@@ -7,7 +7,7 @@
 
   function detectSiteRoot() {
     if (global.__TMA_SITE_ROOT != null) return global.__TMA_SITE_ROOT;
-    if (global.location.hostname.slice(-10) === 'github.io') {
+    if (global.location.hostname.endsWith('github.io')) {
       var seg = global.location.pathname.split('/').filter(Boolean)[0];
       global.__TMA_SITE_ROOT = seg ? '/' + seg : '';
     } else {

@@ -27,10 +27,13 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare site for GitHub Pages
+        run: python3 scripts/prepare-github-pages.py "${{ github.event.repository.name }}"
+
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: dist-pages
 
       - name: Deploy
         id: deployment

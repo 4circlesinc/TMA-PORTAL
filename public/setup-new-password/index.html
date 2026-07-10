@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <script>!function(){var r="/";if(location.hostname.slice(-10)==="github.io"){var s=location.pathname.split("/").filter(Boolean)[0];s&&(r="/"+s+"/")}window.__TMA_SITE_ROOT=r.replace(/\/$/,"");document.write('<base href="'+r+'">')}();</script>
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Setup New Password — TM ANTOINE Advisory</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
