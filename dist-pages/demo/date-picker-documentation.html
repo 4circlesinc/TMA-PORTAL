@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — DatePicker documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/date-picker.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    @media (max-width: 900px) {
+      body { padding: 24px 16px; }
+      .tma-date-picker-doc { padding: 32px 24px; border-radius: 28px; }
+      .tma-date-picker-doc__title { font-size: 40px; line-height: 1.1; }
+      .tma-date-picker-doc__section-title { font-size: 32px; line-height: 1.2; }
+      .tma-date-picker-doc__footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <article class="tma-date-picker-doc" data-node-id="33304:16614">
+    <header class="tma-date-picker-doc__hero" data-node-id="33304:16615">
+      <h1 class="tma-date-picker-doc__title" data-node-id="33304:16616">DatePicker</h1>
+      <div class="tma-date-picker-doc__intro" data-node-id="33304:16617">
+        <p>Used to select a date and time.</p>
+        <p>The top date display area can be selected or the date can be entered.</p>
+        <p>Just like a Windows folder path.</p>
+      </div>
+    </header>
+
+    <section class="tma-date-picker-doc__section" data-node-id="33304:16618">
+      <h2 class="tma-date-picker-doc__section-title" data-node-id="33304:16619">Features</h2>
+      <ul class="tma-date-picker-doc__list" data-node-id="33304:16620">
+        <li>Date only: Select date only</li>
+        <li>Date and time: Select date and time</li>
+        <li>Date range: Select date range</li>
+        <li>Date range and time: Select date range and time</li>
+      </ul>
+    </section>
+
+    <section class="tma-date-picker-doc__section" data-node-id="33304:16621">
+      <h2 class="tma-date-picker-doc__section-title" data-node-id="33304:16622">Correlation</h2>
+      <ul class="tma-date-picker-doc__list" data-node-id="33304:16623">
+        <li>Button component</li>
+      </ul>
+    </section>
+
+    <section class="tma-date-picker-doc__section" data-node-id="33304:16624">
+      <h2 class="tma-date-picker-doc__section-title" data-node-id="33304:16625">Examples</h2>
+      <div class="tma-date-picker-doc__example" data-node-id="33304:16626" id="doc-example"></div>
+    </section>
+
+    <footer class="tma-date-picker-doc__footer" data-node-id="33304:16629" id="doc-footer"></footer>
+  </article>
+
+<script src="../js/date-picker-icons.js"></script>
+<script src="../js/date-picker.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script>
+const DP = window.TMADatePicker;
+const socialSvg = window.TMATableSearchIcons.svg;
+
+DP.attachDocExample(document.getElementById('doc-example'), {
+  type: 'date-only',
+  label: 'Date',
+  placeholder: 'Pick a date',
+  value: { start: new Date(2026, 1, 10) },
+});
+
+function renderLogo() {
+  return `<div class="tma-date-picker-doc__logo" aria-hidden="true">${socialSvg('TMALogoMark', 'tma-date-picker-doc__logo-icon', 28, 28)}<span class="tma-date-picker-doc__wordmark">${socialSvg('TMALogoWordmark', 'tma-date-picker-doc__wordmark-left', 53, 12)}${socialSvg('TMALogoSuffix', 'tma-date-picker-doc__wordmark-right', 15, 12)}</span></div>`;
+}
+
+function renderSocial(href, label, key) {
+  return `<a class="tma-date-picker-doc__social" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}">${socialSvg(key, '', 28, 28)}</a>`;
+}
+
+document.getElementById('doc-footer').innerHTML = `
+  <div class="tma-date-picker-doc__footer-brand">
+    ${renderLogo()}
+    <p class="tma-date-picker-doc__copyright">© 2026 TM ANTOINE Advisory. All rights reserved.</p>
+  </div>
+  <div class="tma-date-picker-doc__socials">
+    ${renderSocial('https://twitter.com/FarewelltoWind', 'Twitter', 'TwitterSocial')}
+    ${renderSocial('https://www.instagram.com/farewelltowind', 'Instagram', 'InstagramSocial')}
+    ${renderSocial('https://www.threads.net/@farewelltowind', 'Threads', 'ThreadsLogo')}
+    ${renderSocial('https://dribbble.com/byewind', 'Dribbble', 'DribbbleSocial')}
+    ${renderSocial('https://www.behance.net/ByeWind', 'Behance', 'BehanceSocial')}
+    ${renderSocial('https://www.figma.com/@byewind', 'Figma', 'FigmaSocial')}
+    ${renderSocial('#', 'Website', 'TMALogoMark')}
+  </div>
+`;
+</script>
+</body>
+</html>

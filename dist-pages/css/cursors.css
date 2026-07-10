@@ -1,0 +1,47 @@
+/* TMA Cursors — production setup (transparent 32x32 PNG) */
+:root {
+  --cursor-default: url('../images/cursors/CursorsDefault.png') 15 14, default;
+  --cursor-beachball: url('../images/cursors/CursorsBeachball.png') 16 16, wait;
+  --cursor-text: url('../images/cursors/CursorsTextCursor.png') 16 16, text;
+  --cursor-cross: url('../images/cursors/CursorsCross.png') 16 16, crosshair;
+  --cursor-menu: url('../images/cursors/CursorsMenu.png') 16 8, context-menu;
+  --cursor-zoom-out: url('../images/cursors/CursorsZoomOut.png') 16 16, zoom-out;
+  --cursor-zoom-in: url('../images/cursors/CursorsZoomIn.png') 16 16, zoom-in;
+  --cursor-pointer: url('../images/cursors/CursorsHandPointing.png') 11 14, pointer;
+  --cursor-grabbing: url('../images/cursors/CursorsHandGrabbing.png') 16 18, grabbing;
+  --cursor-grab: url('../images/cursors/CursorsHandOpen.png') 16 10, grab;
+  --cursor-move: url('../images/cursors/CursorsMove.png') 16 16, move;
+  --cursor-resize-left: url('../images/cursors/CursorsResizeLeft.png') 16 16, w-resize;
+  --cursor-resize-down: url('../images/cursors/CursorsResizeDown.png') 16 16, s-resize;
+  --cursor-resize-right: url('../images/cursors/CursorsResizeRight.png') 16 16, e-resize;
+  --cursor-resize-up: url('../images/cursors/CursorsResizeUp.png') 16 16, n-resize;
+  --cursor-resize-left-right: url('../images/cursors/CursorsResizeLeftRight.png') 16 16, ew-resize;
+  --cursor-resize-up-down: url('../images/cursors/CursorsResizeUpDown.png') 16 16, ns-resize;
+  --cursor-resize-nwse: url('../images/cursors/CursorsResizeNorthWestSouthEast.png') 16 16, nwse-resize;
+  --cursor-resize-nesw: url('../images/cursors/CursorsResizeNorthEastSouthWest.png') 16 16, nesw-resize;
+  --cursor-resize-ew: url('../images/cursors/CursorsResizeWestEast.png') 16 16, ew-resize;
+  --cursor-resize-ns: url('../images/cursors/CursorsResizeNorthSouth.png') 16 16, ns-resize;
+}
+
+html, body { cursor: var(--cursor-default); }
+a, button, [role='button'], .cursor-pointer { cursor: var(--cursor-pointer); }
+input:not([type]), input[type='text'], input[type='search'], input[type='email'],
+input[type='url'], input[type='password'], textarea, [contenteditable='true'], .cursor-text {
+  cursor: var(--cursor-text);
+}
+.cursor-grab { cursor: var(--cursor-grab); }
+.cursor-grabbing { cursor: var(--cursor-grabbing); }
+.cursor-move { cursor: var(--cursor-move); }
+.cursor-cross { cursor: var(--cursor-cross); }
+.cursor-wait { cursor: var(--cursor-beachball); }
+.cursor-zoom-in { cursor: var(--cursor-zoom-in); }
+.cursor-zoom-out { cursor: var(--cursor-zoom-out); }
+.cursor-menu { cursor: var(--cursor-menu); }
+.cursor-n-resize { cursor: var(--cursor-resize-up); }
+.cursor-s-resize { cursor: var(--cursor-resize-down); }
+.cursor-e-resize { cursor: var(--cursor-resize-right); }
+.cursor-w-resize { cursor: var(--cursor-resize-left); }
+.cursor-ns-resize { cursor: var(--cursor-resize-ns); }
+.cursor-ew-resize { cursor: var(--cursor-resize-ew); }
+.cursor-nesw-resize { cursor: var(--cursor-resize-nesw); }
+.cursor-nwse-resize { cursor: var(--cursor-resize-nwse); }

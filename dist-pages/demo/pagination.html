@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Pagination</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/pagination.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .group { background: #fff; border-radius: 16px; padding: 24px 20px 20px; min-width: 932px; width: fit-content; }
+    .group-label { font-size: 16px; line-height: 32px; font-weight: 600; margin-bottom: 32px; }
+    .group-stack { display: flex; flex-direction: column; gap: 24px; }
+  </style>
+</head>
+<body>
+  <div class="group">
+    <p class="group-label">Pagination</p>
+    <div class="group-stack" id="group-root"></div>
+  </div>
+
+<script>
+const ICONS = {
+  ArrowLineLeft: '../images/icons/tma/ArrowLineLeft-16.svg',
+  ArrowLineRight: '../images/icons/tma/ArrowLineRight-16.svg',
+  ArrowLineDown: '../images/icons/tma/ArrowLineDown-16.svg',
+};
+
+const PAGES = [1, 2, 3, 4, 5];
+
+function renderPages(currentPage) {
+  return PAGES.map((page) => {
+    const active = page === currentPage;
+    return `<button type="button" class="tma-pagination__button${active ? ' tma-pagination__button--active' : ''}" aria-label="Page ${page}"${active ? ' aria-current="page"' : ''} data-page="${page}"><span class="tma-pagination__label">${page}</span></button>`;
+  }).join('');
+}
+
+function renderNav(currentPage) {
+  const prevDisabled = currentPage <= 1 ? ' disabled' : '';
+  const nextDisabled = currentPage >= PAGES.length ? ' disabled' : '';
+  return `<nav class="tma-pagination" aria-label="Pagination">${renderPages(currentPage)}<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" data-direction="prev"${prevDisabled}><img src="${ICONS.ArrowLineLeft}" class="tma-pagination__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page" data-direction="next"${nextDisabled}><img src="${ICONS.ArrowLineRight}" class="tma-pagination__icon" width="16" height="16" alt="" /></button></nav>`;
+}
+
+function renderPagination(item) {
+  if (item.variant === 'footer') {
+    return `<div class="tma-pagination-bar tma-pagination-bar--footer"><div class="tma-pagination-bar__meta"><button type="button" class="tma-pagination-bar__page-size" aria-label="Rows per page"><span class="tma-pagination__label">${item.pageSize || 20}</span><img src="${ICONS.ArrowLineDown}" class="tma-pagination__icon" width="16" height="16" alt="" aria-hidden="true" /></button><span class="tma-pagination-bar__results">${item.totalResults || 105} results</span></div>${renderNav(item.currentPage || 1)}</div>`;
+  }
+
+  return `<div class="tma-pagination-bar tma-pagination-bar--default">${renderNav(item.currentPage || 1)}</div>`;
+}
+
+fetch('./data/pagination.json')
+  .then((r) => r.json())
+  .then((data) => {
+    const root = document.getElementById('group-root');
+    data.items.forEach((item) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'group-item';
+      wrap.innerHTML = renderPagination(item);
+      root.appendChild(wrap);
+    });
+  });
+</script>
+<script src="../js/pagination.js"></script>
+</body>
+</html>

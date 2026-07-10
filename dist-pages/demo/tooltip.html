@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Tooltip</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .page { background: #fff; border-radius: 48px; padding: 80px; max-width: 1200px; }
+    .hero-title { font-size: 64px; line-height: 72px; font-weight: 600; margin-bottom: 28px; }
+    .hero-copy { font-size: 18px; line-height: 28px; color: #000; max-width: 1040px; margin-bottom: 48px; }
+    .hero-copy p + p { margin-top: 0; }
+    .section { margin-bottom: 64px; }
+    .section-title { font-size: 48px; line-height: 56px; font-weight: 400; margin-bottom: 28px; }
+    .section-copy { font-size: 18px; line-height: 28px; margin-bottom: 32px; max-width: 1040px; }
+    .section-copy p + p { margin-top: 0; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 32px; overflow-x: auto; }
+    .demo-block { margin-bottom: 32px; }
+    .demo-label { font-size: 18px; line-height: 28px; font-weight: 600; margin-bottom: 16px; }
+    .demo-row { display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start; }
+    .demo-scene { position: relative; min-height: 72px; display: flex; align-items: center; }
+    .demo-scene--tall { min-height: 140px; padding-top: 48px; }
+    .demo-scene--card { min-height: 180px; padding-top: 56px; }
+    .demo-scene--pair { min-height: 100px; gap: 80px; }
+    .static-tooltip-wrap { position: relative; display: inline-block; min-height: 32px; }
+    .icon-button-row { display: flex; gap: 80px; align-items: flex-end; padding-top: 8px; }
+    .icon-button-col { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+    .icon-button-col span { font-size: 18px; line-height: 28px; color: rgba(0,0,0,0.4); }
+    .chart-bar-demo { width: 48px; height: 120px; border-radius: 8px 8px 0 0; background: #000; margin-top: 24px; cursor: default; }
+    .help-row { display: flex; gap: 80px; padding-top: 8px; }
+    .hint { font-size: 12px; color: #888; margin-top: 8px; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .page { padding: 32px 24px; border-radius: 28px; } .hero-title { font-size: 40px; line-height: 1.1; } .section-title { font-size: 32px; line-height: 1.2; } }
+  </style>
+</head>
+<body>
+  <div class="page" id="page-root">
+    <h1 class="hero-title">Tooltip</h1>
+    <div class="hero-copy" id="hero-copy"></div>
+
+    <section class="section">
+      <h2 class="section-title">Interactive guidance</h2>
+      <div class="section-copy" id="guidance-copy"></div>
+      <div class="demo-scene demo-scene--tall">
+        <span class="tma-tooltip-trigger" data-tooltip-trigger data-tooltip-type="help" data-tooltip-target="demo-guidance-tip" data-tooltip-initial-delay="1500" data-tooltip-rehover-delay="500" data-tooltip-rehover-window="30000" aria-describedby="demo-guidance-tip">
+          <span class="tma-tooltip-demo__question"><img src="../images/icons/phosphor/Question.svg" alt="Help"></span>
+          <div id="demo-guidance-tip" class="tma-tooltip tma-tooltip--compact tma-tooltip--top tma-tooltip-trigger__tip" role="tooltip" aria-hidden="true" style="--tooltip-font-size:12px;--tooltip-line-height:16px;--tooltip-padding-x:8px;--tooltip-padding-y:4px;--tooltip-radius:12px;">
+            <div class="tma-tooltip__surface"><div class="tma-tooltip__content tma-tooltip__content--inline"><span class="tma-tooltip__text">Tooltip</span></div></div>
+            <span class="tma-tooltip__arrow" aria-hidden="true"></span>
+          </div>
+        </span>
+      </div>
+      <p class="hint">Hover the ? icon and hold still — tooltip appears after <strong>1.5 seconds</strong> (TMA timing). A dashed outline shows while waiting.</p>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Add Tooltip to the Icon Button</h2>
+      <div class="section-copy" id="icon-button-copy"></div>
+      <div class="icon-button-row">
+        <div class="icon-button-col"><span>Default</span><button type="button" class="tma-tooltip-demo__icon-btn" aria-label="Favorite"><img src="../images/icons/phosphor/Star.svg" alt=""></button></div>
+        <div class="icon-button-col"><span>Hover</span><span id="icon-button-hover"></span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Examples</h2>
+      <p class="hint" style="margin-top:0;margin-bottom:24px;">Hover each example — tooltips appear after ~0.4s here for easier testing. Production uses 1.5s on first hover.</p>
+      <div id="examples-root"></div>
+    </section>
+
+    <pre class="setup">&lt;x-tooltip-trigger text="Tooltip" shortcut="⌘" variant="compact"&gt;
+    &lt;button type="button"&gt;Action&lt;/button&gt;
+&lt;/x-tooltip-trigger&gt;
+
+&lt;x-tooltip-trigger text="Compared with yesterday, it is up 11.01%" variant="multiline" position="top"&gt;
+    &lt;span class="truncate"&gt;+11.01%&lt;/span&gt;
+&lt;/x-tooltip-trigger&gt;</pre>
+  </div>
+
+<script src="../js/tooltip.js"></script>
+<script>
+const ICON_BASE = '../images/icons/phosphor/';
+
+function tooltipMarkup({ id, variant, position, text, title, shortcut, staticVisible }) {
+  const isRich = variant === 'rich';
+  const isMultiline = variant === 'multiline';
+  const lines = isMultiline && text ? text.split('\n') : [];
+  const visibleClass = staticVisible ? ' is-visible tma-tooltip--static' : '';
+  const ariaHidden = staticVisible ? 'false' : 'true';
+
+  let content = '';
+  if (isRich) {
+    content = `<div class="tma-tooltip__content tma-tooltip__content--rich">${title ? `<p class="tma-tooltip__title">${title}</p>` : ''}${text ? `<p class="tma-tooltip__body">${text}</p>` : ''}</div>`;
+  } else if (isMultiline && lines.length > 1) {
+    content = `<div class="tma-tooltip__content tma-tooltip__content--multiline">${lines.map((l) => `<p class="tma-tooltip__line">${l}</p>`).join('')}</div>`;
+  } else {
+    content = `<div class="tma-tooltip__content tma-tooltip__content--inline"><span class="tma-tooltip__text">${text || ''}</span>${shortcut ? `<span class="tma-tooltip__shortcut">${shortcut}</span>` : ''}</div>`;
+  }
+
+  return `<div id="${id}" class="tma-tooltip tma-tooltip--${variant} tma-tooltip--${position} tma-tooltip-trigger__tip${visibleClass}" role="tooltip" aria-hidden="${ariaHidden}" style="--tooltip-font-size:12px;--tooltip-line-height:16px;--tooltip-padding-x:${variant === 'rich' ? 16 : 8}px;--tooltip-padding-y:${variant === 'rich' ? 12 : 4}px;--tooltip-radius:${variant === 'button' ? 8 : 12}px;--tooltip-max-width:${variant === 'rich' ? 255 : 240}px;--tooltip-title-size:14px;--tooltip-title-line-height:20px;--tooltip-body-size:12px;--tooltip-body-line-height:16px;"><div class="tma-tooltip__surface">${content}</div><span class="tma-tooltip__arrow" aria-hidden="true"></span></div>`;
+}
+
+function triggerMarkup({ id, tipId, type, position, inner, variant, text, title, shortcut, staticVisible, delayMs = 400 }) {
+  if (staticVisible) {
+    return `<div class="static-tooltip-wrap">${tooltipMarkup({ id: tipId, variant, position: 'top', text, title, shortcut, staticVisible: true })}</div>`;
+  }
+  return `<span class="tma-tooltip-trigger" data-tooltip-trigger data-tooltip-type="${type || 'default'}" data-tooltip-target="${tipId}" data-tooltip-position="${position || 'top'}" data-tooltip-initial-delay="${delayMs}" data-tooltip-rehover-delay="500" data-tooltip-rehover-window="30000" aria-describedby="${tipId}">${inner}${tooltipMarkup({ id: tipId, variant, position, text, title, shortcut })}</span>`;
+}
+
+function renderPage(data) {
+  const doc = data.documentation || {};
+  document.getElementById('hero-copy').innerHTML = `<p>${doc.purpose || ''}</p>`;
+  document.getElementById('guidance-copy').innerHTML = (doc.guidance || []).map((p) => `<p>${p}</p>`).join('');
+  document.getElementById('icon-button-copy').innerHTML = `<p>By default, all Icon buttons have tooltips that will be displayed on Hover.</p><p>${doc.iconButtonNote || ''}</p>`;
+
+  document.getElementById('icon-button-hover').innerHTML = triggerMarkup({
+    id: 'icon-btn-trigger',
+    tipId: 'icon-btn-tip',
+    type: 'icon-button',
+    position: 'bottom',
+    variant: 'button',
+    text: 'Tooltip',
+    inner: `<button type="button" class="tma-tooltip-demo__icon-btn" aria-label="Favorite"><img src="${ICON_BASE}Star.svg" alt=""></button>`,
+  });
+
+  const root = document.getElementById('examples-root');
+  (data.examples || []).forEach((ex, index) => {
+    const block = document.createElement('div');
+    block.className = 'demo-block';
+    const tipId = `tip-${ex.id}-${index}`;
+    let sceneClass = 'demo-scene';
+    let inner = '';
+
+    if (ex.static) {
+      inner = triggerMarkup({ tipId, variant: ex.variant, position: ex.position || 'top', text: ex.text, title: ex.title, shortcut: ex.shortcut, staticVisible: true });
+    } else if (ex.id === 'truncated-text') {
+      inner = triggerMarkup({ tipId, variant: ex.variant, position: ex.position || 'top', text: ex.text, type: 'truncated', inner: `<span class="tma-tooltip-demo__truncated">${ex.triggerLabel}</span>` });
+    } else if (ex.id === 'icon-button') {
+      inner = triggerMarkup({ tipId, variant: ex.variant, position: ex.position || 'bottom', text: ex.text, type: 'icon-button', inner: `<button type="button" class="tma-tooltip-demo__icon-btn" aria-label="Favorite"><img src="${ICON_BASE}${ex.icon}.svg" alt=""></button>` });
+    } else if (ex.card) {
+      sceneClass += ' demo-scene--card';
+      inner = `<div class="tma-tooltip-demo__card"><div class="tma-tooltip-demo__card-label">Total Sales</div><div class="tma-tooltip-demo__card-value">$89,000</div>${triggerMarkup({ tipId, variant: ex.variant, position: ex.position || 'top', text: ex.text, type: 'metric', inner: `<span class="tma-tooltip-demo__card-delta">↑ +11.01%</span>` })}</div>`;
+    } else if (ex.id === 'chart-data') {
+      sceneClass += ' demo-scene--tall';
+      inner = triggerMarkup({ tipId, variant: ex.variant, position: ex.position || 'top', text: ex.text, type: 'chart', inner: `<div class="chart-bar-demo" aria-label="Chart bar"></div>` });
+    } else if (ex.icon === 'Question') {
+      inner = triggerMarkup({ tipId, variant: ex.variant, position: ex.position || 'top', text: ex.text, type: ex.type || 'help', inner: `<span class="tma-tooltip-demo__question"><img src="${ICON_BASE}Question.svg" alt="Help"></span>` });
+    } else {
+      inner = triggerMarkup({ tipId, variant: ex.variant, position: ex.position || 'top', text: ex.text, title: ex.title, shortcut: ex.shortcut, staticVisible: ex.static });
+    }
+
+    block.innerHTML = `<p class="demo-label">${ex.label}</p><div class="${sceneClass}">${inner}</div>`;
+    root.appendChild(block);
+  });
+
+  const pairBlock = document.createElement('div');
+  pairBlock.className = 'demo-block';
+  pairBlock.innerHTML = `
+    <p class="demo-label">Same-type chaining (help icons)</p>
+    <div class="demo-scene demo-scene--pair">
+      ${triggerMarkup({ tipId: 'tip-help-a', variant: 'compact', position: 'top', text: 'Tooltip', type: 'help', delayMs: 1500, inner: '<span class="tma-tooltip-demo__question"><img src="../images/icons/phosphor/Question.svg" alt="Help"></span>' })}
+      ${triggerMarkup({ tipId: 'tip-help-b', variant: 'compact', position: 'top', text: 'Tooltip', type: 'help', delayMs: 1500, inner: '<span class="tma-tooltip-demo__question"><img src="../images/icons/phosphor/Question.svg" alt="Help"></span>' })}
+    </div>
+    <p class="hint">Hover first icon 1.5s, then move to the second — tooltip switches immediately (same type).</p>`;
+  root.appendChild(pairBlock);
+}
+
+fetch('./data/tooltip.json').then((r) => r.json()).then(renderPage);
+</script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Tab, Segmented</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 1200px; }
+    .nav-card { flex: 0 0 280px; background: #000; border-radius: 48px; padding: 40px 32px; position: sticky; top: 48px; }
+    .nav-card h1 { font-size: 36px; font-weight: 700; line-height: 1.05; margin-bottom: 16px; background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 28px; overflow-x: auto; }
+    .demo-block { border: 1px solid #eee; border-radius: 16px; padding: 28px 24px; background: #fafafa; margin-bottom: 16px; }
+    .demo-label { font-size: 12px; color: #888; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .demo-block--stretch { max-width: 320px; }
+    .hint { margin-top: 8px; font-size: 12px; color: #888; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; } .nav-card { width: 100%; flex: none; position: static; } }
+  </style>
+</head>
+<body>
+  <p class="section-title">Common Components — Tab, Segmented</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>Tab</h1>
+      <p>Switch displayed content. Six variants — underline, pill, segmented, solid, filled, and icon — in three sizes.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;x-tab-group variant="filled" size="small" stretch :tabs="[
+    ['key' => 'monthly', 'label' => 'Monthly', 'active' => true],
+    ['key' => 'yearly', 'label' => 'Yearly'],
+]" /&gt;
+
+&lt;x-tab-group variant="segmented" size="large" :tabs="[
+    ['label' => 'Card', 'icon' => 'SquaresFour', 'active' => true],
+    ['label' => 'list', 'icon' => 'ListBullets'],
+]" /&gt;</pre>
+
+      <div id="demo-root"></div>
+      <p class="hint">Click or use arrow keys to switch tabs.</p>
+    </div>
+  </div>
+<script>
+const SNOWUI_ICONS = new Set(['DefaultIcon']);
+
+function iconPath(name) {
+  const folder = SNOWUI_ICONS.has(name) ? 'tma' : 'phosphor';
+  return `../images/icons/${folder}/${name}.svg`;
+}
+
+function sizeStyle(size, rounded) {
+  const sizes = {
+    small: { fontSize: 12, lineHeight: 16, trackPadding: 4, trackGap: 4, trackRadius: 20, tabPaddingX: 12, tabPaddingY: 4, tabRadius: 12, tabMinHeight: 24, underlineGap: 4, iconSize: 12 },
+    medium: { fontSize: 14, lineHeight: 20, trackPadding: 4, trackGap: 4, trackRadius: 20, tabPaddingX: 16, tabPaddingY: 8, tabRadius: 16, tabMinHeight: 36, underlineGap: 4, iconSize: 24 },
+    large: { fontSize: 16, lineHeight: 24, trackPadding: 8, trackGap: 4, trackRadius: 28, tabPaddingX: 20, tabPaddingY: 12, tabRadius: 20, tabMinHeight: 48, underlineGap: 4, iconSize: 24 },
+  };
+  const t = sizes[size] || sizes.medium;
+  const trackRadius = rounded ? 80 : t.trackRadius;
+  const tabRadius = rounded ? 80 : t.tabRadius;
+  return [
+    `--tab-font-size:${t.fontSize}px`,
+    `--tab-line-height:${t.lineHeight}px`,
+    `--tab-track-padding:${t.trackPadding}px`,
+    `--tab-track-gap:${t.trackGap}px`,
+    `--tab-track-radius:${trackRadius}px`,
+    `--tab-padding-x:${t.tabPaddingX}px`,
+    `--tab-padding-y:${t.tabPaddingY}px`,
+    `--tab-radius:${tabRadius}px`,
+    `--tab-min-height:${t.tabMinHeight}px`,
+    `--tab-underline-gap:${t.underlineGap}px`,
+    `--tab-icon-size:${t.iconSize}px`,
+  ].join(';');
+}
+
+function buildTabGroup(example) {
+  const group = document.createElement('div');
+  const classes = [
+    'tma-tab-group',
+    `tma-tab-group--${example.variant}`,
+    `tma-tab-group--${example.size}`,
+  ];
+  if (example.stretch) classes.push('tma-tab-group--stretch');
+  if (example.rounded) classes.push('tma-tab-group--rounded');
+  if (example.iconOnly) classes.push('tma-tab-group--icon-only');
+  group.className = classes.join(' ');
+  group.role = 'tablist';
+  group.setAttribute('aria-label', 'Tabs');
+  group.style.cssText = sizeStyle(example.size, example.rounded);
+
+  const groupIconOnly = !!example.iconOnly;
+
+  example.tabs.forEach((tab, index) => {
+    const isActive = !!tab.active;
+    const iconOnly = groupIconOnly || !!tab.iconOnly;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tma-tab' + (isActive ? ' is-active' : '');
+    btn.role = 'tab';
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    btn.tabIndex = isActive ? 0 : -1;
+    btn.dataset.tabIndex = String(index);
+    btn.dataset.tabKey = tab.key || `tab-${index + 1}`;
+    if (iconOnly && tab.label) btn.setAttribute('aria-label', tab.label);
+
+    if (tab.icon) {
+      const img = document.createElement('img');
+      img.className = 'tma-tab__icon';
+      img.src = iconPath(tab.icon);
+      img.alt = '';
+      img.setAttribute('aria-hidden', 'true');
+      btn.appendChild(img);
+    }
+
+    if (!iconOnly && tab.label) {
+      const text = document.createElement('span');
+      text.className = 'tma-tab__label';
+      text.textContent = tab.label;
+      btn.appendChild(text);
+    }
+
+    if (example.variant === 'underline') {
+      const indicator = document.createElement('span');
+      indicator.className = 'tma-tab__indicator';
+      indicator.setAttribute('aria-hidden', 'true');
+      btn.appendChild(indicator);
+    }
+
+    group.appendChild(btn);
+  });
+
+  return group;
+}
+
+function renderExamples(data) {
+  const root = document.getElementById('demo-root');
+  data.examples.forEach((example) => {
+    const block = document.createElement('div');
+    block.className = 'demo-block' + (example.stretch ? ' demo-block--stretch' : '');
+
+    const label = document.createElement('p');
+    label.className = 'demo-label';
+    label.textContent = example.label || example.id;
+    block.appendChild(label);
+    block.appendChild(buildTabGroup(example));
+    root.appendChild(block);
+  });
+}
+
+fetch('./data/tab-segmented.json')
+  .then((res) => res.json())
+  .then(renderExamples)
+  .catch((err) => {
+    document.getElementById('demo-root').innerHTML = `<p style="color:#c00">Failed to load examples: ${err}</p>`;
+  });
+</script>
+<script src="../js/tab-group.js"></script>
+</body>
+</html>

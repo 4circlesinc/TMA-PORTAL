@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Horizontal 03</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 900px; }
+    .nav-card { flex: 0 0 280px; background: #000; border-radius: 48px; padding: 40px 32px; }
+    .nav-card h1 { font-size: 44px; font-weight: 700; line-height: 1; margin-bottom: 16px; background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 28px; overflow-x: auto; }
+    .chart-wrap { border: 1px solid #eee; border-radius: 16px; padding: 32px 24px 24px; background: #fafafa; overflow: visible; max-width: 240px; }
+    .hint { margin-top: 12px; font-size: 12px; color: #888; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; } .nav-card { width: 100%; flex: none; } }
+  </style>
+</head>
+<body>
+  <p class="section-title">Horizontal bar — Horizontal 03</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>Horizontal 03</h1>
+      <p>Six rows of three pill segments at 100%, 40%, and 10% opacity — horizontal counterpart to Vertical 03's opacity ramp.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;x-chart-horizontal-03 /&gt;
+
+&lt;x-chart-horizontal-03 :bars="[
+    ['value' => 3000, 'color' => 'black'],
+]" :x-max="6000" /&gt;</pre>
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll">
+          <div id="chart" class="tma-chart-horizontal-03" role="group" aria-label="Segmented horizontal bar chart"></div>
+        </div>
+        <p class="hint">Each row is three equal pills with 2px gaps. Hover for value.</p>
+      </div>
+    </div>
+  </div>
+<script>
+const CHART_WIDTH = 160;
+const CHART_HEIGHT = 240;
+const COLORS = { black: '#000000', cyan: '#a0bce8', mint: '#6be6d3', blue: '#7dbbff', purple: '#b899eb', green: '#71dd8c' };
+
+function formatValue(v) { return v.toLocaleString(); }
+
+function normalizeBars(preset) {
+  return (preset.bars || []).map((bar) => {
+    const color = COLORS[bar.color] || bar.color || preset.color || '#000000';
+    const top = bar.top ?? (bar.segments?.[0]?.top ?? 16);
+    const height = bar.height ?? (bar.segments?.[0]?.height ?? 8);
+    const segments = (bar.segments || []).map((seg) => ({
+      leftPct: (seg.left / CHART_WIDTH) * 100,
+      widthPct: (seg.width / CHART_WIDTH) * 100,
+      opacity: seg.opacity ?? 1,
+    }));
+    return { value: bar.value, color, topPct: (top / CHART_HEIGHT) * 100, heightPct: (height / CHART_HEIGHT) * 100, segments };
+  });
+}
+
+function renderChart(root, preset) {
+  const barsEl = document.createElement('div');
+  barsEl.className = 'tma-chart-horizontal-03__bars';
+
+  normalizeBars(preset).forEach((bar, index) => {
+    const el = document.createElement('div');
+    el.className = 'tma-chart-horizontal-03__bar';
+    el.style.top = `${bar.topPct}%`;
+    el.style.height = `${bar.heightPct}%`;
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', `Bar ${index + 1}: ${formatValue(bar.value)}`);
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'tma-chart-horizontal-03__tooltip';
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.textContent = formatValue(bar.value);
+
+    bar.segments.forEach((seg) => {
+      const span = document.createElement('span');
+      span.className = 'tma-chart-horizontal-03__segment';
+      span.style.left = `${seg.leftPct}%`;
+      span.style.width = `${seg.widthPct}%`;
+      span.style.backgroundColor = bar.color;
+      span.style.opacity = seg.opacity;
+      el.appendChild(span);
+    });
+
+    el.insertBefore(tooltip, el.firstChild);
+    barsEl.appendChild(el);
+  });
+
+  root.appendChild(barsEl);
+}
+
+fetch('./data/horizontal-03.json')
+  .then(r => r.json())
+  .then(preset => {
+    const chart = document.getElementById('chart');
+    renderChart(chart, preset);
+    window.PortalChartMotion.initChart(chart);
+  });
+</script>
+<script src="../js/chart-motion.js"></script>
+</body>
+</html>

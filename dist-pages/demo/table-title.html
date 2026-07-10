@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Table title</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .group { background: #fff; border-radius: 16px; padding: 24px 20px 20px; width: fit-content; }
+    .group-label { font-size: 16px; line-height: 32px; font-weight: 600; margin-bottom: 32px; }
+    .group-row { display: flex; align-items: flex-start; gap: 0; }
+    .group-item { width: auto; }
+  </style>
+</head>
+<body>
+  <div class="group">
+    <p class="group-label">Table title</p>
+    <div class="group-row" id="group-root"></div>
+  </div>
+
+<script>
+const ICONS = {
+  FunnelSimple: '/images/icons/phosphor/FunnelSimple.svg',
+  ArrowsDown: '/images/icons/tma/ArrowsDown.svg',
+  ArrowsUp: '/images/icons/tma/ArrowsUp.svg',
+};
+
+const VARIANTS = {
+  checkbox: { checkbox: true, paddingX: 4, width: 24 },
+  muted: { color: 'rgba(0, 0, 0, 0.4)', icons: [] },
+  filter: { color: '#000000', icons: ['FunnelSimple'] },
+  'filter-sort': { color: '#000000', icons: ['FunnelSimple', 'ArrowsDown', 'ArrowsUp'] },
+};
+
+function renderTitle(variant, label) {
+  const v = VARIANTS[variant];
+  const baseStyle = '--table-title-font-size:12px;--table-title-line-height:16px;--table-title-min-height:40px;--table-title-border-color:rgba(0,0,0,0.2);--table-title-icon-size:16px;--table-title-gap:8px;';
+
+  if (v.checkbox) {
+    return `<div class="tma-table-title tma-table-title--checkbox" style="${baseStyle}--table-title-padding-x:${v.paddingX}px;--table-title-width:${v.width}px;"><input type="checkbox" class="tma-table-title__checkbox" aria-label="Select all" /></div>`;
+  }
+
+  const icons = v.icons.map((name) =>
+    `<img src="${ICONS[name]}" class="tma-table-title__icon" alt="" aria-hidden="true" />`
+  ).join('');
+
+  return `<div class="tma-table-title tma-table-title--${variant}" style="--table-title-color:${v.color};${baseStyle}--table-title-padding-x:12px;">${icons ? `<span class="tma-table-title__icons" aria-hidden="true">${icons}</span>` : ''}<span class="tma-table-title__label">${label}</span></div>`;
+}
+
+fetch('./data/table-title.json')
+  .then((r) => r.json())
+  .then((data) => {
+    const root = document.getElementById('group-root');
+    data.items.forEach((item) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'group-item';
+      wrap.innerHTML = renderTitle(item.variant, item.label);
+      root.appendChild(wrap);
+    });
+  });
+</script>
+</body>
+</html>

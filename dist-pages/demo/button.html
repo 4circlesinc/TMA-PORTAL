@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Button component set</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/button.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="tma-button-demo">
+    <header class="tma-button-demo__header">
+      <h1 class="tma-button-demo__title">Button — Component set (Part 1)</h1>
+      <p class="tma-button-demo__copy">
+        Figma node <strong>33311:3641</strong> — sizes, variants (Borderless, Grey, Outline, Filled), Default/Hover states, and icon-only shapes.
+        Scroll horizontally to inspect the full matrix. <a href="button-documentation.html">Documentation</a> · <a href="button-instances.html">Instances</a>
+      </p>
+    </header>
+
+    <div class="tma-button-demo__canvas" id="button-set-root"></div>
+
+    <section class="tma-button-demo__playground" aria-labelledby="playground-title">
+      <h2 class="tma-button-demo__playground-title" id="playground-title">Interactive preview</h2>
+      <div class="tma-button-demo__playground-row" id="playground-root"></div>
+    </section>
+
+    <pre class="tma-button-demo__setup" id="setup-snippet"></pre>
+  </div>
+
+<script src="../js/button-icons.js"></script>
+<script src="../js/button.js"></script>
+<script>
+const B = window.TMAButton;
+
+B.mountComponentSet(document.getElementById('button-set-root'));
+
+document.getElementById('playground-root').innerHTML = [
+  B.renderButton({ size: 'small', variant: 'borderless', layout: 'leading' }),
+  B.renderButton({ size: 'medium', variant: 'grey', layout: 'trailing' }),
+  B.renderButton({ size: 'large', variant: 'outline', layout: 'text' }),
+  B.renderButton({ size: 'xlarge', variant: 'filled', layout: 'leading' }),
+  B.renderButton({ size: 'medium', variant: 'filled', layout: 'icon', shape: 'circle' }),
+].join('');
+
+document.getElementById('setup-snippet').textContent = `// Include button.css + button-icons.js + button.js
+window.TMAButton.renderButton({
+  size: 'medium',       // small | medium | large | xlarge
+  variant: 'outline',   // borderless | grey | outline | filled
+  layout: 'leading',    // leading | trailing | text | icon
+  shape: 'rect',        // rect | circle (icon layout)
+  label: 'Button',
+});
+
+// Full Figma component set matrix
+window.TMAButton.mountComponentSet(document.getElementById('root'));`;
+</script>
+</body>
+</html>

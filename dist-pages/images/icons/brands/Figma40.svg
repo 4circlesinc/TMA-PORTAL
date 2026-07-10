@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Frame">
+<path id="path0_fill" d="M0 20C0 8.95433 8.95433 0 20 0C31.0457 0 40 8.95433 40 20C40 31.0457 31.0457 40 20 40C8.95433 40 0 31.0457 0 20Z" fill="var(--fill-0, #303030)"/>
+<g id="Group 602">
+<path id="path1_fill" d="M15.5 34C17.9853 34 20 31.9853 20 29.5V25H15.5C13.0147 25 11 27.0147 11 29.5C11 31.9853 13.0147 34 15.5 34Z" fill="var(--fill-0, #0ACF83)"/>
+<path id="path2_fill" d="M11 20.5C11 18.0147 13.0147 16 15.5 16H20V25H15.5C13.0147 25 11 22.9853 11 20.5Z" fill="var(--fill-0, #A259FF)"/>
+<path id="path2_fill_2" d="M11 11.5C11 9.01472 13.0147 7 15.5 7H20V16H15.5C13.0147 16 11 13.9853 11 11.5Z" fill="var(--fill-0, #F25022)"/>
+<path id="path3_fill" d="M20 7H24.5C26.9853 7 29 9.01472 29 11.5C29 13.9853 26.9853 16 24.5 16H20V7Z" fill="var(--fill-0, #FF7262)"/>
+<path id="path4_fill" d="M29 20.5C29 22.9853 26.9853 25 24.5 25C22.0147 25 20 22.9853 20 20.5C20 18.0147 22.0147 16 24.5 16C26.9853 16 29 18.0147 29 20.5Z" fill="var(--fill-0, #1ABCFE)"/>
+</g>
+</g>
+</svg>

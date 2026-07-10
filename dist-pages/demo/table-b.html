@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Table B</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/status-badge.css">
+  <link rel="stylesheet" href="../css/table-b.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .group { background: #fff; border-radius: 16px; padding: 24px 20px 20px; width: fit-content; }
+    .group-label { font-size: 16px; line-height: 32px; font-weight: 600; margin-bottom: 32px; }
+  </style>
+</head>
+<body>
+  <div class="group">
+    <p class="group-label">Table B</p>
+    <div id="group-root"></div>
+  </div>
+
+<script>
+const COLORS = {
+  purple: '#b899eb', green: '#71dd8c', blue: '#7dbbff', orange: '#ffb55b', muted: 'rgba(0, 0, 0, 0.4)',
+};
+
+const STATUS_VARIANTS = {
+  'in-progress': 'dot-purple',
+  complete: 'dot-green',
+  pending: 'dot-blue',
+  approved: 'dot-orange',
+  rejected: 'dot-muted',
+};
+
+const ROWS = [
+  { title: 'Coffee detail page', assignedTo: { avatars: ['AvatarMale01'] }, timeSpend: '3hr 20min', status: 'in-progress', statusLabel: 'In Progress' },
+  { title: 'Drinking bottle graphics', assignedTo: { avatars: ['AvatarFemale01', 'AvatarMale02'] }, timeSpend: '12hr 21min', status: 'complete', statusLabel: 'Complete' },
+  { title: 'App design and development', assignedTo: { avatars: ['AvatarFemale04', 'AvatarMale03'], overflow: '+3' }, timeSpend: '78hr 5min', status: 'pending', statusLabel: 'Pending' },
+  { title: 'Poster illustation design', assignedTo: { avatars: ['AvatarFemale05', 'AvatarMale05'] }, timeSpend: '26hr 58min', status: 'approved', statusLabel: 'Approved' },
+  { title: 'App UI design', assignedTo: { avatars: ['AvatarFemale06'] }, timeSpend: '17hr 22min', status: 'rejected', statusLabel: 'Rejected' },
+];
+
+const COLUMNS = [
+  { key: 'title', type: 'text', label: 'Title', padding: 'title' },
+  { key: 'assignedTo', type: 'avatars', label: 'Assigned to' },
+  { key: 'timeSpend', type: 'text', label: 'Time Spend' },
+  { key: 'status', type: 'status', label: 'Status', padding: 'status' },
+];
+
+function avatarUrl(key) {
+  return `../images/avatars/${key}.png`;
+}
+
+function renderStatusBadge(label, status) {
+  const variant = STATUS_VARIANTS[status];
+  const color = variant.split('-')[1];
+  return `<span class="tma-status-badge tma-status-badge--dot tma-status-badge--${color}" style="--status-badge-color:${COLORS[color]}"><span class="tma-status-badge__dot" aria-hidden="true"></span><span class="tma-status-badge__label">${label}</span></span>`;
+}
+
+function cellClass(column) {
+  let cls = 'tma-table-b__cell';
+  if (column.padding === 'title') cls += ' tma-table-b__cell--title';
+  if (column.padding === 'status') cls += ' tma-table-b__cell--status';
+  if (column.type === 'avatars') cls += ' tma-table-b__cell--avatars';
+  return cls;
+}
+
+function renderAvatarGroup(group) {
+  const avatars = (group.avatars || []).map((key, i, arr) => {
+    const isLast = i === arr.length - 1 && !group.overflow;
+    return `<img src="${avatarUrl(key)}" alt="" class="tma-table-b__avatar" width="24" height="24"${isLast ? '' : ''} />`;
+  }).join('');
+  const overflow = group.overflow
+    ? `<span class="tma-table-b__avatar-overflow">${group.overflow}</span>`
+    : '';
+  return `<div class="tma-table-b__avatar-group">${avatars}${overflow}</div>`;
+}
+
+function renderCell(column, row) {
+  if (column.type === 'avatars') {
+    return renderAvatarGroup(row.assignedTo || {});
+  }
+  if (column.type === 'status') {
+    return renderStatusBadge(row.statusLabel, row.status);
+  }
+  return row[column.key] || '';
+}
+
+function renderTableB() {
+  const head = COLUMNS.map(col =>
+    `<div class="${cellClass(col)}" role="columnheader">${col.label}</div>`
+  ).join('');
+
+  const body = ROWS.map(row => {
+    const cells = COLUMNS.map(col =>
+      `<div class="${cellClass(col)}" role="cell">${renderCell(col, row)}</div>`
+    ).join('');
+    return `<div class="tma-table-b__row" role="row">${cells}</div>`;
+  }).join('');
+
+  return `<div class="tma-table-b tma-table-b--default" style="--table-b-block-width:662px;--table-b-block-height:312px;--table-b-block-background:#f9f9fa;--table-b-block-padding:24px;--table-b-block-radius:16px;--table-b-block-gap:4px;--table-b-title-font-size:14px;--table-b-title-line-height:20px;--table-b-row-min-height:40px;--table-b-cell-padding-y:8px;--table-b-cell-padding-x:12px;--table-b-title-cell-padding-right:12px;--table-b-status-cell-padding-left:8px;--table-b-status-cell-padding-right:12px;--table-b-font-size:12px;--table-b-line-height:16px;--table-b-header-border-color:rgba(0,0,0,0.2);--table-b-header-muted-color:rgba(0,0,0,0.4);--table-b-avatar-size:24px;--table-b-avatar-overlap:8px;--table-b-avatar-border-color:#fff;--table-b-avatar-overflow-background:#e6f1fd;--table-b-title-column-min-width:224px;--table-b-columns:1fr 1fr 1fr 1fr;">
+    <h3 class="tma-table-b__title">Tasks</h3>
+    <div class="tma-table-b__sheet" role="table" aria-label="Tasks">
+      <div class="tma-table-b__row tma-table-b__row--head" role="row">${head}</div>
+      ${body}
+    </div>
+  </div>`;
+}
+
+document.getElementById('group-root').innerHTML = renderTableB();
+</script>
+</body>
+</html>

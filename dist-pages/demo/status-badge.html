@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Status badge</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/status-badge.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .group { background: #fff; border-radius: 16px; padding: 24px 20px 20px; width: fit-content; }
+    .group-label { font-size: 16px; line-height: 32px; font-weight: 600; margin-bottom: 32px; }
+    .group-grid { display: grid; grid-template-columns: repeat(5, auto); column-gap: 57px; row-gap: 24px; align-items: center; }
+    .group-cell { display: flex; align-items: center; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="group">
+    <p class="group-label">Status badge</p>
+    <div class="group-grid" id="group-root"></div>
+  </div>
+
+<script>
+const COLORS = {
+  purple: '#b899eb',
+  green: '#71dd8c',
+  blue: '#7dbbff',
+  orange: '#ffb55b',
+  muted: 'rgba(0, 0, 0, 0.4)',
+};
+
+function renderBadge(variant, label = 'Label') {
+  const [style, color] = variant.split('-');
+  const colorValue = COLORS[color];
+  const surface = color === 'muted' && style === 'pill'
+    ? '--status-badge-pill-surface:rgba(0,0,0,0.04);'
+    : '';
+
+  if (style === 'dot') {
+    return `<span class="tma-status-badge tma-status-badge--dot tma-status-badge--${color}" style="--status-badge-color:${colorValue};${surface}"><span class="tma-status-badge__dot" aria-hidden="true"></span><span class="tma-status-badge__label">${label}</span></span>`;
+  }
+
+  return `<span class="tma-status-badge tma-status-badge--pill tma-status-badge--${color}" style="--status-badge-color:${colorValue};${surface}"><span class="tma-status-badge__label">${label}</span></span>`;
+}
+
+fetch('./data/status-badge.json')
+  .then((r) => r.json())
+  .then((data) => {
+    const root = document.getElementById('group-root');
+    data.columns.forEach((col) => {
+      const dotCell = document.createElement('div');
+      dotCell.className = 'group-cell';
+      dotCell.innerHTML = renderBadge(`dot-${col.color}`);
+      root.appendChild(dotCell);
+    });
+
+    data.columns.forEach((col) => {
+      const pillCell = document.createElement('div');
+      pillCell.className = 'group-cell';
+      pillCell.innerHTML = renderBadge(`pill-${col.color}`);
+      root.appendChild(pillCell);
+    });
+  });
+</script>
+</body>
+</html>

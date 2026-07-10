@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Avatar Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+    }
+
+    .section { margin-bottom: 80px; }
+    .section-title {
+      font-size: 13px;
+      font-weight: 400;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+    }
+
+    /* ── Figma frame layout ── */
+    .frame {
+      display: flex;
+      gap: 100px;
+      align-items: flex-start;
+      background: #fff;
+      border-radius: 80px;
+      padding: 100px;
+      max-width: 1400px;
+    }
+
+    /* Navigation card (left) */
+    .nav-card {
+      flex: 0 0 480px;
+      background: #000;
+      border-radius: 80px;
+      padding: 80px 60px;
+      backdrop-filter: blur(20px);
+    }
+    .nav-card h1 {
+      font-size: 72px;
+      font-weight: 700;
+      line-height: 1;
+      background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 40px;
+    }
+    .nav-card p {
+      font-size: 28px;
+      line-height: 1.3;
+      color: #fff;
+      font-weight: 400;
+    }
+
+    /* ── AvatarNames list (right) — exact Figma order ── */
+    .avatar-names {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-top: 8px;
+    }
+
+    /* User chip — TMA AvatarNames component */
+    .user-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 8px;
+      cursor: default;
+    }
+
+    /* Avatar — 24px, rounded-full, hover state */
+    .avatar {
+      display: inline-flex;
+      shrink: 0;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 80px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.04);
+      transition: opacity 0.15s;
+    }
+    .avatar:hover { opacity: 0.85; }
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .avatar--initials {
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 400;
+      color: #000;
+    }
+
+    .user-chip__name {
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 400;
+      color: #000;
+      letter-spacing: 0;
+    }
+
+    /* ── Avatars grid (64px) ── */
+    .avatar-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .avatar-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .avatar--lg {
+      width: 64px;
+      height: 64px;
+    }
+    .avatar--lg:hover { opacity: 0.85; }
+
+    /* Avatar group — stacked 24px */
+    .avatar-group {
+      display: flex;
+      align-items: center;
+    }
+    .avatar-group .avatar {
+      margin-right: -8px;
+      border: 2px solid #fff;
+    }
+    .avatar-group .avatar:last-child { margin-right: 0; }
+
+    .utility-row {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .label { font-size: 11px; color: #999; margin-bottom: 6px; }
+
+    .code-block {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 24px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      max-width: 900px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      .frame { gap: 48px; padding: 64px; border-radius: 48px; }
+      .nav-card { flex: 0 0 360px; padding: 56px 40px; border-radius: 48px; }
+      .nav-card h1 { font-size: 56px; }
+      .nav-card p { font-size: 22px; }
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 24px 16px; }
+      .section { margin-bottom: 48px; }
+      .frame {
+        flex-direction: column;
+        gap: 32px;
+        padding: 32px 24px;
+        border-radius: 32px;
+        max-width: 100%;
+      }
+      .nav-card {
+        flex: none;
+        width: 100%;
+        padding: 40px 32px;
+        border-radius: 32px;
+      }
+      .nav-card h1 { font-size: 40px; margin-bottom: 16px; }
+      .nav-card p { font-size: 18px; }
+      .avatar-names { width: 100%; }
+      .avatar-grid { width: 100%; }
+      .utility-row { flex-wrap: wrap; gap: 16px; }
+      .code-block {
+        padding: 16px;
+        font-size: 12px;
+        border-radius: 8px;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      body { padding: 16px 12px; }
+      .frame { padding: 24px 16px; border-radius: 24px; gap: 24px; }
+      .nav-card { padding: 28px 20px; border-radius: 24px; }
+      .nav-card h1 { font-size: 32px; }
+      .nav-card p { font-size: 16px; }
+      .avatar-row { gap: 12px; }
+      .avatar--lg { width: 56px; height: 56px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════
+       AVATAR NAMES — matches Figma node 30485:156802
+       Pattern: <user-chip> = 24px avatar + 14px name
+  ══════════════════════════════════════════ -->
+  <div class="section">
+    <p class="section-title">AvatarNames — as used in tables, chat lists &amp; sidebars</p>
+    <div class="frame">
+      <div class="nav-card">
+        <h1>AvatarNames</h1>
+      </div>
+
+      <div class="avatar-names" id="avatar-names-list">
+        <!-- Rendered by JS from design/avatar-names.json data -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       AVATARS — matches Figma node 30485:156827
+       Pattern: 64px photo / initials / groups
+  ══════════════════════════════════════════ -->
+  <div class="section">
+    <p class="section-title">Avatars — 64px components</p>
+    <div class="frame">
+      <div class="nav-card">
+        <h1>Avatars</h1>
+        <p style="margin-top:24px;font-size:22px;line-height:1.4;">
+          From Figma community &amp; Unsplash.<br>All avatars support hover state.
+        </p>
+      </div>
+
+      <div class="avatar-grid">
+        <div>
+          <p class="label">Male</p>
+          <div class="avatar-row" id="row-male"></div>
+        </div>
+        <div>
+          <p class="label">Female</p>
+          <div class="avatar-row" id="row-female"></div>
+        </div>
+        <div>
+          <p class="label">3D</p>
+          <div class="avatar-row" id="row-3d"></div>
+        </div>
+        <div>
+          <p class="label">Abstract</p>
+          <div class="avatar-row" id="row-abstract"></div>
+        </div>
+        <div>
+          <p class="label">Groups &amp; utilities (24px)</p>
+          <div class="utility-row">
+            <div class="avatar avatar--lg"><img src="../images/avatars/AvatarByewind.png" alt="ByeWind"></div>
+            <div class="avatar-group" id="avatar-group"></div>
+            <div class="avatar avatar--initials" style="background:#edeefc;">F</div>
+            <div class="avatar avatar--initials" style="background:#e6f1fd;">+3</div>
+            <div class="avatar"><img src="../images/avatars/AvatarDefault.png" alt="Default user"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       LARAVEL CODE — how each pattern maps
+  ══════════════════════════════════════════ -->
+  <div class="section">
+    <p class="section-title">Laravel Blade equivalent</p>
+    <pre class="code-block"><code>&lt;!-- User chip (AvatarNames pattern) --&gt;
+&lt;x-user-chip name="Drew Cano" avatar="AvatarMale01" /&gt;
+
+&lt;!-- Initials fallback --&gt;
+&lt;x-user-chip name="Bruce Wayne" initial="B" color="#7dbbff" /&gt;
+
+&lt;!-- 64px standalone avatar --&gt;
+&lt;x-avatar src="{{ asset('images/avatars/AvatarMale01.png') }}" alt="Drew Cano" :size="64" /&gt;
+
+&lt;!-- Loop all users from registry --&gt;
+@foreach (App\Support\Avatars::users() as $user)
+    &lt;x-user-chip
+        :name="$user['name']"
+        :avatar="$user['avatar']"
+        :initial="$user['initial'] ?? null"
+        :color="$user['color'] ?? '#edeefc'"
+    /&gt;
+@endforeach</code></pre>
+  </div>
+
+<script>
+const BASE = '../images/avatars/';
+
+// Exact Figma AvatarNames order (by y-position in design)
+const users = [
+  { name: 'Andi Lane',           avatar: 'AvatarFemale01',   },
+  { name: 'Aliah Davis',         avatar: 'AvatarFemale02',   },
+  { name: 'Alexander Williams',  avatar: 'AvatarMale06',     },
+  { name: 'ByeWind',             avatar: 'AvatarByewind',    },
+  { name: 'Bruce Wayne',         initial: 'B', color: '#7dbbff' },
+  { name: 'James Wilson',        avatar: 'AvatarMale05',     },
+  { name: 'Brie Larson',         avatar: 'AvatarFemale03',   },
+  { name: 'Christopher Davis',   avatar: 'Avatar3d01',       },
+  { name: 'Drew Cano',           avatar: 'AvatarMale01',     },
+  { name: 'Emma Smith',          avatar: 'Avatar3d04',       },
+  { name: 'John Smith',          avatar: 'AvatarMale02',     },
+  { name: 'Benjamin Thompson',   avatar: 'AvatarAbstract03', },
+  { name: 'Samuel Anderson',     avatar: 'AvatarAbstract04', },
+  { name: 'Sophia Martinez',     avatar: 'Avatar3d03',       },
+  { name: 'Isabella Davis',      avatar: 'AvatarAbstract01', },
+  { name: 'Kate Morrison',       avatar: 'AvatarFemale04',   },
+  { name: 'Koray Okumus',        avatar: 'AvatarMale04',     },
+  { name: 'Melody Macy',         avatar: 'AvatarFemale05',   },
+  { name: 'Matthew Johnson',     avatar: 'AvatarAbstract02', },
+  { name: 'Michael Brown',       initial: 'M', color: '#71dd8c' },
+  { name: 'Natali Craig',        avatar: 'AvatarFemale06',   },
+  { name: 'Orlando Diggs',       avatar: 'AvatarMale03',     },
+  { name: 'Olivia Johnson',      avatar: 'Avatar3d02',       },
+];
+
+function avatarEl(user, size = '') {
+  const cls = `avatar${size ? ' avatar--lg' : ''}`;
+  if (user.avatar) {
+    return `<div class="${cls}"><img src="${BASE}${user.avatar}.png" alt="${user.name}"></div>`;
+  }
+  return `<div class="${cls} avatar--initials" style="background:${user.color}">${user.initial}</div>`;
+}
+
+function userChip(user) {
+  return `<div class="user-chip">${avatarEl(user)}<span class="user-chip__name">${user.name}</span></div>`;
+}
+
+// Render AvatarNames list
+document.getElementById('avatar-names-list').innerHTML = users.map(userChip).join('');
+
+// Render 64px grids
+const rows = {
+  'row-male':     ['AvatarMale01','AvatarMale02','AvatarMale03','AvatarMale04','AvatarMale05','AvatarMale06'],
+  'row-female':   ['AvatarFemale01','AvatarFemale02','AvatarFemale03','AvatarFemale04','AvatarFemale05','AvatarFemale06'],
+  'row-3d':       ['Avatar3d01','Avatar3d02','Avatar3d03','Avatar3d04'],
+  'row-abstract': ['AvatarAbstract01','AvatarAbstract02','AvatarAbstract03','AvatarAbstract04'],
+};
+
+for (const [id, keys] of Object.entries(rows)) {
+  document.getElementById(id).innerHTML = keys.map(k =>
+    `<div class="avatar avatar--lg"><img src="${BASE}${k}.png" alt="${k}"></div>`
+  ).join('');
+}
+
+// Avatar group stack
+const groupKeys = ['AvatarByewind','AvatarFemale01','AvatarMale02','AvatarMale04','AvatarAbstract02','AvatarFemale06'];
+document.getElementById('avatar-group').innerHTML =
+  groupKeys.map(k => `<div class="avatar"><img src="${BASE}${k}.png" alt="${k}"></div>`).join('') +
+  `<div class="avatar avatar--initials" style="background:#ededed">+3</div>`;
+</script>
+</body>
+</html>

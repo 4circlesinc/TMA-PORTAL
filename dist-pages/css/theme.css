@@ -1,0 +1,240 @@
+/*
+ * TMA Theme — Semantic Component Variables
+ *
+ * Imports tokens.css primitives and maps them to named component slots.
+ * Use this file (after tokens.css) when you need component-scoped overrides
+ * or want to theme a page/section without touching token values.
+ *
+ * Load order in HTML:
+ *   1. tokens.css   — primitive design tokens (:root)
+ *   2. theme.css    — semantic component aliases (:root + component roots)
+ *   3. components.css / button.css / card.css … — component styles
+ */
+
+/* ─── Global resets (scoped to TMA pages) ─── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Page shell defaults ─── */
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-feature-settings: var(--font-features);
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: var(--letter-spacing);
+}
+
+/* ─── Button component slots ─── */
+
+:root {
+  --btn-font-family:      var(--font-family);
+  --btn-font-features:    var(--font-features);
+  --btn-color-filled-bg:  var(--color-black);
+  --btn-color-filled-fg:  var(--color-white);
+  --btn-color-grey-bg:    var(--color-hover);
+  --btn-color-grey-hover: var(--color-hover-deep);
+  --btn-color-outline-border: var(--color-border-medium);
+  --btn-color-hover-bg:   var(--color-hover);
+  --btn-radius-pill:      var(--radius-pill);
+  --btn-radius-sm:        var(--radius-12);
+  --btn-radius-md:        var(--radius-14);
+  --btn-radius-lg:        var(--radius-16);
+  --btn-radius-xl:        var(--radius-20);
+  --btn-size-sm:          var(--size-sm);
+  --btn-size-md:          var(--size-md);
+  --btn-size-lg:          var(--size-lg);
+  --btn-size-xl:          var(--size-xl);
+  --btn-transition:       var(--transition-base);
+}
+
+/* ─── Card component slots ─── */
+
+:root {
+  --card-bg:       var(--color-bg-card);
+  --card-radius:   var(--radius-16);
+  --card-gap:      var(--space-8);
+  --card-color-text:     var(--color-text-primary);
+  --card-color-sub:      var(--color-text-secondary);
+  --card-border:         var(--color-border-soft);
+  --card-chip-purple:    var(--color-violet);
+  --card-chip-blue:      var(--color-blue);
+  --card-chip-green:     var(--color-green);
+  --card-chip-orange:    var(--color-orange);
+}
+
+/* ─── Input component slots ─── */
+
+:root {
+  --input-bg:             var(--color-bg-input);
+  --input-radius:         var(--radius-16);
+  --input-border:         var(--color-border-medium);
+  --input-border-focus:   var(--color-border-strong);
+  --input-font-size:      var(--text-size-14);
+  --input-line-height:    var(--text-lh-14);
+  --input-color:          var(--color-text-primary);
+  --input-placeholder:    var(--color-text-placeholder);
+}
+
+/* ─── Tag component slots ─── */
+
+:root {
+  --tag-bg:       var(--color-bg-tag);
+  --tag-radius:   var(--radius-8);
+  --tag-color:    var(--color-text-primary);
+  --tag-close-opacity: var(--opacity-inactive);
+}
+
+/* ─── Tab group component slots ─── */
+
+:root {
+  --tab-font-size:        var(--text-size-14);
+  --tab-line-height:      var(--text-lh-14);
+  --tab-track-radius:     var(--radius-20);
+  --tab-track-padding:    var(--space-4);
+  --tab-track-gap:        var(--space-4);
+  --tab-radius:           var(--radius-16);
+  --tab-min-height:       var(--size-sm);
+  --tab-padding-x:        var(--space-12);
+  --tab-padding-y:        var(--space-4);
+  --tab-underline-gap:    var(--space-4);
+  --tab-icon-size:        var(--icon-size-lg);
+  --tab-icon-size-sm:     var(--icon-size-xs);
+}
+
+/* ─── Tooltip component slots ─── */
+
+:root {
+  --tooltip-radius:       var(--radius-12);
+  --tooltip-padding-x:    var(--space-8);
+  --tooltip-padding-y:    var(--space-4);
+  --tooltip-font-size:    var(--text-size-12);
+  --tooltip-line-height:  var(--text-lh-12);
+  --tooltip-title-size:   var(--text-size-14);
+  --tooltip-title-line-height: var(--text-lh-14);
+  --tooltip-max-width:    255px;
+  --tooltip-bg:           var(--color-bg-tooltip);
+  --tooltip-arrow-size:   8px;
+}
+
+/* ─── Table component slots ─── */
+
+:root {
+  --table-border:         var(--color-border-soft);
+  --table-row-hover:      var(--color-hover);
+  --table-header-color:   var(--color-text-secondary);
+  --table-font-size:      var(--text-size-14);
+  --table-line-height:    var(--text-lh-14);
+  --table-cell-padding:   var(--space-12) var(--space-16);
+}
+
+/* ─── Global search / popup slots ─── */
+
+:root {
+  --search-popup-width:   var(--popup-width-compact);
+  --search-popup-radius:  var(--popup-radius-compact);
+  --search-popup-bg:      var(--color-bg-popup);
+  --search-popup-shadow:  var(--shadow-popup);
+  --search-highlight:     var(--color-indigo);
+  --search-row-hover:     var(--color-hover);
+  --search-label-color:   var(--color-text-secondary);
+  --search-placeholder:   var(--color-text-placeholder);
+}
+
+/* ─── Toast slots ─── */
+
+:root {
+  --toast-bg:       var(--color-bg-popup);
+  --toast-radius:   var(--radius-16);
+  --toast-shadow:   var(--shadow-popup);
+  --toast-blur:     var(--blur-40);
+}
+
+/* ─── Badge / StatusBadge slots ─── */
+
+:root {
+  --badge-radius:   var(--radius-pill);
+  --badge-font-size:    var(--text-size-12);
+  --badge-line-height:  var(--text-lh-12);
+  --badge-color-green:  var(--color-green);
+  --badge-color-red:    var(--color-red);
+  --badge-color-orange: var(--color-orange);
+  --badge-color-blue:   var(--color-blue);
+  --badge-color-purple: var(--color-violet);
+}
+
+/* ─── Chart palette slots ─── */
+
+:root {
+  --chart-1: var(--chart-cyan);
+  --chart-2: var(--chart-mint);
+  --chart-3: var(--chart-black);
+  --chart-4: var(--chart-blue);
+  --chart-5: var(--chart-purple);
+  --chart-6: var(--chart-green);
+  --chart-7: var(--chart-orange);
+  --chart-8: var(--chart-yellow);
+  --chart-9: var(--chart-pink);
+  --chart-10: var(--chart-red);
+}
+
+/* ─── Pagination slots ─── */
+
+:root {
+  --pagination-border:   var(--color-border-soft);
+  --pagination-radius:   var(--radius-12);
+  --pagination-font-size: var(--text-size-12);
+  --pagination-active-bg: var(--color-hover);
+}
+
+/* ─── Filter & Sort / Function Bar slots ─── */
+
+:root {
+  --filter-radius: var(--radius-12);
+  --filter-bg:     var(--color-hover);
+  --filter-border: var(--color-border-soft);
+}
+
+/* ─── Popover slots ─── */
+
+:root {
+  --popover-bg:     var(--color-white);
+  --popover-radius: var(--radius-16);
+  --popover-shadow: var(--shadow-popup);
+  --popover-border: var(--color-border-soft);
+}
+
+/* ─── Heading gradient (heading128 token) ─── */
+
+.tma-heading-gradient {
+  background: linear-gradient(100.45deg, #ffffff 0.92%, #dcd4ff 46.31%, #e2cbff 55.92%, #98baff 66.83%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: var(--text-size-128, 128px);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+}
+
+/* ─── Frosted glass utility ─── */
+
+.tma-glass {
+  background: var(--color-bg-popup-glass);
+  backdrop-filter: var(--blur-40);
+  -webkit-backdrop-filter: var(--blur-40);
+}
+
+.tma-glass--tooltip {
+  background: var(--color-bg-tooltip);
+  backdrop-filter: var(--blur-20);
+  -webkit-backdrop-filter: var(--blur-20);
+}

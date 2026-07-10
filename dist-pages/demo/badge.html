@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Badge</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/badge.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+    .page {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      max-width: 720px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px 20px 20px;
+    }
+    .card__title {
+      font-size: 16px;
+      line-height: 32px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+    .card__hint {
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 16px;
+      color: rgba(0, 0, 0, 0.4);
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 24px;
+    }
+    .badge-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      min-width: 72px;
+    }
+    .badge-cell__label {
+      font-size: 12px;
+      line-height: 16px;
+      color: rgba(0, 0, 0, 0.4);
+    }
+    .setup {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    a.doc-link {
+      font-size: 14px;
+      line-height: 20px;
+      color: var(--color-primary-dark);
+      text-decoration: none;
+    }
+    a.doc-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <p><a class="doc-link" href="badge-documentation.html">View full documentation →</a></p>
+
+    <div class="card">
+      <p class="card__title">Badge types</p>
+      <div class="badge-row" id="types-root"></div>
+    </div>
+
+    <div class="card">
+      <p class="card__title">On icons</p>
+      <div id="icons-indigo"></div>
+      <div style="margin-top: 20px" id="icons-red"></div>
+      <p class="card__hint">Number badge on the bell icon — indigo and red variants.</p>
+    </div>
+
+    <div class="card">
+      <p class="card__title">On avatars</p>
+      <div class="badge-row" id="avatars-root"></div>
+      <p class="card__hint">Dot vs number styles for the same notification type.</p>
+    </div>
+
+    <div class="card">
+      <p class="card__title">On button text</p>
+      <div id="button-root"></div>
+    </div>
+
+    <pre class="setup" id="setup-snippet"></pre>
+  </div>
+
+<script src="../js/badge-icons.js"></script>
+<script src="../js/badge.js"></script>
+<script>
+const B = window.TMABadge;
+
+function mountTypes() {
+  const root = document.getElementById('types-root');
+  const items = [
+    { label: 'Dot', html: B.renderBadge({ type: 'dot', dotColor: 'indigo' }) },
+    { label: '12', html: B.renderBadge({ type: 'number', value: '12', color: 'indigo' }) },
+    { label: '12 red', html: B.renderBadge({ type: 'number', value: '12', color: 'red' }) },
+    { label: '99+', html: B.renderBadge({ type: 'number', value: '99+', color: 'indigo' }) },
+  ];
+
+  root.innerHTML = items.map((item) => `
+    <div class="badge-cell">
+      <span class="badge-cell__label">${item.label}</span>
+      ${item.html}
+    </div>
+  `).join('');
+}
+
+function mountIcons() {
+  document.getElementById('icons-indigo').innerHTML = B.renderIconGroup({
+    nodeId: 'demo-icons-indigo',
+    badgeColor: 'indigo',
+  });
+  document.getElementById('icons-red').innerHTML = B.renderIconGroup({
+    nodeId: 'demo-icons-red',
+    badgeColor: 'red',
+  });
+}
+
+function mountAvatars() {
+  const root = document.getElementById('avatars-root');
+  root.innerHTML = [
+    B.renderAvatarIcon({
+      nodeId: 'demo-avatar-dot',
+      badge: { type: 'dot', dotColor: 'indigo' },
+    }),
+    B.renderAvatarIcon({
+      nodeId: 'demo-avatar-number',
+      badge: { type: 'number', value: '99+', color: 'indigo' },
+    }),
+  ].join('');
+}
+
+function mountButton() {
+  document.getElementById('button-root').innerHTML = B.renderAssetsButton({ nodeId: 'demo-assets-btn' });
+}
+
+document.getElementById('setup-snippet').textContent = `// Include badge.css + badge-icons.js + badge.js
+window.TMABadge.renderBadge({ type: 'number', value: '12', color: 'indigo' });
+window.TMABadge.renderIconSlot({
+  icon: 'Bell20Duotone',
+  badge: { type: 'number', value: '12', color: 'indigo' },
+});
+window.TMABadge.renderAvatarIcon({
+  badge: { type: 'dot', dotColor: 'indigo' },
+});`;
+
+mountTypes();
+mountIcons();
+mountAvatars();
+mountButton();
+</script>
+</body>
+</html>

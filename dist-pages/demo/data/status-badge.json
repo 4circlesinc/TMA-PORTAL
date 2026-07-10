@@ -1,0 +1,23 @@
+{
+  "slug": "status-badge",
+  "name": "Status badge",
+  "columns": [
+    { "color": "purple", "dot": "32728:395811", "pill": "32728:395812" },
+    { "color": "green", "dot": "32728:395819", "pill": "32728:395820" },
+    { "color": "blue", "dot": "32728:395813", "pill": "32728:395814" },
+    { "color": "orange", "dot": "32728:395815", "pill": "32728:395816" },
+    { "color": "muted", "dot": "32728:395817", "pill": "32728:395818" }
+  ],
+  "items": [
+    { "nodeId": "32728:395811", "variant": "dot-purple" },
+    { "nodeId": "32728:395812", "variant": "pill-purple" },
+    { "nodeId": "32728:395819", "variant": "dot-green" },
+    { "nodeId": "32728:395820", "variant": "pill-green" },
+    { "nodeId": "32728:395813", "variant": "dot-blue" },
+    { "nodeId": "32728:395814", "variant": "pill-blue" },
+    { "nodeId": "32728:395815", "variant": "dot-orange" },
+    { "nodeId": "32728:395816", "variant": "pill-orange" },
+    { "nodeId": "32728:395817", "variant": "dot-muted" },
+    { "nodeId": "32728:395818", "variant": "pill-muted" }
+  ]
+}

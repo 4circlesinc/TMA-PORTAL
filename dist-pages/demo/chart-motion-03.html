@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — ChartMotion 03</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+    }
+    .frame {
+      display: flex;
+      gap: 64px;
+      align-items: flex-start;
+      background: #fff;
+      border-radius: 48px;
+      padding: 64px;
+      max-width: 1100px;
+    }
+    .nav-card {
+      flex: 0 0 280px;
+      background: #000;
+      border-radius: 48px;
+      padding: 40px 32px;
+    }
+    .nav-card h1 {
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 16px;
+      background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title {
+      font-size: 13px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+    }
+    .setup {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 28px;
+      overflow-x: auto;
+    }
+    .chart-wrap {
+      border: 1px solid #eee;
+      border-radius: 16px;
+      padding: 32px 24px 24px;
+      background: #fafafa;
+      overflow: visible;
+    }
+    .hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #888;
+    }
+    @media (max-width: 900px) {
+      body { padding: 24px 16px; }
+      .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; }
+      .nav-card { width: 100%; flex: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <p class="section-title">Chart ↗ — ChartMotion 03</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>ChartMotion</h1>
+      <p>Third chart from Portal-Design — Figma-accurate line chart with gradient area fill and cursor-following tooltip.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;!-- One-time setup --&gt;
+@include('partials.charts')
+
+&lt;!-- Figma preset (line) --&gt;
+&lt;x-chart-motion-line /&gt;</pre>
+
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll">
+          <div id="chart" class="tma-chart-motion-line" role="group" aria-label="Monthly line chart"></div>
+        </div>
+        <p class="hint">Move your cursor along the line to see the ChartDot and value tooltip. On touch devices, drag across the chart.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+function formatY(v) {
+  return v === 0 ? '0' : `${v / 1000}K`;
+}
+
+function formatValue(v) {
+  return Math.round(v).toLocaleString();
+}
+
+function renderChart(root, preset) {
+  const { yMax, yStep, plot, linePath, areaPath, points } = preset;
+  const yTicks = [];
+  for (let v = yMax; v >= 0; v -= yStep) yTicks.push(v);
+
+  const viewBox = `${plot.x} 0 ${plot.width} 400`;
+  const gradId = 'cm-line-demo';
+
+  root.dataset.plot = JSON.stringify(plot);
+  root.dataset.ymax = String(yMax);
+
+  const yAxis = document.createElement('div');
+  yAxis.className = 'tma-chart-motion-line__y-axis';
+  yAxis.setAttribute('aria-hidden', 'true');
+  yTicks.forEach(tick => {
+    const span = document.createElement('span');
+    span.className = 'tma-chart-motion-line__y-label';
+    span.textContent = formatY(tick);
+    yAxis.appendChild(span);
+  });
+
+  const plotEl = document.createElement('div');
+  plotEl.className = 'tma-chart-motion-line__plot';
+
+  const grid = document.createElement('div');
+  grid.className = 'tma-chart-motion-line__grid';
+  grid.setAttribute('aria-hidden', 'true');
+  yTicks.forEach(tick => {
+    const line = document.createElement('span');
+    line.className = 'tma-chart-motion-line__grid-line' + (tick === 0 ? ' tma-chart-motion-line__grid-line--base' : '');
+    grid.appendChild(line);
+  });
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('class', 'tma-chart-motion-line__svg');
+  svg.setAttribute('viewBox', viewBox);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+
+  const defs = document.createElementNS(svgNS, 'defs');
+
+  const areaGrad = document.createElementNS(svgNS, 'radialGradient');
+  areaGrad.setAttribute('id', `${gradId}-area`);
+  areaGrad.setAttribute('cx', '422.499');
+  areaGrad.setAttribute('cy', '106.13');
+  areaGrad.setAttribute('r', '1');
+  areaGrad.setAttribute('gradientUnits', 'userSpaceOnUse');
+  areaGrad.setAttribute('gradientTransform', 'rotate(90) scale(246.37 377.499)');
+  [['0%', '0.1'], ['100%', '0']].forEach(([offset, opacity]) => {
+    const stop = document.createElementNS(svgNS, 'stop');
+    stop.setAttribute('offset', offset);
+    stop.setAttribute('stop-color', '#000');
+    stop.setAttribute('stop-opacity', opacity);
+    areaGrad.appendChild(stop);
+  });
+
+  const lineGrad = document.createElementNS(svgNS, 'linearGradient');
+  lineGrad.setAttribute('id', `${gradId}-line`);
+  lineGrad.setAttribute('x1', '48.559');
+  lineGrad.setAttribute('y1', '331.205');
+  lineGrad.setAttribute('x2', '800');
+  lineGrad.setAttribute('y2', '331.205');
+  lineGrad.setAttribute('gradientUnits', 'userSpaceOnUse');
+  [['0%', '0.4'], ['100%', '1']].forEach(([offset, opacity]) => {
+    const stop = document.createElementNS(svgNS, 'stop');
+    stop.setAttribute('offset', offset);
+    stop.setAttribute('stop-color', '#000');
+    stop.setAttribute('stop-opacity', opacity);
+    lineGrad.appendChild(stop);
+  });
+
+  defs.appendChild(areaGrad);
+  defs.appendChild(lineGrad);
+  svg.appendChild(defs);
+
+  const area = document.createElementNS(svgNS, 'path');
+  area.setAttribute('class', 'tma-chart-motion-line__area');
+  area.setAttribute('d', areaPath);
+  area.setAttribute('fill', `url(#${gradId}-area)`);
+
+  const stroke = document.createElementNS(svgNS, 'path');
+  stroke.setAttribute('class', 'tma-chart-motion-line__stroke');
+  stroke.setAttribute('d', linePath);
+  stroke.setAttribute('fill', 'none');
+  stroke.setAttribute('stroke', `url(#${gradId}-line)`);
+  stroke.setAttribute('vector-effect', 'non-scaling-stroke');
+
+  const glow = document.createElementNS(svgNS, 'path');
+  glow.setAttribute('class', 'tma-chart-motion-line__stroke-glow');
+  glow.setAttribute('d', linePath);
+  glow.setAttribute('fill', 'none');
+  glow.setAttribute('vector-effect', 'non-scaling-stroke');
+
+  svg.appendChild(area);
+  svg.appendChild(stroke);
+  svg.appendChild(glow);
+
+  const hover = document.createElement('div');
+  hover.className = 'tma-chart-motion-line__hover';
+  hover.setAttribute('aria-hidden', 'true');
+
+  const cursor = document.createElement('div');
+  cursor.className = 'tma-chart-motion-line__cursor';
+  const dot = document.createElement('span');
+  dot.className = 'tma-chart-motion-line__dot';
+  const tooltip = document.createElement('span');
+  tooltip.className = 'tma-chart-motion-line__tooltip';
+  cursor.appendChild(dot);
+  cursor.appendChild(tooltip);
+  hover.appendChild(cursor);
+
+  const xAxis = document.createElement('div');
+  xAxis.className = 'tma-chart-motion-line__x-axis';
+  xAxis.setAttribute('aria-hidden', 'true');
+  points.forEach(point => {
+    const span = document.createElement('span');
+    span.className = 'tma-chart-motion-line__x-label';
+    span.textContent = point.label;
+    xAxis.appendChild(span);
+  });
+
+  plotEl.appendChild(grid);
+  plotEl.appendChild(svg);
+  plotEl.appendChild(hover);
+  plotEl.appendChild(xAxis);
+  root.appendChild(yAxis);
+  root.appendChild(plotEl);
+}
+
+</script>
+<script src="../js/chart-motion.js"></script>
+<script>
+fetch('./data/chart-motion-03.json')
+  .then(r => r.json())
+  .then(preset => {
+    const chart = document.getElementById('chart');
+    renderChart(chart, preset);
+    window.PortalChartMotion.initChart(chart);
+  });
+</script>
+</body>
+</html>

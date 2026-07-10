@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — DatePicker form example</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/date-picker.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f9f9fa;
+      color: #000;
+      min-height: 100vh;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    .page-links {
+      text-align: center;
+      padding: 16px;
+      font-size: 13px;
+    }
+    .page-links a {
+      color: var(--color-primary-dark);
+      text-decoration: none;
+    }
+    .page-links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <p class="page-links">
+    <a href="date-picker-guidance.html">← Design guidance</a>
+  </p>
+
+  <form class="tma-date-picker-form" id="event-form">
+    <h1 class="tma-date-picker-form__title">Schedule an event</h1>
+    <p class="tma-date-picker-form__desc">Click a field to open the picker. Selected values are written to hidden inputs for form submission.</p>
+
+    <div class="tma-date-picker-form__fields">
+      <div id="field-event-date"></div>
+      <div id="field-event-datetime"></div>
+      <div id="field-event-range"></div>
+    </div>
+
+    <div class="tma-date-picker-form__actions">
+      <button type="submit" class="tma-date-picker-form__submit">Submit</button>
+      <button type="reset" class="tma-date-picker-form__reset">Reset</button>
+    </div>
+
+    <pre class="tma-date-picker-form__output" id="form-output">Submit the form to see values here.</pre>
+  </form>
+
+<script src="../js/date-picker-icons.js"></script>
+<script src="../js/date-picker.js"></script>
+<script>
+const DP = window.TMADatePicker;
+
+const fields = {
+  eventDate: DP.attachField(document.getElementById('field-event-date'), {
+    type: 'date-only',
+    name: 'event_date',
+    label: 'Event date',
+    placeholder: 'Pick a date',
+  }),
+  eventDateTime: DP.attachField(document.getElementById('field-event-datetime'), {
+    type: 'date-and-time',
+    name: 'event_datetime',
+    label: 'Event date & time',
+    placeholder: 'Pick date and time',
+    closeOnSelect: false,
+  }),
+  eventRange: DP.attachField(document.getElementById('field-event-range'), {
+    type: 'date-range',
+    name: 'event_range',
+    label: 'Date range',
+    placeholder: 'Pick start and end dates',
+    closeOnSelect: true,
+  }),
+};
+
+document.getElementById('event-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const data = new FormData(e.target);
+  const lines = [];
+  for (const [key, value] of data.entries()) {
+    lines.push(`${key}: ${value || '(empty)'}`);
+  }
+  document.getElementById('form-output').textContent = lines.join('\n') || 'No values selected.';
+});
+
+document.getElementById('event-form').addEventListener('reset', () => {
+  setTimeout(() => {
+    document.querySelectorAll('.tma-date-picker-field__trigger').forEach((btn) => {
+      const field = btn.closest('.tma-date-picker-field');
+      const placeholder = field.id === 'field-event-date' ? 'Pick a date'
+        : field.id === 'field-event-datetime' ? 'Pick date and time'
+        : 'Pick start and end dates';
+      btn.textContent = placeholder;
+      btn.setAttribute('data-empty', '');
+    });
+    document.querySelectorAll('.tma-date-picker-field input[type="hidden"]').forEach((input) => {
+      input.value = '';
+    });
+    document.getElementById('form-output').textContent = 'Form reset.';
+  }, 0);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "slug": "function-bar",
+  "name": "Function bar",
+  "items": [
+    { "nodeId": "32728:395823", "variant": "default" },
+    { "nodeId": "32728:395824", "variant": "selected", "selectedCount": 2 }
+  ]
+}

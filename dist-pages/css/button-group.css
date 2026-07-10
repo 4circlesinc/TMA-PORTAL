@@ -1,0 +1,432 @@
+/* TMA — Button Group documentation — 33067:4918 */
+
+.tma-button-group-doc {
+  background: #fff;
+  border-radius: 48px;
+  padding: 80px;
+  width: 1200px;
+  max-width: 100%;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  color: #000;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-button-group-doc__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-button-group-doc__title {
+  margin: 0;
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 600;
+}
+
+.tma-button-group-doc__intro {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.tma-button-group-doc__section {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 48px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-button-group-doc__section-title {
+  margin: 0;
+  font-size: 48px;
+  line-height: 56px;
+  font-weight: 400;
+}
+
+.tma-button-group-doc__examples-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* Shared group */
+
+.tma-button-group-doc__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+}
+
+/* Pagination — 33067:4925 */
+
+.tma-button-group-doc__group--pagination {
+  width: 100%;
+  height: 28px;
+}
+
+.tma-button-group-doc__page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 4px 20px;
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  background: transparent;
+  color: #000;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-button-group-doc__page-btn:first-child {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.tma-button-group-doc__page-btn--active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-button-group-doc__page-btn--icon {
+  flex: 1 1 0;
+  padding: 4px;
+}
+
+.tma-button-group-doc__page-btn:not(.tma-button-group-doc__page-btn--active):hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-button-group-doc__page-btn--active:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-button-group-doc__page-btn:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tma-button-group-doc__page-icon,
+.tma-button-group-doc__page-icon svg {
+  display: block;
+  line-height: 0;
+}
+
+/* Icon toolbar — 33067:4926 */
+
+.tma-button-group-doc__group--icons {
+  gap: 8px;
+}
+
+.tma-button-group-doc__icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #000;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-button-group-doc__icon-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-button-group-doc__icon-btn:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tma-button-group-doc__icon-btn-icon,
+.tma-button-group-doc__icon-btn-svg {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.tma-button-group-doc__tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 2;
+}
+
+.tma-button-group-doc__icon-btn:hover .tma-button-group-doc__tooltip,
+.tma-button-group-doc__icon-btn:focus-visible .tma-button-group-doc__tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.tma-button-group-doc__tooltip-label {
+  color: #fff;
+}
+
+.tma-button-group-doc__tooltip-shortcut {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Auth — 33067:4927 */
+
+.tma-button-group-doc__group--auth {
+  border-radius: 12px;
+}
+
+.tma-button-group-doc__pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-button-group-doc__pill-btn--grey {
+  background: rgba(0, 0, 0, 0.04);
+  color: #000;
+}
+
+.tma-button-group-doc__pill-btn--filled {
+  background: #000;
+  color: #fff;
+}
+
+.tma-button-group-doc__pill-btn--grey:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tma-button-group-doc__pill-btn--filled:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.tma-button-group-doc__pill-btn:active {
+  transform: scale(0.98);
+}
+
+/* Nav — 33067:4928 */
+
+.tma-button-group-doc__group--nav {
+  gap: 16px;
+  width: 384px;
+  max-width: 100%;
+  min-width: 313px;
+  border-radius: 8px;
+}
+
+.tma-button-group-doc__nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  gap: 6px;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-button-group-doc__nav-btn--grey {
+  background: rgba(0, 0, 0, 0.04);
+  color: #000;
+}
+
+.tma-button-group-doc__nav-btn--filled {
+  background: #000;
+  color: #fff;
+}
+
+.tma-button-group-doc__nav-btn--grey:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tma-button-group-doc__nav-btn--filled:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.tma-button-group-doc__nav-btn-icon,
+.tma-button-group-doc__nav-btn-svg {
+  display: inline-flex;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+/* Social brands — 33067:4929 */
+
+.tma-button-group-doc__group--social {
+  width: 400px;
+  max-width: 100%;
+}
+
+.tma-button-group-doc__brand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 12px;
+  border: 0;
+  border-radius: 20px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-button-group-doc__brand-btn--google {
+  background: #8156fa;
+}
+
+.tma-button-group-doc__brand-btn--apple {
+  background: #000;
+}
+
+.tma-button-group-doc__brand-btn--facebook {
+  background: #1877f2;
+}
+
+.tma-button-group-doc__brand-btn:hover {
+  filter: brightness(1.05);
+}
+
+.tma-button-group-doc__brand-btn:active {
+  filter: brightness(0.95);
+}
+
+.tma-button-group-doc__brand-icon,
+.tma-button-group-doc__brand-icon svg {
+  display: block;
+  line-height: 0;
+}
+
+/* Footer */
+
+.tma-button-group-doc__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 48px;
+}
+
+.tma-button-group-doc__footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tma-button-group-doc__logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tma-button-group-doc__logo-icon,
+.tma-button-group-doc__logo-icon svg,
+.tma-button-group-doc__wordmark,
+.tma-button-group-doc__wordmark-left svg,
+.tma-button-group-doc__wordmark-right svg {
+  display: block;
+  line-height: 0;
+}
+
+.tma-button-group-doc__wordmark {
+  display: flex;
+  align-items: center;
+}
+
+.tma-button-group-doc__copyright {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.tma-button-group-doc__socials {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.tma-button-group-doc__social-link,
+.tma-button-group-doc__social-link svg {
+  display: block;
+  line-height: 0;
+}
+
+@media (max-width: 900px) {
+  .tma-button-group-doc {
+    padding: 40px 24px;
+    border-radius: 28px;
+  }
+
+  .tma-button-group-doc__title {
+    font-size: 40px;
+    line-height: 48px;
+  }
+
+  .tma-button-group-doc__section-title {
+    font-size: 32px;
+    line-height: 40px;
+  }
+
+  .tma-button-group-doc__group--nav,
+  .tma-button-group-doc__group--social {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tma-button-group-doc__footer {
+    flex-direction: column;
+  }
+}

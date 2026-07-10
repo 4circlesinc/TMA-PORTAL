@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Cursors Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/cursors.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .section { margin-bottom: 64px; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .frame { display: flex; gap: 48px; background: #fff; border-radius: 48px; padding: 48px; max-width: 100%; }
+    .nav-card { flex: 0 0 300px; background: #000; border-radius: 48px; padding: 40px 32px; }
+    .nav-card h1 {
+      font-size: 44px; font-weight: 700; line-height: 1; margin-bottom: 16px;
+      background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .setup {
+      background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px;
+      font-size: 13px; line-height: 1.6; margin-bottom: 24px; overflow-x: auto;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .cursor-tile {
+      border: 1px solid #e8e8ed; border-radius: 12px;
+      background: repeating-conic-gradient(#e8e8ed 0% 25%, #fafafa 0% 50%) 50% / 10px 10px;
+      padding: 16px 12px; text-align: center; transition: border-color 0.15s;
+    }
+    .cursor-tile:hover { background: #fff; border-color: #c8c8d4; }
+    .cursor-tile img { width: 32px; height: 32px; image-rendering: pixelated; margin-bottom: 10px; }
+    .cursor-tile strong { display: block; font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+    .cursor-tile span { font-size: 10px; color: #888; }
+    .playground {
+      margin-top: 32px; padding: 24px; border-radius: 16px; border: 1px dashed #ccc;
+      background: repeating-conic-gradient(#f0f0f3 0% 25%, #fafafa 0% 50%) 50% / 16px 16px;
+      min-height: 180px;
+    }
+    .playground p { font-size: 14px; color: #555; margin-bottom: 12px; }
+    .playground-hint { font-size: 12px; color: #888; margin-top: 12px; }
+
+    @media (max-width: 768px) {
+      body { padding: 24px 16px; }
+      .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; }
+      .nav-card { width: 100%; flex: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="section">
+    <p class="section-title">Cursors — one-time setup + live preview</p>
+    <div class="frame">
+      <div class="nav-card">
+        <h1>Cursors</h1>
+        <p>21 TMA cursors from Portal-Design. Link the CSS once — cursors apply globally.</p>
+      </div>
+      <div class="content">
+        <pre class="setup">&lt;!-- One-time setup in layout --&gt;
+@include('partials.cursors')
+
+&lt;!-- Or per-element --&gt;
+&lt;div style="cursor: {{ \App\Support\Cursors::css('move') }}"&gt;...&lt;/div&gt;</pre>
+
+        <div class="grid" id="cursor-grid"></div>
+
+        <div class="playground" id="playground">
+          <p><strong>Try them live</strong> — hover each tile above. The page uses TMA cursors globally.</p>
+          <p class="playground-hint">Default arrow on empty space · Pointer on links · Text cursor in inputs below</p>
+          <p style="margin-top:16px"><a href="#">Link uses pointer cursor</a></p>
+          <input type="text" placeholder="Text input uses text cursor" style="margin-top:12px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;width:100%;max-width:320px;font:inherit;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const BASE = '../images/cursors/';
+
+fetch('cursors-catalog.json')
+  .then(r => r.json())
+  .then(({ items }) => {
+    const grid = document.getElementById('cursor-grid');
+    grid.innerHTML = items.map(item => {
+      const label = item.name.replace(/^Cursors/, '');
+      const utility = item.cssVar.replace('--cursor-', '');
+      return `<div class="cursor-tile" style="cursor:var(${item.cssVar})" title="${item.css}">
+        <img src="${BASE}${item.file}" alt="${label}" width="32" height="32">
+        <strong>${label}</strong>
+        <span>${item.cssVar}</span>
+      </div>`;
+    }).join('');
+  });
+</script>
+</body>
+</html>

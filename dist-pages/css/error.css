@@ -1,0 +1,118 @@
+/*
+ * Error & utility pages — Figma Error Page (32546:96102), Maintenance (32546:96103)
+ */
+
+.tma-error {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-card);
+  font-family: var(--font-family);
+  font-feature-settings: var(--font-features);
+  color: var(--color-text-primary);
+  box-sizing: border-box;
+}
+
+.tma-error *,
+.tma-error *::before,
+.tma-error *::after {
+  box-sizing: border-box;
+}
+
+.tma-error__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-28);
+  padding: var(--space-24);
+}
+
+.tma-error__title {
+  margin: 0;
+  font-size: var(--text-size-48);
+  line-height: var(--text-lh-48);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+  text-align: center;
+}
+
+.tma-error__illustration {
+  display: block;
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+
+.tma-error__home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-12);
+  background: rgba(0, 0, 0, 0.04);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-black);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.tma-error__home-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-error__support {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+}
+
+.tma-error__support-label {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.tma-error__support-link {
+  margin: 0;
+  color: var(--color-text-link);
+  text-decoration: none;
+}
+
+.tma-error__support-link:hover {
+  text-decoration: underline;
+}
+
+.tma-error__copyright {
+  flex-shrink: 0;
+  margin: 0;
+  padding-bottom: var(--space-48);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .tma-error__body {
+    padding: var(--space-16);
+  }
+
+  .tma-error__title {
+    font-size: var(--text-size-24);
+    line-height: var(--text-lh-24);
+  }
+
+  .tma-error__illustration {
+    width: 160px;
+    height: 160px;
+  }
+}

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Frame documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/frame.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body>
+  <article class="tma-frame-doc" data-node-id="33302:2140">
+    <header class="tma-frame-doc__hero" data-node-id="33302:2141">
+      <h1 class="tma-frame-doc__title" data-node-id="33302:2142">Frame</h1>
+      <div class="tma-frame-doc__intro" data-node-id="33302:2143">
+        <p>A combination of icon and text.</p>
+        <p>You can also replace icon with avatars, logos, pictures and other components.</p>
+        <p>The difference between Frame and IconText is that Frame can contains IconText instances, and Frame provides more layout structures.</p>
+        <p>The purpose of designing Frame components is to make them carriers of content, capable of supporting content with various layout structures.</p>
+      </div>
+    </header>
+
+    <section class="tma-frame-doc__section" data-node-id="33302:2144">
+      <h2 class="tma-frame-doc__section-title" data-node-id="33302:2145">Features</h2>
+      <ul class="tma-frame-doc__list" data-node-id="33302:2146">
+        <li>State: Component’s interaction state. When previewing, this component supports changes in the interaction state.</li>
+        <li>Vertical: Arrange vertically or horizontally.</li>
+        <li>Flip: Flip layout.</li>
+      </ul>
+    </section>
+
+    <section class="tma-frame-doc__section" data-node-id="33302:2147">
+      <h2 class="tma-frame-doc__section-title" data-node-id="33302:2148">Correlation</h2>
+      <ul class="tma-frame-doc__list" data-node-id="33302:2149">
+        <li>Icon component</li>
+        <li><a href="text-documentation.html">Text component</a></li>
+        <li><a href="icon-text-documentation.html">IconText component</a></li>
+      </ul>
+      <p class="tma-frame-doc__text" data-node-id="33302:2150">Instances within the Frame can be replaced by any instance other than itself.</p>
+    </section>
+
+    <section class="tma-frame-doc__examples" data-node-id="33302:2151">
+      <h2 class="tma-frame-doc__section-title" data-node-id="33302:2152">Examples</h2>
+      <p class="tma-frame-doc__text">
+        See also the <a href="frame-instances.html">Frame instances showcase</a> (Figma 33159:3529).
+      </p>
+      <div id="frame-examples"></div>
+    </section>
+
+    <div id="doc-footer"></div>
+  </article>
+
+<script src="../js/frame-doc-icons.js"></script>
+<script src="../js/card-icons.js"></script>
+<script src="../js/button-doc-icons.js"></script>
+<script src="../js/line-icons.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script src="../js/popover-icons.js"></script>
+<script src="../js/button-instances-icons.js"></script>
+<script src="../js/date-picker-icons.js"></script>
+<script src="../js/frame-doc.js"></script>
+<script>
+window.TMAFrameDoc.mountDocumentation({
+  examplesEl: document.getElementById('frame-examples'),
+  footerEl: document.getElementById('doc-footer'),
+  socialSvg: window.TMATableSearchIcons.svg,
+});
+</script>
+</body>
+</html>

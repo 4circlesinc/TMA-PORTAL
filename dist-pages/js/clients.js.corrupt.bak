@@ -1,0 +1,623 @@
+
+
+  var VIEW_KEY = 'tma.clientsViewMode.v1';
+    FunnelSimple: 'images/icons/tma/FunnelSimple-16.svg',
+    ArrowsDownUp: 'images/icons/tma/ArrowsDownUp.svg',
+    Search: 'images/icons/tma/Search-16.svg',
+    Line: 'images/icons/tma/Line-16.svg',
+    Copy: 'images/icons/tma/Copy-16.svg',
+    ArrowLineDown: 'images/icons/tma/ArrowLineDown-16.svg',
+    CaretDown: ICON + 'CaretDown.svg',
+    ArrowLineLeft: 'images/icons/tma/ArrowLineLeft-16.svg',
+    ArrowLineRight: 'images/icons/tma/ArrowLineRight-16.svg',
+      { id: 'tma-dashboard', title: 'TM ANTOINE Advisory dashboard', project: 'TM ANTOINE Advisory', time: '12hr 30min', due: 'Mar 18, 2026', status: 'in-progress', statusLabel: 'In Progress' },
+      { id: 'api-integration', title: 'API integration review', project: 'TM ANTOINE Advisory', time: '4hr 15min', due: 'Mar 22, 2026', status: 'pending', statusLabel: 'Pending' },
+      { id: 'design-system', title: 'Design system refresh', project: 'TM ANTOINE Advisory', time: '26hr 10min', due: 'Mar 25, 2026', status: 'in-progress', statusLabel: 'In Progress' },
+      { id: 'stakeholder-review', title: 'Stakeholder review', project: 'TM ANTOINE Advisory', time: '3hr 0min', due: 'Mar 28, 2026', status: 'in-progress', statusLabel: 'In Progress' },
+      work: { jobTitle: 'Developer', department: 'Engineering', company: 'TM ANTOINE' },
+      notes: 'Primary engineering contact for advisory portal work.',
+      work: { jobTitle: 'Designer', department: 'Product Design', company: 'TM ANTOINE' },
+      notes: 'Design lead for TM ANTOINE. Best reached in the afternoon PST.',
+      work: { jobTitle: 'Product Manager', department: 'Product', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Marketing Lead', department: 'Marketing', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Engineer', department: 'Engineering', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Operations', department: 'Operations', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Analyst', department: 'Strategy', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Consultant', department: 'Advisory', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Creative Director', department: 'Creative', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Support Lead', department: 'Support', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Sales Manager', department: 'Sales', company: 'TM ANTOINE' },
+      work: { jobTitle: 'Account Manager', department: 'Sales', company: 'TM ANTOINE' },
+
+  function usesTableFullPage(state) {
+    return state.viewMode === 'list';
+  }
+
+  function usesPagedClientsFlow(state) {
+    return isClientsMobile() || usesTableFullPage(state);
+  }
+  function filteredDirectoryItems(state) {
+    var search = typeof state === 'string' ? state : (state && state.search);
+    var removedIds = state && typeof state === 'object' ? state.removedIds : null;
+    var items = [];
+    filteredDirectoryGroups(search).forEach(function (group) {
+      group.items.forEach(function (item) {
+        if (removedIds && removedIds[clientRowKey(item)]) return;
+        items.push(item);
+      });
+    });
+    return items;
+  }
+
+  function loadViewMode() {
+    try {
+      var saved = localStorage.getItem(VIEW_KEY);
+      if (saved === 'table') saved = 'list';
+      if (saved === 'directory') saved = 'grid';
+      if (saved === 'list' || saved === 'grid') return saved;
+    } catch (e) { /* ignore */ }
+    return 'list';
+  }
+
+  function saveViewMode(mode) {
+    try {
+      localStorage.setItem(VIEW_KEY, mode === 'list' ? 'list' : 'grid');
+    } catch (e) { /* ignore */ }
+  }
+
+  function registerViewToggle(entry) {
+    if (!window.TMATableViewToggle || !entry) return;
+    window.TMATableViewToggle.register('clients', {
+      getViewMode: function () { return entry.state.viewMode; },
+      setViewMode: function (mode) {
+        entry.state.viewMode = mode === 'list' ? 'list' : 'grid';
+        saveViewMode(entry.state.viewMode);
+        if (entry.state.viewMode === 'list') {
+          entry.state.screen = 'list';
+          entry.state.page = 1;
+          if (!isClientsMobile()) {
+            history.replaceState(
+              {
+                navId: 'clients',
+                view: 'clients',
+                title: 'Clients',
+                crumb: 'Clients',
+                clientsScreen: 'list',
+                contactId: entry.state.selectedId || null,
+              },
+              '',
+              '/clients'
+            );
+            if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
+              window.TMADashboard.updatePageMeta({ title: 'Clients', crumb: 'Clients' });
+            }
+          }
+        }
+      },
+      render: function () { entry.render({ forceFull: true }); },
+    });
+  }
+
+  function primaryContactValue(id) {
+    var profile = PROFILES[id];
+    if (!profile) return '—';
+    var emails = profile.emails || [];
+    for (var i = 0; i < emails.length; i++) {
+      if (emails[i].value) return emails[i].value;
+    }
+    var phones = profile.phones || [];
+    for (var j = 0; j < phones.length; j++) {
+      if (phones[j].value) return phones[j].value;
+    }
+    return '—';
+  }
+
+  function clientTableColumns(item) {
+    var profile = PROFILES[item.id] || {};
+    var company = profile.work && profile.work.company;
+    if (company) {
+      return { name: company, primaryContact: item.name };
+    }
+    return { name: item.name, primaryContact: primaryContactValue(item.id) };
+  }
+
+  function clientRowKey(item) {
+    return item.id;
+  }
+
+  function clientAvatarMarkup(item) {
+    var av = directoryAvatarItem(item);
+    if (av.avatar) {
+      return '<img src="' + esc(AVATAR + av.avatar + '.png') + '" alt="">';
+    }
+    if (av.photo) {
+      return '<img src="' + esc(av.photo) + '" alt="">';
+    }
+    var colorClass = av.initialColor === 'green' ? ' tma-dash__clients-avatar--green' : ' tma-dash__clients-avatar--blue';
+    return (
+      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial' + colorClass +
+      '" style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)">' + esc(av.initial || '?') + '</span>'
+    );
+  }
+
+  function selectedClientCount(state) {
+    return Object.keys(state.selected || {}).length;
+  }
+
+  function renderClientsHeadActions() {
+    return (
+      '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
+      '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--secondary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
+      'Manage client hub' +
+      '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
+      '</button>' +
+      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--start" data-head-dropdown-menu hidden role="menu" aria-label="Manage client hub">' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:clienthub-access">Manage client hub access</button>' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:service-teams">Manage service teams</button>' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:custom-fields">Manage custom fields</button>' +
+      '</div></div>' +
+      '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
+      '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
+      'Create client' +
+      '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
+      '</button>' +
+      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu hidden role="menu" aria-label="Create client">' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-new">Create new</button>' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import clients</button>' +
+      '</div>' +
+      '<input type="file" accept=".csv,.xlsx,.xls" class="tma-dash__clients-import-input" data-clients-import-input hidden aria-hidden="true">' +
+      '</div>'
+    );
+  }
+
+  function syncClientsPageActions(state, navigate) {
+    var slot = document.querySelector('[data-clients-page-actions]');
+    if (!slot) return;
+    clientsHeadActionsNavigate = navigate;
+    ensureClientsHeadActionsWiring();
+    var show = state.screen === 'list';
+    slot.hidden = !show;
+    if (!show) {
+      slot.innerHTML = '';
+      if (window.TMAHeadDropdown) window.TMAHeadDropdown.closeAll();
+      return;
+    }
+    if (!slot.querySelector('[data-head-dropdown-toggle]')) {
+      slot.innerHTML = renderClientsHeadActions();
+    }
+  }
+
+  function renderBulkToolBtn(action, icon, label) {
+    return (
+      '<button type="button" class="tma-dash__tool-btn" aria-label="' + esc(label) + '" data-clients-bulk-action="' + action + '">' +
+      '<img src="' + icon + '" alt=""></button>'
+    );
+  }
+
+  function renderTableToolbar(state) {
+    var count = selectedClientCount(state);
+    var bulkHidden = count === 0 ? ' hidden' : '';
+    var selectionLabel = count === 1 ? '1 Selected' : count + ' Selected';
+
+    return (
+      '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
+      '<div class="tma-dash__toolbar-actions">' +
+      '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter aria-pressed="false">' +
+      '<img src="' + ICONS.FunnelSimple + '" alt=""></button>' +
+      '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort aria-pressed="false">' +
+      '<img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
+      '<div class="tma-dash__toolbar-bulk" data-clients-bulk' + bulkHidden + '>' +
+      '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
+      '<span class="tma-dash__toolbar-selection" data-clients-selection-count aria-live="polite">' + selectionLabel + '</span>' +
+      renderBulkToolBtn('delete', ICONS.Trash, 'Delete selected clients') +
+      renderBulkToolBtn('duplicate', ICONS.Copy, 'Duplicate selected clients') +
+      '</div></div>' +
+      renderTableSearchField(state) +
+      '</div>'
+    );
+  }
+
+  function updateTableToolbarSelection(root, state) {
+    var count = selectedClientCount(state);
+    var bulk = root.querySelector('[data-clients-bulk]');
+    var label = root.querySelector('[data-clients-selection-count]');
+    var toolbar = root.querySelector('.tma-dash__toolbar');
+    if (!bulk || !label || !toolbar) return;
+    bulk.hidden = count === 0;
+    toolbar.classList.toggle('tma-dash__toolbar--selected', count > 0);
+    label.textContent = count === 1 ? '1 Selected' : count + ' Selected';
+  }
+  function renderTableSearchField(state) {
+    var search = state.search || '';
+    var cls = 'tma-dash__toolbar-search';
+    if (state.searchFocused || search) cls += ' tma-dash__toolbar-search--focused';
+    if (search) cls += ' tma-dash__toolbar-search--has-value';
+    if (state.searchLoading) cls += ' tma-dash__toolbar-search--loading';
+    var kbd = search ? '' : '<kbd class="tma-dash__kbd" data-clients-search-shortcut aria-hidden="true">/</kbd>';
+
+    return (
+      '<div class="' + cls + '" role="search" data-clients-search-wrap>' +
+      '<img src="' + ICONS.Search + '" alt="">' +
+      '<input type="search" class="tma-dash__search-input" data-clients-search value="' + esc(search) +
+      '" placeholder="Search" aria-label="Search table" autocomplete="off" spellcheck="false">' +
+      '<button type="button" class="tma-dash__search-clear" aria-label="Clear search" data-clients-search-clear>' +
+      '<img src="' + ICONS.XCircle + '" alt=""></button>' +
+      '<span class="tma-dash__search-spinner" aria-hidden="true"><img src="' + ICONS.Loading16 + '" alt=""></span>' +
+      kbd +
+      '</div>'
+    );
+  }
+
+  var CLIENTS_PAGE_SIZES = [5, 10, 20];
+
+  function getTablePageData(state) {
+    var items = filteredDirectoryItems(state);
+    var pageSize = state.pageSize || 10;
+    var totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+    if (state.page > totalPages) state.page = totalPages;
+    var start = (state.page - 1) * pageSize;
+    return {
+      items: items.slice(start, start + pageSize),
+      total: items.length,
+      totalPages: totalPages,
+    };
+  }
+
+  function renderFullTableRow(item, index, checked) {
+    var cols = clientTableColumns(item);
+    var selected = checked ? ' tma-dash__ctr--selected' : '';
+    return (
+      '<div class="tma-dash__ctr tma-dash__ctr--body' + selected + '" data-clients-row="' + esc(item.id) +
+      '" data-row-index="' + index + '" role="row">' +
+      '<div class="tma-dash__cc tma-dash__cc--check">' +
+      '<input type="checkbox" class="tma-dash__check" data-clients-check' + (checked ? ' checked' : '') +
+      ' aria-label="Select ' + esc(cols.name) + '"></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user">' + clientAvatarMarkup(item) +
+      '<span class="tma-dash__cc-truncate">' + esc(cols.name) + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--contact"><span class="tma-dash__cc-truncate">' +
+      esc(cols.primaryContact) + '</span></div></div>'
+    );
+  }
+
+  function renderFullTableRows(state) {
+    var page = getTablePageData(state);
+    if (!page.items.length) {
+      return '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">No clients found</div></div>';
+    }
+    var start = (state.page - 1) * (state.pageSize || 10);
+    return page.items.map(function (item, i) {
+      var key = clientRowKey(item);
+      return renderFullTableRow(item, start + i, !!(state.selected && state.selected[key]));
+    }).join('');
+  }
+
+  function renderClientsPagination(state, totalRows) {
+    var pageSize = state.pageSize || 10;
+    var totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+    if (state.page > totalPages) state.page = totalPages;
+
+    var pages = '';
+    var maxButtons = Math.min(5, totalPages);
+    for (var p = 1; p <= maxButtons; p++) {
+      var active = p === state.page;
+      pages +=
+        '<button type="button" class="tma-pagination__button' + (active ? ' tma-pagination__button--active' : '') +
+        '" aria-label="Page ' + p + '"' + (active ? ' aria-current="page"' : '') +
+        ' data-page="' + p + '"><span class="tma-pagination__label">' + p + '</span></button>';
+    }
+
+    var prevDisabled = state.page <= 1 ? ' disabled' : '';
+    var nextDisabled = state.page >= totalPages ? ' disabled' : '';
+    var resultsText = totalRows + (totalRows === 1 ? ' result' : ' results');
+
+    return (
+      '<div class="tma-pagination-bar tma-pagination-bar--footer" data-clients-pagination>' +
+      '<div class="tma-pagination-bar__meta">' +
+      '<button type="button" class="tma-pagination-bar__page-size" aria-label="Rows per page" aria-haspopup="listbox" aria-expanded="false" data-clients-page-size>' +
+      '<span class="tma-pagination__label">' + pageSize + '</span>' +
+      '<img src="' + ICONS.ArrowLineDown + '" class="tma-pagination__icon" width="16" height="16" alt="" aria-hidden="true">' +
+      '</button>' +
+      '<span class="tma-pagination-bar__results" data-clients-results-count>' + resultsText + '</span>' +
+      '</div>' +
+      '<nav class="tma-pagination" aria-label="Pagination">' + pages +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" data-direction="prev"' + prevDisabled + '>' +
+      '<img src="' + ICONS.ArrowLineLeft + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page" data-direction="next"' + nextDisabled + '>' +
+      '<img src="' + ICONS.ArrowLineRight + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      '</nav></div>'
+    );
+  }
+
+  function renderTableListPage(state) {
+    var page = getTablePageData(state);
+    return (
+      renderTableToolbar(state) +
+      '<div class="tma-dash__ctable" role="table" aria-label="Clients">' +
+      '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
+      '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
+      '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all"></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">Name</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Primary contact</div>' +
+      '</div>' +
+      '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
+      '</div>' +
+      renderClientsPagination(state, page.total)
+    );
+  }
+  function renderDirectoryListBody(state) {
+
+  function renderDirectoryBody(state) {
+    return renderDirectoryListBody(state);
+  }
+      '</div>'
+    root.querySelectorAll('[data-clients-row]').forEach(function (row) {
+      row.addEventListener('click', function (e) {
+        if (e.target.closest('[data-clients-check]') || e.target.closest('[data-clients-search-wrap]')) return;
+        var id = row.getAttribute('data-clients-row');
+    root.querySelectorAll('[data-clients-search-wrap]').forEach(function (wrap) {
+      var isToolbar = wrap.classList.contains('tma-dash__toolbar-search');
+      var focused = !!(state.searchFocused || state.search);
+      var hasValue = !!state.search;
+      var loading = !!state.searchLoading;
+      if (isToolbar) {
+        wrap.classList.toggle('tma-dash__toolbar-search--focused', focused);
+        wrap.classList.toggle('tma-dash__toolbar-search--has-value', hasValue);
+        wrap.classList.toggle('tma-dash__toolbar-search--loading', loading);
+        return;
+      }
+      wrap.classList.toggle('tma-dash__clients-search--focused', focused);
+      wrap.classList.toggle('tma-dash__clients-search--has-value', hasValue);
+      wrap.classList.toggle('tma-dash__clients-search--loading', loading);
+    });
+  }
+
+  function wireTablePagination(root, state, render) {
+    var pagination = root.querySelector('[data-clients-pagination]');
+    if (!pagination) return;
+
+    pagination.querySelectorAll('[data-page]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var page = parseInt(btn.getAttribute('data-page'), 10);
+        if (!page || page === state.page) return;
+        state.page = page;
+        render({ forceFull: true });
+      });
+    });
+
+    var prev = pagination.querySelector('[data-direction="prev"]');
+    if (prev) {
+      prev.addEventListener('click', function () {
+        if (state.page <= 1) return;
+        state.page -= 1;
+        render({ forceFull: true });
+      });
+    }
+
+    var next = pagination.querySelector('[data-direction="next"]');
+    if (next) {
+      next.addEventListener('click', function () {
+        var totalPages = Math.max(1, Math.ceil(filteredDirectoryItems(state).length / (state.pageSize || 10)));
+        if (state.page >= totalPages) return;
+        state.page += 1;
+        render({ forceFull: true });
+      });
+    }
+
+    var pageSizeBtn = pagination.querySelector('[data-clients-page-size]');
+    if (pageSizeBtn) {
+      pageSizeBtn.addEventListener('click', function () {
+        var idx = CLIENTS_PAGE_SIZES.indexOf(state.pageSize || 10);
+        var nextSize = CLIENTS_PAGE_SIZES[(idx + 1) % CLIENTS_PAGE_SIZES.length];
+        state.pageSize = nextSize;
+        state.page = 1;
+        render({ forceFull: true });
+      });
+    }
+  }
+
+  function deleteSelectedClients(state, render) {
+    var keys = Object.keys(state.selected || {});
+    if (!keys.length) return;
+    state.removedIds = state.removedIds || {};
+    keys.forEach(function (key) { state.removedIds[key] = true; });
+    state.selected = {};
+    state.page = 1;
+    render({ forceFull: true });
+  }
+
+  function duplicateSelectedClients(state, render) {
+    var keys = Object.keys(state.selected || {});
+    if (!keys.length) return;
+    var nextSelected = {};
+    keys.forEach(function (key) {
+      var item = directoryItemFor(key);
+      if (!item) return;
+      var newId = key + '-copy-' + String(Date.now() + Math.floor(Math.random() * 1000));
+      var newItem = Object.assign({}, item, { id: newId, name: item.name + ' (copy)' });
+      insertContact(newItem);
+      if (PROFILES[key]) {
+        PROFILES[newId] = JSON.parse(JSON.stringify(PROFILES[key]));
+      }
+      nextSelected[newId] = true;
+    });
+    state.selected = nextSelected;
+    render({ forceFull: true });
+  }
+
+  function wireTableBulkActions(root, state, render) {
+    root.querySelectorAll('[data-clients-bulk-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var action = btn.getAttribute('data-clients-bulk-action');
+        if (action === 'delete') deleteSelectedClients(state, render);
+        else if (action === 'duplicate') duplicateSelectedClients(state, render);
+      });
+    });
+  }
+
+  function wireTableSelection(root, state) {
+    var items = filteredDirectoryItems(state);
+    var selectAll = root.querySelector('[data-clients-selectall]');
+    var rowChecks = Array.prototype.slice.call(root.querySelectorAll('[data-clients-check]'));
+
+    function syncRow(cb, rowIndex) {
+      var rowEl = cb.closest('[data-row-index]');
+      var item = items[rowIndex];
+      if (!item) return;
+      var key = clientRowKey(item);
+      if (cb.checked) state.selected[key] = true;
+      else delete state.selected[key];
+      if (rowEl) rowEl.classList.toggle('tma-dash__ctr--selected', cb.checked);
+      updateTableToolbarSelection(root, state);
+    }
+
+    function syncSelectAll() {
+      if (!selectAll) return;
+      var checked = rowChecks.filter(function (c) { return c.checked; }).length;
+      selectAll.checked = checked === rowChecks.length && rowChecks.length > 0;
+      selectAll.indeterminate = checked > 0 && checked < rowChecks.length;
+    }
+
+    rowChecks.forEach(function (cb) {
+      var rowEl = cb.closest('[data-row-index]');
+      var rowIndex = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : 0;
+      cb.addEventListener('change', function () {
+        syncRow(cb, rowIndex);
+        syncSelectAll();
+      });
+    });
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        rowChecks.forEach(function (cb) {
+          var rowEl = cb.closest('[data-row-index]');
+          var rowIndex = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : 0;
+          cb.checked = selectAll.checked;
+          syncRow(cb, rowIndex);
+        });
+        selectAll.indeterminate = false;
+      });
+      syncSelectAll();
+    }
+    state.page = 1;
+    if (root.querySelector('[data-clients-body]') && state.viewMode === 'list') {
+      if (root._clientsController && root._clientsController.render) {
+        root._clientsController.render({ forceFull: true });
+      }
+      return;
+    }
+
+    body.innerHTML = renderDirectoryListBody(state);
+
+  var clientsHeadActionsNavigate = null;
+  var clientsHeadActionsWired = false;
+
+  var CLIENTS_ADMIN_PAGES = {
+    'clienthub-access': { title: 'Client hub access' },
+    'service-teams': { title: 'Service teams' },
+    'custom-fields': { title: 'Custom fields' },
+  };
+
+  function navigateToClientsAdminPage(adminPage) {
+    var meta = CLIENTS_ADMIN_PAGES[adminPage];
+    if (!meta || !window.TMADashboard || !window.TMADashboard.navigate) return;
+    window.TMADashboard.navigate({
+      navId: 'account-settings',
+      view: 'admin',
+      title: meta.title,
+      crumb: 'Account settings / Client hub management / ' + meta.title,
+      adminPage: adminPage,
+    });
+  }
+
+  function ensureClientsHeadActionsWiring() {
+    if (clientsHeadActionsWired) return;
+    clientsHeadActionsWired = true;
+    if (window.TMAHeadDropdown) window.TMAHeadDropdown.mount();
+
+    document.addEventListener('head-dropdown:select', function (event) {
+      var wrap = event.detail && event.detail.wrap;
+      if (!wrap || !wrap.closest('[data-clients-page-actions]')) return;
+      var action = event.detail.action || '';
+
+      if (action.indexOf('admin:') === 0) {
+        navigateToClientsAdminPage(action.slice(6));
+        return;
+      }
+      if (action === 'create-new' && clientsHeadActionsNavigate) {
+        clientsHeadActionsNavigate('add');
+        return;
+      }
+      if (action === 'create-import') {
+        var slot = wrap.closest('[data-clients-page-actions]');
+        var importInput = slot && slot.querySelector('[data-clients-import-input]');
+        if (importInput) importInput.click();
+      }
+    });
+
+    document.addEventListener('change', function (event) {
+      var input = event.target.closest('[data-clients-import-input]');
+      if (input) input.value = '';
+    });
+  }
+
+      root.querySelectorAll('[data-clients-layout]').forEach(function (btn) {
+        btn.remove();
+      });
+
+      if (scope === 'list' && state.viewMode === 'list') {
+        wireTablePagination(root, state, render);
+        wireTableSelection(root, state);
+        wireTableBulkActions(root, state, render);
+        return;
+      }
+          if (usesPagedClientsFlow(state)) navigate('list');
+          navigate('detail', id, { forceFull: !usesPagedClientsFlow(state) });
+        if (usesPagedClientsFlow(state)) render();
+        if (usesPagedClientsFlow(state)) render();
+        if (usesPagedClientsFlow(state)) render();
+  function syncClientsShell(screen, viewMode) {
+    var listFull = !mobile && viewMode === 'list';
+    dash.classList.toggle('tma-dash--clients-detail', (mobile || listFull) && screen !== 'list');
+    dash.classList.toggle('tma-dash--clients-table', listFull && screen === 'list');
+      viewMode: loadViewMode(),
+      page: 1,
+      pageSize: 10,
+      selected: {},
+      removedIds: {},
+      if (usesPagedClientsFlow(state) && screen !== 'list') {
+        return { title: 'Clients', crumb: 'Clients' };
+      }
+        var isActive = id === state.selectedId;
+        btn.classList.toggle('tma-dash__clients-row--active', isActive);
+      syncClientsShell(state.screen, state.viewMode);
+      syncClientsPageActions(state, navigate);
+      root.className = state.viewMode === 'grid'
+        ? 'tma-dash__clients tma-dash__clients--grid'
+        : 'tma-dash__clients';
+
+      if (usesPagedClientsFlow(state)) {
+        if (state.screen === 'list') {
+          root.innerHTML = state.viewMode === 'list'
+            ? renderTableListPage(state)
+            : renderListPage(state);
+          wireEvents(root, state, 'list', navigate, render);
+          if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
+          requestAnimationFrame(function () {
+            var dirBody = root.querySelector('.tma-dash__clients-directory-body');
+            if (dirBody) dirBody.scrollTop = state.listScrollTop;
+          });
+          return;
+        }
+
+        root.innerHTML = renderDetailPage(state);
+        wireEvents(root, state, 'detail', navigate, render);
+        if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
+        return;
+      }
+        if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
+      if (!usesPagedClientsFlow(state)) {
+      if (!isClientsMobile() && state.viewMode !== 'list') {
+        syncClientsShell(state.screen, state.viewMode);
+      syncClientsShell(state.screen, state.viewMode);
+    root._clientsController = { syncRoute: syncRoute, navigate: navigate, render: render };
+    registerViewToggle({ state: state, render: render });

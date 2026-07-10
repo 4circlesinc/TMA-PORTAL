@@ -1,0 +1,21 @@
+{
+  "slug": "vertical-12",
+  "nodeId": "30485:135144",
+  "name": "Vertical 12",
+  "variant": "layered-pill",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "pillWidth": 30,
+  "trackOpacity": 0.1,
+  "color": "#000000",
+  "bars": [
+    { "value": 2000, "trackTop": 95, "fgTop": 133 },
+    { "value": 5000, "trackTop": 35, "fgTop": 55 },
+    { "value": 3000, "trackTop": 75, "fgTop": 95 },
+    { "value": 6000, "trackTop": 15, "fgTop": 37 },
+    { "value": 1000, "trackTop": 115, "fgTop": 127 },
+    { "value": 4000, "trackTop": 55, "fgTop": 103 }
+  ]
+}

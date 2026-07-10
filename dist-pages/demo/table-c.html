@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Table C</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/function-bar.css">
+  <link rel="stylesheet" href="../css/pagination.css">
+  <link rel="stylesheet" href="../css/status-badge.css">
+  <link rel="stylesheet" href="../css/table-a.css">
+  <link rel="stylesheet" href="../css/table-c.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .group { background: #fff; border-radius: 16px; padding: 24px 20px 20px; width: fit-content; }
+    .group-label { font-size: 16px; line-height: 32px; font-weight: 600; margin-bottom: 8px; }
+    .group-desc { font-size: 13px; line-height: 20px; color: rgba(0,0,0,0.5); margin-bottom: 32px; max-width: 892px; }
+  </style>
+</head>
+<body>
+  <div class="group">
+    <p class="group-label">Table C</p>
+    <p class="group-desc">Full interactive table per Figma Table A interactive guidance — selection, function bar states, delete/duplicate, footer pagination, popover, and toast.</p>
+    <div id="group-root"></div>
+  </div>
+
+<script>
+const ICONS = {
+  Add: '../images/icons/tma/Add.svg',
+  FunnelSimple: '../images/icons/tma/FunnelSimple-16.svg',
+  ArrowsDownUp: '../images/icons/tma/ArrowsDownUp.svg',
+  Loading: '../images/icons/tma/Loading-16.svg',
+  Line: '../images/icons/tma/Line-16.svg',
+  Trash: '../images/icons/phosphor/Trash-16.svg',
+  Copy: '../images/icons/tma/Copy-16.svg',
+  Search: '../images/icons/tma/Search-16.svg',
+  CalendarBlank: '../images/icons/phosphor/CalendarBlank-16.svg',
+  ThreeDots: '../images/icons/tma/ThreeDots-16.svg',
+  Checkbox: '../images/icons/tma/Checkbox-16.svg',
+  CheckboxChecked: '../images/icons/tma/CheckboxChecked-16.svg',
+  ArrowLineLeft: '../images/icons/tma/ArrowLineLeft-16.svg',
+  ArrowLineRight: '../images/icons/tma/ArrowLineRight-16.svg',
+  ArrowLineDown: '../images/icons/tma/ArrowLineDown-16.svg',
+  CheckCircle: '../images/icons/phosphor/CheckCircle.svg',
+};
+
+const COLORS = {
+  purple: '#b899eb', green: '#71dd8c', blue: '#7dbbff', orange: '#ffb55b', muted: 'rgba(0, 0, 0, 0.4)',
+};
+
+const STATUS_VARIANTS = {
+  'in-progress': 'dot-purple',
+  complete: 'dot-green',
+  pending: 'dot-blue',
+  approved: 'dot-orange',
+  rejected: 'dot-muted',
+};
+
+const ROWS = [
+  { orderId: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', project: 'Landing Page', address: 'Meadow Lane Oakland', date: 'Just now', status: 'in-progress', statusLabel: 'In Progress', rowVariant: 'default' },
+  { orderId: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', project: 'CRM Admin pages', address: 'Larry San Francisco', date: '1 minute ago', status: 'complete', statusLabel: 'Complete', rowVariant: 'default' },
+  { orderId: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', project: 'Client Project', address: 'Bagwell Avenue Ocala', date: '1 hour ago', status: 'pending', statusLabel: 'Pending', rowVariant: 'default' },
+  { orderId: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', project: 'Admin Dashboard', address: 'Washburn Baton Rouge', date: 'Yesterday', status: 'approved', statusLabel: 'Approved', rowVariant: 'section-end' },
+  { orderId: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', project: 'App Landing Page', address: 'Nest Lane Olivette', date: 'Feb 2, 2026', status: 'rejected', statusLabel: 'Rejected', rowVariant: 'default' },
+  { orderId: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', project: 'Landing Page', address: 'Meadow Lane Oakland', date: 'Just now', status: 'in-progress', statusLabel: 'In Progress', rowVariant: 'default' },
+  { orderId: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', project: 'CRM Admin pages', address: 'Larry San Francisco', date: '1 minute ago', status: 'complete', statusLabel: 'Complete', checked: true },
+  { orderId: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', project: 'Client Project', address: 'Bagwell Avenue Ocala', date: '1 hour ago', status: 'pending', statusLabel: 'Pending', checked: true },
+  { orderId: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', project: 'Admin Dashboard', address: 'Washburn Baton Rouge', date: 'Yesterday', status: 'approved', statusLabel: 'Approved', rowVariant: 'default' },
+  { orderId: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', project: 'App Landing Page', address: 'Nest Lane Olivette', date: 'Feb 2, 2026', status: 'rejected', statusLabel: 'Rejected', rowVariant: 'default' },
+];
+
+function escJson(obj) {
+  return JSON.stringify(obj).replace(/"/g, '&quot;');
+}
+
+function renderCheckbox(checked, attrs) {
+  const src = checked ? ICONS.CheckboxChecked : ICONS.Checkbox;
+  return `<button type="button" class="tma-table-a__checkbox-btn"${attrs} aria-pressed="${checked ? 'true' : 'false'}"${checked ? ' data-checked' : ''}><img src="${src}" class="tma-table-a__checkbox-glyph" data-checkbox-glyph width="16" height="16" alt="" /></button>`;
+}
+
+function renderStatusBadge(label, status) {
+  const variant = STATUS_VARIANTS[status];
+  const color = variant.split('-')[1];
+  return `<span class="tma-status-badge tma-status-badge--dot tma-status-badge--${color}" style="--status-badge-color:${COLORS[color]}"><span class="tma-status-badge__dot" aria-hidden="true"></span><span class="tma-status-badge__label">${label}</span></span>`;
+}
+
+function renderFunctionBar(variant) {
+  if (variant === 'selected') {
+    return `<div class="tma-function-bar tma-function-bar--selected" data-selection-bar style="--function-bar-width:892px;--function-bar-background:#f9f9fa;"><div class="tma-function-bar__actions"><button type="button" class="tma-function-bar__action" aria-label="Add"><img src="${ICONS.Add}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="FunnelSimple"><img src="${ICONS.FunnelSimple}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="ArrowsDownUp"><img src="${ICONS.ArrowsDownUp}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="Loading"><img src="${ICONS.Loading}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><div class="tma-function-bar__selection"><img src="${ICONS.Line}" class="tma-function-bar__icon tma-function-bar__icon--divider" width="16" height="16" alt="" aria-hidden="true" /><span class="tma-function-bar__selection-label">0 Selected</span></div><button type="button" class="tma-function-bar__action" aria-label="Trash"><img src="${ICONS.Trash}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="Copy"><img src="${ICONS.Copy}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button></div><div class="tma-function-bar__search" role="search"><label class="tma-function-bar__search-field"><img src="${ICONS.Search}" class="tma-function-bar__icon" width="16" height="16" alt="" aria-hidden="true" /><input type="search" class="tma-function-bar__search-input" placeholder="Search" aria-label="Search" autocomplete="off" spellcheck="false" /></label><button type="button" class="tma-function-bar__kbd" aria-label="Focus search" data-shortcut="/">/</button></div></div>`;
+  }
+  return `<div class="tma-function-bar tma-function-bar--default" style="--function-bar-width:892px;--function-bar-background:#f9f9fa;"><div class="tma-function-bar__actions"><button type="button" class="tma-function-bar__action" aria-label="Add"><img src="${ICONS.Add}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="FunnelSimple"><img src="${ICONS.FunnelSimple}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="ArrowsDownUp"><img src="${ICONS.ArrowsDownUp}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button></div><div class="tma-function-bar__search" role="search"><label class="tma-function-bar__search-field"><img src="${ICONS.Search}" class="tma-function-bar__icon" width="16" height="16" alt="" aria-hidden="true" /><input type="search" class="tma-function-bar__search-input" placeholder="Search" aria-label="Search" autocomplete="off" spellcheck="false" /></label><button type="button" class="tma-function-bar__kbd" aria-label="Focus search" data-shortcut="/">/</button></div></div>`;
+}
+
+function renderPaginationFooter() {
+  const pages = [1,2,3,4,5].map((p) => `<button type="button" class="tma-pagination__button${p===1?' tma-pagination__button--active':''}" aria-label="Page ${p}"${p===1?' aria-current="page"':''} data-page="${p}"><span class="tma-pagination__label">${p}</span></button>`).join('');
+  return `<div class="tma-pagination-bar tma-pagination-bar--footer" data-table-pagination><div class="tma-pagination-bar__meta"><button type="button" class="tma-pagination-bar__page-size" aria-label="Rows per page"><span class="tma-pagination__label">20</span><img src="${ICONS.ArrowLineDown}" class="tma-pagination__icon" width="16" height="16" alt="" aria-hidden="true" /></button><span class="tma-pagination-bar__results">105 results</span></div><nav class="tma-pagination" aria-label="Pagination">${pages}<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" data-direction="prev" disabled><img src="${ICONS.ArrowLineLeft}" class="tma-pagination__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page" data-direction="next"><img src="${ICONS.ArrowLineRight}" class="tma-pagination__icon" width="16" height="16" alt="" /></button></nav></div>`;
+}
+
+function renderRow(row, index) {
+  const borderVariant = row.rowVariant === 'section-end' ? 'section-end' : 'default';
+  const checked = !!row.checked;
+  return `<div class="tma-table-a__row tma-table-a__row--${borderVariant}" role="row" data-row-index="${index}" data-border-variant="${borderVariant}" data-row-data="${escJson(row)}"><div class="tma-table-a__cell tma-table-a__cell--select" role="cell">${renderCheckbox(checked, ` aria-label="Select row ${row.orderId}" data-row-checkbox`)}</div><div class="tma-table-a__cell tma-table-a__cell--orderId" role="cell"><span class="tma-table-a__label">${row.orderId}</span></div><div class="tma-table-a__cell tma-table-a__cell--user" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--user"><img src="../images/avatars/${row.avatar}.png" alt="" class="tma-table-a__avatar" width="24" height="24" /><span class="tma-table-a__label">${row.user}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--project" role="cell"><span class="tma-table-a__label">${row.project}</span></div><div class="tma-table-a__cell tma-table-a__cell--address" role="cell"><span class="tma-table-a__address"><span class="tma-table-a__label">${row.address}</span><button type="button" class="tma-table-a__clipboard" aria-label="Copy address" data-copy-address><img src="${ICONS.Copy}" class="tma-table-a__icon" width="16" height="16" alt="" /></button></span></div><div class="tma-table-a__cell tma-table-a__cell--date" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--date"><img src="${ICONS.CalendarBlank}" class="tma-table-a__icon" width="16" height="16" alt="" aria-hidden="true" /><span class="tma-table-a__label">${row.date}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--status" role="cell">${renderStatusBadge(row.statusLabel, row.status)}</div><div class="tma-table-a__cell tma-table-a__cell--actions" role="cell"><button type="button" class="tma-table-a__action" aria-label="Row actions" data-row-action><img src="${ICONS.ThreeDots}" class="tma-table-a__icon" width="16" height="16" alt="" /></button></div></div>`;
+}
+
+function renderTableC() {
+  const head = `<div class="tma-table-a__row tma-table-a__row--head" role="row"><div class="tma-table-a__cell tma-table-a__cell--select" role="columnheader">${renderCheckbox(false, ' data-select-all aria-label="Select all rows"')}</div><div class="tma-table-a__cell tma-table-a__cell--orderId" role="columnheader"><span class="tma-table-a__label">Order ID</span></div><div class="tma-table-a__cell tma-table-a__cell--user" role="columnheader"><span class="tma-table-a__label">User</span></div><div class="tma-table-a__cell tma-table-a__cell--project" role="columnheader"><span class="tma-table-a__label">Project</span></div><div class="tma-table-a__cell tma-table-a__cell--address tma-table-a__cell--header-emphasis" role="columnheader"><span class="tma-table-a__label">Address</span></div><div class="tma-table-a__cell tma-table-a__cell--date" role="columnheader"><span class="tma-table-a__label">Date</span></div><div class="tma-table-a__cell tma-table-a__cell--status" role="columnheader"><span class="tma-table-a__label">Status</span></div><div class="tma-table-a__cell tma-table-a__cell--actions" role="columnheader" aria-hidden="true"></div></div>`;
+  const body = ROWS.map(renderRow).join('');
+  const popover = `<div class="tma-table-c__popover" data-table-popover role="menu" aria-hidden="true"><button type="button" class="tma-table-c__popover-item" role="menuitem">Action</button><button type="button" class="tma-table-c__popover-item" role="menuitem">Action</button><button type="button" class="tma-table-c__popover-item" role="menuitem">Action</button></div>`;
+  const toast = `<div class="tma-table-c__toast" data-table-toast role="status" aria-live="polite"><img src="${ICONS.CheckCircle}" class="tma-table-c__toast-icon" width="20" height="20" alt="" aria-hidden="true" /><span class="tma-table-c__toast-text">Deleted    </span><button type="button" class="tma-table-c__toast-undo" data-toast-undo>Undo</button></div>`;
+  return `<div class="tma-table-c tma-table-a tma-table-c--default" data-table-c style="--table-a-width:892px;--table-a-columns:32px 88px 1fr 1fr 176px 1fr 110px 40px;"><div class="tma-table-c__toolbar tma-table-c__toolbar--default">${renderFunctionBar('default')}</div><div class="tma-table-c__toolbar tma-table-c__toolbar--selected">${renderFunctionBar('selected')}</div><div class="tma-table-a__sheet" role="table" aria-label="Orders" data-table-sheet>${head}<div data-table-body>${body}</div></div><div class="tma-table-c__loading" data-table-loading aria-hidden="true"><img src="${ICONS.Loading}" class="tma-table-c__loading-icon" width="20" height="20" alt="" /></div>${renderPaginationFooter()}${popover}${toast}</div>`;
+}
+
+document.getElementById('group-root').innerHTML = renderTableC();
+</script>
+<script src="../js/function-bar.js"></script>
+<script src="../js/pagination.js"></script>
+<script src="../js/table-c.js"></script>
+</body>
+</html>

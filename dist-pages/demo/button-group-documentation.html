@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Button Group documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/button-group.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body>
+  <article class="tma-button-group-doc" data-node-id="33067:4918">
+    <header class="tma-button-group-doc__hero" data-node-id="33067:4919">
+      <h1 class="tma-button-group-doc__title" data-node-id="33067:4920">Button Group</h1>
+      <p class="tma-button-group-doc__intro" data-node-id="33067:4921">Use the Group component to create button groups. <a href="group-documentation.html">Group component</a></p>
+    </header>
+
+    <section class="tma-button-group-doc__section" data-node-id="33067:4922">
+      <h2 class="tma-button-group-doc__section-title" data-node-id="33067:4923">Examples</h2>
+      <div id="button-group-examples"></div>
+    </section>
+
+    <div id="doc-footer"></div>
+  </article>
+
+<script src="../js/button-group-doc-icons.js"></script>
+<script src="../js/button-group-doc.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script>
+window.TMAButtonGroupDoc.mountDocumentation({
+  examplesEl: document.getElementById('button-group-examples'),
+  footerEl: document.getElementById('doc-footer'),
+  socialSvg: window.TMATableSearchIcons.svg,
+});
+</script>
+</body>
+</html>

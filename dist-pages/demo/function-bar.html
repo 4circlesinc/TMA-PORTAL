@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Function bar</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/function-bar.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .group { background: #fff; border-radius: 16px; padding: 24px 20px 20px; min-width: 932px; width: fit-content; }
+    .group-label { font-size: 16px; line-height: 32px; font-weight: 600; margin-bottom: 32px; }
+    .group-stack { display: flex; flex-direction: column; gap: 24px; }
+  </style>
+</head>
+<body>
+  <div class="group">
+    <p class="group-label">Function bar</p>
+    <div class="group-stack" id="group-root"></div>
+  </div>
+
+<script>
+const ICONS = {
+  Add: '../images/icons/tma/Add.svg',
+  FunnelSimple: '../images/icons/tma/FunnelSimple-16.svg',
+  ArrowsDownUp: '../images/icons/tma/ArrowsDownUp.svg',
+  Loading: '../images/icons/tma/Loading-16.svg',
+  Line: '../images/icons/tma/Line-16.svg',
+  Trash: '../images/icons/phosphor/Trash-16.svg',
+  Copy: '../images/icons/tma/Copy-16.svg',
+  Search: '../images/icons/tma/Search-16.svg',
+};
+
+const VARIANTS = {
+  default: { actions: ['Add', 'FunnelSimple', 'ArrowsDownUp'] },
+  selected: {
+    actions: ['Add', 'FunnelSimple', 'ArrowsDownUp', 'Loading'],
+    selectionLabel: '{count} Selected',
+    selectionDivider: 'Line',
+    bulkActions: ['Trash', 'Copy'],
+  },
+};
+
+function iconImg(name) {
+  return `<img src="${ICONS[name]}" class="tma-function-bar__icon" width="16" height="16" alt="" />`;
+}
+
+function actionButton(icon) {
+  return `<button type="button" class="tma-function-bar__action" aria-label="${icon}">${iconImg(icon)}</button>`;
+}
+
+function renderBar(variant, selectedCount) {
+  const v = VARIANTS[variant];
+  const actions = v.actions.map(actionButton).join('');
+  const selection = v.selectionLabel
+    ? `<div class="tma-function-bar__selection">${v.selectionDivider ? `${iconImg(v.selectionDivider)}` : ''}<span class="tma-function-bar__selection-label">${v.selectionLabel.replace('{count}', selectedCount)}</span></div>`
+    : '';
+  const bulk = (v.bulkActions || []).map(actionButton).join('');
+  const search = `<div class="tma-function-bar__search" role="search"><label class="tma-function-bar__search-field">${iconImg('Search')}<input type="search" class="tma-function-bar__search-input" placeholder="Search" aria-label="Search" autocomplete="off" spellcheck="false" /></label><button type="button" class="tma-function-bar__kbd" aria-label="Focus search">/</button></div>`;
+
+  return `<div class="tma-function-bar tma-function-bar--${variant}"><div class="tma-function-bar__actions">${actions}${selection}${bulk}</div>${search}</div>`;
+}
+
+fetch('./data/function-bar.json')
+  .then((r) => r.json())
+  .then((data) => {
+    const root = document.getElementById('group-root');
+    data.items.forEach((item) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'group-item';
+      wrap.innerHTML = renderBar(item.variant, item.selectedCount || 2);
+      root.appendChild(wrap);
+    });
+  });
+</script>
+<script src="../js/function-bar.js"></script>
+</body>
+</html>

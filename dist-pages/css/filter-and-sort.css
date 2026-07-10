@@ -1,0 +1,150 @@
+/* TMA — Filter and sort */
+
+.tma-filter-and-sort {
+  --filter-sort-width: 888px;
+  --filter-sort-min-height: 24px;
+  --filter-sort-radius: 12px;
+  --filter-sort-tags-gap: 8px;
+  --filter-sort-tag-gap: 4px;
+  --filter-sort-tag-padding-x: 4px;
+  --filter-sort-tag-padding-y: 2px;
+  --filter-sort-tag-radius: 8px;
+  --filter-sort-tag-background: rgba(0, 0, 0, 0.04);
+  --filter-sort-font-size: 12px;
+  --filter-sort-line-height: 16px;
+  --filter-sort-text-color: #000000;
+  --filter-sort-reset-color: rgba(0, 0, 0, 0.4);
+  --filter-sort-reset-padding-x: 12px;
+  --filter-sort-reset-padding-y: 4px;
+  --filter-sort-reset-min-size: 24px;
+  --filter-sort-icon-size-16: 16px;
+  --filter-sort-icon-size-12: 12px;
+  --filter-sort-close-size: 6px;
+  --filter-sort-close-hit-size: 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 16px;
+  width: var(--filter-sort-width);
+  max-width: 100%;
+  min-height: var(--filter-sort-min-height);
+  border-radius: var(--filter-sort-radius);
+  box-sizing: border-box;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+}
+
+.tma-filter-and-sort__tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--filter-sort-tags-gap);
+  flex: 1 1 auto;
+  min-width: 0;
+  border-radius: var(--filter-sort-radius);
+}
+
+.tma-filter-and-sort__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--filter-sort-tag-gap);
+  height: 20px;
+  padding: var(--filter-sort-tag-padding-y) var(--filter-sort-tag-padding-x);
+  border-radius: var(--filter-sort-tag-radius);
+  background: var(--filter-sort-tag-background);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.tma-filter-and-sort__label {
+  display: inline-block;
+  font-size: var(--filter-sort-font-size);
+  line-height: var(--filter-sort-line-height);
+  font-weight: 400;
+  color: var(--filter-sort-text-color);
+  white-space: nowrap;
+  overflow-wrap: break-word;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-filter-and-sort__icon {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.tma-filter-and-sort__icon--16 {
+  width: var(--filter-sort-icon-size-16);
+  height: var(--filter-sort-icon-size-16);
+  max-width: var(--filter-sort-icon-size-16);
+  max-height: var(--filter-sort-icon-size-16);
+}
+
+.tma-filter-and-sort__icon--12 {
+  width: var(--filter-sort-icon-size-12);
+  height: var(--filter-sort-icon-size-12);
+  max-width: var(--filter-sort-icon-size-12);
+  max-height: var(--filter-sort-icon-size-12);
+}
+
+.tma-filter-and-sort__icon--close {
+  width: var(--filter-sort-close-size);
+  height: var(--filter-sort-close-size);
+  max-width: var(--filter-sort-close-size);
+  max-height: var(--filter-sort-close-size);
+}
+
+.tma-filter-and-sort__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--filter-sort-close-hit-size);
+  height: var(--filter-sort-close-hit-size);
+  min-width: var(--filter-sort-close-hit-size);
+  min-height: var(--filter-sort-close-hit-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--filter-sort-radius);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-filter-and-sort__reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--filter-sort-reset-min-size);
+  min-height: var(--filter-sort-reset-min-size);
+  padding: var(--filter-sort-reset-padding-y) var(--filter-sort-reset-padding-x);
+  border: 0;
+  border-radius: var(--filter-sort-radius);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-filter-and-sort__reset-label {
+  font-size: var(--filter-sort-font-size);
+  line-height: var(--filter-sort-line-height);
+  font-weight: 400;
+  color: var(--filter-sort-reset-color);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.tma-filter-and-sort__tag--removed {
+  display: none;
+}
+
+.tma-filter-and-sort--empty .tma-filter-and-sort__reset {
+  visibility: hidden;
+  pointer-events: none;
+}

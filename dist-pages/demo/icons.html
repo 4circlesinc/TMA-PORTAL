@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Icons Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .section { margin-bottom: 80px; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 100%; }
+    .nav-card { flex: 0 0 320px; background: #000; border-radius: 48px; padding: 48px 36px; }
+    .nav-card h1 {
+      font-size: 48px; font-weight: 700; line-height: 1; margin-bottom: 16px;
+      background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .nav-card p { font-size: 16px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+    .search {
+      flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #e0e0e5;
+      border-radius: 10px; font: inherit; background: #fafafa;
+    }
+    .badge { font-size: 12px; color: #666; background: #f0f0f3; padding: 6px 10px; border-radius: 999px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 12px;
+    }
+    .icon-card {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 14px 8px; border-radius: 12px; border: 1px solid #eee;
+      background: #fafafa; transition: background 0.15s, border-color 0.15s;
+    }
+    .icon-card:hover { background: #fff; border-color: #d8d8e0; }
+    .icon-card img, .icon-card svg { width: 32px; height: 32px; display: block; }
+    .icon-card .phosphor { color: #111; }
+    .icon-card span { font-size: 10px; color: #666; text-align: center; line-height: 1.2; word-break: break-word; }
+    .notice { font-size: 13px; color: #8a5a00; background: #fff8e8; border: 1px solid #ffe2a8; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; }
+    .usage { margin-top: 24px; font-size: 13px; color: #555; line-height: 1.6; }
+    code { background: #f0f0f3; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+
+    @media (max-width: 900px) {
+      body { padding: 24px 16px; }
+      .frame { flex-direction: column; gap: 24px; padding: 28px 20px; border-radius: 28px; }
+      .nav-card { width: 100%; flex: none; padding: 32px 24px; border-radius: 28px; }
+      .nav-card h1 { font-size: 36px; }
+    }
+    @media (max-width: 480px) {
+      body { padding: 16px 12px; }
+      .grid { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="section">
+    <p class="section-title">TMA Icons — custom set</p>
+    <div class="frame">
+      <div class="nav-card">
+        <h1>TMA Icons</h1>
+        <p>83 custom icons from Portal-Design. Exported as 32×32 SVG vectors.</p>
+      </div>
+      <div class="content">
+        <div id="tma-notice" class="notice" hidden></div>
+        <div class="toolbar">
+          <input class="search" id="tma-search" type="search" placeholder="Filter TMA icons…" />
+          <span class="badge" id="tma-count"></span>
+        </div>
+        <div class="grid" id="tma-grid"></div>
+        <p class="usage">Usage: <code>asset('images/icons/tma/Search.svg')</code></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <p class="section-title">Phosphor Icons — 2.0 Regular</p>
+    <div class="frame">
+      <div class="nav-card">
+        <h1>Phosphor</h1>
+        <p>1,248 icons from the Figma frame, synced as SVG from the official Phosphor library.</p>
+      </div>
+      <div class="content">
+        <div class="toolbar">
+          <input class="search" id="phosphor-search" type="search" placeholder="Search 1,248 icons…" />
+          <span class="badge" id="phosphor-count"></span>
+        </div>
+        <div class="grid" id="phosphor-grid"></div>
+        <p class="usage">Usage: <code>asset('images/icons/phosphor/Heart.svg')</code></p>
+      </div>
+    </div>
+  </div>
+
+<script>
+const BASE_SNOWUI = '../images/icons/tma/';
+const BASE_PHOSPHOR = '../images/icons/phosphor/';
+
+function renderGrid(grid, items, base, filter, isPhosphor = false) {
+  const q = filter.trim().toLowerCase();
+  const filtered = q
+    ? items.filter(i => i.name.toLowerCase().includes(q) || i.slug.toLowerCase().includes(q))
+    : items;
+
+  grid.innerHTML = filtered.map(item => {
+    const src = base + item.file;
+    const inner = isPhosphor
+      ? `<img class="phosphor" src="${src}" alt="${item.name}" width="32" height="32" loading="lazy">`
+      : `<img src="${src}" alt="${item.name}" width="32" height="32" loading="lazy">`;
+    return `<div class="icon-card" title="${item.slug}">${inner}<span>${item.name}</span></div>`;
+  }).join('');
+
+  return filtered.length;
+}
+
+fetch('icons-catalog.json')
+  .then(r => r.json())
+  .then(catalog => {
+    const tma = catalog.tma;
+    const phosphor = catalog.phosphor;
+    const tmaGrid = document.getElementById('tma-grid');
+    const phosphorGrid = document.getElementById('phosphor-grid');
+    const tmaCount = document.getElementById('tma-count');
+    const phosphorCount = document.getElementById('phosphor-count');
+    const tmaNotice = document.getElementById('tma-notice');
+
+    if (tma.length < 83) {
+      tmaNotice.hidden = false;
+      tmaNotice.textContent = `${tma.length} of 83 TMA icons exported. Remaining icons pending (Figma MCP rate limit). Re-run export to complete.`;
+    }
+
+    function updateSnowui() {
+      const n = renderGrid(tmaGrid, tma, BASE_SNOWUI, document.getElementById('tma-search').value);
+      tmaCount.textContent = `${n} icons`;
+    }
+    function updatePhosphor() {
+      const n = renderGrid(phosphorGrid, phosphor, BASE_PHOSPHOR, document.getElementById('phosphor-search').value, true);
+      phosphorCount.textContent = `${n} icons`;
+    }
+
+    document.getElementById('tma-search').addEventListener('input', updateSnowui);
+    document.getElementById('phosphor-search').addEventListener('input', updatePhosphor);
+    updateSnowui();
+    updatePhosphor();
+  });
+</script>
+</body>
+</html>

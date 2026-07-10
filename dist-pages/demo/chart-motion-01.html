@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — ChartMotion 01</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+    }
+    .frame {
+      display: flex;
+      gap: 64px;
+      align-items: flex-start;
+      background: #fff;
+      border-radius: 48px;
+      padding: 64px;
+      max-width: 1100px;
+    }
+    .nav-card {
+      flex: 0 0 280px;
+      background: #000;
+      border-radius: 48px;
+      padding: 40px 32px;
+    }
+    .nav-card h1 {
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 16px;
+      background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title {
+      font-size: 13px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+    }
+    .setup {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 28px;
+      overflow-x: auto;
+    }
+    .chart-wrap {
+      border: 1px solid #eee;
+      border-radius: 16px;
+      padding: 32px 24px 24px;
+      background: #fafafa;
+      overflow: visible;
+    }
+    .hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #888;
+    }
+    @media (max-width: 900px) {
+      body { padding: 24px 16px; }
+      .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; }
+      .nav-card { width: 100%; flex: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <p class="section-title">Chart ↗ — ChartMotion 01</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>ChartMotion</h1>
+      <p>First chart from Portal-Design — code-ready vertical bar chart with Y-axis grid and pill bars.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;!-- One-time setup --&gt;
+@include('partials.charts')
+
+&lt;!-- Figma preset --&gt;
+&lt;x-chart-motion /&gt;
+
+&lt;!-- Custom data --&gt;
+&lt;x-chart-motion :bars="[
+    ['value' => 82000, 'color' => 'blue', 'label' => 'Jan'],
+    ['value' => 45000, 'color' => 'mint', 'label' => 'Feb'],
+]" /&gt;</pre>
+
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll">
+          <div id="chart" class="tma-chart-motion" role="group" aria-label="Monthly bar chart"></div>
+        </div>
+        <p class="hint">Hover a bar for the value tooltip. On touch devices, tap a bar.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+const COLORS = {
+  cyan: '#a0bce8',
+  mint: '#6be6d3',
+  black: '#000000',
+  blue: '#7dbbff',
+  purple: '#b899eb',
+  green: '#71dd8c',
+};
+
+const PRESET = {
+  yMax: 110000,
+  yStep: 10000,
+  labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+  bars: [
+    { value: 57000, color: 'cyan' },
+    { value: 100000, color: 'mint' },
+    { value: 72000, color: 'black' },
+    { value: 115000, color: 'blue' },
+    { value: 43000, color: 'purple' },
+    { value: 86000, color: 'green' },
+    { value: 57000, color: 'cyan' },
+    { value: 100000, color: 'mint' },
+    { value: 72000, color: 'black' },
+    { value: 115000, color: 'blue' },
+    { value: 43000, color: 'purple' },
+    { value: 86000, color: 'green' },
+  ],
+};
+
+function formatY(v) {
+  return v === 0 ? '0' : `${v / 1000}K`;
+}
+
+function renderChart(root, { yMax, yStep, labels, bars }) {
+  const yTicks = [];
+  for (let v = yMax; v >= 0; v -= yStep) yTicks.push(v);
+
+  const yAxis = document.createElement('div');
+  yAxis.className = 'tma-chart-motion__y-axis';
+  yAxis.setAttribute('aria-hidden', 'true');
+  yTicks.forEach(tick => {
+    const span = document.createElement('span');
+    span.className = 'tma-chart-motion__y-label';
+    span.textContent = formatY(tick);
+    yAxis.appendChild(span);
+  });
+
+  const plot = document.createElement('div');
+  plot.className = 'tma-chart-motion__plot';
+
+  const grid = document.createElement('div');
+  grid.className = 'tma-chart-motion__grid';
+  grid.setAttribute('aria-hidden', 'true');
+  yTicks.forEach(tick => {
+    const line = document.createElement('span');
+    line.className = 'tma-chart-motion__grid-line' + (tick === 0 ? ' tma-chart-motion__grid-line--base' : '');
+    grid.appendChild(line);
+  });
+
+  const barRow = document.createElement('div');
+  barRow.className = 'tma-chart-motion__bars';
+
+  bars.forEach((bar, i) => {
+    const height = (bar.value / yMax) * 100;
+    const labelText = bar.label || labels[i] || '';
+    const col = document.createElement('div');
+    col.className = 'tma-chart-motion__bar';
+    col.tabIndex = 0;
+    col.setAttribute('role', 'button');
+    col.setAttribute('aria-label', `${labelText}: ${bar.value.toLocaleString()}`);
+
+    const stack = document.createElement('div');
+    stack.className = 'tma-chart-motion__bar-stack';
+    stack.style.height = `${height}%`;
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'tma-chart-motion__tooltip';
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.textContent = bar.value.toLocaleString();
+
+    const pill = document.createElement('div');
+    pill.className = 'tma-chart-motion__bar-pill';
+    pill.style.backgroundColor = COLORS[bar.color] || bar.color;
+
+    const label = document.createElement('span');
+    label.className = 'tma-chart-motion__x-label';
+    label.textContent = labelText;
+
+    stack.appendChild(tooltip);
+    stack.appendChild(pill);
+    col.appendChild(stack);
+    col.appendChild(label);
+    barRow.appendChild(col);
+  });
+
+  plot.appendChild(grid);
+  plot.appendChild(barRow);
+  root.appendChild(yAxis);
+  root.appendChild(plot);
+}
+
+renderChart(document.getElementById('chart'), PRESET);
+</script>
+<script src="../js/chart-motion.js"></script>
+</body>
+</html>

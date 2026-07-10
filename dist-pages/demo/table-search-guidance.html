@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Search results guidance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/function-bar.css">
+  <link rel="stylesheet" href="../css/pagination.css">
+  <link rel="stylesheet" href="../css/status-badge.css">
+  <link rel="stylesheet" href="../css/table-a.css">
+  <link rel="stylesheet" href="../css/table-search.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #fff;
+      color: #000;
+      padding: 80px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    .guidance-hero {
+      margin-bottom: 0;
+      padding-bottom: 48px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .guidance-hero__title {
+      font-size: 64px;
+      line-height: 72px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .guidance-hero__subtitle {
+      font-size: 48px;
+      line-height: 56px;
+      font-weight: 400;
+    }
+  </style>
+</head>
+<body>
+  <header class="guidance-hero">
+    <h1 class="guidance-hero__title">Search results</h1>
+    <p class="guidance-hero__subtitle">Table interactive guidance</p>
+  </header>
+
+  <div id="guidance-doc"></div>
+  <div id="guidance-root"></div>
+
+<script src="../js/table-search-icons.js"></script>
+<script>
+const svg = window.TMATableSearchIcons.svg;
+
+const COLORS = { purple: '#b899eb', green: '#71dd8c', blue: '#7dbbff', orange: '#ffb55b', muted: 'rgba(0, 0, 0, 0.4)' };
+const STATUS_VARIANTS = { 'in-progress': 'dot-purple', complete: 'dot-green', pending: 'dot-blue', approved: 'dot-orange', rejected: 'dot-muted' };
+
+const ALL_ROWS = [
+  { orderId: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', project: 'Landing Page', address: 'Meadow Lane Oakland', date: 'Just now', status: 'in-progress', statusLabel: 'In Progress' },
+  { orderId: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', project: 'CRM Admin pages', address: 'Larry San Francisco', date: '1 minute ago', status: 'complete', statusLabel: 'Complete' },
+  { orderId: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', project: 'Client Project', address: 'Bagwell Avenue Ocala', date: '1 hour ago', status: 'pending', statusLabel: 'Pending' },
+  { orderId: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', project: 'Admin Dashboard', address: 'Washburn Baton Rouge', date: 'Yesterday', status: 'approved', statusLabel: 'Approved' },
+  { orderId: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', project: 'App Landing Page', address: 'Nest Lane Olivette', date: 'Feb 2, 2026', status: 'rejected', statusLabel: 'Rejected' },
+  { orderId: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', project: 'Landing Page', address: 'Meadow Lane Oakland', date: 'Just now', status: 'in-progress', statusLabel: 'In Progress' },
+  { orderId: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', project: 'CRM Admin pages', address: 'Larry San Francisco', date: '1 minute ago', status: 'complete', statusLabel: 'Complete', checked: true },
+  { orderId: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', project: 'Client Project', address: 'Bagwell Avenue Ocala', date: '1 hour ago', status: 'pending', statusLabel: 'Pending', checked: true },
+  { orderId: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', project: 'Admin Dashboard', address: 'Washburn Baton Rouge', date: 'Yesterday', status: 'approved', statusLabel: 'Approved' },
+  { orderId: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', project: 'App Landing Page', address: 'Nest Lane Olivette', date: 'Feb 2, 2026', status: 'rejected', statusLabel: 'Rejected' },
+];
+
+const SEARCH_ROWS = ALL_ROWS.slice(0, 10);
+
+const RULES = [
+  'The search results appear in the following table instead of the original data.',
+  'The table data is restored to its original state after you clear what you typed.',
+  'If the table data has already been filtered by the user, the search scope is the filtered data.',
+  'Similarly, filtering is filtering the search results if the user searches first, and the same is true for sorting.',
+  'Search results are generated as you type, and the search results will include auto-completed results.',
+];
+
+function escJson(obj) { return JSON.stringify(obj).replace(/"/g, '&quot;'); }
+
+function renderStatusBadge(label, status) {
+  const variant = STATUS_VARIANTS[status];
+  const color = variant.split('-')[1];
+  return `<span class="tma-status-badge tma-status-badge--dot tma-status-badge--${color}" style="--status-badge-color:${COLORS[color]}"><span class="tma-status-badge__dot" aria-hidden="true"></span><span class="tma-status-badge__label">${label}</span></span>`;
+}
+
+function renderCheckbox(checked, attrs = '') {
+  const key = checked ? 'CheckboxChecked16' : 'Checkbox16';
+  return `<button type="button" class="tma-table-a__checkbox-btn"${attrs} aria-pressed="${checked ? 'true' : 'false'}"${checked ? ' data-checked' : ''}>${svg(key, 'tma-table-a__checkbox-glyph', 16, 16)}</button>`;
+}
+
+function renderSearchBar(options = {}) {
+  const { value = '', focused = false } = options;
+  const classes = ['tma-function-bar__search'];
+  if (focused || value) classes.push('tma-function-bar__search--focused');
+  if (value) classes.push('tma-function-bar__search--has-value');
+  const clearBtn = `<button type="button" class="tma-function-bar__search-clear" aria-label="Clear search">${svg('XCircle', 'tma-function-bar__search-clear-icon', 16, 16)}</button>`;
+  const spinner = `<span class="tma-function-bar__search-spinner">${svg('Loading16', '', 20, 20)}</span>`;
+  const kbd = value ? '' : `<button type="button" class="tma-function-bar__kbd" aria-label="Focus search" data-shortcut="/">/</button>`;
+  return `<div class="${classes.join(' ')}" role="search"><label class="tma-function-bar__search-field">${svg('Search16', 'tma-function-bar__icon', 16, 16)}<input type="search" class="tma-function-bar__search-input" placeholder="Search" aria-label="Search" value="${value}" readonly tabindex="-1" /></label>${clearBtn}${spinner}${kbd}</div>`;
+}
+
+function renderFunctionBar(searchOptions) {
+  return `<div class="tma-function-bar tma-function-bar--default" style="--function-bar-width:892px;--function-bar-background:#f9f9fa;"><div class="tma-function-bar__actions"><button type="button" class="tma-function-bar__action" aria-label="Add">${svg('Add', 'tma-function-bar__icon', 16, 16)}</button><button type="button" class="tma-function-bar__action" aria-label="Filter">${svg('FunnelSimple', 'tma-function-bar__icon', 16, 16)}</button><button type="button" class="tma-function-bar__action" aria-label="Sort">${svg('ArrowsDownUp', 'tma-function-bar__icon', 16, 16)}</button></div>${renderSearchBar(searchOptions)}</div>`;
+}
+
+function renderTableHead() {
+  return `<div class="tma-table-a__row tma-table-a__row--head" role="row"><div class="tma-table-a__cell tma-table-a__cell--select" role="columnheader">${renderCheckbox(false, ' data-select-all aria-label="Select all rows"')}</div><div class="tma-table-a__cell tma-table-a__cell--orderId" role="columnheader"><span class="tma-table-a__label">Order ID</span></div><div class="tma-table-a__cell tma-table-a__cell--user" role="columnheader"><span class="tma-table-a__label">User</span></div><div class="tma-table-a__cell tma-table-a__cell--project" role="columnheader"><span class="tma-table-a__label">Project</span></div><div class="tma-table-a__cell tma-table-a__cell--address tma-table-a__cell--header-emphasis" role="columnheader"><span class="tma-table-a__label">Address</span></div><div class="tma-table-a__cell tma-table-a__cell--date" role="columnheader"><span class="tma-table-a__label">Date</span></div><div class="tma-table-a__cell tma-table-a__cell--status" role="columnheader"><span class="tma-table-a__label">Status</span></div><div class="tma-table-a__cell tma-table-a__cell--actions" role="columnheader" aria-hidden="true"></div></div>`;
+}
+
+function renderRow(row, index, options = {}) {
+  const { previewHover = false, rowClass = '' } = options;
+  const borderVariant = row.rowVariant === 'section-end' ? 'section-end' : 'default';
+  let extraClass = rowClass;
+  if (row.checked && rowClass.includes('selected-start')) extraClass = 'tma-table-a__row--selected-start';
+  if (row.checked && rowClass.includes('selected-mid')) extraClass = 'tma-table-a__row--selected-mid';
+  const hoverAttr = previewHover ? ' data-preview-hover' : '';
+  const addressBtn = `<button type="button" class="tma-table-a__clipboard" aria-label="Copy address" data-copy-address${previewHover ? ' style="opacity:1"' : ''}>${svg('Copy16', 'tma-table-a__icon', 16, 16)}</button>`;
+  const actionStyle = previewHover ? ' style="opacity:1"' : '';
+  return `<div class="tma-table-a__row tma-table-a__row--${borderVariant} ${extraClass}" role="row" data-row-index="${index}" data-border-variant="${borderVariant}" data-row-data="${escJson(row)}"${hoverAttr}><div class="tma-table-a__cell tma-table-a__cell--select" role="cell">${renderCheckbox(!!row.checked, ` aria-label="Select row ${row.orderId}" data-row-checkbox`)}</div><div class="tma-table-a__cell tma-table-a__cell--orderId" role="cell"><span class="tma-table-a__label">${row.orderId}</span></div><div class="tma-table-a__cell tma-table-a__cell--user" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--user"><img src="../images/avatars/${row.avatar}.png" alt="" class="tma-table-a__avatar" width="24" height="24" /><span class="tma-table-a__label">${row.user}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--project" role="cell"><span class="tma-table-a__label">${row.project}</span></div><div class="tma-table-a__cell tma-table-a__cell--address" role="cell"><span class="tma-table-a__address"><span class="tma-table-a__label">${row.address}</span>${addressBtn}</span></div><div class="tma-table-a__cell tma-table-a__cell--date" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--date">${svg('CalendarBlank16', 'tma-table-a__icon', 16, 16)}<span class="tma-table-a__label">${row.date}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--status" role="cell">${renderStatusBadge(row.statusLabel, row.status)}</div><div class="tma-table-a__cell tma-table-a__cell--actions" role="cell"><button type="button" class="tma-table-a__action" aria-label="Row actions" data-row-action${actionStyle}>${svg('ThreeDots16', 'tma-table-a__icon', 16, 16)}</button></div></div>`;
+}
+
+function renderPagination(resultsText = '105 results') {
+  const pages = [1, 2, 3, 4, 5].map((p) => `<button type="button" class="tma-pagination__button${p === 1 ? ' tma-pagination__button--active' : ''}" aria-label="Page ${p}"${p === 1 ? ' aria-current="page"' : ''}><span class="tma-pagination__label">${p}</span></button>`).join('');
+  return `<div class="tma-pagination-bar tma-pagination-bar--footer"><div class="tma-pagination-bar__meta"><button type="button" class="tma-pagination-bar__page-size" aria-label="Rows per page"><span class="tma-pagination__label">20</span>${svg('ArrowLineDown16', 'tma-pagination__icon', 16, 16)}</button><span class="tma-pagination-bar__results">${resultsText}</span></div><nav class="tma-pagination" aria-label="Pagination">${pages}<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" disabled>${svg('ArrowLineLeft16', 'tma-pagination__icon', 16, 16)}</button><button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page">${svg('ArrowLineRight16', 'tma-pagination__icon', 16, 16)}</button></nav></div>`;
+}
+
+function renderNoResultsTable() {
+  return `<div class="tma-table-search"><p class="tma-table-search__label">No results</p>${renderFunctionBar({ value: 'Typing|', focused: true })}<div class="tma-table-a tma-table-search--preview-no-results" style="--table-a-width:892px;--table-a-columns:32px 88px 1fr 1fr 176px 1fr 110px 40px;"><div class="tma-table-a__sheet" role="table" aria-label="Orders">${renderTableHead()}<div data-table-body><div class="tma-table-search__empty" role="row">No results</div></div></div></div></div>`;
+}
+
+function renderSearchResultsTable() {
+  const body = SEARCH_ROWS.map((row, i) => {
+    if (i === 4) return renderRow(row, i, { previewHover: true });
+    if (i === 6) return renderRow(row, i, { rowClass: 'tma-table-a__row--selected-start' });
+    if (i === 7) return renderRow(row, i, { rowClass: 'tma-table-a__row--selected-mid' });
+    return renderRow(row, i);
+  }).join('');
+  return `<div class="tma-table-search tma-table-search--preview-results"><p class="tma-table-search__label">Search results</p>${renderFunctionBar({ value: 'Typing|', focused: true })}<div class="tma-table-a" style="--table-a-width:892px;--table-a-columns:32px 88px 1fr 1fr 176px 1fr 110px 40px;"><div class="tma-table-a__sheet" role="table" aria-label="Orders">${renderTableHead()}<div data-table-body>${body}</div></div></div>${renderPagination()}</div>`;
+}
+
+function renderRules() {
+  const items = RULES.map((r) => `<li>${r}</li>`).join('');
+  return `<div class="tma-table-search-guidance__rules"><strong>Search interaction</strong><ul>${items}</ul></div>`;
+}
+
+function renderSearchField(text, extraClass, trailing = '') {
+  return `<div class="tma-search-field ${extraClass}"><div class="tma-search-field__inner">${svg('Search16', 'tma-search-field__icon', 16, 16)}<span class="tma-search-field__text ${text !== 'Search' ? 'tma-search-field__text--value' : ''}">${text}</span></div>${trailing}</div>`;
+}
+
+function renderSearchShowcase() {
+  const kbd = '<span class="tma-search-field__kbd">/</span>';
+  const clear = svg('XCircle', 'tma-search-field__clear', 16, 16);
+  const spinner = `<span class="tma-search-field__spinner">${svg('Loading16', '', 20, 20)}</span>`;
+  const fields = [
+    { cls: 'tma-search-field--gray-default', pos: 'r1c1', text: 'Search', trailing: kbd },
+    { cls: 'tma-search-field--gray-hover', pos: 'r1c2', text: 'Search', trailing: kbd },
+    { cls: 'tma-search-field--gray-default', pos: 'r1c3', text: 'Search', trailing: kbd },
+    { cls: 'tma-search-field--focus', pos: 'r1c4', text: 'Typing|', trailing: clear },
+    { cls: 'tma-search-field--in-progress', pos: 'r1c5', text: 'ByeWind', trailing: spinner },
+    { cls: 'tma-search-field--outline-default', pos: 'r2c1', text: 'Search', trailing: kbd },
+    { cls: 'tma-search-field--outline-hover', pos: 'r2c2', text: 'Search', trailing: kbd },
+    { cls: 'tma-search-field--disabled', pos: 'r2c3', text: 'Search', trailing: kbd },
+    { cls: 'tma-search-field--focus', pos: 'r2c4', text: 'Typing|', trailing: clear },
+    { cls: 'tma-search-field--in-progress', pos: 'r2c5', text: 'ByeWind', trailing: spinner },
+  ].map((f) => renderSearchField(f.text, `tma-search-showcase__field tma-search-showcase__field--${f.pos} ${f.cls}`, f.trailing)).join('');
+
+  return `<div class="tma-search-showcase"><div class="tma-search-showcase__board"><p class="tma-search-showcase__col-title tma-search-showcase__col-title--default">Default</p><p class="tma-search-showcase__col-title tma-search-showcase__col-title--hover">Hover</p><p class="tma-search-showcase__col-title tma-search-showcase__col-title--disabled">Disabled</p><p class="tma-search-showcase__col-title tma-search-showcase__col-title--focus">Focus</p><p class="tma-search-showcase__col-title tma-search-showcase__col-title--progress">In progress</p><div class="tma-search-showcase__divider" aria-hidden="true"></div>${fields}</div></div>`;
+}
+
+function renderDocLink() {
+  return `<a class="tma-table-search-guidance__doc" href="#" target="_blank" rel="noopener noreferrer">${svg('Goto', 'tma-table-search-guidance__doc-icon', 16, 16)}<span>Component documentation</span></a>`;
+}
+
+function renderTMALogo() {
+  return `<div class="tma-table-search-guidance__logo" aria-hidden="true">${svg('TMALogoMark', 'tma-table-search-guidance__logo-icon', 28, 28)}<span class="tma-table-search-guidance__wordmark">${svg('TMALogoWordmark', 'tma-table-search-guidance__wordmark-left', 53, 12)}${svg('TMALogoSuffix', 'tma-table-search-guidance__wordmark-right', 15, 12)}</span></div>`;
+}
+
+function renderSocialLink(href, label, iconKey) {
+  return `<a class="tma-table-search-guidance__social" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="${label}">${svg(iconKey, 'tma-table-search-guidance__social-icon', 28, 28)}</a>`;
+}
+
+function renderFooter() {
+  return `<footer class="tma-table-search-guidance__footer"><div class="tma-table-search-guidance__footer-brand">${renderTMALogo()}<p class="tma-table-search-guidance__copyright">© 2026 TM ANTOINE Advisory. All rights reserved.</p></div><div class="tma-table-search-guidance__socials">${renderSocialLink('https://twitter.com/FarewelltoWind', 'Twitter', 'TwitterSocial')}${renderSocialLink('https://www.instagram.com/farewelltowind', 'Instagram', 'InstagramSocial')}${renderSocialLink('https://www.threads.net/@farewelltowind', 'Threads', 'ThreadsLogo')}${renderSocialLink('https://dribbble.com/byewind', 'Dribbble', 'DribbbleSocial')}${renderSocialLink('https://www.behance.net/ByeWind', 'Behance', 'BehanceSocial')}${renderSocialLink('https://www.figma.com/@byewind', 'Figma', 'FigmaSocial')}${renderSocialLink('#', 'Website', 'TMALogoMark')}</div></footer>`;
+}
+
+document.getElementById('guidance-doc').innerHTML = renderDocLink();
+document.getElementById('guidance-root').innerHTML = `
+  <section class="tma-table-search-guidance__section tma-table-search-guidance__stack">
+    ${renderNoResultsTable()}
+    ${renderSearchResultsTable()}
+    ${renderRules()}
+  </section>
+  <section class="tma-table-search-guidance__section">
+    ${renderSearchShowcase()}
+  </section>
+  ${renderFooter()}
+`;
+</script>
+</body>
+</html>

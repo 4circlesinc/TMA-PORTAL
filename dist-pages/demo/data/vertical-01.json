@@ -1,0 +1,26 @@
+{
+  "slug": "vertical-01",
+  "nodeId": "30485:135136",
+  "name": "Vertical 01",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "barWidth": 28,
+  "bars": [
+    { "value": 2000, "color": "cyan", "size": 50 },
+    { "value": 5000, "color": "mint", "size": 87.5 },
+    { "value": 3000, "color": "black", "size": 62.5 },
+    { "value": 6000, "color": "blue", "size": 100 },
+    { "value": 1000, "color": "purple", "size": 37.5 },
+    { "value": 4000, "color": "green", "size": 75 }
+  ],
+  "colors": {
+    "cyan": "#a0bce8",
+    "mint": "#6be6d3",
+    "black": "#000000",
+    "blue": "#7dbbff",
+    "purple": "#b899eb",
+    "green": "#71dd8c"
+  }
+}

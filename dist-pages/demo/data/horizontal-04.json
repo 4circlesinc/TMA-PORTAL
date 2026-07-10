@@ -1,0 +1,310 @@
+{
+  "slug": "horizontal-04",
+  "nodeId": "30485:135153",
+  "name": "Horizontal 04",
+  "variant": "blocks",
+  "size": "160x240",
+  "width": 160,
+  "height": 240,
+  "xMax": 6000,
+  "blockHeight": 2,
+  "blockGap": 2,
+  "blockSize": 12.5,
+  "color": "#000000",
+  "bars": [
+    {
+      "value": 2000,
+      "top": 19.0,
+      "height": 2.0,
+      "blocks": [
+        {
+          "left": 0.0,
+          "width": 14.2,
+          "top": 19.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 16.2,
+          "width": 14.2,
+          "top": 19.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 32.4,
+          "width": 14.2,
+          "top": 19.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 48.6,
+          "width": 14.2,
+          "top": 19.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 64.8,
+          "width": 14.2,
+          "top": 19.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 81.0,
+          "width": 14.2,
+          "top": 19.0,
+          "height": 2.0,
+          "type": "block"
+        }
+      ]
+    },
+    {
+      "value": 5000,
+      "top": 59.0,
+      "height": 2.0,
+      "blocks": [
+        {
+          "left": 0.0,
+          "width": 21.143,
+          "top": 59.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 23.143,
+          "width": 21.143,
+          "top": 59.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 46.286,
+          "width": 21.143,
+          "top": 59.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 69.429,
+          "width": 21.143,
+          "top": 59.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 92.571,
+          "width": 21.143,
+          "top": 59.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 115.714,
+          "width": 21.143,
+          "top": 59.0,
+          "height": 2.0,
+          "type": "block"
+        }
+      ]
+    },
+    {
+      "value": 3000,
+      "top": 99.0,
+      "height": 2.0,
+      "blocks": [
+        {
+          "left": 0.0,
+          "width": 16.0,
+          "top": 99.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 18.0,
+          "width": 16.0,
+          "top": 99.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 36.0,
+          "width": 16.0,
+          "top": 99.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 54.0,
+          "width": 16.0,
+          "top": 99.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 72.0,
+          "width": 16.0,
+          "top": 99.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 90.0,
+          "width": 16.0,
+          "top": 99.0,
+          "height": 2.0,
+          "type": "block"
+        }
+      ]
+    },
+    {
+      "value": 6000,
+      "top": 139.0,
+      "height": 2.0,
+      "blocks": [
+        {
+          "left": 0.0,
+          "width": 25.0,
+          "top": 139.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 27.0,
+          "width": 25.0,
+          "top": 139.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 54.0,
+          "width": 25.0,
+          "top": 139.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 81.0,
+          "width": 25.0,
+          "top": 139.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 108.0,
+          "width": 25.0,
+          "top": 139.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 135.0,
+          "width": 25.0,
+          "top": 139.0,
+          "height": 2.0,
+          "type": "block"
+        }
+      ]
+    },
+    {
+      "value": 1000,
+      "top": 179.0,
+      "height": 2.0,
+      "blocks": [
+        {
+          "left": 0.0,
+          "width": 12.727,
+          "top": 179.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 14.727,
+          "width": 12.727,
+          "top": 179.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 29.455,
+          "width": 12.727,
+          "top": 179.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 44.182,
+          "width": 12.727,
+          "top": 179.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 58.909,
+          "width": 12.727,
+          "top": 179.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 73.636,
+          "width": 12.727,
+          "top": 179.0,
+          "height": 2.0,
+          "type": "block"
+        }
+      ]
+    },
+    {
+      "value": 4000,
+      "top": 219.0,
+      "height": 2.0,
+      "blocks": [
+        {
+          "left": 0.0,
+          "width": 18.25,
+          "top": 219.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 20.25,
+          "width": 18.25,
+          "top": 219.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 40.5,
+          "width": 18.25,
+          "top": 219.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 60.75,
+          "width": 18.25,
+          "top": 219.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 81.0,
+          "width": 18.25,
+          "top": 219.0,
+          "height": 2.0,
+          "type": "block"
+        },
+        {
+          "left": 101.25,
+          "width": 18.25,
+          "top": 219.0,
+          "height": 2.0,
+          "type": "block"
+        }
+      ]
+    }
+  ]
+}

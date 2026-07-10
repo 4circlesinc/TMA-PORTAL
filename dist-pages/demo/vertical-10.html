@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Vertical 10</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 960px; }
+    .nav-card { flex: 0 0 280px; background: #000; border-radius: 48px; padding: 40px 32px; }
+    .nav-card h1 { font-size: 44px; font-weight: 700; line-height: 1; margin-bottom: 16px; background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 28px; overflow-x: auto; }
+    .chart-wrap { border: 1px solid #eee; border-radius: 16px; padding: 32px 24px 24px; background: #fafafa; overflow: visible; max-width: 520px; }
+    .hint { margin-top: 12px; font-size: 12px; color: #888; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; } .nav-card { width: 100%; flex: none; } }
+  </style>
+</head>
+<body>
+  <p class="section-title">Vertical bar — Vertical 10</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>Vertical 10</h1>
+      <p>Dense 37-bar strip chart at 440×138. One accent bar in lavender (#adadfb). HTML/CSS with Figma-exact positions.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;x-chart-vertical-10 /&gt;
+
+&lt;x-chart-vertical-10 accent-color="#adadfb" :y-max="6000" /&gt;</pre>
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll tma-chart-scroll--wide">
+          <div id="chart" class="tma-chart-vertical-10" role="group" aria-label="Strip vertical bar chart"></div>
+        </div>
+        <p class="hint">Hover any strip for its value. Accent bar is 6px wide; others are 3px.</p>
+      </div>
+    </div>
+  </div>
+<script>
+const CHART_WIDTH = 440;
+const CHART_HEIGHT = 138;
+
+function formatValue(v) { return v.toLocaleString(); }
+
+function normalizeStripBars(preset) {
+  const max = preset.yMax || 6000;
+  const maxHeight = preset.maxBarHeight || (preset.plotBottom - preset.plotTop);
+  const defaultColor = preset.color || '#000000';
+
+  return (preset.bars || []).map((bar) => {
+    const width = bar.width || preset.barWidth || 3;
+    const x = bar.x || 0;
+    const top = bar.top ?? preset.plotTop;
+    const height = bar.height ?? (preset.plotBottom - top);
+    const color = bar.color || defaultColor;
+    const value = bar.value != null ? bar.value : Math.round(height / maxHeight * max);
+
+    return {
+      value,
+      color,
+      leftPct: ((x - width / 2) / CHART_WIDTH) * 100,
+      widthPct: (width / CHART_WIDTH) * 100,
+      topPct: (top / CHART_HEIGHT) * 100,
+      heightPct: (height / CHART_HEIGHT) * 100,
+      isAccent: color.toUpperCase() === (preset.accentColor || '#ADADFB').toUpperCase(),
+    };
+  });
+}
+
+function renderChart(root, preset) {
+  root.style.setProperty('--v10-chart-width', CHART_WIDTH);
+  root.style.setProperty('--v10-chart-height', CHART_HEIGHT);
+
+  const plot = document.createElement('div');
+  plot.className = 'tma-chart-vertical-10__plot';
+
+  normalizeStripBars(preset).forEach((bar, index) => {
+    const el = document.createElement('div');
+    el.className = 'tma-chart-vertical-10__bar' + (bar.isAccent ? ' tma-chart-vertical-10__bar--accent' : '');
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', `Bar ${index + 1}: ${formatValue(bar.value)}`);
+    el.style.left = `${bar.leftPct}%`;
+    el.style.width = `${bar.widthPct}%`;
+    el.style.top = `${bar.topPct}%`;
+    el.style.height = `${bar.heightPct}%`;
+    el.style.setProperty('--v10-bar-color', bar.color);
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'tma-chart-vertical-10__tooltip';
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.textContent = formatValue(bar.value);
+
+    const strip = document.createElement('span');
+    strip.className = 'tma-chart-vertical-10__strip';
+
+    el.appendChild(tooltip);
+    el.appendChild(strip);
+    plot.appendChild(el);
+  });
+
+  root.appendChild(plot);
+}
+
+fetch('./data/vertical-10.json')
+  .then(r => r.json())
+  .then(preset => {
+    const chart = document.getElementById('chart');
+    renderChart(chart, preset);
+    window.PortalChartMotion.initChart(chart);
+  });
+</script>
+<script src="../js/chart-motion.js"></script>
+</body>
+</html>

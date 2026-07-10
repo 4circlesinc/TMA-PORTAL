@@ -1,0 +1,175 @@
+/*
+ * Coming Soon — Figma 32546:96131
+ */
+
+.tma-coming-soon {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-card);
+  font-family: var(--font-family);
+  font-feature-settings: var(--font-features);
+  color: var(--color-text-primary);
+  box-sizing: border-box;
+}
+
+.tma-coming-soon *,
+.tma-coming-soon *::before,
+.tma-coming-soon *::after {
+  box-sizing: border-box;
+}
+
+.tma-coming-soon__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-28);
+  padding: var(--space-24);
+}
+
+.tma-coming-soon__title {
+  margin: 0;
+  font-size: var(--text-size-48);
+  line-height: var(--text-lh-48);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+  text-align: center;
+}
+
+.tma-coming-soon__illustration {
+  display: block;
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+
+.tma-coming-soon__countdown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-8) var(--space-28);
+}
+
+.tma-coming-soon__countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 56px;
+}
+
+.tma-coming-soon__countdown-value {
+  margin: 0;
+  font-size: var(--text-size-48);
+  line-height: var(--text-lh-48);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+}
+
+.tma-coming-soon__countdown-label {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+.tma-coming-soon__countdown-sep {
+  margin: 0;
+  font-size: var(--text-size-48);
+  line-height: var(--text-lh-48);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-placeholder);
+  user-select: none;
+}
+
+.tma-coming-soon__subscribe {
+  width: min(360px, 100%);
+}
+
+.tma-coming-soon__subscribe-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 56px;
+  padding: var(--space-16) var(--space-20);
+  border: 0.5px solid var(--color-text-placeholder);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-input);
+}
+
+.tma-coming-soon__subscribe-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+}
+
+.tma-coming-soon__subscribe-input::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+.tma-coming-soon__subscribe-btn {
+  display: inline-flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-black);
+  cursor: pointer;
+}
+
+.tma-coming-soon__subscribe-btn:hover {
+  color: var(--color-primary);
+}
+
+.tma-coming-soon__subscribe-btn svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.tma-coming-soon__copyright {
+  flex-shrink: 0;
+  margin: 0;
+  padding-bottom: var(--space-48);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .tma-coming-soon__body {
+    padding: var(--space-16);
+  }
+
+  .tma-coming-soon__title {
+    font-size: var(--text-size-24);
+    line-height: var(--text-lh-24);
+  }
+
+  .tma-coming-soon__illustration {
+    width: 160px;
+    height: 160px;
+  }
+
+  .tma-coming-soon__countdown-value,
+  .tma-coming-soon__countdown-sep {
+    font-size: var(--text-size-24);
+    line-height: var(--text-lh-24);
+  }
+}

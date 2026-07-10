@@ -1,0 +1,8 @@
+{
+  "slug": "pagination",
+  "name": "Pagination",
+  "items": [
+    { "nodeId": "32728:395827", "variant": "default", "currentPage": 1 },
+    { "nodeId": "32728:395828", "variant": "footer", "currentPage": 1, "pageSize": 20, "totalResults": 105 }
+  ]
+}

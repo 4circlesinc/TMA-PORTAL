@@ -1,0 +1,28 @@
+<svg width="240" height="160" viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Vertical 08">
+<g id="VerticalBar 08">
+<path id="Rectangle" d="M16 54C16 51.7909 17.7909 50 20 50C22.2091 50 24 51.7909 24 54V80H16V54Z" fill="black"/>
+<path id="Rectangle_2" d="M16 80H24V106C24 108.209 22.2091 110 20 110C17.7909 110 16 108.209 16 106V80Z" fill="#ADADFB"/>
+</g>
+<g id="VerticalBar 08_2">
+<path id="Rectangle_3" d="M56 24C56 21.7909 57.7909 20 60 20C62.2091 20 64 21.7909 64 24V80H56V24Z" fill="black"/>
+<path id="Rectangle_4" d="M56 80H64V136C64 138.209 62.2091 140 60 140C57.7909 140 56 138.209 56 136V80Z" fill="#ADADFB"/>
+</g>
+<g id="VerticalBar 08_3">
+<path id="Rectangle_5" d="M96 44C96 41.7909 97.7909 40 100 40C102.209 40 104 41.7909 104 44V80H96V44Z" fill="black"/>
+<path id="Rectangle_6" d="M96 80H104V116C104 118.209 102.209 120 100 120C97.7909 120 96 118.209 96 116V80Z" fill="#ADADFB"/>
+</g>
+<g id="VerticalBar 08_4">
+<path id="Rectangle_7" d="M136 14C136 11.7909 137.791 10 140 10C142.209 10 144 11.7909 144 14V80H136V14Z" fill="black"/>
+<path id="Rectangle_8" d="M136 80H144V146C144 148.209 142.209 150 140 150C137.791 150 136 148.209 136 146V80Z" fill="#ADADFB"/>
+</g>
+<g id="VerticalBar 08_5">
+<path id="Rectangle_9" d="M176 64C176 61.7909 177.791 60 180 60C182.209 60 184 61.7909 184 64V80H176V64Z" fill="black"/>
+<path id="Rectangle_10" d="M176 80H184V96C184 98.2091 182.209 100 180 100C177.791 100 176 98.2091 176 96V80Z" fill="#ADADFB"/>
+</g>
+<g id="VerticalBar 08_6">
+<path id="Rectangle_11" d="M216 34C216 31.7909 217.791 30 220 30C222.209 30 224 31.7909 224 34V80H216V34Z" fill="black"/>
+<path id="Rectangle_12" d="M216 80H224V126C224 128.209 222.209 130 220 130C217.791 130 216 128.209 216 126V80Z" fill="#ADADFB"/>
+</g>
+</g>
+</svg>

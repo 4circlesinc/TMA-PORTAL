@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Vertical 11</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 900px; }
+    .nav-card { flex: 0 0 280px; background: #000; border-radius: 48px; padding: 40px 32px; }
+    .nav-card h1 { font-size: 44px; font-weight: 700; line-height: 1; margin-bottom: 16px; background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 28px; overflow-x: auto; }
+    .chart-wrap { border: 1px solid #eee; border-radius: 16px; padding: 32px 24px 24px; background: #fafafa; overflow: visible; max-width: 320px; }
+    .hint { margin-top: 12px; font-size: 12px; color: #888; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; } .nav-card { width: 100%; flex: none; } }
+  </style>
+</head>
+<body>
+  <p class="section-title">Vertical bar — Vertical 11</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>Vertical 11</h1>
+      <p>Single solid 30px pill per column — the foreground layer from Vertical 12, built as HTML/CSS.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;x-chart-vertical-11 /&gt;
+
+&lt;x-chart-vertical-11 color="#000000" :bars="[
+    ['value' => 3200],
+    ['value' => 5100],
+]" :y-max="6000" /&gt;</pre>
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll">
+          <div id="chart" class="tma-chart-vertical-11" role="group" aria-label="Pill vertical bar chart"></div>
+        </div>
+        <p class="hint">Hover a bar for the value tooltip.</p>
+      </div>
+    </div>
+  </div>
+<script>
+const BAR_COLOR = '#000000';
+const CHART_HEIGHT = 160;
+
+function formatValue(v) { return v.toLocaleString(); }
+function barSizePercent(value, max) { return Math.max(2, Math.min(100, (value / max) * 100)); }
+
+function generatePillBounds(value, max) {
+  const size = barSizePercent(value, max);
+  const height = Math.max(16, Math.round(size / 100 * 145));
+  const top = CHART_HEIGHT - height;
+  return { top, height };
+}
+
+function renderChart(root, preset) {
+  const { yMax, bars, color } = preset;
+  root.style.setProperty('--v11-color', color || BAR_COLOR);
+  root.style.setProperty('--v11-chart-height', CHART_HEIGHT);
+
+  const barsEl = document.createElement('div');
+  barsEl.className = 'tma-chart-vertical-11__bars';
+
+  bars.forEach((bar, index) => {
+    const value = bar.value;
+    const bounds = bar.top != null
+      ? { top: bar.top, height: CHART_HEIGHT - bar.top }
+      : generatePillBounds(value, yMax);
+
+    const el = document.createElement('div');
+    el.className = 'tma-chart-vertical-11__bar';
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', `Bar ${index + 1}: ${formatValue(value)}`);
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'tma-chart-vertical-11__tooltip';
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.textContent = formatValue(value);
+
+    const pill = document.createElement('div');
+    pill.className = 'tma-chart-vertical-11__pill';
+    pill.style.top = `${(bounds.top / CHART_HEIGHT) * 100}%`;
+    pill.style.height = `${(bounds.height / CHART_HEIGHT) * 100}%`;
+
+    el.appendChild(tooltip);
+    el.appendChild(pill);
+    barsEl.appendChild(el);
+  });
+
+  root.appendChild(barsEl);
+}
+
+fetch('./data/vertical-11.json')
+  .then(r => r.json())
+  .then(preset => {
+    renderChart(document.getElementById('chart'), preset);
+    window.PortalChartMotion.initChart(document.getElementById('chart'));
+  });
+</script>
+<script src="../js/chart-motion.js"></script>
+</body>
+</html>

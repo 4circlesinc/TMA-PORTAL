@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Table B interactive guidance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/status-badge.css">
+  <link rel="stylesheet" href="../css/table-b.css">
+  <link rel="stylesheet" href="../css/table-b-sessions.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #fff;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    .guidance-page { max-width: 1200px; }
+    .guidance-page__title {
+      font-size: 32px;
+      line-height: 40px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .guidance-page__subtitle {
+      font-size: 14px;
+      line-height: 20px;
+      color: rgba(0, 0, 0, 0.6);
+      margin-bottom: 48px;
+    }
+    .guidance-section {
+      display: grid;
+      grid-template-columns: 1fr 240px;
+      gap: 32px;
+      align-items: start;
+      padding: 48px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .guidance-section:last-child { border-bottom: 0; }
+    .guidance-section__notes {
+      font-size: 14px;
+      line-height: 20px;
+      padding-top: 8px;
+    }
+    .guidance-section__notes strong {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .guidance-section__notes ul {
+      margin: 0;
+      padding-left: 21px;
+    }
+    .guidance-section__notes li + li { margin-top: 10px; }
+    .guidance-stack { display: flex; flex-direction: column; gap: 48px; }
+  </style>
+</head>
+<body>
+  <div class="guidance-page">
+    <h1 class="guidance-page__title">Table B interactive guidance</h1>
+    <p class="guidance-page__subtitle">Figma node 32722:24623 — Tasks interactions + Sign in Sessions header variants</p>
+
+    <div id="guidance-root"></div>
+  </div>
+
+  <script>
+const COLORS = {
+  purple: '#b899eb', green: '#71dd8c', blue: '#7dbbff', orange: '#ffb55b', muted: 'rgba(0, 0, 0, 0.4)',
+};
+
+const STATUS_VARIANTS = {
+  'in-progress': 'dot-purple',
+  complete: 'dot-green',
+  pending: 'dot-blue',
+  approved: 'dot-orange',
+  rejected: 'dot-muted',
+};
+
+const TASK_ROWS = [
+  { title: 'Coffee detail page', assignedTo: { avatars: ['AvatarMale01'] }, timeSpend: '3hr 20min', status: 'in-progress', statusLabel: 'In Progress' },
+  { title: 'Drinking bottle graphics', assignedTo: { avatars: ['AvatarFemale01', 'AvatarMale02'] }, timeSpend: '12hr 21min', status: 'complete', statusLabel: 'Complete' },
+  { title: 'App design and development', assignedTo: { avatars: ['AvatarFemale04', 'AvatarMale03'], overflow: '+3' }, timeSpend: '78hr 5min', status: 'pending', statusLabel: 'Pending' },
+  { title: 'Poster illustation design', assignedTo: { avatars: ['AvatarFemale05', 'AvatarMale05'] }, timeSpend: '26hr 58min', status: 'approved', statusLabel: 'Approved' },
+  { title: 'App UI design', assignedTo: { avatars: ['AvatarFemale06'] }, timeSpend: '17hr 22min', status: 'rejected', statusLabel: 'Rejected' },
+];
+
+const TASK_COLUMNS = [
+  { key: 'title', type: 'text', label: 'Title', padding: 'title' },
+  { key: 'assignedTo', type: 'avatars', label: 'Assigned to' },
+  { key: 'timeSpend', type: 'text', label: 'Time Spend' },
+  { key: 'status', type: 'status', label: 'Status', padding: 'status' },
+];
+
+const SESSION_ROWS = [
+  { location: 'USA(5)', device: 'Chrome - Windows', ipAddress: '236.125.56.78', time: '2 minutes ago', status: 'in-progress', statusLabel: 'In Progress' },
+  { location: 'United Kingdom(10)', device: 'Safari - Mac OS', ipAddress: '236.125.56.69', time: '10 minutes ago', status: 'complete', statusLabel: 'Complete' },
+  { location: 'Norway(-)', device: 'Firefox - Windows', ipAddress: '236.125.56.10', time: '20 minutes ago', status: 'pending', statusLabel: 'Pending' },
+  { location: 'Japan(112)', device: 'iOS - iPhone Pro', ipAddress: '236.125.56.54', time: '30 minutes ago', status: 'approved', statusLabel: 'Approved' },
+  { location: 'Italy(5)', device: 'Samsung Noted 5- Android', ipAddress: '236.100.56.50', time: '40 minutes ago', status: 'rejected', statusLabel: 'Rejected' },
+];
+
+const SESSION_COLUMNS = [
+  { key: 'location', type: 'text', label: 'Location', padding: 'location' },
+  { key: 'device', type: 'text', label: 'Device' },
+  { key: 'ipAddress', type: 'text', label: 'IP Address' },
+  { key: 'time', type: 'time', label: 'Time' },
+  { key: 'status', type: 'status', label: 'Status', padding: 'status' },
+];
+
+const ICONS = {
+  expand: '../images/icons/phosphor/ArrowsOutSimple.svg',
+  clock: '../images/icons/phosphor/Clock.svg',
+  arrowDown: '../images/icons/tma/ArrowLineDown-16.svg',
+  threeDots: '../images/icons/tma/ThreeDots-16.svg',
+};
+
+function avatarUrl(key) {
+  return `../images/avatars/${key}.png`;
+}
+
+function renderStatusBadge(label, status) {
+  const variant = STATUS_VARIANTS[status];
+  const color = variant.split('-')[1];
+  return `<span class="tma-status-badge tma-status-badge--dot tma-status-badge--${color}" style="--status-badge-color:${COLORS[color]}"><span class="tma-status-badge__dot" aria-hidden="true"></span><span class="tma-status-badge__label">${label}</span></span>`;
+}
+
+function taskCellClass(column) {
+  let cls = 'tma-table-b__cell';
+  if (column.padding === 'title') cls += ' tma-table-b__cell--title';
+  if (column.padding === 'status') cls += ' tma-table-b__cell--status';
+  if (column.type === 'avatars') cls += ' tma-table-b__cell--avatars';
+  return cls;
+}
+
+function renderInteractiveAvatarGroup(group) {
+  const avatars = (group.avatars || []).map((key) =>
+    `<button type="button" class="tma-table-b__avatar-btn" data-user-avatar data-user-id="${key}"><img src="${avatarUrl(key)}" alt="" class="tma-table-b__avatar" width="24" height="24" /></button>`
+  ).join('');
+  const overflow = group.overflow
+    ? `<span class="tma-table-b__avatar-overflow">${group.overflow}</span>`
+    : '';
+  return `<div class="tma-table-b__avatar-group">${avatars}${overflow}</div>`;
+}
+
+function renderTaskCell(column, row, interactive) {
+  if (column.type === 'avatars') {
+    return interactive ? renderInteractiveAvatarGroup(row.assignedTo || {}) : '';
+  }
+  if (column.type === 'status') return renderStatusBadge(row.statusLabel, row.status);
+  if (interactive && column.key === 'title') {
+    return `<button type="button" class="tma-table-b__row-link" data-task-title>${row[column.key]}</button>`;
+  }
+  return row[column.key] || '';
+}
+
+function renderTasksTable(interactive) {
+  const head = TASK_COLUMNS.map(col =>
+    `<div class="${taskCellClass(col)}" role="columnheader">${col.label}</div>`
+  ).join('');
+
+  const body = TASK_ROWS.map(row => {
+    const cells = TASK_COLUMNS.map(col =>
+      `<div class="${taskCellClass(col)}" role="cell">${renderTaskCell(col, row, interactive)}</div>`
+    ).join('');
+    return `<div class="tma-table-b__row" role="row">${cells}</div>`;
+  }).join('');
+
+  const title = interactive
+    ? `<button type="button" class="tma-table-b__title tma-table-b__title-link" data-table-b-title>Tasks</button>`
+    : `<h3 class="tma-table-b__title">Tasks</h3>`;
+
+  const attrs = interactive
+    ? ' data-table-b data-data-page-url="#"'
+    : '';
+  const mod = interactive ? ' tma-table-b--interactive' : '';
+
+  return `<div class="tma-table-b tma-table-b--default${mod}"${attrs} style="--table-b-block-width:662px;--table-b-block-height:312px;--table-b-block-background:#f9f9fa;--table-b-block-padding:24px;--table-b-block-radius:16px;--table-b-block-gap:4px;--table-b-title-font-size:14px;--table-b-title-line-height:20px;--table-b-row-min-height:40px;--table-b-cell-padding-y:8px;--table-b-cell-padding-x:12px;--table-b-title-cell-padding-right:12px;--table-b-status-cell-padding-left:8px;--table-b-status-cell-padding-right:12px;--table-b-font-size:12px;--table-b-line-height:16px;--table-b-header-border-color:rgba(0,0,0,0.2);--table-b-header-muted-color:rgba(0,0,0,0.4);--table-b-avatar-size:24px;--table-b-avatar-overlap:8px;--table-b-avatar-border-color:#fff;--table-b-avatar-overflow-background:#e6f1fd;--table-b-title-column-min-width:224px;--table-b-columns:1fr 1fr 1fr 1fr;">
+    ${title}
+    <div class="tma-table-b__sheet" role="table" aria-label="Tasks">
+      <div class="tma-table-b__row tma-table-b__row--head" role="row">${head}</div>
+      ${body}
+    </div>
+  </div>`;
+}
+
+function sessionCellClass(column) {
+  let cls = 'tma-table-b-sessions__cell';
+  if (column.padding === 'location') cls += ' tma-table-b-sessions__cell--location';
+  if (column.padding === 'status') cls += ' tma-table-b-sessions__cell--status';
+  return cls;
+}
+
+function renderSessionCell(column, row) {
+  if (column.type === 'time') {
+    return `<span class="tma-table-b-sessions__time"><img src="${ICONS.clock}" alt="" class="tma-table-b-sessions__time-icon" width="16" height="16" /><span>${row.time}</span></span>`;
+  }
+  if (column.type === 'status') return renderStatusBadge(row.statusLabel, row.status);
+  return row[column.key] || '';
+}
+
+function renderSessionsHeader(variant) {
+  if (variant === 'expand') {
+    return `<button type="button" class="tma-table-b-sessions__header-control tma-table-b-sessions__header-control--expand" data-sessions-expand aria-label="Open as full page"><img src="${ICONS.expand}" alt="" class="tma-table-b-sessions__header-control-icon" width="16" height="16" /></button>`;
+  }
+  if (variant === 'filter') {
+    return `<button type="button" class="tma-table-b-sessions__header-control tma-table-b-sessions__header-control--filter" data-sessions-filter aria-haspopup="listbox" aria-expanded="false"><span data-sessions-filter-label>1 hour</span><img src="${ICONS.arrowDown}" alt="" class="tma-table-b-sessions__header-control-icon" width="16" height="16" /></button>`;
+  }
+  return `<button type="button" class="tma-table-b-sessions__header-control tma-table-b-sessions__header-control--actions" data-sessions-actions aria-label="More actions" aria-haspopup="menu" aria-expanded="false"><img src="${ICONS.threeDots}" alt="" class="tma-table-b-sessions__header-control-icon" width="16" height="16" /></button>`;
+}
+
+function renderFilterPopover() {
+  const options = [
+    { value: '1h', label: '1 hour', selected: true },
+    { value: '3h', label: '3 hours' },
+    { value: '1d', label: '1 day' },
+    { value: '1w', label: '1 week' },
+  ];
+  const items = options.map(o =>
+    `<button type="button" class="tma-table-b__popover-item" role="option" data-popover-value="${o.value}"${o.selected ? ' data-selected' : ''}>${o.label}</button>`
+  ).join('');
+  return `<div class="tma-table-b__popover" data-table-b-popover="filter" role="listbox" aria-hidden="true" hidden>${items}</div>`;
+}
+
+function renderActionsPopover() {
+  const items = ['Action 1', 'Action 2', 'Action 3'].map((label, i) =>
+    `<button type="button" class="tma-table-b__popover-item" role="menuitem" data-popover-value="action-${i + 1}">${label}</button>`
+  ).join('');
+  return `<div class="tma-table-b__popover" data-table-b-popover="actions" role="menu" aria-hidden="true" hidden>${items}</div>`;
+}
+
+function renderSessionsTable(variant) {
+  const head = SESSION_COLUMNS.map(col =>
+    `<div class="${sessionCellClass(col)}" role="columnheader">${col.label}</div>`
+  ).join('');
+
+  const body = SESSION_ROWS.map(row => {
+    const cells = SESSION_COLUMNS.map(col =>
+      `<div class="${sessionCellClass(col)}" role="cell">${renderSessionCell(col, row)}</div>`
+    ).join('');
+    return `<div class="tma-table-b-sessions__row" role="row">${cells}</div>`;
+  }).join('');
+
+  const popover = variant === 'filter' ? renderFilterPopover() : variant === 'actions' ? renderActionsPopover() : '';
+
+  return `<div class="tma-table-b-sessions tma-table-b-sessions--${variant}" data-table-b-sessions data-variant="${variant}" data-full-page-url="#" style="--table-b-sessions-block-width:892px;--table-b-sessions-block-min-width:800px;--table-b-sessions-block-background:#f9f9fa;--table-b-sessions-block-padding:24px;--table-b-sessions-block-radius:16px;--table-b-sessions-block-gap:4px;--table-b-sessions-title-font-size:14px;--table-b-sessions-title-line-height:20px;--table-b-sessions-row-min-height:40px;--table-b-sessions-cell-padding-y:8px;--table-b-sessions-cell-padding-x:12px;--table-b-sessions-location-cell-padding-right:12px;--table-b-sessions-status-cell-padding-left:8px;--table-b-sessions-status-cell-padding-right:12px;--table-b-sessions-font-size:12px;--table-b-sessions-line-height:16px;--table-b-sessions-header-border-color:rgba(0,0,0,0.2);--table-b-sessions-header-muted-color:rgba(0,0,0,0.4);--table-b-sessions-columns:174px 1fr 158px 165px 120px;">
+    <div class="tma-table-b-sessions__header">
+      <h3 class="tma-table-b-sessions__title">Sign in Sessions</h3>
+      ${renderSessionsHeader(variant)}
+    </div>
+    <div class="tma-table-b-sessions__sheet" role="table" aria-label="Sign in Sessions">
+      <div class="tma-table-b-sessions__row tma-table-b-sessions__row--head" role="row">${head}</div>
+      ${body}
+    </div>
+    ${popover}
+  </div>`;
+}
+
+function guidanceSection(content, notesHtml) {
+  return `<section class="guidance-section"><div>${content}</div><div class="guidance-section__notes">${notesHtml}</div></section>`;
+}
+
+document.getElementById('guidance-root').innerHTML = `
+  ${guidanceSection(
+    renderTasksTable(true),
+    `<strong>Open the data page</strong><span>Open it in the pop-up window. Click the title or any row title. Click an avatar to go to the user page.</span>`
+  )}
+  <div class="guidance-stack">
+    ${guidanceSection(
+      renderSessionsTable('expand'),
+      `<strong>Open as full page</strong><ul><li>Buttons are only displayed when the cursor is within the block.</li><li>Open the table in a new tab.</li></ul>`
+    )}
+    ${guidanceSection(
+      renderSessionsTable('filter'),
+      `<strong>You can use Popover to select more options</strong>`
+    )}
+    ${guidanceSection(
+      renderSessionsTable('actions'),
+      `<strong>Action button</strong><span>The action button is only displayed when the cursor is over the content block.</span>`
+    )}
+  </div>
+`;
+  </script>
+  <script src="../js/table-b.js"></script>
+  <script>window.TMATableB.init();</script>
+</body>
+</html>
