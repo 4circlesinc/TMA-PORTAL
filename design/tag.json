@@ -1,0 +1,43 @@
+{
+  "slug": "tag",
+  "nodeId": "33307:661",
+  "documentationNodeId": "33307:764",
+  "name": "Tag",
+  "description": "Tag component — labeled chips with optional close icon, typically used for options.",
+  "cssPath": "public/css/tag.css",
+  "jsPath": "public/js/tag.js",
+  "iconJsPath": "public/js/tag-icons.js",
+  "documentationPath": "public/demo/tag-documentation.html",
+  "demoPath": "public/demo/tag-documentation.html",
+  "defaultVariant": "default",
+  "variants": {
+    "default": { "name": "Default", "background": "#e6f1fd", "radius": 8 },
+    "leftArrow": { "name": "Left arrow" },
+    "rightArrow": { "name": "Right arrow" }
+  },
+  "colors": {
+    "background": "#e6f1fd",
+    "text": "#000000",
+    "closeOpacity": 0.4
+  },
+  "documentation": {
+    "purpose": [
+      "Tag components are typically used for options.",
+      "The difference between Tag and IconText is that Tag usually has a background."
+    ],
+    "features": [
+      "Type: Default, Left arrow, Right arrow.",
+      "State: Component’s interaction state. When previewing, this component supports changes in the interaction state.",
+      "Hide left icon.",
+      "Hide Right icon."
+    ],
+    "correlation": [
+      "Similar to IconText.",
+      "Similar to Status Badge."
+    ]
+  },
+  "items": [
+    { "nodeId": "I33307:776;11029:21470;11048:14280", "label": "List Item" },
+    { "nodeId": "I33307:776;11029:21470;11048:14281", "label": "Tag" }
+  ]
+}

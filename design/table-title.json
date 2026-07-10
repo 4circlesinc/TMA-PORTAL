@@ -1,0 +1,46 @@
+{
+  "slug": "table-title",
+  "nodeId": "32728:395805",
+  "groupNodeIds": ["32728:395808", "32728:395806", "32728:395805", "32728:395807"],
+  "name": "Table title",
+  "defaultVariant": "muted",
+  "variants": {
+    "checkbox": {
+      "checkbox": true,
+      "paddingX": 4,
+      "width": 24
+    },
+    "muted": {
+      "color": "rgba(0, 0, 0, 0.4)",
+      "icons": []
+    },
+    "filter": {
+      "color": "#000000",
+      "icons": ["FunnelSimple"]
+    },
+    "filter-sort": {
+      "color": "#000000",
+      "icons": ["FunnelSimple", "ArrowsDown", "ArrowsUp"]
+    }
+  },
+  "iconSources": {
+    "FunnelSimple": { "set": "phosphor", "file": "FunnelSimple.svg", "catalog": "design/icons-phosphor.json" },
+    "ArrowsDown": { "set": "tma", "file": "ArrowsDown.svg", "catalog": "design/icons-tma.json" },
+    "ArrowsUp": { "set": "tma", "file": "ArrowsUp.svg", "catalog": "design/icons-tma.json" }
+  },
+  "tokens": {
+    "fontSize": 12,
+    "lineHeight": 16,
+    "paddingX": 12,
+    "minHeight": 40,
+    "borderColor": "rgba(0, 0, 0, 0.2)",
+    "iconSize": 16,
+    "gap": 8
+  },
+  "items": [
+    { "nodeId": "32728:395808", "variant": "checkbox" },
+    { "nodeId": "32728:395806", "variant": "muted", "label": "Title" },
+    { "nodeId": "32728:395805", "variant": "filter", "label": "Title" },
+    { "nodeId": "32728:395807", "variant": "filter-sort", "label": "Title" }
+  ]
+}

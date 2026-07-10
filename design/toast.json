@@ -1,0 +1,41 @@
+{
+  "slug": "toast",
+  "nodeId": "33260:21601",
+  "guidanceNodeId": "33260:21601",
+  "name": "Toast",
+  "description": "Toast interactive guidance — success and failure variants in large and small sizes, with dashboard placement and 3s duration behavior.",
+  "cssPath": "public/css/toast.css",
+  "jsPath": "public/js/toast.js",
+  "iconJsPath": "public/js/toast-icons.js",
+  "defaultVariant": "successful-big",
+  "variants": {
+    "successful-big": { "nodeId": "33260:21603", "size": "big", "state": "successful", "message": "Done" },
+    "failure-big": { "nodeId": "33260:21604", "size": "big", "state": "failure", "message": "Something Wrong" },
+    "successful-small": { "nodeId": "33260:21605", "size": "small", "state": "successful", "message": "Done" },
+    "failure-small": { "nodeId": "33260:21606", "size": "small", "state": "failure", "message": "Something Wrong" }
+  },
+  "behavior": {
+    "placement": "bottom-center",
+    "durationMs": 3000,
+    "entrance": "slide-up"
+  },
+  "documentation": {
+    "purpose": "Toast is required when a user writes data to the database.",
+    "guidance": [
+      "Recedes from the bottom — notifications appear at the bottom of the viewport.",
+      "stay 3s — the toast remains visible for 3 seconds before disappearing."
+    ]
+  },
+  "iconSources": {
+    "ToastCheckCircle20": "images/icons/tma/ToastCheckCircle20.svg",
+    "ToastCheckCircle16": "images/icons/tma/ToastCheckCircle16.svg",
+    "ToastWarning20": "images/icons/tma/ToastWarning20.svg",
+    "ToastWarning16": "images/icons/tma/ToastWarning16.svg"
+  },
+  "items": [
+    { "nodeId": "33260:21603", "variant": "successful-big" },
+    { "nodeId": "33260:21604", "variant": "failure-big" },
+    { "nodeId": "33260:21605", "variant": "successful-small" },
+    { "nodeId": "33260:21606", "variant": "failure-small" }
+  ]
+}

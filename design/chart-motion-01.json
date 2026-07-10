@@ -1,0 +1,31 @@
+{
+  "slug": "chart-motion-01",
+  "nodeId": "30485:135132",
+  "name": "ChartMotion",
+  "size": "800x400",
+  "yMax": 110000,
+  "yStep": 10000,
+  "labels": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  "bars": [
+    { "value": 57000, "color": "cyan" },
+    { "value": 100000, "color": "mint" },
+    { "value": 72000, "color": "black" },
+    { "value": 115000, "color": "blue" },
+    { "value": 43000, "color": "purple" },
+    { "value": 86000, "color": "green" },
+    { "value": 57000, "color": "cyan" },
+    { "value": 100000, "color": "mint" },
+    { "value": 72000, "color": "black" },
+    { "value": 115000, "color": "blue" },
+    { "value": 43000, "color": "purple" },
+    { "value": 86000, "color": "green" }
+  ],
+  "colors": {
+    "cyan": "#a0bce8",
+    "mint": "#6be6d3",
+    "black": "#000000",
+    "blue": "#7dbbff",
+    "purple": "#b899eb",
+    "green": "#71dd8c"
+  }
+}

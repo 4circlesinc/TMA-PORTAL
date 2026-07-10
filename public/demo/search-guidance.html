@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Search guidance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/global-search.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #fff;
+      color: #000;
+      padding: 80px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    .guidance-hero {
+      margin-bottom: 0;
+      padding-bottom: 48px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .guidance-hero__title {
+      font-size: 64px;
+      line-height: 72px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .guidance-hero__subtitle {
+      font-size: 48px;
+      line-height: 56px;
+      font-weight: 400;
+    }
+  </style>
+</head>
+<body>
+  <header class="guidance-hero">
+    <h1 class="guidance-hero__title">Search</h1>
+    <p class="guidance-hero__subtitle">Interactive guidance</p>
+  </header>
+
+  <a class="tma-global-search-guidance__doc" href="#" target="_blank" rel="noopener noreferrer">
+    <img src="../images/icons/tma/Goto.svg" alt="" class="tma-global-search-guidance__doc-icon" width="16" height="16" />
+    <span>Component documentation</span>
+  </a>
+
+  <div id="guidance-root"></div>
+
+<script>window.TMAGlobalSearchAssetBase = '../images/';</script>
+<script src="../js/global-search.js"></script>
+<script>
+window.TMAGlobalSearchIndex = [
+  { type: 'query', label: 'Landing page design', keywords: ['landing', 'page', 'design'] },
+  { type: 'user', label: 'ByeWind', avatar: 'AvatarByewind', keywords: ['byewind', 'bye', 'wind'], href: '#user-byewind' },
+  { type: 'page', label: 'Overview', keywords: ['overview'], href: '#overview' },
+  { type: 'page', title: 'Overview', subtitle: "I'm ByeWind, a Product UX/UI Designer, based in China.", keywords: ['byewind', 'wind', 'overview'], href: '#overview' },
+  { type: 'page', label: "ByeWind's profile", keywords: ['byewind', 'wind', 'profile'], href: '#profile-byewind' },
+  { type: 'page', label: 'Farewell to Wind', keywords: ['farewell', 'wind'], href: '#farewell-wind' },
+  { type: 'page', label: 'https://twitter.com/FarewelltoWind', keywords: ['twitter', 'farewell', 'wind'], href: 'https://twitter.com/FarewelltoWind' },
+  { type: 'user', label: 'Emma Smith', avatar: 'Avatar3d04', keywords: ['emma', 'smith'], href: '#user-emma' },
+  { type: 'user', label: 'Melody Macy', avatar: 'AvatarFemale05', keywords: ['melody', 'macy'], href: '#user-melody' },
+];
+
+const RULES = [
+  'Click outside the search pop-up or press the ESC key to close the SearchPopup.',
+  'The first search result is selected by default.',
+  'Hit the Enter key to enter the search results.',
+  'Search results are generated as you type, and the search results will include auto-completed results.',
+  'The search results will be opened in the current page, and hold down the ⌘ key to open in a new tab of the browser.',
+];
+
+const GS = window.TMAGlobalSearch;
+
+function renderRules() {
+  const items = RULES.map(r => `<li>${r}</li>`).join('');
+  return `<aside class="tma-global-search-guidance__rules"><strong>Search interaction</strong><ul>${items}</ul></aside>`;
+}
+
+function renderGlobalSearchSection() {
+  return `<section class="tma-global-search-guidance__section">
+    <h2 class="tma-global-search-guidance__section-title">Global search</h2>
+    <p class="tma-global-search-guidance__section-note">A search pops up after clicking Global search.</p>
+    <div class="tma-global-search-guidance__showcase">
+      <div data-global-search-live></div>
+      ${renderRules()}
+    </div>
+  </section>`;
+}
+
+function renderResultsPreview() {
+  const popup = GS.renderPopup({
+    variant: 'large',
+    state: 'results',
+    query: 'Wind',
+    standalone: true,
+    showScrollbar: true,
+  });
+
+  return `<section class="tma-global-search-guidance__section">
+    <h2 class="tma-global-search-guidance__section-title">Search results</h2>
+    <div class="tma-global-search-results-frame">
+      <span class="tma-global-search-results-frame__label tma-global-search-results-frame__label--types">Type of search results</span>
+      <span class="tma-global-search-results-frame__label tma-global-search-results-frame__label--user">User</span>
+      <span class="tma-global-search-results-frame__label tma-global-search-results-frame__label--page">Page</span>
+      <span class="tma-global-search-results-frame__label tma-global-search-results-frame__label--text">Text on the page</span>
+      <span class="tma-global-search-results-frame__label tma-global-search-results-frame__label--data">Data in the table</span>
+      <p class="tma-global-search-results-frame__note tma-global-search-results-frame__note--clear">Clear the typing and return to the initial state of the SearchPopup.</p>
+      <p class="tma-global-search-results-frame__note tma-global-search-results-frame__note--scroll">Scrollbar</p>
+      <span class="tma-global-search-results-frame__line tma-global-search-results-frame__line--user" aria-hidden="true"></span>
+      <span class="tma-global-search-results-frame__line tma-global-search-results-frame__line--page" aria-hidden="true"></span>
+      <span class="tma-global-search-results-frame__line tma-global-search-results-frame__line--text" aria-hidden="true"></span>
+      <span class="tma-global-search-results-frame__line tma-global-search-results-frame__line--data" aria-hidden="true"></span>
+      <span class="tma-global-search-results-frame__line tma-global-search-results-frame__line--clear" aria-hidden="true"></span>
+      <span class="tma-global-search-results-frame__line tma-global-search-results-frame__line--scroll" aria-hidden="true"></span>
+      <div class="tma-global-search-results-frame__popup-wrap">${popup}</div>
+    </div>
+  </section>`;
+}
+
+function renderNoResultsSection() {
+  const popup = GS.renderPopup({
+    variant: 'large',
+    state: 'empty',
+    query: 'zzzz',
+    standalone: true,
+    loading: true,
+  });
+
+  return `<section class="tma-global-search-guidance__section">
+    <h2 class="tma-global-search-guidance__section-title">No results</h2>
+    ${popup}
+  </section>`;
+}
+
+function renderFooter() {
+  return `<footer class="tma-global-search-guidance__footer">
+    <a class="tma-global-search-guidance__footer-link" href="#" target="_blank" rel="noopener noreferrer">
+      <img src="../images/icons/tma/Goto.svg" alt="" width="16" height="16" />
+      <span>Component documentation</span>
+    </a>
+  </footer>`;
+}
+
+document.getElementById('guidance-root').innerHTML =
+  renderGlobalSearchSection() +
+  renderResultsPreview() +
+  renderNoResultsSection() +
+  renderFooter();
+
+GS.mountInteractiveScene(
+  document.querySelector('[data-global-search-live]'),
+  window.TMAGlobalSearchIndex,
+  { startOpen: true }
+);
+
+document.querySelectorAll('[data-global-search-scene]').forEach((scene) => {
+  GS.updateSceneScale(scene);
+  new ResizeObserver(() => GS.updateSceneScale(scene)).observe(scene);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+{
+  "slug": "tooltip",
+  "nodeId": "33302:4716",
+  "name": "Tooltip",
+  "description": "Describe or identify an element on hover. Shown in Hover state.",
+  "documentation": {
+    "purpose": "Tooltips are used to describe or identify an element. In most scenarios, tooltips help the user understand meaning, function or alt-text. Tooltip will be displayed in Hover state.",
+    "guidance": [
+      "Usually, the Tooltip appears above the object being prompted, and its position should not block the object being prompted and other important information.",
+      "When the Tooltip appears, it also needs to avoid being blocked.",
+      "Tooltip always appears at the top level.",
+      "The Tooltip will appear for the first time 1.5 seconds after the cursor hovers.",
+      "If the cursor points to the same type of object at this time, the Tooltip of the same type of object will appear immediately.",
+      "Within 30 seconds, if the user points the cursor to the last object where the Tooltip appeared again, the Tooltip will appear after 0.5 seconds."
+    ],
+    "iconButtonNote": "By default, all Icon buttons have tooltips that will be displayed on Hover. If you don't need a Tooltip, turn the Show switch off under Tooltip in the Button option."
+  },
+  "behavior": {
+    "initialDelayMs": 1500,
+    "rehoverDelayMs": 500,
+    "rehoverWindowMs": 30000
+  },
+  "defaultVariant": "compact",
+  "defaultPosition": "top",
+  "variants": {
+    "compact": {
+      "label": "Compact",
+      "fontSize": 12,
+      "lineHeight": 16,
+      "paddingX": 8,
+      "paddingY": 4,
+      "radius": 12
+    },
+    "button": {
+      "label": "Button",
+      "fontSize": 12,
+      "lineHeight": 16,
+      "paddingX": 8,
+      "paddingY": 4,
+      "radius": 8
+    },
+    "multiline": {
+      "label": "Multiline",
+      "fontSize": 12,
+      "lineHeight": 16,
+      "paddingX": 8,
+      "paddingY": 4,
+      "radius": 12,
+      "maxWidth": 240
+    },
+    "rich": {
+      "label": "Rich",
+      "titleSize": 14,
+      "titleLineHeight": 20,
+      "titleWeight": 600,
+      "bodySize": 12,
+      "bodyLineHeight": 16,
+      "paddingX": 16,
+      "paddingY": 12,
+      "radius": 12,
+      "maxWidth": 255
+    },
+    "data": {
+      "label": "Data",
+      "fontSize": 12,
+      "lineHeight": 16,
+      "paddingX": 8,
+      "paddingY": 4,
+      "radius": 12
+    }
+  },
+  "positions": ["top", "bottom", "left", "right"],
+  "examples": [
+    {
+      "id": "compact-shortcut",
+      "label": "Compact with shortcut",
+      "variant": "compact",
+      "text": "Tooltip",
+      "shortcut": "⌘",
+      "static": true
+    },
+    {
+      "id": "truncated-text",
+      "label": "Truncated text",
+      "variant": "multiline",
+      "text": "Tooltip will be displayed in Hover state.",
+      "triggerLabel": "TMA is a design system and UI kit.",
+      "position": "top"
+    },
+    {
+      "id": "icon-button",
+      "label": "Button function tips",
+      "variant": "button",
+      "text": "Tooltip",
+      "position": "bottom",
+      "icon": "Star"
+    },
+    {
+      "id": "card-stat",
+      "label": "Card metric",
+      "variant": "multiline",
+      "text": "Compared with yesterday,\nit is up 11.01%",
+      "position": "top"
+    },
+    {
+      "id": "chart-data",
+      "label": "Chart data value",
+      "variant": "data",
+      "text": "26,156,897",
+      "position": "top"
+    },
+    {
+      "id": "rich",
+      "label": "Rich tooltip",
+      "variant": "rich",
+      "title": "This is a tooltip",
+      "text": "Tooltips are used to describe or identify an element. In most scenarios, tooltips help the user understand meaning, function or alt-text.",
+      "static": true
+    },
+    {
+      "id": "question-icon",
+      "label": "Help icon",
+      "variant": "compact",
+      "text": "Tooltip",
+      "icon": "Question",
+      "position": "top"
+    }
+  ]
+}

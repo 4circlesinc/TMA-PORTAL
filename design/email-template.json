@@ -1,0 +1,80 @@
+{
+  "slug": "email-template",
+  "nodeId": "12780:88498",
+  "name": "Email Templates",
+  "description": "Transactional and authentication email templates from the Portal Design email template page.",
+  "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=12780-88498",
+  "jsPath": "public/js/email-templates.js",
+  "jsGlobal": "window.TMAEmailTemplates",
+  "cssPath": "public/css/dashboard.css",
+  "templates": [
+    {
+      "id": "auth-sign-in",
+      "name": "Email Sign In",
+      "category": "Authentication",
+      "subject": "Sign in to TM ANTOINE Advisory",
+      "nodeId": "32534:3772",
+      "mobileNodeId": "32534:3782",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3772",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3782"
+    },
+    {
+      "id": "auth-verify-email",
+      "name": "Verify email address",
+      "category": "Authentication",
+      "subject": "Verify your email address",
+      "nodeId": "32534:3776",
+      "mobileNodeId": "32534:3784",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3776",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3784"
+    },
+    {
+      "id": "auth-change-email",
+      "name": "Change email verification",
+      "category": "Authentication",
+      "subject": "Verify your new email address",
+      "nodeId": "32534:3794",
+      "mobileNodeId": "32534:3786",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3794",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3786"
+    },
+    {
+      "id": "auth-reset-password",
+      "name": "Set a new password",
+      "category": "Authentication",
+      "subject": "Set a new password",
+      "nodeId": "32534:3778",
+      "mobileNodeId": "32534:3788",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3778",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3788"
+    },
+    {
+      "id": "auth-welcome",
+      "name": "Successful sign up",
+      "category": "Authentication",
+      "subject": "Welcome to TM ANTOINE Advisory",
+      "nodeId": "32534:3774",
+      "mobileNodeId": "32534:3790",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3774",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3790"
+    },
+    {
+      "id": "auth-unsubscribed",
+      "name": "Unsubscribed",
+      "category": "Unsubscribe",
+      "subject": "You have been unsubscribed",
+      "nodeId": "32534:3770",
+      "mobileNodeId": "32534:3792",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3770",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32534-3792"
+    },
+    {
+      "id": "invoice",
+      "name": "Invoice",
+      "category": "Transactional",
+      "subject": "Invoice #VL25000355 — TM ANTOINE Advisory",
+      "nodeId": "32546:96133",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96133"
+    }
+  ]
+}

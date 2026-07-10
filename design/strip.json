@@ -1,0 +1,49 @@
+{
+  "slug": "strip",
+  "nodeId": "32792:9423",
+  "documentationNodeId": "32421:48401",
+  "name": "Strip",
+  "description": "Strip component — segmented bars for progress, strength indicators, and horizontal bar charts.",
+  "cssPath": "public/css/strip.css",
+  "jsPath": "public/js/strip.js",
+  "iconJsPath": "public/js/strip-icons.js",
+  "documentationPath": "public/demo/strip-documentation.html",
+  "demoPath": "public/demo/strip-documentation.html",
+  "defaultVariant": "horizontal",
+  "variants": {
+    "horizontal": { "name": "Horizontal", "gap": 8, "radius": 80 },
+    "progress": { "name": "Progress track", "height": 8, "track": true },
+    "strength": { "name": "Strength indicator", "height": 4 },
+    "bar": { "name": "Bar chart row", "height": 18, "barHeight": 6 }
+  },
+  "segmentColors": {
+    "indigo": "#adadfb",
+    "black": "#000000",
+    "muted": "rgba(0,0,0,0.1)",
+    "track": "rgba(0,0,0,0.04)"
+  },
+  "documentation": {
+    "purpose": "Strip component is used to draw strips.",
+    "features": [
+      "Count: The number of strips in the Strip.",
+      "Vertical: Arrange vertically or horizontally."
+    ],
+    "correlation": "None",
+    "examples": [
+      "Draw bar progress bar using Strip",
+      "Draw password strength indicator using Strip",
+      "Draw bar chart using Strip"
+    ]
+  },
+  "items": [
+    { "nodeId": "32421:48417", "example": "progress" },
+    { "nodeId": "32421:48422", "example": "password-strength" },
+    { "nodeId": "32421:48429", "example": "bar-chart" },
+    { "nodeId": "32421:48430", "example": "bar-chart" },
+    { "nodeId": "32421:48431", "example": "bar-chart-accent" },
+    { "nodeId": "32421:48432", "example": "bar-chart" },
+    { "nodeId": "32421:48433", "example": "bar-chart" },
+    { "nodeId": "32421:48434", "example": "bar-chart" },
+    { "nodeId": "32421:48435", "example": "bar-chart" }
+  ]
+}

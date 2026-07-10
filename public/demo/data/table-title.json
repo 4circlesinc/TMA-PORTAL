@@ -1,0 +1,10 @@
+{
+  "slug": "table-title",
+  "name": "Table title",
+  "items": [
+    { "nodeId": "32728:395808", "variant": "checkbox" },
+    { "nodeId": "32728:395806", "variant": "muted", "label": "Title" },
+    { "nodeId": "32728:395805", "variant": "filter", "label": "Title" },
+    { "nodeId": "32728:395807", "variant": "filter-sort", "label": "Title" }
+  ]
+}

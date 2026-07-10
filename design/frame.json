@@ -1,0 +1,26 @@
+{
+  "slug": "frame",
+  "nodeId": "33302:2140",
+  "instancesNodeId": "33159:3529",
+  "name": "Frame",
+  "description": "TMA Frame — flexible content carrier combining icon, text, avatar, and nested IconText with configurable layout (vertical, flip, state).",
+  "cssPath": "public/css/frame.css",
+  "docJsPath": "public/js/frame-doc.js",
+  "docIconJsPath": "public/js/frame-doc-icons.js",
+  "instancesJsPath": "public/js/frame-instances.js",
+  "instancesIconJsPath": "public/js/frame-instances-icons.js",
+  "documentationPath": "public/demo/frame-documentation.html",
+  "iconTextDocumentationNodeId": "33302:488",
+  "iconTextDocumentationPath": "public/demo/icon-text-documentation.html",
+  "iconTextDocJsPath": "public/js/icon-text-doc.js",
+  "textDocumentationNodeId": "32722:4768",
+  "textDocumentationPath": "public/demo/text-documentation.html",
+  "textDocJsPath": "public/js/text-doc.js",
+  "textInstancesPath": "public/demo/text-instances.html",
+  "textInstancesJsPath": "public/js/text-instances.js",
+  "instancesPath": "public/demo/frame-instances.html",
+  "examples": {
+    "extensibilityCompare": { "nodeId": "33302:2157" },
+    "layoutCompare": { "nodeId": "33302:2179" }
+  }
+}

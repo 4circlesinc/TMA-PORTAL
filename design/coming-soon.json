@@ -1,0 +1,9 @@
+{
+  "slug": "coming-soon",
+  "nodeId": "32546:96131",
+  "name": "Coming Soon",
+  "description": "Launch countdown with Illustration08 and email subscribe field.",
+  "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96131",
+  "htmlPath": "public/coming-soon/index.html",
+  "cssPath": "public/css/coming-soon.css"
+}

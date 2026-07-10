@@ -1,0 +1,19 @@
+{
+  "slug": "interactive-guidance",
+  "pageNodeId": "12779:273712",
+  "name": "Interactive guidance",
+  "description": "TMA interactive guidance canvas — three rows of navigation rails and component guidance boards.",
+  "cssPath": "public/css/interactive-guidance-page.css",
+  "jsPath": "public/js/interactive-guidance-page.js",
+  "demoPath": "public/demo/interactive-guidance.html",
+  "figmaUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=12779-273712",
+  "board": {
+    "width": 17981,
+    "height": 14515
+  },
+  "rows": [
+    { "key": "shared", "label": "Shared", "navNodeId": "30992:280837", "y": 0 },
+    { "key": "dashboard", "label": "Dashboard", "navNodeId": "30992:280838", "y": 4795 },
+    { "key": "table", "label": "Table", "navNodeId": "30992:280839", "y": 11143 }
+  ]
+}

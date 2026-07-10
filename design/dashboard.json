@@ -1,0 +1,135 @@
+{
+  "slug": "dashboard",
+  "nodeId": "32546:96118",
+  "altNodeId": "32546:96098",
+  "name": "Default Dashboard (Overview)",
+  "description": "Application home — tma-portal Overview dashboard (My Projects — Overview). Three-column layout (sidebar / main / rightbar) with project tab bar, SnowUI hero summary, What's on the road timeline, Latest Files, Project Spendings table, footer, and notifications / activities / contacts. Fully interactive (navigation, expandable groups, theme, search, drawers).",
+  "appEntry": "public/index.html",
+  "cssPath": "public/css/dashboard.css",
+  "jsPath": "public/js/dashboard.js",
+  "overviewJsPath": "public/js/overview.js",
+  "jsGlobal": "window.TMADashboard",
+  "overviewGlobal": "window.TMAOverview",
+  "views": {
+    "dashboard": "Default dashboard metrics (Figma 32546:96097 / 32546:96098)",
+    "overview": "Project Overview — SnowUI (Figma 32546:96118)",
+    "projects": {
+      "nav": "Projects",
+      "source": "My Projects (Figma 32546:96122)",
+      "title": "My Projects"
+    },
+    "clients": {
+      "nav": "Clients",
+      "source": "Order List - A (Figma 32546:96123)",
+      "title": "Clients",
+      "sections": ["Toolbar (add / filter / sort + search)", "Selectable data table (Order ID / User / Project / Address / Date / Status)", "Pagination"],
+      "statusChips": "reuses .tma-dash__chip--{purple,green,blue,orange,muted}",
+      "interactions": "row + select-all checkboxes, row highlight, list/grid view toggle, pagination active page; Add opens add-data view",
+      "emptyState": {
+        "source": "No data (Figma 32546:96126)",
+        "component": "no-data",
+        "illustration": "Illustration07.svg",
+        "copy": { "title": "No data", "subtitle": "You may need", "cta": "Add Client (itemLabel-driven)" },
+        "demo": "Append ?empty=1 to show empty state on Clients"
+      }
+    },
+    "add-data": {
+      "nav": "Clients / New",
+      "source": "Add data modal (Figma 32546:96143)",
+      "title": "New entry",
+      "component": "table-add-data",
+      "formInstances": "Input form instances 32728:395270–273 (forms.html / form-instances.html)",
+      "sections": ["First / Last name (form-1row)", "Email (title + input)", "Date (form date field, creation default)"],
+      "interactions": "Auto-stages on input; navigate away to Clients or Users; second Add commits staged row"
+    },
+    "users": {
+      "nav": "Users",
+      "source": "User List - A (Figma 32546:96147)",
+      "title": "Users",
+      "sections": ["Toolbar (add / filter / sort + search)", "List: table (Serial / User / Email / Address / Registration date)", "Grid: avatar mosaic (95px tiles, 12px gap)", "Pagination"],
+      "interactions": "row + select-all checkboxes, row highlight, address copy on hover, list/grid view toggle (list = table, grid = avatar tiles per Figma 32546:96146), click user opens side info panel (Figma 32546:96148), pagination active page; Add opens add-data view",
+      "emptyState": {
+        "source": "No data (Figma 32546:96126)",
+        "component": "no-data",
+        "illustration": "Illustration07.svg",
+        "copy": { "title": "No data", "subtitle": "You may need", "cta": "Add User (itemLabel-driven)" },
+        "demo": "Append ?empty=1 to show empty state on Users"
+      }
+    }
+  },
+  "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96118",
+  "interactions": {
+    "navigation": "Active-state switching; updates page title + breadcrumb; persisted in localStorage",
+    "expandableGroups": "User Profile / Account / Corporate / Blog / Social accordion subnavs",
+    "favoritesRecently": "Sidebar list toggle",
+    "header": "Sidebar collapses to a 72px icon-only rail on desktop (labels hidden, hover shows native tooltip) or opens the mobile menu; rightbar collapses/hides on desktop or opens as a drawer; favorite (star); theme toggle (light/dark); recently; notifications",
+    "overviewTabs": "Underline tab bar (Overview / Targets / Budget / Users / Files / Activity / Settings) + Add User / Add Target actions",
+    "search": "Command palette — '/' to open, type to filter pages, arrow keys + Enter to navigate"
+  },
+  "layout": {
+    "sceneWidth": 1440,
+    "sceneHeight": 1024,
+    "sidebar": 212,
+    "rightbar": 280,
+    "contentGap": 28,
+    "columns": "three"
+  },
+  "breakpoints": {
+    "three": ">1280px (sidebar + main + rightbar)",
+    "two": "<=1280px (rightbar becomes a right drawer)",
+    "one": "<=1024px (single column; bottom TabBar + iOS Home menu replace the sidebar)"
+  },
+  "mobile": {
+    "nodeId": "32548:116275",
+    "name": "Home (mobile)",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32548-116275",
+    "tabBar": ["Home (House)", "Recent (ClockCounterClockwise)", "Notifications (Bell)", "Settings (Gear)", "Profile (Avatar)"],
+    "menu": "Large 'Home' title + search field + Favorites and Dashboards grouped cards (white rounded cards with row dividers)"
+  },
+  "sections": [
+    { "name": "Sidebar" },
+    { "name": "Header" },
+    { "name": "Tab bar — Overview / Targets / Budget / Users / Files / Activity / Settings" },
+    { "name": "Hero — SnowUI summary (status strip, tasks, due date, budget, SnowLogo40, avatar group)" },
+    { "name": "What's on the road? (week picker + activity timeline)" },
+    { "name": "Latest Files (FilePdf / FileJpg / FileXls + upload drop zone)" },
+    { "name": "Project Spendings (Manager / Date / Amount / Status table)" },
+    { "name": "Footer (© 2026 TM ANTOINE Advisory · About / Support / Contact Us)" },
+    { "name": "RightSidebar (Notifications / Activities / Contacts)" }
+  ],
+  "statusChips": {
+    "In Progress": "secondary/purple #b899eb",
+    "Complete": "secondary/green #71dd8c",
+    "Pending": "secondary/blue #7dbbff",
+    "Approved": "secondary/orange #ffb55b",
+    "Rejected": "black/40"
+  },
+  "reuses": {
+    "tokens": "public/css/tokens.css",
+    "theme": "public/css/theme.css",
+    "tabs": "components.css — tma-tab-group--underline",
+    "icons": [
+      "icons/phosphor/ChartPieSlice.svg",
+      "icons/phosphor/ShoppingBagOpen.svg",
+      "icons/phosphor/FolderNotch.svg",
+      "icons/phosphor/FilePdf.svg",
+      "icons/phosphor/FileJpg.svg",
+      "icons/phosphor/FileXls.svg",
+      "icons/phosphor/DownloadSimple.svg",
+      "icons/phosphor/Plus.svg",
+      "icons/tma/ThreeDots-16.svg",
+      "icons/brands/SnowLogo40.svg",
+      "icons/tma/Rightbar.svg",
+      "icons/tma/Search-16.svg",
+      "icons/tma/ArrowLineDown-16.svg",
+      "brand/tma/tma-logo-horizontal.png",
+      "brand/tma/tma-logo-mark.png",
+      "brand/tma/favicon.png"
+    ],
+    "avatars": [
+      "AvatarByewind", "AvatarFemale05", "AvatarFemale06", "AvatarMale01", "AvatarMale03",
+      "AvatarFemale01", "AvatarFemale02", "AvatarAbstract01", "AvatarMale05"
+    ]
+  },
+  "notes": "Overview content rendered by TMAOverview.mount() into [data-overview]. Brand logo: icons/brands/SnowLogo40.svg only — no inline SVG."
+}

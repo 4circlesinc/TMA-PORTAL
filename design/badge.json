@@ -1,0 +1,53 @@
+{
+  "slug": "badge",
+  "nodeId": "32792:840",
+  "documentationNodeId": "32726:1920",
+  "name": "Badge",
+  "description": "Badge component — dot and number notification indicators for icons, avatars, and buttons.",
+  "cssPath": "public/css/badge.css",
+  "jsPath": "public/js/badge.js",
+  "iconJsPath": "public/js/badge-icons.js",
+  "documentationPath": "public/demo/badge-documentation.html",
+  "demoPath": "public/demo/badge.html",
+  "defaultVariant": "number-indigo",
+  "variants": {
+    "dot": { "name": "Dot", "size": 16, "dotSize": 6 },
+    "number": { "name": "Number", "fontSize": 12, "lineHeight": 16, "radius": 80 }
+  },
+  "colors": {
+    "indigo": "#136da0",
+    "red": "#ff4747",
+    "dotIndigo": "#136da0",
+    "text": "#ffffff",
+    "caption": "#136da0"
+  },
+  "offsets": {
+    "icon": { "top": -7, "right": -7 },
+    "avatar": { "top": -6, "right": -6 },
+    "button": { "top": -8, "right": -8 }
+  },
+  "documentation": {
+    "purpose": [
+      "Badges are used to highlight information such as notifications and new messages."
+    ],
+    "features": [
+      "Type: Dot, Number."
+    ],
+    "correlation": [
+      "Used in the Icon component.",
+      "It can also be used alone."
+    ],
+    "guidance": [
+      "Number draw the user's attention more than Dot, and are more intrusive.",
+      "Use Number for important information; use Dot for lower-priority reminders.",
+      "The notification disappears after the user clicks it."
+    ]
+  },
+  "examples": {
+    "iconGroupIndigo": { "nodeId": "32726:1938", "badgeColor": "indigo", "badgeValue": "12" },
+    "iconGroupRed": { "nodeId": "32726:1939", "badgeColor": "red", "badgeValue": "12" },
+    "avatarDot": { "nodeId": "32726:1943", "type": "dot" },
+    "avatarNumber": { "nodeId": "32726:1944", "type": "number", "value": "99+" },
+    "assetsButton": { "nodeId": "32726:1947", "label": "Assets", "type": "dot" }
+  }
+}

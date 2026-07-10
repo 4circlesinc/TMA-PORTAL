@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport:{width:1440,height:1024}, deviceScaleFactor:2 });
+await p.goto('file:///Users/vernonfrancis/Desktop/Portal/public/index.html',{waitUntil:'networkidle'});
+await p.waitForTimeout(300);
+const card = p.locator('.snowui-dash__card').first();
+const before = await card.evaluate(el=>getComputedStyle(el).backgroundColor);
+await card.hover(); await p.waitForTimeout(250);
+const after = await card.evaluate(el=>getComputedStyle(el).backgroundColor);
+const border = await card.evaluate(el=>getComputedStyle(el).borderTopColor);
+console.log('bg before=',before,'| bg after=',after,'| border on hover=',border);
+const box = await p.locator('.snowui-dash__cards').boundingBox();
+await p.screenshot({ path:'./card-hover.png', clip:{x:box.x-4,y:box.y-4,width:box.width+8,height:box.height+8} });
+await b.close();

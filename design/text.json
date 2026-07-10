@@ -1,0 +1,47 @@
+{
+  "slug": "text",
+  "nodeId": "32814:289",
+  "canvasNodeId": "25559:7066",
+  "documentationNodeId": "32722:4768",
+  "instancesNodeId": "32708:1064",
+  "referenceGridNodeId": "32253:107748",
+  "name": "Text",
+  "description": "TMA Text — extensible text component with configurable count, state, vertical layout, and text styles.",
+  "cssPath": "public/css/text.css",
+  "jsPath": "public/js/text.js",
+  "docJsPath": "public/js/text-doc.js",
+  "instancesJsPath": "public/js/text-instances.js",
+  "documentationPath": "public/demo/text-documentation.html",
+  "instancesPath": "public/demo/text-instances.html",
+  "features": ["count", "state", "vertical"],
+  "states": ["default", "hover", "no-interaction", "static"],
+  "typography": {
+    "12": { "size": 12, "lineHeight": 16, "weight": 400 },
+    "14": { "size": 14, "lineHeight": 20, "weight": 400 },
+    "14-semibold": { "size": 14, "lineHeight": 20, "weight": 600 },
+    "18": { "size": 18, "lineHeight": 28, "weight": 400 },
+    "18-semibold": { "size": 18, "lineHeight": 28, "weight": 600 },
+    "24-semibold": { "size": 24, "lineHeight": 32, "weight": 600 },
+    "48": { "size": 48, "lineHeight": 56, "weight": 400 },
+    "48-semibold": { "size": 48, "lineHeight": 56, "weight": 600 },
+    "64-semibold": { "size": 64, "lineHeight": 72, "weight": 600 }
+  },
+  "colors": {
+    "primary": "#000000",
+    "secondary": "rgba(0,0,0,0.4)",
+    "link": "#03a5e9",
+    "hint": "#136da0",
+    "white": "#ffffff"
+  },
+  "instancesShowcase": {
+    "width": 2317,
+    "height": 856,
+    "borderRadius": 48
+  },
+  "referenceGrid": {
+    "width": 1328,
+    "height": 320,
+    "offsetX": 20,
+    "offsetY": 695
+  }
+}

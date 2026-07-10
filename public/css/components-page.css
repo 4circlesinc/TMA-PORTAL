@@ -1,0 +1,347 @@
+/* TMA — Components board (Figma 33320:6937) */
+
+:root {
+  --components-font: Inter, system-ui, sans-serif;
+  --components-indigo: #adadfb;
+  --components-black: #000000;
+  --components-board-bg: #ffffff;
+}
+
+body.tma-components-page {
+  padding: 48px;
+}
+
+.tma-components-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 100%;
+}
+
+.tma-components-demo__header {
+  max-width: 960px;
+}
+
+.tma-components-demo__title {
+  margin: 0 0 12px;
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 600;
+}
+
+.tma-components-demo__copy {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.tma-components-demo__copy a {
+  color: #000;
+  text-decoration: underline;
+}
+
+.tma-components-demo__copy a:hover {
+  opacity: 0.7;
+}
+
+.tma-components-demo__canvas {
+  width: 100%;
+  overflow: hidden;
+}
+
+.tma-components-demo__stage {
+  position: relative;
+  width: 100%;
+}
+
+.tma-components-demo__board-wrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  min-height: 200px;
+}
+
+.tma-components-demo__boards {
+  position: relative;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.tma-components-demo__boards--catalog {
+  width: 6480px;
+  height: 4258px;
+}
+
+/* ── Full board (SVG + interactive overlays) ── */
+
+.tma-components-board {
+  position: relative;
+  background: var(--components-board-bg);
+  border-radius: 0;
+  overflow: hidden;
+  font-family: var(--components-font);
+  font-feature-settings: "ss01" 1, "cv01" 1;
+}
+
+.tma-components-board__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.tma-components-board__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tma-components-board__node {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.tma-components-board__hotspot {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  pointer-events: auto;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.tma-components-board__hotspot:hover,
+.tma-components-board__hotspot:focus-visible {
+  background: rgba(173, 173, 251, 0.12);
+  outline: none;
+}
+
+.tma-components-board__hotspot:focus-visible {
+  outline: 2px solid var(--components-indigo);
+  outline-offset: 2px;
+}
+
+.tma-components-board__hotspot-label,
+.tma-components-board__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Hero panels (left column) — 33320:7286, 33320:7287 ── */
+
+.tma-components-hero {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 160px;
+  border-radius: 80px;
+  background: var(--components-black);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.tma-components-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 80px;
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tma-components-hero__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 80px;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+}
+
+.tma-components-hero__title {
+  margin: 0;
+  font-size: 128px;
+  line-height: normal;
+  font-weight: 700;
+  background: linear-gradient(
+    100.7deg,
+    #ffffff 0.92%,
+    #dcd4ff 46.31%,
+    #e2cbff 55.92%,
+    #98baff 66.83%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tma-components-hero__title-line {
+  display: block;
+}
+
+.tma-components-hero__body {
+  margin: 0;
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 400;
+  color: #fff;
+}
+
+.tma-components-hero__link {
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 400;
+  color: var(--components-indigo);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.tma-components-hero__link:hover {
+  opacity: 0.85;
+}
+
+.tma-components-hero__link:focus-visible {
+  outline: 2px solid var(--components-indigo);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* ── Responsive layout ── */
+
+.tma-components-responsive {
+  display: none;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+.tma-components-responsive__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 24px;
+}
+
+.tma-components-responsive__heading {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tma-components-responsive__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.tma-components-responsive__link {
+  display: block;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  color: #000;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tma-components-responsive__link:hover {
+  background: rgba(173, 173, 251, 0.2);
+}
+
+.tma-components-responsive__cta {
+  display: inline-block;
+  padding: 16px 24px;
+  border-radius: 16px;
+  background: var(--components-black);
+  color: var(--components-indigo);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tma-components-responsive .tma-components-hero {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 200px;
+  padding: 48px 32px;
+  border-radius: 32px;
+}
+
+.tma-components-responsive .tma-components-hero::before {
+  border-radius: 32px;
+}
+
+.tma-components-responsive .tma-components-hero__content {
+  gap: 32px;
+}
+
+.tma-components-responsive .tma-components-hero__title {
+  font-size: clamp(40px, 10vw, 80px);
+}
+
+.tma-components-responsive .tma-components-hero__body,
+.tma-components-responsive .tma-components-hero__link {
+  font-size: clamp(18px, 4vw, 32px);
+  line-height: 1.25;
+}
+
+@media (min-width: 901px) {
+  .tma-components-demo__board-wrap--main {
+    display: block;
+  }
+
+  .tma-components-responsive {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  body.tma-components-page {
+    padding: 24px 16px 32px;
+  }
+
+  .tma-components-demo__title {
+    font-size: 28px;
+    line-height: 36px;
+  }
+
+  .tma-components-demo__copy {
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  .tma-components-demo__board-wrap--main {
+    display: none !important;
+  }
+
+  .tma-components-responsive {
+    display: flex;
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "slug": "table-search",
+  "nodeId": "32260:171687",
+  "guidanceNodeId": "32260:171687",
+  "name": "Table Search",
+  "description": "Search results interactive guidance — no-results state, search results table, search field states, and footer.",
+  "cssPath": "public/css/table-search.css",
+  "jsPath": "public/js/table-search-icons.js",
+  "defaultVariant": "search-results",
+  "variants": {
+    "no-results": { "emptyState": true },
+    "search-results": { "previewRows": true }
+  },
+  "searchInteraction": [
+    "The search results appear in the following table instead of the original data.",
+    "The table data is restored to its original state after you clear what you typed.",
+    "If the table data has already been filtered by the user, the search scope is the filtered data.",
+    "Similarly, filtering is filtering the search results if the user searches first, and the same is true for sorting.",
+    "Search results are generated as you type, and the search results will include auto-completed results."
+  ],
+  "searchFieldStates": {
+    "columns": ["default", "hover", "disabled", "focus", "in-progress"],
+    "rows": ["large", "small"]
+  },
+  "iconSources": {
+    "Search16": "images/icons/tma/Search-16.svg",
+    "XCircle": "images/icons/tma/Xcircle.svg",
+    "Loading16": "images/icons/tma/Loading-16.svg",
+    "Goto": "images/icons/tma/Goto.svg"
+  },
+  "items": [
+    { "nodeId": "32260:171687", "variant": "no-results" },
+    { "nodeId": "32260:171687", "variant": "search-results" }
+  ]
+}

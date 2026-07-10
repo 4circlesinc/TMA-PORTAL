@@ -1,0 +1,25 @@
+{
+  "source": {
+    "fileKey": "58ZXC7sZYQsbenzf0foWCH",
+    "pageId": "16:13406",
+    "pageName": "👋 Hello"
+  },
+  "desktop": [
+    { "name": "New chat", "variants": 2, "size": "1440x1024" },
+    { "name": "In Chat", "variants": 2, "size": "1440x1024" },
+    { "name": "Recommend", "variants": 2, "size": "1440x1024" },
+    { "name": "Graphics", "variants": 2, "size": "1440x1024" },
+    { "name": "Code", "variants": 2, "size": "1440x1024" },
+    { "name": "Table", "variants": 2, "size": "1440x1024" }
+  ],
+  "mobile": [
+    { "name": "Chat List", "variants": 4, "size": "393x852" },
+    { "name": "In Chat", "variants": 4, "size": "393x852" },
+    { "name": "Restaurants", "variants": 2, "size": "393x852" },
+    { "name": "Movies", "variants": 2, "size": "393x852" },
+    { "name": "Code", "variants": 2, "size": "393x852" },
+    { "name": "Graphics", "variants": 2, "size": "393x852" },
+    { "name": "Table", "variants": 2, "size": "393x852" }
+  ],
+  "notes": "Screens are exported as image references on the Hello page. Use get_metadata with specific node IDs when implementing individual screens."
+}

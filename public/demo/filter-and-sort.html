@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Filter and sort</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/filter-and-sort.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .group { background: #fff; border-radius: 16px; padding: 24px 20px 20px; min-width: 928px; width: fit-content; }
+    .group-label { font-size: 16px; line-height: 32px; font-weight: 600; margin-bottom: 32px; }
+    .group-stack { display: flex; flex-direction: column; gap: 24px; }
+  </style>
+</head>
+<body>
+  <div class="group">
+    <p class="group-label">Filter and sort</p>
+    <div class="group-stack" id="group-root"></div>
+  </div>
+
+<script>
+const ICONS = {
+  FunnelSimple: '../images/icons/tma/FunnelSimple-16.svg',
+  Dot: '../images/icons/tma/Dot-12.svg',
+  ArrowsDown: '../images/icons/tma/ArrowsDown-16.svg',
+  Close: '../images/icons/tma/Close-12.svg',
+};
+
+const TAGS = [
+  { id: 'date-range', kind: 'filter', icon: 'FunnelSimple', iconSize: 16, label: 'Date: 10/02/2026 - 25/02/2026' },
+  { id: 'status', kind: 'filter', icon: 'Dot', iconSize: 12, label: 'Status' },
+  { id: 'sort-date', kind: 'sort', icon: 'ArrowsDown', iconSize: 16, label: 'Date' },
+];
+
+function renderTag(tag) {
+  const iconSize = tag.iconSize || 16;
+  const iconClass = iconSize === 12
+    ? 'tma-filter-and-sort__icon tma-filter-and-sort__icon--12'
+    : 'tma-filter-and-sort__icon tma-filter-and-sort__icon--16';
+
+  return `<div class="tma-filter-and-sort__tag" role="listitem" data-tag-id="${tag.id}"><img src="${ICONS[tag.icon]}" class="${iconClass}" width="${iconSize}" height="${iconSize}" alt="" aria-hidden="true" /><span class="tma-filter-and-sort__label">${tag.label}</span><button type="button" class="tma-filter-and-sort__remove" aria-label="Remove ${tag.label}" data-remove-tag="${tag.id}"><img src="${ICONS.Close}" class="tma-filter-and-sort__icon tma-filter-and-sort__icon--close" width="6" height="6" alt="" /></button></div>`;
+}
+
+function renderFilterAndSort() {
+  const tags = TAGS.map(renderTag).join('');
+  return `<div class="tma-filter-and-sort tma-filter-and-sort--default"><div class="tma-filter-and-sort__tags" role="list">${tags}</div><button type="button" class="tma-filter-and-sort__reset" data-reset-filters><span class="tma-filter-and-sort__reset-label">Reset</span></button></div>`;
+}
+
+fetch('./data/filter-and-sort.json')
+  .then((r) => r.json())
+  .then((data) => {
+    const root = document.getElementById('group-root');
+    data.items.forEach(() => {
+      const wrap = document.createElement('div');
+      wrap.className = 'group-item';
+      wrap.innerHTML = renderFilterAndSort();
+      root.appendChild(wrap);
+    });
+  });
+</script>
+<script src="../js/filter-and-sort.js"></script>
+</body>
+</html>

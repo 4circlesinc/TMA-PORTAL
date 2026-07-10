@@ -1,0 +1,20 @@
+{
+  "slug": "vertical-11",
+  "nodeId": "30485:135146",
+  "name": "Vertical 11",
+  "variant": "pill",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "pillWidth": 30,
+  "color": "#000000",
+  "bars": [
+    { "value": 2000, "top": 95 },
+    { "value": 5000, "top": 35 },
+    { "value": 3000, "top": 75 },
+    { "value": 6000, "top": 15 },
+    { "value": 1000, "top": 115 },
+    { "value": 4000, "top": 55 }
+  ]
+}

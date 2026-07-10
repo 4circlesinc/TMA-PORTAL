@@ -1,0 +1,91 @@
+/* TMA — shared table typography (Figma 12 Regular / 14 Semibold) */
+
+:root {
+  --tma-table-font-family: Inter, system-ui, sans-serif;
+  --tma-table-letter-spacing: 0;
+  --tma-table-font-weight-regular: 400;
+  --tma-table-font-weight-semibold: 600;
+  --tma-table-font-size: 12px;
+  --tma-table-line-height: 16px;
+  --tma-table-text-color: #000;
+  --tma-table-header-muted-color: rgba(0, 0, 0, 0.4);
+  --tma-table-title-font-size: 14px;
+  --tma-table-title-line-height: 20px;
+  --tma-table-title-font-weight: 600;
+}
+
+/* Table title */
+
+.tma-table-title {
+  display: flex;
+  align-items: center;
+  gap: var(--table-title-gap, 8px);
+  min-height: var(--table-title-min-height, 40px);
+  padding: 0 var(--table-title-padding-x, 12px);
+  border-bottom: 1px solid var(--table-title-border-color, rgba(0, 0, 0, 0.2));
+  box-sizing: border-box;
+  font-family: var(--tma-table-font-family);
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  font-style: normal;
+  letter-spacing: var(--tma-table-letter-spacing);
+  -webkit-font-smoothing: antialiased;
+  color: var(--table-title-color, var(--tma-table-header-muted-color));
+  background: transparent;
+  width: fit-content;
+}
+
+.tma-table-title__icons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--table-title-gap, 8px);
+  flex-shrink: 0;
+}
+
+.tma-table-title__icon {
+  display: block;
+  width: var(--table-title-icon-size, 16px);
+  height: var(--table-title-icon-size, 16px);
+  flex-shrink: 0;
+}
+
+.tma-table-title__label {
+  font-size: var(--table-title-font-size, var(--tma-table-font-size));
+  line-height: var(--table-title-line-height, var(--tma-table-line-height));
+  font-weight: var(--tma-table-font-weight-regular);
+  white-space: nowrap;
+}
+
+.tma-table-title--filter-sort .tma-table-title__icons {
+  gap: 4px;
+}
+
+.tma-table-title--checkbox {
+  justify-content: center;
+  width: var(--table-title-width, 24px);
+  min-width: var(--table-title-width, 24px);
+}
+
+.tma-table-title__checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: var(--table-title-icon-size, 16px);
+  height: var(--table-title-icon-size, 16px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/* Inherit typography inside table cell labels */
+
+[class*="tma-table-"] [class*="__label"] {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  font-style: inherit;
+}

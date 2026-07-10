@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Design Resources</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <style>
+
+    /* ─── Page shell ─── */
+    .dr-page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: var(--space-48) var(--space-28);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-28);
+    }
+
+    /* ─── Section label ─── */
+    .dr-section-label {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding-bottom: var(--space-16);
+    }
+
+    /* ─── TMA logo (horizontal) ─── */
+    .tma-logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      text-decoration: none;
+    }
+
+    .tma-logo__icon {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .tma-logo__wordmark {
+      position: relative;
+      width: 71px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+
+    .tma-logo__wordmark img {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      height: 100%;
+      object-fit: fill;
+    }
+
+    .tma-logo__wordmark img:first-child { left: 0; right: 18px; }
+    .tma-logo__wordmark img:last-child  { left: 56px; right: 0; }
+
+    /* ─────────────────────────────────────────
+     * COVER CARD (Contents, 90% Principle)
+     * 266532, 266533
+     * ───────────────────────────────────────── */
+    .dr-cover {
+      background: var(--color-bg-card);
+      border-radius: var(--radius-40);
+      padding: 120px;
+      max-width: 1000px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      min-height: 640px;
+      gap: var(--space-80);
+    }
+
+    .dr-cover__body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-24);
+    }
+
+    .dr-cover__title {
+      font-size: var(--text-size-48);
+      line-height: var(--text-lh-48);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-cover__list {
+      font-size: var(--text-size-24);
+      line-height: var(--text-lh-24);
+      font-weight: var(--font-weight-regular);
+      color: var(--color-text-primary);
+      font-feature-settings: var(--font-features);
+      list-style: disc;
+      padding-left: 1.5em;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .dr-cover__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .dr-cover__footer-link {
+      font-size: var(--text-size-14);
+      line-height: var(--text-lh-14);
+      font-weight: var(--font-weight-regular);
+      color: var(--color-text-secondary);
+      text-decoration: none;
+    }
+
+    .dr-cover__footer-link:hover { text-decoration: underline; }
+
+    /* 90% Principle graphic */
+    .dr-principle-graphic {
+      height: 64px;
+      width: 100%;
+      object-fit: contain;
+      object-position: left center;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    /* ─────────────────────────────────────────
+     * DOC CARD (all documentation sections)
+     * 266534, 266537–266540
+     * ───────────────────────────────────────── */
+    .dr-doc {
+      background: var(--color-white);
+      border-radius: var(--radius-40);
+      padding: var(--space-28);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header block */
+    .dr-doc__header {
+      background: var(--color-bg-card);
+      border-radius: var(--radius-28);
+      padding: var(--space-40);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-24);
+    }
+
+    .dr-doc__header-left {
+      flex: 1 0 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-16);
+    }
+
+    .dr-doc__title {
+      font-size: var(--text-size-48);
+      line-height: 56px;
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text-primary);
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-doc__subtitle {
+      display: flex;
+      align-items: center;
+      gap: var(--space-16);
+      flex-wrap: wrap;
+      font-size: var(--text-size-14);
+      line-height: var(--text-lh-14);
+      font-weight: var(--font-weight-regular);
+      color: var(--color-text-secondary);
+    }
+
+    .dr-doc__subtitle a {
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-doc__subtitle a:hover { text-decoration: underline; }
+
+    /* Body rows */
+    .dr-doc__body {
+      padding: 0 var(--space-40);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Individual row */
+    .dr-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+      align-items: flex-start;
+      padding: var(--space-28) 0;
+      border-bottom: 1px solid var(--color-border-soft);
+    }
+
+    .dr-row--center    { align-items: center; }
+    .dr-row--dark-sep  { border-bottom-color: var(--color-border-heavy); }
+    .dr-row--no-border { border-bottom: none; }
+    .dr-row--pt-lg     { padding-top: var(--space-48); }
+    .dr-row--pb-lg     { padding-bottom: var(--space-48); }
+
+    .dr-row__label {
+      flex: 1 0 0;
+      max-width: 320px;
+      min-width: 200px;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      font-size: var(--text-size-24);
+      line-height: var(--text-lh-24);
+      font-weight: var(--font-weight-regular);
+      color: var(--color-text-primary);
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-row__label--accent { color: var(--color-indigo); }
+
+    .dr-row__content {
+      flex: 1 0 0;
+      min-width: 358px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .dr-row__text {
+      font-size: var(--text-size-14);
+      line-height: var(--text-lh-14);
+      font-weight: var(--font-weight-regular);
+      color: var(--color-text-primary);
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-row__text p + p { margin-top: 10px; }
+
+    .dr-row__text a {
+      color: var(--color-indigo);
+      text-decoration: none;
+    }
+
+    .dr-row__text a:hover { text-decoration: underline; }
+
+    .dr-row__text ul {
+      list-style: disc;
+      padding-left: 21px;
+    }
+
+    .dr-row__text li + li { margin-top: 10px; }
+
+    /* ─────────────────────────────────────────
+     * SPACING / SIZE / CORNER RADIUS SWATCHES
+     * 266539
+     * ───────────────────────────────────────── */
+    .dr-swatches {
+      display: flex;
+      align-items: flex-end;
+      gap: var(--space-8);
+    }
+
+    .dr-swatch {
+      flex: 1 0 0;
+      min-width: 0;
+      padding: 40px 0;
+      border-radius: var(--radius-16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-size-14);
+      line-height: var(--text-lh-14);
+      font-weight: var(--font-weight-regular);
+      font-feature-settings: var(--font-features);
+      color: var(--color-white);
+      text-align: center;
+    }
+
+    .dr-swatch--dashed  { border: 1px dashed var(--color-border-soft); color: var(--color-overlay-20); background: transparent; }
+    .dr-swatch--o4      { background: var(--color-overlay-4);  color: var(--color-overlay-20); }
+    .dr-swatch--o10     { background: var(--color-overlay-10); color: var(--color-overlay-20); }
+    .dr-swatch--o10-w   { background: var(--color-overlay-10); color: var(--color-white); }
+    .dr-swatch--o20     { background: var(--color-overlay-20); color: var(--color-white); }
+    .dr-swatch--o20-dk  { background: var(--color-overlay-20); color: var(--color-overlay-20); }
+    .dr-swatch--o40     { background: var(--color-overlay-40); color: var(--color-white); }
+    .dr-swatch--o80     { background: var(--color-overlay-80); color: var(--color-white); }
+    .dr-swatch--o100    { background: var(--color-black);       color: var(--color-white); }
+
+    /* ─────────────────────────────────────────
+     * TEXT STYLE SAMPLES
+     * 266540
+     * ───────────────────────────────────────── */
+    .dr-text-samples {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+      align-items: flex-start;
+    }
+
+    .dr-text-sample {
+      padding: var(--space-20);
+      border-radius: var(--radius-16);
+      background: var(--color-overlay-4);
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-text-sample--10  { background: var(--color-overlay-10); }
+    .dr-text-sample--20  { background: var(--color-overlay-20); }
+    .dr-text-sample--40  { background: var(--color-overlay-40); color: var(--color-white); }
+    .dr-text-sample--100 { background: var(--color-black);       color: var(--color-white); }
+
+    /* ─────────────────────────────────────────
+     * EFFECT STYLE SWATCHES — exact Figma node 33305:140101
+     * 266538
+     * ───────────────────────────────────────── */
+    .dr-effects {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+      align-items: flex-start;
+    }
+
+    /* Base: 320px fixed width, grey fill, centred label */
+    .dr-effect {
+      width: 320px;
+      padding: var(--space-20);
+      border-radius: var(--radius-16);
+      background: var(--color-overlay-4);
+      font-size: var(--text-size-14);
+      line-height: var(--text-lh-14);
+      font-weight: var(--font-weight-regular);
+      font-feature-settings: var(--font-features);
+      text-align: center;
+      color: var(--color-text-primary);
+    }
+
+    /* Glass 1 — bg white/20%, drop shadow 0 4px 16 rgba(0,0,0,0.04) */
+    .dr-effect--glass-1 {
+      background: rgba(255,255,255,0.2);
+      box-shadow: 0 4px 16px 0 rgba(0,0,0,0.04);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    /* Glass 2 — bg white/20%, drop shadow 0 8px 28 rgba(0,0,0,0.10) */
+    .dr-effect--glass-2 {
+      background: rgba(255,255,255,0.2);
+      box-shadow: 0 8px 28px 0 rgba(0,0,0,0.10);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+    }
+
+    /* Glow — Figma filter2_dd (dilate 8, blur 12; blend modes → lower CSS opacity) */
+    .dr-effect--glow {
+      box-shadow:
+        0 0 10px 6px rgba(0, 0, 0, 0.07),
+        0 0 10px 6px rgba(255, 255, 255, 0.05);
+    }
+
+    /* Focus — white bg, 1px border, 4px transparent ring */
+    .dr-effect--focus {
+      background: var(--color-white);
+      border: 1px solid rgba(0,0,0,0.10);
+      box-shadow: 0 0 0 4px rgba(0,0,0,0.04);
+    }
+
+    .dr-effect--focus-sub {
+      font-size: var(--text-size-12);
+      line-height: 18px;
+      color: rgba(0,0,0,0.40);
+      font-feature-settings: "ss01" 1, "cv01" 1, "cv11" 1;
+      white-space: pre-wrap;
+    }
+
+    /* Inner shadow — 4-layer inset (matches Figma exactly) */
+    .dr-effect--inner {
+      box-shadow:
+        inset 0 -0.5px 1px 0 rgba(255,255,255,0.30),
+        inset 0 -0.5px 1px 0 rgba(255,255,255,0.25),
+        inset 1px 1.5px 4px 0 rgba(0,0,0,0.08),
+        inset 1px 1.5px 4px 0 rgba(0,0,0,0.10);
+    }
+
+    .dr-effect--drop1 { box-shadow: 0 0.5px 0.5px 0 rgba(0,0,0,0.10); }
+    .dr-effect--drop2 { box-shadow: 0 2px 4px 0 rgba(0,0,0,0.10); }
+
+    /* Image hover — Figma 33305:140123 / filter7_i (top inner shadow, overlay) */
+    .dr-effect--image-hover {
+      background:
+        linear-gradient(
+          180deg,
+          rgba(0, 0, 0, 0.1) 0%,
+          rgba(0, 0, 0, 0) 48%,
+          rgba(0, 0, 0, 0) 100%
+        ),
+        var(--color-overlay-4);
+      box-shadow: none;
+    }
+
+    /* Background blur — Figma radius÷2 → CSS blur value */
+    .dr-effect--blur-40  { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+    .dr-effect--blur-100 { backdrop-filter: blur(50px); -webkit-backdrop-filter: blur(50px); }
+
+    /* ─────────────────────────────────────────
+     * COMPONENT EXAMPLES
+     * 266538
+     * ───────────────────────────────────────── */
+    .dr-example-box {
+      background: var(--color-bg-card);
+      border-radius: var(--radius-20);
+      padding: var(--space-20);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      margin-top: var(--space-28);
+    }
+
+    .dr-example-box__title {
+      font-size: var(--text-size-14);
+      font-weight: var(--font-weight-semibold);
+      line-height: var(--text-lh-14);
+      color: var(--color-text-primary);
+      padding-bottom: var(--space-12);
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-example-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-20);
+      padding: 0 var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .dr-example-label {
+      flex: 1 0 0;
+      min-width: 160px;
+      font-size: var(--text-size-14);
+      line-height: var(--text-lh-14);
+      font-feature-settings: var(--font-features);
+    }
+
+    .dr-example-arrow {
+      width: 88px;
+      font-size: var(--text-size-14);
+      line-height: var(--text-lh-14);
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    /* Mini button example (from Components section) */
+    .dr-mini-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      justify-content: center;
+      background: var(--color-black);
+      color: var(--color-white);
+      border-radius: var(--radius-12);
+      min-height: 24px;
+      padding: 4px 12px;
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: var(--font-weight-regular);
+      font-feature-settings: var(--font-features);
+      flex-shrink: 0;
+    }
+
+    .dr-mini-btn__icon-placeholder {
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      border: 0.5px dashed rgba(255,255,255,0.8);
+      background: rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+
+    .dr-mini-btn__avatar {
+      width: 12px;
+      height: 12px;
+      border-radius: 80px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+
+    .dr-mini-btn__avatar--lg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .dr-mini-btn__avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* ─────────────────────────────────────────
+     * RESPONSIVE
+     * ───────────────────────────────────────── */
+    @media (max-width: 1000px) {
+      .dr-cover { padding: 60px 48px; min-height: auto; }
+    }
+
+    @media (max-width: 768px) {
+      .dr-page { padding: var(--space-24) var(--space-16); gap: var(--space-24); }
+      .dr-cover { padding: 48px 32px; }
+      .dr-cover__title { font-size: var(--text-size-32); line-height: var(--text-lh-32); }
+      .dr-cover__list  { font-size: var(--text-size-18); line-height: var(--text-lh-18); }
+      .dr-doc__header  { padding: var(--space-24); flex-direction: column; }
+      .dr-doc__body    { padding: 0 var(--space-24); }
+      .dr-doc__title   { font-size: var(--text-size-32); line-height: var(--text-lh-32); }
+      .dr-row__label   { max-width: 100%; font-size: var(--text-size-18); }
+      .dr-row__content { min-width: 0; }
+      .dr-swatches     { flex-wrap: wrap; }
+      .dr-swatch       { min-width: 48px; }
+    }
+
+    @media (max-width: 480px) {
+      .dr-page { padding: var(--space-16) 12px; }
+      .dr-cover { padding: 32px 24px; }
+      .dr-cover__title { font-size: var(--text-size-24); line-height: var(--text-lh-24); }
+      .dr-doc__header  { padding: var(--space-16); }
+      .dr-doc__body    { padding: 0 var(--space-16); }
+      .dr-doc__title   { font-size: var(--text-size-24); line-height: var(--text-lh-24); }
+    }
+
+  </style>
+</head>
+<body>
+
+<main class="dr-page">
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 1 — Contents of Design System (node 30484:266532)
+       Cover card: bg #f9f9fa, radius 40, padding 120, 1000×1200
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">Design Resources — Contents (node 30484:266532)</p>
+  <section id="section-contents" class="dr-cover">
+    <div class="dr-cover__body">
+      <h1 class="dr-cover__title">Design system consists of the following parts:</h1>
+      <ul class="dr-cover__list">
+        <li>Variables</li>
+        <li>Spacing, Size, Corner Radius</li>
+        <li>Colors</li>
+        <li>Text Styles</li>
+        <li>Effect Styles</li>
+        <li>Components</li>
+        <li>Design Resources</li>
+      </ul>
+    </div>
+    <footer class="dr-cover__footer">
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="TMA icon">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+      <a class="dr-cover__footer-link" href="#" target="_blank">tma-portal</a>
+    </footer>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 2 — 90% Principle (node 30484:266533)
+       Cover card with large graphic + principle text
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">90% Principle (node 30484:266533)</p>
+  <section id="section-principle" class="dr-cover">
+    <div class="dr-cover__body">
+      <img class="dr-principle-graphic" src="../images/design-system/90-principle.png" alt="90% PRINCIPLE" width="760" height="64">
+      <div style="display:flex;flex-direction:column;gap:var(--space-40);margin-top:var(--space-40);">
+        <h2 class="dr-cover__title">In TMA we follow 90% of the design from the design system.</h2>
+        <ul class="dr-cover__list">
+          <li>Doing so avoids bloating the design system.</li>
+          <li>It can keep the rules in the design system more applicable.</li>
+          <li>The remaining 10% (colors, spacing, fonts, components, etc.) can be exempt from design system rules.</li>
+        </ul>
+      </div>
+    </div>
+    <footer class="dr-cover__footer">
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="TMA icon">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+      <a class="dr-cover__footer-link" href="#" target="_blank">tma-portal</a>
+    </footer>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 3 — Variables (node 30484:266534)
+       Doc card: white bg, radius 40, padding 28
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">Variables (node 30484:266534)</p>
+  <section id="section-variables" class="dr-doc">
+    <header class="dr-doc__header">
+      <div class="dr-doc__header-left">
+        <h2 class="dr-doc__title">Variables</h2>
+        <div class="dr-doc__subtitle">
+          <a href="#variables" target="_blank">tma-portal/variables ↗</a>
+        </div>
+      </div>
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+    </header>
+    <div class="dr-doc__body">
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label dr-row__label--accent">Introduction</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>In TMA, we use variables to control color, spacing, icon size, and corner radius. These are key parts of the design system.</p>
+            <p>In addition, we also have variables such as Icon weight, Show text, Text, etc.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label dr-row__label--accent">Rules of use</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Please see below.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center dr-row--dark-sep dr-row--pb-lg">
+        <div class="dr-row__label dr-row__label--accent">How to use</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Variables can be added, modified and deleted. Modifying them will affect all components and pages, please proceed with caution.</p>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label">Colors</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>The Colors variable is used to switch between light and dark modes, and the colors in this variable are a key part of the design system.</p>
+            <p>Applies to: all elements.</p>
+            <p><a href="#" target="_blank">Rules of use</a></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label">Corner Radius</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>The Corner Radius variable is used to set the value of the corner radius.</p>
+            <p>Applies to: vector element, component, block, frame, page.</p>
+            <p><a href="#" target="_blank">Rules of use</a></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Font</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">The Font variable is used to switch fonts.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Font Weight</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">The Font Weight variable is used to switch font weight.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Paragraph Spacing</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">The Paragraph Spacing variable changes the paragraph text spacing when the text is a paragraph.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Show or Hide</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">A Boolean value used to control whether the element is hidden.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Show or Hide 2</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Another Boolean value used to control whether the element is hidden.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg">
+        <div class="dr-row__label">Size</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>The Size variable is used to control the element size.</p>
+            <p>Applies to: the size of icons, avatars, logos, images, emoji, etc.</p>
+            <p><a href="#" target="_blank">Rules of use</a></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg dr-row--no-border">
+        <div class="dr-row__label">Spacing</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>The Spacing variable is used to set the value of spacing.</p>
+            <p>Applies to: Gap, Padding, Margin.</p>
+            <p><a href="#" target="_blank">Rules of use</a></p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 4 — Spacing, Size, Corner Radius (node 30484:266539)
+       Doc card with visual swatch rows
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">Spacing, Size, Corner Radius (node 30484:266539)</p>
+  <section id="section-spacing" class="dr-doc">
+    <header class="dr-doc__header">
+      <div class="dr-doc__header-left">
+        <h2 class="dr-doc__title">Spacing, Size, Corner Radius</h2>
+        <div class="dr-doc__subtitle">
+          <a href="#spacing-icon-size-corner-radius" target="_blank">tma-portal/spacing-icon-size-corner-radius ↗</a>
+        </div>
+      </div>
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+    </header>
+    <div class="dr-doc__body">
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Introduction</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Spacing, Icon size, Corner radius are key parts of the design system, you can find them in variables.</p>
+            <p>To define them, we have the following principles: 1. Widely used in design. 2. The number of Spacing, Icon size, and Corner radius should be as small as possible.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Rules of use</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Please try to keep the number of Spacing, Icon size, and Corner radius below 16.</p>
+            <p>90% principle: If Spacing, Icon size, Corner radius used in a single product accounts for less than 10%, please do not include it in the design system.</p>
+            <p>Their values are multiples of 4.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--dark-sep dr-row--pb-lg">
+        <div class="dr-row__label dr-row__label--accent">How to use</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Spacing, Icon size, Corner radius can be added, modified and deleted. Modifying them will affect all components and pages, please proceed with caution.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg">
+        <div class="dr-row__label">Notes</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>A dashed border indicates that the value is not available yet.</p>
+            <p>The fill color from dark to light represents the frequency of use from high to low.</p>
+            <p>Different products will have different frequency of use, here is the <a href="https://www.figma.com/file/pTTWqClVP5NPzmImOUiPn3" target="_blank">Snow Dashboard UI Kit ↗</a> as a reference.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spacing swatches: 80 dashed, 48 o10, 40 o20, 32 dashed, 28 o100, 24 o100, 20 o40, 16 o100, 12 o20, 8 o100, 4 o40, 0 o40 -->
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Spacing</div>
+        <div class="dr-row__content">
+          <div class="dr-swatches">
+            <div class="dr-swatch dr-swatch--dashed">80</div>
+            <div class="dr-swatch dr-swatch--o10">48</div>
+            <div class="dr-swatch dr-swatch--o20">40</div>
+            <div class="dr-swatch dr-swatch--dashed">32</div>
+            <div class="dr-swatch dr-swatch--o100">28</div>
+            <div class="dr-swatch dr-swatch--o100">24</div>
+            <div class="dr-swatch dr-swatch--o40">20</div>
+            <div class="dr-swatch dr-swatch--o100">16</div>
+            <div class="dr-swatch dr-swatch--o20">12</div>
+            <div class="dr-swatch dr-swatch--o100">8</div>
+            <div class="dr-swatch dr-swatch--o40">4</div>
+            <div class="dr-swatch dr-swatch--o40">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Size swatches: 80 o40, 48 o20, 40 o40, 32 o20, 28 o10, 24 o80, 20 o100, 16 o80, 12 o10, 8 dashed, 4 dashed, 0 dashed -->
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Size</div>
+        <div class="dr-row__content">
+          <div class="dr-swatches">
+            <div class="dr-swatch dr-swatch--o40">80</div>
+            <div class="dr-swatch dr-swatch--o20">48</div>
+            <div class="dr-swatch dr-swatch--o40">40</div>
+            <div class="dr-swatch dr-swatch--o20">32</div>
+            <div class="dr-swatch dr-swatch--o10">28</div>
+            <div class="dr-swatch dr-swatch--o80">24</div>
+            <div class="dr-swatch dr-swatch--o100">20</div>
+            <div class="dr-swatch dr-swatch--o80">16</div>
+            <div class="dr-swatch dr-swatch--o10-w">12</div>
+            <div class="dr-swatch dr-swatch--dashed">8</div>
+            <div class="dr-swatch dr-swatch--dashed">4</div>
+            <div class="dr-swatch dr-swatch--dashed">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Corner Radius swatches: 80 o40, 48 o4, 40 o4, 32 o10-w, 28 o4, 24 o40, 20 o20, 16 o100, 12 o100, 8 o100, 4 o80, 0 o20 -->
+      <div class="dr-row dr-row--center dr-row--no-border">
+        <div class="dr-row__label">Corner Radius</div>
+        <div class="dr-row__content">
+          <div class="dr-swatches">
+            <div class="dr-swatch dr-swatch--o40">80</div>
+            <div class="dr-swatch dr-swatch--o4">48</div>
+            <div class="dr-swatch dr-swatch--o4">40</div>
+            <div class="dr-swatch dr-swatch--o10-w">32</div>
+            <div class="dr-swatch dr-swatch--o4">28</div>
+            <div class="dr-swatch dr-swatch--o40">24</div>
+            <div class="dr-swatch dr-swatch--o20">20</div>
+            <div class="dr-swatch dr-swatch--o100">16</div>
+            <div class="dr-swatch dr-swatch--o100">12</div>
+            <div class="dr-swatch dr-swatch--o100">8</div>
+            <div class="dr-swatch dr-swatch--o80">4</div>
+            <div class="dr-swatch dr-swatch--o20">0</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 5 — Text Styles (node 30484:266540)
+       Doc card with Inter type scale samples
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">Text Styles (node 30484:266540)</p>
+  <section id="section-text" class="dr-doc">
+    <header class="dr-doc__header">
+      <div class="dr-doc__header-left">
+        <h2 class="dr-doc__title">Text Styles</h2>
+        <div class="dr-doc__subtitle">
+          <a href="#text-styles" target="_blank">tma-portal/text-styles ↗</a>
+        </div>
+      </div>
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+    </header>
+    <div class="dr-doc__body">
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Introduction</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Text styles are a key part of the design system.</p>
+            <p>To define Text styles, we have the following principles: 1. Widely used in design. 2. The number of Text styles should be as small as possible.</p>
+            <p>The font we use is: <a href="https://fonts.google.com/specimen/Inter" target="_blank">Inter ↗</a>, other recommended fonts: SF Pro, Roboto, Averta.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Rules of use</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Please try to keep the number of Text styles below 20.</p>
+            <p>90% principle: If the Text styles used in a single product accounts for less than 10%, please do not include it in the design system.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center dr-row--dark-sep dr-row--pb-lg">
+        <div class="dr-row__label dr-row__label--accent">How to use</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Text styles can be added, modified and deleted. Modifying them will affect all components and pages, please proceed with caution.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg">
+        <div class="dr-row__label">Notes</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>The fill color from dark to light represents the frequency of use from high to low.</p>
+            <p>Different products will have different frequency of use, here is the <a href="https://www.figma.com/file/pTTWqClVP5NPzmImOUiPn3" target="_blank">Snow Dashboard UI Kit ↗</a> as a reference.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg dr-row--no-border">
+        <div class="dr-row__label">Font: Inter</div>
+        <div class="dr-row__content">
+          <div class="dr-text-samples">
+            <div class="dr-text-sample" style="font-size:64px;line-height:72px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">64 Semibold</div>
+            <div class="dr-text-sample" style="font-size:64px;line-height:72px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">64 Regular</div>
+            <div class="dr-text-sample" style="font-size:48px;line-height:56px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">48 Semibold</div>
+            <div class="dr-text-sample" style="font-size:48px;line-height:56px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">48 Regular</div>
+            <div class="dr-text-sample" style="font-size:32px;line-height:40px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">32 Semibold</div>
+            <div class="dr-text-sample" style="font-size:32px;line-height:40px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">32 Regular</div>
+            <div class="dr-text-sample dr-text-sample--10" style="font-size:24px;line-height:32px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">24 Semibold</div>
+            <div class="dr-text-sample" style="font-size:24px;line-height:32px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">24 Regular</div>
+            <div class="dr-text-sample dr-text-sample--20" style="font-size:18px;line-height:28px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">18 Semibold</div>
+            <div class="dr-text-sample dr-text-sample--20" style="font-size:18px;line-height:28px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">18 Regular</div>
+            <div class="dr-text-sample" style="font-size:16px;line-height:24px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">16 Semibold</div>
+            <div class="dr-text-sample dr-text-sample--10" style="font-size:16px;line-height:24px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">16 Regular</div>
+            <div class="dr-text-sample dr-text-sample--40" style="font-size:14px;line-height:20px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">14 Semibold</div>
+            <div class="dr-text-sample dr-text-sample--100" style="font-size:14px;line-height:20px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">14 Regular</div>
+            <div class="dr-text-sample dr-text-sample--20" style="font-size:12px;line-height:16px;font-weight:600;font-feature-settings:'ss01' 1,'cv01' 1;">12 Semibold</div>
+            <div class="dr-text-sample dr-text-sample--100" style="font-size:12px;line-height:16px;font-weight:400;font-feature-settings:'ss01' 1,'cv01' 1;">12 Regular</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 6 — Effect Styles (node 30484:266537)
+       Doc card with shadow/blur swatch examples
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">Effect Styles (node 30484:266537)</p>
+  <section id="section-effects" class="dr-doc">
+    <header class="dr-doc__header">
+      <div class="dr-doc__header-left">
+        <h2 class="dr-doc__title">Effect Styles</h2>
+        <div class="dr-doc__subtitle">
+          <a href="#effect-styles" target="_blank">tma-portal/effect-styles ↗</a>
+        </div>
+      </div>
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+    </header>
+    <div class="dr-doc__body">
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Introduction</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Effect styles are a key part of the design system.</p>
+            <p>To define Effect styles, we have the following principles: 1. Widely used in design. 2. The number of Effect styles should be as small as possible.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Rules of use</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Please try to keep the number of Effect styles below 8.</p>
+            <p>90% principle: If the Effect styles used in a single product accounts for less than 10%, please do not include it in the design system.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center dr-row--dark-sep dr-row--pb-lg">
+        <div class="dr-row__label dr-row__label--accent">How to use</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Effect styles can be added, modified and deleted. Modifying them will affect all components and pages, please proceed with caution.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg dr-row--no-border">
+        <div class="dr-row__label">Effect Styles</div>
+        <div class="dr-row__content">
+          <div class="dr-effects">
+            <div class="dr-effect dr-effect--glass-1">Glass 1</div>
+            <div class="dr-effect dr-effect--glass-2">Glass 2</div>
+            <div class="dr-effect dr-effect--glow">Glow</div>
+            <div class="dr-effect dr-effect--focus">
+              Focus
+              <div class="dr-effect--focus-sub">Focus styles, Focus ring, Focus indicator.<br>Can change shadow color to brand color.</div>
+            </div>
+            <div class="dr-effect dr-effect--inner">Inner shadow</div>
+            <div class="dr-effect dr-effect--drop1">Drop shadow 1</div>
+            <div class="dr-effect dr-effect--drop2">Drop shadow 2</div>
+            <div class="dr-effect dr-effect--image-hover">Image hover</div>
+            <div class="dr-effect dr-effect--blur-40">Background blur 40</div>
+            <div class="dr-effect dr-effect--blur-100">Background blur 100</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 7 — Components (node 30484:266538)
+       Doc card describing component hierarchy + example
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">Components (node 30484:266538)</p>
+  <section id="section-components" class="dr-doc">
+    <header class="dr-doc__header">
+      <div class="dr-doc__header-left">
+        <h2 class="dr-doc__title">Components</h2>
+        <div class="dr-doc__subtitle">
+          <a href="#components" target="_blank">tma-portal/components ↗</a>
+        </div>
+      </div>
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+    </header>
+    <div class="dr-doc__body">
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Introduction</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Components are a key part of a design system.</p>
+            <p>To define Components, we have the following principles: 1. Widely used in the design. 2. The number of Components should be as small as possible.</p>
+            <p>The design logic of TMA components is to make the most frequently used combinations into base components, and then make other components and page elements from the base components.</p>
+            <p>The benefits of doing this are:</p>
+            <ul>
+              <li>The extensibility of components is better. For example, you can replace the Icon in the button component with the avatar, and you don't need to add new components for this design.</li>
+              <li>The maintenance cost of components is less. For example, you only need to change the Icon component to change the size of all Icons.</li>
+              <li>Maintaining the existing structure of components during design and development can give you more space to deal with uncertain product requirements in the future.</li>
+            </ul>
+            <!-- Component usage example box -->
+            <div class="dr-example-box">
+              <p class="dr-example-box__title">Examples of component usage</p>
+              <div class="dr-example-row">
+                <button class="dr-mini-btn">
+                  <span class="dr-mini-btn__icon-placeholder"></span>
+                  Button
+                </button>
+                <span class="dr-example-label">Button component</span>
+              </div>
+              <div class="dr-example-arrow">↓</div>
+              <div class="dr-example-row">
+                <button class="dr-mini-btn">
+                  <span class="dr-mini-btn__avatar">
+                    <img src="../images/avatars/AvatarByewind.png" alt="ByeWind">
+                  </span>
+                  Button
+                </button>
+                <span class="dr-example-label">Replace Icon with avatar. Double-click to select the Icon, and replace the property with an avatar.</span>
+              </div>
+              <div class="dr-example-arrow">↓</div>
+              <div class="dr-example-row">
+                <button class="dr-mini-btn">
+                  <span class="dr-mini-btn__avatar dr-mini-btn__avatar--lg">
+                    <img src="../images/avatars/AvatarByewind.png" alt="ByeWind">
+                  </span>
+                  Button
+                </button>
+                <span class="dr-example-label">Change the size of the avatar. Double-click to select the Icon, and change the value of Size.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Rules of use</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Please minimize the number of Components to Reduce maintenance costs.</p>
+            <p>90% principle: If Components used in a single product accounts for less than 10%, please do not include it in the design system.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center dr-row--dark-sep dr-row--pb-lg">
+        <div class="dr-row__label dr-row__label--accent">How to use</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Components can be added, modified and deleted. Modifying them will affect all components and pages, please proceed with caution.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg">
+        <div class="dr-row__label">Base Components</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>The base components of TMA, they are the most frequently used components, and most of the page elements are made of them.</p>
+            <p>In most cases you don't need to modify them, each base component has multiple variants, you can add more variants to meet your design needs.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Common Components</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Common components other than base components.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Chart Components</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Components for making charts.</p>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label">Mobile Components</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Mobile components. Since the mobile design will use the <a href="https://www.figma.com/community/file/1248375255495415511" target="_blank">Apple Design Resources – iOS 17 and iPadOS 17 ↗</a> library, this part of the components is only a supplement.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--no-border dr-row--pt-lg">
+        <div class="dr-row__label">Page Components</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Page-specific components. These components are usually only used on certain pages, they do not belong to the design system, but their design conforms to the design system rules.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SECTION 8 — Design Resources (node 30484:266535 / 266536)
+       Doc card: Charts, Icons, Avatars, Logos, Emoji, Illustrations
+  ════════════════════════════════════════════════════════ -->
+  <p class="dr-section-label">Design Resources (node 30484:266536)</p>
+  <section id="section-resources" class="dr-doc">
+    <header class="dr-doc__header">
+      <div class="dr-doc__header-left">
+        <h2 class="dr-doc__title">Design Resources</h2>
+        <div class="dr-doc__subtitle">
+          <a href="#design-resources" target="_blank">tma-portal/design-resources ↗</a>
+          <a href="https://www.figma.com/file/bwa7U96g5J1yyQVakRTmDo" target="_blank">TMA Design Resource ↗</a>
+        </div>
+      </div>
+      <a href="#" target="_blank" class="tma-logo" aria-label="TM ANTOINE Advisory">
+        <img class="tma-logo__icon" src="../images/design-system/tma-icon.png" width="28" height="28" alt="">
+        <div class="tma-logo__wordmark" aria-hidden="true">
+          <img src="../images/design-system/tma-wordmark-text.png" alt="">
+          <img src="../images/design-system/tma-wordmark-star.png" alt="">
+        </div>
+      </a>
+    </header>
+    <div class="dr-doc__body">
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Introduction</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>Design resources include Charts, Icons, Avatars, Logos, Emoji, Illustrations, etc., but not limited to these.</p>
+            <p>Design resources are not constrained by design system rules.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row">
+        <div class="dr-row__label dr-row__label--accent">Rules of use</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>The design resources currently contained in the TMA Library can be integrated with the design of TMA, please use it according to the design needs.</p>
+            <p>You can add other design resources, but please make sure that their design styles can be integrated into TMA's design.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--dark-sep dr-row--pb-lg">
+        <div class="dr-row__label dr-row__label--accent">How to use</div>
+        <div class="dr-row__content">
+          <div class="dr-row__text">
+            <p>All design resources are in TMA Library files and published as component libraries.</p>
+            <p>You can use TMA Library as a local component library, or as an online component library (default).</p>
+            <p>When TMA Library is used as an online component library, you will receive update notifications. Usually these updates will not affect your design, but there will inevitably be exceptions. It is a safer way to use it as a local component library.</p>
+            <p><a href="https://www.youtube.com/watch?v=GQ2jztKpxLk&ab_channel=Figma" target="_blank">How to switch component libraries ↗</a></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--pt-lg">
+        <div class="dr-row__label">Charts</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">I found that the data graphics of charts are difficult to create rich chart styles with a few simple components, so I put the data graphics into design resources.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Icons</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">TMA uses Phosphor Icons, you can replace it with other icon libraries.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Avatars</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Avatars are from Figma community and Unsplash.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Logos</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Logos are from Figma community.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center">
+        <div class="dr-row__label">Emoji</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Emoji are from Fluent emoji, you can find the full version in Figma community.</p>
+        </div>
+      </div>
+
+      <div class="dr-row dr-row--center dr-row--no-border">
+        <div class="dr-row__label">Illustrations</div>
+        <div class="dr-row__content">
+          <p class="dr-row__text">Illustrations are free resources from Figma community.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

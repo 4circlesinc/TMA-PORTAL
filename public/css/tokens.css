@@ -1,0 +1,301 @@
+/*
+ * TMA Design Tokens
+ * Source: design/tokens.json + all design/*.json component specs
+ * File key: 58ZXC7sZYQsbenzf0foWCH (Portal-Design)
+ *
+ * This is the single source of truth for all design values.
+ * Import this file before any component stylesheet.
+ */
+
+:root {
+
+  /* ─────────────────────────────────────────
+   * COLOR — Brand
+   * ───────────────────────────────────────── */
+
+  --color-black:  #000000;
+  --color-white:  #ffffff;
+
+  /* TMA brand primaries */
+  --color-primary:       #03a5e9;
+  --color-primary-dark:  #136da0;
+
+  /* ─────────────────────────────────────────
+   * COLOR — Accent palette
+   * Source: design/tokens.json, design/button.json,
+   *         design/card.json, chart JSON color maps
+   * ───────────────────────────────────────── */
+
+  /* Primary accent = TMA brand blue. --color-indigo is remapped to the
+     brand primary so every accent consumer (links, badges, highlights,
+     progress fills) renders the branding blue. Legacy value: #adadfb. */
+  --color-indigo:  var(--color-primary-dark);   /* link, highlight, accent — brand blue */
+  --color-purple:  var(--color-primary-dark);   /* legacy alias — do not use for chart series */
+  --color-violet:  var(--color-primary);   /* progress strip, chip label — brand blue */
+  --color-blue:    #7dbbff;   /* secondary blue, badge bg */
+
+  /* Selection / focus tints derived from brand blue */
+  --color-accent:             var(--color-primary-dark);
+  --color-accent-bg:          color-mix(in srgb, var(--color-primary-dark) 8%, transparent);
+  --color-accent-bg-hover:    color-mix(in srgb, var(--color-primary-dark) 12%, transparent);
+  --color-mint:    #6be6d3;   /* chart mint */
+  --color-cyan:    #a0bce8;   /* chart cyan */
+  --color-green:   #71dd8c;   /* success, chart green, code string */
+  --color-pink:    #ff90e8;   /* secondary pink */
+  --color-orange:  #ffb55b;   /* warning, code number */
+  --color-yellow:  #ffcc00;   /* secondary yellow */
+  --color-red:     #ff4747;   /* error / danger */
+
+  /* ─────────────────────────────────────────
+   * COLOR — Surface / Background
+   * ───────────────────────────────────────── */
+
+  --color-bg-page:         #f5f5f7;           /* outer page shell */
+  --color-bg-card:         #f9f9fa;           /* card, inner panels */
+  --color-bg-input:        rgba(255, 255, 255, 0.8);
+  --color-bg-popup:        rgba(255, 255, 255, 0.9);
+  --color-bg-popup-glass:  rgba(255, 255, 255, 0.8);
+  --color-bg-tooltip:      rgba(0, 0, 0, 0.8);
+  --color-bg-tag:          var(--color-1);
+  --color-bg-code:         #1e1e1e;           /* code block dark bg */
+
+  /* Theme tints — 90% white mix of brand primaries */
+  --color-1:               #e6f6fd;           /* Color 1 — tint of #03a5e9 */
+  --color-2:               #e7f0f6;           /* Color 2 — tint of #136da0 */
+
+  /* ─────────────────────────────────────────
+   * COLOR — Interactive states (transparent overlays)
+   * Source: design/button.json variants
+   * ───────────────────────────────────────── */
+
+  --color-hover:       rgba(0, 0, 0, 0.04);
+  --color-hover-deep:  rgba(0, 0, 0, 0.08);
+  --color-active:      rgba(0, 0, 0, 0.12);
+  --color-inactive:    rgba(0, 0, 0, 0.40);   /* disabled / secondary opacity */
+
+  /* ─────────────────────────────────────────
+   * COLOR — Text
+   * ───────────────────────────────────────── */
+
+  --color-text-primary:      #000000;
+  --color-text-secondary:    rgba(0, 0, 0, 0.40);
+  --color-text-placeholder:  rgba(0, 0, 0, 0.20);
+  --color-text-white:        #ffffff;
+  --color-text-link:         var(--color-primary);
+  --color-text-hint:         var(--color-primary-dark);
+
+  /* ─────────────────────────────────────────
+   * COLOR — Border
+   * ───────────────────────────────────────── */
+
+  --color-border-soft:    rgba(0, 0, 0, 0.10);
+  --color-border-medium:  rgba(0, 0, 0, 0.20);
+  --color-border-strong:  rgba(0, 0, 0, 0.40);
+  --color-border-heavy:   rgba(0, 0, 0, 0.80);  /* section-separator in doc cards */
+
+  /* Black overlay scale (for swatch/visual use) */
+  --color-overlay-4:   rgba(0, 0, 0, 0.04);
+  --color-overlay-10:  rgba(0, 0, 0, 0.10);
+  --color-overlay-20:  rgba(0, 0, 0, 0.20);
+  --color-overlay-40:  rgba(0, 0, 0, 0.40);
+  --color-overlay-80:  rgba(0, 0, 0, 0.80);
+
+  /* ─────────────────────────────────────────
+   * TYPOGRAPHY — Family & Features
+   * Source: design/tokens.json
+   * ───────────────────────────────────────── */
+
+  --font-family:          Inter, system-ui, sans-serif;
+  --font-features:        "ss01" 1, "cv01" 1;
+  --font-weight-regular:  400;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+  --letter-spacing:       0;
+
+  /* ─────────────────────────────────────────
+   * TYPOGRAPHY — Size / Line-height pairs
+   * Source: design/tokens.json typography scale
+   * ───────────────────────────────────────── */
+
+  --text-size-12:   13px;   --text-lh-12:   18px;
+  --text-size-14:   15px;   --text-lh-14:   22px;
+  --text-size-16:   17px;   --text-lh-16:   26px;
+  --text-size-18:   19px;   --text-lh-18:   30px;
+  --text-size-24:   26px;   --text-lh-24:   34px;
+  --text-size-32:   34px;   --text-lh-32:   42px;
+  --text-size-48:   50px;   --text-lh-48:   58px;
+  --text-size-64:   66px;   --text-lh-64:   74px;
+  --text-size-128: 130px;
+
+  /* ─────────────────────────────────────────
+   * ICON SIZES
+   * Standard scale for inline UI, nav, and decorative icons
+   * ───────────────────────────────────────── */
+
+  --icon-size-xs:  13px;
+  --icon-size-sm:  17px;
+  --icon-size-md:  21px;
+  --icon-size-lg:  25px;
+  --icon-size-xl:  29px;
+  --icon-size-2xl: 33px;
+  --icon-size-3xl: 49px;
+
+  /* ─────────────────────────────────────────
+   * SPACING
+   * Derived from component padding/gap survey
+   * ───────────────────────────────────────── */
+
+  --space-2:   2px;
+  --space-4:   4px;
+  --space-6:   6px;
+  --space-8:   8px;
+  --space-10:  10px;
+  --space-12:  12px;
+  --space-14:  14px;
+  --space-16:  16px;
+  --space-20:  20px;
+  --space-24:  24px;
+  --space-28:  28px;
+  --space-32:  32px;
+  --space-40:  40px;
+  --space-48:  48px;
+  --space-56:  56px;
+  --space-64:  64px;
+  --space-80:  80px;
+
+  /* ─────────────────────────────────────────
+   * BORDER RADIUS
+   * Source: design/button.json sizes, design/card.json,
+   *         design/input.json behavior
+   * ───────────────────────────────────────── */
+
+  --radius-4:   4px;
+  --radius-6:   6px;
+  --radius-8:   8px;
+  --radius-12:  12px;   /* small button pill half */
+  --radius-14:  14px;   /* medium button pill half */
+  --radius-16:  16px;   /* large button, card, input */
+  --radius-20:  20px;   /* xlarge button, nav button */
+  --radius-24:  24px;   /* wide button, dialog */
+  --radius-28:  28px;   /* doc card inner header */
+  --radius-32:  32px;   /* large panel */
+  --radius-40:  40px;   /* doc card outer, cover card */
+  --radius-48:  48px;   /* documentation shell */
+  --radius-pill: 80px;  /* full pill — text buttons, tags */
+
+  /* ─────────────────────────────────────────
+   * COMPONENT MINIMUM HEIGHTS
+   * Source: design/button.json sizes
+   * ───────────────────────────────────────── */
+
+  --size-sm:   24px;   /* small button / compact tab */
+  --size-md:   28px;   /* medium button */
+  --size-lg:   32px;   /* large button */
+  --size-xl:   40px;   /* xlarge button / icon pill */
+  --size-2xl:  48px;   /* nav / icon button */
+  --size-3xl:  56px;   /* large icon button */
+
+  /* ─────────────────────────────────────────
+   * SHADOW
+   * Source: design/global-search.json tokens,
+   *         public/css/components.css
+   * ───────────────────────────────────────── */
+
+  --shadow-pill:     0 2px  4px rgba(0, 0, 0, 0.10);
+  --shadow-popup:    0 8px 28px rgba(0, 0, 0, 0.10);
+
+  /* Effect Styles — from Figma node 33305:140101 */
+  --shadow-glass-1:  0 4px 16px rgba(0, 0, 0, 0.04);   /* Glass 1: light drop + blur 16px */
+  --shadow-glass-2:  0 8px 28px rgba(0, 0, 0, 0.10);   /* Glass 2: medium drop + blur 40px */
+  --shadow-glow:     0 0 10px 6px rgba(0, 0, 0, 0.07), 0 0 10px 6px rgba(255, 255, 255, 0.05);
+  --shadow-focus:    0 0 0 4px rgba(0, 0, 0, 0.04);    /* Focus ring */
+  --shadow-drop-1:   0 0.5px 0.5px rgba(0, 0, 0, 0.10);
+  --shadow-drop-2:   0 2px 4px rgba(0, 0, 0, 0.10);
+  --shadow-inner:    inset 0 -0.5px 1px rgba(255, 255, 255, 0.30), inset 1px 1.5px 4px rgba(0, 0, 0, 0.08);
+
+  /* ─────────────────────────────────────────
+   * EFFECTS — Blur / Backdrop
+   * Source: design/tokens.json effects,
+   *         tooltip + frosted-glass components
+   * ───────────────────────────────────────── */
+
+  --blur-16:   blur(16px);   /* Glass 1 effect */
+  --blur-20:   blur(20px);   /* tooltip, frosted chip */
+  --blur-40:   blur(40px);   /* input glass, popup glass */
+  --blur-100:  blur(100px);  /* heavy background blur */
+
+  /* ─────────────────────────────────────────
+   * TRANSITIONS
+   * ───────────────────────────────────────── */
+
+  --transition-fast:  0.12s ease;
+  --transition-base:  0.15s ease;
+
+  /* ─────────────────────────────────────────
+   * OPACITY
+   * Source: button inactive, tab inactive
+   * ───────────────────────────────────────── */
+
+  --opacity-inactive: 0.40;  /* secondary / inactive items */
+  --opacity-white-80: 0.80;  /* frosted glass white overlay */
+
+  /* ─────────────────────────────────────────
+   * LAYOUT
+   * Source: design/global-search.json, screens.json
+   * ───────────────────────────────────────── */
+
+  --layout-scene-w:   1440px;
+  --layout-scene-h:   1024px;
+  --layout-mobile-w:   393px;
+  --layout-content-max: 1200px;
+
+  /* ─────────────────────────────────────────
+   * POPUP / DIALOG SIZES
+   * Source: design/global-search.json tokens
+   * ───────────────────────────────────────── */
+
+  --popup-width-compact:  480px;
+  --popup-width-large:    600px;
+  --popup-radius-compact:  24px;
+  --popup-radius-large:    32px;
+
+  /* ─────────────────────────────────────────
+   * CHART COLOR PALETTE
+   * Source: design/vertical-01.json colors,
+   *         design/charts.json, design/donut-*.json
+   * ───────────────────────────────────────── */
+
+  --chart-cyan:    #a0bce8;
+  --chart-mint:    #6be6d3;
+  --chart-black:   #000000;
+  --chart-blue:    #7dbbff;
+  --chart-purple:  var(--color-primary);
+  --chart-green:   #71dd8c;
+  --chart-orange:  #ffb55b;
+  --chart-yellow:  #ffcc00;
+  --chart-pink:    #ff90e8;
+  --chart-red:     #ff4747;
+
+  /* ─────────────────────────────────────────
+   * LEGACY ALIASES  (backwards-compat with existing CSS)
+   * Maps old component-scoped variables to tokens.
+   * ───────────────────────────────────────── */
+
+  /* From public/css/components.css */
+  --component-font:             var(--font-family);
+  --component-black:            var(--color-black);
+  --component-black-4:          var(--color-hover);
+  --component-white-80:         rgba(255, 255, 255, 0.80);
+  --component-inactive-opacity: var(--opacity-inactive);
+  --component-shadow-pill:      var(--shadow-pill);
+
+  /* From public/css/text.css */
+  --text-font-family:       var(--font-family);
+  --text-letter-spacing:    var(--letter-spacing);
+  --text-font-features:     var(--font-features);
+  --text-color-primary:     var(--color-text-primary);
+  --text-color-secondary:   var(--color-text-secondary);
+  --text-color-link:        var(--color-text-link);
+  --text-color-hint:        var(--color-text-hint);
+  --text-color-white:       var(--color-text-white);
+}

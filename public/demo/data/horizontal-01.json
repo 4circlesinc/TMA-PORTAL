@@ -1,0 +1,27 @@
+{
+  "slug": "horizontal-01",
+  "nodeId": "30485:135150",
+  "name": "Horizontal 01",
+  "variant": "pill",
+  "size": "160x240",
+  "width": 160,
+  "height": 240,
+  "xMax": 6000,
+  "barHeight": 28,
+  "bars": [
+    { "value": 2000, "color": "cyan", "size": 50, "top": 6 },
+    { "value": 5000, "color": "mint", "size": 87.5, "top": 46 },
+    { "value": 3000, "color": "black", "size": 62.5, "top": 86 },
+    { "value": 6000, "color": "blue", "size": 100, "top": 126 },
+    { "value": 1000, "color": "purple", "size": 37.5, "top": 166 },
+    { "value": 4000, "color": "green", "size": 75, "top": 206 }
+  ],
+  "colors": {
+    "cyan": "#a0bce8",
+    "mint": "#6be6d3",
+    "black": "#000000",
+    "blue": "#7dbbff",
+    "purple": "#b899eb",
+    "green": "#71dd8c"
+  }
+}

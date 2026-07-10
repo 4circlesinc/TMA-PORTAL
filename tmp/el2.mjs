@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport:{width:1440,height:1100}, deviceScaleFactor:2 });
+await p.goto('file:///Users/vernonfrancis/Desktop/Portal/public/index.html',{waitUntil:'networkidle'});
+await p.waitForTimeout(300);
+const row = await p.locator('.snowui-dash__panels').boundingBox();
+await p.screenshot({ path:'./panels-row.png', clip:{x:row.x-4,y:row.y-4,width:row.width+8,height:row.height+8} });
+const s = await p.locator('.snowui-dash__panel--status').boundingBox();
+const t = await p.locator('.snowui-dash__panel--tasklist').boundingBox();
+console.log('status h=',Math.round(s.height),'tasklist h=',Math.round(t.height));
+await b.close();

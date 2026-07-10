@@ -1,0 +1,646 @@
+[
+  {
+    "filename": "SunDim.svg",
+    "url": "https://www.figma.com/api/mcp/asset/a96b8aaf-d759-4464-b9d7-d6a1e038b410"
+  },
+  {
+    "filename": "SunHorizon.svg",
+    "url": "https://www.figma.com/api/mcp/asset/bd094656-f41d-41a7-bd0e-6773c7075c99"
+  },
+  {
+    "filename": "Sunglasses.svg",
+    "url": "https://www.figma.com/api/mcp/asset/a7830604-ecdc-444c-b665-ee48d30003dd"
+  },
+  {
+    "filename": "Swap.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2db5f979-a15e-4464-ab25-2c7341fa7522"
+  },
+  {
+    "filename": "Swatches.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2ad8a803-63ed-4404-b488-b640fbaf5be2"
+  },
+  {
+    "filename": "SwimmingPool.svg",
+    "url": "https://www.figma.com/api/mcp/asset/42b06b09-6a99-4e21-9495-dd1bf5165264"
+  },
+  {
+    "filename": "Sword.svg",
+    "url": "https://www.figma.com/api/mcp/asset/e5320192-a6c2-42d4-a726-b3548d79647c"
+  },
+  {
+    "filename": "Synagogue.svg",
+    "url": "https://www.figma.com/api/mcp/asset/92e13a7e-acc3-4da5-9af1-944be277f914"
+  },
+  {
+    "filename": "Syringe.svg",
+    "url": "https://www.figma.com/api/mcp/asset/acf994ec-ddcf-4eac-a977-c698344ba2c2"
+  },
+  {
+    "filename": "TShirt.svg",
+    "url": "https://www.figma.com/api/mcp/asset/87fcac88-fc7d-4e05-96dc-482459f744c8"
+  },
+  {
+    "filename": "Table.svg",
+    "url": "https://www.figma.com/api/mcp/asset/abd6f3ab-effb-451a-a36e-17c5aff99cc3"
+  },
+  {
+    "filename": "Tabs.svg",
+    "url": "https://www.figma.com/api/mcp/asset/fef0214b-bfb3-4a7f-8609-06c42b883ceb"
+  },
+  {
+    "filename": "Tag.svg",
+    "url": "https://www.figma.com/api/mcp/asset/8bec0dba-39db-4849-9add-12fb847ba5c3"
+  },
+  {
+    "filename": "TagChevron.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2c8ddb63-1896-4429-92b9-d7c211a47d4d"
+  },
+  {
+    "filename": "TagSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/effc1680-2c8d-43fc-8716-765caaaeaa4b"
+  },
+  {
+    "filename": "Target.svg",
+    "url": "https://www.figma.com/api/mcp/asset/686dd1b7-0cab-4a83-b49b-d4c9c760656c"
+  },
+  {
+    "filename": "Taxi.svg",
+    "url": "https://www.figma.com/api/mcp/asset/8f8b09cb-1ee2-4924-8a2e-ec3750a446bf"
+  },
+  {
+    "filename": "TelegramLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1c29fbc7-66b0-4fd9-97fe-a09477cb9c5c"
+  },
+  {
+    "filename": "Television.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b3a5ef35-02ea-472c-b7a2-b14f7afcc87b"
+  },
+  {
+    "filename": "TelevisionSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ed6a6657-0bea-4ab5-8217-072e05291325"
+  },
+  {
+    "filename": "TennisBall.svg",
+    "url": "https://www.figma.com/api/mcp/asset/a005e9b9-3636-4001-b148-f56b61831666"
+  },
+  {
+    "filename": "Tent.svg",
+    "url": "https://www.figma.com/api/mcp/asset/52bf0af3-2fcf-4761-9afa-1d14e0a08ef6"
+  },
+  {
+    "filename": "Terminal.svg",
+    "url": "https://www.figma.com/api/mcp/asset/04aa4468-b7a1-4f4f-96b1-33fe433cc124"
+  },
+  {
+    "filename": "TerminalWindow.svg",
+    "url": "https://www.figma.com/api/mcp/asset/8e426ae8-2cb2-49fa-8635-8a74dbad5e48"
+  },
+  {
+    "filename": "TestTube.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b5f68dfe-1893-4dc4-ab21-a05f0e0d4895"
+  },
+  {
+    "filename": "TextAUnderline.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2aac4083-618f-4bb8-b4ba-2bc0adcfccff"
+  },
+  {
+    "filename": "TextAa.svg",
+    "url": "https://www.figma.com/api/mcp/asset/fc400b45-8476-4670-acde-267fc6cfd139"
+  },
+  {
+    "filename": "TextAlignCenter.svg",
+    "url": "https://www.figma.com/api/mcp/asset/6e8c93a9-786f-4673-8854-34347ae82976"
+  },
+  {
+    "filename": "TextAlignJustify.svg",
+    "url": "https://www.figma.com/api/mcp/asset/42f161a8-dc06-409b-b050-6bc5b91b8cd9"
+  },
+  {
+    "filename": "TextAlignLeft.svg",
+    "url": "https://www.figma.com/api/mcp/asset/8e05208f-1ed1-41e2-b968-c75c35ea7177"
+  },
+  {
+    "filename": "TextAlignRight.svg",
+    "url": "https://www.figma.com/api/mcp/asset/7c92bdac-a30e-4d54-8d9f-78d870adbece"
+  },
+  {
+    "filename": "TextB.svg",
+    "url": "https://www.figma.com/api/mcp/asset/9442dc8b-0e0a-4559-a0c4-f14cbc7aac0c"
+  },
+  {
+    "filename": "TextColumns.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ed0fb33b-d01a-4c2a-80da-41172bc0f034"
+  },
+  {
+    "filename": "TextH.svg",
+    "url": "https://www.figma.com/api/mcp/asset/7141ddda-8c07-4331-a372-31aa8e15621a"
+  },
+  {
+    "filename": "TextHFive.svg",
+    "url": "https://www.figma.com/api/mcp/asset/eb5b247b-4523-4e72-921f-64385f18f829"
+  },
+  {
+    "filename": "TextHFour.svg",
+    "url": "https://www.figma.com/api/mcp/asset/67d28232-8929-42a6-b470-42d44301bc90"
+  },
+  {
+    "filename": "TextHOne.svg",
+    "url": "https://www.figma.com/api/mcp/asset/9721dca6-51c1-455d-b03a-06d211e0875e"
+  },
+  {
+    "filename": "TextHSix.svg",
+    "url": "https://www.figma.com/api/mcp/asset/08d2c62f-c127-4c5b-a0ca-6d1122bcd755"
+  },
+  {
+    "filename": "TextHThree.svg",
+    "url": "https://www.figma.com/api/mcp/asset/093a9225-b896-4b10-8269-ff9e8f3555bb"
+  },
+  {
+    "filename": "TextHTwo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/41a23e10-d25a-460c-84f6-2840ac59445f"
+  },
+  {
+    "filename": "TextIndent.svg",
+    "url": "https://www.figma.com/api/mcp/asset/e9f0a0d6-d2f3-46e7-870d-2410d84ab677"
+  },
+  {
+    "filename": "TextItalic.svg",
+    "url": "https://www.figma.com/api/mcp/asset/db796166-5983-47d6-a1e0-74c7df026a66"
+  },
+  {
+    "filename": "TextOutdent.svg",
+    "url": "https://www.figma.com/api/mcp/asset/4983bf1f-81b5-4067-b9e9-6e5c29ae72f4"
+  },
+  {
+    "filename": "TextStrikethrough.svg",
+    "url": "https://www.figma.com/api/mcp/asset/fe1a6202-9c8c-4a88-b202-129100bc3d8c"
+  },
+  {
+    "filename": "TextT.svg",
+    "url": "https://www.figma.com/api/mcp/asset/23496064-df47-480a-99a4-94ff31fef4bf"
+  },
+  {
+    "filename": "TextUnderline.svg",
+    "url": "https://www.figma.com/api/mcp/asset/98f993fb-9b97-4749-a48f-464d9c6fb4c8"
+  },
+  {
+    "filename": "Textbox.svg",
+    "url": "https://www.figma.com/api/mcp/asset/77a6202a-438a-4fa0-9a64-ede021d745cd"
+  },
+  {
+    "filename": "Thermometer.svg",
+    "url": "https://www.figma.com/api/mcp/asset/0a281422-e29d-4c30-88f8-e3eb28e116e8"
+  },
+  {
+    "filename": "ThermometerCold.svg",
+    "url": "https://www.figma.com/api/mcp/asset/30c54abd-8e77-4d3b-9ec2-d832bf417842"
+  },
+  {
+    "filename": "ThermometerHot.svg",
+    "url": "https://www.figma.com/api/mcp/asset/69019aec-86c5-4b8c-a38d-2fea4a352c61"
+  },
+  {
+    "filename": "ThermometerSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/720c4644-1646-4e42-a308-317d33d57ec6"
+  },
+  {
+    "filename": "ThumbsDown.svg",
+    "url": "https://www.figma.com/api/mcp/asset/d66de55f-a23f-4f8e-8545-ff68afbb0da7"
+  },
+  {
+    "filename": "ThumbsUp.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ab600d7b-3397-4feb-935a-bc735c15d788"
+  },
+  {
+    "filename": "Ticket.svg",
+    "url": "https://www.figma.com/api/mcp/asset/7c65c5b7-4ae1-4b76-acc6-47210d828987"
+  },
+  {
+    "filename": "TidalLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/30df6293-766b-4b82-991a-a21fbeb7fda2"
+  },
+  {
+    "filename": "TiktokLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/10123457-079c-4018-be6b-1bb3a7f84b03"
+  },
+  {
+    "filename": "Timer.svg",
+    "url": "https://www.figma.com/api/mcp/asset/75e72ed6-929e-4e9d-8189-deca9fc1921e"
+  },
+  {
+    "filename": "Tipi.svg",
+    "url": "https://www.figma.com/api/mcp/asset/67f815b4-2fd9-439d-85d2-be344587efe1"
+  },
+  {
+    "filename": "ToggleLeft.svg",
+    "url": "https://www.figma.com/api/mcp/asset/62a2af33-5202-4e49-9f86-ee2a53a6af39"
+  },
+  {
+    "filename": "ToggleRight.svg",
+    "url": "https://www.figma.com/api/mcp/asset/c2338d30-b784-4409-b98f-f95803927bad"
+  },
+  {
+    "filename": "Toilet.svg",
+    "url": "https://www.figma.com/api/mcp/asset/632f70cf-3b59-4d43-870e-a255d04db726"
+  },
+  {
+    "filename": "ToiletPaper.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2429c4ed-144f-4403-b9aa-b0ef0cf6b22b"
+  },
+  {
+    "filename": "Toolbox.svg",
+    "url": "https://www.figma.com/api/mcp/asset/62b65ee2-2bac-4d56-ae20-f6cbd233befd"
+  },
+  {
+    "filename": "Tooth.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2f787407-c824-4f9b-bd7e-64aece37c1c9"
+  },
+  {
+    "filename": "Tote.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ab5e90fa-cd84-486c-a5a8-4cb5c7ffeaff"
+  },
+  {
+    "filename": "ToteSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/e88c1326-04d4-42fa-be61-dd89c145e023"
+  },
+  {
+    "filename": "Trademark.svg",
+    "url": "https://www.figma.com/api/mcp/asset/16a44b7b-22f4-4a95-833f-efee4c2781ac"
+  },
+  {
+    "filename": "TrademarkRegistered.svg",
+    "url": "https://www.figma.com/api/mcp/asset/c354c214-2f8f-40b8-b818-4115879d7087"
+  },
+  {
+    "filename": "TrafficCone.svg",
+    "url": "https://www.figma.com/api/mcp/asset/915cd175-a533-41a5-ab04-2febb237d69f"
+  },
+  {
+    "filename": "TrafficSign.svg",
+    "url": "https://www.figma.com/api/mcp/asset/4e185c89-aa00-448d-9d10-a0ab439245ac"
+  },
+  {
+    "filename": "TrafficSignal.svg",
+    "url": "https://www.figma.com/api/mcp/asset/25701de5-16dd-4ff8-9fb9-125d7ff3871a"
+  },
+  {
+    "filename": "Train.svg",
+    "url": "https://www.figma.com/api/mcp/asset/9cb078f0-6c72-49a7-a2fe-1e8759151b98"
+  },
+  {
+    "filename": "TrainRegional.svg",
+    "url": "https://www.figma.com/api/mcp/asset/3508cd76-4423-44e3-b954-1892eafb70a8"
+  },
+  {
+    "filename": "TrainSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/44530899-09c6-44b2-bba1-eea2faf55ae4"
+  },
+  {
+    "filename": "Tram.svg",
+    "url": "https://www.figma.com/api/mcp/asset/015239e7-7bca-46f9-a36e-bd1a7cd8c84e"
+  },
+  {
+    "filename": "Translate.svg",
+    "url": "https://www.figma.com/api/mcp/asset/fc534e31-c03e-4e77-bd28-16477d748b9b"
+  },
+  {
+    "filename": "Trash.svg",
+    "url": "https://www.figma.com/api/mcp/asset/949615b7-1e94-4d0a-99b0-bd927b00376d"
+  },
+  {
+    "filename": "TrashSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/20b9f08b-f06e-42a7-abda-2e2a5426e34b"
+  },
+  {
+    "filename": "Tray.svg",
+    "url": "https://www.figma.com/api/mcp/asset/3d49b65b-965b-49cc-98e7-f29f57133318"
+  },
+  {
+    "filename": "Tree.svg",
+    "url": "https://www.figma.com/api/mcp/asset/127fb2fc-09fb-4193-a00a-21ce34ec32d3"
+  },
+  {
+    "filename": "TreeEvergreen.svg",
+    "url": "https://www.figma.com/api/mcp/asset/f403fc0f-a644-4cf0-8f69-c5aeae7fec67"
+  },
+  {
+    "filename": "TreePalm.svg",
+    "url": "https://www.figma.com/api/mcp/asset/164a8574-10cc-470c-bbb5-21b5748c4a37"
+  },
+  {
+    "filename": "TreeStructure.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ecfeec1d-309c-42d9-886a-09b51feb98a7"
+  },
+  {
+    "filename": "TrendDown.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1bd82993-5311-4f9c-9519-0b565a99f126"
+  },
+  {
+    "filename": "TrendUp.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2b4fd803-a986-4404-988a-d08b9a3099ef"
+  },
+  {
+    "filename": "Triangle.svg",
+    "url": "https://www.figma.com/api/mcp/asset/6719cd52-d273-4fcc-9607-a76e09eefedc"
+  },
+  {
+    "filename": "Trophy.svg",
+    "url": "https://www.figma.com/api/mcp/asset/5d952b93-93be-4d77-8235-3e2f9b3e2b45"
+  },
+  {
+    "filename": "Truck.svg",
+    "url": "https://www.figma.com/api/mcp/asset/8eaf8b5e-504f-4948-a72f-f0716277979c"
+  },
+  {
+    "filename": "TwitchLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/08986ccc-7eae-4630-988d-986d6450a5e9"
+  },
+  {
+    "filename": "TwitterLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/473a4449-7fb6-468b-b230-478c6e67119c"
+  },
+  {
+    "filename": "Umbrella.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b8182d6f-70b5-4785-9a88-8d0376fd6e9c"
+  },
+  {
+    "filename": "UmbrellaSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/0214e21a-6761-43b5-85c6-a21feb4dfca7"
+  },
+  {
+    "filename": "Unite.svg",
+    "url": "https://www.figma.com/api/mcp/asset/4d13b6f1-3485-4f02-8f4f-a64840b81691"
+  },
+  {
+    "filename": "UniteSquare.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2e260ef0-ae5c-429b-9592-0db4300f1e98"
+  },
+  {
+    "filename": "Upload.svg",
+    "url": "https://www.figma.com/api/mcp/asset/67e708bb-bbfc-4b06-bcf8-964ca8c9536f"
+  },
+  {
+    "filename": "UploadSimple.svg",
+    "url": "https://www.figma.com/api/mcp/asset/8310a8e3-73c1-4586-a2d1-8a6e37a8359c"
+  },
+  {
+    "filename": "Usb.svg",
+    "url": "https://www.figma.com/api/mcp/asset/16604796-731b-495a-b3f9-a1f85cd2dfd2"
+  },
+  {
+    "filename": "User.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1c2fef53-d838-43ac-ae6b-18e68394854b"
+  },
+  {
+    "filename": "UserCircle.svg",
+    "url": "https://www.figma.com/api/mcp/asset/f53eb6aa-492b-478a-b1ca-834cbdeda673"
+  },
+  {
+    "filename": "UserCircleGear.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b3f64237-0f24-4d0a-b974-98a0f25031de"
+  },
+  {
+    "filename": "UserCircleMinus.svg",
+    "url": "https://www.figma.com/api/mcp/asset/f2c7f9ca-17c0-475a-a5c7-54726bf0368a"
+  },
+  {
+    "filename": "UserCirclePlus.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ddad6204-454e-42b9-a1ca-5724b739ba09"
+  },
+  {
+    "filename": "UserFocus.svg",
+    "url": "https://www.figma.com/api/mcp/asset/d3ff9750-417e-4445-81bd-75d12e506792"
+  },
+  {
+    "filename": "UserGear.svg",
+    "url": "https://www.figma.com/api/mcp/asset/c5e24cc6-cd53-4063-9dc3-2ac4e6b06499"
+  },
+  {
+    "filename": "UserList.svg",
+    "url": "https://www.figma.com/api/mcp/asset/22c6f005-01b4-4748-8d40-3a7c96b0f017"
+  },
+  {
+    "filename": "UserMinus.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b5e6512b-1503-45a0-9b2e-4a6d0743c22d"
+  },
+  {
+    "filename": "UserPlus.svg",
+    "url": "https://www.figma.com/api/mcp/asset/eeda8f33-3089-40c6-b093-81651548f011"
+  },
+  {
+    "filename": "UserRectangle.svg",
+    "url": "https://www.figma.com/api/mcp/asset/3766c862-728b-4e11-b800-119a7295a46f"
+  },
+  {
+    "filename": "UserSquare.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b2432575-401e-48dc-b6e5-139644773904"
+  },
+  {
+    "filename": "UserSwitch.svg",
+    "url": "https://www.figma.com/api/mcp/asset/8171979e-feb8-4707-9f1c-5979769cbfdb"
+  },
+  {
+    "filename": "Users.svg",
+    "url": "https://www.figma.com/api/mcp/asset/90652123-a3fa-417e-b2c8-60832a67a579"
+  },
+  {
+    "filename": "UsersFour.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ec46f61c-94ac-496b-ae9c-988366259dee"
+  },
+  {
+    "filename": "UsersThree.svg",
+    "url": "https://www.figma.com/api/mcp/asset/71b4f2e0-c7b5-4538-94a1-21191a59f246"
+  },
+  {
+    "filename": "Van.svg",
+    "url": "https://www.figma.com/api/mcp/asset/82d32c9c-b212-452b-8069-25038c63dad6"
+  },
+  {
+    "filename": "Vault.svg",
+    "url": "https://www.figma.com/api/mcp/asset/959ac76a-7522-442b-bc87-4a378d31a0ca"
+  },
+  {
+    "filename": "Vibrate.svg",
+    "url": "https://www.figma.com/api/mcp/asset/d09bfb28-2cce-43a9-82b4-08827a2b05e0"
+  },
+  {
+    "filename": "Video.svg",
+    "url": "https://www.figma.com/api/mcp/asset/6301c78a-74bc-4308-b41b-8c8473527d65"
+  },
+  {
+    "filename": "VideoCamera.svg",
+    "url": "https://www.figma.com/api/mcp/asset/e6757fe3-046c-4983-b6d7-519d2cf6c349"
+  },
+  {
+    "filename": "VideoCameraSlash.svg",
+    "url": "https://www.figma.com/api/mcp/asset/e63ac176-496a-4dff-963b-56997a1cdfdc"
+  },
+  {
+    "filename": "Vignette.svg",
+    "url": "https://www.figma.com/api/mcp/asset/76567f60-b22a-47d0-8157-b08bd241f2b2"
+  },
+  {
+    "filename": "VinylRecord.svg",
+    "url": "https://www.figma.com/api/mcp/asset/2eb8ea01-4b28-4f54-ad63-f66d355f2602"
+  },
+  {
+    "filename": "VirtualReality.svg",
+    "url": "https://www.figma.com/api/mcp/asset/59dabe2d-f0bf-4277-a6b0-391ff5e003d4"
+  },
+  {
+    "filename": "Virus.svg",
+    "url": "https://www.figma.com/api/mcp/asset/f80fc987-141e-495f-9310-b95dd466bdef"
+  },
+  {
+    "filename": "Voicemail.svg",
+    "url": "https://www.figma.com/api/mcp/asset/88a6713b-62f1-42dd-a72a-bcb4fdaaadac"
+  },
+  {
+    "filename": "Volleyball.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1cef90c6-f048-403a-8587-4569405509a6"
+  },
+  {
+    "filename": "Wall.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1de0e874-af42-4ee5-90d4-1104341f2d6b"
+  },
+  {
+    "filename": "Wallet.svg",
+    "url": "https://www.figma.com/api/mcp/asset/18f3aa75-62bb-4847-a611-a266069f0d6d"
+  },
+  {
+    "filename": "Warehouse.svg",
+    "url": "https://www.figma.com/api/mcp/asset/cced1e48-cbe1-48be-927c-c2e55854ee31"
+  },
+  {
+    "filename": "Warning.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1ae098ec-2967-4328-83f9-8b60c398db27"
+  },
+  {
+    "filename": "WarningCircle.svg",
+    "url": "https://www.figma.com/api/mcp/asset/03a41b52-e2c1-456e-b44d-0f0118d53343"
+  },
+  {
+    "filename": "WarningDiamond.svg",
+    "url": "https://www.figma.com/api/mcp/asset/546f8f0b-0abf-4b33-843c-4f330dfc9da5"
+  },
+  {
+    "filename": "WarningOctagon.svg",
+    "url": "https://www.figma.com/api/mcp/asset/66219bba-ee5e-4452-b101-e73f47146258"
+  },
+  {
+    "filename": "Watch.svg",
+    "url": "https://www.figma.com/api/mcp/asset/479484ba-a2b3-47b7-b2c5-cffbbd5bd03f"
+  },
+  {
+    "filename": "WaveSawtooth.svg",
+    "url": "https://www.figma.com/api/mcp/asset/9598cd50-31cb-4a6c-9a7d-1385ef6b9520"
+  },
+  {
+    "filename": "WaveSine.svg",
+    "url": "https://www.figma.com/api/mcp/asset/f1b0d684-2a67-4302-b05f-c5794e8a9205"
+  },
+  {
+    "filename": "WaveSquare.svg",
+    "url": "https://www.figma.com/api/mcp/asset/150b7a7f-8cd8-44ae-a8ab-7708c673a278"
+  },
+  {
+    "filename": "WaveTriangle.svg",
+    "url": "https://www.figma.com/api/mcp/asset/6de383ae-14d6-42a9-8d08-5841926ec037"
+  },
+  {
+    "filename": "Waveform.svg",
+    "url": "https://www.figma.com/api/mcp/asset/79502c98-8679-453d-944a-7b5ef5fa318a"
+  },
+  {
+    "filename": "Waves.svg",
+    "url": "https://www.figma.com/api/mcp/asset/a84c7847-317d-4294-895e-0e22d3ebef8f"
+  },
+  {
+    "filename": "Webcam.svg",
+    "url": "https://www.figma.com/api/mcp/asset/ebc8a291-2b88-49b0-bc6b-b4e1096395eb"
+  },
+  {
+    "filename": "WebcamSlash.svg",
+    "url": "https://www.figma.com/api/mcp/asset/bd847131-521c-4c5b-9c0a-93bbba99f61c"
+  },
+  {
+    "filename": "WebhooksLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/508c823c-c048-4b1b-af97-5a9bebf63fe3"
+  },
+  {
+    "filename": "WechatLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/0deb480b-f424-4f68-84ca-13265286fdb5"
+  },
+  {
+    "filename": "WhatsappLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/4b4cb921-f7d6-478d-88f6-f9578febd1b8"
+  },
+  {
+    "filename": "Wheelchair.svg",
+    "url": "https://www.figma.com/api/mcp/asset/4dd9f7ac-3b16-4d2f-88a0-afb6207e0900"
+  },
+  {
+    "filename": "WheelchairMotion.svg",
+    "url": "https://www.figma.com/api/mcp/asset/5b71c80b-9a72-4dfb-876e-c91541b23c99"
+  },
+  {
+    "filename": "WifiHigh.svg",
+    "url": "https://www.figma.com/api/mcp/asset/6955619c-4081-4dbc-b992-fa36fed4d2b2"
+  },
+  {
+    "filename": "WifiLow.svg",
+    "url": "https://www.figma.com/api/mcp/asset/6edf76dc-0dc9-459f-a812-f307c2b76391"
+  },
+  {
+    "filename": "WifiMedium.svg",
+    "url": "https://www.figma.com/api/mcp/asset/f124836a-37ee-47e3-8a55-add3b4f34334"
+  },
+  {
+    "filename": "WifiNone.svg",
+    "url": "https://www.figma.com/api/mcp/asset/9bb25c93-ef33-4074-a826-9e347a8792cd"
+  },
+  {
+    "filename": "WifiSlash.svg",
+    "url": "https://www.figma.com/api/mcp/asset/c0b824d6-8f8d-49b5-ae35-30ce0ec23250"
+  },
+  {
+    "filename": "WifiX.svg",
+    "url": "https://www.figma.com/api/mcp/asset/72d03e06-3b21-40b6-ada1-ab28ee34aaeb"
+  },
+  {
+    "filename": "Wind.svg",
+    "url": "https://www.figma.com/api/mcp/asset/7fd2f7db-ab74-4319-89fb-48b6c6e26a71"
+  },
+  {
+    "filename": "WindowsLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/aab31443-3462-423a-8b77-62ca0fff6ed9"
+  },
+  {
+    "filename": "Wine.svg",
+    "url": "https://www.figma.com/api/mcp/asset/a283dd44-9560-4cc1-9d73-d77d6b6b42b0"
+  },
+  {
+    "filename": "Wrench.svg",
+    "url": "https://www.figma.com/api/mcp/asset/f236ae94-6d65-4b4e-a842-0b0cbae34026"
+  },
+  {
+    "filename": "X.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b6e57d17-0647-4c86-b8a1-4630dd2b9a38"
+  },
+  {
+    "filename": "XSquare.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1a207180-1fdb-46b8-b740-2ca75d031949"
+  },
+  {
+    "filename": "Xcircle.svg",
+    "url": "https://www.figma.com/api/mcp/asset/03c1abde-3b8e-40b1-ac1f-6f20ef00403d"
+  },
+  {
+    "filename": "YinYang.svg",
+    "url": "https://www.figma.com/api/mcp/asset/d02cfe11-b438-40c6-9293-f8af0607624d"
+  },
+  {
+    "filename": "YoutubeLogo.svg",
+    "url": "https://www.figma.com/api/mcp/asset/a1701987-5d44-40ad-91e3-3a795a47e7f8"
+  }
+]

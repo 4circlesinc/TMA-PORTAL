@@ -1,0 +1,23 @@
+{
+  "slug": "vertical-08",
+  "nodeId": "30485:135140",
+  "name": "Vertical 08",
+  "variant": "split-pin",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "barWidth": 28,
+  "pinWidth": 8,
+  "split": 80,
+  "solid": "#000000",
+  "accent": "#adadfb",
+  "bars": [
+    { "value": 2000, "top": 54, "bottom": 106 },
+    { "value": 5000, "top": 24, "bottom": 136 },
+    { "value": 3000, "top": 44, "bottom": 116 },
+    { "value": 6000, "top": 14, "bottom": 146 },
+    { "value": 1000, "top": 64, "bottom": 96 },
+    { "value": 4000, "top": 34, "bottom": 126 }
+  ]
+}

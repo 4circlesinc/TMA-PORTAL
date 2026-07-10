@@ -1,0 +1,232 @@
+{
+  "slug": "tab-segmented",
+  "nodeId": "28002:98904",
+  "name": "Tab, Segmented",
+  "description": "Switch displayed content. Variants: underline, pill, segmented, solid, filled, icon.",
+  "defaultVariant": "underline",
+  "defaultSize": "medium",
+  "variants": {
+    "underline": { "label": "Underline" },
+    "pill": { "label": "Pill" },
+    "segmented": { "label": "Segmented" },
+    "solid": { "label": "Solid" },
+    "filled": { "label": "Filled" },
+    "icon": { "label": "Icon" }
+  },
+  "sizes": {
+    "small": {
+      "fontSize": 12,
+      "lineHeight": 16,
+      "trackPadding": 4,
+      "trackGap": 4,
+      "trackRadius": 20,
+      "tabPaddingX": 12,
+      "tabPaddingY": 4,
+      "tabRadius": 12,
+      "tabMinHeight": 24,
+      "underlineGap": 4,
+      "iconSize": 12
+    },
+    "medium": {
+      "fontSize": 14,
+      "lineHeight": 20,
+      "trackPadding": 4,
+      "trackGap": 4,
+      "trackRadius": 20,
+      "tabPaddingX": 16,
+      "tabPaddingY": 8,
+      "tabRadius": 16,
+      "tabMinHeight": 36,
+      "underlineGap": 4,
+      "iconSize": 24
+    },
+    "large": {
+      "fontSize": 16,
+      "lineHeight": 24,
+      "trackPadding": 8,
+      "trackGap": 4,
+      "trackRadius": 28,
+      "tabPaddingX": 20,
+      "tabPaddingY": 12,
+      "tabRadius": 20,
+      "tabMinHeight": 48,
+      "underlineGap": 4,
+      "iconSize": 24
+    }
+  },
+  "examples": [
+    {
+      "id": "underline-medium-7",
+      "label": "Underline — Medium (7 tabs)",
+      "variant": "underline",
+      "size": "medium",
+      "tabs": [
+        { "key": "1", "label": "Text", "active": true },
+        { "key": "2", "label": "Text" },
+        { "key": "3", "label": "Text" },
+        { "key": "4", "label": "Text" },
+        { "key": "5", "label": "Text" },
+        { "key": "6", "label": "Text" },
+        { "key": "7", "label": "Text" }
+      ]
+    },
+    {
+      "id": "underline-small",
+      "label": "Underline — Small",
+      "variant": "underline",
+      "size": "small",
+      "tabs": [
+        { "key": "1", "label": "Text", "active": true },
+        { "key": "2", "label": "Text" },
+        { "key": "3", "label": "Text" }
+      ]
+    },
+    {
+      "id": "underline-large",
+      "label": "Underline — Large",
+      "variant": "underline",
+      "size": "large",
+      "tabs": [
+        { "key": "1", "label": "Text", "active": true },
+        { "key": "2", "label": "Text" },
+        { "key": "3", "label": "Text" }
+      ]
+    },
+    {
+      "id": "pill-small",
+      "label": "Pill — Small",
+      "variant": "pill",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "pill-medium",
+      "label": "Pill — Medium",
+      "variant": "pill",
+      "size": "medium",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "pill-large",
+      "label": "Pill — Large",
+      "variant": "pill",
+      "size": "large",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "pill-icon-toggle",
+      "label": "Pill — Icon toggle (small)",
+      "variant": "pill",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "icon": "DefaultIcon", "active": true },
+        { "key": "b", "icon": "DefaultIcon", "iconOnly": true }
+      ]
+    },
+    {
+      "id": "segmented-small-2",
+      "label": "Segmented — Small",
+      "variant": "segmented",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "segmented-icon-large",
+      "label": "Segmented — Icon + label (large)",
+      "variant": "segmented",
+      "size": "large",
+      "tabs": [
+        { "key": "card", "label": "Card", "icon": "SquaresFour", "active": true },
+        { "key": "list", "label": "list", "icon": "ListBullets" }
+      ]
+    },
+    {
+      "id": "solid-small",
+      "label": "Solid — Small",
+      "variant": "solid",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "solid-large",
+      "label": "Solid — Large",
+      "variant": "solid",
+      "size": "large",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "filled-small-stretch",
+      "label": "Filled — Monthly / Yearly (stretch)",
+      "variant": "filled",
+      "size": "small",
+      "stretch": true,
+      "tabs": [
+        { "key": "monthly", "label": "Monthly", "active": true },
+        { "key": "yearly", "label": "Yearly" }
+      ]
+    },
+    {
+      "id": "filled-large-3",
+      "label": "Filled — Daily / Weekly / Monthly",
+      "variant": "filled",
+      "size": "large",
+      "tabs": [
+        { "key": "daily", "label": "Daily", "active": true },
+        { "key": "weekly", "label": "Weekly" },
+        { "key": "monthly", "label": "Monthly" }
+      ]
+    },
+    {
+      "id": "filled-rounded-icons",
+      "label": "Filled — Card / list (rounded 80px)",
+      "variant": "filled",
+      "size": "large",
+      "rounded": true,
+      "tabs": [
+        { "key": "card", "label": "Card", "icon": "SquaresFour", "active": true },
+        { "key": "list", "label": "list", "icon": "ListBullets" }
+      ]
+    },
+    {
+      "id": "icon-sun-moon",
+      "label": "Icon — Sun / Moon (icon only)",
+      "variant": "icon",
+      "size": "large",
+      "iconOnly": true,
+      "tabs": [
+        { "key": "sun", "icon": "SunDim", "label": "Light", "active": true },
+        { "key": "moon", "icon": "Moon", "label": "Dark" }
+      ]
+    },
+    {
+      "id": "icon-only-rounded",
+      "label": "Filled — Icon only (rounded 80px)",
+      "variant": "filled",
+      "size": "large",
+      "rounded": true,
+      "iconOnly": true,
+      "tabs": [
+        { "key": "card", "icon": "SquaresFour", "label": "Card", "active": true },
+        { "key": "list", "icon": "ListBullets", "label": "List" }
+      ]
+    }
+  ]
+}

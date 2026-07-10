@@ -1,0 +1,51 @@
+
+    var todayWrap = root.querySelector('[data-today-dropdown]');
+      var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
+      /* Always clear signature-wizard scroll lock when leaving that flow.
+         A stuck tma-dash--signatures-wizard class kills content scrolling. */
+      if (name !== 'signatures') {
+        if (window.TMAPortalSignatures && window.TMAPortalSignatures.closeWizardChrome) {
+          window.TMAPortalSignatures.closeWizardChrome();
+        } else if (window.TMAPortalSignatures && window.TMAPortalSignatures.clearLock) {
+          window.TMAPortalSignatures.clearLock();
+        } else {
+          root.classList.remove('tma-dash--signatures-wizard');
+          document.documentElement.classList.remove('tma-dash--signatures-wizard');
+          document.documentElement.style.overflow = '';
+          document.body.style.overflow = '';
+        }
+      }
+      var clientsPageActions = root.querySelector('[data-clients-page-actions]');
+      if (clientsPageActions && name !== 'clients') {
+        clientsPageActions.hidden = true;
+        clientsPageActions.innerHTML = '';
+      }
+          html += '<span class="tma-dash__crumb--current" title="' + escape(part) + '">' + escape(part) + '</span>';
+          html += '<a class="tma-dash__crumb" href="#" data-crumb-index="' + i + '" title="' + escape(part) + '">' + escape(part) + '</a>';
+      var SIDEBAR_DEFAULT = 220;
+      var SIDEBAR_MIN = 220;
+    if (window.TMAHeadDropdown) window.TMAHeadDropdown.mount();
+
+    /* ── Today dropdown (shared head-dropdown pattern) ── */
+    function closeToday() {
+      if (window.TMAHeadDropdown) window.TMAHeadDropdown.closeAll();
+      else if (todayMenu) todayMenu.hidden = true;
+    }
+    if (todayWrap && todayMenu) {
+      todayWrap.addEventListener('head-dropdown:select', function (event) {
+        var item = event.detail && event.detail.item;
+        if (!item) return;
+        var val = item.getAttribute('data-today') || item.textContent.trim();
+        if (todayLabel) todayLabel.textContent = val;
+        todayMenu.querySelectorAll('[data-today]').forEach(function (m) {
+          m.classList.remove('tma-dash__menu-item--active');
+        });
+        item.classList.add('tma-dash__menu-item--active');
+        store.set('tma.today', val);
+      if (action === 'toggle-theme') return;
+    if (window.TMAPortalSignatures && window.TMAPortalSignatures.clearLock) {
+      window.TMAPortalSignatures.clearLock();
+    } else {
+      root.classList.remove('tma-dash--signatures-wizard');
+      document.documentElement.classList.remove('tma-dash--signatures-wizard');
+    }

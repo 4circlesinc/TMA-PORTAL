@@ -1,0 +1,66 @@
+{
+  "slug": "table-add-data",
+  "nodeId": "32722:24624",
+  "guidanceNodeId": "32722:24624",
+  "name": "Table Add Data",
+  "description": "Add data interactive guidance — New modal, avatar upload, form fields, and staged row insertion.",
+  "cssPath": "public/css/table-add-data.css",
+  "jsPath": "public/js/table-add-data.js",
+  "defaultVariant": "live",
+  "variants": {
+    "preview": { "staticModal": true },
+    "live": { "interactive": true }
+  },
+  "addInteraction": [
+    "Unlike the search pop-up, this pop-up can only be closed by clicking the close button.",
+    "When closed, it automatically saves what the user has entered.",
+    "Clicking Cancel does not save what the user entered.",
+    "The saved content appears when the user clicks the Add data."
+  ],
+  "iconSources": {
+    "Add": "images/icons/tma/Add.svg",
+    "Close": "images/icons/tma/Close.svg",
+    "User": "images/icons/phosphor/User.svg",
+    "XCircle": "images/icons/tma/Xcircle.svg",
+    "CalendarBlank": "images/icons/phosphor/CalendarBlank-16.svg",
+    "ArrowLineUpDown": "images/icons/tma/ArrowLineUpDown.svg",
+    "Goto": "images/icons/tma/Goto.svg"
+  },
+  "tokens": {
+    "overlayWidth": 1440,
+    "overlayHeight": 1024,
+    "overlayRadius": 24,
+    "maskGradientFrom": "rgba(215, 208, 255, 0.2)",
+    "maskGradientTo": "rgba(203, 221, 255, 0.5)",
+    "popupRadius": 32,
+    "popupPadding": 80,
+    "popupBackground": "rgba(255, 255, 255, 0.9)",
+    "popupBlur": "20px",
+    "titleFontSize": 48,
+    "titleLineHeight": 56,
+    "titleFontWeight": 600,
+    "fieldLabelFontSize": 12,
+    "fieldLabelLineHeight": 16,
+    "fieldLabelColor": "rgba(0, 0, 0, 0.4)",
+    "fieldTextFontSize": 14,
+    "fieldTextLineHeight": 20,
+    "fieldPlaceholderColor": "rgba(0, 0, 0, 0.2)",
+    "fieldBackground": "rgba(255, 255, 255, 0.8)",
+    "fieldBorderColor": "rgba(0, 0, 0, 0.1)",
+    "fieldRadius": 16,
+    "fieldPaddingX": 20,
+    "fieldPaddingY": 16,
+    "buttonFontSize": 16,
+    "buttonLineHeight": 24,
+    "buttonRadius": 20,
+    "buttonMinHeight": 48,
+    "avatarSize": 80,
+    "avatarGuidanceSize": 48,
+    "rulesFontSize": 14,
+    "rulesLineHeight": 20
+  },
+  "items": [
+    { "nodeId": "32722:24624", "variant": "preview" },
+    { "nodeId": "32722:24624", "variant": "live" }
+  ]
+}

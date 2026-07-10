@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Classic</title>
+  <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css?v=2">
+  <link rel="stylesheet" href="css/theme.css?v=2">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pagination.css">
+  <link rel="stylesheet" href="css/dashboard.css?v=9">
+  <link rel="stylesheet" href="css/global-search.css">
+  <link rel="stylesheet" href="css/filter-and-sort.css">
+  <link rel="stylesheet" href="css/table-filter-sort.css">
+  <link rel="stylesheet" href="css/input.css">
+  <link rel="stylesheet" href="css/date-picker.css">
+  <link rel="stylesheet" href="css/user-info-panel.css">
+  <link rel="stylesheet" href="css/card.css">
+  <link rel="stylesheet" href="css/strip.css">
+  <link rel="stylesheet" href="css/no-data.css">
+  <link rel="stylesheet" href="css/charts.css">
+  <link rel="stylesheet" href="css/status-badge.css">
+  <link rel="stylesheet" href="css/tag.css">
+  <link rel="stylesheet" href="css/badge.css">
+  <link rel="stylesheet" href="css/toast.css">
+  <link rel="stylesheet" href="css/table-b-sessions.css">
+  <link rel="stylesheet" href="css/portal.css">
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body { background: var(--color-white); }
+  </style>
+  <script>window.TMA_CLASSIC = true;</script>
+</head>
+<body>
+  <div class="tma-dash" data-node-id="32546:96098">
+
+    <!-- ── Sidebar ─────────────────────────────────────── -->
+    <aside class="tma-dash__sidebar" aria-label="Primary">
+      <div class="tma-dash__sidebar-logo" aria-label="TM ANTOINE Advisory">
+        <div class="tma-dash__logo-expanded">
+          <img class="tma-dash__logo-horizontal" src="images/brand/tma/tma-logo-horizontal.png" alt="TM ANTOINE Advisory" loading="lazy">
+        </div>
+        <div class="tma-dash__logo-collapsed">
+          <img class="tma-dash__logo-mark" src="images/brand/tma/tma-logo-mark.png" alt="TM ANTOINE Advisory" width="40" height="40" loading="lazy">
+        </div>
+      </div>
+
+      <div class="tma-dash__sidebar-nav">
+      <div class="tma-dash__nav-section" hidden>
+        <div class="tma-dash__tabs" role="tablist">
+          <button type="button" class="tma-dash__tab tma-dash__tab--active" data-list-tab="favorites" role="tab" aria-selected="true">Favorites</button>
+          <button type="button" class="tma-dash__tab" data-list-tab="recently" role="tab" aria-selected="false">Recently</button>
+        </div>
+        <div class="tma-dash__list" data-list="favorites">
+          <a class="tma-dash__nav-item tma-dash__nav-item--fav" href="#" data-nav="fav-dashboard" data-title="Dashboard" data-crumb="Dashboard" data-view="dashboard" hidden>
+            <img class="tma-dash__nav-dot" src="images/icons/tma/Dot.svg" alt="">
+            <span>Dashboard</span>
+          </a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--fav" href="/projects" data-nav="fav-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects" hidden>
+            <img class="tma-dash__nav-dot" src="images/icons/tma/Dot.svg" alt="">
+            <span>Projects</span>
+          </a>
+        </div>
+        <div class="tma-dash__list" data-list="recently" hidden>
+        </div>
+      </div>
+
+      <div class="tma-dash__nav-section">
+        <div class="tma-dash__group-label">Dashboards</div>
+        <a class="tma-dash__nav-item tma-dash__nav-item--active" href="#" data-nav="dash-dashboard" data-title="Dashboard" data-crumb="Dashboard" data-view="dashboard" aria-current="page">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/House.svg" alt="">
+          <span>Dashboard</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/overview" data-nav="dash-project-overview" data-title="Project Overview" data-crumb="Dashboard / Overview" data-view="overview">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChartPieSlice.svg" alt="">
+          <span>Overview</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/projects" data-nav="dash-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/FolderNotch.svg" alt="">
+          <span>Projects</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/users" data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/UserList.svg" alt="">
+          <span>Users</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/email" data-nav="email" data-title="Email" data-crumb="Email" data-view="email">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/EnvelopeSimple.svg" alt="">
+          <span>Email</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/calendar" data-nav="calendar" data-title="Calendar" data-crumb="Calendar" data-view="calendar">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/CalendarBlank.svg" alt="">
+          <span>Calendar</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/clients" data-nav="clients" data-title="Clients" data-crumb="Clients" data-view="clients">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/AddressBook.svg" alt="">
+          <span>Clients</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/social/messages" data-nav="so-messages" data-title="Messages" data-crumb="Messages" data-view="messages">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChatsCircle.svg" alt="">
+          <span>Messages</span>
+        </a>
+      </div>
+
+      <div class="tma-dash__nav-section">
+        <div class="tma-dash__group-label">Pages</div>
+
+        <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="social" aria-expanded="false">
+          <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChatsTeardrop.svg" alt="">
+          <span>Social</span>
+        </button>
+        <div class="tma-dash__subnav" data-subnav="social" hidden>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/social/feed" data-nav="so-feed" data-title="Feed" data-crumb="Social / Feed" data-view="feed">Feed</a>
+        </div>
+
+        <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="user-profile" aria-expanded="false">
+          <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/IdentificationBadge.svg" alt="">
+          <span>User Profile</span>
+        </button>
+        <div class="tma-dash__subnav" data-subnav="user-profile" hidden>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="#" data-nav="up-overview" data-title="Overview" data-crumb="User Profile / Overview">Overview</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="#" data-nav="up-projects" data-title="Projects" data-crumb="User Profile / Projects">Projects</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="#" data-nav="up-campaigns" data-title="Campaigns" data-crumb="User Profile / Campaigns">Campaigns</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="#" data-nav="up-documents" data-title="Documents" data-crumb="User Profile / Documents">Documents</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="#" data-nav="up-followers" data-title="Followers" data-crumb="User Profile / Followers">Followers</a>
+        </div>
+
+        <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="account" aria-expanded="false">
+          <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/IdentificationCard.svg" alt="">
+          <span>Account</span>
+        </button>
+        <div class="tma-dash__subnav" data-subnav="account" hidden>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/account" data-nav="ac-overview" data-title="Overview" data-crumb="Account / Overview" data-view="account">Overview</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/settings" data-nav="settings" data-title="Settings" data-crumb="Settings" data-view="settings">Settings</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/account" data-nav="ac-security" data-title="Security" data-crumb="Account / Security" data-view="account">Security</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/account" data-nav="ac-billing" data-title="Billing" data-crumb="Account / Billing" data-view="account" hidden>Billing</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/account" data-nav="ac-statements" data-title="Statements" data-crumb="Account / Statements" data-view="account" hidden>Statements</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/account" data-nav="ac-referrals" data-title="Referrals" data-crumb="Account / Referrals" data-view="account" hidden>Referrals</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/account" data-nav="ac-api-keys" data-title="API Keys" data-crumb="Account / API Keys" data-view="account" hidden>API Keys</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/account" data-nav="ac-logs" data-title="Logs" data-crumb="Account / Logs" data-view="account">Logs</a>
+        </div>
+
+
+
+      </div>
+
+      <div class="tma-dash__nav-section">
+        <a class="tma-dash__nav-item" href="/">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <img class="tma-dash__nav-icon" src="images/icons/phosphor/Sparkle.svg" alt="">
+          <span>New design</span>
+        </a>
+      </div>
+      </div>
+
+      <div class="tma-dash__profile">
+        <img class="tma-dash__profile-avatar" src="images/avatars/AvatarByewind.png" alt="Vernon Francis avatar" width="24" height="24">
+        <div class="tma-dash__profile-meta">
+          <span class="tma-dash__profile-name">Vernon Francis</span>
+          <span class="tma-dash__profile-email">vfrancis@tmantoinelaw.com</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Header ──────────────────────────────────────── -->
+    <header class="tma-dash__header">
+      <div class="tma-dash__header-left">
+        <button type="button" class="tma-dash__icon-btn" data-action="toggle-sidebar" aria-label="Toggle sidebar"><img src="images/icons/phosphor/Sidebar.svg" alt=""></button>
+        <nav class="tma-dash__breadcrumb" data-breadcrumb aria-label="Breadcrumb">
+          <span class="tma-dash__crumb--current">Dashboard</span>
+        </nav>
+      </div>
+      <div class="tma-dash__header-center">
+        <button type="button" class="tma-dash__search" data-action="open-search" aria-label="Search (press /)">
+          <img src="images/icons/tma/Search-16.svg" alt="">
+          <span class="tma-dash__search-text">Search</span>
+          <kbd class="tma-dash__kbd">/</kbd>
+        </button>
+      </div>
+      <div class="tma-dash__header-right">
+        <div class="tma-dash__header-icons">
+          <button type="button" class="tma-dash__icon-btn" data-action="toggle-theme" aria-label="Toggle theme"><img src="images/icons/phosphor/Sun.svg" alt=""></button>
+          <button type="button" class="tma-dash__icon-btn" data-action="toggle-activities-popup" aria-label="Activities" aria-expanded="false" aria-haspopup="true"><img src="images/icons/phosphor/ClockCounterClockwise.svg" alt=""></button>
+          <button type="button" class="tma-dash__icon-btn" data-action="toggle-notifications-popup" aria-label="Notifications" aria-expanded="false" aria-haspopup="true"><img src="images/icons/phosphor/Bell.svg" alt=""></button>
+          <button type="button" class="tma-dash__icon-btn" data-action="toggle-rightbar" aria-label="Toggle right panel"><img src="images/icons/tma/Rightbar.svg" alt=""></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Main ────────────────────────────────────────── -->
+    <main class="tma-dash__main">
+      <div class="tma-dash__main-head">
+        <div class="tma-dash__main-head-left">
+          <button type="button" class="tma-dash__back-btn" data-page-back hidden aria-label="Go back">
+            <img src="images/icons/phosphor/ArrowLeft.svg" alt="" width="20" height="20">
+          </button>
+          <h1 class="tma-dash__page-title" data-page-title>Dashboard</h1>
+        </div>
+        <div class="tma-dash__main-head-right">
+          <div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap data-today-dropdown>
+            <button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--secondary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">
+              <span data-today-label>Today</span>
+              <img class="tma-dash__head-dropdown-caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" aria-hidden="true">
+            </button>
+            <div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu data-today-menu hidden role="menu" aria-label="Date range">
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="Today" data-today="Today">Today</button>
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="This week" data-today="This week">This week</button>
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="This month" data-today="This month">This month</button>
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="This year" data-today="This year">This year</button>
+            </div>
+          </div>
+          <div class="tma-dash__clients-head-actions" data-clients-page-actions hidden>
+          </div>
+          <div class="tma-dash__view-toggle-wrap" data-page-view-toggle hidden>
+            <div class="tma-dash__view-toggle" role="group" aria-label="View mode">
+              <button type="button" class="tma-dash__view-toggle-btn tma-dash__view-toggle-btn--active" data-view-mode="list" aria-label="List view" aria-pressed="true">
+                <img src="images/icons/phosphor/ListDashes.svg" alt="">
+              </button>
+              <button type="button" class="tma-dash__view-toggle-btn" data-view-mode="grid" aria-label="Grid view" aria-pressed="false">
+                <img src="images/icons/phosphor/SquaresFour.svg" alt="">
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tma-dash__view" data-view="dashboard">
+        <div class="tma-dash__dashboard-mount" data-portal-mount></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="overview" hidden>
+        <div class="tma-dash__overview-mount" data-overview></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="account" hidden>
+        <div class="tma-dash__account-mount" data-account></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="projects" data-table-view hidden>
+        <div class="tma-dash__projects" data-projects></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="users" data-table-view data-table-grid="avatar" hidden>
+        <div class="tma-dash__users" data-users></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="email" hidden>
+        <div class="tma-dash__email" data-email></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="messages" hidden>
+        <div class="tma-dash__messages" data-messages></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="feed" hidden>
+        <div class="tma-dash__feed" data-feed></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="clients" hidden>
+        <div class="tma-dash__clients" data-clients></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="calendar" hidden>
+        <div class="tma-dash__calendar-mount" data-calendar></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="pricing" hidden>
+        <div class="tma-dash__pricing-mount" data-pricing></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="settings" hidden>
+        <div class="tma-dash__settings" data-settings></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="add-data" hidden>
+        <div class="tma-dash__add-data" data-dashboard-add-data></div>
+      </div>
+
+      <footer class="tma-dash__footer">
+        <span class="tma-dash__footer-copy">© 2026 TM ANTOINE Advisory</span>
+        <nav class="tma-dash__footer-links" aria-label="Footer">
+          <a href="#">About</a>
+          <a href="#">Support</a>
+          <a href="#">Contact Us</a>
+        </nav>
+      </footer>
+    </main>
+
+    <!-- ── Notifications & Activities popups (Figma 32546:96099) ── -->
+    <div class="tma-dash__header-popups" data-header-popups hidden aria-live="polite"></div>
+
+    <!-- ── Right sidebar ───────────────────────────────── -->
+    <aside class="tma-dash__rightbar" aria-label="Activity">
+      <div class="tma-dash__rb-section">
+        <div class="tma-dash__rb-title">Notifications</div>
+        <div class="tma-dash__notice">
+          <span class="tma-dash__notice-icon tma-dash__notice-icon--purple"><img src="images/icons/phosphor/BugBeetle.svg" alt=""></span>
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">You fixed a bug.</div>
+            <div class="tma-dash__notice-meta">Just now</div>
+          </div>
+        </div>
+        <div class="tma-dash__notice">
+          <span class="tma-dash__notice-icon tma-dash__notice-icon--blue"><img src="images/icons/phosphor/User.svg" alt=""></span>
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">New user registered.</div>
+            <div class="tma-dash__notice-meta">59 minutes ago</div>
+          </div>
+        </div>
+        <div class="tma-dash__notice">
+          <span class="tma-dash__notice-icon tma-dash__notice-icon--purple"><img src="images/icons/phosphor/BugBeetle.svg" alt=""></span>
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">You fixed a bug.</div>
+            <div class="tma-dash__notice-meta">12 hours ago</div>
+          </div>
+        </div>
+        <div class="tma-dash__notice">
+          <span class="tma-dash__notice-icon tma-dash__notice-icon--blue"><img src="images/icons/phosphor/Broadcast.svg" alt=""></span>
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">Andi Lane subscribed to you.</div>
+            <div class="tma-dash__notice-meta">Today, 11:59 AM</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tma-dash__rb-section tma-dash__rb-section--activities">
+        <div class="tma-dash__rb-title">Activities</div>
+        <div class="tma-dash__activity">
+          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarAbstract03.png" alt="">
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">Changed the style.</div>
+            <div class="tma-dash__notice-meta">Just now</div>
+          </div>
+        </div>
+        <div class="tma-dash__activity">
+          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale03.png" alt="">
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">Released a new version.</div>
+            <div class="tma-dash__notice-meta">59 minutes ago</div>
+          </div>
+        </div>
+        <div class="tma-dash__activity">
+          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarMale02.png" alt="">
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">Submitted a bug.</div>
+            <div class="tma-dash__notice-meta">12 hours ago</div>
+          </div>
+        </div>
+        <div class="tma-dash__activity">
+          <img class="tma-dash__rb-avatar" src="images/avatars/Avatar3d03.png" alt="">
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">Modified A data in Page X.</div>
+            <div class="tma-dash__notice-meta">Today, 11:59 AM</div>
+          </div>
+        </div>
+        <div class="tma-dash__activity">
+          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarAbstract04.png" alt="">
+          <div class="tma-dash__notice-body">
+            <div class="tma-dash__notice-title">Deleted a page in Project X.</div>
+            <div class="tma-dash__notice-meta">Feb 2, 2026</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tma-dash__rb-section">
+        <div class="tma-dash__rb-title">Clients</div>
+        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale06.png" alt=""><span class="tma-dash__contact-name">Natali Craig</span></div>
+        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarMale01.png" alt=""><span class="tma-dash__contact-name">Drew Cano</span></div>
+        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale01.png" alt=""><span class="tma-dash__contact-name">Andi Lane</span></div>
+        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarMale04.png" alt=""><span class="tma-dash__contact-name">Koray Okumus</span></div>
+        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale04.png" alt=""><span class="tma-dash__contact-name">Kate Morrison</span></div>
+        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale05.png" alt=""><span class="tma-dash__contact-name">Melody Macy</span></div>
+      </div>
+    </aside>
+
+    <!-- ── Mobile bottom tab bar (Figma 32548:116275) ─── -->
+    <nav class="tma-dash__tabbar" aria-label="Bottom navigation">
+      <div class="tma-dash__tabbar-row">
+        <button type="button" class="tma-dash__tab-btn tma-dash__tab-btn--active" data-tab="dashboard" aria-label="Dashboard"><span class="tma-dash__tab-btn-icon"><img src="images/icons/phosphor/House.svg" alt=""></span><span class="tma-dash__tab-btn-label">Home</span></button>
+        <button type="button" class="tma-dash__tab-btn" data-tab="messages" aria-label="Messages"><span class="tma-dash__tab-btn-icon"><img src="images/icons/phosphor/ChatsCircle.svg" alt=""></span><span class="tma-dash__tab-btn-label">Chat</span></button>
+        <button type="button" class="tma-dash__tab-btn" data-tab="alerts" aria-label="Notifications"><span class="tma-dash__tab-btn-icon"><img src="images/icons/phosphor/Bell.svg" alt=""></span><span class="tma-dash__tab-btn-label">Alerts</span></button>
+        <button type="button" class="tma-dash__tab-btn" data-tab="email" aria-label="Email"><span class="tma-dash__tab-btn-icon"><img src="images/icons/phosphor/EnvelopeSimple.svg" alt=""></span><span class="tma-dash__tab-btn-label">Email</span></button>
+        <button type="button" class="tma-dash__tab-btn tma-dash__tab-btn--profile" data-tab="profile" aria-label="Profile"><span class="tma-dash__tab-btn-icon"><img src="images/avatars/AvatarByewind.png" alt=""></span><span class="tma-dash__tab-btn-label">Profile</span></button>
+      </div>
+    </nav>
+
+    <!-- ── Mobile menu / Home hub (Figma 32548:116275) ── -->
+    <div class="tma-dash__mmenu" data-mmenu hidden>
+      <h2 class="tma-dash__mmenu-title">Home</h2>
+      <button type="button" class="tma-dash__mmenu-search" data-action="open-search">
+        <img src="images/icons/tma/Search-16.svg" alt="">
+        <span>Search</span>
+        <img class="tma-dash__mmenu-mic" src="images/icons/phosphor/Microphone.svg" alt="">
+      </button>
+
+      <div class="tma-dash__mmenu-favorites" hidden>
+      <div class="tma-dash__mmenu-label">Favorites</div>
+      <div class="tma-dash__mmenu-card">
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="fav-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects" hidden>
+          <img class="tma-dash__mrow-emoji" src="images/emoji/RobotEmoji.svg" alt=""><span>My Projects</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="users" data-title="Users" data-crumb="Users" data-view="users" hidden>
+          <img class="tma-dash__mrow-emoji" src="images/emoji/GrinningCat.svg" alt=""><span>Users</span>
+        </button>
+      </div>
+      </div>
+
+      <div class="tma-dash__mmenu-label">Dashboards</div>
+      <div class="tma-dash__mmenu-card">
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="dash-dashboard" data-title="Dashboard" data-crumb="Dashboard" data-view="dashboard">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/House.svg" alt=""><span>Dashboard</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="dash-project-overview" data-title="Project Overview" data-crumb="Dashboard / Overview" data-view="overview">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ChartPieSlice.svg" alt=""><span>Overview</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="dash-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/FolderNotch.svg" alt=""><span>Projects</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>Users</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="email" data-title="Email" data-crumb="Email" data-view="email">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/EnvelopeSimple.svg" alt=""><span>Email</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="calendar" data-title="Calendar" data-crumb="Calendar" data-view="calendar">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/CalendarBlank.svg" alt=""><span>Calendar</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="clients" data-title="Clients" data-crumb="Clients" data-view="clients">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/AddressBook.svg" alt=""><span>Clients</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="so-messages" data-title="Messages" data-crumb="Messages" data-view="messages">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ChatsCircle.svg" alt=""><span>Messages</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="so-feed" data-title="Social" data-crumb="Social">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ChatsTeardrop.svg" alt=""><span>Social</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="up-overview" data-title="User Profile" data-crumb="User Profile">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/IdentificationBadge.svg" alt=""><span>User Profile</span>
+        </button>
+        <a class="tma-dash__mrow" href="/">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Sparkle.svg" alt=""><span>New design</span>
+        </a>
+      </div>
+
+      <div class="tma-dash__mmenu-label">Account</div>
+      <div class="tma-dash__mmenu-card" data-mmenu-account></div>
+    </div>
+
+    <button type="button" class="tma-dash__scrim" data-dash-scrim aria-label="Close panel"></button>
+
+    <!-- ── Global search popup (33257:43316) ───────────── -->
+    <div class="tma-dash__cmd" data-cmd hidden>
+      <div class="tma-dash__cmd-mount" data-dash-search-mount></div>
+    </div>
+
+  </div>
+
+  <div class="tma-add-data__toast" data-add-toast role="status" aria-live="polite"></div>
+
+  <script src="js/tooltip.js"></script>
+  <script src="js/input-icons.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/input-interactive.js"></script>
+  <script src="js/date-picker-icons.js"></script>
+  <script src="js/date-picker.js"></script>
+  <script src="js/table-add-data.js"></script>
+  <script src="js/no-data.js"></script>
+  <script src="js/table-view-toggle.js"></script>
+  <script src="js/dashboard-add-data.js"></script>
+  <script src="js/card-icons.js"></script>
+  <script src="js/card.js"></script>
+  <script src="js/strip.js"></script>
+  <script src="js/projects.js"></script>
+  <script src="js/dashboard-metrics.js"></script>
+  <script src="js/file-icons.js"></script>
+  <script src="js/overview-files.js"></script>
+  <script src="js/overview-activity.js"></script>
+  <script src="js/overview.js"></script>
+  <script src="js/table-b.js"></script>
+  <script src="js/chart-motion.js"></script>
+  <script src="js/account.js"></script>
+  <script src="js/tag-icons.js"></script>
+  <script src="js/tag.js"></script>
+  <script src="js/badge-icons.js"></script>
+  <script src="js/badge.js"></script>
+  <script src="js/email-templates.js"></script>
+  <script src="js/email.js"></script>
+  <script src="js/messages.js"></script>
+  <script src="js/feed.js"></script>
+  <script src="js/schedule.js"></script>
+  <script src="js/tab-group.js"></script>
+  <script src="js/toast-icons.js"></script>
+  <script src="js/toast.js"></script>
+  <script src="js/head-dropdown.js"></script>
+  <script src="js/clients.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/pricing.js"></script>
+  <script src="js/two-step-countries.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/user-info-panel-icons.js"></script>
+  <script src="js/user-info-panel.js"></script>
+  <script src="js/users.js"></script>
+  <script src="js/activity-popups.js"></script>
+  <script src="js/global-search.js"></script>
+  <script src="js/dash-search-chrome.js"></script>
+  <script src="js/tabbar-indicator.js"></script>
+  <script src="js/portal-data.js"></script>
+  <script src="js/portal-views.js"></script>
+  <script src="js/portal-home.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

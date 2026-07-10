@@ -1,0 +1,9 @@
+{
+  "slug": "billing-details-card",
+  "nodeId": "32546:96134",
+  "name": "Authentication — Billing Details (Card)",
+  "description": "Sign-up step — card payment fields, save-card toggle, and Submit.",
+  "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96134",
+  "htmlPath": "public/billing-details/card/index.html",
+  "cssPath": "public/css/auth.css"
+}

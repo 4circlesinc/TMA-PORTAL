@@ -1,0 +1,683 @@
+{
+  "source": {
+    "fileKey": "58ZXC7sZYQsbenzf0foWCH",
+    "frameId": "32730:413847",
+    "frameName": "TMA Icons",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32730-413847"
+  },
+  "description": "TMA custom icon set from Portal-Design.",
+  "exportPath": "public/images/icons/tma",
+  "export": {
+    "format": "svg",
+    "exportedAt": "2026-06-11",
+    "count": 83,
+    "total": 83
+  },
+  "items": [
+    {
+      "nodeId": "32730:413849",
+      "name": "RoundAlt",
+      "slug": "RoundAlt",
+      "file": "RoundAlt.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413850",
+      "name": "Round",
+      "slug": "Round",
+      "file": "Round.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413851",
+      "name": "DocxIcon",
+      "slug": "DocxIcon",
+      "file": "DocxIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413852",
+      "name": "XlsxIcon",
+      "slug": "XlsxIcon",
+      "file": "XlsxIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413853",
+      "name": "TxtIcon",
+      "slug": "TxtIcon",
+      "file": "TxtIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413854",
+      "name": "FormIcon",
+      "slug": "FormIcon",
+      "file": "FormIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413855",
+      "name": "PptIcon",
+      "slug": "PptIcon",
+      "file": "PptIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413856",
+      "name": "OnenoteIcon",
+      "slug": "OnenoteIcon",
+      "file": "OnenoteIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413857",
+      "name": "SearchIcon",
+      "slug": "SearchIcon",
+      "file": "SearchIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413858",
+      "name": "Notepad",
+      "slug": "Notepad",
+      "file": "Notepad.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413859",
+      "name": "SnowIcon",
+      "slug": "SnowIcon",
+      "file": "SnowIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413860",
+      "name": "DefaultIcon",
+      "slug": "DefaultIcon",
+      "file": "DefaultIcon.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413861",
+      "name": "SwitchPoint",
+      "slug": "SwitchPoint",
+      "file": "SwitchPoint.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413862",
+      "name": "Selected",
+      "slug": "Selected",
+      "file": "Selected.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413863",
+      "name": "Line",
+      "slug": "Line",
+      "file": "Line.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413864",
+      "name": "AI",
+      "slug": "AI",
+      "file": "AI.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413865",
+      "name": "StarFour",
+      "slug": "StarFour",
+      "file": "StarFour.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413866",
+      "name": "TextA",
+      "slug": "TextA",
+      "file": "TextA.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413867",
+      "name": "Add",
+      "slug": "Add",
+      "file": "Add.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413868",
+      "name": "HorizontalScreen",
+      "slug": "HorizontalScreen",
+      "file": "HorizontalScreen.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413869",
+      "name": "VerticalScreen",
+      "slug": "VerticalScreen",
+      "file": "VerticalScreen.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413870",
+      "name": "Blank",
+      "slug": "Blank",
+      "file": "Blank.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413871",
+      "name": "PayWave",
+      "slug": "PayWave",
+      "file": "PayWave.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413872",
+      "name": "Chip",
+      "slug": "Chip",
+      "file": "Chip.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413873",
+      "name": "ArrowsDown",
+      "slug": "ArrowsDown",
+      "file": "ArrowsDown.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413874",
+      "name": "ArrowsUp",
+      "slug": "ArrowsUp",
+      "file": "ArrowsUp.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413875",
+      "name": "ArrowsDownUp",
+      "slug": "ArrowsDownUp",
+      "file": "ArrowsDownUp.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413876",
+      "name": "ArrowLineUpDown",
+      "slug": "ArrowLineUpDown",
+      "file": "ArrowLineUpDown.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413877",
+      "name": "ArrowRight",
+      "slug": "ArrowRight",
+      "file": "ArrowRight.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413878",
+      "name": "ArrowRise",
+      "slug": "ArrowRise",
+      "file": "ArrowRise.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413879",
+      "name": "ArrowFall",
+      "slug": "ArrowFall",
+      "file": "ArrowFall.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413880",
+      "name": "Minimize",
+      "slug": "Minimize",
+      "file": "Minimize.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413881",
+      "name": "Maximize",
+      "slug": "Maximize",
+      "file": "Maximize.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413882",
+      "name": "Windowed",
+      "slug": "Windowed",
+      "file": "Windowed.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413883",
+      "name": "Close",
+      "slug": "Close",
+      "file": "Close.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413884",
+      "name": "Search",
+      "slug": "Search",
+      "file": "Search.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413885",
+      "name": "Goto",
+      "slug": "Goto",
+      "file": "Goto.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413886",
+      "name": "Help",
+      "slug": "Help",
+      "file": "Help.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413887",
+      "name": "RoundedCorner",
+      "slug": "RoundedCorner",
+      "file": "RoundedCorner.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413888",
+      "name": "Explain",
+      "slug": "Explain",
+      "file": "Explain.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413889",
+      "name": "ThreeDots",
+      "slug": "ThreeDots",
+      "file": "ThreeDots.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413890",
+      "name": "Variables",
+      "slug": "Variables",
+      "file": "Variables.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413891",
+      "name": "FourPointedStar",
+      "slug": "FourPointedStar",
+      "file": "FourPointedStar.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413892",
+      "name": "StopAlt",
+      "slug": "StopAlt",
+      "file": "StopAlt.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413893",
+      "name": "Rightbar",
+      "slug": "Rightbar",
+      "file": "Rightbar.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413894",
+      "name": "RightbarMode",
+      "slug": "RightbarMode",
+      "file": "RightbarMode.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413895",
+      "name": "Badge",
+      "slug": "Badge",
+      "file": "Badge.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413896",
+      "name": "ChatDashed",
+      "slug": "ChatDashed",
+      "file": "ChatDashed.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413897",
+      "name": "Rating",
+      "slug": "Rating",
+      "file": "Rating.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413898",
+      "name": "StopSecondary",
+      "slug": "StopSecondary",
+      "file": "StopSecondary.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413899",
+      "name": "ImageLoading",
+      "slug": "ImageLoading",
+      "file": "ImageLoading.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413900",
+      "name": "Repost",
+      "slug": "Repost",
+      "file": "Repost.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413901",
+      "name": "Typing",
+      "slug": "Typing",
+      "file": "Typing.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413902",
+      "name": "Switch",
+      "slug": "Switch",
+      "file": "Switch.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413903",
+      "name": "Checkbox",
+      "slug": "Checkbox",
+      "file": "Checkbox.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413904",
+      "name": "Checkbox",
+      "slug": "Checkbox_2",
+      "file": "Checkbox_2.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413905",
+      "name": "RadioAlt",
+      "slug": "RadioAlt",
+      "file": "RadioAlt.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413906",
+      "name": "Radio",
+      "slug": "Radio",
+      "file": "Radio.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413907",
+      "name": "Loading",
+      "slug": "Loading",
+      "file": "Loading.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413908",
+      "name": "Loading",
+      "slug": "Loading_2",
+      "file": "Loading_2.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413909",
+      "name": "Loading",
+      "slug": "Loading_3",
+      "file": "Loading_3.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413910",
+      "name": "Clipboard",
+      "slug": "Clipboard",
+      "file": "Clipboard.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413911",
+      "name": "Copy",
+      "slug": "Copy",
+      "file": "Copy.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413912",
+      "name": "Xcircle",
+      "slug": "Xcircle",
+      "file": "Xcircle.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413913",
+      "name": "FourLeafClover",
+      "slug": "FourLeafClover",
+      "file": "FourLeafClover.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413914",
+      "name": "Stars",
+      "slug": "Stars",
+      "file": "Stars.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413915",
+      "name": "Dot",
+      "slug": "Dot",
+      "file": "Dot.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413916",
+      "name": "Dot",
+      "slug": "Dot_2",
+      "file": "Dot_2.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413917",
+      "name": "Dot",
+      "slug": "Dot_3",
+      "file": "Dot_3.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413918",
+      "name": "Dot",
+      "slug": "Dot_4",
+      "file": "Dot_4.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413919",
+      "name": "IconSet",
+      "slug": "IconSet",
+      "file": "IconSet.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413920",
+      "name": "ArrowLineUp",
+      "slug": "ArrowLineUp",
+      "file": "ArrowLineUp.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413921",
+      "name": "ArrowLineDown",
+      "slug": "ArrowLineDown",
+      "file": "ArrowLineDown.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413922",
+      "name": "ArrowLineRight",
+      "slug": "ArrowLineRight",
+      "file": "ArrowLineRight.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413923",
+      "name": "ArrowLineLeft",
+      "slug": "ArrowLineLeft",
+      "file": "ArrowLineLeft.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413924",
+      "name": "IconSize",
+      "slug": "IconSize",
+      "file": "IconSize.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413925",
+      "name": "IconSize",
+      "slug": "IconSize_2",
+      "file": "IconSize_2.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413926",
+      "name": "IconSize",
+      "slug": "IconSize_3",
+      "file": "IconSize_3.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413927",
+      "name": "IconSize",
+      "slug": "IconSize_4",
+      "file": "IconSize_4.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413928",
+      "name": "IconSize",
+      "slug": "IconSize_5",
+      "file": "IconSize_5.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413929",
+      "name": "IconSize",
+      "slug": "IconSize_6",
+      "file": "IconSize_6.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413930",
+      "name": "IconSize",
+      "slug": "IconSize_7",
+      "file": "IconSize_7.svg",
+      "size": "32x32",
+      "exported": true
+    },
+    {
+      "nodeId": "32730:413931",
+      "name": "IconSize",
+      "slug": "IconSize_8",
+      "file": "IconSize_8.svg",
+      "size": "32x32",
+      "exported": true
+    }
+  ],
+  "laravelUsage": "asset('images/icons/tma/Search.svg')"
+}

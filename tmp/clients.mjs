@@ -1,0 +1,18 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport:{width:1440,height:1024}, deviceScaleFactor:1.5 });
+const errs=[]; p.on('console',m=>{if(m.type()==='error')errs.push(m.text());}); p.on('pageerror',e=>errs.push('PE '+e.message));
+await p.goto('file:///Users/vernonfrancis/Desktop/Portal/public/index.html',{waitUntil:'networkidle'});
+await p.waitForTimeout(300);
+await p.click('[data-nav="dash-clients"]');
+await p.waitForTimeout(250);
+const title = await p.textContent('[data-page-title]');
+const crumb = await p.textContent('[data-breadcrumb]');
+const dashHidden = await p.evaluate(()=>document.querySelector('.snowui-dash__view[data-view="dashboard"]').hidden);
+const broken = await p.evaluate(()=>Array.from(document.images).filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.getAttribute('src')));
+console.log('title=',title.trim(),'| crumb=',crumb.replace(/\s+/g,' ').trim(),'| dashHidden=',dashHidden,'| BROKEN=',JSON.stringify(broken));
+await p.screenshot({ path:'./clients.png' });
+await p.click('[data-action="toggle-theme"]'); await p.waitForTimeout(250); await p.mouse.move(5,5);
+await p.screenshot({ path:'./clients-dark.png' });
+console.log('ERRORS',JSON.stringify(errs));
+await b.close();

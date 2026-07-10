@@ -1,0 +1,60 @@
+{
+  "slug": "input",
+  "nodeId": "33319:47513",
+  "documentationNodeId": "32728:395033",
+  "guidanceNodeId": "32257:116552",
+  "instancesNodeId": "32728:395248",
+  "demoPath": "public/demo/forms.html",
+  "name": "Input",
+  "description": "Input component — composable text fields for single-line, multi-row, textarea, select, command, and tag variants.",
+  "cssPath": "public/css/input.css",
+  "jsPath": "public/js/input.js",
+  "iconJsPath": "public/js/input-icons.js",
+  "interactiveJsPath": "public/js/input-interactive.js",
+  "defaultVariant": "content-1row",
+  "variants": {
+    "content-1row": { "nodeId": "32728:395059", "name": "1 row content" },
+    "title-2row-vertical": { "nodeId": "32728:395058", "name": "2 row vertical title" },
+    "textarea": { "nodeId": "32728:395054", "name": "Textarea" },
+    "textarea-counter": { "nodeId": "32728:395055", "name": "Textarea with counter" },
+    "title-input-vertical": { "nodeId": "32728:395057", "name": "Title + input vertical" },
+    "select": { "nodeId": "32728:395056", "name": "Select" },
+    "command": { "nodeId": "32728:395062", "name": "Command input" },
+    "tags": { "nodeId": "32728:395063", "name": "Tag input" }
+  },
+  "behavior": {
+    "background": "rgba(255,255,255,0.8)",
+    "radius": 16,
+    "borderDefault": "rgba(0,0,0,0.2)",
+    "borderActive": "rgba(0,0,0,0.4)",
+    "states": ["default", "hover", "disabled", "focus", "progress", "done", "error"]
+  },
+  "documentation": {
+    "purpose": "The Input component is used to create various Inputs. Input defaults to the Content instance, which can be replaced with other instances.",
+    "guidance": [
+      "Buttons — Sign in with Apple, form button bar, saved toast.",
+      "Input states — 1 row, title vertical, textarea, textarea counter, title + input, and select across seven states.",
+      "Radio, checkbox, and switch controls with default, hover, and disabled variants.",
+      "Error messages display below fields and push content down."
+    ],
+    "features": [
+      "Type — 1 row, 2row vertical, 2 row horizontal, Textarea.",
+      "State — Default, Hover, Focus, No interaction."
+    ],
+    "correlation": "Instances within the Input are replaceable with any instance except itself.",
+    "examples": [
+      "Because form elements such as Input and select fields often have the same style, it's easier to maintain them all using the Input component.",
+      "Any element that can Input text can be done with the input component."
+    ]
+  },
+  "items": [
+    { "nodeId": "32728:395059", "variant": "content-1row" },
+    { "nodeId": "32728:395058", "variant": "title-2row-vertical" },
+    { "nodeId": "32728:395054", "variant": "textarea" },
+    { "nodeId": "32728:395055", "variant": "textarea-counter" },
+    { "nodeId": "32728:395057", "variant": "title-input-vertical" },
+    { "nodeId": "32728:395056", "variant": "select" },
+    { "nodeId": "32728:395062", "variant": "command" },
+    { "nodeId": "32728:395063", "variant": "tags" }
+  ]
+}

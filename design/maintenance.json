@@ -1,0 +1,9 @@
+{
+  "slug": "maintenance",
+  "nodeId": "32546:96103",
+  "name": "Maintenance",
+  "description": "Site under maintenance state with Illustration09 and support contact link.",
+  "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96103",
+  "htmlPath": "public/maintenance/index.html",
+  "cssPath": "public/css/error.css"
+}

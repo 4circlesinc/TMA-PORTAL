@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Input documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/input.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+  </style>
+</head>
+<body>
+  <article class="tma-input-doc" data-node-id="32728:395033">
+    <header class="tma-input-doc__hero" data-node-id="32728:395034">
+      <h1 class="tma-input-doc__title" data-node-id="32728:395035">Input</h1>
+      <div class="tma-input-doc__intro" data-node-id="32728:395036">
+        <p>The Input component is used to create various Inputs.</p>
+        <p>Input defaults to the Content instance, which can be replaced with other instances.</p>
+        <p><a href="forms.html" style="color:#000;text-decoration:underline;">All forms demo</a></p>
+        <p><a href="forms-guidance.html" style="color:#000;text-decoration:underline;">Interactive guidance</a></p>
+        <p><a href="form-instances.html" style="color:#000;text-decoration:underline;">Form instances</a></p>
+      </div>
+    </header>
+
+    <section class="tma-input-doc__section" data-node-id="32728:395037">
+      <h2 class="tma-input-doc__section-title" data-node-id="32728:395038">Features</h2>
+      <ul class="tma-input-doc__list" data-node-id="32728:395039">
+        <li>Type: 1 row, 2row vertical, 2 row horizontal, Textarea</li>
+        <li>State: Default, Hover, Focus, No interaction.</li>
+      </ul>
+    </section>
+
+    <section class="tma-input-doc__section" data-node-id="32728:395040">
+      <h2 class="tma-input-doc__section-title" data-node-id="32728:395041">Correlation</h2>
+      <p class="tma-input-doc__body" data-node-id="32728:395042">Instances within the Input are replaceable with any instance except itself.</p>
+    </section>
+
+    <section class="tma-input-doc__section" data-node-id="32728:395043">
+      <h2 class="tma-input-doc__section-title" data-node-id="32728:395044">Examples</h2>
+
+      <div class="tma-input-doc__example-block" data-node-id="32728:395045">
+        <p class="tma-input-doc__example-label" data-node-id="32728:395046">Because form elements such as Input and select fields often have the same style, it's easier to maintain them all using the Input component.</p>
+        <div id="examples-grid"></div>
+      </div>
+
+      <div class="tma-input-doc__example-block tma-input-doc__special" data-node-id="32728:395060">
+        <p class="tma-input-doc__example-label" data-node-id="32728:395061">Any element that can Input text can be done with the input component.</p>
+        <div id="example-command"></div>
+        <div id="example-tags"></div>
+      </div>
+    </section>
+
+    <div id="doc-footer"></div>
+  </article>
+
+<script src="../js/input-icons.js"></script>
+<script src="../js/input.js"></script>
+<script src="../js/input-interactive.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script>
+window.TMAInput.mountDocumentation({
+  gridEl: document.getElementById('examples-grid'),
+  commandEl: document.getElementById('example-command'),
+  tagsEl: document.getElementById('example-tags'),
+  footerEl: document.getElementById('doc-footer'),
+  socialSvg: window.TMATableSearchIcons.svg,
+});
+</script>
+</body>
+</html>

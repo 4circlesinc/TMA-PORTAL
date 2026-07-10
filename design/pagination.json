@@ -1,0 +1,52 @@
+{
+  "slug": "pagination",
+  "nodeId": "32728:395827",
+  "groupNodeIds": ["32728:395827", "32728:395828"],
+  "name": "Pagination",
+  "cssPath": "public/css/pagination.css",
+  "defaultVariant": "default",
+  "variants": {
+    "default": {},
+    "stretch": {
+      "stretch": true
+    },
+    "footer": {
+      "pageSize": 20,
+      "totalResults": 105,
+      "resultsLabel": "{count} results"
+    }
+  },
+  "iconSources": {
+    "ArrowLineLeft": { "set": "tma", "file": "ArrowLineLeft-16.svg", "catalog": "design/icons-tma.json" },
+    "ArrowLineRight": { "set": "tma", "file": "ArrowLineRight-16.svg", "catalog": "design/icons-tma.json" },
+    "ArrowLineDown": { "set": "tma", "file": "ArrowLineDown-16.svg", "catalog": "design/icons-tma.json" }
+  },
+  "tokens": {
+    "width": 892,
+    "minHeight": 28,
+    "footerMinHeight": 24,
+    "gap": 8,
+    "footerGap": 40,
+    "metaGap": 8,
+    "buttonMinSize": 24,
+    "buttonRadius": 12,
+    "buttonPaddingY": 4,
+    "buttonPaddingXActive": 12,
+    "buttonPaddingX": 20,
+    "buttonPaddingIcon": 4,
+    "buttonBorderColor": "rgba(0, 0, 0, 0.1)",
+    "buttonActiveBackground": "rgba(0, 0, 0, 0.04)",
+    "fontSize": 12,
+    "lineHeight": 16,
+    "mutedColor": "rgba(0, 0, 0, 0.4)",
+    "iconSize": 16,
+    "pageSizeIconSize": 10,
+    "pageSizeGap": 4
+  },
+  "pages": [1, 2, 3, 4, 5],
+  "items": [
+    { "nodeId": "32728:395827", "variant": "default", "currentPage": 1 },
+    { "nodeId": "33160:33563", "variant": "stretch", "currentPage": 1 },
+    { "nodeId": "32728:395828", "variant": "footer", "currentPage": 1, "pageSize": 20, "totalResults": 105 }
+  ]
+}

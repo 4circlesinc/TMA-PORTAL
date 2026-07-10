@@ -1,0 +1,465 @@
+/* TMA — Design system board page (Figma 15098:130290) */
+
+body.ds-page {
+  margin: 0;
+  padding: 48px;
+  background: var(--color-bg-page);
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--color-text-primary);
+  font-feature-settings: var(--font-features);
+}
+
+.ds-demo__header {
+  max-width: 960px;
+  margin-bottom: 32px;
+}
+
+.ds-demo__title {
+  margin: 0 0 12px;
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 600;
+}
+
+.ds-demo__copy {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--color-text-secondary);
+}
+
+.ds-demo__copy a {
+  color: var(--color-text-primary);
+}
+
+.ds-demo__stage {
+  width: 100%;
+}
+
+.ds-demo__board-wrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  min-height: 240px;
+}
+
+.ds-demo__board {
+  position: relative;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.ds-board-card {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.ds-board-card__slot {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.ds-board-card__inner,
+.ds-board-card__slot > section {
+  width: 100%;
+  max-width: none !important;
+  min-height: auto !important;
+}
+
+/* ── Inline SVG logo ── */
+
+.tma-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.tma-logo__mark,
+.tma-logo__horizontal,
+.tma-logo__full {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.tma-logo__horizontal {
+  width: auto;
+  max-width: 180px;
+  height: 28px;
+}
+
+.tma-logo--mark .tma-logo__mark {
+  border-radius: 50%;
+}
+
+.tma-logo__wordmark {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* ── TMA cover card (30484:266531) ── */
+
+.ds-cover-tma {
+  width: 1000px;
+  height: 1200px;
+  background: #000;
+  border-radius: var(--radius-40);
+  padding: 120px 148px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.ds-cover-tma__body {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+}
+
+.ds-cover-tma__logo-wrap {
+  padding: 28px 12px 12px;
+}
+
+.ds-cover-tma__logo {
+  display: block;
+  width: 120px;
+  height: 120px;
+}
+
+.ds-cover-tma__logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ds-cover-tma__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ds-cover-tma__line {
+  margin: 0;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(100.45deg, #ffffff 0.92%, #dcd4ff 46.31%, #e2cbff 55.92%, #98baff 66.83%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.ds-cover-tma__line--brand {
+  font-size: 112px;
+  line-height: 0.95;
+  text-transform: lowercase;
+}
+
+.ds-cover-tma__line--upper {
+  font-size: 112px;
+  line-height: 0.95;
+}
+
+.ds-cover-tma__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ds-cover-tma__copy p {
+  margin: 0 0 18px;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ds-cover-tma__copy code {
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ds-cover-tma__footer-link {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.ds-cover-tma .tma-logo__horizontal {
+  height: 24px;
+  opacity: 0.85;
+}
+
+/* ── Brand logos panel (resources card) ── */
+
+.ds-brand-logos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-16);
+  margin-top: var(--space-20);
+}
+
+.ds-brand-logos__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.ds-brand-logos__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88px;
+  padding: var(--space-16);
+  border-radius: var(--radius-16);
+  border: 0.5px solid var(--color-border-soft);
+  background: var(--color-bg-card);
+}
+
+.ds-brand-logos__preview--light {
+  background: #fff;
+}
+
+.ds-brand-logos__horizontal {
+  width: auto;
+  max-width: 100%;
+  height: 32px;
+  object-fit: contain;
+}
+
+.ds-brand-logos__mark,
+.ds-brand-logos__favicon {
+  display: block;
+  object-fit: contain;
+}
+
+.ds-brand-logos__label {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.ds-brand-logos__meta {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.ds-brand-logos__path {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tag);
+  padding: 4px 8px;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+/* ── 90% principle title (replaces PNG) ── */
+
+.ds-principle-title {
+  margin: 0;
+  font-size: 64px;
+  line-height: 64px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+/* ── Colors card grid (30484:266540) ── */
+
+.ds-colors-card {
+  width: 1440px;
+}
+
+.ds-color-grid {
+  display: flex;
+  gap: 16px;
+  padding-top: 28px;
+}
+
+.ds-color-grid__labels {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-top: 72px;
+}
+
+.ds-color-grid__spacer {
+  height: 0;
+}
+
+.ds-color-grid__label {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  font-size: 24px;
+  line-height: 32px;
+  color: var(--color-text-primary);
+}
+
+.ds-color-grid__themes {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ds-color-col {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.ds-color-theme {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-text-primary);
+}
+
+.ds-color-theme__radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.ds-color-theme--active .ds-color-theme__radio {
+  border: 5px solid #000;
+}
+
+.ds-color-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ds-color-swatch {
+  min-height: 60px;
+  padding: 20px;
+  border-radius: var(--radius-16);
+  font-size: 14px;
+  line-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* Board card sizing overrides */
+
+.ds-board-card .dr-cover {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.ds-board-card .dr-doc {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Responsive nav ── */
+
+.ds-responsive {
+  display: none;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  background: var(--color-white);
+  border-radius: 24px;
+}
+
+.ds-responsive__title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+}
+
+.ds-responsive__copy {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--color-text-secondary);
+}
+
+.ds-responsive__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.ds-responsive__link {
+  display: block;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ds-responsive__link:hover {
+  background: rgba(173, 173, 251, 0.2);
+}
+
+.ds-responsive__note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.ds-responsive__note a {
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 900px) {
+  body.ds-page {
+    padding: 24px 16px 32px;
+  }
+
+  .ds-demo__board-wrap {
+    display: none !important;
+  }
+
+  .ds-responsive {
+    display: flex;
+  }
+}
+
+@media (min-width: 901px) {
+  .ds-demo__board-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ds-demo__board {
+    min-width: 13980px;
+  }
+}

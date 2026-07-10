@@ -1,0 +1,28 @@
+<frame id="30485:135130" name="Chart graphics">
+  <instance id="30485:135132" name="ChartMotion" />
+  <instance id="30485:135133" name="ChartMotion" />
+  <instance id="30485:135134" name="ChartMotion" />
+  <instance id="30485:135136" name="Vertical 01" />
+  <instance id="30485:135139" name="Vertical 02" />
+  <instance id="30485:135137" name="Vertical 03" />
+  <instance id="30485:135142" name="Vertical 04" />
+  <instance id="30485:135138" name="Vertical 05" />
+  <instance id="30485:135143" name="Vertical 06" />
+  <instance id="30485:135141" name="Vertical 07" />
+  <instance id="30485:135140" name="Vertical 08" />
+  <instance id="30485:135147" name="Vertical 09" />
+  <instance id="30485:135145" name="Vertical 10" />
+  <instance id="30485:135146" name="Vertical 11" />
+  <instance id="30485:135144" name="Vertical 12" />
+  <instance id="30485:135148" name="ProportionStatistics" />
+  <instance id="30485:135150" name="Horizontal 01" />
+  <instance id="30485:135151" name="Horizontal 02" />
+  <instance id="30485:135152" name="Horizontal 03" />
+  <instance id="30485:135153" name="Horizontal 04" />
+  <instance id="30485:135155" name="SemicircleChart" />
+  <instance id="30485:135156" name="DonutChart" />
+  <instance id="30485:135157" name="DonutChart" />
+  <instance id="30485:135158" name="DonutChart" />
+  <instance id="30485:135159" name="DonutChart" />
+  <instance id="30485:135160" name="DonutChart" />
+</frame>

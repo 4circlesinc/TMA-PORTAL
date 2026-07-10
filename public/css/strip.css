@@ -1,0 +1,377 @@
+/* TMA — Strip */
+
+.tma-strip,
+.tma-strip *,
+.tma-strip *::before,
+.tma-strip *::after {
+  box-sizing: border-box;
+}
+
+.tma-strip {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tma-strip--track {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 80px;
+}
+
+.tma-strip--h8 {
+  height: 8px;
+}
+
+.tma-strip--h4 {
+  height: 4px;
+}
+
+.tma-strip--bar {
+  height: 18px;
+  padding: 6px 0;
+  align-items: center;
+}
+
+.tma-strip--bar .tma-strip__segment {
+  height: 6px;
+}
+
+.tma-strip__segment {
+  flex: 1 1 0;
+  min-width: 1px;
+  height: 100%;
+  border-radius: 80px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.tma-strip__segment--indigo {
+  background: var(--color-primary);
+}
+
+.tma-strip__segment--black {
+  background: #000;
+}
+
+.tma-strip__segment--muted {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Documentation page — 32421:48401 */
+
+.tma-strip-doc {
+  background: #fff;
+  border-radius: 48px;
+  padding: 80px;
+  width: 1200px;
+  max-width: 100%;
+  min-height: 1672px;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  color: #000;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-strip-doc__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-strip-doc__title {
+  margin: 0;
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 600;
+}
+
+.tma-strip-doc__intro {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.tma-strip-doc__section {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 48px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-strip-doc__section-title {
+  margin: 0;
+  font-size: 48px;
+  line-height: 56px;
+  font-weight: 400;
+}
+
+.tma-strip-doc__list {
+  margin: 0;
+  padding: 0 0 0 27px;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+  list-style: disc;
+}
+
+.tma-strip-doc__list li + li {
+  margin-top: 14px;
+}
+
+.tma-strip-doc__body {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.tma-strip-doc__examples {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 48px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-strip-doc__examples > .tma-strip-doc__section-title {
+  margin: 0;
+}
+
+.tma-strip-doc__example-block {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 20px;
+}
+
+.tma-strip-doc__example-label {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+  color: var(--color-primary-dark);
+  white-space: nowrap;
+}
+
+.tma-strip-doc__example-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.tma-strip-doc__example-stack--progress {
+  width: 600px;
+  max-width: 100%;
+}
+
+.tma-strip-doc__example-stack--password {
+  width: 384px;
+  max-width: 100%;
+}
+
+.tma-strip-doc__text-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.tma-strip-doc__text-strong {
+  font-weight: 600;
+  color: #000;
+}
+
+.tma-strip-doc__text-muted {
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.tma-strip-doc__password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 384px;
+  max-width: 100%;
+  min-width: 313px;
+  height: 40px;
+  padding: 4px 12px;
+  border: 0.5px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.tma-strip-doc__password-input {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-feature-settings: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  color: #000;
+  outline: none;
+}
+
+.tma-strip-doc__password-input::placeholder {
+  color: rgba(0, 0, 0, 0.2);
+}
+
+.tma-strip-doc__password-icon,
+.tma-strip-doc__password-icon svg {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: #000;
+}
+
+.tma-strip-doc__caption {
+  margin: 0;
+  width: 384px;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.tma-strip-doc__chart {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  width: 200px;
+  height: 246px;
+}
+
+.tma-strip-doc__chart-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  height: 246px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: #000;
+}
+
+.tma-strip-doc__chart-label {
+  display: block;
+}
+
+.tma-strip-doc__chart-bars {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  height: 246px;
+}
+
+.tma-strip-doc__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 48px;
+}
+
+.tma-strip-doc__footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.tma-strip-doc__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tma-strip-doc__logo-icon,
+.tma-strip-doc__logo-icon svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.tma-strip-doc__wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.tma-strip-doc__wordmark-left,
+.tma-strip-doc__wordmark-left svg {
+  display: block;
+  width: 53px;
+  height: 12px;
+}
+
+.tma-strip-doc__wordmark-right,
+.tma-strip-doc__wordmark-right svg {
+  display: block;
+  width: 15px;
+  height: 12px;
+}
+
+.tma-strip-doc__copyright {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.tma-strip-doc__socials {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.tma-strip-doc__social,
+.tma-strip-doc__social svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 900px) {
+  .tma-strip-doc {
+    padding: 48px 32px;
+    border-radius: 32px;
+  }
+
+  .tma-strip-doc__title {
+    font-size: 48px;
+    line-height: 56px;
+  }
+
+  .tma-strip-doc__section-title {
+    font-size: 36px;
+    line-height: 44px;
+  }
+
+  .tma-strip-doc__footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

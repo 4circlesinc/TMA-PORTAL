@@ -1,0 +1,54 @@
+{
+  "source": {
+    "fileKey": "58ZXC7sZYQsbenzf0foWCH",
+    "frameId": "30485:158234",
+    "frameName": "Emoji",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-158234"
+  },
+  "description": "Emoji is from Fluent Emoji — full version available in the Figma community.",
+  "attribution": "Microsoft Fluent Emoji (open source). Verify license before production use.",
+  "navigation": {
+    "nodeId": "30995:44304",
+    "name": "Navigation",
+    "title": "Emoji"
+  },
+  "items": [
+    { "nodeId": "30485:158237", "name": "WinkingFace", "size": "32x32" },
+    { "nodeId": "30485:158241", "name": "SmilingFaceSunglasses", "size": "32x32" },
+    { "nodeId": "30485:158236", "name": "FaceTearsJoy", "size": "32x32" },
+    { "nodeId": "30485:158235", "name": "GrinningFaceSweat", "size": "32x32" },
+    { "nodeId": "30485:158238", "name": "SmilingFaceHearts", "size": "32x32" },
+    { "nodeId": "30485:158239", "name": "FaceBlowingKiss", "size": "32x32" },
+    { "nodeId": "30485:158242", "name": "LoudlyCryingFace", "size": "32x32" },
+    { "nodeId": "30485:158243", "name": "FaceSteamFromNose", "size": "32x32" },
+    { "nodeId": "30485:158240", "name": "WinkingFaceTongue", "size": "32x32" },
+    { "nodeId": "30485:158244", "name": "SmilingFaceHorns", "size": "32x32" },
+    { "nodeId": "30485:158247", "name": "GrinningCat", "size": "32x32" },
+    { "nodeId": "30485:158251", "name": "SeeMonkey", "size": "32x32" },
+    { "nodeId": "30485:158245", "name": "SkullCrossbones", "size": "32x32" },
+    { "nodeId": "30485:158246", "name": "RobotEmoji", "size": "32x32" },
+    { "nodeId": "30485:158248", "name": "HeartArrow", "size": "32x32" },
+    { "nodeId": "30485:158252", "name": "RedHeart", "size": "32x32" },
+    { "nodeId": "30485:158250", "name": "BombEmoji", "size": "32x32" },
+    { "nodeId": "30485:158249", "name": "HundredPoints", "size": "32x32" },
+    { "nodeId": "32473:334", "name": "Snowman", "size": "32x32" },
+    { "nodeId": "32473:335", "name": "SnowflakeEmoji", "size": "32x32" },
+    { "nodeId": "32473:336", "name": "UmbrellaEmoji", "size": "32x32" }
+  ],
+  "exportPath": "public/images/emoji",
+  "export": {
+    "format": "svg",
+    "exportedAt": "2026-06-11",
+    "count": 21,
+    "files": [
+      "WinkingFace.svg", "SmilingFaceSunglasses.svg", "FaceTearsJoy.svg",
+      "GrinningFaceSweat.svg", "SmilingFaceHearts.svg", "FaceBlowingKiss.svg",
+      "LoudlyCryingFace.svg", "FaceSteamFromNose.svg", "WinkingFaceTongue.svg",
+      "SmilingFaceHorns.svg", "GrinningCat.svg", "SeeMonkey.svg",
+      "SkullCrossbones.svg", "RobotEmoji.svg", "HeartArrow.svg", "RedHeart.svg",
+      "BombEmoji.svg", "HundredPoints.svg", "Snowman.svg", "SnowflakeEmoji.svg",
+      "UmbrellaEmoji.svg"
+    ]
+  },
+  "laravelUsage": "asset('images/emoji/SmilingFaceSunglasses.svg')"
+}

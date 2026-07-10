@@ -1,0 +1,24 @@
+<frame id="32261:178336" name="Cursors" x="0" y="0" width="2000" height="911">
+  <instance id="32261:178337" name="Navigation" x="100" y="100" width="1200" height="699" />
+  <instance id="32261:178338" name="CursorsDefault" x="1400" y="100" width="32" height="32" />
+  <instance id="32261:178339" name="CursorsBeachball" x="1461" y="100" width="32" height="32" />
+  <instance id="32261:178340" name="CursorsTextCursor" x="1522" y="100" width="32" height="32" />
+  <instance id="32261:178341" name="CursorsCross" x="1583" y="100" width="32" height="32" />
+  <instance id="32261:178342" name="CursorsMenu" x="1644" y="100" width="32" height="32" />
+  <instance id="32261:178343" name="CursorsZoomOut" x="1400" y="166" width="32" height="32" />
+  <instance id="32261:178344" name="CursorsZoomIn" x="1461" y="166" width="32" height="32" />
+  <instance id="32261:178345" name="CursorsHandPointing" x="1522" y="166" width="32" height="32" />
+  <instance id="32261:178346" name="CursorsHandGrabbing" x="1583" y="166" width="32" height="32" />
+  <instance id="32261:178347" name="CursorsHandOpen" x="1644" y="166" width="32" height="32" />
+  <instance id="32261:178348" name="CursorsMove" x="1705" y="166" width="32" height="32" />
+  <instance id="32261:178349" name="CursorsResizeLeft" x="1400" y="231" width="32" height="32" />
+  <instance id="32261:178350" name="CursorsResizeDown" x="1461" y="231" width="32" height="32" />
+  <instance id="32261:178351" name="CursorsResizeRight" x="1522" y="231" width="32" height="32" />
+  <instance id="32261:178352" name="CursorsResizeUp" x="1583" y="231" width="32" height="32" />
+  <instance id="32261:178353" name="CursorsResizeLeftRight" x="1644" y="231" width="32" height="32" />
+  <instance id="32261:178354" name="CursorsResizeUpDown" x="1705" y="231" width="32" height="32" />
+  <instance id="32261:178355" name="CursorsResizeNorthWestSouthEast" x="1400" y="296" width="32" height="32" />
+  <instance id="32261:178356" name="CursorsResizeNorthEastSouthWest" x="1461" y="296" width="32" height="32" />
+  <instance id="32261:178357" name="CursorsResizeWestEast" x="1522" y="296" width="32" height="32" />
+  <instance id="32261:178358" name="CursorsResizeNorthSouth" x="1583" y="296" width="32" height="32" />
+</frame>

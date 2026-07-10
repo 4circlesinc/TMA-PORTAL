@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/">
+  <title>Pricing — TM ANTOINE Advisory</title>
+  <script>
+    fetch('/index.html')
+      .then(function (response) { return response.text(); })
+      .then(function (html) {
+        document.open();
+        document.write(html);
+        document.close();
+      });
+  </script>
+</head>
+<body></body>
+</html>

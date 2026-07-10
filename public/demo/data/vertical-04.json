@@ -1,0 +1,41 @@
+{
+  "slug": "vertical-04",
+  "nodeId": "30485:135142",
+  "name": "Vertical 04",
+  "variant": "blocks",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "barWidth": 28,
+  "blockHeight": 20,
+  "blockSize": 12.5,
+  "primary": "#b899eb",
+  "accent": "#adadfb",
+  "bars": [
+    {
+      "value": 2000,
+      "blocks": ["cap-bottom", "dark", "accent", "cap-top"]
+    },
+    {
+      "value": 5000,
+      "blocks": ["cap-bottom", "dark", "dark", "dark", "accent", "accent", "cap-top"]
+    },
+    {
+      "value": 3000,
+      "blocks": ["cap-bottom", "dark", "accent", "accent", "cap-top"]
+    },
+    {
+      "value": 6000,
+      "blocks": ["cap-bottom", "dark", "dark", "dark", "dark", "accent", "accent", "cap-top"]
+    },
+    {
+      "value": 1000,
+      "blocks": ["cap-bottom", "accent", "cap-top"]
+    },
+    {
+      "value": 4000,
+      "blocks": ["cap-bottom", "dark", "dark", "accent", "accent", "cap-top"]
+    }
+  ]
+}

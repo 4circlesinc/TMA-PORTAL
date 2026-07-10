@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Text documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/frame.css">
+  <link rel="stylesheet" href="../css/text.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body.tma-text-page {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body class="tma-text-page">
+  <article class="tma-frame-doc" data-node-id="32722:4768">
+    <header class="tma-frame-doc__hero" data-node-id="32722:4769">
+      <h1 class="tma-frame-doc__title" data-node-id="32722:4770">Text</h1>
+      <div class="tma-frame-doc__intro" data-node-id="32722:4771">
+        <p>The purpose of making text components is to make it more extensible.</p>
+      </div>
+    </header>
+
+    <section class="tma-frame-doc__section" data-node-id="32722:4772">
+      <h2 class="tma-frame-doc__section-title" data-node-id="32722:4773">Features</h2>
+      <ul class="tma-frame-doc__list" data-node-id="32722:4774">
+        <li>Count: The number of text in the instance.</li>
+        <li>State: Default, hover, No interaction.</li>
+        <li>Vertical: Arrange vertically or horizontally.</li>
+      </ul>
+    </section>
+
+    <section class="tma-frame-doc__section" data-node-id="32722:4775">
+      <h2 class="tma-frame-doc__section-title" data-node-id="32722:4776">Correlation</h2>
+      <ul class="tma-frame-doc__list" data-node-id="32722:4777">
+        <li>Use text styles to change the text size.</li>
+        <li>Change the text color using color variables and color styles.</li>
+        <li>Text components are often paired with  and Content components.</li>
+      </ul>
+    </section>
+
+    <section class="tma-frame-doc__examples tma-text-doc__examples" data-node-id="32722:4778">
+      <h2 class="tma-frame-doc__section-title" data-node-id="32722:4779">Examples</h2>
+      <div id="text-examples"></div>
+    </section>
+
+    <div id="doc-footer"></div>
+  </article>
+
+<script src="../js/frame-doc-icons.js"></script>
+<script src="../js/button-instances-icons.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script src="../js/frame-doc.js"></script>
+<script src="../js/text.js"></script>
+<script src="../js/text-doc.js"></script>
+<script>
+window.TMATextDoc.mountDocumentation({
+  examplesEl: document.getElementById('text-examples'),
+  footerEl: document.getElementById('doc-footer'),
+  socialSvg: window.TMATableSearchIcons.svg,
+});
+</script>
+</body>
+</html>

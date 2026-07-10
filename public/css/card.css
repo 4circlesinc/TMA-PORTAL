@@ -1,0 +1,1486 @@
+/* TMA — Card */
+
+.tma-card,
+.tma-card *,
+.tma-card *::before,
+.tma-card *::after {
+  box-sizing: border-box;
+}
+
+.tma-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  color: var(--color-text-primary);
+  background: var(--color-bg-card);
+  border-radius: 16px;
+  overflow: clip;
+  --tma-card-content-inset: 4px;
+}
+
+/* Progress card — 32267:8047 */
+
+.tma-card--progress {
+  width: 278.667px;
+  min-width: 240px;
+  height: 166px;
+  padding: 24px;
+}
+
+.tma-card__header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline: var(--tma-card-content-inset);
+}
+
+.tma-card__copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-card__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-card__subtitle {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__logo,
+.tma-card__logo-svg,
+.tma-card__logo-img {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.tma-card__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px var(--tma-card-content-inset);
+  border-radius: 8px;
+}
+
+.tma-card__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-card__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+}
+
+.tma-card__chip-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.tma-card__chip-dot-svg,
+.tma-card__chip-dot svg {
+  width: 4.5px;
+  height: 4.5px;
+  flex-shrink: 0;
+}
+
+.tma-card__chip-label {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-violet);
+  white-space: nowrap;
+}
+
+.tma-card__strip {
+  display: flex;
+  width: 100%;
+  padding-right: 40px;
+  overflow: hidden;
+  border-radius: 80px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tma-card__strip-fill {
+  display: block;
+  height: 2px;
+  border-radius: 80px;
+  background: var(--color-primary);
+}
+
+.tma-card__stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.tma-card__tasks {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+.tma-card__tasks-sep,
+.tma-card__tasks-label {
+  color: var(--color-text-secondary);
+}
+
+.tma-card__tasks-sep {
+  color: var(--color-text-placeholder);
+}
+
+.tma-card__percent {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+/* Credit card — 32267:8050 */
+
+.tma-card--credit {
+  position: relative;
+  width: 270.667px;
+  min-width: 200px;
+  max-width: 280px;
+  height: 140px;
+  padding: 16px 24px;
+  border: 0;
+  text-align: left;
+  cursor: default;
+}
+
+.tma-card__edit {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.04);
+  font-family: inherit;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-card__edit:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.tma-card__credit-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+  border-radius: 8px;
+}
+
+.tma-card__credit-name {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__status-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 80px;
+  overflow: hidden;
+}
+
+.tma-card__status-chip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #71dd8c;
+  opacity: 0.1;
+}
+
+.tma-card__status-chip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 0.5px solid #71dd8c;
+  border-radius: inherit;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.tma-card__status-chip-label {
+  position: relative;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-green);
+  white-space: nowrap;
+}
+
+.tma-card__number {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  padding-top: 4px;
+  border-radius: 8px;
+}
+
+.tma-card__number-group {
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.tma-card__credit-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border-radius: 12px;
+}
+
+.tma-card__expiry {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__visa,
+.tma-card__visa-svg {
+  width: 40px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.tma-card__card-brand-img {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.tma-card__card-brand-img--paypal {
+  width: auto;
+  height: 32px;
+  max-width: 40px;
+}
+
+/* Documentation page — 32267:8033 */
+
+.tma-card-doc {
+  background: #fff;
+  border-radius: 48px;
+  padding: 80px;
+  max-width: 1200px;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-card-doc__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-card-doc__title {
+  margin: 0;
+  font-size: var(--text-size-64);
+  line-height: 72px;
+  font-weight: 600;
+}
+
+.tma-card-doc__intro p {
+  margin: 0;
+  font-size: var(--text-size-18);
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.tma-card-doc__section {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 48px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-card-doc__section-title {
+  margin: 0;
+  font-size: var(--text-size-48);
+  line-height: 56px;
+  font-weight: 400;
+}
+
+.tma-card-doc__list {
+  margin: 0;
+  padding: 0 0 0 27px;
+  font-size: var(--text-size-18);
+  line-height: 28px;
+  font-weight: 400;
+  list-style: disc;
+}
+
+.tma-card-doc__list li + li {
+  margin-top: 14px;
+}
+
+.tma-card-doc__body {
+  margin: 0;
+  font-size: var(--text-size-18);
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.tma-card-doc__example-block {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 20px;
+}
+
+.tma-card-doc__example-block + .tma-card-doc__example-block {
+  margin-top: 28px;
+}
+
+.tma-card-doc__example-label {
+  margin: 0;
+  font-size: var(--text-size-18);
+  line-height: 28px;
+  font-weight: 400;
+  color: var(--color-purple);
+  white-space: nowrap;
+}
+
+.tma-card-doc__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 48px;
+}
+
+.tma-card-doc__footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.tma-card-doc__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tma-card-doc__logo-icon,
+.tma-card-doc__logo-icon svg {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.tma-card-doc__wordmark {
+  display: inline-flex;
+  align-items: center;
+  height: 12px;
+}
+
+.tma-card-doc__wordmark-left,
+.tma-card-doc__wordmark-left svg {
+  width: 53px;
+  height: 12px;
+}
+
+.tma-card-doc__wordmark-right,
+.tma-card-doc__wordmark-right svg {
+  width: 15px;
+  height: 12px;
+}
+
+.tma-card-doc__copyright {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-card-doc__socials {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.tma-card-doc__social,
+.tma-card-doc__social svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 900px) {
+  .tma-card-doc {
+    padding: 32px 24px;
+    border-radius: 28px;
+  }
+
+  .tma-card-doc__title {
+    font-size: var(--text-size-32);
+    line-height: 1.1;
+  }
+
+  .tma-card-doc__section-title {
+    font-size: var(--text-size-32);
+    line-height: 1.2;
+  }
+
+  .tma-card-doc__footer {
+    flex-direction: column;
+  }
+}
+
+/* Chip color variants */
+
+.tma-card__chip--purple {
+  color: var(--color-violet);
+}
+
+.tma-card__chip--green {
+  color: var(--color-green);
+}
+
+.tma-card__chip--gray {
+  color: var(--color-text-secondary);
+}
+
+.tma-card__chip--blue {
+  color: var(--color-blue);
+}
+
+.tma-card__chip--orange {
+  color: var(--color-orange);
+}
+
+.tma-card__chip--purple .tma-card__chip-label,
+.tma-card__chip--green .tma-card__chip-label,
+.tma-card__chip--gray .tma-card__chip-label,
+.tma-card__chip--blue .tma-card__chip-label,
+.tma-card__chip--orange .tma-card__chip-label {
+  color: inherit;
+}
+
+.tma-card__chip-dot,
+.tma-card__chip-dot-svg {
+  color: inherit;
+}
+
+/* Strip fill colors */
+
+.tma-card__strip-fill--purple {
+  background: var(--color-primary);
+}
+
+.tma-card__strip-fill--green {
+  background: #71dd8c;
+}
+
+.tma-card__strip-fill--gray {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.tma-card__strip-fill--blue {
+  background: #7dbbff;
+}
+
+.tma-card__strip-fill--orange {
+  background: #ffb55b;
+}
+
+.tma-card__strip-fill--yellow {
+  background: #ffcc00;
+}
+
+.tma-card__strip--full {
+  padding-right: 0;
+}
+
+/* Progress board variant — 33160 instances */
+
+.tma-card--progress-board {
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  height: 166px;
+}
+
+.tma-card__avatar-group {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tma-card__avatar-group .tma-card__avatar {
+  margin-right: -8px;
+  border: 2px solid #f9f9fa;
+}
+
+.tma-card__avatar-group .tma-card__avatar:last-child,
+.tma-card__avatar-group .tma-card__avatar-more:last-child {
+  margin-right: 0;
+}
+
+.tma-card__avatar-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: -8px;
+  border: 2px solid #f9f9fa;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+/* Stat card — 33160:10066 */
+
+.tma-card--stat {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: clamp(6px, 2.5cqi, 8px);
+  width: 280px;
+  min-width: 280px;
+  height: 112px;
+  padding: clamp(16px, 6cqi, 24px);
+  border: 0;
+}
+
+.tma-card__stat-label {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(11px, 5.8cqi, var(--text-size-14));
+  line-height: clamp(15px, 6.8cqi, 20px);
+  font-weight: 400;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-card__stat-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: clamp(6px, 2.5cqi, 8px);
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline: var(--tma-card-content-inset);
+}
+
+.tma-card__stat-row--top {
+  grid-template-columns: minmax(0, 1fr) clamp(18px, 9cqi, 24px);
+}
+
+.tma-card__stat-value {
+  grid-column: 1;
+  margin: 0;
+  font-size: clamp(17px, 10.5cqi, var(--text-size-24));
+  line-height: clamp(22px, 11.5cqi, 32px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-card__stat-trend {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(8px, 4cqi, 12px);
+  min-width: 0;
+  max-width: 100%;
+  font-size: clamp(10px, 5.2cqi, var(--text-size-12));
+  line-height: clamp(14px, 6cqi, 16px);
+  font-weight: 400;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.tma-card__stat-trend-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-card__stat-trend-icon,
+.tma-card__stat-trend-icon svg,
+.tma-card__stat-trend-icon img,
+.tma-card__stat-trend-icon-svg {
+  width: clamp(12px, 7cqi, 16px);
+  height: clamp(12px, 7cqi, 16px);
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.tma-card__stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: clamp(18px, 9cqi, 24px);
+  height: clamp(18px, 9cqi, 24px);
+  color: var(--color-text-primary);
+}
+
+.tma-card__stat-icon-svg,
+.tma-card__stat-icon svg,
+.tma-card__stat-icon img {
+  width: clamp(18px, 9cqi, 24px);
+  height: clamp(18px, 9cqi, 24px);
+  object-fit: contain;
+}
+
+/* Task card — 33160:10081 */
+
+.tma-card--task {
+  width: 280px;
+  min-width: 280px;
+  height: 164px;
+  padding: 16px;
+  gap: 8px;
+}
+
+.tma-card__tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 80px;
+  background: var(--color-2);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.tma-card__description {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-card__task-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: auto;
+}
+
+.tma-card__task-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tma-card__task-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__task-meta-icon,
+.tma-card__task-meta-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+/* Price card — 33160:10093 */
+
+.tma-card--price {
+  width: 372px;
+  min-width: 372px;
+  height: 568px;
+  padding: 40px;
+  gap: 24px;
+  background: #fff;
+}
+
+.tma-card__price-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__price-value {
+  margin: 0;
+  font-size: var(--text-size-48);
+  line-height: 56px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__price-license {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tma-card__feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+.tma-card__feature-icon,
+.tma-card__feature-icon svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+}
+
+.tma-card__price-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: auto;
+  padding: 12px 24px;
+  border: 0;
+  border-radius: 80px;
+  background: #000;
+  font-family: inherit;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-white);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-card__price-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* Usage card — 33160:10096 */
+
+.tma-card--usage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 260px;
+  min-width: 260px;
+  padding: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  background: var(--color-bg-card);
+  font-family: inherit;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-card--usage-selected,
+.tma-card--usage.is-selected {
+  border: 2px solid #000;
+  padding: 15px;
+}
+
+.tma-card__usage-title {
+  margin: 0;
+  padding-right: 32px;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__usage-desc {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__usage-radio {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-primary);
+}
+
+.tma-card--usage {
+  position: relative;
+}
+
+.tma-card__usage-radio svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Credit card variants */
+
+.tma-card--credit-hover,
+.tma-card--credit.tma-card--credit-hover {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-card--credit-compact {
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  height: auto;
+  min-height: 120px;
+  padding: 16px;
+}
+
+.tma-card--credit-compact .tma-card__credit-top {
+  padding: 0;
+}
+
+.tma-card--credit-button {
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  height: auto;
+  min-height: 120px;
+  padding: 16px;
+}
+
+.tma-card__credit-email {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card--credit-paypal {
+  cursor: default;
+}
+
+.tma-card__credit-top--solo {
+  padding: 4px 0;
+}
+
+.tma-card__credit-email--primary {
+  margin: 0;
+  padding-top: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__credit-footer--brand {
+  width: 100%;
+}
+
+.tma-card__mastercard,
+.tma-card__mastercard-svg,
+.tma-card__paypal,
+.tma-card__paypal-svg {
+  width: 40px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.tma-card__paypal,
+.tma-card__paypal-svg {
+  height: 14px;
+}
+
+/* Address card — 33160:10102 */
+
+.tma-card--address {
+  position: relative;
+  width: 260px;
+  min-width: 260px;
+  padding: 16px;
+  gap: 8px;
+  border: 0;
+  background: var(--color-bg-card);
+  font-family: inherit;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-card--address:hover,
+.tma-card--address-active {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-card--address-active {
+  padding: 15px;
+}
+
+.tma-card__address-label {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__address-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tma-card__address-line {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+/* Add address card — 33160:10104 */
+
+.tma-card--add-address {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 260px;
+  min-width: 260px;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 16px;
+  background: transparent;
+  font-family: inherit;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-card--add-address:hover {
+  border-color: rgba(0, 0, 0, 0.35);
+  color: var(--color-text-primary);
+}
+
+.tma-card__add-icon,
+.tma-card__add-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+/* Code block — 33250:2266 */
+
+.tma-card--code-block {
+  position: relative;
+  width: 653px;
+  min-width: 653px;
+  height: 640px;
+  padding: 20px;
+  gap: 0;
+  background: var(--color-bg-card);
+  overflow: hidden;
+}
+
+.tma-card__code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.tma-card__code-lang {
+  margin-right: auto;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__code-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-card__code-tool:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-primary);
+}
+
+.tma-card__code-tool svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tma-card__code-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  font-family: "Source Code Pro", ui-monospace, monospace;
+  font-size: var(--text-size-12);
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.tma-card__code-lines {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0 12px 0 0;
+  list-style: none;
+  text-align: right;
+  color: var(--color-text-placeholder);
+  user-select: none;
+}
+
+.tma-card__code-line-num {
+  display: block;
+  min-width: 20px;
+}
+
+.tma-card__code-pre {
+  margin: 0;
+  overflow: visible;
+  white-space: pre;
+  color: var(--color-text-primary);
+}
+
+.tma-card__code-resize {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-placeholder);
+  pointer-events: none;
+}
+
+.tma-card__code-resize svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tma-card__code-kw {
+  color: var(--color-purple);
+}
+
+.tma-card__code-fn {
+  color: var(--color-blue);
+}
+
+.tma-card__code-str {
+  color: var(--color-green);
+}
+
+.tma-card__code-num {
+  color: var(--color-orange);
+}
+
+.tma-card__code-cmt {
+  color: var(--color-text-secondary);
+}
+
+.tma-card__code-op {
+  color: var(--color-text-primary);
+}
+
+/* Card instances page — 33160:10064 */
+
+.tma-card-instances-page {
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+}
+
+.tma-card-instances-page__hero {
+  margin-bottom: 48px;
+}
+
+.tma-card-instances-page__hero-title {
+  margin: 0 0 8px;
+  font-size: var(--text-size-48);
+  line-height: 56px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card-instances-page__hero-subtitle {
+  margin: 0;
+  font-size: var(--text-size-18);
+  line-height: 28px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card-instances-page__board-wrap {
+  overflow: auto;
+  max-width: 100%;
+  border-radius: 48px;
+  background: #fff;
+}
+
+.tma-card-instances-page__board {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tma-card-instances-page__card {
+  position: absolute;
+}
+
+/* Renderer class aliases + Figma tuning */
+
+.tma-card--task {
+  padding: 24px;
+}
+
+.tma-card__task-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--color-2);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-card__task-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__task-description {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-card__task-metrics {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tma-card__task-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__task-metric-icon,
+.tma-card__task-metric-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__avatar--sm {
+  width: 24px;
+  height: 24px;
+}
+
+.tma-card__avatar-more.tma-card__avatar--sm {
+  width: 24px;
+  height: 24px;
+  font-size: var(--text-size-12);
+}
+
+.tma-card--price {
+  background: var(--color-bg-card);
+}
+
+.tma-card__price-title {
+  font-size: var(--text-size-18);
+  line-height: 28px;
+}
+
+.tma-card__price-amount-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.tma-card__price-amount {
+  margin: 0;
+  font-size: var(--text-size-48);
+  line-height: 56px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-card__price-period {
+  margin: 0 0 8px;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card__price-features {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 0;
+  padding: 0 0 16px;
+  list-style: none;
+  width: 100%;
+}
+
+.tma-card__price-feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-size-18);
+  line-height: 28px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+.tma-card__price-check,
+.tma-card__price-check svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+}
+
+.tma-card__price-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  margin-top: auto;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 20px;
+  background: #000;
+  font-family: inherit;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  font-size: var(--text-size-16);
+  line-height: 24px;
+  font-weight: 400;
+  color: var(--color-white);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-card__price-button:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.tma-card--usage {
+  position: relative;
+  padding: 24px;
+  gap: 8px;
+}
+
+.tma-card__usage-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.tma-card__usage-description {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-card--usage-selected {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tma-card__address-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.tma-card--task .tma-card__avatar,
+.tma-card--task .tma-card__avatar--sm {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid #fff;
+  border-radius: 50%;
+}
+
+.tma-card--task .tma-card__avatar-more {
+  background: var(--color-2);
+  border: 1px solid #fff;
+  color: var(--color-text-primary);
+}

@@ -1,0 +1,37 @@
+{
+  "slug": "table-c",
+  "nodeId": "32722:24626",
+  "guidanceNodeId": "32722:24626",
+  "name": "Table C",
+  "description": "Full interactive table implementing Table A interactive guidance — selection, function bar states, delete/duplicate, pagination footer, popover, and toast.",
+  "cssPath": "public/css/table-c.css",
+  "jsPath": "public/js/table-c.js",
+  "defaultVariant": "default",
+  "variants": {
+    "default": {}
+  },
+  "interactions": {
+    "rowBlankClickSelect": true,
+    "modifierMultiSelect": true,
+    "shiftRangeSelect": true,
+    "clickOutsideDeselect": true,
+    "selectAllOnSheetHover": true,
+    "functionBarSelectedState": true,
+    "deleteWithToast": true,
+    "duplicateBelowSelection": true,
+    "rowActionPopover": true,
+    "paginationFooter": true,
+    "pageSizes": [20, 50, 100],
+    "defaultPageSize": 20
+  },
+  "toast": {
+    "deleteMessage": "Deleted",
+    "undoLabel": "Undo"
+  },
+  "popover": {
+    "items": ["Action", "Action", "Action"]
+  },
+  "items": [
+    { "nodeId": "32722:24626", "variant": "default", "currentPage": 1, "pageSize": 20, "totalResults": 105 }
+  ]
+}

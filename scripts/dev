@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PORT="${DEV_SERVER_PORT:-8765}"
+
+"$ROOT/scripts/stop-dev-server.sh" 2>/dev/null || true
+
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  lsof -tiTCP:"$PORT" -sTCP:LISTEN | xargs kill 2>/dev/null || true
+  sleep 0.5
+fi
+
+exec "$ROOT/scripts/dev-server.sh"

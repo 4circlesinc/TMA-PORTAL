@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Filter and sort guidance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/function-bar.css">
+  <link rel="stylesheet" href="../css/pagination.css">
+  <link rel="stylesheet" href="../css/status-badge.css">
+  <link rel="stylesheet" href="../css/table-a.css">
+  <link rel="stylesheet" href="../css/filter-and-sort.css">
+  <link rel="stylesheet" href="../css/table-filter-sort.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #fff;
+      color: #000;
+      padding: 48px 80px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    .guidance-hero { margin-bottom: 0; padding-bottom: 48px; border-bottom: 1px solid rgba(0,0,0,0.1); }
+    .guidance-hero__title { font-size: 64px; line-height: 72px; font-weight: 600; margin-bottom: 8px; }
+    .guidance-hero__subtitle { font-size: 48px; line-height: 56px; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <header class="guidance-hero">
+    <h1 class="guidance-hero__title">Filter and sort</h1>
+    <p class="guidance-hero__subtitle">Table interactive guidance</p>
+  </header>
+
+  <a class="tma-table-filter-sort-guidance__doc" href="#" target="_blank" rel="noopener noreferrer">
+    <img src="../images/icons/tma/Goto.svg" alt="" class="tma-table-filter-sort-guidance__doc-icon" width="16" height="16" />
+    <span>Component documentation</span>
+  </a>
+
+  <div id="guidance-root"></div>
+
+<script>
+const ICONS = {
+  Add: '../images/icons/tma/Add.svg',
+  FunnelSimple: '../images/icons/tma/FunnelSimple-16.svg',
+  ArrowsDownUp: '../images/icons/tma/ArrowsDownUp.svg',
+  ArrowsDown: '../images/icons/tma/ArrowsDown-16.svg',
+  ArrowsUp: '../images/icons/tma/ArrowsUp.svg',
+  Search: '../images/icons/tma/Search-16.svg',
+  Close: '../images/icons/tma/Close-12.svg',
+  Dot: '../images/icons/tma/Dot-12.svg',
+  ArrowLineRight: '../images/icons/tma/ArrowLineRight-16.svg',
+  ArrowLineUpDown: '../images/icons/tma/ArrowLineUpDown.svg',
+  Copy: '../images/icons/tma/Copy-16.svg',
+  ThreeDots: '../images/icons/tma/ThreeDots-16.svg',
+  Checkbox: '../images/icons/tma/Checkbox-16.svg',
+  CheckboxChecked: '../images/icons/tma/CheckboxChecked-16.svg',
+  ArrowLineLeft: '../images/icons/tma/ArrowLineLeft-16.svg',
+  ArrowLineDown: '../images/icons/tma/ArrowLineDown-16.svg',
+  CalendarBlank: '../images/icons/phosphor/CalendarBlank-16.svg',
+  ListNumbers: '../images/icons/phosphor/ListNumbers.svg',
+  User: '../images/icons/phosphor/User.svg',
+  EnvelopeSimple: '../images/icons/phosphor/EnvelopeSimple.svg',
+  MapPin: '../images/icons/phosphor/MapPin.svg',
+  CirclesThreePlus: '../images/icons/phosphor/CirclesThreePlus.svg',
+  Broom: '../images/icons/phosphor/Broom.svg',
+};
+
+window.TMATableFilterSortIcons = ICONS;
+
+const COLORS = { purple: '#b899eb', green: '#71dd8c', blue: '#7dbbff', orange: '#ffb55b', muted: 'rgba(0, 0, 0, 0.4)' };
+const STATUS_VARIANTS = { 'in-progress': 'dot-purple', complete: 'dot-green', pending: 'dot-blue', approved: 'dot-orange', rejected: 'dot-muted' };
+
+const FILTER_FIELDS = [
+  { id: 'orderId', label: 'Order ID', icon: 'ListNumbers' },
+  { id: 'user', label: 'User', icon: 'User' },
+  { id: 'email', label: 'Email', icon: 'EnvelopeSimple' },
+  { id: 'address', label: 'Address', icon: 'MapPin' },
+  { id: 'date', label: 'Date', icon: 'CalendarBlank' },
+  { id: 'status', label: 'Status', icon: 'CirclesThreePlus' },
+];
+
+const OPERATORS = ['Is', 'Is not', 'Contains', 'Does not contain', 'Starts with', 'Ends with'];
+const STATUS_OPTIONS = ['In Progress', 'Complete', 'Pending', 'Approved', 'Rejected'];
+const USER_OPTIONS = [
+  { name: 'Natali Craig', avatar: 'AvatarFemale06' },
+  { name: 'Kate Morrison', avatar: 'AvatarFemale04' },
+  { name: 'Drew Cano', avatar: 'AvatarMale01' },
+  { name: 'Orlando Diggs', avatar: 'AvatarMale03' },
+  { name: 'Andi Lane', avatar: 'AvatarFemale01' },
+];
+
+const ALL_ROWS = [
+  { orderId: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', project: 'Landing Page', address: 'Meadow Lane Oakland', date: 'Just now', status: 'in-progress', statusLabel: 'In Progress' },
+  { orderId: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', project: 'CRM Admin pages', address: 'Larry San Francisco', date: '1 minute ago', status: 'complete', statusLabel: 'Complete' },
+  { orderId: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', project: 'Client Project', address: 'Bagwell Avenue Ocala', date: '1 hour ago', status: 'pending', statusLabel: 'Pending' },
+  { orderId: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', project: 'Admin Dashboard', address: 'Washburn Baton Rouge', date: 'Yesterday', status: 'approved', statusLabel: 'Approved', rowVariant: 'section-end' },
+  { orderId: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', project: 'App Landing Page', address: 'Nest Lane Olivette', date: 'Feb 2, 2026', status: 'rejected', statusLabel: 'Rejected' },
+  { orderId: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', project: 'Landing Page', address: 'Meadow Lane Oakland', date: 'Just now', status: 'in-progress', statusLabel: 'In Progress' },
+  { orderId: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', project: 'CRM Admin pages', address: 'Larry San Francisco', date: '1 minute ago', status: 'complete', statusLabel: 'Complete', checked: true },
+  { orderId: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', project: 'Client Project', address: 'Bagwell Avenue Ocala', date: '1 hour ago', status: 'pending', statusLabel: 'Pending', checked: true },
+  { orderId: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', project: 'Admin Dashboard', address: 'Washburn Baton Rouge', date: 'Yesterday', status: 'approved', statusLabel: 'Approved' },
+  { orderId: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', project: 'App Landing Page', address: 'Nest Lane Olivette', date: 'Feb 2, 2026', status: 'rejected', statusLabel: 'Rejected' },
+];
+
+function escJson(obj) { return JSON.stringify(obj).replace(/"/g, '&quot;'); }
+
+function renderStatusBadge(label, status) {
+  const color = STATUS_VARIANTS[status].split('-')[1];
+  return `<span class="tma-status-badge tma-status-badge--dot tma-status-badge--${color}" style="--status-badge-color:${COLORS[color]}"><span class="tma-status-badge__dot" aria-hidden="true"></span><span class="tma-status-badge__label">${label}</span></span>`;
+}
+
+function renderCheckbox(checked, attrs = '') {
+  const src = checked ? ICONS.CheckboxChecked : ICONS.Checkbox;
+  return `<button type="button" class="tma-table-a__checkbox-btn"${attrs} aria-pressed="${checked ? 'true' : 'false'}"${checked ? ' data-checked' : ''}><img src="${src}" class="tma-table-a__checkbox-glyph" data-checkbox-glyph width="16" height="16" alt="" /></button>`;
+}
+
+function renderPopoverSearch(staticMode = true) {
+  const inputAttrs = staticMode ? ' readonly tabindex="-1"' : ' data-popover-search';
+  return `<div class="tma-filter-popover__search"><img src="${ICONS.Search}" alt="" class="tma-filter-popover__search-icon" width="16" height="16" /><input type="search" class="tma-filter-popover__search-input" placeholder="Search"${inputAttrs} /><span class="tma-filter-popover__search-kbd">/</span></div>`;
+}
+
+function renderFieldItem(field, options = {}) {
+  const { hover = false, staticMode = true } = options;
+  const attrs = staticMode
+    ? `class="tma-filter-popover__item tma-filter-popover__item--static${hover ? '" data-hover' : '"'}`
+    : `class="tma-filter-popover__item" type="button" data-filter-field="${field.id}" data-filter-field-label="${field.label}"`;
+  const tag = staticMode ? 'div' : 'button';
+  return `<${tag} ${attrs}><img src="${ICONS[field.icon]}" alt="" class="tma-filter-popover__item-icon" width="16" height="16" /><span class="tma-filter-popover__item-label">${field.label}</span><img src="${ICONS.ArrowLineRight}" alt="" class="tma-filter-popover__item-chevron" width="16" height="16" aria-hidden="true" /></${tag}>`;
+}
+
+function renderFieldsPopover(options = {}) {
+  const { staticMode = true, emailHover = false } = options;
+  const items = FILTER_FIELDS.map(f => renderFieldItem(f, { staticMode, hover: emailHover && f.id === 'email' })).join('');
+  const cls = staticMode ? 'tma-filter-popover' : 'tma-filter-popover tma-filter-popover--fixed';
+  const attrs = staticMode ? '' : ' data-filter-popover="fields" aria-hidden="true"';
+  return `<div class="${cls}"${attrs}>${renderPopoverSearch(staticMode)}${items}</div>`;
+}
+
+function renderOperatorsPopover(options = {}) {
+  const { staticMode = true, containsHover = true } = options;
+  const input = `<div class="tma-filter-popover__value-input"><input type="text" placeholder="Type a value..."${staticMode ? ' readonly tabindex="-1"' : ' data-operator-value'} /></div>`;
+  const items = OPERATORS.map(op => {
+    const hover = containsHover && op === 'Contains';
+    const check = hover ? `<img src="${ICONS.CheckboxChecked}" alt="" class="tma-filter-popover__item-check" width="16" height="16" />` : '';
+    if (staticMode) {
+      return `<div class="tma-filter-popover__item tma-filter-popover__item--static${hover ? '" data-hover' : '"'}><span class="tma-filter-popover__item-label">${op}</span>${check}</div>`;
+    }
+    return `<button type="button" class="tma-filter-popover__item" data-filter-operator="${op.toLowerCase()}"><span class="tma-filter-popover__item-label">${op}</span></button>`;
+  }).join('');
+  const cls = staticMode ? 'tma-filter-popover' : 'tma-filter-popover tma-filter-popover--fixed';
+  const attrs = staticMode ? '' : ' data-filter-popover="operators" aria-hidden="true"';
+  return `<div class="${cls}"${attrs}>${input}${items}</div>`;
+}
+
+function renderStatusPopover(staticMode = true) {
+  const items = STATUS_OPTIONS.map(s => staticMode
+    ? `<div class="tma-filter-popover__item tma-filter-popover__item--static"><span class="tma-filter-popover__item-label">${s}</span></div>`
+    : `<button type="button" class="tma-filter-popover__item" data-filter-status="${s}"><span class="tma-filter-popover__item-label">${s}</span></button>`
+  ).join('');
+  const cls = staticMode ? 'tma-filter-popover' : 'tma-filter-popover tma-filter-popover--fixed';
+  const attrs = staticMode ? '' : ' data-filter-popover="status" aria-hidden="true"';
+  return `<div class="${cls}"${attrs}>${items}</div>`;
+}
+
+function renderUsersPopover(staticMode = true, multi = true) {
+  const group = `<div class="tma-filter-popover__group-label">Group 1</div>`;
+  const items = USER_OPTIONS.map(u => {
+    const check = (!multi && u.name === 'Kate Morrison') ? `<img src="${ICONS.CheckboxChecked}" alt="" class="tma-filter-popover__item-check" width="16" height="16" />` : (multi && (u.name === 'Kate Morrison' || u.name === 'Drew Cano') ? `<img src="${ICONS.CheckboxChecked}" alt="" class="tma-filter-popover__item-check" width="16" height="16" />` : '');
+    const inner = `<span class="tma-filter-popover__user-row"><img src="../images/avatars/${u.avatar}.png" alt="" class="tma-filter-popover__user-avatar" width="24" height="24" /><span class="tma-filter-popover__item-label">${u.name}</span></span>${check}`;
+    if (staticMode) return `<div class="tma-filter-popover__item tma-filter-popover__item--static">${inner}</div>`;
+    return `<button type="button" class="tma-filter-popover__item" data-filter-user="${u.name}">${inner}</button>`;
+  }).join('');
+  const cls = staticMode ? 'tma-filter-popover' : 'tma-filter-popover tma-filter-popover--fixed';
+  const attrs = staticMode ? '' : ' data-filter-popover="users" aria-hidden="true"';
+  return `<div class="${cls}"${attrs}>${renderPopoverSearch(staticMode)}${group}${items}</div>`;
+}
+
+function renderColumnPopover(staticMode = true) {
+  const cls = staticMode ? 'tma-filter-popover tma-filter-popover--wide' : 'tma-filter-popover tma-filter-popover--wide tma-filter-popover--fixed';
+  const attrs = staticMode ? '' : ' data-filter-popover="column" aria-hidden="true"';
+  const item = (label, icon, meta, action) => {
+    if (staticMode) return `<div class="tma-filter-popover__item tma-filter-popover__item--static"><img src="${ICONS[icon]}" alt="" class="tma-filter-popover__item-icon" width="16" height="16" /><span class="tma-filter-popover__item-label">${label}</span>${meta ? `<span class="tma-filter-popover__item-meta">${meta}</span>` : ''}${action ? '' : (meta ? `<img src="${ICONS.ArrowLineRight}" alt="" class="tma-filter-popover__item-chevron" width="16" height="16" />` : '')}</div>`;
+    return `<button type="button" class="tma-filter-popover__item" data-column-action="${action}"><img src="${ICONS[icon]}" alt="" class="tma-filter-popover__item-icon" width="16" height="16" /><span class="tma-filter-popover__item-label">${label}</span>${meta ? `<span class="tma-filter-popover__item-meta">${meta}</span>` : ''}</button>`;
+  };
+  return `<div class="${cls}"${attrs}>
+    ${item('Date', 'CalendarBlank', '10/02/2026 - 25/02/2026', 'noop')}
+    ${item('Sort ascending', 'ArrowsUp', 'A - Z', 'sort-asc')}
+    ${item('Sort descending', 'ArrowsDown', 'Z - A', 'sort-desc')}
+    <div class="tma-filter-popover__divider"></div>
+    ${item('Clear filter', 'Broom', '', 'clear-filter')}
+    ${item('Clear sort', 'Broom', '', 'clear-sort')}
+  </div>`;
+}
+
+function renderDateRangePreview() {
+  const days = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+  const nums = ['','','','','','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28'];
+  const dayCells = days.map(d => `<div class="tma-date-range-preview__day tma-date-range-preview__day--muted">${d}</div>`).join('');
+  const numCells = nums.map((n, i) => {
+    if (!n) return '<div></div>';
+    let cls = 'tma-date-range-preview__day';
+    if (n === '10' || n === '25') cls += ' tma-date-range-preview__day--selected';
+    else if (+n > 10 && +n < 25) cls += ' tma-date-range-preview__day--in-range';
+    return `<div class="${cls}">${n}</div>`;
+  }).join('');
+  return `<div class="tma-date-range-preview"><div class="tma-date-range-preview__shortcuts"><span class="tma-date-range-preview__shortcut">Today</span><span class="tma-date-range-preview__shortcut">Last selection</span></div><div class="tma-date-range-preview__grid">${dayCells}${numCells}</div></div>`;
+}
+
+function renderFilterTags(tags) {
+  const html = tags.map(tag => {
+    const icon = tag.icon || 'FunnelSimple';
+    const iconSize = icon === 'Dot' ? 12 : 16;
+    const iconClass = iconSize === 12 ? 'tma-filter-and-sort__icon tma-filter-and-sort__icon--12' : 'tma-filter-and-sort__icon tma-filter-and-sort__icon--16';
+    return `<div class="tma-filter-and-sort__tag" role="listitem" data-tag-id="${tag.id}"><img src="${ICONS[icon]}" class="${iconClass}" width="${iconSize}" height="${iconSize}" alt="" aria-hidden="true" /><span class="tma-filter-and-sort__label">${tag.label}</span><button type="button" class="tma-filter-and-sort__remove" aria-label="Remove ${tag.label}" data-remove-tag="${tag.id}"><img src="${ICONS.Close}" class="tma-filter-and-sort__icon tma-filter-and-sort__icon--close" width="6" height="6" alt="" /></button></div>`;
+  }).join('');
+  return `<div class="tma-filter-and-sort tma-filter-and-sort--default" style="--filter-sort-width:892px;"><div class="tma-filter-and-sort__tags" role="list">${html}</div><button type="button" class="tma-filter-and-sort__reset" data-reset-filters><span class="tma-filter-and-sort__reset-label">Reset</span></button></div>`;
+}
+
+function renderFunctionBar(interactive = false) {
+  const filterAttrs = interactive ? ' data-filter-trigger aria-label="Filter" aria-expanded="false" aria-pressed="false"' : ' aria-label="Filter"';
+  return `<div class="tma-function-bar tma-function-bar--default" style="--function-bar-width:892px;--function-bar-background:#f9f9fa;"><div class="tma-function-bar__actions"><button type="button" class="tma-function-bar__action" aria-label="Add"><img src="${ICONS.Add}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action"${filterAttrs}><img src="${ICONS.FunnelSimple}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="Sort"><img src="${ICONS.ArrowsDownUp}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button></div><div class="tma-function-bar__search" role="search"><label class="tma-function-bar__search-field"><img src="${ICONS.Search}" class="tma-function-bar__icon" width="16" height="16" alt="" aria-hidden="true" /><input type="search" class="tma-function-bar__search-input" placeholder="Search" aria-label="Search" autocomplete="off" spellcheck="false" /></label><button type="button" class="tma-function-bar__kbd" aria-label="Focus search" data-shortcut="/">/</button></div></div>`;
+}
+
+function renderHeadCell(label, options = {}) {
+  const { active = false, column = null, menuTrigger = false } = options;
+  const icons = active
+    ? `<span class="tma-table-a__head-icons" style="display:inline-flex"><img src="${ICONS.FunnelSimple}" alt="" class="tma-table-a__head-icon" width="16" height="16" /><img src="${ICONS.ArrowsDown}" alt="" class="tma-table-a__head-icon" width="16" height="16" /></span>`
+    : (column ? `<span class="tma-table-a__head-icons" style="display:none"><img src="${ICONS.FunnelSimple}" alt="" class="tma-table-a__head-icon" width="16" height="16" /><img src="${ICONS.ArrowsDown}" alt="" class="tma-table-a__head-icon" width="16" height="16" /></span>` : '');
+  const cls = ['tma-table-a__cell', `tma-table-a__cell--${column || label.toLowerCase().replace(/\s+/g, '')}`];
+  if (active) cls.push('tma-table-a__head-cell--active');
+  if (label === 'Address') cls.push('tma-table-a__cell--header-emphasis');
+  const labelHtml = menuTrigger && column
+    ? `<button type="button" class="tma-table-a__label tma-table-a__head-trigger" data-column-menu-trigger="${column}" aria-expanded="false" style="border:0;background:transparent;padding:0;font:inherit;color:inherit;cursor:pointer;">${icons}${label}</button>`
+    : `<span class="tma-table-a__label">${icons}${label}</span>`;
+  return `<div class="${cls.join(' ')}" role="columnheader">${labelHtml}</div>`;
+}
+
+function renderTableHead(options = {}) {
+  const { dateActive = false, statusActive = false, menuTriggers = false } = options;
+  return `<div class="tma-table-a__row tma-table-a__row--head" role="row">
+    <div class="tma-table-a__cell tma-table-a__cell--select" role="columnheader">${renderCheckbox(false, ' data-select-all aria-label="Select all rows"')}</div>
+    ${renderHeadCell('Order ID', { column: 'orderId' })}
+    ${renderHeadCell('User', { column: 'user' })}
+    ${renderHeadCell('Project', { column: 'project' })}
+    ${renderHeadCell('Address', { column: 'address' })}
+    ${renderHeadCell('Date', { active: dateActive, column: 'date', menuTrigger: menuTriggers })}
+    ${renderHeadCell('Status', { active: statusActive, column: 'status', menuTrigger: menuTriggers })}
+    <div class="tma-table-a__cell tma-table-a__cell--actions" role="columnheader" aria-hidden="true"></div>
+  </div>`;
+}
+
+function renderRow(row, index, options = {}) {
+  const { previewHover = false, rowClass = '' } = options;
+  const borderVariant = row.rowVariant === 'section-end' ? 'section-end' : 'default';
+  let extraClass = rowClass;
+  if (row.checked && rowClass.includes('selected-start')) extraClass = 'tma-table-a__row--selected-start';
+  if (row.checked && rowClass.includes('selected-mid')) extraClass = 'tma-table-a__row--selected-mid';
+  const addressBtn = previewHover
+    ? `<button type="button" class="tma-table-a__clipboard" aria-label="Copy address" data-copy-address style="opacity:1"><img src="${ICONS.Copy}" class="tma-table-a__icon" width="16" height="16" alt="" /></button>`
+    : `<button type="button" class="tma-table-a__clipboard" aria-label="Copy address" data-copy-address><img src="${ICONS.Copy}" class="tma-table-a__icon" width="16" height="16" alt="" /></button>`;
+  return `<div class="tma-table-a__row tma-table-a__row--${borderVariant} ${extraClass}" role="row" data-row-index="${index}" data-row-data="${escJson(row)}"><div class="tma-table-a__cell tma-table-a__cell--select" role="cell">${renderCheckbox(!!row.checked, ` aria-label="Select row ${row.orderId}" data-row-checkbox`)}</div><div class="tma-table-a__cell tma-table-a__cell--orderId" role="cell"><span class="tma-table-a__label">${row.orderId}</span></div><div class="tma-table-a__cell tma-table-a__cell--user" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--user"><img src="../images/avatars/${row.avatar}.png" alt="" class="tma-table-a__avatar" width="24" height="24" /><span class="tma-table-a__label">${row.user}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--project" role="cell"><span class="tma-table-a__label">${row.project}</span></div><div class="tma-table-a__cell tma-table-a__cell--address" role="cell"><span class="tma-table-a__address"><span class="tma-table-a__label">${row.address}</span>${addressBtn}</span></div><div class="tma-table-a__cell tma-table-a__cell--date" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--date"><img src="${ICONS.CalendarBlank}" class="tma-table-a__icon" width="16" height="16" alt="" aria-hidden="true" /><span class="tma-table-a__label">${row.date}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--status" role="cell">${renderStatusBadge(row.statusLabel, row.status)}</div><div class="tma-table-a__cell tma-table-a__cell--actions" role="cell"><button type="button" class="tma-table-a__action" aria-label="Row actions" data-row-action><img src="${ICONS.ThreeDots}" class="tma-table-a__icon" width="16" height="16" alt="" /></button></div></div>`;
+}
+
+window.TMATableFilterSortRenderRow = renderRow;
+
+function renderPagination(resultsText = '105 results') {
+  const pages = [1,2,3,4,5].map(p => `<button type="button" class="tma-pagination__button${p===1?' tma-pagination__button--active':''}" aria-label="Page ${p}"${p===1?' aria-current="page"':''}><span class="tma-pagination__label">${p}</span></button>`).join('');
+  return `<div class="tma-pagination-bar tma-pagination-bar--footer"><div class="tma-pagination-bar__meta"><button type="button" class="tma-pagination-bar__page-size" aria-label="Rows per page"><span class="tma-pagination__label">20</span><img src="${ICONS.ArrowLineDown}" class="tma-pagination__icon" width="16" height="16" alt="" aria-hidden="true" /></button><span class="tma-pagination-bar__results" data-filter-results-count>${resultsText}</span></div><nav class="tma-pagination" aria-label="Pagination">${pages}<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" disabled><img src="${ICONS.ArrowLineLeft}" class="tma-pagination__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page"><img src="${ICONS.ArrowLineRight}" class="tma-pagination__icon" width="16" height="16" alt="" /></button></nav></div>`;
+}
+
+function renderFilteredTablePreview() {
+  const tags = [
+    { id: 'date-range', label: 'Date: 10/02/2026 - 25/02/2026', icon: 'FunnelSimple' },
+    { id: 'status', label: 'Status', icon: 'Dot' },
+    { id: 'sort-date', label: 'Date', icon: 'ArrowsDown' },
+  ];
+  const body = ALL_ROWS.slice(0, 10).map((row, i) => {
+    if (i === 4) return renderRow(row, i, { previewHover: true });
+    if (i === 6) return renderRow(row, i, { rowClass: 'tma-table-a__row--selected-start' });
+    if (i === 7) return renderRow(row, i, { rowClass: 'tma-table-a__row--selected-mid' });
+    return renderRow(row, i);
+  }).join('');
+  return `<div class="tma-table-filter-sort__toolbar-gap">${renderFunctionBar(false)}${renderFilterTags(tags)}<div class="tma-table-a" style="--table-a-width:892px;--table-a-columns:32px 88px 1fr 1fr 176px 1fr 110px 40px;"><div class="tma-table-a__sheet" role="table" aria-label="Orders">${renderTableHead({ dateActive: true, statusActive: true })}<div data-table-body>${body}</div></div></div>${renderPagination()}</div>`;
+}
+
+function renderPlanBSection() {
+  return `<section class="tma-table-filter-sort-guidance__section">
+    <h2 class="tma-table-filter-sort-guidance__plan-title">Plan B</h2>
+    <div data-table-filter-sort-plan-b data-all-rows="${escJson(ALL_ROWS)}">
+      <div class="tma-table-filter-sort__toolbar-gap">
+        ${renderFunctionBar(false)}
+        <div class="tma-plan-b-filters">
+          <div class="tma-plan-b-filters__fields">
+            <label class="tma-plan-b-filters__field tma-plan-b-filters__field--project"><input type="text" class="tma-plan-b-filters__field-input" placeholder="Project" data-plan-b-project /></label>
+            <div class="tma-plan-b-filters__field tma-plan-b-filters__field--select"><span class="tma-plan-b-filters__field-placeholder">Select</span><img src="${ICONS.ArrowLineUpDown}" alt="" class="tma-plan-b-filters__field-icon" width="16" height="16" /></div>
+            <div class="tma-plan-b-filters__field tma-plan-b-filters__field--date"><span class="tma-plan-b-filters__field-placeholder">20/02/2026 - 20/02/2026</span><img src="${ICONS.CalendarBlank}" alt="" class="tma-plan-b-filters__field-icon" width="16" height="16" /></div>
+          </div>
+          <div class="tma-plan-b-filters__actions">
+            <button type="button" class="tma-plan-b-filters__btn tma-plan-b-filters__btn--reset" data-plan-b-reset>Reset</button>
+            <button type="button" class="tma-plan-b-filters__btn tma-plan-b-filters__btn--search" data-plan-b-search>Search</button>
+          </div>
+        </div>
+        <div class="tma-table-a" style="--table-a-width:892px;--table-a-columns:32px 88px 1fr 1fr 176px 1fr 110px 40px;">
+          <div class="tma-table-a__sheet" role="table" aria-label="Orders">
+            ${renderTableHead()}
+            <div data-table-body>${ALL_ROWS.slice(0, 5).map((r, i) => renderRow(r, i)).join('')}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderLiveSection() {
+  const body = ALL_ROWS.map((row, i) => renderRow(row, i)).join('');
+  const tags = [
+    { id: 'date-range', label: 'Date: 10/02/2026 - 25/02/2026', icon: 'FunnelSimple' },
+    { id: 'sort-date', label: 'Date', icon: 'ArrowsDown' },
+  ];
+  return `<section class="tma-table-filter-sort-guidance__section">
+    <p class="tma-table-filter-sort-guidance__live-label">Live demo — click Filter, pick a field, filter by status or user, or click Date/Status headers to sort</p>
+    <div class="tma-table-filter-sort" data-table-filter-sort data-all-rows="${escJson(ALL_ROWS)}">
+      <div class="tma-table-filter-sort__toolbar-gap">
+        ${renderFunctionBar(true)}
+        ${renderFilterTags(tags)}
+        <div class="tma-table-a" style="--table-a-width:892px;--table-a-columns:32px 88px 1fr 1fr 176px 1fr 110px 40px;">
+          <div class="tma-table-a__sheet" role="table" aria-label="Orders">
+            ${renderTableHead({ dateActive: true, menuTriggers: true })}
+            <div data-table-body>${body}</div>
+          </div>
+        </div>
+        ${renderPagination()}
+      </div>
+      ${renderFieldsPopover({ staticMode: false })}
+      ${renderOperatorsPopover({ staticMode: false, containsHover: false })}
+      ${renderStatusPopover(false)}
+      ${renderUsersPopover(false, true)}
+      ${renderColumnPopover(false)}
+    </div>
+  </section>`;
+}
+
+document.getElementById('guidance-root').innerHTML = `
+  <section class="tma-table-filter-sort-guidance__section">
+    <h2 class="tma-table-filter-sort-guidance__plan-title">Plan A</h2>
+    <p class="tma-table-filter-sort-guidance__note">List all the filterable items.</p>
+    <div class="tma-table-filter-sort-guidance__row">
+      ${renderFieldsPopover({ emailHover: true })}
+      ${renderOperatorsPopover()}
+    </div>
+    <p class="tma-table-filter-sort-guidance__design-label">Filter and sort</p>
+    ${renderFilteredTablePreview()}
+    <p class="tma-table-filter-sort-guidance__design-label">Select date range</p>
+    <div class="tma-table-filter-sort-guidance__row">
+      ${renderDateRangePreview()}
+      <div>
+        <p class="tma-table-filter-sort-guidance__design-label" style="margin-top:0">Selecting multiple users</p>
+        ${renderUsersPopover(true, true)}
+      </div>
+      <div>
+        <p class="tma-table-filter-sort-guidance__design-label" style="margin-top:0">Selecting a single user</p>
+        ${renderUsersPopover(true, false)}
+      </div>
+    </div>
+    <p class="tma-table-filter-sort-guidance__design-label">Column header menu</p>
+    ${renderColumnPopover(true)}
+  </section>
+  ${renderPlanBSection()}
+  ${renderLiveSection()}
+`;
+</script>
+<script src="../js/function-bar.js"></script>
+<script src="../js/filter-and-sort.js"></script>
+<script src="../js/table-filter-sort.js"></script>
+<script>window.TMATableFilterSort.init();</script>
+</body>
+</html>

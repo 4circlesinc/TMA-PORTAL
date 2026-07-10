@@ -1,0 +1,67 @@
+{
+  "slug": "status-badge",
+  "nodeId": "32728:395811",
+  "groupNodeIds": [
+    "32728:395811",
+    "32728:395812",
+    "32728:395819",
+    "32728:395820",
+    "32728:395813",
+    "32728:395814",
+    "32728:395815",
+    "32728:395816",
+    "32728:395817",
+    "32728:395818"
+  ],
+  "name": "Status badge",
+  "cssPath": "public/css/status-badge.css",
+  "defaultVariant": "dot-purple",
+  "defaultLabel": "Label",
+  "colors": {
+    "purple": "#b899eb",
+    "green": "#71dd8c",
+    "blue": "#7dbbff",
+    "orange": "#ffb55b",
+    "muted": "rgba(0, 0, 0, 0.4)"
+  },
+  "tokens": {
+    "fontSize": 12,
+    "lineHeight": 16,
+    "dotMinHeight": 16,
+    "pillMinHeight": 20,
+    "pillPaddingX": 4,
+    "pillPaddingY": 2,
+    "pillRadius": 4,
+    "pillShapeRadius": 80,
+    "pillBackgroundOpacity": 0.1,
+    "pillBorderOpacity": 0.2,
+    "pillBorderWidth": 0.5,
+    "dotSize": 12,
+    "dotInset": 31.25,
+    "mutedPillSurface": "rgba(0, 0, 0, 0.04)"
+  },
+  "variants": {
+    "dot-purple": { "style": "dot", "color": "purple" },
+    "pill-purple": { "style": "pill", "color": "purple" },
+    "dot-green": { "style": "dot", "color": "green" },
+    "pill-green": { "style": "pill", "color": "green" },
+    "dot-blue": { "style": "dot", "color": "blue" },
+    "pill-blue": { "style": "pill", "color": "blue" },
+    "dot-orange": { "style": "dot", "color": "orange" },
+    "pill-orange": { "style": "pill", "color": "orange" },
+    "dot-muted": { "style": "dot", "color": "muted" },
+    "pill-muted": { "style": "pill", "color": "muted", "surface": true }
+  },
+  "items": [
+    { "nodeId": "32728:395811", "variant": "dot-purple" },
+    { "nodeId": "32728:395812", "variant": "pill-purple" },
+    { "nodeId": "32728:395819", "variant": "dot-green" },
+    { "nodeId": "32728:395820", "variant": "pill-green" },
+    { "nodeId": "32728:395813", "variant": "dot-blue" },
+    { "nodeId": "32728:395814", "variant": "pill-blue" },
+    { "nodeId": "32728:395815", "variant": "dot-orange" },
+    { "nodeId": "32728:395816", "variant": "pill-orange" },
+    { "nodeId": "32728:395817", "variant": "dot-muted" },
+    { "nodeId": "32728:395818", "variant": "pill-muted" }
+  ]
+}

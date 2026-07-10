@@ -1,0 +1,111 @@
+{
+  "slug": "table-b-sessions",
+  "nodeId": "32722:24623",
+  "name": "Table B — Sign in Sessions",
+  "cssPath": "public/css/table-b-sessions.css",
+  "jsPath": "public/js/table-b.js",
+  "defaultVariant": "expand",
+  "variants": {
+    "expand": { "headerControl": "expand" },
+    "filter": { "headerControl": "filter" },
+    "actions": { "headerControl": "actions" }
+  },
+  "tokens": {
+    "blockWidth": 892,
+    "blockMinWidth": 800,
+    "blockBackground": "#f9f9fa",
+    "blockPadding": 24,
+    "blockRadius": 16,
+    "blockGap": 4,
+    "titleFontSize": 14,
+    "titleLineHeight": 20,
+    "titleFontWeight": 600,
+    "fontSize": 12,
+    "lineHeight": 16,
+    "fontWeight": 400,
+    "letterSpacing": 0,
+    "textColor": "#000000",
+    "cellPaddingY": 8,
+    "cellPaddingX": 12,
+    "locationCellPaddingRight": 12,
+    "statusCellPaddingLeft": 8,
+    "statusCellPaddingRight": 12,
+    "rowMinHeight": 40,
+    "headerBorderColor": "rgba(0, 0, 0, 0.2)",
+    "headerMutedColor": "rgba(0, 0, 0, 0.4)",
+    "columns": "174px 1fr 158px 165px 120px"
+  },
+  "iconSources": {
+    "expand": "images/icons/phosphor/ArrowsOutSimple.svg",
+    "clock": "images/icons/phosphor/Clock.svg",
+    "arrowDown": "images/icons/tma/ArrowLineDown-16.svg",
+    "threeDots": "images/icons/tma/ThreeDots-16.svg"
+  },
+  "filterOptions": [
+    { "value": "1h", "label": "1 hour" },
+    { "value": "3h", "label": "3 hours" },
+    { "value": "1d", "label": "1 day" },
+    { "value": "1w", "label": "1 week" }
+  ],
+  "actionOptions": [
+    { "value": "action-1", "label": "Action 1" },
+    { "value": "action-2", "label": "Action 2" },
+    { "value": "action-3", "label": "Action 3" }
+  ],
+  "columns": [
+    { "key": "location", "type": "text", "label": "Location", "padding": "location" },
+    { "key": "device", "type": "text", "label": "Device" },
+    { "key": "ipAddress", "type": "text", "label": "IP Address" },
+    { "key": "time", "type": "time", "label": "Time" },
+    { "key": "status", "type": "status", "label": "Status", "padding": "status" }
+  ],
+  "statusVariants": {
+    "in-progress": "dot-purple",
+    "complete": "dot-green",
+    "pending": "dot-blue",
+    "approved": "dot-orange",
+    "rejected": "dot-muted"
+  },
+  "rows": [
+    {
+      "location": "USA(5)",
+      "device": "Chrome - Windows",
+      "ipAddress": "236.125.56.78",
+      "time": "2 minutes ago",
+      "status": "in-progress",
+      "statusLabel": "In Progress"
+    },
+    {
+      "location": "United Kingdom(10)",
+      "device": "Safari - Mac OS",
+      "ipAddress": "236.125.56.69",
+      "time": "10 minutes ago",
+      "status": "complete",
+      "statusLabel": "Complete"
+    },
+    {
+      "location": "Norway(-)",
+      "device": "Firefox - Windows",
+      "ipAddress": "236.125.56.10",
+      "time": "20 minutes ago",
+      "status": "pending",
+      "statusLabel": "Pending"
+    },
+    {
+      "location": "Japan(112)",
+      "device": "iOS - iPhone Pro",
+      "ipAddress": "236.125.56.54",
+      "time": "30 minutes ago",
+      "status": "approved",
+      "statusLabel": "Approved"
+    },
+    {
+      "location": "Italy(5)",
+      "device": "Samsung Noted 5- Android",
+      "ipAddress": "236.100.56.50",
+      "time": "40 minutes ago",
+      "status": "rejected",
+      "statusLabel": "Rejected"
+    }
+  ]
+}

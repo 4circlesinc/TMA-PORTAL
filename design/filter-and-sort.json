@@ -1,0 +1,66 @@
+{
+  "slug": "filter-and-sort",
+  "nodeId": "32728:395835",
+  "groupNodeIds": ["32728:395835"],
+  "name": "Filter and sort",
+  "cssPath": "public/css/filter-and-sort.css",
+  "defaultVariant": "default",
+  "variants": {
+    "default": {}
+  },
+  "iconSources": {
+    "FunnelSimple": { "set": "tma", "file": "FunnelSimple-16.svg", "catalog": "design/icons-tma.json" },
+    "Dot": { "set": "tma", "file": "Dot-12.svg", "catalog": "design/icons-tma.json" },
+    "ArrowsDown": { "set": "tma", "file": "ArrowsDown-16.svg", "catalog": "design/icons-tma.json" },
+    "Close": { "set": "tma", "file": "Close-12.svg", "catalog": "design/icons-tma.json" }
+  },
+  "tokens": {
+    "width": 888,
+    "minHeight": 24,
+    "radius": 12,
+    "tagsGap": 8,
+    "tagGap": 4,
+    "tagPaddingX": 4,
+    "tagPaddingY": 2,
+    "tagRadius": 8,
+    "tagBackground": "rgba(0, 0, 0, 0.04)",
+    "fontSize": 12,
+    "lineHeight": 16,
+    "textColor": "#000000",
+    "resetColor": "rgba(0, 0, 0, 0.4)",
+    "resetPaddingX": 12,
+    "resetPaddingY": 4,
+    "resetMinSize": 24,
+    "iconSize16": 16,
+    "iconSize12": 12,
+    "closeSize": 6,
+    "closeHitSize": 12
+  },
+  "resetLabel": "Reset",
+  "tags": [
+    {
+      "id": "date-range",
+      "kind": "filter",
+      "icon": "FunnelSimple",
+      "iconSize": 16,
+      "label": "Date: 10/02/2026 - 25/02/2026"
+    },
+    {
+      "id": "status",
+      "kind": "filter",
+      "icon": "Dot",
+      "iconSize": 12,
+      "label": "Status"
+    },
+    {
+      "id": "sort-date",
+      "kind": "sort",
+      "icon": "ArrowsDown",
+      "iconSize": 16,
+      "label": "Date"
+    }
+  ],
+  "items": [
+    { "nodeId": "32728:395835", "variant": "default" }
+  ]
+}

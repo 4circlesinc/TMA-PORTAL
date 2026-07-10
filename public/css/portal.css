@@ -1,0 +1,2527 @@
+/*
+ * TMA — Client portal pages (dashboard home, folders, projects,
+ * workflows, templates, signatures, inbox, people, account settings).
+ * Page-level CSS only: composes tokens.css / theme.css variables and
+ * existing component recipes (no-data CTA button, settings switch,
+ * settings change-card modal chrome). No new palettes or type styles.
+ */
+
+/* ── page scaffolding ─────────────────────────────── */
+.tma-portal-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: 0;
+}
+
+.tma-portal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+/* Page titles match the app-shell page title (.tma-dash__page-title) */
+.tma-portal-head__title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-black);
+}
+
+.tma-portal-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.tma-portal-head__actions .tma-dash__head-dropdown-wrap,
+.tma-portal-toolbar__group .tma-dash__head-dropdown-wrap,
+.tma-portal-empty__cta .tma-dash__head-dropdown-wrap {
+  display: inline-flex;
+}
+
+/* toolbar actions — compact size (legacy no-data CTA buttons) */
+.tma-portal-head__actions .tma-no-data__btn {
+  min-height: 28px;
+  min-width: 0;
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-12);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+}
+
+.tma-portal-subtitle {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+}
+
+/* ── buttons (variants of the no-data CTA recipe) ── */
+.tma-portal-btn--ghost {
+  background: var(--color-hover);
+  color: var(--color-black);
+}
+
+.tma-portal-btn--ghost:hover { filter: none; background: rgba(0, 0, 0, 0.08); }
+
+.tma-portal-btn--ghost .tma-no-data__btn-icon { filter: none; opacity: 0.7; }
+
+.tma-portal-btn--danger {
+  background: var(--color-hover);
+  color: var(--color-red);
+}
+
+.tma-portal-btn--danger:hover { filter: none; background: rgba(0, 0, 0, 0.08); }
+
+.tma-portal-btn--small {
+  min-height: 28px;
+  padding: var(--space-4) var(--space-12);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+}
+
+.tma-no-data__btn[disabled] {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.tma-portal-btn__caret { margin-left: 2px; }
+
+.tma-portal-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-link);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition-fast);
+}
+
+.tma-portal-link:hover {
+  color: color-mix(in srgb, var(--color-text-link) 72%, #000);
+  text-decoration: underline;
+}
+
+.tma-portal-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-4);
+}
+
+/* ── banners ──────────────────────────────────────── */
+.tma-portal-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-tag);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+}
+
+.tma-portal-banner__icon { margin-top: 2px; opacity: 0.7; }
+
+.tma-portal-banner--warning { background: rgba(255, 181, 91, 0.18); }
+
+.tma-portal-banner__text { min-width: 0; }
+
+.tma-portal-banner .tma-portal-link { font-size: inherit; }
+
+/* ── empty states ─────────────────────────────────── */
+.tma-portal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-48) var(--space-24);
+  text-align: center;
+}
+
+.tma-portal-empty__illustration { width: 120px; height: 120px; object-fit: contain; }
+
+.tma-portal-empty__title {
+  margin: var(--space-8) 0 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-empty__subtitle {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+  max-width: 420px;
+}
+
+.tma-portal-empty__cta { margin-top: var(--space-12); display: flex; gap: var(--space-8); flex-wrap: wrap; justify-content: center; }
+
+/* ── alphabetical filter ──────────────────────────── */
+.tma-portal-alpha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+}
+
+.tma-portal-alpha__btn {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-portal-alpha__btn:hover { background: var(--color-hover); }
+
+.tma-portal-alpha__btn.is-active {
+  background: var(--color-black);
+  color: var(--color-white);
+}
+
+/* ── toolbar row ──────────────────────────────────── */
+.tma-portal-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.tma-portal-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.tma-portal-toolbar__group--search {
+  flex: 0 0 auto;
+  align-items: flex-end;
+}
+
+.tma-portal-toolbar__group--search .tma-dash__toolbar-search {
+  width: 240px;
+  flex: 0 0 auto;
+}
+
+.tma-portal-toolbar__group--filters {
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.tma-portal-toolbar .tma-portal-field {
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.tma-portal-toolbar .tma-portal-field__label {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-toolbar .tma-portal-field .tma-portal-select {
+  max-width: none;
+  min-height: 28px;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-16);
+  border-width: 0.5px;
+  border-color: var(--color-border-medium);
+  background: var(--color-bg-input);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+}
+
+/* ── tables — follow the documented table recipe ─────
+   (public/css/table.css + table-a.css: 12/16 Regular cells,
+   40px row height, muted 12px header over rgba(0,0,0,0.2) rule,
+   rgba(0,0,0,0.04) row hairlines, --color-hover row hover,
+   borderless sheet — no boxed card) */
+.tma-portal-table-wrap {
+  overflow-x: auto;
+}
+
+.tma-portal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--tma-table-font-family, Inter, system-ui, sans-serif);
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: var(--tma-table-letter-spacing, 0);
+  font-size: var(--tma-table-font-size, 12px);
+  line-height: var(--tma-table-line-height, 16px);
+}
+
+.tma-portal-table th {
+  height: 40px;
+  padding: var(--space-8) var(--space-12);
+  text-align: left;
+  font-weight: var(--tma-table-font-weight-regular, 400);
+  font-size: var(--tma-table-font-size, 12px);
+  line-height: var(--tma-table-line-height, 16px);
+  color: var(--tma-table-header-muted-color, rgba(0, 0, 0, 0.4));
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+
+.tma-portal-table td {
+  height: 40px;
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  font-size: var(--tma-table-font-size, 12px);
+  line-height: var(--tma-table-line-height, 16px);
+  color: var(--tma-table-text-color, var(--color-black));
+  vertical-align: middle;
+}
+
+/* documented table cells are 12 Regular — name cells carry no extra weight */
+.tma-portal-table strong { font-weight: var(--tma-table-font-weight-regular, 400); }
+
+.tma-portal-table tbody tr:last-child td { border-bottom: 0; }
+
+.tma-portal-table tbody tr:hover td { background: var(--color-hover); }
+
+.tma-portal-table__muted { color: var(--tma-table-header-muted-color, rgba(0, 0, 0, 0.4)); }
+
+/* tight control columns (select / star) */
+.tma-portal-table th.tma-portal-cell--tight,
+.tma-portal-table td.tma-portal-cell--tight {
+  width: 32px;
+  padding-right: 0;
+  white-space: nowrap;
+}
+
+/* bulk checkbox — design-system glyph styling comes from .tma-dash__check (dashboard.css) */
+.tma-portal-table .tma-dash__check {
+  vertical-align: middle;
+}
+
+.tma-portal-table th.tma-portal-cell--tight,
+.tma-portal-table td.tma-portal-cell--tight {
+  text-align: center;
+}
+
+.tma-portal-table tbody tr.tma-portal-table__row--selected td {
+  background: var(--color-accent-bg);
+}
+
+.tma-portal-table tbody tr.tma-portal-table__row--selected:hover td {
+  background: var(--color-accent-bg-hover);
+}
+
+/* selection toolbar — icon-only; label expands on hover to stay one line */
+.tma-portal-selection-bar {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin-bottom: var(--space-4);
+  min-width: 0;
+}
+
+.tma-portal-selection-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tma-portal-selection-bar__actions::-webkit-scrollbar { display: none; }
+
+.tma-portal-selection-bar__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-accent);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: gap 0.15s ease, padding 0.15s ease, background 0.15s ease;
+}
+
+.tma-portal-selection-bar__label {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.15s ease, opacity 0.15s ease;
+}
+
+.tma-portal-selection-bar__action:hover,
+.tma-portal-selection-bar__action:focus-visible {
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-8);
+  background: var(--color-accent-bg);
+}
+
+.tma-portal-selection-bar__action:hover .tma-portal-selection-bar__label,
+.tma-portal-selection-bar__action:focus-visible .tma-portal-selection-bar__label {
+  max-width: 12rem;
+  opacity: 1;
+}
+
+.tma-portal-selection-bar__action img {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  filter: brightness(0) saturate(100%) invert(32%) sepia(89%) saturate(747%) hue-rotate(169deg) brightness(92%) contrast(95%);
+}
+
+.tma-portal-selection-bar__divider {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.35;
+}
+
+/* compact action menu (selection bar › More, etc.) */
+.tma-portal-menu-pop {
+  position: fixed;
+  z-index: 260;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 16px));
+  padding: var(--space-12);
+  border-radius: var(--radius-16);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+  font-family: var(--font-family);
+  font-feature-settings: var(--font-features);
+}
+
+.tma-portal-menu-pop__item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-8);
+  border: 0;
+  border-radius: var(--radius-12);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 400;
+  color: var(--color-text-primary);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-portal-menu-pop__item:hover { background: var(--color-hover); }
+
+.tma-portal-menu-pop__item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* file row right-click context menu */
+.tma-portal-context-menu {
+  position: fixed;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  padding: var(--space-4);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  border: 0.5px solid var(--color-border-soft);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+  font-family: var(--font-family);
+  font-feature-settings: var(--font-features);
+}
+
+.tma-portal-context-menu__item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 400;
+  color: var(--color-text-primary);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-portal-context-menu__item:hover { background: var(--color-hover); }
+
+/* favorite star — always visible; muted outline, full opacity when starred (column after checkbox) */
+.tma-portal-star img { opacity: 0.4; }
+
+.tma-portal-star.is-starred img { opacity: 1; }
+
+.tma-portal-table__empty td {
+  padding: var(--space-24);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-table .tma-portal-row-actions {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: flex-end;
+}
+
+.tma-portal-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  cursor: pointer;
+}
+
+.tma-portal-icon-btn:hover { background: var(--color-hover); }
+
+.tma-portal-icon-btn img { width: 16px; height: 16px; opacity: 0.7; }
+
+/* ── settings sections ────────────────────────────── */
+.tma-portal-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-portal-section__title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-help { color: var(--color-text-secondary); cursor: help; font-weight: 400; }
+
+.tma-portal-section__desc {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-section__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-20);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+}
+
+.tma-portal-section__card p { margin: 0; font-size: var(--text-size-14); line-height: var(--text-lh-14); }
+
+.tma-portal-section__card p.tma-portal-subtitle,
+.tma-portal-section__card .tma-portal-note {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-section__card ul,
+.tma-portal-section__card ol {
+  margin: 0;
+  padding-left: var(--space-20);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-20, 20px);
+  color: var(--color-black);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── form controls ────────────────────────────────── */
+.tma-portal-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.tma-portal-field__label {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-input,
+.tma-portal-select,
+.tma-portal-textarea {
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  box-sizing: border-box;
+}
+
+.tma-portal-textarea { max-width: 480px; min-height: 96px; resize: vertical; }
+
+.tma-portal-input:focus,
+.tma-portal-select:focus,
+.tma-portal-textarea:focus {
+  outline: none;
+  border-color: var(--color-black);
+}
+
+.tma-portal-input::placeholder,
+.tma-portal-textarea::placeholder { color: var(--color-text-placeholder); }
+
+.tma-portal-select { width: auto; min-width: 160px; }
+
+.tma-portal-radio-row { display: flex; gap: var(--space-16); align-items: center; flex-wrap: wrap; }
+
+.tma-portal-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  cursor: pointer;
+}
+
+.tma-portal-radio input { position: absolute; opacity: 0; pointer-events: none; }
+
+.tma-portal-radio__dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-white);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.tma-portal-radio input:checked + .tma-portal-radio__dot {
+  border: 5px solid var(--color-black);
+}
+
+.tma-portal-radio input:focus-visible + .tma-portal-radio__dot { outline: 2px solid var(--color-indigo); outline-offset: 2px; }
+
+.tma-portal-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  cursor: pointer;
+}
+
+.tma-portal-checkbox input,
+.tma-portal-matrix input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.tma-portal-checkbox input:checked,
+.tma-portal-matrix input:checked {
+  box-shadow: none;
+  background: url("../images/icons/tma/CheckboxChecked-16.svg") center / 16px 16px no-repeat;
+}
+
+.tma-portal-checkbox input:focus-visible,
+.tma-portal-matrix input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tma-portal-checkbox--toolbar {
+  align-self: flex-end;
+}
+
+.tma-portal-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.tma-portal-toggle-row__label {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  min-width: 0;
+}
+
+.tma-portal-form-actions { display: flex; gap: var(--space-8); }
+
+/* ── matrix (alert settings / DLP allowed actions) ──
+   follows the shared table typography (table.css) */
+.tma-portal-matrix {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 640px;
+  font-family: var(--tma-table-font-family, Inter, system-ui, sans-serif);
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-portal-matrix th,
+.tma-portal-matrix td {
+  height: 40px;
+  padding: var(--space-8) var(--space-12);
+  font-size: var(--tma-table-font-size, 12px);
+  line-height: var(--tma-table-line-height, 16px);
+  text-align: center;
+}
+
+.tma-portal-matrix th {
+  color: var(--tma-table-header-muted-color, rgba(0, 0, 0, 0.4));
+  font-weight: var(--tma-table-font-weight-regular, 400);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.tma-portal-matrix td { border-bottom: 1px solid rgba(0, 0, 0, 0.04); }
+
+.tma-portal-matrix tbody tr:last-child td { border-bottom: 0; }
+
+.tma-portal-matrix td:first-child,
+.tma-portal-matrix th:first-child {
+  text-align: left;
+  color: var(--tma-table-text-color, var(--color-black));
+}
+
+/* matrix checkboxes share the design-system glyph styling above */
+
+/* ── settings modal chrome + toggle (shared with portal modals) ─ */
+.tma-dash__settings-change-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  padding: var(--space-24);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+}
+
+.tma-dash__settings-change-close {
+  position: absolute;
+  top: var(--space-24);
+  right: var(--space-24);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__settings-change-close:hover { background: var(--color-hover); }
+
+.tma-dash__settings-change-close img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.tma-dash__settings-switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.tma-dash__settings-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tma-dash__settings-switch-ui {
+  display: block;
+  position: relative;
+  width: 40px;
+  height: 24px;
+}
+
+.tma-dash__settings-switch-track {
+  position: absolute;
+  inset: 0;
+  /* dashboard.css sets a fixed 24x12 track; reset so the pill fills the 40x24 ui */
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.12);
+  transition: background 0.15s ease;
+}
+
+.tma-dash__settings-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s ease;
+}
+
+.tma-dash__settings-switch-input:checked + .tma-dash__settings-switch-ui .tma-dash__settings-switch-track {
+  background: var(--color-primary);
+}
+
+.tma-dash__settings-switch-input:checked + .tma-dash__settings-switch-ui .tma-dash__settings-switch-thumb {
+  transform: translateX(16px);
+}
+
+.tma-dash__settings-switch-input:focus-visible + .tma-dash__settings-switch-ui .tma-dash__settings-switch-track {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── modal wrapper (reuses settings change-card) ──── */
+.tma-portal-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+}
+
+.tma-portal-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.tma-portal-modal__card {
+  --settings-close-inset: var(--space-24);
+  --settings-close-size: 28px;
+  --settings-close-gap: var(--space-20);
+  --settings-close-reserve: calc(var(--settings-close-inset) + var(--settings-close-size) + var(--settings-close-gap));
+  padding-top: var(--settings-close-reserve);
+  align-items: stretch;
+  gap: var(--space-20);
+  max-height: min(85vh, 720px);
+  overflow-y: auto;
+}
+
+.tma-portal-modal__title {
+  margin: 0;
+  font-size: var(--text-size-18);
+  line-height: var(--text-lh-18);
+  font-weight: 600;
+  color: var(--color-black);
+  text-align: left;
+}
+
+.tma-portal-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  text-align: left;
+}
+
+.tma-portal-modal__body p { margin: 0; font-size: var(--text-size-14); line-height: var(--text-lh-14); color: var(--color-text-secondary); }
+
+/* ── edit dashboard modal (tile rows) ──────────────── */
+.tma-portal-tilerows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.tma-portal-tilerow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-16);
+}
+
+.tma-portal-tilerow__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tma-portal-tilerow__label {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.tma-portal-tilerow__desc {
+  font-size: var(--text-size-13, 13px);
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-tilerow .tma-dash__settings-switch { flex-shrink: 0; margin-top: var(--space-2, 2px); }
+
+/* mini skeleton preview thumbnail */
+.tma-portal-tilerow__preview {
+  flex-shrink: 0;
+  width: 96px;
+  height: 68px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-4);
+  background: #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.tma-portal-tilerow__preview-bar {
+  display: block;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tma-portal-tilerow__preview-bar--title {
+  flex: none;
+  width: 46%;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.tma-portal-tilerow__preview-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tma-portal-tilerow__preview-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  opacity: 0.55;
+}
+
+.tma-portal-tilerow__preview-dot--star { border-radius: 50%; }
+
+.tma-portal-tilerow__preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  align-content: start;
+  flex: 1;
+}
+
+.tma-portal-tilerow__preview-grid--wide { grid-template-columns: repeat(3, 1fr); }
+
+.tma-portal-tilerow__preview-circle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-bg-card);
+  justify-self: center;
+}
+
+.tma-portal-tilerow__preview-box {
+  height: 100%;
+  min-height: 22px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 3px;
+  background: var(--color-bg-card);
+}
+
+.tma-portal-form-actions--start { justify-content: flex-start; padding-top: var(--space-8); }
+
+.tma-portal-modal .tma-portal-form-actions .tma-no-data__btn:not(.tma-portal-btn--ghost) {
+  background: var(--color-primary);
+}
+
+.tma-portal-modal .tma-portal-form-actions .tma-portal-btn--ghost {
+  background: transparent;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+}
+
+.tma-portal-modal .tma-portal-form-actions .tma-portal-btn--ghost:hover {
+  background: var(--color-accent-bg);
+}
+
+/* ── dashboard home ───────────────────────────────── */
+.tma-portal-hello {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.tma-portal-hello__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tma-portal-hello__title {
+  margin: 0;
+  font-size: var(--text-size-24);
+  line-height: var(--text-lh-24);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-hello__spacer { flex: 1; }
+
+/* always two equal columns — a lone tile stays half width, never full width */
+.tma-portal-home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-20);
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .tma-portal-home-grid { grid-template-columns: 1fr; }
+}
+
+.tma-portal-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-20);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+  min-width: 0;
+}
+
+.tma-portal-panel__title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-panel__note {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8);
+  border-radius: var(--radius-12);
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+}
+
+.tma-portal-file-row:hover { background: var(--color-hover); }
+
+.tma-portal-file-row img { width: 24px; height: 24px; flex-shrink: 0; }
+
+.tma-portal-file-row__meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.tma-portal-file-row__name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-file-row__path {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-12);
+}
+
+.tma-portal-shortcut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-12);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-black);
+  text-align: center;
+  cursor: pointer;
+}
+
+.tma-portal-shortcut:hover { background: var(--color-hover); }
+
+.tma-portal-shortcut__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-tag);
+}
+
+.tma-portal-shortcut__icon img { width: 20px; height: 20px; }
+
+.tma-portal-tutorials { display: flex; flex-direction: column; gap: var(--space-8); }
+
+.tma-portal-tutorial {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8);
+  border-radius: var(--radius-12);
+}
+
+.tma-portal-tutorial__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-soft);
+  flex-shrink: 0;
+  background: var(--color-white);
+}
+
+.tma-portal-tutorial.is-done .tma-portal-tutorial__check {
+  background: var(--color-green);
+  border-color: var(--color-green);
+}
+
+.tma-portal-tutorial.is-done .tma-portal-tutorial__check img { filter: invert(1); }
+
+.tma-portal-tutorial__label { font-size: var(--text-size-14); line-height: var(--text-lh-14); color: var(--color-black); }
+
+.tma-portal-tutorial.is-done .tma-portal-tutorial__label { color: var(--color-text-secondary); text-decoration: line-through; }
+
+/* ── template / project cards ─────────────────────── */
+.tma-portal-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-16);
+}
+
+.tma-portal-tpl-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-16);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  min-width: 0;
+}
+
+.tma-portal-tpl-card__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96px;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.tma-portal-tpl-card__preview img { width: 44px; height: 44px; opacity: 0.7; }
+
+.tma-portal-tpl-card__name {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-tpl-card__desc {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tma-portal-tpl-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-top: auto;
+}
+
+.tma-portal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-pill, 80px);
+  background: var(--color-bg-tag);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-black);
+}
+
+.tma-portal-cat-chips { display: flex; gap: var(--space-8); flex-wrap: wrap; }
+
+.tma-portal-cat-chip {
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-pill, 80px);
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-black);
+  cursor: pointer;
+}
+
+.tma-portal-cat-chip:hover { background: var(--color-hover); }
+
+.tma-portal-cat-chip.is-active {
+  background: var(--color-black);
+  border-color: var(--color-black);
+  color: var(--color-white);
+}
+
+/* ── signature requests ───────────────────────────── */
+.tma-portal-head__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.tma-portal-head__title-wrap .tma-portal-head__title {
+  margin: 0;
+}
+
+.tma-portal-sig-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tma-portal-sig-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-16) var(--space-20);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  min-width: 0;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tma-portal-sig-card:hover {
+  background: var(--color-hover);
+}
+
+.tma-portal-sig-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.tma-portal-sig-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.tma-portal-page--signatures .tma-portal-toolbar {
+  margin-top: var(--space-4);
+}
+
+/* ── signature request wizard (fullscreen) ────────── */
+/* Do NOT lock .tma-dash__main overflow — a stuck wizard class
+   would permanently kill wheel/touch scrolling in the content area.
+   The fixed overlay already covers the viewport. */
+html.tma-dash--signatures-wizard,
+html.tma-dash--signatures-wizard body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+.tma-dash--signatures-wizard .tma-dash__main-head,
+.tma-dash--signatures-wizard .tma-dash__footer {
+  display: none;
+}
+
+.tma-portal-sig-wizard {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0;
+  z-index: 280;
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  overscroll-behavior: contain;
+  touch-action: auto;
+  margin: 0;
+  background: var(--color-white);
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.tma-portal-sig-wizard__head {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-16) var(--space-24);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tma-portal-sig-wizard__title {
+  margin: 0;
+  font-size: var(--text-size-18);
+  line-height: var(--text-lh-18);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-portal-sig-wizard__step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-portal-sig-wizard__step.is-active {
+  color: var(--color-accent);
+}
+
+.tma-portal-sig-wizard__step.is-done {
+  color: var(--chart-green, #71dd8c);
+}
+
+.tma-portal-sig-wizard__step.is-done .tma-portal-sig-wizard__step-icon img {
+  opacity: 1;
+  filter: none;
+}
+
+.tma-portal-sig-wizard__step-line.is-done {
+  border-top-color: var(--chart-green, #71dd8c);
+}
+
+.tma-portal-sig-wizard__step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.tma-portal-sig-wizard__step-icon img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.55;
+}
+
+.tma-portal-sig-wizard__step.is-active .tma-portal-sig-wizard__step-icon img,
+.tma-portal-sig-wizard__step.is-done .tma-portal-sig-wizard__step-icon img {
+  opacity: 1;
+}
+
+.tma-portal-sig-wizard__step-label {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+}
+
+.tma-portal-sig-wizard__step-line {
+  width: 28px;
+  height: 0;
+  border-top: 2px dotted var(--color-border-soft);
+  flex-shrink: 0;
+}
+
+.tma-portal-sig-wizard__close {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-portal-sig-wizard__close:hover {
+  background: var(--color-hover);
+}
+
+.tma-portal-sig-wizard__close img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.7;
+}
+
+.tma-portal-sig-wizard__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-28);
+  padding: var(--space-28) var(--space-32);
+  overflow-y: auto;
+}
+
+.tma-portal-sig-wizard__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  max-width: 920px;
+}
+
+.tma-portal-sig-wizard__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.tma-portal-sig-wizard__section-title {
+  margin: 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__section-desc {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-sig-wizard__only-signer {
+  flex-shrink: 0;
+}
+
+.tma-portal-sig-wizard__doc-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: 168px;
+}
+
+.tma-portal-sig-wizard__doc-thumb {
+  position: relative;
+}
+
+.tma-portal-sig-wizard__doc-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-black);
+  cursor: pointer;
+}
+
+.tma-portal-sig-wizard__doc-remove img {
+  width: 12px;
+  height: 12px;
+  filter: invert(1);
+}
+
+.tma-portal-sig-wizard__doc-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-height: 196px;
+  padding: var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.tma-portal-sig-wizard__doc-preview-title {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__doc-preview-line {
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill, 80px);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tma-portal-sig-wizard__doc-preview-line--short {
+  width: 72%;
+}
+
+.tma-portal-sig-wizard__doc-name {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-portal-sig-wizard__recipient {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+}
+
+.tma-portal-sig-wizard__recipient-label {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-sig-wizard__recipient-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-16);
+}
+
+.tma-portal-sig-wizard__recipient-fields .tma-portal-field {
+  max-width: none;
+}
+
+.tma-portal-sig-wizard__recipient-fields .tma-portal-input,
+.tma-portal-sig-wizard__recipient-fields .tma-portal-select {
+  max-width: none;
+}
+
+.tma-portal-sig-wizard--review .tma-portal-sig-wizard__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24) var(--space-32);
+  overflow: auto;
+}
+
+.tma-portal-sig-wizard__review-step {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.tma-portal-sig-wizard__review-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.tma-portal-sig-wizard__review-form .tma-portal-field__label {
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__review-form .tma-portal-input {
+  max-width: none;
+  width: 100%;
+}
+
+.tma-portal-sig-wizard__storage-field .tma-portal-field__label {
+  display: block;
+  margin-bottom: var(--space-12);
+}
+
+.tma-portal-sig-wizard__storage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-14) var(--space-16);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+}
+
+.tma-portal-sig-wizard__storage-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__storage-pick img {
+  flex-shrink: 0;
+}
+
+.tma-portal-sig-wizard__storage-row .tma-portal-link {
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.tma-portal-sig-wizard__storage-row .tma-portal-link:hover {
+  text-decoration: underline;
+}
+
+.tma-portal-sig-wizard__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  flex-shrink: 0;
+  margin-top: auto;
+  padding: var(--space-16) var(--space-24);
+  border-top: 1px solid var(--color-border-soft);
+  background: var(--color-bg-card);
+}
+
+.tma-portal-sig-wizard__foot .tma-no-data__btn.tma-portal-btn--ghost {
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-white);
+}
+
+.tma-portal-sig-wizard--place-fields .tma-portal-sig-wizard__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.tma-portal-sig-wizard__workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 168px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.tma-portal-sig-wizard__fields-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-20) var(--space-16);
+  border-right: 1px solid var(--color-border-soft);
+  background: var(--color-white);
+  min-width: 0;
+}
+
+.tma-portal-sig-wizard__fields-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-portal-sig-wizard__fields-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__fields-desc {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-sig-wizard__field-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-portal-sig-wizard__field-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  padding: var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-sig-wizard__field-card:hover {
+  background: var(--color-hover);
+  border-color: var(--color-border-medium);
+}
+
+.tma-portal-sig-wizard__field-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.tma-portal-sig-wizard__field-card-icon img {
+  width: 20px;
+  height: 20px;
+  opacity: 0.75;
+}
+
+.tma-portal-sig-wizard__canvas {
+  min-width: 0;
+  background: #ececef;
+  overflow: hidden;
+}
+
+.tma-portal-sig-wizard__canvas-scroll {
+  height: 100%;
+  overflow: auto;
+  padding: var(--space-24);
+}
+
+.tma-portal-sig-wizard__doc-sheet {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  padding: var(--space-28) var(--space-32);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__doc-sheet--art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+}
+
+.tma-portal-sig-wizard__doc-brand {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-sig-wizard__doc-heading {
+  margin: var(--space-12) 0 var(--space-16);
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: 600;
+}
+
+.tma-portal-sig-wizard__doc-meta {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--space-16);
+  font-size: var(--text-size-12);
+}
+
+.tma-portal-sig-wizard__doc-meta th,
+.tma-portal-sig-wizard__doc-meta td {
+  padding: var(--space-4) var(--space-8);
+  border: 1px solid var(--color-border-soft);
+  text-align: left;
+  font-weight: 400;
+}
+
+.tma-portal-sig-wizard__doc-meta th {
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  width: 18%;
+}
+
+.tma-portal-sig-wizard__doc-subhead {
+  margin: var(--space-16) 0 var(--space-8);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+}
+
+.tma-portal-sig-wizard__doc-copy {
+  margin: 0 0 var(--space-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-sig-wizard__doc-list {
+  margin: 0;
+  padding-left: var(--space-20);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-sig-wizard__logo-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.tma-portal-sig-wizard__logo-leaf {
+  width: 96px;
+  height: 96px;
+  border-radius: 50% 50% 50% 0;
+  background: linear-gradient(135deg, #71dd8c, #2f9e44);
+  transform: rotate(-45deg);
+}
+
+.tma-portal-sig-wizard__logo-text {
+  font-size: var(--text-size-18);
+  line-height: var(--text-lh-18);
+  font-weight: 600;
+  color: #2f9e44;
+}
+
+.tma-portal-sig-wizard__pages-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-12);
+  border-left: 1px solid var(--color-border-soft);
+  background: var(--color-white);
+  min-width: 0;
+}
+
+.tma-portal-sig-wizard__pages-title {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  color: var(--color-black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-portal-sig-wizard__page-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-portal-sig-wizard__page-thumb {
+  display: block;
+  width: 100%;
+  padding: var(--space-4);
+  border: 2px solid transparent;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-portal-sig-wizard__page-thumb.is-active {
+  border-color: var(--color-black);
+}
+
+.tma-portal-sig-wizard__page-mini {
+  display: block;
+  width: 100%;
+  aspect-ratio: 0.77;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-4);
+  background: var(--color-white);
+}
+
+.tma-portal-sig-wizard__page-mini--brief {
+  background:
+    linear-gradient(var(--color-bg-card) 12px, transparent 12px) 0 8px / 100% 18px repeat-y,
+    var(--color-white);
+}
+
+.tma-portal-sig-wizard__page-mini--logo {
+  background:
+    radial-gradient(circle at 50% 42%, #71dd8c 0 18%, transparent 19%),
+    var(--color-white);
+}
+
+@media (max-width: 900px) {
+  .tma-portal-sig-wizard__head {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "title close"
+      "steps steps";
+  }
+
+  .tma-portal-sig-wizard__title { grid-area: title; }
+  .tma-portal-sig-wizard__close { grid-area: close; }
+  .tma-portal-sig-wizard__steps {
+    grid-area: steps;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .tma-portal-sig-wizard__recipient-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .tma-portal-sig-wizard__workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .tma-portal-sig-wizard__fields-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border-soft);
+  }
+
+  .tma-portal-sig-wizard__field-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .tma-portal-sig-wizard__field-card {
+    flex: 1 1 140px;
+  }
+
+  .tma-portal-sig-wizard__pages-panel {
+    border-left: 0;
+    border-top: 1px solid var(--color-border-soft);
+  }
+
+  .tma-portal-sig-wizard__page-list {
+    flex-direction: row;
+  }
+
+  .tma-portal-sig-wizard__page-thumb {
+    width: 72px;
+  }
+}
+
+.tma-portal-sig-card__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.tma-portal-sig-card__title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 400;
+  color: var(--color-black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tma-portal-sig-card__meta {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-portal-sig-card__assign {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-portal-sig-card__assign-label {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-portal-sig-card__assign-name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  white-space: nowrap;
+}
+
+.tma-portal-sig-card__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--color-black);
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .tma-portal-sig-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-12);
+  }
+
+  .tma-portal-sig-card__actions {
+    justify-content: flex-start;
+  }
+}
+
+.tma-portal-page--signatures .tma-portal-toolbar {
+  margin-top: var(--space-4);
+}
+
+/* ── plan cards (convert free trial) ──────────────── */
+.tma-portal-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-16);
+  align-items: stretch;
+}
+
+.tma-portal-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-20);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+}
+
+.tma-portal-plan.is-current { border-color: var(--color-black); }
+
+.tma-portal-plan__badges { display: flex; gap: var(--space-4); flex-wrap: wrap; min-height: 20px; }
+
+.tma-portal-plan__name {
+  margin: 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: 600;
+}
+
+.tma-portal-plan__tagline {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  min-height: 32px;
+}
+
+.tma-portal-plan__price { display: flex; align-items: baseline; gap: var(--space-4); }
+
+.tma-portal-plan__amount {
+  font-size: var(--text-size-24);
+  line-height: var(--text-lh-24);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-portal-plan__per {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-plan__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-plan__meta span { display: inline-flex; align-items: center; gap: var(--space-8); }
+
+.tma-portal-plan__meta img { width: 14px; height: 14px; opacity: 0.6; }
+
+/* ── connectors ───────────────────────────────────── */
+.tma-portal-connector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-12) var(--space-16);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tma-portal-connector:last-child { border-bottom: 0; }
+
+.tma-portal-connector__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-8);
+  background: var(--color-bg-card);
+  flex-shrink: 0;
+}
+
+.tma-portal-connector__logo img { width: 22px; height: 22px; }
+
+.tma-portal-connector__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.tma-portal-connector__name { font-size: var(--text-size-14); line-height: var(--text-lh-14); font-weight: 600; color: var(--color-black); }
+
+.tma-portal-connector__desc { font-size: var(--text-size-12); line-height: var(--text-lh-12); color: var(--color-text-secondary); }
+
+.tma-portal-connector-list {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+}
+
+/* ── account settings (admin) shell ───────────────── */
+.tma-portal-admin {
+  display: flex;
+  gap: var(--space-20);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.tma-portal-admin__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 224px;
+  flex-shrink: 0;
+  padding: var(--space-8);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+  position: sticky;
+  top: 0;
+}
+
+.tma-portal-admin__nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-admin__nav-item:hover { background: var(--color-hover); }
+
+.tma-portal-admin__nav-item.is-active { background: var(--color-hover); font-weight: 600; }
+
+.tma-portal-admin__nav-item .tma-portal-admin__caret {
+  margin-left: auto;
+  width: 12px;
+  height: 12px;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+.tma-portal-admin__nav-item[aria-expanded="true"] .tma-portal-admin__caret { transform: rotate(90deg); }
+
+.tma-portal-admin__subnav { display: flex; flex-direction: column; gap: 2px; padding-left: var(--space-16); }
+
+.tma-portal-admin__subnav .tma-portal-admin__nav-item { font-size: var(--text-size-12); line-height: var(--text-lh-12); padding: var(--space-8) var(--space-12); }
+
+.tma-portal-admin__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.tma-portal-admin__page-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-black);
+}
+
+@media (max-width: 900px) {
+  .tma-portal-admin { flex-direction: column; }
+  .tma-portal-admin__nav { width: 100%; position: static; }
+}
+
+/* ── inbox ────────────────────────────────────────── */
+.tma-portal-msg-row { cursor: pointer; }
+
+.tma-portal-msg-row__subject { font-weight: 600; }
+
+/* ── drag & drop upload overlay ───────────────────── */
+.tma-portal-dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 230;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-28);
+  background: color-mix(in srgb, var(--color-white) 88%, transparent);
+}
+
+.tma-portal-dropzone[hidden] { display: none; }
+
+.tma-portal-dropzone__badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-indigo) 40%, var(--color-white));
+}
+
+.tma-portal-dropzone__badge img {
+  width: 96px;
+  height: 96px;
+}
+
+.tma-portal-dropzone__label {
+  margin: 0;
+  font-size: var(--text-size-24);
+  line-height: var(--text-lh-24);
+  font-weight: 400;
+  color: var(--color-black);
+}
+
+/* ── File Box: folder-actions FAB + empty state ───── */
+.tma-portal-fab-anchor {
+  position: relative;
+  align-self: flex-end;
+  height: 0;
+  z-index: 5;
+}
+
+.tma-portal-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-black);
+  box-shadow: var(--shadow-pill);
+  cursor: pointer;
+}
+
+.tma-portal-fab:hover { filter: brightness(0.92); }
+
+.tma-portal-fab img {
+  width: 20px;
+  height: 20px;
+  filter: invert(1);
+}
+
+.tma-portal-fab-menu {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: var(--space-8);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: var(--shadow-popup);
+}
+
+.tma-portal-fab-menu[hidden] { display: none; }
+
+.tma-portal-fab-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-fab-menu__item:hover { background: var(--color-hover); }
+
+.tma-portal-fab-menu__item img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.75;
+}
+
+.tma-portal-filebox-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-48) var(--space-24);
+  text-align: center;
+}
+
+.tma-portal-filebox-empty__title {
+  margin: 0;
+  font-size: var(--text-size-18);
+  line-height: var(--text-lh-18);
+  font-weight: 400;
+  color: var(--color-black);
+}
+
+.tma-portal-filebox-empty__badge {
+  width: 160px;
+  height: 160px;
+}
+
+.tma-portal-filebox-empty__hint {
+  margin: 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  color: var(--color-black);
+}
+
+.tma-portal-filebox-empty__browse { text-decoration: underline; }
+
+/* ── misc ─────────────────────────────────────────── */
+.tma-portal-two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-16);
+  align-items: stretch;
+}
+
+.tma-portal-feature {
+  display: flex;
+  gap: var(--space-12);
+  align-items: flex-start;
+  padding: var(--space-12) 0;
+}
+
+.tma-portal-feature img { width: 20px; height: 20px; opacity: 0.7; margin-top: 2px; }
+
+.tma-portal-feature__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.tma-portal-feature__title { font-size: var(--text-size-14); line-height: var(--text-lh-14); font-weight: 600; color: var(--color-black); }
+
+.tma-portal-feature__desc { font-size: var(--text-size-12); line-height: var(--text-lh-12); color: var(--color-text-secondary); }
+
+.tma-portal-avatar-cell { display: inline-flex; align-items: center; gap: var(--space-8); min-width: 0; max-width: 100%; }
+
+.tma-portal-avatar-cell img { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; }
+
+/* file name — edit icon only when hovering the name */
+.tma-portal-file-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tma-portal-file-name__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--tma-table-font-weight-regular, 400);
+}
+
+.tma-portal-file-name__edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.tma-portal-file-name__edit img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.tma-portal-file-name:hover .tma-portal-file-name__edit,
+.tma-portal-file-name:focus-within .tma-portal-file-name__edit {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tma-portal-file-name__edit:hover { background: var(--color-hover); }
+
+.tma-portal-watermark-tokens { display: flex; gap: var(--space-8); flex-wrap: wrap; }
+
+/* dark theme adjustments piggyback on data-theme handled by dashboard.css tokens */
+.tma-dash[data-theme="dark"] .tma-portal-input,
+.tma-dash[data-theme="dark"] .tma-portal-select,
+.tma-dash[data-theme="dark"] .tma-portal-textarea,
+.tma-dash[data-theme="dark"] .tma-portal-tpl-card,
+.tma-dash[data-theme="dark"] .tma-portal-plan,
+.tma-dash[data-theme="dark"] .tma-portal-connector-list {
+  background: var(--dash-panel-bg, var(--color-bg-card));
+  color: inherit;
+}

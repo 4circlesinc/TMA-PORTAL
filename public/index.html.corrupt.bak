@@ -1,0 +1,14 @@
+
+          <div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap data-today-dropdown>
+            <button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--secondary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">
+              <span data-today-label>Today</span>
+              <img class="tma-dash__head-dropdown-caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" aria-hidden="true">
+            <div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu data-today-menu hidden role="menu" aria-label="Date range">
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="Today" data-today="Today">Today</button>
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="This week" data-today="This week">This week</button>
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="This month" data-today="This month">This month</button>
+              <button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="This year" data-today="This year">This year</button>
+          <div class="tma-dash__clients-head-actions" data-clients-page-actions hidden>
+          </div>
+      <div class="tma-dash__view" data-view="clients" data-table-view hidden>
+  <script src="js/head-dropdown.js"></script>

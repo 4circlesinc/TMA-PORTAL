@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — SemicircleChart</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 900px; }
+    .nav-card { flex: 0 0 280px; background: #000; border-radius: 48px; padding: 40px 32px; }
+    .nav-card h1 { font-size: 40px; font-weight: 700; line-height: 1.05; margin-bottom: 16px; background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 28px; overflow-x: auto; }
+    .chart-wrap { border: 1px solid #eee; border-radius: 16px; padding: 32px 24px 24px; background: #fafafa; overflow: visible; max-width: 320px; }
+    .hint { margin-top: 12px; font-size: 12px; color: #888; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; } .nav-card { width: 100%; flex: none; } }
+  </style>
+</head>
+<body>
+  <p class="section-title">Circular — SemicircleChart</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>SemicircleChart</h1>
+      <p>Three-arc semicircle gauge with center labels. SVG paths from preset — not a static image export.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;x-chart-semicircle-chart /&gt;
+
+&lt;x-chart-semicircle-chart :segments="[
+    ['key' => 'muted', 'value' => 200, 'color' => '#000000', 'opacity' => 0.2],
+    ['key' => 'primary', 'value' => 500, 'color' => '#000000'],
+    ['key' => 'accent', 'value' => 300, 'color' => '#adadfb'],
+]" /&gt;</pre>
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll">
+          <div id="chart" class="tma-chart-semicircle" role="group" aria-label="Semicircle chart"></div>
+        </div>
+        <p class="hint">Hover an arc for its share percentage.</p>
+      </div>
+    </div>
+  </div>
+<script>
+const CHART_WIDTH = 250;
+const CHART_HEIGHT = 126;
+
+function normalizeSegments(preset) {
+  const total = (preset.segments || []).reduce((sum, s) => sum + (s.value || 0), 0);
+  return (preset.segments || []).map((segment) => {
+    const anchor = segment.tooltipAnchor || { x: 50, y: 50 };
+    const value = segment.value || 0;
+    return {
+      ...segment,
+      percent: total > 0 ? Math.round(value / total * 100) : 0,
+      tooltipLeftPct: (anchor.x / CHART_WIDTH) * 100,
+      tooltipTopPct: (anchor.y / CHART_HEIGHT) * 100,
+    };
+  });
+}
+
+function renderChart(root, preset) {
+  root.style.setProperty('--sc-chart-width', CHART_WIDTH);
+  root.style.setProperty('--sc-chart-height', CHART_HEIGHT);
+
+  const stage = document.createElement('div');
+  stage.className = 'tma-chart-semicircle__stage';
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'tma-chart-semicircle__svg');
+  svg.setAttribute('viewBox', `0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`);
+  svg.setAttribute('fill', 'none');
+
+  const segments = normalizeSegments(preset);
+  segments.forEach((segment, index) => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'tma-chart-semicircle__segment');
+    g.setAttribute('data-segment-index', String(index));
+    g.tabIndex = 0;
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-label', `${segment.key}: ${segment.percent}%`);
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'tma-chart-semicircle__arc');
+    path.setAttribute('fill-rule', 'evenodd');
+    path.setAttribute('clip-rule', 'evenodd');
+    path.setAttribute('d', segment.path);
+    path.setAttribute('fill', segment.color);
+    path.setAttribute('fill-opacity', segment.opacity ?? 1);
+
+    g.appendChild(path);
+    svg.appendChild(g);
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'tma-chart-semicircle__tooltip';
+    tooltip.setAttribute('data-segment-index', String(index));
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.style.left = `${segment.tooltipLeftPct}%`;
+    tooltip.style.top = `${segment.tooltipTopPct}%`;
+    tooltip.textContent = `${segment.percent}%`;
+    stage.appendChild(tooltip);
+  });
+
+  stage.insertBefore(svg, stage.firstChild);
+
+  const center = preset.center || {};
+  if (center.primary || center.secondary || center.tertiary) {
+    const centerEl = document.createElement('div');
+    centerEl.className = 'tma-chart-semicircle__center';
+    centerEl.setAttribute('aria-hidden', 'true');
+    if (center.primary) {
+      const el = document.createElement('span');
+      el.className = 'tma-chart-semicircle__center-primary';
+      el.textContent = center.primary;
+      centerEl.appendChild(el);
+    }
+    if (center.secondary) {
+      const el = document.createElement('span');
+      el.className = 'tma-chart-semicircle__center-secondary';
+      el.textContent = center.secondary;
+      centerEl.appendChild(el);
+    }
+    if (center.tertiary) {
+      const el = document.createElement('span');
+      el.className = 'tma-chart-semicircle__center-tertiary';
+      el.textContent = center.tertiary;
+      centerEl.appendChild(el);
+    }
+    stage.appendChild(centerEl);
+  }
+
+  root.appendChild(stage);
+}
+
+fetch('./data/semicircle-chart.json')
+  .then(r => r.json())
+  .then(preset => {
+    const chart = document.getElementById('chart');
+    renderChart(chart, preset);
+    window.PortalChartMotion.initChart(chart);
+  });
+</script>
+<script src="../js/chart-motion.js"></script>
+</body>
+</html>

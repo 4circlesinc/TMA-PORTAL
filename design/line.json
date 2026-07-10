@@ -1,0 +1,39 @@
+{
+  "slug": "line",
+  "nodeId": "32792:1923",
+  "documentationNodeId": "32219:8431",
+  "name": "Line",
+  "description": "Line component — horizontal underlines, pill indicators, and vertical separators.",
+  "cssPath": "public/css/line.css",
+  "jsPath": "public/js/line.js",
+  "iconJsPath": "public/js/line-icons.js",
+  "documentationPath": "public/demo/line-documentation.html",
+  "demoPath": "public/demo/line-documentation.html",
+  "defaultVariant": "horizontal",
+  "variants": {
+    "horizontal": { "name": "Horizontal", "height": 2, "color": "#000000" },
+    "pill": { "name": "Pill indicator", "width": 16, "height": 4, "radius": 80 },
+    "vertical": { "name": "Vertical separator", "width": 20, "height": 20 }
+  },
+  "documentation": {
+    "purpose": "Line component is used to draw lines.",
+    "features": [
+      "Horizontal: arranged horizontally",
+      "Vertical: arranged vertically",
+      "Count: The number of lines in the Line."
+    ],
+    "correlation": "Used in the Tap component.",
+    "examples": [
+      "Draw an underline in the Tap component.",
+      "Using the Line component will allow you to adjust the style of the underline in the instance.",
+      "Use Line component as separator between components."
+    ]
+  },
+  "items": [
+    { "nodeId": "32219:8445", "example": "tab-underline" },
+    { "nodeId": "32219:8448", "example": "tab-pill" },
+    { "nodeId": "32219:8451", "example": "toolbar-separator" },
+    { "nodeId": "32219:8453", "example": "vertical-separator" },
+    { "nodeId": "32219:8456", "example": "vertical-separator" }
+  ]
+}

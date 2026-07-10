@@ -1,0 +1,413 @@
+/* TMA — Badge */
+
+.tma-badge,
+.tma-badge *,
+.tma-badge *::before,
+.tma-badge *::after,
+.tma-badge-icon,
+.tma-badge-icon *,
+.tma-badge-avatar-icon,
+.tma-badge-avatar-icon * {
+  box-sizing: border-box;
+}
+
+.tma-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.tma-badge--number {
+  padding: 1px 6px;
+  border-radius: 80px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.tma-badge--indigo.tma-badge--number {
+  background: #adadfb;
+}
+
+.tma-badge--red.tma-badge--number {
+  background: #ff4747;
+}
+
+.tma-badge__label {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+}
+
+.tma-badge--dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 80px;
+}
+
+.tma-badge__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 31.25%;
+}
+
+.tma-badge__dot-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tma-badge--dot.tma-badge--indigo {
+  color: #adadfb;
+}
+
+.tma-badge--dot.tma-badge--black {
+  color: #000;
+}
+
+.tma-badge--offset-icon {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+}
+
+.tma-badge--offset-avatar {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+}
+
+.tma-badge--offset-button {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+}
+
+.tma-badge-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tma-badge-icon__glyph,
+.tma-badge-icon__svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  color: #000;
+}
+
+.tma-badge-avatar-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tma-badge-avatar-icon__image {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 80px;
+  background: rgba(0, 0, 0, 0.04);
+  object-fit: cover;
+}
+
+/* Documentation page — 32726:1920 */
+
+.tma-badge-doc {
+  background: #fff;
+  border-radius: 48px;
+  padding: 80px;
+  width: 1200px;
+  max-width: 100%;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  color: #000;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-badge-doc__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-badge-doc__title {
+  margin: 0;
+  font-size: 64px;
+  line-height: 72px;
+  font-weight: 600;
+}
+
+.tma-badge-doc__intro {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.tma-badge-doc__section {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 48px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-badge-doc__section-title {
+  margin: 0;
+  font-size: 48px;
+  line-height: 56px;
+  font-weight: 400;
+}
+
+.tma-badge-doc__text {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.tma-badge-doc__text p {
+  margin: 0;
+}
+
+.tma-badge-doc__text p + p {
+  margin-top: 14px;
+}
+
+.tma-badge-doc__list {
+  margin: 0;
+  padding: 0 0 0 27px;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+  list-style: disc;
+}
+
+.tma-badge-doc__list li + li {
+  margin-top: 14px;
+}
+
+.tma-badge-doc__examples {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 48px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.tma-badge-doc__examples > .tma-badge-doc__section-title {
+  margin: 0;
+}
+
+.tma-badge-doc__example-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.tma-badge-doc__example-block--colors {
+  padding-bottom: 20px;
+}
+
+#badge-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+}
+
+.tma-badge-doc__example-caption {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 400;
+  color: #9747ff;
+  white-space: nowrap;
+}
+
+.tma-badge-doc__icon-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+}
+
+.tma-badge-doc__toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #000;
+  cursor: default;
+  font: inherit;
+  line-height: 0;
+}
+
+.tma-badge-doc__avatar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.tma-badge-doc__assets-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #000;
+  cursor: default;
+  font: inherit;
+}
+
+.tma-badge-doc__assets-label {
+  display: block;
+  margin-right: -8px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.tma-badge-doc__assets-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tma-badge-doc__assets-icon-slot {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.tma-badge-doc__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 48px;
+}
+
+.tma-badge-doc__footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.tma-badge-doc__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tma-badge-doc__logo-icon,
+.tma-badge-doc__logo-icon svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.tma-badge-doc__wordmark {
+  display: inline-flex;
+  align-items: center;
+}
+
+.tma-badge-doc__wordmark-left,
+.tma-badge-doc__wordmark-left svg {
+  display: block;
+  width: 53px;
+  height: 12px;
+}
+
+.tma-badge-doc__wordmark-right,
+.tma-badge-doc__wordmark-right svg {
+  display: block;
+  width: 15px;
+  height: 12px;
+}
+
+.tma-badge-doc__copyright {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.tma-badge-doc__socials {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.tma-badge-doc__social,
+.tma-badge-doc__social svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 900px) {
+  .tma-badge-doc {
+    padding: 48px 32px;
+    border-radius: 32px;
+  }
+
+  .tma-badge-doc__title {
+    font-size: 48px;
+    line-height: 56px;
+  }
+
+  .tma-badge-doc__section-title {
+    font-size: 36px;
+    line-height: 44px;
+  }
+
+  .tma-badge-doc__example-caption {
+    white-space: normal;
+  }
+
+  .tma-badge-doc__footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

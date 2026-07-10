@@ -1,0 +1,64 @@
+{
+  "slug": "function-bar",
+  "nodeId": "32728:395823",
+  "groupNodeIds": ["32728:395823", "32728:395824"],
+  "name": "Function bar",
+  "cssPath": "public/css/function-bar.css",
+  "defaultVariant": "default",
+  "variants": {
+    "default": {
+      "actions": ["Add", "FunnelSimple", "ArrowsDownUp"]
+    },
+    "selected": {
+      "actions": ["Add", "FunnelSimple", "ArrowsDownUp", "Loading"],
+      "selectionLabel": "{count} Selected",
+      "selectionDivider": "Line",
+      "bulkActions": ["Trash", "Copy"]
+    }
+  },
+  "iconSources": {
+    "Add": { "set": "tma", "file": "Add.svg", "catalog": "design/icons-tma.json" },
+    "FunnelSimple": { "set": "tma", "file": "FunnelSimple-16.svg", "catalog": "design/icons-tma.json" },
+    "ArrowsDownUp": { "set": "tma", "file": "ArrowsDownUp.svg", "catalog": "design/icons-tma.json" },
+    "Loading": { "set": "tma", "file": "Loading-16.svg", "catalog": "design/icons-tma.json" },
+    "Line": { "set": "tma", "file": "Line-16.svg", "catalog": "design/icons-tma.json" },
+    "Trash": { "set": "phosphor", "file": "Trash-16.svg", "catalog": "design/icons-phosphor.json" },
+    "Copy": { "set": "tma", "file": "Copy-16.svg", "catalog": "design/icons-tma.json" },
+    "Search": { "set": "tma", "file": "Search-16.svg", "catalog": "design/icons-tma.json" }
+  },
+  "tokens": {
+    "width": 892,
+    "minHeight": 44,
+    "padding": 8,
+    "radius": 12,
+    "background": "#f9f9fa",
+    "gap": 16,
+    "actionsGap": 8,
+    "iconSize": 16,
+    "actionSize": 24,
+    "actionPadding": 4,
+    "searchRadius": 16,
+    "searchPaddingX": 8,
+    "searchPaddingY": 4,
+    "searchBackground": "rgba(255, 255, 255, 0.8)",
+    "searchBorderColor": "rgba(0, 0, 0, 0.2)",
+    "searchPlaceholderColor": "rgba(0, 0, 0, 0.2)",
+    "searchFontSize": 14,
+    "searchLineHeight": 20,
+    "searchFieldWidth": 116,
+    "kbdWidth": 20,
+    "kbdFontSize": 12,
+    "kbdLineHeight": 16,
+    "kbdBorderColor": "rgba(0, 0, 0, 0.1)",
+    "selectionFontSize": 12,
+    "selectionLineHeight": 16
+  },
+  "search": {
+    "placeholder": "Search",
+    "shortcut": "/"
+  },
+  "items": [
+    { "nodeId": "32728:395823", "variant": "default" },
+    { "nodeId": "32728:395824", "variant": "selected", "selectedCount": 2 }
+  ]
+}

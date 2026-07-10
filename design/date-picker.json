@@ -1,0 +1,44 @@
+{
+  "slug": "date-picker",
+  "nodeId": "29706:37201",
+  "guidanceNodeId": "33304:16630",
+  "documentationNodeId": "33304:16614",
+  "name": "DatePicker",
+  "description": "DatePicker interactive guidance — date only, date and time, date range, and date range and time variants with calendar, month, year, and time views.",
+  "cssPath": "public/css/date-picker.css",
+  "jsPath": "public/js/date-picker.js",
+  "iconJsPath": "public/js/date-picker-icons.js",
+  "defaultVariant": "date-only",
+  "variants": {
+    "date-only": { "nodeId": "33304:16635", "type": "date-only" },
+    "date-and-time": { "nodeId": "33304:16633", "type": "date-and-time" },
+    "date-range": { "nodeId": "33304:16634", "type": "date-range" },
+    "date-range-and-time": { "nodeId": "33304:16632", "type": "date-range-and-time" }
+  },
+  "behavior": {
+    "headerSegments": ["month", "day", "year", "time"],
+    "views": ["calendar", "month", "year", "time"],
+    "rangeSelection": "two-click",
+    "hitAreaScale": [1.5, 2]
+  },
+  "documentation": {
+    "purpose": "Used to select a date and time. The top date display area can be selected or the date can be entered.",
+    "guidance": [
+      "Select date only — calendar, month, and year views with Back navigation.",
+      "Select date and time — time picker with AM/PM, hours, and minutes.",
+      "Select date range — start and end dates with in-range highlight.",
+      "Select date range and time — range plus time for active date.",
+      "The click range in the top area — segmented header hit areas; scale 1.5× or 2× if too small."
+    ]
+  },
+  "iconSources": {
+    "ArrowLineLeft20": "images/icons/tma/ArrowLineLeft.svg",
+    "ArrowLineRight20": "images/icons/tma/ArrowLineRight.svg"
+  },
+  "items": [
+    { "nodeId": "33304:16635", "variant": "date-only" },
+    { "nodeId": "33304:16633", "variant": "date-and-time" },
+    { "nodeId": "33304:16634", "variant": "date-range" },
+    { "nodeId": "33304:16632", "variant": "date-range-and-time" }
+  ]
+}

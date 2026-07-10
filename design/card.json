@@ -1,0 +1,52 @@
+{
+  "slug": "card",
+  "nodeId": "33302:4597",
+  "documentationNodeId": "32267:8033",
+  "instancesNodeId": "33160:10064",
+  "name": "Card",
+  "description": "Card component — composable rows for project progress, credit card, and other compact summaries.",
+  "cssPath": "public/css/card.css",
+  "jsPath": "public/js/card.js",
+  "iconJsPath": "public/js/card-icons.js",
+  "defaultVariant": "progress",
+  "variants": {
+    "progress": { "nodeId": "32267:8047", "name": "Project progress card" },
+    "credit": { "nodeId": "32267:8050", "name": "Credit card" }
+  },
+  "behavior": {
+    "background": "#f9f9fa",
+    "radius": 16,
+    "gap": 8,
+    "states": ["default", "hover", "selected", "no-interaction"]
+  },
+  "documentation": {
+    "purpose": "The Card component makes it easier to design cards.",
+    "features": [
+      "Count — the number of rows of content, you can add more rows in the component.",
+      "State — Default, Hover, Selected, No interaction."
+    ],
+    "correlation": "Instances inside the Card can be replaced with any instance except itself.",
+    "examples": [
+      "Use Card to make a project progress card.",
+      "Use Card to make a credit card."
+    ]
+  },
+  "items": [
+    { "nodeId": "32267:8047", "variant": "progress" },
+    { "nodeId": "32267:8050", "variant": "credit" }
+  ],
+  "instances": [
+    { "nodeId": "33250:2266", "name": "CodeBlock" },
+    { "nodeId": "33160:10066", "name": "Stat — Current Projects" },
+    { "nodeId": "33160:10067", "name": "Stat — Project Finance" },
+    { "nodeId": "33160:10068", "name": "Stat — Our Clients" },
+    { "nodeId": "33160:10069", "name": "Progress — TMA" },
+    { "nodeId": "33160:10070", "name": "Progress — Coffee detail page" },
+    { "nodeId": "33160:10081", "name": "Task — Meeting with customer" },
+    { "nodeId": "33160:10093", "name": "Price — PRO version" },
+    { "nodeId": "33160:10096", "name": "Usage — Precise Usage" },
+    { "nodeId": "33160:10099", "name": "Credit — ByeWind Visa" },
+    { "nodeId": "33160:10102", "name": "Address — ByeWind's house" },
+    { "nodeId": "33160:10104", "name": "Add Address" }
+  ]
+}

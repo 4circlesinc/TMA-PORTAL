@@ -1,0 +1,27 @@
+{
+  "slug": "vertical-02",
+  "nodeId": "30485:135139",
+  "name": "Vertical 02",
+  "variant": "layered",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "barWidth": 28,
+  "bars": [
+    { "value": 2000, "color": "cyan", "trackSize": 50, "size": 37.5 },
+    { "value": 5000, "color": "mint", "trackSize": 87.5, "size": 75 },
+    { "value": 3000, "color": "black", "trackSize": 62.5, "size": 50 },
+    { "value": 6000, "color": "blue", "trackSize": 100, "size": 87.5 },
+    { "value": 1000, "color": "purple", "trackSize": 37.5, "size": 25 },
+    { "value": 4000, "color": "green", "trackSize": 75, "size": 62.5 }
+  ],
+  "colors": {
+    "cyan": "#a0bce8",
+    "mint": "#6be6d3",
+    "black": "#000000",
+    "blue": "#7dbbff",
+    "purple": "#b899eb",
+    "green": "#71dd8c"
+  }
+}

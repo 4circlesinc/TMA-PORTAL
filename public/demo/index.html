@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Menu</title>
+  <link rel="icon" type="image/png" href="../images/brand/tma/favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100%;
+      font-family: Inter, system-ui, sans-serif;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      background: var(--color-bg-page, #f5f5f7);
+      color: var(--color-text-primary, #000);
+    }
+
+    .portal-menu {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .portal-menu__sidebar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--color-black);
+      color: var(--color-white);
+      padding: var(--space-28) var(--space-20);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-28);
+    }
+
+    .portal-menu__brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .portal-menu__brand img { width: 24px; height: 24px; display: block; }
+
+    .portal-menu__brand-text {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .portal-menu__intro h1 {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.1;
+      background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: var(--space-12);
+    }
+
+    .portal-menu__intro p {
+      font-size: 14px;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .portal-menu__search {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--color-white);
+      font: inherit;
+    }
+
+    .portal-menu__search::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+    .portal-menu__nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .portal-menu__nav-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: rgba(255, 255, 255, 0.4);
+      padding: var(--space-8) var(--space-8) var(--space-4);
+    }
+
+    .portal-menu__nav-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      border-radius: var(--radius-12);
+      background: transparent;
+      color: rgba(255, 255, 255, 0.82);
+      font: inherit;
+      font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .portal-menu__nav-btn:hover,
+    .portal-menu__nav-btn--active {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--color-white);
+    }
+
+    .portal-menu__nav-count {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.45);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .portal-menu__footer {
+      margin-top: auto;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.45);
+      line-height: 1.5;
+    }
+
+    .portal-menu__footer a {
+      color: rgba(255, 255, 255, 0.65);
+      text-decoration: none;
+    }
+
+    .portal-menu__footer a:hover { text-decoration: underline; }
+
+    /* ── Main ── */
+    .portal-menu__main {
+      padding: var(--space-40) var(--space-48);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-40);
+    }
+
+    .portal-menu__header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-16);
+    }
+
+    .portal-menu__header h2 {
+      font-size: 40px;
+      font-weight: 600;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .portal-menu__header p {
+      font-size: 14px;
+      color: var(--color-text-secondary, rgba(0, 0, 0, 0.55));
+      max-width: 520px;
+      line-height: 1.5;
+    }
+
+    .portal-menu__stats {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .portal-menu__stat {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      background: var(--color-white);
+      border: 1px solid var(--color-border-soft, rgba(0, 0, 0, 0.06));
+      padding: 6px 12px;
+      border-radius: 999px;
+    }
+
+    .portal-menu__section {
+      scroll-margin-top: 24px;
+    }
+
+    .portal-menu__section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-12);
+      margin-bottom: var(--space-16);
+    }
+
+    .portal-menu__section-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-secondary);
+    }
+
+    .portal-menu__section-desc {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+
+    .portal-menu__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: var(--space-12);
+    }
+
+    .portal-menu__card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: var(--space-16) var(--space-20);
+      background: var(--color-white);
+      border: 1px solid var(--color-border-soft, rgba(0, 0, 0, 0.06));
+      border-radius: var(--radius-16);
+      text-decoration: none;
+      color: inherit;
+      min-height: 88px;
+    }
+
+    .portal-menu__card:hover {
+      background: var(--color-hover, rgba(0, 0, 0, 0.04));
+    }
+
+    .portal-menu__card-title {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .portal-menu__card-path {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .portal-menu__card-tag {
+      align-self: flex-start;
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      background: var(--color-bg-card, #f9f9fa);
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-top: auto;
+    }
+
+    .portal-menu__empty {
+      grid-column: 1 / -1;
+      padding: var(--space-24);
+      text-align: center;
+      color: var(--color-text-secondary);
+      background: var(--color-white);
+      border-radius: var(--radius-16);
+      border: 1px dashed var(--color-border-soft);
+    }
+
+    .portal-menu__mobile-nav {
+      display: none;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--color-white);
+      border-bottom: 1px solid var(--color-border-soft);
+      padding: 12px 16px;
+      overflow-x: auto;
+      gap: 8px;
+    }
+
+    .portal-menu__mobile-nav button {
+      flex-shrink: 0;
+      border: 1px solid var(--color-border-soft);
+      background: var(--color-white);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .portal-menu__mobile-nav button:hover,
+    .portal-menu__mobile-nav button.active {
+      background: var(--color-black);
+      color: var(--color-white);
+      border-color: var(--color-black);
+    }
+
+    @media (max-width: 960px) {
+      .portal-menu {
+        grid-template-columns: 1fr;
+      }
+
+      .portal-menu__sidebar {
+        position: relative;
+        height: auto;
+        padding: var(--space-24) var(--space-16);
+      }
+
+      .portal-menu__nav { display: none; }
+
+      .portal-menu__mobile-nav { display: flex; }
+
+      .portal-menu__main {
+        padding: var(--space-24) var(--space-16);
+      }
+
+      .portal-menu__header h2 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="portal-menu">
+  <aside class="portal-menu__sidebar">
+    <a class="portal-menu__brand" href="../index.html" aria-label="TM ANTOINE Advisory">
+      <img src="../images/brand/tma/tma-logo-mark.png" alt="" width="28" height="28">
+      <span class="portal-menu__brand-text">tma-portal</span>
+    </a>
+
+    <div class="portal-menu__intro">
+      <h1>Menu</h1>
+      <p>Browse all demos, components, icons, brand logos, and documentation in the TM ANTOINE Advisory design system.</p>
+    </div>
+
+    <input class="portal-menu__search" id="menu-search" type="search" placeholder="Search pages…" autocomplete="off" spellcheck="false">
+
+    <nav class="portal-menu__nav" id="sidebar-nav" aria-label="Categories"></nav>
+
+    <p class="portal-menu__footer">
+      <a href="#" target="_blank" rel="noopener">tma-portal</a><br>
+      Figma <a href="https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design" target="_blank" rel="noopener">Portal-Design</a>
+    </p>
+  </aside>
+
+  <div>
+    <nav class="portal-menu__mobile-nav" id="mobile-nav" aria-label="Jump to section"></nav>
+
+    <main class="portal-menu__main" id="menu-main">
+      <header class="portal-menu__header">
+        <div>
+          <h2>Portal resources</h2>
+          <p>Design system demos, documentation boards, and every live application route. Use the search or sidebar to jump to any page.</p>
+        </div>
+        <div class="portal-menu__stats" id="menu-stats"></div>
+      </header>
+      <div id="menu-sections"></div>
+    </main>
+  </div>
+</div>
+
+<script>
+const SECTIONS = [
+  {
+    id: 'application',
+    title: 'Application',
+    description: 'Live app shell and feature views',
+    items: [
+      { title: 'Dashboard', href: '../index.html', path: 'public/index.html', tag: 'App' },
+      { title: 'Classic design', href: '../classic/', path: 'public/classic/', tag: 'App' },
+      { title: 'Overview', href: '../overview/', path: 'public/overview/', tag: 'App' },
+      { title: 'Projects', href: '../projects/', path: 'public/projects/', tag: 'App' },
+      { title: 'Calendar', href: '../calendar/', path: 'public/calendar/', tag: 'App' },
+      { title: 'Users', href: '../users/', path: 'public/users/', tag: 'App' },
+      { title: 'New user', href: '../users/new/', path: 'public/users/new/', tag: 'App' },
+      { title: 'Account', href: '../account/', path: 'public/account/', tag: 'App' },
+      { title: 'Email', href: '../email/', path: 'public/email/', tag: 'App' },
+      { title: 'Email templates', href: '../email/templates/', path: 'public/email/templates/', tag: 'App' },
+      { title: 'Messages', href: '../social/messages/', path: 'public/social/messages/', tag: 'App' },
+      { title: 'Feed', href: '../social/feed/', path: 'public/social/feed/', tag: 'App' },
+      { title: 'Settings', href: '../settings/', path: 'public/settings/', tag: 'App' },
+      { title: 'Change email', href: '../settings/change-email/', path: 'public/settings/change-email/', tag: 'App' },
+      { title: 'Pricing', href: '../pricing/', path: 'public/pricing/', tag: 'App' },
+    ],
+  },
+  {
+    id: 'auth',
+    title: 'Auth & onboarding',
+    description: 'Sign-in flows and account setup',
+    items: [
+      { title: 'Sign in', href: '../sign-in/', path: 'public/sign-in/', tag: 'Auth' },
+      { title: 'Sign up', href: '../sign-up/', path: 'public/sign-up/', tag: 'Auth' },
+      { title: 'Forgot password', href: '../forgot-password/', path: 'public/forgot-password/', tag: 'Auth' },
+      { title: 'Setup new password', href: '../setup-new-password/', path: 'public/setup-new-password/', tag: 'Auth' },
+      { title: 'Two-step verification', href: '../two-step-verification/', path: 'public/two-step-verification/', tag: 'Auth' },
+      { title: 'Choose account type', href: '../choose-account-type/', path: 'public/choose-account-type/', tag: 'Auth' },
+      { title: 'Account info', href: '../account-info/', path: 'public/account-info/', tag: 'Auth' },
+    ],
+  },
+  {
+    id: 'billing',
+    title: 'Billing',
+    description: 'Payment and billing details',
+    items: [
+      { title: 'Billing details', href: '../billing-details/', path: 'public/billing-details/', tag: 'Billing' },
+      { title: 'Add payment card', href: '../billing-details/card/', path: 'public/billing-details/card/', tag: 'Billing' },
+    ],
+  },
+  {
+    id: 'system',
+    title: 'System pages',
+    description: 'Utility and empty states',
+    items: [
+      { title: '404', href: '../404/', path: 'public/404/', tag: 'System' },
+      { title: 'Coming soon', href: '../coming-soon/', path: 'public/coming-soon/', tag: 'System' },
+      { title: 'Maintenance', href: '../maintenance/', path: 'public/maintenance/', tag: 'System' },
+    ],
+  },
+  {
+    id: 'overview',
+    title: 'Overview boards',
+    description: 'Full Figma canvases',
+    items: [
+      { title: 'Design system', href: 'design-system.html', tag: 'Board' },
+      { title: 'Components catalog', href: 'components.html', tag: 'Board' },
+      { title: 'Interactive guidance', href: 'interactive-guidance.html', tag: 'Board' },
+      { title: 'Design resources', href: 'design-resources.html', tag: 'Docs' },
+    ],
+  },
+  {
+    id: 'components',
+    title: 'Components',
+    description: 'Interactive component demos',
+    items: [
+      { title: 'Button', href: 'button.html', tag: 'Demo' },
+      { title: 'Badge', href: 'badge.html', tag: 'Demo' },
+      { title: 'Tab — Segmented', href: 'tab-segmented.html', tag: 'Demo' },
+      { title: 'Tooltip', href: 'tooltip.html', tag: 'Demo' },
+      { title: 'Forms', href: 'forms.html', tag: 'Demo' },
+      { title: 'Select dropdown', href: 'select-dropdown-demo.html', tag: 'Demo' },
+      { title: 'Status badge', href: 'status-badge.html', tag: 'Demo' },
+      { title: 'Filter and sort', href: 'filter-and-sort.html', tag: 'Demo' },
+      { title: 'Pagination', href: 'pagination.html', tag: 'Demo' },
+      { title: 'Function bar', href: 'function-bar.html', tag: 'Demo' },
+      { title: 'Table title', href: 'table-title.html', tag: 'Demo' },
+      { title: 'Table A', href: 'table-a.html', tag: 'Demo' },
+      { title: 'Table B', href: 'table-b.html', tag: 'Demo' },
+      { title: 'Table C', href: 'table-c.html', tag: 'Demo' },
+      { title: 'Date picker form', href: 'date-picker-form.html', tag: 'Demo' },
+    ],
+  },
+  {
+    id: 'documentation',
+    title: 'Documentation',
+    description: 'Component specs and usage guides',
+    items: [
+      { title: 'Text', href: 'text-documentation.html', tag: 'Doc' },
+      { title: 'Icon + Text', href: 'icon-text-documentation.html', tag: 'Doc' },
+      { title: 'Frame', href: 'frame-documentation.html', tag: 'Doc' },
+      { title: 'Group', href: 'group-documentation.html', tag: 'Doc' },
+      { title: 'Button', href: 'button-documentation.html', tag: 'Doc' },
+      { title: 'Button group', href: 'button-group-documentation.html', tag: 'Doc' },
+      { title: 'Badge', href: 'badge-documentation.html', tag: 'Doc' },
+      { title: 'Tag', href: 'tag-documentation.html', tag: 'Doc' },
+      { title: 'Line', href: 'line-documentation.html', tag: 'Doc' },
+      { title: 'Strip', href: 'strip-documentation.html', tag: 'Doc' },
+      { title: 'Input', href: 'input-documentation.html', tag: 'Doc' },
+      { title: 'Card', href: 'card-documentation.html', tag: 'Doc' },
+      { title: 'Date picker', href: 'date-picker-documentation.html', tag: 'Doc' },
+    ],
+  },
+  {
+    id: 'instances',
+    title: 'Instances',
+    description: 'Variant galleries',
+    items: [
+      { title: 'Text instances', href: 'text-instances.html', tag: 'Instances' },
+      { title: 'Frame instances', href: 'frame-instances.html', tag: 'Instances' },
+      { title: 'Group instances', href: 'group-instances.html', tag: 'Instances' },
+      { title: 'Button instances', href: 'button-instances.html', tag: 'Instances' },
+      { title: 'Form instances', href: 'form-instances.html', tag: 'Instances' },
+      { title: 'Card instances', href: 'card-instances.html', tag: 'Instances' },
+      { title: 'Popover instances', href: 'popover-instances.html', tag: 'Instances' },
+    ],
+  },
+  {
+    id: 'guidance',
+    title: 'Guidance boards',
+    description: 'Interactive guidance panels',
+    items: [
+      { title: 'Forms guidance', href: 'forms-guidance.html', tag: 'Guidance' },
+      { title: 'Popover guidance', href: 'popover-guidance.html', tag: 'Guidance' },
+      { title: 'Date picker guidance', href: 'date-picker-guidance.html', tag: 'Guidance' },
+      { title: 'Search guidance', href: 'search-guidance.html', tag: 'Guidance' },
+      { title: 'Toast guidance', href: 'toast-guidance.html', tag: 'Guidance' },
+      { title: 'Table search', href: 'table-search-guidance.html', tag: 'Guidance' },
+      { title: 'Table filter & sort', href: 'table-filter-sort-guidance.html', tag: 'Guidance' },
+      { title: 'Table add data', href: 'table-add-data-guidance.html', tag: 'Guidance' },
+      { title: 'Table B guidance', href: 'table-b-guidance.html', tag: 'Guidance' },
+    ],
+  },
+  {
+    id: 'charts',
+    title: 'Charts',
+    description: 'Chart graphics and motion',
+    items: [
+      { title: 'Charts hub', href: 'charts.html', tag: 'Hub' },
+      { title: 'Proportion statistics', href: 'proportion-statistics.html', tag: 'Chart' },
+      { title: 'Semicircle chart', href: 'semicircle-chart.html', tag: 'Chart' },
+      { title: 'Chart motion 01', href: 'chart-motion-01.html', tag: 'Motion' },
+      { title: 'Chart motion 02', href: 'chart-motion-02.html', tag: 'Motion' },
+      { title: 'Chart motion 03', href: 'chart-motion-03.html', tag: 'Motion' },
+      { title: 'Vertical 01', href: 'vertical-01.html', tag: 'Vertical' },
+      { title: 'Vertical 02', href: 'vertical-02.html', tag: 'Vertical' },
+      { title: 'Vertical 03', href: 'vertical-03.html', tag: 'Vertical' },
+      { title: 'Vertical 04', href: 'vertical-04.html', tag: 'Vertical' },
+      { title: 'Vertical 05', href: 'vertical-05.html', tag: 'Vertical' },
+      { title: 'Vertical 06', href: 'vertical-06.html', tag: 'Vertical' },
+      { title: 'Vertical 07', href: 'vertical-07.html', tag: 'Vertical' },
+      { title: 'Vertical 08', href: 'vertical-08.html', tag: 'Vertical' },
+      { title: 'Vertical 09', href: 'vertical-09.html', tag: 'Vertical' },
+      { title: 'Vertical 10', href: 'vertical-10.html', tag: 'Vertical' },
+      { title: 'Vertical 11', href: 'vertical-11.html', tag: 'Vertical' },
+      { title: 'Vertical 12', href: 'vertical-12.html', tag: 'Vertical' },
+      { title: 'Horizontal 01', href: 'horizontal-01.html', tag: 'Horizontal' },
+      { title: 'Horizontal 02', href: 'horizontal-02.html', tag: 'Horizontal' },
+      { title: 'Horizontal 03', href: 'horizontal-03.html', tag: 'Horizontal' },
+      { title: 'Horizontal 04', href: 'horizontal-04.html', tag: 'Horizontal' },
+      { title: 'Donut 01', href: 'donut-01.html', tag: 'Donut' },
+      { title: 'Donut 02', href: 'donut-02.html', tag: 'Donut' },
+      { title: 'Donut 03', href: 'donut-03.html', tag: 'Donut' },
+      { title: 'Donut 04', href: 'donut-04.html', tag: 'Donut' },
+      { title: 'Donut 05', href: 'donut-05.html', tag: 'Donut' },
+    ],
+  },
+  {
+    id: 'icons',
+    title: 'Icons',
+    description: 'tma custom + Phosphor sets',
+    items: [
+      { title: 'Icons gallery', href: 'icons.html', path: 'public/demo/icons.html', tag: 'Gallery' },
+    ],
+  },
+  {
+    id: 'brand-logos',
+    title: 'Brand logos',
+    description: '24px and 40px brand marks',
+    items: [
+      { title: 'Brand logos gallery', href: 'brand-logos.html', path: 'public/demo/brand-logos.html', tag: 'Gallery' },
+    ],
+  },
+  {
+    id: 'assets',
+    title: 'Assets',
+    description: 'Avatars, cursors, and more',
+    items: [
+      { title: 'Avatars', href: 'avatars.html', tag: 'Gallery' },
+      { title: 'Cursors', href: 'cursors.html', tag: 'Gallery' },
+    ],
+  },
+];
+
+const sidebarNav = document.getElementById('sidebar-nav');
+const mobileNav = document.getElementById('mobile-nav');
+const menuSections = document.getElementById('menu-sections');
+const menuStats = document.getElementById('menu-stats');
+const searchInput = document.getElementById('menu-search');
+
+let activeSection = SECTIONS[0].id;
+
+function totalItems() {
+  return SECTIONS.reduce((n, s) => n + s.items.length, 0);
+}
+
+function renderNav() {
+  sidebarNav.innerHTML = SECTIONS.map(section => `
+    <button type="button" class="portal-menu__nav-btn${section.id === activeSection ? ' portal-menu__nav-btn--active' : ''}" data-section="${section.id}">
+      <span>${section.title}</span>
+      <span class="portal-menu__nav-count">${section.items.length}</span>
+    </button>
+  `).join('');
+
+  mobileNav.innerHTML = SECTIONS.map(section => `
+    <button type="button" data-section="${section.id}" class="${section.id === activeSection ? 'active' : ''}">${section.title}</button>
+  `).join('');
+}
+
+function cardHtml(item) {
+  const path = item.path || `public/demo/${item.href}`;
+  return `
+    <a class="portal-menu__card" href="${item.href}" data-title="${item.title.toLowerCase()}" data-path="${path.toLowerCase()}">
+      <span class="portal-menu__card-title">${item.title}</span>
+      <span class="portal-menu__card-path">${path}</span>
+      <span class="portal-menu__card-tag">${item.tag}</span>
+    </a>
+  `;
+}
+
+function renderSections(filter = '') {
+  const q = filter.trim().toLowerCase();
+
+  menuSections.innerHTML = SECTIONS.map(section => {
+    const items = q
+      ? section.items.filter(item =>
+          item.title.toLowerCase().includes(q) ||
+          item.href.toLowerCase().includes(q) ||
+          (item.tag && item.tag.toLowerCase().includes(q)) ||
+          section.title.toLowerCase().includes(q)
+        )
+      : section.items;
+
+    if (!items.length) return '';
+
+    return `
+      <section class="portal-menu__section" id="section-${section.id}">
+        <div class="portal-menu__section-head">
+          <h3 class="portal-menu__section-title">${section.title}</h3>
+          <span class="portal-menu__section-desc">${section.description}</span>
+        </div>
+        <div class="portal-menu__grid">
+          ${items.map(cardHtml).join('')}
+        </div>
+      </section>
+    `;
+  }).join('');
+
+  if (!menuSections.innerHTML.trim()) {
+    menuSections.innerHTML = '<p class="portal-menu__empty">No pages match your search.</p>';
+  }
+}
+
+function renderStats(filter = '') {
+  const q = filter.trim().toLowerCase();
+  const visible = q
+    ? SECTIONS.reduce((n, s) => n + s.items.filter(item =>
+        item.title.toLowerCase().includes(q) ||
+        item.href.toLowerCase().includes(q) ||
+        (item.tag && item.tag.toLowerCase().includes(q)) ||
+        s.title.toLowerCase().includes(q)
+      ).length, 0)
+    : totalItems();
+
+  menuStats.innerHTML = `
+    <span class="portal-menu__stat">${visible} page${visible === 1 ? '' : 's'}</span>
+    <span class="portal-menu__stat">${SECTIONS.length} categories</span>
+  `;
+}
+
+function scrollToSection(id) {
+  activeSection = id;
+  renderNav();
+  const el = document.getElementById(`section-${id}`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+sidebarNav.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-section]');
+  if (btn) scrollToSection(btn.dataset.section);
+});
+
+mobileNav.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-section]');
+  if (btn) scrollToSection(btn.dataset.section);
+});
+
+searchInput.addEventListener('input', () => {
+  renderSections(searchInput.value);
+  renderStats(searchInput.value);
+});
+
+renderNav();
+renderSections();
+renderStats();
+</script>
+</body>
+</html>

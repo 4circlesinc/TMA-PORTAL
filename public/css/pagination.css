@@ -1,0 +1,185 @@
+/* TMA — Pagination */
+
+.tma-pagination-bar {
+  --pagination-width: 892px;
+  --pagination-min-height: 28px;
+  --pagination-footer-min-height: 24px;
+  --pagination-gap: 8px;
+  --pagination-footer-gap: 40px;
+  --pagination-meta-gap: 8px;
+  --pagination-button-min-size: 24px;
+  --pagination-button-radius: 12px;
+  --pagination-button-padding-y: 4px;
+  --pagination-button-padding-x-active: 12px;
+  --pagination-button-padding-x: 20px;
+  --pagination-button-padding-icon: 4px;
+  --pagination-button-border-color: rgba(0, 0, 0, 0.1);
+  --pagination-button-active-background: rgba(0, 0, 0, 0.04);
+  --pagination-font-size: var(--tma-table-font-size, 12px);
+  --pagination-line-height: var(--tma-table-line-height, 16px);
+  --pagination-letter-spacing: var(--tma-table-letter-spacing, 0);
+  --pagination-muted-color: var(--tma-table-header-muted-color, rgba(0, 0, 0, 0.4));
+  --pagination-icon-size: 16px;
+  --pagination-page-size-icon-size: 10px;
+  --pagination-page-size-gap: 4px;
+
+  display: flex;
+  align-items: center;
+  gap: var(--pagination-footer-gap);
+  width: var(--pagination-width);
+  max-width: 100%;
+  min-height: var(--pagination-footer-min-height);
+  box-sizing: border-box;
+  font-family: Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+}
+
+.tma-pagination-bar--default {
+  min-height: var(--pagination-min-height);
+}
+
+.tma-pagination-bar__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pagination-meta-gap);
+  flex-shrink: 0;
+}
+
+.tma-pagination-bar__page-size {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pagination-page-size-gap);
+  min-height: var(--pagination-button-min-size);
+  min-width: var(--pagination-button-min-size);
+  padding: var(--pagination-button-padding-y) var(--pagination-button-padding-x-active);
+  border: 0;
+  border-radius: var(--pagination-button-radius);
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  font: 400 var(--pagination-font-size) / var(--pagination-line-height) Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  letter-spacing: var(--pagination-letter-spacing);
+  color: var(--tma-table-text-color, #000);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-pagination-bar__results {
+  font: 400 var(--pagination-font-size) / var(--pagination-line-height) Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  letter-spacing: var(--pagination-letter-spacing);
+  color: var(--pagination-muted-color);
+  white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-pagination__label {
+  display: block;
+  min-width: 0;
+  font: inherit;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--pagination-letter-spacing);
+  line-height: var(--pagination-line-height);
+  text-align: center;
+}
+
+.tma-pagination {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: var(--pagination-gap);
+  min-width: 0;
+}
+
+.tma-pagination-bar--default .tma-pagination {
+  flex: 0 0 auto;
+  width: var(--pagination-width);
+}
+
+.tma-pagination__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 0 0;
+  width: 0;
+  min-width: 0;
+  min-height: var(--pagination-button-min-size);
+  height: var(--pagination-button-min-size);
+  padding: var(--pagination-button-padding-y) var(--pagination-button-padding-x);
+  border: 0.5px solid var(--pagination-button-border-color);
+  border-radius: var(--pagination-button-radius);
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  font: 400 var(--pagination-font-size) / var(--pagination-line-height) Inter, system-ui, sans-serif;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  letter-spacing: var(--pagination-letter-spacing);
+  color: var(--tma-table-text-color, #000);
+  text-align: center;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-pagination__button--active {
+  background: var(--pagination-button-active-background);
+}
+
+.tma-pagination__button--icon {
+  padding: var(--pagination-button-padding-y) var(--pagination-button-padding-x);
+}
+
+.tma-pagination__button--next {
+  padding: var(--pagination-button-padding-icon);
+}
+
+.tma-pagination__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tma-pagination__icon {
+  display: block;
+  width: var(--pagination-icon-size);
+  height: var(--pagination-icon-size);
+  max-width: var(--pagination-icon-size);
+  max-height: var(--pagination-icon-size);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.tma-pagination-bar__page-size .tma-pagination__icon {
+  width: var(--pagination-page-size-icon-size);
+  height: var(--pagination-page-size-icon-size);
+  max-width: var(--pagination-page-size-icon-size);
+  max-height: var(--pagination-page-size-icon-size);
+}
+
+/* Table A — equal-width stretch pagination (Figma 33160:33563) */
+.tma-pagination-bar--stretch {
+  display: block;
+  width: 100%;
+  min-height: var(--pagination-min-height);
+}
+
+.tma-pagination-bar--stretch .tma-pagination {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: var(--pagination-gap);
+  width: 100%;
+  min-width: 0;
+  height: var(--pagination-min-height);
+}
+
+.tma-pagination-bar--stretch .tma-pagination__button--icon {
+  padding: var(--pagination-button-padding-y) var(--pagination-button-padding-x);
+}
+
+.tma-pagination-bar--stretch .tma-pagination__button--next {
+  padding: var(--pagination-button-padding-icon);
+}

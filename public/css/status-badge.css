@@ -1,0 +1,95 @@
+/* TMA — Status badge */
+
+.tma-status-badge {
+  --status-badge-color: var(--color-primary);
+  --status-badge-font-size: var(--tma-table-font-size, 12px);
+  --status-badge-line-height: var(--tma-table-line-height, 16px);
+  --status-badge-font-weight: var(--tma-table-font-weight-regular, 400);
+  --status-badge-letter-spacing: var(--tma-table-letter-spacing, 0);
+  --status-badge-dot-min-height: 16px;
+  --status-badge-pill-min-height: 20px;
+  --status-badge-pill-padding-x: 4px;
+  --status-badge-pill-padding-y: 2px;
+  --status-badge-pill-radius: 4px;
+  --status-badge-pill-shape-radius: 80px;
+  --status-badge-pill-background-opacity: 0.1;
+  --status-badge-pill-border-opacity: 0.2;
+  --status-badge-pill-border-width: 0.5px;
+  --status-badge-dot-size: 12px;
+  --status-badge-dot-inset: 31.25%;
+
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  font-family: var(--tma-table-font-family, Inter, system-ui, sans-serif);
+  font-feature-settings: "ss01" 1, "cv01" 1;
+  font-style: normal;
+  letter-spacing: var(--status-badge-letter-spacing);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tma-status-badge--dot {
+  min-height: var(--status-badge-dot-min-height);
+  border-radius: var(--status-badge-pill-radius);
+}
+
+.tma-status-badge--pill {
+  position: relative;
+  min-height: var(--status-badge-pill-min-height);
+  padding: var(--status-badge-pill-padding-y) var(--status-badge-pill-padding-x);
+  border-radius: var(--status-badge-pill-radius);
+  overflow: hidden;
+}
+
+.tma-status-badge--pill.tma-status-badge--muted {
+  background: var(--status-badge-pill-surface, rgba(0, 0, 0, 0.04));
+}
+
+.tma-status-badge--pill::before,
+.tma-status-badge--pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--status-badge-pill-shape-radius);
+  pointer-events: none;
+}
+
+.tma-status-badge--pill::before {
+  background: var(--status-badge-color);
+  opacity: var(--status-badge-pill-background-opacity);
+}
+
+.tma-status-badge--pill::after {
+  border: var(--status-badge-pill-border-width) solid var(--status-badge-color);
+  opacity: var(--status-badge-pill-border-opacity);
+}
+
+.tma-status-badge__dot {
+  position: relative;
+  width: var(--status-badge-dot-size);
+  height: var(--status-badge-dot-size);
+  min-width: var(--status-badge-dot-size);
+  min-height: var(--status-badge-dot-size);
+  flex-shrink: 0;
+}
+
+.tma-status-badge__dot::before {
+  content: "";
+  position: absolute;
+  inset: var(--status-badge-dot-inset);
+  background: var(--status-badge-color);
+  border-radius: 2px;
+}
+
+.tma-status-badge__label {
+  position: relative;
+  z-index: 1;
+  font-size: var(--status-badge-font-size);
+  line-height: var(--status-badge-line-height);
+  font-weight: var(--status-badge-font-weight);
+  letter-spacing: var(--status-badge-letter-spacing);
+  font-style: normal;
+  color: var(--status-badge-color);
+  white-space: nowrap;
+}

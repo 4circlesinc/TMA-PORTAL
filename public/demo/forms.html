@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Forms demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/input.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="tma-forms-demo" data-node-id="forms-demo">
+    <header class="tma-forms-demo__hero">
+      <h1 class="tma-forms-demo__title">Forms</h1>
+      <p class="tma-forms-demo__intro">All Input and Form components — variants, interactive guidance, and real-world instances.</p>
+      <nav class="tma-forms-demo__nav" aria-label="Form demo sections">
+        <a href="#variants">Variants</a>
+        <a href="#buttons">Buttons</a>
+        <a href="#states">States</a>
+        <a href="#instances">Instances</a>
+        <a href="#related">Related</a>
+      </nav>
+    </header>
+
+    <section class="tma-forms-demo__section" id="variants">
+      <h2 class="tma-forms-demo__section-title">Input variants</h2>
+      <p class="tma-forms-demo__section-desc">Default and active states for each Input instance type.</p>
+      <div class="tma-forms-demo__panel">
+        <div id="variants-grid"></div>
+      </div>
+      <div class="tma-forms-demo__panel tma-forms-demo__panel--stack">
+        <div id="example-command"></div>
+        <div id="example-tags"></div>
+      </div>
+    </section>
+
+    <section class="tma-forms-demo__section" id="buttons">
+      <div id="buttons-board"></div>
+    </section>
+
+    <section class="tma-forms-demo__section" id="states">
+      <div id="states-board"></div>
+    </section>
+
+    <section class="tma-forms-demo__section" id="instances">
+      <h2 class="tma-forms-demo__section-title">Form instances</h2>
+      <p class="tma-forms-demo__section-desc">Composite form fields built from Input, Radio, Checkbox, and Switch.</p>
+      <div id="instances-board"></div>
+    </section>
+
+    <section class="tma-forms-demo__section" id="related">
+      <h2 class="tma-forms-demo__section-title">Related demos</h2>
+      <ul class="tma-forms-demo__links">
+        <li><a href="input-documentation.html">Input documentation</a></li>
+        <li><a href="forms-guidance.html">Forms interactive guidance</a></li>
+        <li><a href="form-instances.html">Form instances</a></li>
+        <li><a href="date-picker-form.html">Date picker form example</a></li>
+        <li><a href="date-picker-guidance.html">Date picker guidance</a></li>
+      </ul>
+    </section>
+
+    <div id="demo-footer"></div>
+  </div>
+
+<script src="../js/input-icons.js"></script>
+<script src="../js/input.js"></script>
+<script src="../js/input-interactive.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script src="../js/forms-guidance.js"></script>
+<script src="../js/form-instances.js"></script>
+<script src="../js/forms-demo.js"></script>
+<script>
+window.TMAFormsDemo.mountDemo({
+  variantsGridEl: document.getElementById('variants-grid'),
+  commandEl: document.getElementById('example-command'),
+  tagsEl: document.getElementById('example-tags'),
+  buttonsEl: document.getElementById('buttons-board'),
+  statesEl: document.getElementById('states-board'),
+  instancesEl: document.getElementById('instances-board'),
+  footerEl: document.getElementById('demo-footer'),
+  socialSvg: window.TMATableSearchIcons.svg,
+});
+</script>
+</body>
+</html>

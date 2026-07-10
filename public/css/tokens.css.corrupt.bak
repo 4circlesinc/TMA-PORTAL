@@ -1,0 +1,10 @@
+
+  --color-purple:  var(--color-primary-dark);   /* legacy alias — do not use for chart series */
+  --color-violet:  var(--color-primary);   /* progress strip, chip label — brand blue */
+
+  /* Selection / focus tints derived from brand blue */
+  --color-accent:             var(--color-primary-dark);
+  --color-accent-bg:          color-mix(in srgb, var(--color-primary-dark) 8%, transparent);
+  --color-accent-bg-hover:    color-mix(in srgb, var(--color-primary-dark) 12%, transparent);
+  --color-text-hint:         var(--color-primary-dark);
+  --chart-purple:  var(--color-primary);

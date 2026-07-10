@@ -1,0 +1,212 @@
+/* TMA — Layout interactive guidance (Figma 30484:299256) */
+
+.ig-layout__intro-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 18px;
+  line-height: 28px;
+}
+
+.ig-layout__intro-copy p {
+  margin: 0;
+}
+
+.ig-layout__showcase {
+  position: relative;
+  width: 1876px;
+  max-width: 100%;
+  height: 1024px;
+}
+
+.ig-layout__showcase--two {
+  height: 1058px;
+}
+
+.ig-layout__showcase--one {
+  height: 1200px;
+}
+
+.ig-layout__scene {
+  position: absolute;
+  left: 215px;
+  top: 0;
+  width: 1440px;
+  height: 1024px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #333;
+}
+
+.ig-layout__scene--two {
+  top: 34px;
+}
+
+.ig-layout__scene--one {
+  top: 140px;
+  left: 0;
+  width: 1200px;
+}
+
+.ig-layout__scene .tma-overview__cards {
+  gap: 28px;
+}
+
+.ig-layout__scene .tma-overview {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  background: #333;
+  color: #fff;
+  font-feature-settings: "ss01" 1, "cv01" 1;
+}
+
+.ig-layout__fallback {
+  margin: 0;
+  padding: 48px;
+  font-size: 18px;
+  line-height: 28px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Dark overview tokens inside layout scene */
+
+.ig-layout__scene .tma-overview--dark .tma-overview__sidebar,
+.ig-layout__scene .tma-overview--dark .tma-overview__right-sidebar {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__header {
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.15);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__brand-name,
+.ig-layout__scene .tma-overview--dark .tma-overview__nav-item,
+.ig-layout__scene .tma-overview--dark .tma-overview__panel-title,
+.ig-layout__scene .tma-overview--dark .tma-overview__notice-title,
+.ig-layout__scene .tma-overview--dark .tma-overview__contact-name,
+.ig-layout__scene .tma-overview--dark .tma-overview__page-title,
+.ig-layout__scene .tma-overview--dark .tma-overview__card-label,
+.ig-layout__scene .tma-overview--dark .tma-overview__card-value,
+.ig-layout__scene .tma-overview--dark .tma-overview__chart-title {
+  color: #fff;
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__nav-group-label,
+.ig-layout__scene .tma-overview--dark .tma-overview__breadcrumb,
+.ig-layout__scene .tma-overview--dark .tma-overview__notice-meta,
+.ig-layout__scene .tma-overview--dark .tma-overview__card-delta {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__breadcrumb strong {
+  color: #fff;
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__nav-item--active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__nav-icon,
+.ig-layout__scene .tma-overview--dark .tma-overview__header-icon img,
+.ig-layout__scene .tma-overview--dark .tma-overview__global-search-icon {
+  opacity: 0.6;
+  filter: brightness(0) invert(1);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__nav-item--active .tma-overview__nav-icon {
+  opacity: 1;
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__global-search {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__global-search-text,
+.ig-layout__scene .tma-overview--dark .tma-overview__global-search-kbd {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__global-search-kbd {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__brand-mark {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 80px;
+  overflow: hidden;
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__brand-mark img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__card,
+.ig-layout__scene .tma-overview--dark .tma-overview__chart {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__card--blue,
+.ig-layout__scene .tma-overview--dark .tma-overview__card--purple {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ig-layout__scene .tma-overview--dark .tma-overview__card-delta img {
+  filter: none;
+}
+
+.ig-layout__scene .tma-overview__sidebar {
+  width: 212px;
+}
+
+.ig-layout__scene .tma-overview__main {
+  left: 212px;
+  right: 280px;
+}
+
+.ig-layout__scene .tma-overview__right-sidebar {
+  width: 280px;
+}
+
+.ig-layout__scene--two .tma-overview__right-sidebar {
+  display: none;
+}
+
+.ig-layout__scene--two .tma-overview__main {
+  right: 0;
+  padding-right: 0;
+}
+
+.ig-layout__scene--one .tma-overview__sidebar {
+  display: none;
+}
+
+.ig-layout__scene--one .tma-overview__header {
+  left: 0;
+  right: 0;
+}
+
+.ig-layout__scene--one .tma-overview__main {
+  left: 0;
+  right: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.ig-layout__scene .tma-overview__right-sidebar {
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.ig-layout__scene .tma-overview__activity {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+.ig-layout__scene .tma-overview__main {
+  overflow: auto;
+  scrollbar-width: thin;
+}

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Vertical 09</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 1200px; }
+    .nav-card { flex: 0 0 280px; background: #000; border-radius: 48px; padding: 40px 32px; }
+    .nav-card h1 { font-size: 44px; font-weight: 700; line-height: 1; margin-bottom: 16px; background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 28px; overflow-x: auto; }
+    .chart-wrap { border: 1px solid #eee; border-radius: 16px; padding: 32px 16px 24px; background: #fafafa; overflow: visible; }
+    .hint { margin-top: 12px; font-size: 12px; color: #888; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; } .nav-card { width: 100%; flex: none; } }
+  </style>
+</head>
+<body>
+  <p class="section-title">Vertical bar — Vertical 09</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>Vertical 09</h1>
+      <p>Wide 1100×212 chart — 48 columns, each with 3 stacked segments: solid black, 40% black, and lavender (#adadfb).</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;x-chart-vertical-09 /&gt;
+
+&lt;x-chart-vertical-09 accent-color="#adadfb" :y-max="6000" /&gt;</pre>
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll tma-chart-scroll--wide">
+          <div id="chart" class="tma-chart-vertical-09" role="group" aria-label="Stacked strip vertical bar chart"></div>
+        </div>
+        <p class="hint">Scroll horizontally on narrow viewports. Hover a strip for its total value.</p>
+      </div>
+    </div>
+  </div>
+<script>
+const CHART_WIDTH = 1100;
+const CHART_HEIGHT = 212;
+
+function formatValue(v) { return v.toLocaleString(); }
+
+function normalizeStackedStrips(preset) {
+  const max = preset.yMax || 6000;
+  const plotTop = preset.plotTop || 32;
+  const plotBottom = preset.plotBottom || 212;
+  const maxStack = plotBottom - plotTop;
+  const defaultColor = preset.color || '#000000';
+  const accentColor = (preset.accentColor || '#ADADFB').toUpperCase();
+
+  return (preset.strips || []).map((strip) => {
+    const width = strip.width || preset.stripWidth || 2;
+    const x = strip.x || 0;
+    const segments = (strip.segments || []).map((segment) => {
+      const color = (segment.color || defaultColor).toUpperCase();
+      return {
+        topPct: (segment.top / CHART_HEIGHT) * 100,
+        heightPct: (segment.height / CHART_HEIGHT) * 100,
+        color: color === accentColor ? accentColor : defaultColor,
+        opacity: segment.opacity != null ? segment.opacity : (color === accentColor ? 1 : 0.4),
+      };
+    });
+    const stackHeight = (strip.segments || []).reduce((sum, s) => sum + s.height, 0);
+    const value = strip.value != null ? strip.value : Math.round(stackHeight / maxStack * max);
+
+    return {
+      value,
+      leftPct: ((x - width / 2) / CHART_WIDTH) * 100,
+      widthPct: (width / CHART_WIDTH) * 100,
+      segments,
+    };
+  });
+}
+
+function renderChart(root, preset) {
+  root.style.setProperty('--v09-chart-width', CHART_WIDTH);
+  root.style.setProperty('--v09-chart-height', CHART_HEIGHT);
+
+  const plot = document.createElement('div');
+  plot.className = 'tma-chart-vertical-09__plot';
+
+  normalizeStackedStrips(preset).forEach((strip, index) => {
+    const el = document.createElement('div');
+    el.className = 'tma-chart-vertical-09__strip';
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', `Strip ${index + 1}: ${formatValue(strip.value)}`);
+    el.style.left = `${strip.leftPct}%`;
+    el.style.width = `${strip.widthPct}%`;
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'tma-chart-vertical-09__tooltip';
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.textContent = formatValue(strip.value);
+
+    strip.segments.forEach((segment) => {
+      const seg = document.createElement('span');
+      seg.className = 'tma-chart-vertical-09__segment';
+      seg.style.top = `${segment.topPct}%`;
+      seg.style.height = `${segment.heightPct}%`;
+      seg.style.backgroundColor = segment.color;
+      seg.style.opacity = segment.opacity;
+      el.appendChild(seg);
+    });
+
+    el.insertBefore(tooltip, el.firstChild);
+    plot.appendChild(el);
+  });
+
+  root.appendChild(plot);
+}
+
+fetch('./data/vertical-09.json')
+  .then(r => r.json())
+  .then(preset => {
+    const chart = document.getElementById('chart');
+    renderChart(chart, preset);
+    window.PortalChartMotion.initChart(chart);
+  });
+</script>
+<script src="../js/chart-motion.js"></script>
+</body>
+</html>

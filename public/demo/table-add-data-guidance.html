@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Add data guidance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/table.css">
+  <link rel="stylesheet" href="../css/function-bar.css">
+  <link rel="stylesheet" href="../css/pagination.css">
+  <link rel="stylesheet" href="../css/status-badge.css">
+  <link rel="stylesheet" href="../css/table-a.css">
+  <link rel="stylesheet" href="../css/table-add-data.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #fff;
+      color: #000;
+      padding: 48px 80px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    .guidance-hero { margin-bottom: 0; padding-bottom: 48px; border-bottom: 1px solid rgba(0,0,0,0.1); }
+    .guidance-hero__title { font-size: 64px; line-height: 72px; font-weight: 600; margin-bottom: 8px; }
+    .guidance-hero__subtitle { font-size: 48px; line-height: 56px; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <header class="guidance-hero">
+    <h1 class="guidance-hero__title">Add data</h1>
+    <p class="guidance-hero__subtitle">Table interactive guidance</p>
+  </header>
+
+  <a class="tma-table-add-data-guidance__doc" href="#" target="_blank" rel="noopener noreferrer">
+    <img src="../images/icons/tma/Goto.svg" alt="" class="tma-table-add-data-guidance__doc-icon" width="16" height="16" />
+    <span>Component documentation</span>
+  </a>
+
+  <div id="guidance-root"></div>
+  <div class="tma-add-data__toast" data-add-toast role="status" aria-live="polite"></div>
+
+<script>
+const ICONS = {
+  Add: '../images/icons/tma/Add.svg',
+  FunnelSimple: '../images/icons/tma/FunnelSimple-16.svg',
+  ArrowsDownUp: '../images/icons/tma/ArrowsDownUp.svg',
+  Search: '../images/icons/tma/Search-16.svg',
+  Close: '../images/icons/tma/Close.svg',
+  User: '../images/icons/phosphor/User.svg',
+  XCircle: '../images/icons/tma/Xcircle.svg',
+  CalendarBlank: '../images/icons/phosphor/CalendarBlank-16.svg',
+  ArrowLineUpDown: '../images/icons/tma/ArrowLineUpDown.svg',
+  Copy: '../images/icons/tma/Copy-16.svg',
+  ThreeDots: '../images/icons/tma/ThreeDots-16.svg',
+  Checkbox: '../images/icons/tma/Checkbox-16.svg',
+  CheckboxChecked: '../images/icons/tma/CheckboxChecked-16.svg',
+  ArrowLineLeft: '../images/icons/tma/ArrowLineLeft-16.svg',
+  ArrowLineRight: '../images/icons/tma/ArrowLineRight-16.svg',
+  ArrowLineDown: '../images/icons/tma/ArrowLineDown-16.svg',
+};
+
+const COLORS = { purple: '#b899eb', green: '#71dd8c', blue: '#7dbbff', orange: '#ffb55b', muted: 'rgba(0, 0, 0, 0.4)' };
+const STATUS_VARIANTS = { 'in-progress': 'dot-purple', complete: 'dot-green', pending: 'dot-blue', approved: 'dot-orange', rejected: 'dot-muted' };
+
+const RULES = [
+  'Unlike the search pop-up, this pop-up can only be closed by clicking the close button.',
+  'When closed, it automatically saves what the user has entered.',
+  'Clicking Cancel does not save what the user entered.',
+  'The saved content appears when the user clicks the Add data.',
+];
+
+const BASE_ROWS = [
+  { orderId: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', project: 'Landing Page', address: 'Meadow Lane Oakland', date: 'Just now', status: 'in-progress', statusLabel: 'In Progress' },
+  { orderId: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', project: 'CRM Admin pages', address: 'Larry San Francisco', date: '1 minute ago', status: 'complete', statusLabel: 'Complete' },
+  { orderId: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', project: 'Client Project', address: 'Bagwell Avenue Ocala', date: '1 hour ago', status: 'pending', statusLabel: 'Pending' },
+  { orderId: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', project: 'Admin Dashboard', address: 'Washburn Baton Rouge', date: 'Yesterday', status: 'approved', statusLabel: 'Approved', rowVariant: 'section-end' },
+  { orderId: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', project: 'App Landing Page', address: 'Nest Lane Olivette', date: 'Feb 2, 2026', status: 'rejected', statusLabel: 'Rejected' },
+];
+
+function escJson(obj) { return JSON.stringify(obj).replace(/"/g, '&quot;'); }
+
+function renderStatusBadge(label, status) {
+  const color = STATUS_VARIANTS[status].split('-')[1];
+  return `<span class="tma-status-badge tma-status-badge--dot tma-status-badge--${color}" style="--status-badge-color:${COLORS[color]}"><span class="tma-status-badge__dot" aria-hidden="true"></span><span class="tma-status-badge__label">${label}</span></span>`;
+}
+
+function renderCheckbox(checked, attrs = '') {
+  const src = checked ? ICONS.CheckboxChecked : ICONS.Checkbox;
+  return `<button type="button" class="tma-table-a__checkbox-btn"${attrs} aria-pressed="${checked ? 'true' : 'false'}"${checked ? ' data-checked' : ''}><img src="${src}" class="tma-table-a__checkbox-glyph" data-checkbox-glyph width="16" height="16" alt="" /></button>`;
+}
+
+function renderFunctionBar(interactive = false) {
+  const addAttrs = interactive ? ' data-add-data-trigger aria-label="Add data"' : ' aria-label="Add"';
+  return `<div class="tma-function-bar tma-function-bar--default" style="--function-bar-width:892px;--function-bar-background:#f9f9fa;"><div class="tma-function-bar__actions"><button type="button" class="tma-function-bar__action"${addAttrs}><img src="${ICONS.Add}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="Filter"><img src="${ICONS.FunnelSimple}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-function-bar__action" aria-label="Sort"><img src="${ICONS.ArrowsDownUp}" class="tma-function-bar__icon" width="16" height="16" alt="" /></button></div><div class="tma-function-bar__search" role="search"><label class="tma-function-bar__search-field"><img src="${ICONS.Search}" class="tma-function-bar__icon" width="16" height="16" alt="" aria-hidden="true" /><input type="search" class="tma-function-bar__search-input" placeholder="Search" aria-label="Search" autocomplete="off" spellcheck="false" /></label><button type="button" class="tma-function-bar__kbd" aria-label="Focus search" data-shortcut="/">/</button></div></div>`;
+}
+
+function renderTableHead() {
+  return `<div class="tma-table-a__row tma-table-a__row--head" role="row"><div class="tma-table-a__cell tma-table-a__cell--select" role="columnheader">${renderCheckbox(false, ' data-select-all aria-label="Select all rows"')}</div><div class="tma-table-a__cell tma-table-a__cell--orderId" role="columnheader"><span class="tma-table-a__label">Order ID</span></div><div class="tma-table-a__cell tma-table-a__cell--user" role="columnheader"><span class="tma-table-a__label">User</span></div><div class="tma-table-a__cell tma-table-a__cell--project" role="columnheader"><span class="tma-table-a__label">Project</span></div><div class="tma-table-a__cell tma-table-a__cell--address tma-table-a__cell--header-emphasis" role="columnheader"><span class="tma-table-a__label">Address</span></div><div class="tma-table-a__cell tma-table-a__cell--date" role="columnheader"><span class="tma-table-a__label">Date</span></div><div class="tma-table-a__cell tma-table-a__cell--status" role="columnheader"><span class="tma-table-a__label">Status</span></div><div class="tma-table-a__cell tma-table-a__cell--actions" role="columnheader" aria-hidden="true"></div></div>`;
+}
+
+function avatarImg(row) {
+  if (row.avatarSrc) {
+    return `<img src="${row.avatarSrc}" alt="" class="tma-table-a__avatar" width="24" height="24" />`;
+  }
+  return `<img src="../images/avatars/${row.avatar}.png" alt="" class="tma-table-a__avatar" width="24" height="24" />`;
+}
+
+function renderRow(row, index) {
+  const borderVariant = row.rowVariant === 'section-end' ? 'section-end' : 'default';
+  return `<div class="tma-table-a__row tma-table-a__row--${borderVariant}" role="row" data-row-index="${index}" data-border-variant="${borderVariant}" data-row-data="${escJson(row)}"><div class="tma-table-a__cell tma-table-a__cell--select" role="cell">${renderCheckbox(!!row.checked, ` aria-label="Select row ${row.orderId}" data-row-checkbox`)}</div><div class="tma-table-a__cell tma-table-a__cell--orderId" role="cell"><span class="tma-table-a__label">${row.orderId}</span></div><div class="tma-table-a__cell tma-table-a__cell--user" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--user">${avatarImg(row)}<span class="tma-table-a__label">${row.user}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--project" role="cell"><span class="tma-table-a__label">${row.project}</span></div><div class="tma-table-a__cell tma-table-a__cell--address" role="cell"><span class="tma-table-a__address"><span class="tma-table-a__label">${row.address}</span><button type="button" class="tma-table-a__clipboard" aria-label="Copy address" data-copy-address><img src="${ICONS.Copy}" class="tma-table-a__icon" width="16" height="16" alt="" /></button></span></div><div class="tma-table-a__cell tma-table-a__cell--date" role="cell"><span class="tma-table-a__icon-text tma-table-a__icon-text--date"><img src="${ICONS.CalendarBlank}" class="tma-table-a__icon" width="16" height="16" alt="" aria-hidden="true" /><span class="tma-table-a__label">${row.date}</span></span></div><div class="tma-table-a__cell tma-table-a__cell--status" role="cell">${renderStatusBadge(row.statusLabel, row.status)}</div><div class="tma-table-a__cell tma-table-a__cell--actions" role="cell"><button type="button" class="tma-table-a__action" aria-label="Row actions" data-row-action><img src="${ICONS.ThreeDots}" class="tma-table-a__icon" width="16" height="16" alt="" /></button></div></div>`;
+}
+
+window.TMATableAddDataRenderRow = renderRow;
+
+function renderPagination() {
+  const pages = [1,2,3,4,5].map(p => `<button type="button" class="tma-pagination__button${p===1?' tma-pagination__button--active':''}" aria-label="Page ${p}"${p===1?' aria-current="page"':''}><span class="tma-pagination__label">${p}</span></button>`).join('');
+  return `<div class="tma-pagination-bar tma-pagination-bar--footer"><div class="tma-pagination-bar__meta"><button type="button" class="tma-pagination-bar__page-size" aria-label="Rows per page"><span class="tma-pagination__label">20</span><img src="${ICONS.ArrowLineDown}" class="tma-pagination__icon" width="16" height="16" alt="" aria-hidden="true" /></button><span class="tma-pagination-bar__results">105 results</span></div><nav class="tma-pagination" aria-label="Pagination">${pages}<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" disabled><img src="${ICONS.ArrowLineLeft}" class="tma-pagination__icon" width="16" height="16" alt="" /></button><button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page"><img src="${ICONS.ArrowLineRight}" class="tma-pagination__icon" width="16" height="16" alt="" /></button></nav></div>`;
+}
+
+function renderModalPopup(interactive = false) {
+  const readonly = interactive ? '' : ' readonly tabindex="-1"';
+  const staticBtn = interactive ? '' : ' tma-add-data__btn--static';
+  const dateValue = 'February 24th, 2026 at 8:53 PM.';
+  const avatarExtras = interactive
+    ? `<input type="file" accept="image/*" class="tma-add-data__avatar-input" data-avatar-input aria-hidden="true" />
+       <button type="button" class="tma-add-data__avatar-remove" data-avatar-remove aria-label="Remove photo"><img src="${ICONS.XCircle}" alt="" class="tma-add-data__avatar-remove-icon" width="20" height="20" /></button>`
+    : '';
+  const avatarClass = 'tma-add-data__avatar-btn' + (interactive ? '' : ' tma-add-data__avatar-btn--static');
+  const avatarOpen = interactive
+    ? `<button type="button" class="${avatarClass}" data-add-avatar>`
+    : `<div class="${avatarClass}">`;
+  const avatarClose = interactive ? '</button>' : '</div>';
+
+  return `<div class="tma-add-data__popup">
+    <div class="tma-add-data__avatar-wrap">
+      ${avatarOpen}
+        <img src="${ICONS.User}" alt="" class="tma-add-data__avatar-placeholder" width="40" height="40" />
+        <img alt="" class="tma-add-data__avatar-preview" data-avatar-preview width="80" height="80" />
+      ${avatarClose}
+      ${avatarExtras}
+    </div>
+    <div class="tma-add-data__form">
+      <div class="tma-add-data__row">
+        <label class="tma-add-data__field tma-add-data__field--half">
+          <input type="text" class="tma-add-data__field-input" placeholder="First Name" data-field="firstName"${readonly} />
+        </label>
+        <label class="tma-add-data__field tma-add-data__field--half">
+          <input type="text" class="tma-add-data__field-input" placeholder="Last Name" data-field="lastName"${readonly} />
+        </label>
+      </div>
+      <label class="tma-add-data__field tma-add-data__field--full">
+        <span class="tma-add-data__field-label">Email</span>
+        <input type="email" class="tma-add-data__field-input" placeholder="Please enter your email address." data-field="email"${readonly} />
+      </label>
+      <div class="tma-add-data__field tma-add-data__field--full">
+        <span class="tma-add-data__field-label">Date</span>
+        <div class="tma-add-data__date-row">
+          <span class="tma-add-data__date-main">
+            <img src="${ICONS.CalendarBlank}" alt="" class="tma-add-data__date-icon" width="20" height="20" />
+            <span class="tma-add-data__field-value" data-field="date">${dateValue}</span>
+          </span>
+          <img src="${ICONS.ArrowLineUpDown}" alt="" class="tma-add-data__date-chevron" width="16" height="16" aria-hidden="true" />
+        </div>
+      </div>
+    </div>
+    <div class="tma-add-data__actions">
+      <button type="button" class="tma-add-data__btn tma-add-data__btn--cancel${staticBtn}" data-add-cancel>Cancel</button>
+      <button type="button" class="tma-add-data__btn tma-add-data__btn--save${staticBtn}" data-add-save>Save</button>
+    </div>
+  </div>`;
+}
+
+function renderModalCenter(interactive = false) {
+  const closeEl = interactive
+    ? `<button type="button" class="tma-add-data__close" data-add-close aria-label="Close"><img src="${ICONS.Close}" alt="" class="tma-add-data__close-icon" width="24" height="24" /></button>`
+    : `<div class="tma-add-data__close tma-add-data__close--static" aria-hidden="true"><img src="${ICONS.Close}" alt="" class="tma-add-data__close-icon" width="24" height="24" /></div>`;
+
+  return `<div class="tma-add-data-scene__center" data-add-modal>
+    <div class="tma-add-data__header">
+      <div class="tma-add-data__header-title">
+        <img src="${ICONS.Add}" alt="" class="tma-add-data__header-icon" width="48" height="48" />
+        <h2 class="tma-add-data__header-label">New</h2>
+      </div>
+      ${closeEl}
+    </div>
+    ${renderModalPopup(interactive)}
+  </div>`;
+}
+
+function renderScene(interactive = false) {
+  return `<div class="tma-add-data-scene">
+    <div class="tma-add-data-scene__mask" aria-hidden="true"></div>
+    ${renderModalCenter(interactive)}
+  </div>`;
+}
+
+function renderRules() {
+  const items = RULES.map(r => `<li>${r}</li>`).join('');
+  return `<aside class="tma-table-add-data-guidance__rules">
+    <ul>${items}</ul>
+    <p class="tma-table-add-data-guidance__date-note">The default date is the creation date.</p>
+  </aside>`;
+}
+
+function renderAvatarGuide() {
+  return `<div class="tma-add-data-avatar-guide">
+    <div class="tma-add-data-avatar-guide__step">
+      <div class="tma-add-data-avatar-guide__avatar"><img src="${ICONS.User}" alt="" width="24" height="24" /></div>
+    </div>
+    <div class="tma-add-data-avatar-guide__connector" aria-hidden="true"></div>
+    <div class="tma-add-data-avatar-guide__step">
+      <span class="tma-add-data-avatar-guide__label">Hover</span>
+      <div class="tma-add-data-avatar-guide__avatar"><img src="${ICONS.User}" alt="" width="24" height="24" /></div>
+    </div>
+    <div class="tma-add-data-avatar-guide__connector" aria-hidden="true"></div>
+    <div class="tma-add-data-avatar-guide__step">
+      <span class="tma-add-data-avatar-guide__label">Click</span>
+      <div class="tma-add-data-avatar-guide__avatar tma-add-data-avatar-guide__avatar--click">
+        <img src="${ICONS.User}" alt="" width="24" height="24" />
+        <img src="${ICONS.XCircle}" alt="" class="tma-add-data-avatar-guide__remove" width="20" height="20" />
+      </div>
+    </div>
+    <div class="tma-add-data-avatar-guide__connector" aria-hidden="true"></div>
+    <div class="tma-add-data-avatar-guide__tooltip">OS select file window</div>
+  </div>`;
+}
+
+function renderPreviewSection() {
+  return `<section class="tma-table-add-data-guidance__section">
+    <div class="tma-table-add-data-guidance__showcase">
+      ${renderScene(false)}
+      ${renderRules()}
+    </div>
+    ${renderAvatarGuide()}
+  </section>`;
+}
+
+function renderLiveSection() {
+  const body = BASE_ROWS.map((row, i) => renderRow(row, i)).join('');
+  return `<section class="tma-table-add-data-guidance__section">
+    <p class="tma-add-data__label">Live demo</p>
+    <div data-table-add-data>
+      ${renderFunctionBar(true)}
+      <div class="tma-table-a" data-add-table style="--table-a-width:892px;--table-a-columns:32px 88px 1fr 1fr 176px 1fr 110px 40px;">
+        <div class="tma-table-a__sheet" role="table" aria-label="Orders">
+          ${renderTableHead()}
+          <div class="tma-table-a__body" data-table-body>${body}</div>
+        </div>
+      </div>
+      ${renderPagination()}
+      <div class="tma-add-data-overlay" data-add-overlay aria-hidden="true">
+        <div class="tma-add-data-overlay__scene">
+          ${renderScene(true)}
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+document.getElementById('guidance-root').innerHTML = `
+  ${renderPreviewSection()}
+  ${renderLiveSection()}
+`;
+</script>
+<script src="../js/function-bar.js"></script>
+<script src="../js/table-add-data.js"></script>
+</body>
+</html>

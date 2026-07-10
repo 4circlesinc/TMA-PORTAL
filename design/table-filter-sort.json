@@ -1,0 +1,71 @@
+{
+  "slug": "table-filter-sort",
+  "nodeId": "32722:24625",
+  "guidanceNodeId": "32722:24625",
+  "name": "Table Filter and Sort",
+  "description": "Filter and sort interactive guidance — Plan A popover filtering, Plan B inline filters, column menus, and live table.",
+  "cssPath": "public/css/table-filter-sort.css",
+  "jsPath": "public/js/table-filter-sort.js",
+  "defaultVariant": "live",
+  "variants": {
+    "plan-a": { "popoverFilter": true },
+    "plan-b": { "inlineFilters": true },
+    "live": { "interactive": true }
+  },
+  "filterFields": [
+    { "id": "orderId", "label": "Order ID", "icon": "ListNumbers" },
+    { "id": "user", "label": "User", "icon": "User" },
+    { "id": "email", "label": "Email", "icon": "EnvelopeSimple" },
+    { "id": "address", "label": "Address", "icon": "MapPin" },
+    { "id": "date", "label": "Date", "icon": "CalendarBlank" },
+    { "id": "status", "label": "Status", "icon": "CirclesThreePlus" }
+  ],
+  "operators": ["Is", "Is not", "Contains", "Does not contain", "Starts with", "Ends with"],
+  "statusOptions": ["In Progress", "Complete", "Pending", "Approved", "Rejected"],
+  "iconSources": {
+    "FunnelSimple": "images/icons/tma/FunnelSimple-16.svg",
+    "Dot": "images/icons/tma/Dot-12.svg",
+    "ArrowsDown": "images/icons/tma/ArrowsDown-16.svg",
+    "ArrowsUp": "images/icons/tma/ArrowsUp.svg",
+    "Close": "images/icons/tma/Close-12.svg",
+    "ArrowLineRight": "images/icons/tma/ArrowLineRight-16.svg",
+    "Check": "images/icons/tma/Check-16.svg",
+    "Goto": "images/icons/tma/Goto.svg",
+    "ListNumbers": "images/icons/phosphor/ListNumbers.svg",
+    "User": "images/icons/phosphor/User.svg",
+    "EnvelopeSimple": "images/icons/phosphor/EnvelopeSimple.svg",
+    "MapPin": "images/icons/phosphor/MapPin.svg",
+    "CalendarBlank": "images/icons/phosphor/CalendarBlank-16.svg",
+    "CirclesThreePlus": "images/icons/phosphor/CirclesThreePlus.svg",
+    "Broom": "images/icons/phosphor/Broom.svg"
+  },
+  "tokens": {
+    "heroTitleSize": 64,
+    "heroTitleLineHeight": 72,
+    "heroTitleWeight": 600,
+    "heroSubtitleSize": 48,
+    "heroSubtitleLineHeight": 56,
+    "planTitleSize": 48,
+    "planTitleLineHeight": 56,
+    "designNoteSize": 18,
+    "designNoteLineHeight": 28,
+    "designNoteColor": "#9747FF",
+    "popoverWidth": 240,
+    "popoverPadding": 12,
+    "popoverRadius": 16,
+    "popoverBackground": "rgba(255, 255, 255, 0.9)",
+    "popoverShadow": "0 8px 28px rgba(0, 0, 0, 0.1)",
+    "popoverItemSize": 14,
+    "popoverItemLineHeight": 20,
+    "popoverItemColor": "#000",
+    "popoverPlaceholderColor": "rgba(0, 0, 0, 0.2)",
+    "tagFontSize": 12,
+    "tagLineHeight": 16,
+    "resetColor": "rgba(0, 0, 0, 0.4)"
+  },
+  "items": [
+    { "nodeId": "32722:24625", "variant": "plan-a" },
+    { "nodeId": "32722:24625", "variant": "plan-b" },
+    { "nodeId": "32722:24625", "variant": "live" }
+  ]
+}

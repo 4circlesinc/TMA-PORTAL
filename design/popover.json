@@ -1,0 +1,61 @@
+{
+  "slug": "popover",
+  "nodeId": "28002:96385",
+  "guidanceNodeId": "33303:7653",
+  "instancesNodeId": "33303:7642",
+  "name": "Popover",
+  "description": "Popover and select dropdown — simple text menus (1–8 options), rich property menus with search, grouping, and nested levels.",
+  "cssPath": "public/css/popover.css",
+  "jsPath": "public/js/popover.js",
+  "iconJsPath": "public/js/popover-icons.js",
+  "defaultVariant": "options-8",
+  "variants": {
+    "options-1": { "nodeId": "33303:7655", "optionCount": 1 },
+    "options-2": { "nodeId": "33303:7656", "optionCount": 2 },
+    "options-3": { "nodeId": "33303:7657", "optionCount": 3 },
+    "options-4": { "nodeId": "33303:7658", "optionCount": 4 },
+    "options-5": { "nodeId": "33303:7659", "optionCount": 5 },
+    "options-6": { "nodeId": "33303:7660", "optionCount": 6 },
+    "options-7": { "nodeId": "33303:7661", "optionCount": 7 },
+    "options-8": { "nodeId": "33303:7662", "optionCount": 8 }
+  },
+  "behavior": {
+    "width": 240,
+    "wideWidth": 360,
+    "glassBackground": "rgba(255,255,255,0.9)",
+    "shadow": "0 8px 28px rgba(0,0,0,0.1)",
+    "itemHover": "rgba(0,0,0,0.04)"
+  },
+  "documentation": {
+    "purpose": "Popover menus surface contextual actions and select dropdown options.",
+    "guidance": [
+      "Select dropdown — 1 through 8 text options (Figma 33303:7655–7662).",
+      "Basic interaction — search, icons, shortcuts, switch, and destructive delete.",
+      "Search — no input, no results, and filtered results states.",
+      "Second level menu — nested popover beside parent item.",
+      "With grouping — tags, avatars, partial selection, and collapsible groups."
+    ]
+  },
+  "items": [
+    { "nodeId": "33303:7655", "variant": "options-1" },
+    { "nodeId": "33303:7656", "variant": "options-2" },
+    { "nodeId": "33303:7657", "variant": "options-3" },
+    { "nodeId": "33303:7658", "variant": "options-4" },
+    { "nodeId": "33303:7659", "variant": "options-5" },
+    { "nodeId": "33303:7660", "variant": "options-6" },
+    { "nodeId": "33303:7661", "variant": "options-7" },
+    { "nodeId": "33303:7662", "variant": "options-8" }
+  ],
+  "instances": [
+    { "nodeId": "33303:7643", "name": "Property menu — Hide in View / Wrap Column" },
+    { "nodeId": "33303:7644", "name": "Focused search — no results" },
+    { "nodeId": "33303:7645", "name": "Focused search — Ask AI hover" },
+    { "nodeId": "33303:7646", "name": "Value input — filter operators" },
+    { "nodeId": "33303:7647", "name": "Field picker" },
+    { "nodeId": "33303:7648", "name": "Text filter — grouped avatars" },
+    { "nodeId": "33303:7649", "name": "Timezone list" },
+    { "nodeId": "33303:7650", "name": "Language list" },
+    { "nodeId": "33303:7651", "name": "Cookie settings" },
+    { "nodeId": "33303:7652", "name": "Security methods" }
+  ]
+}

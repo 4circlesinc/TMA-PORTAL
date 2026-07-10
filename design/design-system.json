@@ -1,0 +1,27 @@
+{
+  "slug": "design-system",
+  "pageNodeId": "15098:130290",
+  "name": "Design system",
+  "description": "TM ANTOINE Advisory design system horizontal overview — cover cards and documentation panels.",
+  "cssPath": "public/css/design-system-page.css",
+  "cardsCssPath": "public/css/design-system-cards.css",
+  "jsPath": "public/js/design-system-page.js",
+  "demoPath": "public/demo/design-system.html",
+  "board": {
+    "width": 13980,
+    "height": 3012,
+    "gap": 100
+  },
+  "cards": [
+    { "nodeId": "30484:266531", "name": "TMA Design System", "x": 0, "y": 0, "width": 1000, "height": 1200 },
+    { "nodeId": "30484:266533", "name": "90% Principle", "x": 1100, "y": 0, "width": 1000, "height": 1200 },
+    { "nodeId": "30484:266532", "name": "Contents of Design System", "x": 2200, "y": 0, "width": 1000, "height": 1200 },
+    { "nodeId": "30484:266534", "name": "Variables", "x": 3300, "y": 0, "width": 1440, "height": 1500 },
+    { "nodeId": "30484:266539", "name": "Spacing, Size, Corner Radius", "x": 4840, "y": 0, "width": 1440, "height": 1180 },
+    { "nodeId": "30484:266540", "name": "Colors", "x": 6380, "y": 0, "width": 1440, "height": 3012 },
+    { "nodeId": "30484:266537", "name": "Text Styles", "x": 7920, "y": 0, "width": 1440, "height": 2084 },
+    { "nodeId": "30484:266538", "name": "Effect Styles", "x": 9460, "y": 0, "width": 1440, "height": 1340 },
+    { "nodeId": "30484:266535", "name": "Components", "x": 11000, "y": 0, "width": 1440, "height": 1516 },
+    { "nodeId": "30484:266536", "name": "Design Resources", "x": 12540, "y": 0, "width": 1440, "height": 1272 }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "slug": "vertical-06",
+  "nodeId": "30485:135143",
+  "name": "Vertical 06",
+  "variant": "gradient",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "barWidth": 28,
+  "segmentGap": 2,
+  "color": "#000000",
+  "bars": [
+    {
+      "value": 2000,
+      "segments": [
+        { "height": 36, "opacity": 1 },
+        { "height": 20, "opacity": 0.4 },
+        { "height": 8, "opacity": 0.2 },
+        { "height": 8, "opacity": 0.1 }
+      ]
+    },
+    {
+      "value": 5000,
+      "segments": [
+        { "height": 76, "opacity": 1 },
+        { "height": 40, "opacity": 0.4 },
+        { "height": 8, "opacity": 0.2 },
+        { "height": 8, "opacity": 0.1 }
+      ]
+    },
+    {
+      "value": 3000,
+      "segments": [
+        { "height": 46, "opacity": 1 },
+        { "height": 30, "opacity": 0.4 },
+        { "height": 8, "opacity": 0.2 },
+        { "height": 8, "opacity": 0.1 }
+      ]
+    },
+    {
+      "value": 6000,
+      "segments": [
+        { "height": 98, "opacity": 1 },
+        { "height": 40, "opacity": 0.4 },
+        { "height": 8, "opacity": 0.2 },
+        { "height": 8, "opacity": 0.1 }
+      ]
+    },
+    {
+      "value": 1000,
+      "segments": [
+        { "height": 26, "opacity": 1 },
+        { "height": 10, "opacity": 0.4 },
+        { "height": 8, "opacity": 0.2 },
+        { "height": 8, "opacity": 0.1 }
+      ]
+    },
+    {
+      "value": 4000,
+      "segments": [
+        { "height": 56, "opacity": 1 },
+        { "height": 40, "opacity": 0.4 },
+        { "height": 8, "opacity": 0.2 },
+        { "height": 8, "opacity": 0.1 }
+      ]
+    }
+  ]
+}

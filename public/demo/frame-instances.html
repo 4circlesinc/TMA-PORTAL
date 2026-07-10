@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Frame instances</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/frame.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body.tma-frame-page {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body class="tma-frame-page">
+  <div class="tma-frame-demo">
+    <header class="tma-frame-demo__header">
+      <h1 class="tma-frame-demo__title">Frame — Instances</h1>
+      <p class="tma-frame-demo__copy">
+        Figma node <strong>33159:3529</strong> — 91 Frame instances across messages, settings, tasks, features, calendar widgets, and product cards.
+        The full canvas scales to your viewport on desktop; on smaller screens, instances are grouped in a stacked layout.
+        Switches, checkboxes, downloads, article buttons, and product menus are interactive.
+        <a href="frame-documentation.html">Documentation</a> ·
+        <a href="icon-text-documentation.html">IconText documentation</a> ·
+        <a href="text-documentation.html">Text documentation</a> ·
+        <a href="group-instances.html">Group instances</a>
+      </p>
+    </header>
+
+    <div class="tma-frame-demo__canvas tma-frame-demo__canvas--instances" id="frame-instances-root"></div>
+  </div>
+
+<script src="../js/frame-instances-icons.js"></script>
+<script src="../js/frame-doc-icons.js"></script>
+<script src="../js/input-icons.js"></script>
+<script src="../js/card-icons.js"></script>
+<script src="../js/group-instances-icons.js"></script>
+<script src="../js/button-doc-icons.js"></script>
+<script src="../js/line-icons.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script src="../js/popover-icons.js"></script>
+<script src="../js/button-instances-icons.js"></script>
+<script src="../js/frame-instances.js"></script>
+<script>
+window.TMAFrameInstances.mountInstances(document.getElementById('frame-instances-root'));
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+
+    Trash: 'images/icons/phosphor/Trash.svg',
+    Copy: 'images/icons/tma/Copy-16.svg',
+
+  function renderBulkToolBtn(action, icon, label) {
+    return '<button type="button" class="tma-dash__tool-btn" aria-label="' + escapeHtml(label) + '" data-users-bulk-action="' + action + '">' +
+      '<img src="' + icon + '" alt=""></button>';
+  }
+            renderBulkToolBtn('delete', ICONS.Trash, 'Delete selected users') +
+            renderBulkToolBtn('duplicate', ICONS.Copy, 'Duplicate selected users') +
+
+      container.querySelectorAll('[data-users-bulk-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var action = btn.getAttribute('data-users-bulk-action');
+          var keys = Object.keys(state.selected);
+          if (!keys.length) return;
+          if (action === 'delete') {
+            state.rows = state.rows.filter(function (row) {
+              return !state.selected[rowKey(row, state)];
+            });
+            state.selected = {};
+            state.page = 1;
+            render();
+            return;
+          }
+          if (action === 'duplicate') {
+            var copies = [];
+            keys.forEach(function (key) {
+              var source = state.rows.find(function (row) { return rowKey(row, state) === key; });
+              if (!source) return;
+              var copy = Object.assign({}, source, {
+                orderId: '#CM' + state.nextId,
+                user: source.user + ' (copy)',
+              });
+              state.nextId += 1;
+              state.rows.push(copy);
+              copies.push(rowKey(copy, state));
+            });
+            state.selected = {};
+            copies.forEach(function (key) { state.selected[key] = true; });
+            render();
+          }
+        });
+      });

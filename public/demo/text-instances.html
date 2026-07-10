@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Text instances</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/text.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body.tma-text-page {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body class="tma-text-page">
+  <div class="tma-text-demo">
+    <header class="tma-text-demo__header">
+      <h1 class="tma-text-demo__title">Text — Instances</h1>
+      <p class="tma-text-demo__copy">
+        Figma node <strong>32708:1064</strong> — Text component instances across subscription copy, auth headers, display headings, inline pairs, and styled cards.
+        Scroll horizontally on desktop to inspect the full Figma canvas, or browse the stacked layout on smaller screens.
+        <a href="text-documentation.html">Documentation</a> ·
+        <a href="icon-text-documentation.html">IconText documentation</a> ·
+        <a href="frame-documentation.html">Frame documentation</a>
+      </p>
+    </header>
+
+    <div class="tma-text-demo__canvas" id="text-instances-root"></div>
+  </div>
+
+<script src="../js/text.js"></script>
+<script src="../js/text-instances.js"></script>
+<script>
+window.TMATextInstances.mountInstances(document.getElementById('text-instances-root'));
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "source": {
+    "fileKey": "58ZXC7sZYQsbenzf0foWCH",
+    "frameId": "30485:160085",
+    "frameName": "Illustrations",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-160085"
+  },
+  "description": "Most of these design resources were collected from the Figma community; some are custom-drawn.",
+  "attribution": "Check Figma community source licenses before production use.",
+  "navigation": {
+    "nodeId": "30995:45280",
+    "name": "Navigation",
+    "title": "Illustrations"
+  },
+  "items": [
+    { "nodeId": "30485:160086", "name": "Illustration01", "size": "100x100" },
+    { "nodeId": "30485:160087", "name": "Illustration02", "size": "100x100" },
+    { "nodeId": "30485:160088", "name": "Illustration03", "size": "100x100" },
+    { "nodeId": "30485:160089", "name": "Illustration04", "size": "100x100" },
+    { "nodeId": "30485:160090", "name": "Illustration05", "size": "100x100" },
+    { "nodeId": "30485:160091", "name": "Illustration06", "size": "100x100" },
+    { "nodeId": "30485:160092", "name": "Illustration07", "size": "100x100" },
+    { "nodeId": "30485:160093", "name": "Illustration08", "size": "100x100" },
+    { "nodeId": "30485:160094", "name": "Illustration09", "size": "100x100" },
+    { "nodeId": "30485:160095", "name": "Illustration10", "size": "100x100" },
+    { "nodeId": "30485:160096", "name": "Illustration11", "size": "100x100" },
+    { "nodeId": "30485:160097", "name": "Illustration12", "size": "100x100" },
+    { "nodeId": "30485:160098", "name": "Illustration13", "size": "100x75" },
+    { "nodeId": "30485:160099", "name": "Illustration14", "size": "100x75" },
+    { "nodeId": "30485:160100", "name": "Illustration15", "size": "100x75" },
+    { "nodeId": "30485:160101", "name": "Illustration16", "size": "100x75" },
+    { "nodeId": "30485:160102", "name": "Illustration17", "size": "100x75" },
+    { "nodeId": "30485:160103", "name": "Illustration18", "size": "100x75" },
+    { "nodeId": "30485:160104", "name": "Illustration19", "size": "100x75" },
+    { "nodeId": "30485:160105", "name": "Illustration20", "size": "100x75" },
+    { "nodeId": "30485:160106", "name": "Illustration21", "size": "100x75" },
+    { "nodeId": "30485:160107", "name": "Illustration22", "size": "100x75" },
+    { "nodeId": "30485:160108", "name": "Illustration23", "size": "100x75" },
+    { "nodeId": "30485:160109", "name": "Illustration24", "size": "100x75" },
+    { "nodeId": "30485:160110", "name": "Illustration25", "size": "100x75" },
+    { "nodeId": "30485:160111", "name": "Illustration26", "size": "100x75" },
+    { "nodeId": "30485:160112", "name": "Illustration27", "size": "100x75" },
+    { "nodeId": "30485:160113", "name": "Illustration28", "size": "100x75" },
+    { "nodeId": "30485:160114", "name": "LineDrawing01", "size": "100x100" },
+    { "nodeId": "30485:160115", "name": "LineDrawing02", "size": "100x100" },
+    { "nodeId": "30485:160116", "name": "LineDrawing03", "size": "100x100" }
+  ],
+  "exportPath": "public/images/illustrations",
+  "export": {
+    "format": "svg",
+    "exportedAt": "2026-06-11",
+    "count": 31,
+    "files": [
+      "Illustration01.svg", "Illustration02.svg", "Illustration03.svg", "Illustration04.svg",
+      "Illustration05.svg", "Illustration06.svg", "Illustration07.svg", "Illustration08.svg",
+      "Illustration09.svg", "Illustration10.svg", "Illustration11.svg", "Illustration12.svg",
+      "Illustration13.svg", "Illustration14.svg", "Illustration15.svg", "Illustration16.svg",
+      "Illustration17.svg", "Illustration18.svg", "Illustration19.svg", "Illustration20.svg",
+      "Illustration21.svg", "Illustration22.svg", "Illustration23.svg", "Illustration24.svg",
+      "Illustration25.svg", "Illustration26.svg", "Illustration27.svg", "Illustration28.svg",
+      "LineDrawing01.svg", "LineDrawing02.svg", "LineDrawing03.svg"
+    ]
+  },
+  "laravelUsage": "asset('images/illustrations/Illustration01.svg')"
+}

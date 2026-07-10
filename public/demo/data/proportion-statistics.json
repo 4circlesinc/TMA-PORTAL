@@ -1,0 +1,39 @@
+{
+  "slug": "proportion-statistics",
+  "nodeId": "30485:135148",
+  "name": "ProportionStatistics",
+  "variant": "proportion",
+  "size": "440x200",
+  "width": 440,
+  "height": 200,
+  "plotTop": 101,
+  "tickWidth": 2,
+  "color": "#000000",
+  "mutedOpacity": 0.4,
+  "sections": [
+    {
+      "key": "old",
+      "label": "Old users",
+      "value": 52,
+      "lineCount": 26,
+      "muted": false,
+      "weight": 96
+    },
+    {
+      "key": "new",
+      "label": "New users",
+      "value": 18,
+      "lineCount": 15,
+      "muted": false,
+      "weight": 57
+    },
+    {
+      "key": "visitors",
+      "label": "Visitors",
+      "value": 30,
+      "lineCount": 19,
+      "muted": true,
+      "weight": 68
+    }
+  ]
+}

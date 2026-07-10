@@ -1,0 +1,295 @@
+{
+  "source": {
+    "fileKey": "58ZXC7sZYQsbenzf0foWCH",
+    "frameId": "32261:178336",
+    "frameName": "Cursors",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32261-178336"
+  },
+  "description": "TMA custom cursors. Transparent 32x32 PNGs. Link cursors.css once in your layout.",
+  "exportPath": "public/images/cursors",
+  "cssPath": "public/css/cursors.css",
+  "export": {
+    "format": "png",
+    "size": 32,
+    "background": "transparent",
+    "exportedAt": "2026-06-11",
+    "count": 21
+  },
+  "items": [
+    {
+      "nodeId": "32261:178338",
+      "name": "CursorsDefault",
+      "file": "CursorsDefault.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 15,
+        "y": 14
+      },
+      "cssVar": "--cursor-default",
+      "fallback": "default",
+      "css": "url('../images/cursors/CursorsDefault.png') 15 14, default"
+    },
+    {
+      "nodeId": "32261:178339",
+      "name": "CursorsBeachball",
+      "file": "CursorsBeachball.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-beachball",
+      "fallback": "wait",
+      "css": "url('../images/cursors/CursorsBeachball.png') 16 16, wait"
+    },
+    {
+      "nodeId": "32261:178340",
+      "name": "CursorsTextCursor",
+      "file": "CursorsTextCursor.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-text",
+      "fallback": "text",
+      "css": "url('../images/cursors/CursorsTextCursor.png') 16 16, text"
+    },
+    {
+      "nodeId": "32261:178341",
+      "name": "CursorsCross",
+      "file": "CursorsCross.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-cross",
+      "fallback": "crosshair",
+      "css": "url('../images/cursors/CursorsCross.png') 16 16, crosshair"
+    },
+    {
+      "nodeId": "32261:178342",
+      "name": "CursorsMenu",
+      "file": "CursorsMenu.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 8
+      },
+      "cssVar": "--cursor-menu",
+      "fallback": "context-menu",
+      "css": "url('../images/cursors/CursorsMenu.png') 16 8, context-menu"
+    },
+    {
+      "nodeId": "32261:178343",
+      "name": "CursorsZoomOut",
+      "file": "CursorsZoomOut.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-zoom-out",
+      "fallback": "zoom-out",
+      "css": "url('../images/cursors/CursorsZoomOut.png') 16 16, zoom-out"
+    },
+    {
+      "nodeId": "32261:178344",
+      "name": "CursorsZoomIn",
+      "file": "CursorsZoomIn.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-zoom-in",
+      "fallback": "zoom-in",
+      "css": "url('../images/cursors/CursorsZoomIn.png') 16 16, zoom-in"
+    },
+    {
+      "nodeId": "32261:178345",
+      "name": "CursorsHandPointing",
+      "file": "CursorsHandPointing.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 11,
+        "y": 14
+      },
+      "cssVar": "--cursor-pointer",
+      "fallback": "pointer",
+      "css": "url('../images/cursors/CursorsHandPointing.png') 11 14, pointer"
+    },
+    {
+      "nodeId": "32261:178346",
+      "name": "CursorsHandGrabbing",
+      "file": "CursorsHandGrabbing.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 18
+      },
+      "cssVar": "--cursor-grabbing",
+      "fallback": "grabbing",
+      "css": "url('../images/cursors/CursorsHandGrabbing.png') 16 18, grabbing"
+    },
+    {
+      "nodeId": "32261:178347",
+      "name": "CursorsHandOpen",
+      "file": "CursorsHandOpen.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 10
+      },
+      "cssVar": "--cursor-grab",
+      "fallback": "grab",
+      "css": "url('../images/cursors/CursorsHandOpen.png') 16 10, grab"
+    },
+    {
+      "nodeId": "32261:178348",
+      "name": "CursorsMove",
+      "file": "CursorsMove.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-move",
+      "fallback": "move",
+      "css": "url('../images/cursors/CursorsMove.png') 16 16, move"
+    },
+    {
+      "nodeId": "32261:178349",
+      "name": "CursorsResizeLeft",
+      "file": "CursorsResizeLeft.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-left",
+      "fallback": "w-resize",
+      "css": "url('../images/cursors/CursorsResizeLeft.png') 16 16, w-resize"
+    },
+    {
+      "nodeId": "32261:178350",
+      "name": "CursorsResizeDown",
+      "file": "CursorsResizeDown.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-down",
+      "fallback": "s-resize",
+      "css": "url('../images/cursors/CursorsResizeDown.png') 16 16, s-resize"
+    },
+    {
+      "nodeId": "32261:178351",
+      "name": "CursorsResizeRight",
+      "file": "CursorsResizeRight.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-right",
+      "fallback": "e-resize",
+      "css": "url('../images/cursors/CursorsResizeRight.png') 16 16, e-resize"
+    },
+    {
+      "nodeId": "32261:178352",
+      "name": "CursorsResizeUp",
+      "file": "CursorsResizeUp.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-up",
+      "fallback": "n-resize",
+      "css": "url('../images/cursors/CursorsResizeUp.png') 16 16, n-resize"
+    },
+    {
+      "nodeId": "32261:178353",
+      "name": "CursorsResizeLeftRight",
+      "file": "CursorsResizeLeftRight.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-left-right",
+      "fallback": "ew-resize",
+      "css": "url('../images/cursors/CursorsResizeLeftRight.png') 16 16, ew-resize"
+    },
+    {
+      "nodeId": "32261:178354",
+      "name": "CursorsResizeUpDown",
+      "file": "CursorsResizeUpDown.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-up-down",
+      "fallback": "ns-resize",
+      "css": "url('../images/cursors/CursorsResizeUpDown.png') 16 16, ns-resize"
+    },
+    {
+      "nodeId": "32261:178355",
+      "name": "CursorsResizeNorthWestSouthEast",
+      "file": "CursorsResizeNorthWestSouthEast.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-nwse",
+      "fallback": "nwse-resize",
+      "css": "url('../images/cursors/CursorsResizeNorthWestSouthEast.png') 16 16, nwse-resize"
+    },
+    {
+      "nodeId": "32261:178356",
+      "name": "CursorsResizeNorthEastSouthWest",
+      "file": "CursorsResizeNorthEastSouthWest.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-nesw",
+      "fallback": "nesw-resize",
+      "css": "url('../images/cursors/CursorsResizeNorthEastSouthWest.png') 16 16, nesw-resize"
+    },
+    {
+      "nodeId": "32261:178357",
+      "name": "CursorsResizeWestEast",
+      "file": "CursorsResizeWestEast.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-ew",
+      "fallback": "ew-resize",
+      "css": "url('../images/cursors/CursorsResizeWestEast.png') 16 16, ew-resize"
+    },
+    {
+      "nodeId": "32261:178358",
+      "name": "CursorsResizeNorthSouth",
+      "file": "CursorsResizeNorthSouth.png",
+      "size": "32x32",
+      "hotspot": {
+        "x": 16,
+        "y": 16
+      },
+      "cssVar": "--cursor-resize-ns",
+      "fallback": "ns-resize",
+      "css": "url('../images/cursors/CursorsResizeNorthSouth.png') 16 16, ns-resize"
+    }
+  ],
+  "setup": "Include resources/views/partials/cursors.blade.php in your layout <head>.",
+  "laravelUsage": "App\\Support\\Cursors::css('pointer')"
+}

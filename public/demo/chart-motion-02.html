@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — ChartMotion 02</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+    }
+    .frame {
+      display: flex;
+      gap: 64px;
+      align-items: flex-start;
+      background: #fff;
+      border-radius: 48px;
+      padding: 64px;
+      max-width: 1100px;
+    }
+    .nav-card {
+      flex: 0 0 280px;
+      background: #000;
+      border-radius: 48px;
+      padding: 40px 32px;
+    }
+    .nav-card h1 {
+      font-size: 44px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 16px;
+      background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title {
+      font-size: 13px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+    }
+    .setup {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 28px;
+      overflow-x: auto;
+    }
+    .chart-wrap {
+      border: 1px solid #eee;
+      border-radius: 16px;
+      padding: 32px 24px 24px;
+      background: #fafafa;
+      overflow: visible;
+    }
+    .hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #888;
+    }
+    @media (max-width: 900px) {
+      body { padding: 24px 16px; }
+      .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; }
+      .nav-card { width: 100%; flex: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <p class="section-title">Chart ↗ — ChartMotion 02</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>ChartMotion</h1>
+      <p>Second chart from Portal-Design — horizontal bar chart with month labels on the left and X-axis grid below.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;!-- One-time setup --&gt;
+@include('partials.charts')
+
+&lt;!-- Figma preset (horizontal) --&gt;
+&lt;x-chart-motion-horizontal /&gt;
+
+&lt;!-- Custom data --&gt;
+&lt;x-chart-motion-horizontal :bars="[
+    ['value' => 82000, 'color' => 'blue', 'label' => 'Jan'],
+    ['value' => 45000, 'color' => 'mint', 'label' => 'Feb'],
+]" /&gt;</pre>
+
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll">
+          <div id="chart" class="tma-chart-motion-horizontal" role="group" aria-label="Monthly horizontal bar chart"></div>
+        </div>
+        <p class="hint">Hover a bar for the value tooltip. On touch devices, tap a bar.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+const COLORS = {
+  cyan: '#a0bce8',
+  mint: '#6be6d3',
+  black: '#1c1c1c',
+  blue: '#7dbbff',
+  purple: '#b899eb',
+  green: '#71dd8c',
+};
+
+const PRESET = {
+  xMax: 110000,
+  xStep: 10000,
+  labels: ['Dec','Nov','Oct','Sep','Aug','Jul','Jun','May','Apr','Mar','Feb','Jan'],
+  bars: [
+    { value: 57000, color: 'cyan', label: 'Dec' },
+    { value: 100000, color: 'mint', label: 'Nov' },
+    { value: 72000, color: 'black', label: 'Oct' },
+    { value: 115000, color: 'blue', label: 'Sep' },
+    { value: 43000, color: 'purple', label: 'Aug' },
+    { value: 86000, color: 'green', label: 'Jul' },
+    { value: 57000, color: 'cyan', label: 'Jun' },
+    { value: 100000, color: 'mint', label: 'May' },
+    { value: 72000, color: 'black', label: 'Apr' },
+    { value: 115000, color: 'blue', label: 'Mar' },
+    { value: 43000, color: 'purple', label: 'Feb' },
+    { value: 86000, color: 'green', label: 'Jan' },
+  ],
+};
+
+function formatX(v) {
+  return v === 0 ? '0' : `${v / 1000}K`;
+}
+
+function renderChart(root, { xMax, xStep, labels, bars }) {
+  const xTicks = [];
+  for (let v = 0; v <= xMax; v += xStep) xTicks.push(v);
+
+  const yAxis = document.createElement('div');
+  yAxis.className = 'tma-chart-motion-horizontal__y-axis';
+  yAxis.setAttribute('aria-hidden', 'true');
+  bars.forEach(bar => {
+    const span = document.createElement('span');
+    span.className = 'tma-chart-motion-horizontal__y-label';
+    span.textContent = bar.label;
+    yAxis.appendChild(span);
+  });
+
+  const plot = document.createElement('div');
+  plot.className = 'tma-chart-motion-horizontal__plot';
+
+  const grid = document.createElement('div');
+  grid.className = 'tma-chart-motion-horizontal__grid';
+  grid.setAttribute('aria-hidden', 'true');
+  xTicks.forEach(tick => {
+    const line = document.createElement('span');
+    line.className = 'tma-chart-motion-horizontal__grid-line' + (tick === 0 ? ' tma-chart-motion-horizontal__grid-line--base' : '');
+    grid.appendChild(line);
+  });
+
+  const barRow = document.createElement('div');
+  barRow.className = 'tma-chart-motion-horizontal__bars';
+
+  bars.forEach((bar, i) => {
+    const width = (bar.value / xMax) * 100;
+    const labelText = bar.label || labels[i] || '';
+    const row = document.createElement('div');
+    row.className = 'tma-chart-motion-horizontal__bar';
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-label', `${labelText}: ${bar.value.toLocaleString()}`);
+
+    const stack = document.createElement('div');
+    stack.className = 'tma-chart-motion-horizontal__bar-stack';
+    stack.style.width = `${width}%`;
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'tma-chart-motion-horizontal__tooltip';
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.textContent = bar.value.toLocaleString();
+
+    const pill = document.createElement('div');
+    pill.className = 'tma-chart-motion-horizontal__bar-pill';
+    pill.style.backgroundColor = COLORS[bar.color] || bar.color;
+
+    stack.appendChild(tooltip);
+    stack.appendChild(pill);
+    row.appendChild(stack);
+    barRow.appendChild(row);
+  });
+
+  const xAxis = document.createElement('div');
+  xAxis.className = 'tma-chart-motion-horizontal__x-axis';
+  xAxis.setAttribute('aria-hidden', 'true');
+  xTicks.forEach(tick => {
+    const span = document.createElement('span');
+    span.className = 'tma-chart-motion-horizontal__x-label';
+    span.textContent = formatX(tick);
+    xAxis.appendChild(span);
+  });
+
+  plot.appendChild(grid);
+  plot.appendChild(barRow);
+  plot.appendChild(xAxis);
+  root.appendChild(yAxis);
+  root.appendChild(plot);
+}
+
+renderChart(document.getElementById('chart'), PRESET);
+</script>
+<script src="../js/chart-motion.js"></script>
+</body>
+</html>

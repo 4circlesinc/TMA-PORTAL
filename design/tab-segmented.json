@@ -1,0 +1,216 @@
+{
+  "slug": "tab-segmented",
+  "nodeId": "28002:98904",
+  "name": "Tab, Segmented",
+  "description": "Switch displayed content. Variants: underline, pill, segmented, solid, filled, icon.",
+  "defaultVariant": "underline",
+  "defaultSize": "medium",
+  "variants": {
+    "underline": { "label": "Underline", "activeIndicator": "line" },
+    "pill": { "label": "Pill", "activeBackground": "rgba(255, 255, 255, 0.8)", "activeShadow": "0 2px 4px rgba(0, 0, 0, 0.1)" },
+    "segmented": { "label": "Segmented", "activeBackground": "#ffffff" },
+    "solid": { "label": "Solid", "activeBackground": "rgba(0, 0, 0, 0.04)" },
+    "filled": { "label": "Filled", "activeBackground": "#000000", "activeColor": "#ffffff" },
+    "icon": { "label": "Icon", "activeBackground": "#000000", "activeColor": "#ffffff", "iconSize": 24 }
+  },
+  "sizes": {
+    "small": {
+      "fontSize": 12,
+      "lineHeight": 16,
+      "trackPadding": 4,
+      "trackGap": 4,
+      "trackRadius": 20,
+      "tabPaddingX": 12,
+      "tabPaddingY": 4,
+      "tabRadius": 12,
+      "tabMinHeight": 24,
+      "underlineGap": 4,
+      "iconSize": 12
+    },
+    "medium": {
+      "fontSize": 14,
+      "lineHeight": 20,
+      "trackPadding": 4,
+      "trackGap": 4,
+      "trackRadius": 20,
+      "tabPaddingX": 16,
+      "tabPaddingY": 8,
+      "tabRadius": 16,
+      "tabMinHeight": 36,
+      "underlineGap": 4,
+      "iconSize": 24
+    },
+    "large": {
+      "fontSize": 16,
+      "lineHeight": 24,
+      "trackPadding": 8,
+      "trackGap": 4,
+      "trackRadius": 28,
+      "tabPaddingX": 20,
+      "tabPaddingY": 12,
+      "tabRadius": 20,
+      "tabMinHeight": 48,
+      "underlineGap": 4,
+      "iconSize": 24
+    }
+  },
+  "examples": [
+    {
+      "id": "underline-medium-7",
+      "variant": "underline",
+      "size": "medium",
+      "tabs": [
+        { "key": "1", "label": "Text", "active": true },
+        { "key": "2", "label": "Text" },
+        { "key": "3", "label": "Text" },
+        { "key": "4", "label": "Text" },
+        { "key": "5", "label": "Text" },
+        { "key": "6", "label": "Text" },
+        { "key": "7", "label": "Text" }
+      ]
+    },
+    {
+      "id": "segmented-small-2",
+      "variant": "segmented",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "filled-small-stretch",
+      "variant": "filled",
+      "size": "small",
+      "stretch": true,
+      "tabs": [
+        { "key": "monthly", "label": "Monthly", "active": true },
+        { "key": "yearly", "label": "Yearly" }
+      ]
+    },
+    {
+      "id": "icon-sun-moon",
+      "variant": "icon",
+      "size": "large",
+      "iconOnly": true,
+      "tabs": [
+        { "key": "sun", "icon": "SunDim", "active": true },
+        { "key": "moon", "icon": "Moon" }
+      ]
+    },
+    {
+      "id": "segmented-icon-large",
+      "variant": "segmented",
+      "size": "large",
+      "tabs": [
+        { "key": "card", "label": "Card", "icon": "SquaresFour", "active": true },
+        { "key": "list", "label": "list", "icon": "ListBullets" }
+      ]
+    },
+    {
+      "id": "filled-large-3",
+      "variant": "filled",
+      "size": "large",
+      "tabs": [
+        { "key": "daily", "label": "Daily", "active": true },
+        { "key": "weekly", "label": "Weekly" },
+        { "key": "monthly", "label": "Monthly" }
+      ]
+    },
+    {
+      "id": "filled-rounded-icons",
+      "variant": "filled",
+      "size": "large",
+      "rounded": true,
+      "tabs": [
+        { "key": "card", "label": "Card", "icon": "SquaresFour", "active": true },
+        { "key": "list", "label": "list", "icon": "ListBullets" }
+      ]
+    },
+    {
+      "id": "icon-only-rounded",
+      "variant": "filled",
+      "size": "large",
+      "rounded": true,
+      "iconOnly": true,
+      "tabs": [
+        { "key": "card", "icon": "SquaresFour", "active": true },
+        { "key": "list", "icon": "ListBullets" }
+      ]
+    },
+    {
+      "id": "pill-small",
+      "variant": "pill",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "pill-medium",
+      "variant": "pill",
+      "size": "medium",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "pill-large",
+      "variant": "pill",
+      "size": "large",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "solid-small",
+      "variant": "solid",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "solid-large",
+      "variant": "solid",
+      "size": "large",
+      "tabs": [
+        { "key": "a", "label": "Button", "active": true },
+        { "key": "b", "label": "Button" }
+      ]
+    },
+    {
+      "id": "underline-small",
+      "variant": "underline",
+      "size": "small",
+      "tabs": [
+        { "key": "1", "label": "Text", "active": true },
+        { "key": "2", "label": "Text" },
+        { "key": "3", "label": "Text" }
+      ]
+    },
+    {
+      "id": "underline-large",
+      "variant": "underline",
+      "size": "large",
+      "tabs": [
+        { "key": "1", "label": "Text", "active": true },
+        { "key": "2", "label": "Text" },
+        { "key": "3", "label": "Text" }
+      ]
+    },
+    {
+      "id": "icon-toggle-small",
+      "variant": "pill",
+      "size": "small",
+      "tabs": [
+        { "key": "a", "label": "Button", "icon": "DefaultIcon", "active": true },
+        { "key": "b", "icon": "DefaultIcon", "iconOnly": true }
+      ]
+    }
+  ]
+}

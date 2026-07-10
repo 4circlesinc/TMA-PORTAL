@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Tag documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/tag.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body>
+  <article class="tma-tag-doc" data-node-id="33307:764">
+    <header class="tma-tag-doc__hero" data-node-id="33307:765">
+      <h1 class="tma-tag-doc__title" data-node-id="33307:766">Tag</h1>
+      <div class="tma-tag-doc__intro" data-node-id="33307:767">
+        <p>Tag components are typically used for options.</p>
+        <p>The difference between Tag and IconText is that Tag usually has a background.</p>
+      </div>
+    </header>
+
+    <section class="tma-tag-doc__section" data-node-id="33307:768">
+      <h2 class="tma-tag-doc__section-title" data-node-id="33307:769">Features</h2>
+      <ul class="tma-tag-doc__list" data-node-id="33307:770">
+        <li>Type: Default, Left arrow, Right arrow.</li>
+        <li>State: Component’s interaction state. When previewing, this component supports changes in the interaction state.</li>
+        <li>Hide left icon.</li>
+        <li>Hide Right icon.</li>
+      </ul>
+    </section>
+
+    <section class="tma-tag-doc__section" data-node-id="33307:771">
+      <h2 class="tma-tag-doc__section-title" data-node-id="33307:772">Correlation</h2>
+      <ul class="tma-tag-doc__list" data-node-id="33307:773">
+        <li>Similar to IconText.</li>
+        <li>Similar to Status Badge.</li>
+      </ul>
+    </section>
+
+    <section class="tma-tag-doc__examples" data-node-id="33307:774">
+      <h2 class="tma-tag-doc__section-title" data-node-id="33307:775">Examples</h2>
+      <div id="tag-examples"></div>
+    </section>
+
+    <div id="doc-footer"></div>
+  </article>
+
+<script src="../js/tag-icons.js"></script>
+<script src="../js/tag.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script>
+window.TMATag.mountDocumentation({
+  examplesEl: document.getElementById('tag-examples'),
+  footerEl: document.getElementById('doc-footer'),
+  socialSvg: window.TMATableSearchIcons.svg,
+});
+</script>
+</body>
+</html>

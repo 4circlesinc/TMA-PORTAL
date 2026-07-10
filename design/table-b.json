@@ -1,0 +1,94 @@
+{
+  "slug": "table-b",
+  "nodeId": "33160:33568",
+  "groupNodeIds": ["33160:33567", "33160:33568"],
+  "name": "Table B",
+  "cssPath": "public/css/table-b.css",
+  "defaultVariant": "default",
+  "variants": {
+    "default": {}
+  },
+  "tokens": {
+    "blockWidth": 662,
+    "blockHeight": 312,
+    "blockBackground": "#f9f9fa",
+    "blockPadding": 24,
+    "blockRadius": 16,
+    "blockGap": 4,
+    "titleFontSize": 14,
+    "titleLineHeight": 20,
+    "titleFontWeight": 600,
+    "fontSize": 12,
+    "lineHeight": 16,
+    "fontWeight": 400,
+    "letterSpacing": 0,
+    "textColor": "#000000",
+    "cellPaddingY": 8,
+    "cellPaddingX": 12,
+    "titleCellPaddingRight": 12,
+    "statusCellPaddingLeft": 8,
+    "statusCellPaddingRight": 12,
+    "rowMinHeight": 40,
+    "headerBorderColor": "rgba(0, 0, 0, 0.2)",
+    "headerMutedColor": "rgba(0, 0, 0, 0.4)",
+    "avatarSize": 24,
+    "avatarOverlap": 8,
+    "avatarBorderColor": "#fff",
+    "avatarOverflowBackground": "#e6f1fd",
+    "titleColumnMinWidth": 224,
+    "columns": "1fr 1fr 1fr 1fr"
+  },
+  "columns": [
+    { "key": "title", "type": "text", "label": "Title", "headerMuted": true, "padding": "title" },
+    { "key": "assignedTo", "type": "avatars", "label": "Assigned to", "headerMuted": true },
+    { "key": "timeSpend", "type": "text", "label": "Time Spend", "headerMuted": true },
+    { "key": "status", "type": "status", "label": "Status", "headerMuted": true, "padding": "status" }
+  ],
+  "statusVariants": {
+    "in-progress": "dot-purple",
+    "complete": "dot-green",
+    "pending": "dot-blue",
+    "approved": "dot-orange",
+    "rejected": "dot-muted"
+  },
+  "rows": [
+    {
+      "title": "Coffee detail page",
+      "assignedTo": { "avatars": ["AvatarMale01"] },
+      "timeSpend": "3hr 20min",
+      "status": "in-progress",
+      "statusLabel": "In Progress"
+    },
+    {
+      "title": "Drinking bottle graphics",
+      "assignedTo": { "avatars": ["AvatarFemale01", "AvatarMale02"] },
+      "timeSpend": "12hr 21min",
+      "status": "complete",
+      "statusLabel": "Complete"
+    },
+    {
+      "title": "App design and development",
+      "assignedTo": { "avatars": ["AvatarFemale04", "AvatarMale03"], "overflow": "+3" },
+      "timeSpend": "78hr 5min",
+      "status": "pending",
+      "statusLabel": "Pending"
+    },
+    {
+      "title": "Poster illustation design",
+      "assignedTo": { "avatars": ["AvatarFemale05", "AvatarMale05"] },
+      "timeSpend": "26hr 58min",
+      "status": "approved",
+      "statusLabel": "Approved"
+    },
+    {
+      "title": "App UI design",
+      "assignedTo": { "avatars": ["AvatarFemale06"] },
+      "timeSpend": "17hr 22min",
+      "status": "rejected",
+      "statusLabel": "Rejected"
+    }
+  ],
+  "items": [
+    { "nodeId": "33160:33568", "variant": "default", "title": "Tasks" }
+  ]
+}

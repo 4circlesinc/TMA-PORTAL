@@ -1,0 +1,107 @@
+
+  /* Search — reuses documented table toolbar search chrome (dashboard.css) */
+  function searchInput(placeholder, dataAttr, value, opts) {
+    var o = opts || {};
+    var v = value || '';
+    var hasValue = !!String(v).length;
+    var classes = ['tma-dash__toolbar-search'];
+    if (o.focused || hasValue) classes.push('tma-dash__toolbar-search--focused');
+    if (hasValue) classes.push('tma-dash__toolbar-search--has-value');
+    return '<div class="' + classes.join(' ') + '" role="search" data-portal-search-wrap>' +
+      '<input type="search" class="tma-dash__search-input" ' + (dataAttr || '') +
+      ' placeholder="' + esc(placeholder || 'Search') + '" value="' + esc(v) + '"' +
+      ' aria-label="' + esc(placeholder || 'Search') + '" autocomplete="off" spellcheck="false">' +
+      '<button type="button" class="tma-dash__search-clear" aria-label="Clear search" data-search-clear>' +
+      '<img src="images/icons/phosphor/XCircle.svg" alt="" width="16" height="16"></button>' +
+      '<kbd class="tma-dash__kbd" data-search-shortcut>/</kbd>' +
+      '</div>';
+  }
+
+  function wireToolbarSearch(root, inputSelector, onChange) {
+    if (!root) return;
+    var input = root.querySelector(inputSelector);
+    if (!input) return;
+    var wrap = input.closest('[data-portal-search-wrap]');
+    if (!wrap) return;
+
+    function sync() {
+      var has = !!input.value.trim();
+      wrap.classList.toggle('tma-dash__toolbar-search--has-value', has);
+      wrap.classList.toggle('tma-dash__toolbar-search--focused', document.activeElement === input);
+    }
+
+    input.addEventListener('input', function () {
+      sync();
+      if (typeof onChange === 'function') onChange(input.value);
+    });
+    input.addEventListener('focus', sync);
+    input.addEventListener('blur', function () { setTimeout(sync, 0); });
+
+    var clear = wrap.querySelector('[data-search-clear]');
+    if (clear) {
+      clear.addEventListener('click', function (e) {
+        e.preventDefault();
+        input.value = '';
+        sync();
+        if (typeof onChange === 'function') onChange('');
+        input.focus();
+      });
+    }
+
+    sync();
+    return '<div class="tma-portal-table-wrap"><table class="tma-portal-table' + (o.cls ? ' ' + esc(o.cls) : '') + '"' + (o.tableAttrs || '') + '>' +
+  /* Head dropdown — same pattern as Clients main-head buttons */
+  function headDropdown(opts) {
+    var o = opts || {};
+    var variant = o.primary ? 'primary' : 'secondary';
+    var align = o.alignEnd ? ' tma-dash__head-dropdown-menu--end' : ' tma-dash__head-dropdown-menu--start';
+    var wrapAttr = o.wrapAttrs ? ' ' + o.wrapAttrs : '';
+    var items = (o.items || []).map(function (it) {
+      var action = it.action != null ? String(it.action) : esc(it.label);
+      var disabled = it.disabled ? ' disabled' : '';
+      return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="' + esc(action) + '"' + disabled + '>' + esc(it.label) + '</button>';
+    }).join('');
+    return (
+      '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap' + wrapAttr + '>' +
+      '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--' + variant + '" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
+      esc(o.label || '') +
+      '<img class="tma-dash__head-dropdown-caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" aria-hidden="true">' +
+      '</button>' +
+      '<div class="tma-dash__menu tma-dash__head-dropdown-menu' + align + '" data-head-dropdown-menu hidden role="menu" aria-label="' + esc(o.menuLabel || o.label || 'Menu') + '">' +
+      items +
+      '</div></div>'
+    );
+  }
+
+  function wireHeadDropdown(wrap, onSelect) {
+    if (!wrap || wrap.dataset.portalHeadDropdownWired) return;
+    wrap.dataset.portalHeadDropdownWired = '1';
+    if (window.TMAHeadDropdown) window.TMAHeadDropdown.mount();
+    wrap.addEventListener('head-dropdown:select', function (e) {
+      if (e.detail.wrap !== wrap) return;
+      var item = e.detail.item;
+      if (item && item.disabled) return;
+      onSelect({
+        action: e.detail.action,
+        label: item ? item.textContent.trim() : '',
+      });
+    });
+  }
+
+  function wireHeadDropdownAll(root, selector, onSelect) {
+    if (!root) return;
+    root.querySelectorAll(selector).forEach(function (wrap) {
+      wireHeadDropdown(wrap, onSelect);
+    });
+  }
+
+  /* Small dropdown menu anchored to a trigger */
+      menu.className = 'tma-portal-menu-pop';
+        return '<button type="button" class="tma-portal-menu-pop__item" role="menuitem" data-menu-index="' + i + '"' + (it.disabled ? ' disabled' : '') + '>' + esc(it.label) + '</button>';
+      menu.style.zIndex = '260';
+      var left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8));
+      menu.style.left = left + 'px';
+    headDropdown: headDropdown,
+    wireHeadDropdown: wireHeadDropdown,
+    wireHeadDropdownAll: wireHeadDropdownAll,
+    wireToolbarSearch: wireToolbarSearch,

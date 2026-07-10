@@ -1,0 +1,23 @@
+{
+  "slug": "vertical-07",
+  "nodeId": "30485:135141",
+  "name": "Vertical 07",
+  "variant": "pins",
+  "size": "240x160",
+  "width": 240,
+  "height": 160,
+  "yMax": 6000,
+  "barWidth": 28,
+  "pinWidth": 4,
+  "pinGap": 4,
+  "color": "#a0bce8",
+  "mutedOpacity": 0.5,
+  "bars": [
+    { "value": 2000, "primary": 48.75, "secondary": 45.625 },
+    { "value": 5000, "primary": 86.25, "secondary": 80.625 },
+    { "value": 3000, "primary": 61.25, "secondary": 57.5 },
+    { "value": 6000, "primary": 98.75, "secondary": 92.5 },
+    { "value": 1000, "primary": 36.25, "secondary": 34.375 },
+    { "value": 4000, "primary": 73.75, "secondary": 69.375 }
+  ]
+}

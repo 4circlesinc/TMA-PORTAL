@@ -1,0 +1,96 @@
+{
+  "slug": "button",
+  "nodeId": "33311:3641",
+  "componentSetNodeId": "33311:3641",
+  "documentationNodeId": "33159:7245",
+  "instancesNodeId": "33159:7810",
+  "name": "Button",
+  "description": "TMA Button — borderless, grey, outline, and filled variants across four sizes with icon layouts.",
+  "cssPath": "public/css/button.css",
+  "jsPath": "public/js/button.js",
+  "iconJsPath": "public/js/button-icons.js",
+  "docJsPath": "public/js/button-doc.js",
+  "docIconJsPath": "public/js/button-doc-icons.js",
+  "instancesJsPath": "public/js/button-instances.js",
+  "instancesIconJsPath": "public/js/button-instances-icons.js",
+  "demoPath": "public/demo/button.html",
+  "documentationPath": "public/demo/button-documentation.html",
+  "instancesPath": "public/demo/button-instances.html",
+  "defaultVariant": "borderless",
+  "defaultSize": "small",
+  "sizes": {
+    "small": {
+      "minHeight": 24,
+      "paddingX": 12,
+      "paddingY": 4,
+      "radius": 12,
+      "fontSize": 12,
+      "lineHeight": 16,
+      "iconText": 12,
+      "iconOnly": 16
+    },
+    "medium": {
+      "minHeight": 28,
+      "paddingX": 12,
+      "paddingY": 4,
+      "radius": 14,
+      "fontSize": 14,
+      "lineHeight": 20,
+      "iconText": 14,
+      "iconOnly": 20
+    },
+    "large": {
+      "minHeight": 32,
+      "paddingX": 16,
+      "paddingY": 6,
+      "radius": 16,
+      "fontSize": 14,
+      "lineHeight": 20,
+      "iconText": 16,
+      "iconOnly": 24
+    },
+    "xlarge": {
+      "minHeight": 40,
+      "paddingX": 20,
+      "paddingY": 8,
+      "radius": 20,
+      "fontSize": 16,
+      "lineHeight": 24,
+      "iconText": 20,
+      "iconOnly": 28
+    }
+  },
+  "variants": {
+    "borderless": {
+      "default": { "background": "transparent", "color": "#000000" },
+      "hover": { "background": "rgba(0,0,0,0.04)", "color": "#000000" }
+    },
+    "grey": {
+      "default": { "background": "rgba(0,0,0,0.04)", "color": "#000000" },
+      "hover": { "background": "rgba(0,0,0,0.08)", "color": "#000000" }
+    },
+    "outline": {
+      "default": { "background": "transparent", "border": "0.5px solid rgba(0,0,0,0.2)", "color": "#000000" },
+      "hover": { "background": "rgba(0,0,0,0.04)", "border": "0.5px solid rgba(0,0,0,0.4)", "color": "#000000" }
+    },
+    "filled": {
+      "default": { "background": "#000000", "color": "#ffffff" },
+      "hover": { "background": "rgba(0,0,0,0.8)", "color": "#ffffff" }
+    }
+  },
+  "layouts": ["leading", "trailing", "text", "icon"],
+  "shapes": ["rect", "circle"],
+  "states": ["default", "hover"],
+  "componentSet": {
+    "width": 3760,
+    "height": 512,
+    "border": "2px dashed #136da0",
+    "radius": 20
+  },
+  "instancesShowcase": {
+    "width": 3839,
+    "height": 958,
+    "border": "2px dashed #136da0",
+    "radius": 20
+  }
+}

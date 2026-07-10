@@ -1,0 +1,133 @@
+{
+  "slug": "settings",
+  "nodeId": "30919:278108",
+  "name": "Settings — Profile",
+  "description": "Dashboard-integrated settings with sidebar nav, profile/account security rows, and change-name/email popups.",
+  "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278108",
+  "htmlPath": "public/settings/index.html",
+  "cssPath": "public/css/dashboard.css",
+  "jsPath": "public/js/settings.js",
+  "routes": {
+    "profile": "/settings",
+    "changeEmail": "/settings (popup)",
+    "changeName": "/settings (popup)",
+    "changePassword": "/settings (popup)",
+    "logoutAll": "/settings (popup)",
+    "deleteAccount": "/settings (popup)"
+  },
+  "subpages": [
+    {
+      "slug": "theme",
+      "nodeId": "30919:278123",
+      "name": "Theme",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278123",
+      "mobileNodeId": "30919:293276",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-293276"
+    },
+    {
+      "slug": "time-and-language",
+      "nodeId": "30919:278124",
+      "name": "Time and language",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278124",
+      "mobileNodeId": "30919:293272",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-293272",
+      "pickers": [
+        { "nodeId": "30919:278185", "name": "Time zone", "mobileNodeId": "30919:293299" },
+        { "nodeId": "30919:278186", "name": "Language", "mobileNodeId": "30919:293301" }
+      ]
+    },
+    {
+      "slug": "notifications",
+      "nodeId": "30919:278125",
+      "name": "Notifications",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278125",
+      "mobileNodeId": "30919:293271",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-293271"
+    },
+    {
+      "slug": "privacy",
+      "nodeId": "33319:118350",
+      "name": "Privacy",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33319-118350",
+      "pickers": [
+        { "nodeId": "33303:7651", "name": "Cookie settings" }
+      ]
+    },
+    {
+      "slug": "payment",
+      "nodeId": "30919:278127",
+      "name": "Payment",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278127",
+      "mobileNodeId": "30919:293269",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-293269",
+      "popups": [
+        {
+          "nodeId": "30919:278156",
+          "name": "Add payment method",
+          "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278156",
+          "mobileNodeId": "30919:293348",
+          "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-293348",
+          "implementationNote": "Use standard settings popup chrome: single close button (renderPopupClose) inside tma-dash__settings-change-card. Do not add Figma SettingsPopoverTitle back/close row outside the card. Mobile uses full-screen --flow pattern (renderMobileFlowSheet) like Change name.",
+          "steps": [
+            { "nodeId": "30919:278156", "name": "Pick method", "mobileNodeId": "30919:293348" },
+            { "nodeId": "30919:278157", "name": "Add credit card (empty)", "mobileNodeId": "30919:293349" },
+            { "nodeId": "30919:278161", "name": "Add credit card (typing)", "mobileNodeId": "30919:293350" },
+            { "nodeId": "30919:278158", "name": "Add credit card (filled)", "mobileNodeId": "30919:293355" },
+            { "nodeId": "30919:278159", "name": "Add credit card (save)", "mobileNodeId": "30919:293355" }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "plugins",
+      "nodeId": "30919:278129",
+      "name": "Plugins",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278129",
+      "mobileNodeId": "30919:293275",
+      "mobileUrl": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-293275"
+    },
+    {
+      "slug": "change-name",
+      "nodeId": "30919:278184",
+      "name": "Change name",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278184"
+    },
+    {
+      "slug": "change-email",
+      "nodeId": "30919:278149",
+      "name": "Change email",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278149",
+      "steps": [
+        { "nodeId": "30919:278150", "name": "Verify password" },
+        { "nodeId": "30919:278151", "name": "Enter new email" },
+        { "nodeId": "30919:278149", "name": "Check inbox" }
+      ]
+    },
+    {
+      "slug": "change-password",
+      "nodeId": "30919:278181",
+      "name": "Change password",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278181",
+      "steps": [
+        { "nodeId": "30919:293308", "name": "Current password" },
+        { "nodeId": "30919:293310", "name": "New password" },
+        { "nodeId": "30919:293309", "name": "Repeat password" }
+      ]
+    },
+    {
+      "slug": "logout-all",
+      "nodeId": "30919:278182",
+      "name": "Log out of all devices",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278182"
+    },
+    {
+      "slug": "delete-account",
+      "nodeId": "30919:278183",
+      "name": "Delete my account",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278183",
+      "steps": [
+        { "nodeId": "30919:293316", "name": "Confirm email" }
+      ]
+    }
+  ]
+}

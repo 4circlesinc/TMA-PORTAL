@@ -1,0 +1,9 @@
+
+      body: "We're glad to see that you've started using Slack. Join TM ANTOINE Advisory Community on Slack.",
+      to: { name: 'TM ANTOINE Advisory', email: 'notifications@tmantoine.com' },
+        sender: 'TM ANTOINE Advisory',
+        email: 'notifications@tmantoine.com',
+      '<p>We\'re glad to see that you\'ve started using Slack. Join <strong>TM ANTOINE Advisory Community</strong> on Slack.</p>' +
+      '<p>Your team name is <strong>TM ANTOINE Advisory Community</strong></p>' +
+      '<div class="tma-dash__email-signin-title">TM ANTOINE Advisory Community</div>' +
+      '<div>Workspace URL: TM-ANTOINE-community</div>' +

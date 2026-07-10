@@ -1,0 +1,342 @@
+{
+  "file": {
+    "name": "Portal-Design",
+    "fileKey": "58ZXC7sZYQsbenzf0foWCH",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design",
+    "designSystem": "TMA",
+    "designSystemDocs": "#",
+    "designSystemFigma": "https://www.figma.com/file/PAA0JKidFMVK44KRRWB1zL/TMA"
+  },
+  "connectedAs": {
+    "handle": "Vernon Francis",
+    "email": "igraphixmarketingco@gmail.com"
+  },
+  "targetStack": {
+    "framework": "laravel",
+    "languages": ["php", "html", "css", "javascript"],
+    "notes": "Adapt Figma MCP output (React + Tailwind reference) to Blade templates and project CSS."
+  },
+  "entryPoints": {
+    "illustrations": {
+      "nodeId": "30485:160085",
+      "name": "Illustrations",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-160085"
+    },
+    "emoji": {
+      "nodeId": "30485:158234",
+      "name": "Emoji",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-158234"
+    },
+    "avatars": {
+      "nodeId": "30485:156827",
+      "name": "Avatars",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-156827"
+    },
+    "avatarNames": {
+      "nodeId": "30485:156802",
+      "name": "AvatarNames",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-156802"
+    },
+    "tmaIcons": {
+      "nodeId": "32730:413847",
+      "name": "TMA Icons",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32730-413847"
+    },
+    "phosphorIcons": {
+      "nodeId": "32730:413932",
+      "name": "Phosphor Icons",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32730-413932"
+    },
+    "cursors": {
+      "nodeId": "32261:178336",
+      "name": "Cursors",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32261-178336"
+    },
+    "charts": {
+      "nodeId": "30485:135130",
+      "name": "Chart graphics",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-135130"
+    },
+    "commonComponents": {
+      "catalog": "design/common-components.json",
+      "tabSegmented": {
+        "nodeId": "28002:98904",
+        "name": "Tab, Segmented",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=28002-98904"
+      },
+      "tooltip": {
+        "nodeId": "33302:4716",
+        "name": "Tooltip",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33302-4716"
+      },
+      "tableTitle": {
+        "nodeId": "32728:395805",
+        "name": "Table title",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=25596-130955"
+      },
+      "functionBar": {
+        "nodeId": "32728:395823",
+        "name": "Function bar",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=25596-130955"
+      },
+      "pagination": {
+        "nodeId": "32728:395827",
+        "name": "Pagination",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32728-395827"
+      },
+      "filterAndSort": {
+        "nodeId": "32728:395835",
+        "name": "Filter and sort",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32728-395835"
+      },
+      "statusBadge": {
+        "nodeId": "32728:395811",
+        "name": "Status badge",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32728-395811"
+      },
+      "tableA": {
+        "nodeId": "33160:33464",
+        "name": "Table A",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33160-33456"
+      },
+      "tableB": {
+        "nodeId": "33160:33568",
+        "name": "Table B",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33160-33567"
+      },
+      "tableBGuidance": {
+        "nodeId": "32722:24623",
+        "name": "Table B interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32722-24623"
+      },
+      "tableC": {
+        "nodeId": "32722:24626",
+        "name": "Table C",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32722-24626"
+      },
+      "tableSearch": {
+        "nodeId": "32722:24627",
+        "name": "Search results interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32722-24627"
+      },
+      "tableAddData": {
+        "nodeId": "32722:24624",
+        "name": "Add data interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32722-24624"
+      },
+      "tableFilterSort": {
+        "nodeId": "32722:24625",
+        "name": "Filter and sort interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32722-24625"
+      },
+      "globalSearch": {
+        "nodeId": "32260:171686",
+        "name": "Search interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32260-171686"
+      },
+      "toast": {
+        "nodeId": "33260:21601",
+        "name": "Toast interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33260-21601"
+      },
+      "datePicker": {
+        "nodeId": "33304:16630",
+        "name": "DatePicker interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33304-16630"
+      },
+      "datePickerDocumentation": {
+        "nodeId": "33304:16614",
+        "name": "DatePicker documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33304-16614"
+      },
+      "popover": {
+        "nodeId": "33303:7653",
+        "name": "Popover interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33303-7653"
+      },
+      "popoverCanvas": {
+        "nodeId": "28002:96385",
+        "name": "Popover",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=28002-96385"
+      },
+      "popoverInstances": {
+        "nodeId": "33303:7642",
+        "name": "Popover instances",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33303-7642"
+      },
+      "card": {
+        "nodeId": "33302:4597",
+        "name": "Card",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33302-4597"
+      },
+      "cardDocumentation": {
+        "nodeId": "32267:8033",
+        "name": "Card documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32267-8033"
+      },
+      "cardInstances": {
+        "nodeId": "33160:10064",
+        "name": "Card instances",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33160-10064"
+      },
+      "input": {
+        "nodeId": "33319:47513",
+        "name": "Input",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33319-47513"
+      },
+      "inputDocumentation": {
+        "nodeId": "32728:395033",
+        "name": "Input documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32728-395033"
+      },
+      "formsGuidance": {
+        "nodeId": "32257:116552",
+        "name": "Forms interactive guidance",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32257-116552"
+      },
+      "formInstances": {
+        "nodeId": "32728:395248",
+        "name": "Form instances",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32728-395248"
+      },
+      "formsDemo": {
+        "nodeId": "forms-demo",
+        "name": "Forms demo",
+        "url": "public/demo/forms.html"
+      },
+      "strip": {
+        "nodeId": "32792:9423",
+        "name": "Strip",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32792-9423"
+      },
+      "stripDocumentation": {
+        "nodeId": "32421:48401",
+        "name": "Strip documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32421-48401"
+      },
+      "line": {
+        "nodeId": "32792:1923",
+        "name": "Line",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32792-1923"
+      },
+      "lineDocumentation": {
+        "nodeId": "32219:8431",
+        "name": "Line documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32219-8431"
+      },
+      "tag": {
+        "nodeId": "33307:661",
+        "name": "Tag",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33307-661"
+      },
+      "tagDocumentation": {
+        "nodeId": "33307:764",
+        "name": "Tag documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33307-764"
+      },
+      "badge": {
+        "nodeId": "32792:840",
+        "name": "Badge",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32792-840"
+      },
+      "badgeDocumentation": {
+        "nodeId": "32726:1920",
+        "name": "Badge documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32726-1920"
+      },
+      "button": {
+        "nodeId": "33311:3641",
+        "name": "Button component set",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33311-3641"
+      },
+      "buttonDocumentation": {
+        "nodeId": "33159:7245",
+        "name": "Button documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33159-7245"
+      },
+      "buttonGroupDocumentation": {
+        "nodeId": "33067:4918",
+        "name": "Button Group documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33067-4918"
+      },
+      "groupDocumentation": {
+        "nodeId": "33302:3387",
+        "name": "Group documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33302-3387"
+      },
+      "groupInstances": {
+        "nodeId": "32729:396128",
+        "name": "Group instances",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32729-396128"
+      },
+      "frameDocumentation": {
+        "nodeId": "33302:2140",
+        "name": "Frame documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33302-2140"
+      },
+      "frameInstances": {
+        "nodeId": "33159:3529",
+        "name": "Frame instances",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33159-3529"
+      },
+      "textDocumentation": {
+        "nodeId": "32722:4768",
+        "name": "Text documentation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=25559-7066"
+      },
+      "textInstances": {
+        "nodeId": "32708:1064",
+        "name": "Text instances",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=25559-7066"
+      },
+      "buttonInstances": {
+        "nodeId": "33159:7810",
+        "name": "Button instances",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33159-7810"
+      },
+      "componentsPage": {
+        "nodeId": "8300:425",
+        "name": "Components",
+        "catalog": "design/components.json",
+        "boardNodeId": "33320:6937",
+        "demoPath": "public/demo/components.html",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=8300-425"
+      },
+      "componentsBoard": {
+        "nodeId": "33320:6937",
+        "name": "Components catalog",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=33320-6937"
+      },
+      "designSystemPage": {
+        "nodeId": "15098:130290",
+        "name": "Design system",
+        "catalog": "design/design-system.json",
+        "demoPath": "public/demo/design-system.html",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=15098-130290"
+      },
+      "interactiveGuidancePage": {
+        "nodeId": "12779:273712",
+        "name": "Interactive guidance",
+        "catalog": "design/interactive-guidance.json",
+        "demoPath": "public/demo/interactive-guidance.html",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=12779-273712"
+      },
+      "componentsNavigationCta": {
+        "nodeId": "32218:9351",
+        "name": "Navigation",
+        "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32218-9351"
+      }
+    },
+    "helloPage": {
+      "nodeId": "16:13406",
+      "name": "👋 Hello"
+    }
+  },
+  "mcpTools": {
+    "getDesignContext": "Primary tool for screen/component implementation",
+    "getMetadata": "Structure overview and node discovery",
+    "getVariableDefs": "Design tokens and variables",
+    "downloadAssets": "Export illustrations and images",
+    "getScreenshot": "Visual reference snapshots"
+  }
+}

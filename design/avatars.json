@@ -1,0 +1,80 @@
+{
+  "source": {
+    "avatarsFrame": {
+      "nodeId": "30485:156827",
+      "name": "Avatars",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-156827"
+    },
+    "avatarNamesFrame": {
+      "nodeId": "30485:156802",
+      "name": "AvatarNames",
+      "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-156802"
+    }
+  },
+  "description": "Avatars from Figma community and Unsplash. All support hover state per TMA.",
+  "attribution": "Check Figma community and Unsplash licenses before production use.",
+  "sizes": {
+    "lg": 64,
+    "sm": 24
+  },
+  "tokens": {
+    "background": "rgba(0,0,0,0.04)",
+    "borderRadius": "80px",
+    "hover": "opacity or scale transition",
+    "initialsBlue": "#7dbbff",
+    "initialsGreen": "#71dd8c",
+    "initialsPurple": "#e7f0f6",
+    "moreBlue": "#e6f6fd"
+  },
+  "components": {
+    "photo": {
+      "pattern": "rounded-full overflow-hidden bg-black/4",
+      "props": ["src", "alt", "size"]
+    },
+    "initials": {
+      "pattern": "rounded-full flex items-center justify-center text-xs font-normal",
+      "props": ["initial", "color"]
+    },
+    "userChip": {
+      "pattern": "flex items-center gap-2",
+      "props": ["name", "avatar"]
+    },
+    "group": {
+      "pattern": "flex -space-x-2",
+      "props": ["avatars", "overflow"]
+    }
+  },
+  "items": [
+    { "key": "AvatarMale01", "file": "AvatarMale01.png", "size": 64, "person": "Drew Cano" },
+    { "key": "AvatarMale02", "file": "AvatarMale02.png", "size": 64, "person": "John Smith" },
+    { "key": "AvatarMale03", "file": "AvatarMale03.png", "size": 64, "person": "Orlando Diggs" },
+    { "key": "AvatarMale04", "file": "AvatarMale04.png", "size": 64, "person": "Koray Okumus" },
+    { "key": "AvatarMale05", "file": "AvatarMale05.png", "size": 64, "person": "James Wilson" },
+    { "key": "AvatarMale06", "file": "AvatarMale06.png", "size": 64, "person": "Alexander Williams" },
+    { "key": "AvatarFemale01", "file": "AvatarFemale01.png", "size": 64, "person": "Andi Lane" },
+    { "key": "AvatarFemale02", "file": "AvatarFemale02.png", "size": 64, "person": "Aliah Davis" },
+    { "key": "AvatarFemale03", "file": "AvatarFemale03.png", "size": 64, "person": "Brie Larson" },
+    { "key": "AvatarFemale04", "file": "AvatarFemale04.png", "size": 64, "person": "Kate Morrison" },
+    { "key": "AvatarFemale05", "file": "AvatarFemale05.png", "size": 64, "person": "Melody Macy" },
+    { "key": "AvatarFemale06", "file": "AvatarFemale06.png", "size": 64, "person": "Natali Craig" },
+    { "key": "Avatar3d01", "file": "Avatar3d01.png", "size": 64, "person": "Christopher Davis" },
+    { "key": "Avatar3d02", "file": "Avatar3d02.png", "size": 64, "person": "Olivia Johnson" },
+    { "key": "Avatar3d03", "file": "Avatar3d03.png", "size": 64, "person": "Sophia Martinez" },
+    { "key": "Avatar3d04", "file": "Avatar3d04.png", "size": 64, "person": "Emma Smith" },
+    { "key": "AvatarAbstract01", "file": "AvatarAbstract01.png", "size": 64, "person": "Isabella Davis" },
+    { "key": "AvatarAbstract02", "file": "AvatarAbstract02.png", "size": 64, "person": "Matthew Johnson" },
+    { "key": "AvatarAbstract03", "file": "AvatarAbstract03.png", "size": 64, "person": "Benjamin Thompson" },
+    { "key": "AvatarAbstract04", "file": "AvatarAbstract04.png", "size": 64, "person": "Samuel Anderson" },
+    { "key": "AvatarByewind", "file": "AvatarByewind.png", "size": 64, "person": "ByeWind" },
+    { "key": "AvatarDefault", "file": "AvatarDefault.png", "size": 24, "type": "icon" },
+    { "key": "AvatarMore", "file": "AvatarMore.png", "size": 24, "type": "overflow", "defaultText": "+3" },
+    { "key": "AvatarNophoto", "file": "AvatarNophoto.png", "size": 24, "type": "initials", "defaultText": "F" }
+  ],
+  "exportPath": "public/images/avatars",
+  "export": {
+    "format": "png",
+    "scale": 2,
+    "exportedAt": "2026-06-11",
+    "count": 24
+  }
+}

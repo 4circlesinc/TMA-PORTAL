@@ -1,0 +1,53 @@
+{
+  "source": {
+    "fileKey": "58ZXC7sZYQsbenzf0foWCH",
+    "frameId": "30485:135130",
+    "frameName": "Chart graphics",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-135130"
+  },
+  "description": "26 pre-designed chart graphics from Figma. All charts implemented as code-ready Blade components with JSON presets, CSS, and chart-motion.js.",
+  "exportPath": "public/images/charts",
+  "export": {
+    "format": "svg",
+    "exportedAt": "2026-06-11",
+    "count": 26
+  },
+  "cssPath": "public/css/charts.css",
+  "setup": "<x-chart-motion /> for 01 (vertical); <x-chart-motion-horizontal /> for 02 (horizontal); <x-chart-motion-line /> for 03 (line); <x-chart-vertical-01 /> through <x-chart-vertical-08 /> for Vertical 01–08.",
+  "categories": [
+    { "id": "motion", "name": "Chart", "label": "Chart ↗" },
+    { "id": "vertical", "name": "Vertical bar", "label": "Vertical bar" },
+    { "id": "horizontal", "name": "Horizontal bar", "label": "Horizontal bar" },
+    { "id": "circular", "name": "CircularChart", "label": "CircularChart" },
+    { "id": "proportion", "name": "ProportionStatistics", "label": "Proportion" }
+  ],
+  "items": [
+    { "nodeId": "30485:135132", "name": "ChartMotion", "slug": "chart-motion-01", "file": "ChartMotion-01.svg", "category": "motion", "size": "800x400", "width": 800, "height": 400, "component": "chart-motion", "implemented": true, "preset": "design/chart-motion-01.json" },
+    { "nodeId": "30485:135133", "name": "ChartMotion", "slug": "chart-motion-02", "file": "ChartMotion-02.svg", "category": "motion", "size": "800x400", "width": 800, "height": 400, "component": "chart-motion-horizontal", "implemented": true, "preset": "design/chart-motion-02.json" },
+    { "nodeId": "30485:135134", "name": "ChartMotion", "slug": "chart-motion-03", "file": "ChartMotion-03.svg", "category": "motion", "size": "800x400", "width": 800, "height": 400, "component": "chart-motion-line", "implemented": true, "preset": "design/chart-motion-03.json" },
+    { "nodeId": "30485:135136", "name": "Vertical 01", "slug": "vertical-01", "file": "Vertical-01.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-01", "implemented": true, "preset": "design/vertical-01.json" },
+    { "nodeId": "30485:135139", "name": "Vertical 02", "slug": "vertical-02", "file": "Vertical-02.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-02", "implemented": true, "preset": "design/vertical-02.json" },
+    { "nodeId": "30485:135137", "name": "Vertical 03", "slug": "vertical-03", "file": "Vertical-03.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-03", "implemented": true, "preset": "design/vertical-03.json" },
+    { "nodeId": "30485:135142", "name": "Vertical 04", "slug": "vertical-04", "file": "Vertical-04.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-04", "implemented": true, "preset": "design/vertical-04.json" },
+    { "nodeId": "30485:135138", "name": "Vertical 05", "slug": "vertical-05", "file": "Vertical-05.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-05", "implemented": true, "preset": "design/vertical-05.json" },
+    { "nodeId": "30485:135143", "name": "Vertical 06", "slug": "vertical-06", "file": "Vertical-06.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-06", "implemented": true, "preset": "design/vertical-06.json" },
+    { "nodeId": "30485:135141", "name": "Vertical 07", "slug": "vertical-07", "file": "Vertical-07.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-07", "implemented": true, "preset": "design/vertical-07.json" },
+    { "nodeId": "30485:135140", "name": "Vertical 08", "slug": "vertical-08", "file": "Vertical-08.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-08", "implemented": true, "preset": "design/vertical-08.json" },
+    { "nodeId": "30485:135144", "name": "Vertical 12", "slug": "vertical-12", "file": "Vertical-12.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-12", "implemented": true, "preset": "design/vertical-12.json" },
+    { "nodeId": "30485:135146", "name": "Vertical 11", "slug": "vertical-11", "file": "Vertical-11.svg", "category": "vertical", "size": "240x160", "width": 240, "height": 160, "component": "chart-vertical-11", "implemented": true, "preset": "design/vertical-11.json" },
+    { "nodeId": "30485:135148", "name": "ProportionStatistics", "slug": "proportion-statistics", "file": "ProportionStatistics.svg", "category": "proportion", "size": "440x200", "width": 440, "height": 200, "component": "chart-proportion-statistics", "implemented": true, "preset": "design/proportion-statistics.json" },
+    { "nodeId": "30485:135145", "name": "Vertical 10", "slug": "vertical-10", "file": "Vertical-10.svg", "category": "vertical", "size": "440x138", "width": 440, "height": 138, "component": "chart-vertical-10", "implemented": true, "preset": "design/vertical-10.json" },
+    { "nodeId": "30485:135147", "name": "Vertical 09", "slug": "vertical-09", "file": "Vertical-09.svg", "category": "vertical", "size": "1100x212", "width": 1100, "height": 212, "wide": true, "component": "chart-vertical-09", "implemented": true, "preset": "design/vertical-09.json" },
+    { "nodeId": "30485:135150", "name": "Horizontal 01", "slug": "horizontal-01", "file": "Horizontal-01.svg", "category": "horizontal", "size": "160x240", "width": 160, "height": 240, "component": "chart-horizontal-01", "implemented": true, "preset": "design/horizontal-01.json" },
+    { "nodeId": "30485:135151", "name": "Horizontal 02", "slug": "horizontal-02", "file": "Horizontal-02.svg", "category": "horizontal", "size": "160x240", "width": 160, "height": 240, "component": "chart-horizontal-02", "implemented": true, "preset": "design/horizontal-02.json" },
+    { "nodeId": "30485:135152", "name": "Horizontal 03", "slug": "horizontal-03", "file": "Horizontal-03.svg", "category": "horizontal", "size": "160x240", "width": 160, "height": 240, "component": "chart-horizontal-03", "implemented": true, "preset": "design/horizontal-03.json" },
+    { "nodeId": "30485:135153", "name": "Horizontal 04", "slug": "horizontal-04", "file": "Horizontal-04.svg", "category": "horizontal", "size": "160x240", "width": 160, "height": 240, "component": "chart-horizontal-04", "implemented": true, "preset": "design/horizontal-04.json" },
+    { "nodeId": "30485:135155", "name": "SemicircleChart", "slug": "semicircle-chart", "file": "SemicircleChart.svg", "category": "circular", "size": "250x126", "width": 250, "height": 126, "component": "chart-semicircle-chart", "implemented": true, "preset": "design/semicircle-chart.json" },
+    { "nodeId": "30485:135156", "name": "DonutChart", "slug": "donut-01", "file": "DonutChart-01.svg", "category": "circular", "size": "120x120", "width": 120, "height": 120, "component": "chart-donut-01", "implemented": true, "preset": "design/donut-01.json" },
+    { "nodeId": "30485:135157", "name": "DonutChart", "slug": "donut-02", "file": "DonutChart-02.svg", "category": "circular", "size": "120x120", "width": 120, "height": 120, "component": "chart-donut-02", "implemented": true, "preset": "design/donut-02.json" },
+    { "nodeId": "30485:135158", "name": "DonutChart", "slug": "donut-03", "file": "DonutChart-03.svg", "category": "circular", "size": "120x120", "width": 120, "height": 120, "component": "chart-donut-03", "implemented": true, "preset": "design/donut-03.json" },
+    { "nodeId": "30485:135159", "name": "DonutChart", "slug": "donut-04", "file": "DonutChart-04.svg", "category": "circular", "size": "120x120", "width": 120, "height": 120, "component": "chart-donut-04", "implemented": true, "preset": "design/donut-04.json" },
+    { "nodeId": "30485:135160", "name": "DonutChart", "slug": "donut-05", "file": "DonutChart-05.svg", "category": "circular", "size": "120x120", "width": 120, "height": 120, "component": "chart-donut-05", "implemented": true, "preset": "design/donut-05.json" }
+  ],
+  "laravelUsage": "<x-chart-motion /> or <x-chart-motion :bars=\"$monthlyRevenue\" />"
+}

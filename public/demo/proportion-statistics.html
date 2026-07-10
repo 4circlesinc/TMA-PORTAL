@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — ProportionStatistics</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f5f5f7; color: #000; padding: 48px; }
+    .frame { display: flex; gap: 64px; align-items: flex-start; background: #fff; border-radius: 48px; padding: 64px; max-width: 960px; }
+    .nav-card { flex: 0 0 280px; background: #000; border-radius: 48px; padding: 40px 32px; }
+    .nav-card h1 { font-size: 36px; font-weight: 700; line-height: 1.1; margin-bottom: 16px; background: linear-gradient(100deg, #fff 1%, #dcd4ff 46%, #e2cbff 56%, #98baff 67%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .nav-card p { font-size: 15px; line-height: 1.5; color: #fff; opacity: 0.9; }
+    .content { flex: 1; min-width: 0; }
+    .section-title { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 24px; }
+    .setup { background: #1e1e1e; color: #d4d4d4; padding: 16px 20px; border-radius: 12px; font-size: 13px; line-height: 1.6; margin-bottom: 28px; overflow-x: auto; }
+    .chart-wrap { border: 1px solid #eee; border-radius: 16px; padding: 32px 24px 24px; background: #fafafa; overflow: visible; max-width: 520px; }
+    .hint { margin-top: 12px; font-size: 12px; color: #888; }
+    @media (max-width: 900px) { body { padding: 24px 16px; } .frame { flex-direction: column; padding: 28px 20px; border-radius: 28px; } .nav-card { width: 100%; flex: none; } }
+  </style>
+</head>
+<body>
+  <p class="section-title">Proportion — ProportionStatistics</p>
+  <div class="frame">
+    <div class="nav-card">
+      <h1>ProportionStatistics</h1>
+      <p>Fourteenth chart — three-column proportion graphic with labels, percentages, and vertical tick columns. HTML/CSS, not SVG.</p>
+    </div>
+    <div class="content">
+      <pre class="setup">&lt;x-chart-proportion-statistics /&gt;
+
+&lt;x-chart-proportion-statistics :sections="[
+    ['key' => 'old', 'label' => 'Old users', 'value' => 52, 'lineCount' => 26],
+    ['key' => 'new', 'label' => 'New users', 'value' => 18, 'lineCount' => 15],
+    ['key' => 'visitors', 'label' => 'Visitors', 'value' => 30, 'lineCount' => 19, 'muted' => true],
+]" /&gt;</pre>
+      <div class="chart-wrap">
+        <div class="tma-chart-scroll tma-chart-scroll--wide">
+          <div id="chart" class="tma-chart-proportion" role="group" aria-label="Proportion statistics chart"></div>
+        </div>
+        <p class="hint">Visitors column uses 40% opacity per Figma. Ticks are &lt;span&gt; elements, not SVG paths.</p>
+      </div>
+    </div>
+  </div>
+<script>
+const COLOR = '#000000';
+const MUTED = 0.4;
+const CHART_HEIGHT = 200;
+const PLOT_TOP = 101;
+
+function formatPercent(v) {
+  return `${v.toLocaleString()}%`;
+}
+
+function renderChart(root, preset) {
+  const { sections, color, mutedOpacity } = preset;
+  root.style.setProperty('--prop-color', color || COLOR);
+  root.style.setProperty('--prop-muted-opacity', mutedOpacity ?? MUTED);
+  root.style.setProperty('--prop-chart-height', CHART_HEIGHT);
+  root.style.setProperty('--prop-plot-top', `${(PLOT_TOP / CHART_HEIGHT) * 100}%`);
+
+  const sectionsEl = document.createElement('div');
+  sectionsEl.className = 'tma-chart-proportion__sections';
+
+  sections.forEach((section) => {
+    const el = document.createElement('div');
+    el.className = 'tma-chart-proportion__section' + (section.muted ? ' tma-chart-proportion__section--muted' : '');
+    el.style.flex = `${section.weight || 1} 1 0`;
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', `${section.label}: ${formatPercent(section.value)}`);
+
+    const header = document.createElement('div');
+    header.className = 'tma-chart-proportion__header';
+
+    const label = document.createElement('span');
+    label.className = 'tma-chart-proportion__label';
+    label.textContent = section.label;
+
+    const value = document.createElement('span');
+    value.className = 'tma-chart-proportion__value';
+    value.textContent = formatPercent(section.value);
+
+    header.appendChild(label);
+    header.appendChild(value);
+
+    const plot = document.createElement('div');
+    plot.className = 'tma-chart-proportion__plot';
+    plot.setAttribute('aria-hidden', 'true');
+
+    const ticks = document.createElement('div');
+    ticks.className = 'tma-chart-proportion__ticks';
+
+    for (let i = 0; i < section.lineCount; i++) {
+      const tick = document.createElement('span');
+      tick.className = 'tma-chart-proportion__tick';
+      ticks.appendChild(tick);
+    }
+
+    plot.appendChild(ticks);
+    el.appendChild(header);
+    el.appendChild(plot);
+    sectionsEl.appendChild(el);
+  });
+
+  root.appendChild(sectionsEl);
+}
+
+fetch('./data/proportion-statistics.json')
+  .then(r => r.json())
+  .then(preset => renderChart(document.getElementById('chart'), preset));
+</script>
+</body>
+</html>

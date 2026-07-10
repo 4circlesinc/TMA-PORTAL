@@ -1,0 +1,23 @@
+{
+  "slug": "group",
+  "nodeId": "33302:3387",
+  "instancesNodeId": "32729:396128",
+  "name": "Group",
+  "description": "TMA Group — combine any instances (text, icon, avatar, button, IconText, tabs, tags) with configurable count, direction, and order.",
+  "cssPath": "public/css/group.css",
+  "docJsPath": "public/js/group-doc.js",
+  "docIconJsPath": "public/js/group-doc-icons.js",
+  "instancesJsPath": "public/js/group-instances.js",
+  "instancesIconJsPath": "public/js/group-instances-icons.js",
+  "documentationPath": "public/demo/group-documentation.html",
+  "instancesPath": "public/demo/group-instances.html",
+  "examples": {
+    "topNavigation": { "nodeId": "33302:3402" },
+    "sideNavigation": { "nodeId": "33302:3405" },
+    "iconText": { "nodeId": "33302:3408" },
+    "featureBars": { "nodeId": "33302:3411" },
+    "segmentedControl": { "nodeId": "33302:3421" },
+    "pagination": { "nodeId": "33302:3424" },
+    "mixedInstances": { "nodeId": "33302:3427" }
+  }
+}

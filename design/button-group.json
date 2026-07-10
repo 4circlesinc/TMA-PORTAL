@@ -1,0 +1,32 @@
+{
+  "slug": "button-group",
+  "nodeId": "33067:4918",
+  "name": "Button Group",
+  "description": "TMA Button Group — use the Group component to combine buttons for pagination, toolbars, auth, navigation, and social sign-in.",
+  "cssPath": "public/css/button-group.css",
+  "docJsPath": "public/js/button-group-doc.js",
+  "docIconJsPath": "public/js/button-group-doc-icons.js",
+  "documentationPath": "public/demo/button-group-documentation.html",
+  "examples": {
+    "pagination": { "nodeId": "33067:4925" },
+    "iconToolbar": { "nodeId": "33067:4926" },
+    "auth": { "nodeId": "33067:4927" },
+    "navigation": { "nodeId": "33067:4928" },
+    "social": { "nodeId": "33067:4929" }
+  },
+  "tokens": {
+    "paginationButtonMinSize": 24,
+    "paginationButtonRadius": 12,
+    "paginationButtonBorder": "0.5px solid rgba(0,0,0,0.1)",
+    "paginationActiveBackground": "rgba(0,0,0,0.04)",
+    "authButtonRadius": 12,
+    "authButtonFontSize": 12,
+    "navButtonMinHeight": 36,
+    "navButtonRadius": 16,
+    "navButtonFontSize": 14,
+    "brandButtonMinHeight": 48,
+    "brandButtonRadius": 20,
+    "brandGoogle": "#8156fa",
+    "brandFacebook": "#1877f2"
+  }
+}

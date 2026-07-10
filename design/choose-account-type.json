@@ -1,0 +1,9 @@
+{
+  "slug": "choose-account-type",
+  "nodeId": "32546:96137",
+  "name": "Authentication — Choose Account Type",
+  "description": "Sign-up step — select Personal or Corporate account type, then Continue.",
+  "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96137",
+  "htmlPath": "public/choose-account-type/index.html",
+  "cssPath": "public/css/auth.css"
+}

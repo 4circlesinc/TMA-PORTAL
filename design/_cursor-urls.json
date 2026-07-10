@@ -1,0 +1,23 @@
+{
+  "CursorsDefault": "https://www.figma.com/api/mcp/asset/77e49fe9-1904-43c8-92cc-36acc125f3fc",
+  "CursorsBeachball": "https://www.figma.com/api/mcp/asset/d1c3e6d6-c630-4f35-8754-c8602e3d6401",
+  "CursorsTextCursor": "https://www.figma.com/api/mcp/asset/a13d1bca-4697-4d0a-ab69-6efeb91f8b85",
+  "CursorsCross": "https://www.figma.com/api/mcp/asset/14a138ed-d335-439e-bc16-bacfec52c662",
+  "CursorsMenu": "https://www.figma.com/api/mcp/asset/c1eca931-faae-4f85-9c67-223dbdf98c8b",
+  "CursorsZoomOut": "https://www.figma.com/api/mcp/asset/73551123-b875-4d79-8e41-9a75842ee9d1",
+  "CursorsZoomIn": "https://www.figma.com/api/mcp/asset/0e9a6795-63f0-4f49-a8b3-5bfe9366d811",
+  "CursorsHandPointing": "https://www.figma.com/api/mcp/asset/e641cac8-29c6-4ef3-9d3b-fa6a82e07b76",
+  "CursorsHandGrabbing": "https://www.figma.com/api/mcp/asset/0971a941-f707-4462-9dbb-9c49754ddd6e",
+  "CursorsHandOpen": "https://www.figma.com/api/mcp/asset/29b16f56-3ab3-4cc5-8b31-ba5907a27c0c",
+  "CursorsMove": "https://www.figma.com/api/mcp/asset/166522f4-8b2a-4d01-a5ba-87740990b28a",
+  "CursorsResizeLeft": "https://www.figma.com/api/mcp/asset/fc5f3103-9088-4f60-8cbd-6d02040a65ff",
+  "CursorsResizeDown": "https://www.figma.com/api/mcp/asset/e0a010e2-b7f0-4bab-8d55-ef481a1b57d6",
+  "CursorsResizeRight": "https://www.figma.com/api/mcp/asset/6462e21a-b042-4ab8-8fa9-78ad7c273368",
+  "CursorsResizeUp": "https://www.figma.com/api/mcp/asset/c578b30f-b7a1-4fc0-b8d4-abdc2f9c71c1",
+  "CursorsResizeLeftRight": "https://www.figma.com/api/mcp/asset/274572b3-6d46-41a2-ad8d-90eb69c588c7",
+  "CursorsResizeUpDown": "https://www.figma.com/api/mcp/asset/d4ab861b-59b9-4447-9da4-0f04a1338665",
+  "CursorsResizeNorthWestSouthEast": "https://www.figma.com/api/mcp/asset/b0cea9ae-aa08-4628-9930-9775928a99fc",
+  "CursorsResizeNorthEastSouthWest": "https://www.figma.com/api/mcp/asset/7fbd3151-69a9-498c-a774-560931098e34",
+  "CursorsResizeWestEast": "https://www.figma.com/api/mcp/asset/ff73388d-fec2-4453-8200-c6b516611096",
+  "CursorsResizeNorthSouth": "https://www.figma.com/api/mcp/asset/ffa7c608-6213-4956-8050-83baf3e7687f"
+}

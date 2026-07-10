@@ -1,0 +1,39 @@
+{
+  "source": {
+    "nodeId": "30485:156802",
+    "name": "AvatarNames",
+    "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-156802"
+  },
+  "description": "TMA user chips — avatar (24px) + name label (14px Inter). Maps display names to avatar assets.",
+  "layout": {
+    "gap": "8px",
+    "avatarSize": 24,
+    "fontSize": 14,
+    "lineHeight": 20
+  },
+  "users": [
+    { "slug": "andi-lane", "name": "Andi Lane", "avatar": "AvatarFemale01", "type": "photo" },
+    { "slug": "aliah-davis", "name": "Aliah Davis", "avatar": "AvatarFemale02", "type": "photo" },
+    { "slug": "alexander-williams", "name": "Alexander Williams", "avatar": "AvatarMale06", "type": "photo" },
+    { "slug": "byewind", "name": "ByeWind", "avatar": "AvatarByewind", "type": "photo" },
+    { "slug": "bruce-wayne", "name": "Bruce Wayne", "avatar": null, "type": "initials", "initial": "B", "color": "#7dbbff" },
+    { "slug": "james-wilson", "name": "James Wilson", "avatar": "AvatarMale05", "type": "photo" },
+    { "slug": "brie-larson", "name": "Brie Larson", "avatar": "AvatarFemale03", "type": "photo" },
+    { "slug": "christopher-davis", "name": "Christopher Davis", "avatar": "Avatar3d01", "type": "photo" },
+    { "slug": "drew-cano", "name": "Drew Cano", "avatar": "AvatarMale01", "type": "photo" },
+    { "slug": "emma-smith", "name": "Emma Smith", "avatar": "Avatar3d04", "type": "photo" },
+    { "slug": "john-smith", "name": "John Smith", "avatar": "AvatarMale02", "type": "photo" },
+    { "slug": "benjamin-thompson", "name": "Benjamin Thompson", "avatar": "AvatarAbstract03", "type": "photo" },
+    { "slug": "samuel-anderson", "name": "Samuel Anderson", "avatar": "AvatarAbstract04", "type": "photo" },
+    { "slug": "sophia-martinez", "name": "Sophia Martinez", "avatar": "Avatar3d03", "type": "photo" },
+    { "slug": "isabella-davis", "name": "Isabella Davis", "avatar": "AvatarAbstract01", "type": "photo" },
+    { "slug": "kate-morrison", "name": "Kate Morrison", "avatar": "AvatarFemale04", "type": "photo" },
+    { "slug": "koray-okumus", "name": "Koray Okumus", "avatar": "AvatarMale04", "type": "photo" },
+    { "slug": "melody-macy", "name": "Melody Macy", "avatar": "AvatarFemale05", "type": "photo" },
+    { "slug": "matthew-johnson", "name": "Matthew Johnson", "avatar": "AvatarAbstract02", "type": "photo" },
+    { "slug": "michael-brown", "name": "Michael Brown", "avatar": null, "type": "initials", "initial": "M", "color": "#71dd8c" },
+    { "slug": "natali-craig", "name": "Natali Craig", "avatar": "AvatarFemale06", "type": "photo" },
+    { "slug": "orlando-diggs", "name": "Orlando Diggs", "avatar": "AvatarMale03", "type": "photo" },
+    { "slug": "olivia-johnson", "name": "Olivia Johnson", "avatar": "Avatar3d02", "type": "photo" }
+  ]
+}

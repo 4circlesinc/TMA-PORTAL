@@ -1,0 +1,115 @@
+{
+  "slug": "global-search",
+  "nodeId": "32260:171686",
+  "guidanceNodeId": "32260:171686",
+  "name": "Global Search",
+  "description": "Global search interactive guidance — SearchPopup over Overview dashboard with recent, results, and no-results states.",
+  "cssPath": "public/css/global-search.css",
+  "jsPath": "public/js/global-search.js",
+  "defaultVariant": "live",
+  "variants": {
+    "default": { "popupState": "initial" },
+    "results": { "popupState": "results" },
+    "empty": { "popupState": "empty" },
+    "live": { "interactive": true }
+  },
+  "recentSearches": [
+    { "type": "query", "label": "Landing page design" },
+    { "type": "user", "label": "ByeWind", "avatar": "AvatarByewind", "selected": true }
+  ],
+  "recentlyVisited": [
+    { "type": "page", "label": "Overview" }
+  ],
+  "contacts": [
+    { "label": "ByeWind", "avatar": "AvatarByewind" },
+    { "label": "Emma Smith", "avatar": "Avatar3d04" },
+    { "label": "Melody Macy", "avatar": "AvatarFemale05" }
+  ],
+  "resultItems": [
+    { "type": "user", "label": "ByeWind", "avatar": "AvatarByewind" },
+    { "type": "user", "label": "ByeWind", "match": "Wind", "enterHint": true, "selected": true },
+    { "type": "page", "title": "Overview", "subtitle": "I'm ByeWind, a Product UX/UI Designer, based in China. ", "match": "Wind" },
+    { "type": "page", "label": "ByeWind's profile", "match": "Wind" },
+    { "type": "page", "label": "Farewell to Wind", "match": "Wind" },
+    { "type": "page", "label": "https://twitter.com/FarewelltoWind", "match": "Wind" }
+  ],
+  "searchIndex": [
+    { "type": "query", "label": "Landing page design", "keywords": ["landing", "page", "design"] },
+    { "type": "user", "label": "ByeWind", "avatar": "AvatarByewind", "keywords": ["byewind", "bye", "wind"], "href": "#user-byewind" },
+    { "type": "page", "label": "Overview", "keywords": ["overview", "dashboard"], "href": "#overview" },
+    { "type": "page", "title": "Overview", "subtitle": "I'm ByeWind, a Product UX/UI Designer, based in China.", "keywords": ["byewind", "wind", "overview", "designer"], "href": "#overview" },
+    { "type": "page", "label": "ByeWind's profile", "keywords": ["byewind", "wind", "profile"], "href": "#profile-byewind" },
+    { "type": "page", "label": "Farewell to Wind", "keywords": ["farewell", "wind"], "href": "#farewell-wind" },
+    { "type": "page", "label": "https://twitter.com/FarewelltoWind", "keywords": ["twitter", "farewell", "wind"], "href": "https://twitter.com/FarewelltoWind" },
+    { "type": "user", "label": "Emma Smith", "avatar": "Avatar3d04", "keywords": ["emma", "smith"], "href": "#user-emma" },
+    { "type": "user", "label": "Melody Macy", "avatar": "AvatarFemale05", "keywords": ["melody", "macy"], "href": "#user-melody" },
+    { "type": "user", "label": "Natali Craig", "avatar": "AvatarFemale06", "keywords": ["natali", "craig"], "href": "#user-natali" },
+    { "type": "user", "label": "Drew Cano", "avatar": "AvatarMale01", "keywords": ["drew", "cano"], "href": "#user-drew" }
+  ],
+  "rules": [
+    "Click outside the search pop-up or press the ESC key to close the SearchPopup.",
+    "The first search result is selected by default.",
+    "Hit the Enter key to enter the search results.",
+    "Search results are generated as you type, and the search results will include auto-completed results.",
+    "The search results will be opened in the current page, and hold down the ⌘ key to open in a new tab of the browser."
+  ],
+  "iconSources": {
+    "Search": "images/icons/tma/Search.svg",
+    "Search16": "images/icons/tma/Search-16.svg",
+    "XCircle": "images/icons/tma/Xcircle.svg",
+    "Xcircle": "images/icons/tma/Xcircle.svg",
+    "Loading": "images/icons/tma/Loading.svg",
+    "Loading16": "images/icons/tma/Loading-16.svg",
+    "Goto": "images/icons/tma/Goto.svg",
+    "User": "images/icons/phosphor/User.svg",
+    "FileText": "images/icons/phosphor/FileText.svg",
+    "BugBeetle": "images/icons/phosphor/BugBeetle.svg",
+    "Broadcast": "images/icons/phosphor/Broadcast.svg",
+    "ArrowRise": "images/icons/tma/ArrowRise.svg",
+    "ArrowFall": "images/icons/tma/ArrowFall.svg",
+    "DonutChart": "images/charts/DonutChart-01.svg",
+    "ChartMotion": "images/charts/ChartMotion-01.svg",
+    "DefaultIcon": "icons/tma/DefaultIcon.svg",
+    "ChartPie": "icons/phosphor/ChartPie.svg",
+    "Storefront": "icons/phosphor/Storefront.svg",
+    "Folder": "icons/phosphor/Folder.svg",
+    "SidebarSimple": "icons/phosphor/SidebarSimple.svg",
+    "SquaresFour": "icons/phosphor/SquaresFour.svg",
+    "Sun": "icons/phosphor/Sun.svg",
+    "Bell": "icons/phosphor/Bell.svg",
+    "ClockCounterClockwise": "icons/phosphor/ClockCounterClockwise.svg"
+  },
+  "tokens": {
+    "heroTitleSize": 64,
+    "heroTitleLineHeight": 72,
+    "heroTitleWeight": 600,
+    "heroSubtitleSize": 48,
+    "heroSubtitleLineHeight": 56,
+    "sectionTitleSize": 48,
+    "sectionTitleLineHeight": 56,
+    "designNoteSize": 18,
+    "designNoteLineHeight": 28,
+    "popupCompactWidth": 480,
+    "popupLargeWidth": 600,
+    "popupCompactRadius": 24,
+    "popupLargeRadius": 32,
+    "popupBackground": "rgba(255, 255, 255, 0.9)",
+    "popupGlassBackground": "rgba(255, 255, 255, 0.8)",
+    "popupShadow": "0 8px 28px rgba(0, 0, 0, 0.1)",
+    "highlightColor": "#03a5e9",
+    "searchPopupNodeId": "33257:43316",
+    "bodySize": 14,
+    "bodyLineHeight": 20,
+    "labelColor": "rgba(0, 0, 0, 0.4)",
+    "placeholderColor": "rgba(0, 0, 0, 0.2)",
+    "rowHoverBackground": "rgba(0, 0, 0, 0.04)",
+    "sceneWidth": 1440,
+    "sceneHeight": 1024
+  },
+  "items": [
+    { "nodeId": "32260:171686", "variant": "default" },
+    { "nodeId": "32260:171686", "variant": "results" },
+    { "nodeId": "32260:171686", "variant": "empty" },
+    { "nodeId": "32260:171686", "variant": "live" }
+  ]
+}

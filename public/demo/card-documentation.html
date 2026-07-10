@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Card documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/card.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+  </style>
+</head>
+<body>
+  <article class="tma-card-doc" data-node-id="32267:8033">
+    <header class="tma-card-doc__hero" data-node-id="32267:8034">
+      <h1 class="tma-card-doc__title" data-node-id="32267:8035">Card</h1>
+      <div class="tma-card-doc__intro" data-node-id="32267:8036">
+        <p>The Card component makes it easier to design cards.</p>
+      </div>
+    </header>
+
+    <section class="tma-card-doc__section" data-node-id="32267:8037">
+      <h2 class="tma-card-doc__section-title" data-node-id="32267:8038">Features</h2>
+      <ul class="tma-card-doc__list" data-node-id="32267:8039">
+        <li>Count: The number of rows of content, you can add more rows in the component.</li>
+        <li>State: Default, Hover, Selected, No interaction.</li>
+      </ul>
+    </section>
+
+    <section class="tma-card-doc__section" data-node-id="32267:8040">
+      <h2 class="tma-card-doc__section-title" data-node-id="32267:8041">Correlation</h2>
+      <p class="tma-card-doc__body" data-node-id="32267:8042">Instances inside the Card can be replaced with any instance except itself.</p>
+    </section>
+
+    <section class="tma-card-doc__section" data-node-id="32267:8043">
+      <h2 class="tma-card-doc__section-title" data-node-id="32267:8044">Examples</h2>
+
+      <p class="tma-card-doc__body" style="margin-bottom:24px;">
+        <a href="card-instances.html" style="color:#000;text-decoration:underline;">View all card instances</a>
+      </p>
+
+      <div class="tma-card-doc__example-block" data-node-id="32267:8045">
+        <p class="tma-card-doc__example-label" data-node-id="32267:8046">Use Card to make a project progress card.</p>
+        <div id="example-progress"></div>
+      </div>
+
+      <div class="tma-card-doc__example-block" data-node-id="32267:8048">
+        <p class="tma-card-doc__example-label" data-node-id="32267:8049">Use Card to make a credit card.</p>
+        <div id="example-credit"></div>
+      </div>
+    </section>
+
+    <div id="doc-footer"></div>
+  </article>
+
+<script src="../js/card-icons.js"></script>
+<script src="../js/card.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script>
+const Card = window.TMACard;
+const socialSvg = window.TMATableSearchIcons.svg;
+
+document.getElementById('example-progress').innerHTML =
+  Card.renderProgressCard({ nodeId: '32267:8047' });
+
+document.getElementById('example-credit').innerHTML =
+  Card.renderCreditCard({ nodeId: '32267:8050' });
+
+Card.mountDocumentation({
+  footerEl: document.getElementById('doc-footer'),
+  socialSvg,
+});
+</script>
+</body>
+</html>

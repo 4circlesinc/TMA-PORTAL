@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Badge documentation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/badge.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f5f5f7;
+      color: #000;
+      padding: 48px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  </style>
+</head>
+<body>
+  <article class="tma-badge-doc" data-node-id="32726:1920">
+    <header class="tma-badge-doc__hero" data-node-id="32726:1921">
+      <h1 class="tma-badge-doc__title" data-node-id="32726:1922">Badge</h1>
+      <p class="tma-badge-doc__intro" data-node-id="32726:1923">Badges are used to highlight information such as notifications and new messages.</p>
+    </header>
+
+    <section class="tma-badge-doc__section" data-node-id="32726:1924">
+      <h2 class="tma-badge-doc__section-title" data-node-id="32726:1925">Features</h2>
+      <p class="tma-badge-doc__text" data-node-id="32726:1926">Type: Dot, Number.</p>
+    </section>
+
+    <section class="tma-badge-doc__section" data-node-id="32726:1927">
+      <h2 class="tma-badge-doc__section-title" data-node-id="32726:1928">Correlation</h2>
+      <div class="tma-badge-doc__text" data-node-id="32726:1929">
+        <p>Used in the Icon component.</p>
+        <p>It can also be used alone.</p>
+      </div>
+    </section>
+
+    <section class="tma-badge-doc__section" data-node-id="32726:1930">
+      <h2 class="tma-badge-doc__section-title" data-node-id="32726:1931">When to use Number and when to use dot?</h2>
+      <div class="tma-badge-doc__text" data-node-id="32726:1932">
+        <p>Number draw the user&apos;s attention more than Dot, and are more intrusive.</p>
+        <ul class="tma-badge-doc__list">
+          <li>Use Number or Dot to determine the importance of information to users. Use Number for important information.</li>
+          <li>If the frequency of notifications is high, Number are not suitable.</li>
+          <li>Judgment based on the significance of the notification to the user, such as the increase in the number of followers, it is recommended to use Number, and the new function reminder is recommended to use Dot.</li>
+          <li>It is best to allow users to choose the notification method or turn off the notification.</li>
+        </ul>
+      </div>
+      <div class="tma-badge-doc__text" data-node-id="32726:1933">
+        <p>The notification disappears after the user clicks it.</p>
+        <p>Please be cautious about the timing and method of notifications, which will have a huge impact on user experience.</p>
+      </div>
+    </section>
+
+    <section class="tma-badge-doc__examples" data-node-id="32726:1934">
+      <h2 class="tma-badge-doc__section-title" data-node-id="32726:1935">Examples</h2>
+      <div id="badge-examples"></div>
+    </section>
+
+    <div id="doc-footer"></div>
+  </article>
+
+<script src="../js/badge-icons.js"></script>
+<script src="../js/badge.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script>
+window.TMABadge.mountDocumentation({
+  examplesEl: document.getElementById('badge-examples'),
+  footerEl: document.getElementById('doc-footer'),
+  socialSvg: window.TMATableSearchIcons.svg,
+});
+</script>
+</body>
+</html>

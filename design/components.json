@@ -1,0 +1,25 @@
+{
+  "slug": "components",
+  "pageNodeId": "8300:425",
+  "boardNodeId": "33320:6937",
+  "name": "Components",
+  "description": "TMA Components catalog — full component matrix with hero panels and section links.",
+  "cssPath": "public/css/components-page.css",
+  "jsPath": "public/js/components-page.js",
+  "demoPath": "public/demo/components.html",
+  "board": {
+    "width": 6480,
+    "height": 4258,
+    "svgPath": "public/images/components/board-33320-6937.svg"
+  },
+  "heroes": {
+    "components": { "nodeId": "33320:7286", "x": 100, "y": 100, "width": 1600, "height": 2958 },
+    "mobile": { "nodeId": "33320:7287", "x": 100, "y": 3160, "width": 1600, "height": 998 }
+  },
+  "cards": {
+    "howToUse": { "nodeId": "32218:9348", "name": "How to use components", "width": 1400, "height": 3200 },
+    "variantsAndInstances": { "nodeId": "32218:9349", "name": "Components, Variants and Instances", "width": 1200, "height": 2134 },
+    "switchLibrary": { "nodeId": "32218:9350", "name": "Switch library", "width": 800, "height": 1639 },
+    "navigationCta": { "nodeId": "32218:9351", "name": "Navigation", "width": 2336, "height": 475, "communityUrl": "https://www.figma.com/community/file/1388431032861751537" }
+  }
+}

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — Select dropdown</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/popover.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #f9f9fa;
+      color: #000;
+      min-height: 100vh;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+    .page-links {
+      text-align: center;
+      padding: 16px;
+      font-size: 13px;
+    }
+    .page-links a {
+      color: var(--color-primary-dark);
+      text-decoration: none;
+    }
+    .page-links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <p class="page-links">
+    <a href="popover-guidance.html">← Design guidance</a>
+  </p>
+
+  <form class="tma-popover-form" id="select-form">
+    <h1 class="tma-popover-form__title">Select dropdown</h1>
+    <p class="tma-popover-form__desc">Click a field to open the popover menu. The selected value is written to a hidden input for form submission.</p>
+
+    <div class="tma-popover-form__fields">
+      <div id="field-project"></div>
+      <div id="field-priority"></div>
+    </div>
+
+    <div class="tma-popover-form__actions">
+      <button type="submit" class="tma-popover-form__submit">Submit</button>
+      <button type="reset" class="tma-popover-form__reset">Reset</button>
+    </div>
+
+    <pre class="tma-popover-form__output" id="form-output">Submit the form to see values here.</pre>
+  </form>
+
+<script src="../js/table-search-icons.js"></script>
+<script src="../js/popover-icons.js"></script>
+<script src="../js/popover.js"></script>
+<script>
+const PO = window.TMAPopover;
+
+const fields = {
+  project: PO.attachSelectField(document.getElementById('field-project'), {
+    label: 'Project',
+    name: 'project',
+    placeholder: 'Select a project',
+    options: ['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5', 'Option 6', 'Option 7', 'Option 8'],
+  }),
+  priority: PO.attachSelectField(document.getElementById('field-priority'), {
+    label: 'Priority',
+    name: 'priority',
+    placeholder: 'Select priority',
+    options: ['Low', 'Medium', 'High', 'Urgent'],
+  }),
+};
+
+document.getElementById('select-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const data = {
+    project: document.querySelector('[name="project"]')?.value || '',
+    priority: document.querySelector('[name="priority"]')?.value || '',
+  };
+  document.getElementById('form-output').textContent = JSON.stringify(data, null, 2);
+});
+
+document.getElementById('select-form').addEventListener('reset', () => {
+  setTimeout(() => {
+    fields.project.select('');
+    fields.priority.select('');
+    document.getElementById('form-output').textContent = 'Submit the form to see values here.';
+  }, 0);
+});
+</script>
+</body>
+</html>

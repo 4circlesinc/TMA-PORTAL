@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM ANTOINE Advisory — DatePicker guidance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/date-picker.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: #fff;
+      color: #000;
+      padding: 80px;
+      font-feature-settings: "ss01" 1, "cv01" 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="tma-date-picker-guidance-page" data-node-id="33304:16630">
+    <header class="tma-date-picker-guidance-page__hero">
+      <h1 class="tma-date-picker-guidance-page__hero-title">DatePicker</h1>
+      <p class="tma-date-picker-guidance-page__hero-subtitle">Interactive guidance</p>
+    </header>
+
+    <a class="tma-date-picker-guidance-page__doc" href="date-picker-documentation.html">
+      <span class="tma-date-picker-guidance-page__doc-icon" id="doc-goto-icon" aria-hidden="true"></span>
+      <span>Component documentation</span>
+    </a>
+
+    <div id="guidance-sections"></div>
+  </div>
+
+<script src="../js/date-picker-icons.js"></script>
+<script src="../js/table-search-icons.js"></script>
+<script src="../js/date-picker.js"></script>
+<script src="../js/date-picker-guidance.js"></script>
+<script>
+document.getElementById('doc-goto-icon').innerHTML =
+  window.TMADatePickerIcons.svg('Goto20', '', 20, 20);
+window.TMADatePickerGuidance.mountGuidance(document.getElementById('guidance-sections'));
+</script>
+</body>
+</html>

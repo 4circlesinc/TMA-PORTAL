@@ -1,0 +1,421 @@
+{
+  "set": "tma",
+  "count": 83,
+  "items": [
+    {
+      "nodeId": "32730:413849",
+      "name": "RoundAlt",
+      "slug": "RoundAlt"
+    },
+    {
+      "nodeId": "32730:413850",
+      "name": "Round",
+      "slug": "Round"
+    },
+    {
+      "nodeId": "32730:413851",
+      "name": "DocxIcon",
+      "slug": "DocxIcon"
+    },
+    {
+      "nodeId": "32730:413852",
+      "name": "XlsxIcon",
+      "slug": "XlsxIcon"
+    },
+    {
+      "nodeId": "32730:413853",
+      "name": "TxtIcon",
+      "slug": "TxtIcon"
+    },
+    {
+      "nodeId": "32730:413854",
+      "name": "FormIcon",
+      "slug": "FormIcon"
+    },
+    {
+      "nodeId": "32730:413855",
+      "name": "PptIcon",
+      "slug": "PptIcon"
+    },
+    {
+      "nodeId": "32730:413856",
+      "name": "OnenoteIcon",
+      "slug": "OnenoteIcon"
+    },
+    {
+      "nodeId": "32730:413857",
+      "name": "SearchIcon",
+      "slug": "SearchIcon"
+    },
+    {
+      "nodeId": "32730:413858",
+      "name": "Notepad",
+      "slug": "Notepad"
+    },
+    {
+      "nodeId": "32730:413859",
+      "name": "SnowIcon",
+      "slug": "SnowIcon"
+    },
+    {
+      "nodeId": "32730:413860",
+      "name": "DefaultIcon",
+      "slug": "DefaultIcon"
+    },
+    {
+      "nodeId": "32730:413861",
+      "name": "SwitchPoint",
+      "slug": "SwitchPoint"
+    },
+    {
+      "nodeId": "32730:413862",
+      "name": "Selected",
+      "slug": "Selected"
+    },
+    {
+      "nodeId": "32730:413863",
+      "name": "Line",
+      "slug": "Line"
+    },
+    {
+      "nodeId": "32730:413864",
+      "name": "AI",
+      "slug": "AI"
+    },
+    {
+      "nodeId": "32730:413865",
+      "name": "StarFour",
+      "slug": "StarFour"
+    },
+    {
+      "nodeId": "32730:413866",
+      "name": "TextA",
+      "slug": "TextA"
+    },
+    {
+      "nodeId": "32730:413867",
+      "name": "Add",
+      "slug": "Add"
+    },
+    {
+      "nodeId": "32730:413868",
+      "name": "HorizontalScreen",
+      "slug": "HorizontalScreen"
+    },
+    {
+      "nodeId": "32730:413869",
+      "name": "VerticalScreen",
+      "slug": "VerticalScreen"
+    },
+    {
+      "nodeId": "32730:413870",
+      "name": "Blank",
+      "slug": "Blank"
+    },
+    {
+      "nodeId": "32730:413871",
+      "name": "PayWave",
+      "slug": "PayWave"
+    },
+    {
+      "nodeId": "32730:413872",
+      "name": "Chip",
+      "slug": "Chip"
+    },
+    {
+      "nodeId": "32730:413873",
+      "name": "ArrowsDown",
+      "slug": "ArrowsDown"
+    },
+    {
+      "nodeId": "32730:413874",
+      "name": "ArrowsUp",
+      "slug": "ArrowsUp"
+    },
+    {
+      "nodeId": "32730:413875",
+      "name": "ArrowsDownUp",
+      "slug": "ArrowsDownUp"
+    },
+    {
+      "nodeId": "32730:413876",
+      "name": "ArrowLineUpDown",
+      "slug": "ArrowLineUpDown"
+    },
+    {
+      "nodeId": "32730:413877",
+      "name": "ArrowRight",
+      "slug": "ArrowRight"
+    },
+    {
+      "nodeId": "32730:413878",
+      "name": "ArrowRise",
+      "slug": "ArrowRise"
+    },
+    {
+      "nodeId": "32730:413879",
+      "name": "ArrowFall",
+      "slug": "ArrowFall"
+    },
+    {
+      "nodeId": "32730:413880",
+      "name": "Minimize",
+      "slug": "Minimize"
+    },
+    {
+      "nodeId": "32730:413881",
+      "name": "Maximize",
+      "slug": "Maximize"
+    },
+    {
+      "nodeId": "32730:413882",
+      "name": "Windowed",
+      "slug": "Windowed"
+    },
+    {
+      "nodeId": "32730:413883",
+      "name": "Close",
+      "slug": "Close"
+    },
+    {
+      "nodeId": "32730:413884",
+      "name": "Search",
+      "slug": "Search"
+    },
+    {
+      "nodeId": "32730:413885",
+      "name": "Goto",
+      "slug": "Goto"
+    },
+    {
+      "nodeId": "32730:413886",
+      "name": "Help",
+      "slug": "Help"
+    },
+    {
+      "nodeId": "32730:413887",
+      "name": "RoundedCorner",
+      "slug": "RoundedCorner"
+    },
+    {
+      "nodeId": "32730:413888",
+      "name": "Explain",
+      "slug": "Explain"
+    },
+    {
+      "nodeId": "32730:413889",
+      "name": "ThreeDots",
+      "slug": "ThreeDots"
+    },
+    {
+      "nodeId": "32730:413890",
+      "name": "Variables",
+      "slug": "Variables"
+    },
+    {
+      "nodeId": "32730:413891",
+      "name": "FourPointedStar",
+      "slug": "FourPointedStar"
+    },
+    {
+      "nodeId": "32730:413892",
+      "name": "StopAlt",
+      "slug": "StopAlt"
+    },
+    {
+      "nodeId": "32730:413893",
+      "name": "Rightbar",
+      "slug": "Rightbar"
+    },
+    {
+      "nodeId": "32730:413894",
+      "name": "RightbarMode",
+      "slug": "RightbarMode"
+    },
+    {
+      "nodeId": "32730:413895",
+      "name": "Badge",
+      "slug": "Badge"
+    },
+    {
+      "nodeId": "32730:413896",
+      "name": "ChatDashed",
+      "slug": "ChatDashed"
+    },
+    {
+      "nodeId": "32730:413897",
+      "name": "Rating",
+      "slug": "Rating"
+    },
+    {
+      "nodeId": "32730:413898",
+      "name": "StopSecondary",
+      "slug": "StopSecondary"
+    },
+    {
+      "nodeId": "32730:413899",
+      "name": "ImageLoading",
+      "slug": "ImageLoading"
+    },
+    {
+      "nodeId": "32730:413900",
+      "name": "Repost",
+      "slug": "Repost"
+    },
+    {
+      "nodeId": "32730:413901",
+      "name": "Typing",
+      "slug": "Typing"
+    },
+    {
+      "nodeId": "32730:413902",
+      "name": "Switch",
+      "slug": "Switch"
+    },
+    {
+      "nodeId": "32730:413903",
+      "name": "Checkbox",
+      "slug": "Checkbox"
+    },
+    {
+      "nodeId": "32730:413904",
+      "name": "Checkbox",
+      "slug": "Checkbox_2"
+    },
+    {
+      "nodeId": "32730:413905",
+      "name": "RadioAlt",
+      "slug": "RadioAlt"
+    },
+    {
+      "nodeId": "32730:413906",
+      "name": "Radio",
+      "slug": "Radio"
+    },
+    {
+      "nodeId": "32730:413907",
+      "name": "Loading",
+      "slug": "Loading"
+    },
+    {
+      "nodeId": "32730:413908",
+      "name": "Loading",
+      "slug": "Loading_2"
+    },
+    {
+      "nodeId": "32730:413909",
+      "name": "Loading",
+      "slug": "Loading_3"
+    },
+    {
+      "nodeId": "32730:413910",
+      "name": "Clipboard",
+      "slug": "Clipboard"
+    },
+    {
+      "nodeId": "32730:413911",
+      "name": "Copy",
+      "slug": "Copy"
+    },
+    {
+      "nodeId": "32730:413912",
+      "name": "Xcircle",
+      "slug": "Xcircle"
+    },
+    {
+      "nodeId": "32730:413913",
+      "name": "FourLeafClover",
+      "slug": "FourLeafClover"
+    },
+    {
+      "nodeId": "32730:413914",
+      "name": "Stars",
+      "slug": "Stars"
+    },
+    {
+      "nodeId": "32730:413915",
+      "name": "Dot",
+      "slug": "Dot"
+    },
+    {
+      "nodeId": "32730:413916",
+      "name": "Dot",
+      "slug": "Dot_2"
+    },
+    {
+      "nodeId": "32730:413917",
+      "name": "Dot",
+      "slug": "Dot_3"
+    },
+    {
+      "nodeId": "32730:413918",
+      "name": "Dot",
+      "slug": "Dot_4"
+    },
+    {
+      "nodeId": "32730:413919",
+      "name": "IconSet",
+      "slug": "IconSet"
+    },
+    {
+      "nodeId": "32730:413920",
+      "name": "ArrowLineUp",
+      "slug": "ArrowLineUp"
+    },
+    {
+      "nodeId": "32730:413921",
+      "name": "ArrowLineDown",
+      "slug": "ArrowLineDown"
+    },
+    {
+      "nodeId": "32730:413922",
+      "name": "ArrowLineRight",
+      "slug": "ArrowLineRight"
+    },
+    {
+      "nodeId": "32730:413923",
+      "name": "ArrowLineLeft",
+      "slug": "ArrowLineLeft"
+    },
+    {
+      "nodeId": "32730:413924",
+      "name": "IconSize",
+      "slug": "IconSize"
+    },
+    {
+      "nodeId": "32730:413925",
+      "name": "IconSize",
+      "slug": "IconSize_2"
+    },
+    {
+      "nodeId": "32730:413926",
+      "name": "IconSize",
+      "slug": "IconSize_3"
+    },
+    {
+      "nodeId": "32730:413927",
+      "name": "IconSize",
+      "slug": "IconSize_4"
+    },
+    {
+      "nodeId": "32730:413928",
+      "name": "IconSize",
+      "slug": "IconSize_5"
+    },
+    {
+      "nodeId": "32730:413929",
+      "name": "IconSize",
+      "slug": "IconSize_6"
+    },
+    {
+      "nodeId": "32730:413930",
+      "name": "IconSize",
+      "slug": "IconSize_7"
+    },
+    {
+      "nodeId": "32730:413931",
+      "name": "IconSize",
+      "slug": "IconSize_8"
+    }
+  ]
+}
