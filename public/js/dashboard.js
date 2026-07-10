@@ -65,8 +65,30 @@
       return { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' };
     }
 
+    function siteRoot() {
+      return window.__TMA_SITE_ROOT || '';
+    }
+
+    function appUrl(path) {
+      var p = String(path == null ? '/' : path);
+      if (!p || p === '/') return siteRoot() || '/';
+      if (p.charAt(0) !== '/') p = '/' + p;
+      return siteRoot() + p;
+    }
+
+    function prefixRootAnchors() {
+      var root = siteRoot();
+      if (!root) return;
+      Array.prototype.slice.call(document.querySelectorAll('a[href^="/"]')).forEach(function (a) {
+        var href = a.getAttribute('href');
+        if (href && href.indexOf(root) !== 0) a.setAttribute('href', root + href);
+      });
+    }
+
     function normalizePath(path) {
       var p = String(path || '').replace(/\/index\.html$/i, '');
+      var root = siteRoot();
+      if (root && p.indexOf(root) === 0) p = p.slice(root.length) || '/';
       if (p.length > 1 && p.charAt(p.length - 1) === '/') p = p.slice(0, -1);
       return p || '/';
     }
@@ -344,7 +366,7 @@
           contactId: opts.contactId,
         },
         '',
-        next
+        appUrl(next)
       );
     }
 
@@ -422,7 +444,7 @@
         var logo = document.createElement('a');
         logo.className = 'tma-dash__header-logo';
         logo.setAttribute('data-header-logo', '');
-        logo.href = window.TMA_CLASSIC ? '/classic' : '/';
+        logo.href = appUrl(window.TMA_CLASSIC ? '/classic' : '/');
         logo.setAttribute('aria-label', 'TM ANTOINE Advisory home');
         logo.innerHTML =
           '<span class="tma-dash__logo-expanded">' +
@@ -2030,6 +2052,7 @@
     } else {
       activate(savedNav, { keepDrawer: true, skipExpand: true, skipUrl: true });
     }
+    prefixRootAnchors();
     root._activate = activate;
     root._updatePageMeta = function (meta) {
       meta = meta || {};
