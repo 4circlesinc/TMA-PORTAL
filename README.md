@@ -2,6 +2,37 @@
 
 tma-portal — TM ANTOINE Advisory application based on the [Portal Design](https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design) Figma file.
 
+## Stack
+
+- **Laravel 13** (PHP 8.3+)
+- **Blade** components in `resources/views/components/`
+- **Support classes** in `app/Support/`
+- Static assets in `public/`
+
+## Local setup
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan serve
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+## Deploy to Laravel Cloud
+
+1. Push this repo to GitHub, GitLab, or Bitbucket.
+2. Create a new application at [cloud.laravel.com](https://cloud.laravel.com).
+3. Connect the repository — Laravel Cloud auto-detects Laravel.
+4. Set environment variables (minimum):
+   - `APP_KEY` — run `php artisan key:generate --show` locally and paste the value
+   - `APP_ENV=production`
+   - `APP_DEBUG=false`
+5. **Build command:** `composer install --no-dev --optimize-autoloader`
+6. **Deploy command:** `php artisan migrate --force` (optional until you add migrations)
+7. Deploy.
+
 ## Figma connection
 
 Design reference is stored in `design/`:
@@ -25,9 +56,11 @@ Connected via Figma MCP as **Vernon Francis** (`igraphixmarketingco@gmail.com`).
 - Primary font: **Inter**
 - Dark UI with gradient headings and backdrop blur effects
 
-## Next steps
+## Project structure
 
-1. Scaffold Laravel (`composer create-project laravel/laravel .`)
-2. Add Inter font and CSS variables from `design/tokens.json`
-3. Pick a screen from `design/screens.json` and implement via Figma MCP `get_design_context`
-4. Export illustrations to `public/images/illustrations/` using MCP `download_assets`
+```
+app/Support/          # PHP helpers (Charts, Avatars, Cursors, etc.)
+resources/views/      # Blade components and pages
+public/               # CSS, JS, images, and legacy static HTML pages
+design/               # Figma tokens and design metadata
+```

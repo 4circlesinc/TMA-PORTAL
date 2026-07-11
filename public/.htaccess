@@ -1,31 +1,25 @@
-# tma-portal — Apache rewrites for clean URLs and dashboard route reloads.
-# Document root should point at this public/ directory.
-
 <IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
     RewriteEngine On
-    RewriteBase /
 
-    # Avoid extensionless path conflicts (e.g. /overview matching overview.*)
-    Options -MultiViews
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-    # Serve real files (css, js, images, demo/*.html, etc.)
-    RewriteCond %{REQUEST_FILENAME} -f
-    RewriteRule ^ - [L]
+    # Handle X-XSRF-Token Header
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
-    # Only serve directories that have their own index.html (not /email/, /css/, etc.)
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI}/index.html -f
-    RewriteRule ^ - [L]
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
 
-    # Map extensionless paths to nested index.html (e.g. /sign-in, /settings/change-email)
-    RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI}/index.html -f
-    RewriteRule ^(.+?)/?$ $1/index.html [L]
-
-    # Dashboard client-side routes (/overview, /clients/new, /email, etc.)
-    RewriteRule ^ index.html [L]
+    # Send Requests To Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
 </IfModule>
-
-DirectoryIndex index.html
-
-# Prevent directory listings when index.html is missing
-Options -Indexes
