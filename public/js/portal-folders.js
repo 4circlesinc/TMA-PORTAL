@@ -318,7 +318,7 @@
     menu.setAttribute('role', 'menu');
     menu.innerHTML = FILE_CONTEXT_MENU.map(function (label, i) {
       return '<button type="button" class="tma-portal-context-menu__item" role="menuitem" data-ctx-index="' + i + '">' +
-        ui().esc(label) + '</button>';
+        '<span class="tma-portal-context-menu__label">' + ui().esc(label) + '</span></button>';
     }).join('');
     document.body.appendChild(menu);
     contextMenuEl = menu;

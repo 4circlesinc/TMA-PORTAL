@@ -287,12 +287,15 @@
     el.innerHTML =
       '<div class="tma-portal-page" data-node-id="portal-home">' +
       '<div class="tma-portal-hello">' +
+      '<div class="tma-portal-hello__main">' +
       '<img class="tma-portal-hello__avatar" src="images/avatars/AvatarByewind.png" alt="">' +
+      '<div class="tma-portal-hello__copy">' +
       '<h2 class="tma-portal-hello__title">Hello ' + ui().esc(s.user.firstName) + '</h2>' +
-      '<button type="button" class="tma-portal-link" data-home-add-picture>Add profile picture</button>' +
-      '<span class="tma-portal-hello__spacer"></span>' +
-      ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', attrs: 'data-home-edit' }) +
-      '</div>' +
+      '<button type="button" class="tma-portal-link tma-portal-hello__picture-link" data-home-add-picture>Add profile picture</button>' +
+      '</div></div>' +
+      '<div class="tma-portal-hello__actions">' +
+      ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
+      '</div></div>' +
       renderKpis(s) +
       ((show.recentFiles || show.shortcuts || show.favorites || show.tutorials)
         ? '<div class="tma-portal-home-grid">' +

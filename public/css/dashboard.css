@@ -751,8 +751,8 @@
 }
 
 .tma-dash__head-dropdown-caret {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   flex-shrink: 0;
   opacity: 0.55;
   transition: transform var(--transition-fast);
@@ -780,7 +780,8 @@
 .tma-dash__clients-action-menu,
 .tma-dash__head-dropdown-menu {
   z-index: 40;
-  min-width: 200px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .tma-dash__clients-action-menu--start,
@@ -898,6 +899,7 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: 30;
+  width: max-content;
   min-width: 160px;
   display: flex;
   flex-direction: column;
@@ -913,14 +915,16 @@
   appearance: none;
   border: 0;
   background: transparent;
-  font-family: inherit;
+  font: 400 var(--text-size-14) / var(--text-lh-14) var(--font-family, inherit);
   text-align: left;
-  font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
   color: var(--color-text-primary);
-  padding: var(--space-8);
+  padding: var(--space-8) var(--space-12);
   border-radius: var(--radius-8);
   cursor: pointer;
+  white-space: nowrap;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 .tma-dash__menu-item:hover { background: var(--color-hover); }
 .tma-dash__menu-item--active { background: var(--color-hover); font-weight: var(--font-weight-semibold); }
@@ -11806,8 +11810,8 @@
 }
 
 .tma-dash__email-compose-tool-caret {
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   opacity: 0.6;
 }
 
@@ -15218,10 +15222,16 @@
   width: auto;
   flex-shrink: 0;
   white-space: nowrap;
-  padding-inline: var(--space-16);
-  font-size: var(--text-size-14);
-  line-height: 20px;
-  border-radius: var(--radius-16);
+  min-height: 28px;
+  padding: var(--space-4) var(--space-12);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  border-radius: var(--radius-12);
+}
+
+.tma-dash__calendar-toolbar .tma-dash__clients-add-btn--toolbar img {
+  width: 12px;
+  height: 12px;
 }
 
 .tma-dash__calendar-layout {
@@ -18248,9 +18258,12 @@
   font-family: inherit;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
+  font-weight: 400;
   color: var(--color-text-primary);
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .tma-dash__settings-plugin-dropdown-item:hover {

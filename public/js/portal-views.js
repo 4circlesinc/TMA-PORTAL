@@ -53,7 +53,7 @@
       : '';
     return '<button type="button" class="' + cls + '"' + (o.attrs || '') + (o.disabled ? ' disabled' : '') + '>' +
       iconHtml + '<span>' + esc(o.label) + '</span>' +
-      (o.caret ? '<img class="tma-no-data__btn-icon tma-portal-btn__caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" width="16" height="16">' : '') +
+      (o.caret ? '<img class="tma-no-data__btn-icon tma-portal-btn__caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10">' : '') +
       '</button>';
   }
 
@@ -232,9 +232,11 @@
     modalHost.innerHTML =
       '<div class="tma-portal-modal__backdrop" data-portal-modal-close></div>' +
       '<div class="tma-dash__settings-change-card tma-portal-modal__card" role="dialog" aria-modal="true" aria-label="' + esc(o.title || 'Dialog') + '">' +
+      '<div class="tma-portal-modal__head">' +
+      (o.title ? '<h2 class="tma-portal-modal__title">' + esc(o.title) + '</h2>' : '<span class="tma-portal-modal__title" aria-hidden="true"></span>') +
       '<button type="button" class="tma-dash__settings-change-close" data-portal-modal-close aria-label="Close">' +
       '<img src="' + ICON + 'X.svg" alt=""></button>' +
-      (o.title ? '<h2 class="tma-portal-modal__title">' + esc(o.title) + '</h2>' : '') +
+      '</div>' +
       '<div class="tma-portal-modal__body">' + (o.body || '') + '</div>' +
       '</div>';
     document.body.appendChild(modalHost);
@@ -290,7 +292,7 @@
       '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap' + wrapAttr + '>' +
       '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--' + variant + '" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
       esc(o.label || '') +
-      '<img class="tma-dash__head-dropdown-caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" aria-hidden="true">' +
+      '<img class="tma-dash__head-dropdown-caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10" aria-hidden="true">' +
       '</button>' +
       '<div class="tma-dash__menu tma-dash__head-dropdown-menu' + align + '" data-head-dropdown-menu hidden role="menu" aria-label="' + esc(o.menuLabel || o.label || 'Menu') + '">' +
       items +
@@ -332,15 +334,20 @@
       menu.className = 'tma-portal-menu-pop';
       menu.setAttribute('role', 'menu');
       menu.innerHTML = items.map(function (it, i) {
-        return '<button type="button" class="tma-portal-menu-pop__item" role="menuitem" data-menu-index="' + i + '"' + (it.disabled ? ' disabled' : '') + '>' + esc(it.label) + '</button>';
+        return '<button type="button" class="tma-portal-menu-pop__item" role="menuitem" data-menu-index="' + i + '"' + (it.disabled ? ' disabled' : '') + '><span class="tma-portal-menu-pop__label">' + esc(it.label) + '</span></button>';
       }).join('');
       document.body.appendChild(menu);
       var r = trigger.getBoundingClientRect();
       menu.style.position = 'fixed';
       menu.style.zIndex = '260';
-      var left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8));
+      menu.style.visibility = 'hidden';
+      menu.style.left = '0';
+      menu.style.top = '0';
+      var menuWidth = menu.offsetWidth;
+      var left = Math.max(8, Math.min(r.left, window.innerWidth - menuWidth - 8));
       menu.style.top = (r.bottom + 4) + 'px';
       menu.style.left = left + 'px';
+      menu.style.visibility = '';
       function dismiss() {
         menu.remove();
         document.removeEventListener('click', dismiss);
