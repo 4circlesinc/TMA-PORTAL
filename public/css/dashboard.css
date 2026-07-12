@@ -17517,9 +17517,100 @@
   transition: background 0.15s ease;
 }
 
+button.tma-dash__header-popup-item {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread):not(.tma-dash__header-popup-item--active):not(:hover) {
+  background: transparent;
+}
+
+button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread,
+button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
+button.tma-dash__header-popup-item:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+button.tma-dash__header-popup-item:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.12);
+  outline-offset: 2px;
+}
+
+.tma-dash__header-popup-item--unread,
 .tma-dash__header-popup-item--active,
 .tma-dash__header-popup-item:hover {
   background: rgba(255, 255, 255, 0.28);
+}
+
+.tma-dash__header-popup--notifications {
+  gap: var(--space-8);
+}
+
+.tma-dash__header-popup--notifications .tma-dash__header-popup-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tma-dash__header-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: 0 var(--space-4);
+}
+
+.tma-dash__header-popup-head .tma-dash__header-popup-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-8) 0;
+}
+
+.tma-dash__header-popup-action {
+  margin: 0;
+  padding: var(--space-8) var(--space-4);
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.tma-dash__header-popup-action:hover:not(:disabled) {
+  color: var(--color-black);
+}
+
+.tma-dash__header-popup-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tma-dash__header-popup-foot {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4) 0 0;
+}
+
+.tma-dash__header-popup-action--footer {
+  width: 100%;
+  text-align: center;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
 }
 
 .tma-dash__header-popup-icon {
@@ -17620,11 +17711,42 @@
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+.tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread,
+.tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
+.tma-dash[data-theme="dark"] button.tma-dash__header-popup-item:hover,
+.tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread,
+.tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
+.tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread,
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--active,
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item:hover,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--active,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-action,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-action {
+  color: var(--color-text-secondary);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-action:hover:not(:disabled),
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-action:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-action--footer,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-action--footer {
+  color: var(--color-text-primary);
+}
+
+.tma-dash[data-theme="dark"] button.tma-dash__header-popup-item:focus-visible,
+.tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.2);
 }
 
 @media (max-width: 1280px) {
