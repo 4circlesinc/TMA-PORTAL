@@ -10,7 +10,8 @@
         "laravel/fortify": "^1.36",
         "laravel/framework": "^13.8",
         "laravel/socialite": "^5.28",
-        "laravel/tinker": "^3.0"
+        "laravel/tinker": "^3.0",
+        "socialiteproviders/microsoft": "^4.9"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

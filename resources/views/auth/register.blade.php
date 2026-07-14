@@ -9,6 +9,7 @@
     </button>
 
     <section class="tma-auth__stage" aria-hidden="true">
+      <img class="tma-auth__stage-mark" src="/images/brand/tma/tma-logo-mark.png" alt="" width="40" height="40">
       <img class="tma-auth__stage-art" src="/images/illustrations/Illustration28.svg" alt="" width="100" height="75">
     </section>
 
@@ -36,10 +37,10 @@
             <img src="/images/icons/brands/Google16.svg" alt="" width="16" height="16" aria-hidden="true">
             <span>Sign up with Google</span>
           </a>
-          <button type="button" class="tma-auth__social-btn" title="Coming soon">
+          <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'microsoft') }}">
             <img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16" aria-hidden="true">
             <span>Sign up with Microsoft</span>
-          </button>
+          </a>
           <button type="button" class="tma-auth__social-btn" data-show-email>
             <img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16" aria-hidden="true">
             <span>Sign up with Email</span>

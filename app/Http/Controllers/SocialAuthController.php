@@ -16,7 +16,7 @@ use Throwable;
 
 class SocialAuthController extends Controller
 {
-    private const PROVIDERS = ['google'];
+    private const PROVIDERS = ['google', 'microsoft'];
 
     public function redirect(Request $request, string $provider): RedirectResponse
     {
@@ -24,6 +24,25 @@ class SocialAuthController extends Controller
 
         if (! config("services.{$provider}.client_id")) {
             return $this->fail($request, ucfirst($provider).' sign-in is not configured yet.');
+        }
+
+        // Entra only accepts http://localhost (not 127.0.0.1) as a local
+        // callback. If the provider's callback lives on the other loopback
+        // name, hop there first so the session holding the OAuth state is
+        // the one the callback lands on.
+        $callback = (string) config("services.{$provider}.redirect");
+        $callbackHost = parse_url($callback, PHP_URL_HOST);
+        $loopbacks = ['localhost', '127.0.0.1'];
+
+        if (
+            $callbackHost
+            && $callbackHost !== $request->getHost()
+            && in_array($callbackHost, $loopbacks, true)
+            && in_array($request->getHost(), $loopbacks, true)
+        ) {
+            $port = parse_url($callback, PHP_URL_PORT);
+
+            return redirect()->away('http://'.$callbackHost.($port ? ':'.$port : '').$request->getRequestUri());
         }
 
         $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
@@ -48,7 +67,13 @@ class SocialAuthController extends Controller
             return $this->fail($request, 'Sign-in with '.ucfirst($provider)." didn't complete. Please try again.");
         }
 
-        $verified = $provider !== 'google' || (bool) ($oauth->user['email_verified'] ?? false);
+        $verified = match ($provider) {
+            // Google supplies an explicit claim; Microsoft account emails
+            // (personal MSA or Entra work accounts) are provider-verified.
+            'google' => (bool) ($oauth->user['email_verified'] ?? false),
+            'microsoft' => (bool) $oauth->getEmail(),
+            default => false,
+        };
         $intent = $request->session()->pull('social.intent', 'auth');
 
         if ($intent === 'connect' && $request->user()) {

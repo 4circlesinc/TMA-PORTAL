@@ -16,6 +16,14 @@ class EnsureAccountApproved
     {
         $user = $request->user();
 
+        if ($user && $user->status === 'suspended') {
+            auth()->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->with('social_error', 'Your account has been suspended. Contact support if you believe this is a mistake.');
+        }
+
         if ($user && ! $user->isApproved()) {
             return redirect('/auth/pending');
         }

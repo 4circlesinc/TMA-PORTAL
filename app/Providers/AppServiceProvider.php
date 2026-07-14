@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use SocialiteProviders\Manager\SocialiteWasCalled;
+use SocialiteProviders\Microsoft\MicrosoftExtendSocialite;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,5 +25,7 @@ class AppServiceProvider extends ServiceProvider
         // App\Listeners\RecordAuthEvent is picked up by Laravel's automatic
         // listener discovery - do not also register it manually, or every
         // auth event gets recorded twice.
+
+        Event::listen(SocialiteWasCalled::class, MicrosoftExtendSocialite::class);
     }
 }

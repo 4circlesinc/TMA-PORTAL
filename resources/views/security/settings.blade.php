@@ -29,10 +29,11 @@
     'recovery-codes-generated' => 'New recovery codes generated. Your old codes no longer work.',
     'other-sessions-ended' => 'Every session except this one has ended.',
     'mfa-required' => 'Your administrator requires two-factor authentication. Set it up below.',
-    'social-connected' => 'Google connected. You can now sign in with either method.',
-    'social-disconnected' => 'Google disconnected.',
+    'social-connected' => 'Sign-in method connected. You can now sign in with either method.',
+    'social-disconnected' => 'Sign-in method disconnected.',
   ];
   $googleAccount = $user->connectedAccount('google');
+  $microsoftAccount = $user->connectedAccount('microsoft');
   $status = session('status');
   $eventLabels = [
     'registered' => 'Account created',
@@ -42,8 +43,15 @@
     'login_failed' => 'Failed sign-in attempt',
     'password_reset' => 'Password reset',
     'lockout' => 'Sign-in temporarily locked',
-    'social_connected' => 'Google connected',
-    'social_disconnected' => 'Google disconnected',
+    'social_connected' => 'Sign-in method connected',
+    'social_disconnected' => 'Sign-in method disconnected',
+    'user_invited' => 'Invited to the portal',
+    'account_approved' => 'Account approved',
+    'account_suspended' => 'Account suspended',
+    'account_reactivated' => 'Account reactivated',
+    'account_updated' => 'Profile updated by admin',
+    'password_reset_link_sent' => 'Password reset link sent',
+    'password_generated' => 'Temporary password generated',
   ];
 @endphp
 <body>
@@ -177,9 +185,20 @@
               <span class="tma-security__row-ico" aria-hidden="true"><img src="/images/icons/brands/Microsoft16.svg" alt=""></span>
               <span class="tma-security__row-copy">
                 <span class="tma-security__row-name">Microsoft</span>
-                <span class="tma-security__row-sub">Coming soon</span>
+                @if ($microsoftAccount)
+                  <span class="tma-security__row-sub tma-auth__provider-status tma-auth__provider-status--on">Connected as {{ $microsoftAccount->email }}</span>
+                @else
+                  <span class="tma-security__row-sub">Not connected</span>
+                @endif
               </span>
-              <button type="button" class="tma-auth__chip-btn" disabled><span>Connect</span></button>
+              @if ($microsoftAccount)
+                <form method="POST" action="{{ route('social.disconnect', 'microsoft') }}">
+                  @csrf
+                  <button type="submit" class="tma-auth__chip-btn"><span>Disconnect</span></button>
+                </form>
+              @else
+                <a class="tma-auth__chip-btn" href="{{ route('social.redirect', 'microsoft') }}"><span>Connect</span></a>
+              @endif
             </div>
           </section>
 

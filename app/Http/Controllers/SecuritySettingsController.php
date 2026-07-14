@@ -57,10 +57,12 @@ class SecuritySettingsController extends Controller
             ]);
 
         $google = $user->connectedAccount('google');
+        $microsoft = $user->connectedAccount('microsoft');
 
         return response()->json([
             'email' => $user->email,
             'google' => ['connected' => (bool) $google, 'email' => $google?->email],
+            'microsoft' => ['connected' => (bool) $microsoft, 'email' => $microsoft?->email],
             'hasRealPassword' => ! $user->password_auto,
             'twoFactor' => $user->two_factor_confirmed_at ? 'on' : ($user->two_factor_secret ? 'pending' : 'off'),
             'twoFactorSince' => $user->two_factor_confirmed_at?->format('j M Y'),

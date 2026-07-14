@@ -834,24 +834,33 @@
 }
 
 .tma-auth__stage {
-  flex: 1 1 55%;
+  position: relative;
+  flex: 1 1 63%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-end;
   min-width: 0;
-  padding: clamp(32px, 5vw, 72px);
+  padding: clamp(24px, 4vw, 56px);
   background: color-mix(in srgb, var(--color-primary) 10%, var(--color-white));
 }
 
+.tma-auth__stage-mark {
+  position: absolute;
+  top: clamp(24px, 4vw, 56px);
+  left: clamp(24px, 4vw, 56px);
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
 .tma-auth__stage-art {
-  width: min(620px, 84%);
+  width: min(420px, 55%);
   height: auto;
-  margin-bottom: clamp(16px, 9vh, 110px);
 }
 
 .tma-auth__panel {
-  flex: 1 1 45%;
+  flex: 1 1 37%;
   display: flex;
   flex-direction: column;
   min-width: 0;

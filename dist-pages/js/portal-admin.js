@@ -538,8 +538,15 @@
     registered: { label: 'Account created', badge: '' },
     email_verified: { label: 'Email verified', badge: '' },
     password_reset: { label: 'Password reset', badge: '' },
-    social_connected: { label: 'Google connected', badge: 'tma-auth__badge--done' },
-    social_disconnected: { label: 'Google disconnected', badge: '' },
+    social_connected: { label: 'Sign-in method connected', badge: 'tma-auth__badge--done' },
+    social_disconnected: { label: 'Sign-in method disconnected', badge: '' },
+    user_invited: { label: 'Invited to the portal', badge: '' },
+    account_approved: { label: 'Account approved', badge: 'tma-auth__badge--done' },
+    account_suspended: { label: 'Account suspended', badge: 'tma-auth__badge--danger' },
+    account_reactivated: { label: 'Account reactivated', badge: 'tma-auth__badge--done' },
+    account_updated: { label: 'Profile updated by admin', badge: '' },
+    password_reset_link_sent: { label: 'Password reset link sent', badge: '' },
+    password_generated: { label: 'Temporary password generated', badge: '' },
   };
 
   function secEnsureStyles() {
@@ -601,13 +608,20 @@
             : '<span class="tma-security__row-sub">Not connected</span>') +
           '</span>' +
           (d.google && d.google.connected
-            ? '<button type="button" class="tma-auth__chip-btn" data-sec-gdisconnect><span>Disconnect</span></button>'
+            ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="google"><span>Disconnect</span></button>'
             : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect"><span>Connect</span></a>') +
           '</div>' +
           '<div class="tma-security__row">' +
           '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Microsoft16.svg" alt=""></span>' +
-          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Microsoft</span><span class="tma-security__row-sub">Not connected</span></span>' +
-          '<button type="button" class="tma-auth__chip-btn" data-sec-connect="Microsoft"><span>Connect</span></button></div></section>' +
+          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Microsoft</span>' +
+          (d.microsoft && d.microsoft.connected
+            ? '<span class="tma-security__row-sub tma-auth__provider-status tma-auth__provider-status--on">Connected as ' + esc(d.microsoft.email || '') + '</span>'
+            : '<span class="tma-security__row-sub">Not connected</span>') +
+          '</span>' +
+          (d.microsoft && d.microsoft.connected
+            ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="microsoft"><span>Disconnect</span></button>'
+            : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect"><span>Connect</span></a>') +
+          '</div></section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-phone">' +
           '<div class="tma-security__head">' +
@@ -838,15 +852,17 @@
           });
         });
 
-        /* Google disconnect */
-        var gdis = root.querySelector('[data-sec-gdisconnect]');
-        if (gdis) gdis.addEventListener('click', function () {
-          secApi('POST', '/auth/social/google/disconnect').then(function (res) {
-            return res.json().then(function (j) {
-              ui().toast((j && j.message) || (res.ok ? 'Google disconnected.' : 'Could not disconnect.'));
-              if (res.ok) refresh();
-            });
-          }).catch(function () { ui().toast('Could not disconnect.'); });
+        /* provider disconnects */
+        root.querySelectorAll('[data-sec-sdisconnect]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var prov = b.getAttribute('data-sec-sdisconnect');
+            secApi('POST', '/auth/social/' + prov + '/disconnect').then(function (res) {
+              return res.json().then(function (j) {
+                ui().toast((j && j.message) || (res.ok ? 'Disconnected.' : 'Could not disconnect.'));
+                if (res.ok) refresh();
+              });
+            }).catch(function () { ui().toast('Could not disconnect.'); });
+          });
         });
 
         /* two-factor setup flow */

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminSecurityController;
+use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\LegacyPageController;
@@ -22,6 +23,16 @@ Route::middleware(['auth', 'verified', 'account.approved', 'mfa.enforced'])->gro
 
     Route::post('/security-settings/logout-others', [SecuritySettingsController::class, 'logoutOtherDevices'])
         ->name('security-settings.logout-others');
+
+    Route::get('/admin/users', [AdminUsersController::class, 'index'])->name('admin.users');
+    Route::post('/admin/users', [AdminUsersController::class, 'store'])->name('admin.users.store');
+    Route::patch('/admin/users/{user}', [AdminUsersController::class, 'update'])->name('admin.users.update');
+    Route::get('/admin/users/{user}/activity', [AdminUsersController::class, 'activity'])->name('admin.users.activity');
+    Route::post('/admin/users/{user}/send-reset', [AdminUsersController::class, 'sendReset'])->name('admin.users.send-reset');
+    Route::post('/admin/users/{user}/generate-password', [AdminUsersController::class, 'generatePassword'])->name('admin.users.generate-password');
+    Route::post('/admin/users/{user}/approve', [AdminUsersController::class, 'approve'])->name('admin.users.approve');
+    Route::post('/admin/users/{user}/suspend', [AdminUsersController::class, 'suspend'])->name('admin.users.suspend');
+    Route::post('/admin/users/{user}/reactivate', [AdminUsersController::class, 'reactivate'])->name('admin.users.reactivate');
 
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])
         ->name('admin.security-policies');

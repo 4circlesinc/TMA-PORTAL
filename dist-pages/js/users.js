@@ -7,32 +7,81 @@
   'use strict';
 
   var ICONS = {
-    Add: '/TMA-PORTAL/images/icons/tma/Add.svg',
-    FunnelSimple: '/TMA-PORTAL/images/icons/tma/FunnelSimple-16.svg',
-    ArrowsDownUp: '/TMA-PORTAL/images/icons/tma/ArrowsDownUp.svg',
-    ArrowsDown: '/TMA-PORTAL/images/icons/tma/ArrowsDown-16.svg',
-    ArrowsUp: '/TMA-PORTAL/images/icons/tma/ArrowsUp.svg',
-    Search: '/TMA-PORTAL/images/icons/tma/Search-16.svg',
-    Close: '/TMA-PORTAL/images/icons/tma/Close-12.svg',
-    Dot: '/TMA-PORTAL/images/icons/tma/Dot-12.svg',
-    ArrowLineRight: '/TMA-PORTAL/images/icons/tma/ArrowLineRight-16.svg',
-    ArrowLineLeft: '/TMA-PORTAL/images/icons/tma/ArrowLineLeft-16.svg',
-    ArrowLineDown: '/TMA-PORTAL/images/icons/tma/ArrowLineDown-16.svg',
-    XCircle: '/TMA-PORTAL/images/icons/tma/Xcircle.svg',
-    Loading16: '/TMA-PORTAL/images/icons/tma/Loading-16.svg',
-    CalendarBlank: '/TMA-PORTAL/images/icons/phosphor/CalendarBlank.svg',
-    ListNumbers: '/TMA-PORTAL/images/icons/phosphor/ListNumbers.svg',
-    User: '/TMA-PORTAL/images/icons/phosphor/User.svg',
-    MapPin: '/TMA-PORTAL/images/icons/phosphor/MapPin.svg',
-    CirclesThreePlus: '/TMA-PORTAL/images/icons/phosphor/CirclesThreePlus.svg',
-    Broom: '/TMA-PORTAL/images/icons/phosphor/Broom.svg',
-    Plus: '/TMA-PORTAL/images/icons/phosphor/Plus.svg',
-    Line: '/TMA-PORTAL/images/icons/tma/Line-16.svg',
-    Trash: '/TMA-PORTAL/images/icons/phosphor/Trash.svg',
-    Copy: '/TMA-PORTAL/images/icons/tma/Copy-16.svg',
-    EnvelopeSimple: '/TMA-PORTAL/images/icons/phosphor/EnvelopeSimple.svg',
-    ThreeDots: '/TMA-PORTAL/images/icons/tma/ThreeDots-16.svg',
+    Add: 'images/icons/tma/Add.svg',
+    FunnelSimple: 'images/icons/tma/FunnelSimple-16.svg',
+    ArrowsDownUp: 'images/icons/tma/ArrowsDownUp.svg',
+    ArrowsDown: 'images/icons/tma/ArrowsDown-16.svg',
+    ArrowsUp: 'images/icons/tma/ArrowsUp.svg',
+    Search: 'images/icons/tma/Search-16.svg',
+    Close: 'images/icons/tma/Close-12.svg',
+    Dot: 'images/icons/tma/Dot-12.svg',
+    ArrowLineRight: 'images/icons/tma/ArrowLineRight-16.svg',
+    ArrowLineLeft: 'images/icons/tma/ArrowLineLeft-16.svg',
+    ArrowLineDown: 'images/icons/tma/ArrowLineDown-16.svg',
+    XCircle: 'images/icons/tma/Xcircle.svg',
+    Loading16: 'images/icons/tma/Loading-16.svg',
+    CalendarBlank: 'images/icons/phosphor/CalendarBlank.svg',
+    ListNumbers: 'images/icons/phosphor/ListNumbers.svg',
+    User: 'images/icons/phosphor/User.svg',
+    MapPin: 'images/icons/phosphor/MapPin.svg',
+    CirclesThreePlus: 'images/icons/phosphor/CirclesThreePlus.svg',
+    Broom: 'images/icons/phosphor/Broom.svg',
+    Plus: 'images/icons/phosphor/Plus.svg',
+    Line: 'images/icons/tma/Line-16.svg',
+    Trash: 'images/icons/phosphor/Trash.svg',
+    Copy: 'images/icons/tma/Copy-16.svg',
+    EnvelopeSimple: 'images/icons/phosphor/EnvelopeSimple.svg',
+    ThreeDots: 'images/icons/tma/ThreeDots-16.svg',
   };
+
+  /* ── real user directory (database-backed, admin only) ── */
+  var ACCOUNT_TYPES = ['Client', 'Employee', 'Administrator'];
+  var AVATARS = ['AvatarMale01', 'AvatarFemale01', 'AvatarMale03', 'AvatarFemale04', 'AvatarFemale06'];
+
+  function usersApi(method, url, body) {
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return fetch(url, {
+      method: method,
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': m ? decodeURIComponent(m[1]) : '',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  function usersToast(message, ok) {
+    if (window.TMAToast && window.TMAToast.showFloatingToast) {
+      window.TMAToast.showFloatingToast(message, { state: ok ? 'positive' : 'negative' });
+    }
+  }
+
+  function realRow(u) {
+    return {
+      serial: '#U' + String(u.id).padStart(4, '0'),
+      user: u.name,
+      avatar: AVATARS[u.id % AVATARS.length],
+      email: u.email,
+      address: u.accountType || 'Not assigned',
+      date: u.joined,
+      _ts: u.joinedIso ? Date.parse(u.joinedIso) : null,
+      _status: u.status,
+      _id: u.id,
+      _self: u.self,
+      _twoFactor: u.twoFactor,
+      _lastActive: u.lastActive,
+    };
+  }
+
+  function statusBadge(row) {
+    if (!row._status) return '';
+    var label = row._status === 'pending' ? 'Pending' : (row._status === 'suspended' ? 'Suspended' : 'Active');
+    return '<button type="button" class="tma-dash__ustatus tma-dash__ustatus--' + row._status + '"' +
+      ' data-users-status data-user-id="' + row._id + '" aria-haspopup="menu" title="Account actions">' + label + '</button>';
+  }
 
   var DATE_WEIGHT = {
     'just now': 0,
@@ -46,7 +95,7 @@
     { id: 'serial', label: 'Serial', icon: 'ListNumbers' },
     { id: 'user', label: 'User', icon: 'User' },
     { id: 'email', label: 'Email', icon: 'EnvelopeSimple' },
-    { id: 'address', label: 'Address', icon: 'MapPin' },
+    { id: 'address', label: 'Account type', icon: 'MapPin' },
   ];
 
   var USER_OPTIONS = [
@@ -269,7 +318,9 @@ if (state.filters.user) {
 
     if (state.sort.column === 'date') {
       rows.sort(function (a, b) {
-        var diff = dateWeight(a.date) - dateWeight(b.date);
+        var diff = (a._ts != null && b._ts != null)
+          ? a._ts - b._ts
+          : dateWeight(a.date) - dateWeight(b.date);
         return state.sort.direction === 'asc' ? diff : -diff;
       });
     } else if (state.sort.column === 'user') {
@@ -297,7 +348,7 @@ if (state.filters.user) {
     var selected = checked ? ' tma-dash__ctr--selected' : '';
     return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-users-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + escapeHtml(row.user) + '"></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--user"><img src="/TMA-PORTAL/images/avatars/' + escapeHtml(row.avatar) + '.png" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user"><img src="images/avatars/' + escapeHtml(row.avatar) + '.png" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--email"><span class="tma-dash__cc-truncate">' + escapeHtml(row.email) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--overview-date">' + escapeHtml(row.date) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--actions">' +
@@ -312,7 +363,7 @@ if (state.filters.user) {
     return '<div class="tma-dash__ctr tma-dash__ctr--body' + selected + active + '" data-row-index="' + index + '" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-users-check' + (checked ? ' checked' : '') + '></div>' +
       '<div class="tma-dash__cc tma-dash__cc--id">' + escapeHtml(row.serial) + '</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--user"><img src="/TMA-PORTAL/images/avatars/' + escapeHtml(row.avatar) + '.png" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user"><img src="images/avatars/' + escapeHtml(row.avatar) + '.png" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--email"><span class="tma-dash__cc-truncate">' + escapeHtml(row.email) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--address">' +
         '<span class="tma-dash__cc-truncate">' + escapeHtml(row.address) + '</span>' +
@@ -325,7 +376,7 @@ if (state.filters.user) {
     var selected = checked ? ' tma-dash__uavatar-tile--selected' : '';
     var active = infoOpen ? ' tma-dash__uavatar-tile--info-open' : '';
     var tipId = 'users-avatar-tip-' + index;
-    var avatarSrc = '/TMA-PORTAL/images/avatars/' + escapeHtml(row.avatar) + '.png';
+    var avatarSrc = 'images/avatars/' + escapeHtml(row.avatar) + '.png';
     return '<button type="button" class="tma-dash__uavatar-tile' + selected + active + '" data-row-index="' + index + '" aria-label="' + escapeHtml(row.user) + '" aria-pressed="' + (checked ? 'true' : 'false') + '" aria-describedby="' + tipId + '" data-tooltip-trigger data-tooltip-type="avatar" data-tooltip-position="top" data-tooltip-initial-delay="1500" data-tooltip-rehover-delay="500" data-tooltip-rehover-window="30000">' +
       '<img src="' + avatarSrc + '" alt="">' +
       '<div id="' + tipId + '" class="tma-tooltip tma-tooltip--profile tma-tooltip--top tma-tooltip-trigger__tip" role="tooltip" aria-hidden="true" style="--tooltip-font-size:12px;--tooltip-line-height:16px;--tooltip-padding-x:8px;--tooltip-padding-y:4px;--tooltip-radius:12px;">' +
@@ -499,7 +550,7 @@ if (state.filters.user) {
   function renderUsersPopover() {
     var items = USER_OPTIONS.map(function (u) {
       return '<button type="button" class="tma-filter-popover__item" data-filter-user="' + escapeHtml(u.name) + '">' +
-        '<span class="tma-filter-popover__user-row"><img src="/TMA-PORTAL/images/avatars/' + escapeHtml(u.avatar) + '.png" alt="" class="tma-filter-popover__user-avatar" width="24" height="24">' +
+        '<span class="tma-filter-popover__user-row"><img src="images/avatars/' + escapeHtml(u.avatar) + '.png" alt="" class="tma-filter-popover__user-avatar" width="24" height="24">' +
         '<span class="tma-filter-popover__item-label">' + escapeHtml(u.name) + '</span></span></button>';
     }).join('');
     return '<div class="tma-filter-popover tma-filter-popover--fixed tma-dash__users-popover" data-users-popover="users" aria-hidden="true">' + items + '</div>';
@@ -559,7 +610,92 @@ if (state.filters.user) {
     container.setAttribute('data-users-context', context);
     var popoverEls = createPopovers(state);
 
+    function loadRealUsers() {
+      usersApi('GET', '/admin/users').then(function (res) {
+        if (!res.ok) return; // not an admin (or design preview): demo rows stay
+        return res.json().then(function (j) {
+          if (j.accountTypes) ACCOUNT_TYPES = j.accountTypes;
+          state.rows = (j.users || []).map(realRow);
+          state.live = true;
+          state.selected = {};
+          state.page = 1;
+          render();
+        });
+      }).catch(function () {});
+    }
+    state.reloadReal = loadRealUsers;
+    loadRealUsers();
+
+    function closeStatusMenu() {
+      var open = document.querySelector('[data-users-status-menu]');
+      if (open) open.remove();
+    }
+
+    function statusAction(url, body) {
+      usersApi('POST', url, body).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (j) {
+          if (res.ok) { usersToast('Done', true); loadRealUsers(); }
+          else usersToast((j && j.message) || 'That action failed.', false);
+        });
+      }).catch(function () { usersToast('That action failed.', false); });
+    }
+
+    function openStatusMenu(btn) {
+      closeStatusMenu();
+      var row = null;
+      var id = parseInt(btn.getAttribute('data-user-id'), 10);
+      state.rows.forEach(function (r) { if (r._id === id) row = r; });
+      if (!row) return;
+
+      var items = '';
+      if (row._status === 'pending') {
+        items = ACCOUNT_TYPES.map(function (type) {
+          return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="approve" data-ustatus-type="' + type + '">Approve as ' + type + '</button>';
+        }).join('');
+      } else if (row._status === 'suspended') {
+        items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="reactivate">Reactivate account</button>';
+      } else if (!row._self) {
+        items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="suspend">Suspend account</button>';
+      } else {
+        items = '<button type="button" class="tma-dash__menu-item" role="menuitem" disabled>This is your account</button>';
+      }
+
+      var menu = document.createElement('div');
+      menu.className = 'tma-dash__menu';
+      menu.setAttribute('data-users-status-menu', '');
+      menu.setAttribute('role', 'menu');
+      menu.style.position = 'fixed';
+      menu.style.zIndex = '90';
+      menu.innerHTML = items;
+      document.body.appendChild(menu);
+      var r2 = btn.getBoundingClientRect();
+      menu.style.top = Math.min(window.innerHeight - menu.offsetHeight - 8, r2.bottom + 4) + 'px';
+      menu.style.left = Math.min(window.innerWidth - menu.offsetWidth - 8, r2.left) + 'px';
+
+      menu.addEventListener('click', function (ev2) {
+        var act = ev2.target.closest('[data-ustatus-act]');
+        if (!act) return;
+        var kind = act.getAttribute('data-ustatus-act');
+        closeStatusMenu();
+        if (kind === 'approve') statusAction('/admin/users/' + row._id + '/approve', { account_type: act.getAttribute('data-ustatus-type') });
+        if (kind === 'suspend') statusAction('/admin/users/' + row._id + '/suspend');
+        if (kind === 'reactivate') statusAction('/admin/users/' + row._id + '/reactivate');
+      });
+      window.setTimeout(function () {
+        document.addEventListener('click', function once(ev3) {
+          if (!menu.contains(ev3.target)) { closeStatusMenu(); document.removeEventListener('click', once); }
+        });
+      }, 0);
+    }
+
     container.addEventListener('click', function (e) {
+      var statusBtn = e.target.closest('[data-users-status]');
+      if (statusBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        openStatusMenu(statusBtn);
+        return;
+      }
       if (state.isOverview) {
         if (e.target.closest('[data-users-row-more]') || e.target.closest('[data-users-check]')) return;
         return;
@@ -578,7 +714,161 @@ if (state.filters.user) {
       openUserInfoPanel(parseInt(rowEl.getAttribute('data-row-index'), 10));
     });
 
+    var ACT_LABELS = {
+      registered: 'Account created', email_verified: 'Email verified', login: 'Signed in',
+      logout: 'Signed out', login_failed: 'Failed sign-in attempt', password_reset: 'Password reset',
+      lockout: 'Sign-in locked', social_connected: 'Sign-in method connected',
+      social_disconnected: 'Sign-in method disconnected', user_invited: 'Invited to the portal',
+      account_approved: 'Account approved', account_suspended: 'Account suspended',
+      account_reactivated: 'Account reactivated', account_updated: 'Profile updated by admin',
+      password_reset_link_sent: 'Password reset link sent', password_generated: 'Temporary password generated',
+    };
+
+    function closeRealPanel() {
+      var el = document.querySelector('[data-real-user-panel]');
+      if (el) {
+        var host = el.parentNode;
+        el.remove();
+        if (host && host.classList) host.classList.remove('tma-dash__view--split');
+      }
+    }
+
+    function openRealUserPanel(row) {
+      closeRealPanel();
+      var statusLabel = row._status === 'pending' ? 'Pending' : (row._status === 'suspended' ? 'Suspended' : 'Active');
+      var host = container.closest('.tma-dash__view') || container.parentNode;
+      host.classList.add('tma-dash__view--split');
+      var wrap = document.createElement('aside');
+      wrap.className = 'tma-rup';
+      wrap.setAttribute('data-real-user-panel', '');
+      wrap.setAttribute('aria-label', 'User details');
+      wrap.innerHTML =
+          '<div class="tma-rup__head">' +
+            '<div>' +
+              '<h2 class="tma-user-info-panel__heading-title">' + escapeHtml(row.user) + '</h2>' +
+              '<p class="tma-user-info-panel__heading-id">' + escapeHtml(row.serial) + ' <span class="tma-dash__ustatus tma-dash__ustatus--' + row._status + '" style="cursor: default;">' + statusLabel + '</span></p>' +
+            '</div>' +
+            '<button type="button" class="tma-user-info-panel__icon-btn" data-rup-close aria-label="Close"><img src="images/icons/phosphor/X.svg" alt="" width="16" height="16"></button>' +
+          '</div>' +
+          '<div class="tma-rup__tabs" role="tablist">' +
+            '<button type="button" class="tma-dash__tab tma-dash__tab--active" data-rup-tab="details" role="tab" aria-selected="true">Details</button>' +
+            '<button type="button" class="tma-dash__tab" data-rup-tab="activity" role="tab" aria-selected="false">Activity</button>' +
+          '</div>' +
+          '<div class="tma-rup__body" data-rup-pane="details">' +
+            '<label class="tma-user-info-panel__field tma-rup__field"><span class="tma-user-info-panel__field-label">Name</span>' +
+              '<input class="tma-user-info-panel__field-input" data-rup-name value="' + escapeHtml(row.user) + '" aria-label="Name"></label>' +
+            '<div class="tma-user-info-panel__field tma-rup__field tma-user-info-panel__field--muted"><span class="tma-user-info-panel__field-label">Email</span>' +
+              '<span class="tma-user-info-panel__field-value">' + escapeHtml(row.email) + '</span></div>' +
+            '<label class="tma-user-info-panel__field tma-rup__field"><span class="tma-user-info-panel__field-label">Account type</span>' +
+              '<select class="tma-user-info-panel__field-input" data-rup-type aria-label="Account type">' +
+              ACCOUNT_TYPES.map(function (tp) { return '<option value="' + tp + '"' + (row.address === tp ? ' selected' : '') + '>' + tp + '</option>'; }).join('') +
+              '</select></label>' +
+            '<div class="tma-rup__meta">' +
+              '<div class="tma-rup__meta-row"><span>Two-factor authentication</span><strong>' + (row._twoFactor ? 'On' : 'Off') + '</strong></div>' +
+              '<div class="tma-rup__meta-row"><span>Joined</span><strong>' + escapeHtml(row.date) + '</strong></div>' +
+              '<div class="tma-rup__meta-row"><span>Last active</span><strong data-rup-lastactive>' + escapeHtml(row._lastActive || '—') + '</strong></div>' +
+            '</div>' +
+            '<p class="tma-user-info-panel__field-label tma-rup__group-label">Admin controls</p>' +
+            '<div class="tma-rup__actions">' +
+              (row._status === 'pending' ? '<button type="button" class="tma-rup__btn tma-rup__btn--primary" data-rup-act="approve">Approve</button>' : '') +
+              '<button type="button" class="tma-rup__btn" data-rup-act="send-reset">Email password reset link</button>' +
+              '<button type="button" class="tma-rup__btn" data-rup-act="generate-password">Generate temporary password</button>' +
+              (row._status === 'approved' && !row._self ? '<button type="button" class="tma-rup__btn tma-rup__btn--danger" data-rup-act="suspend">Suspend account</button>' : '') +
+              (row._status === 'suspended' ? '<button type="button" class="tma-rup__btn" data-rup-act="reactivate">Reactivate account</button>' : '') +
+            '</div>' +
+            '<div class="tma-rup__pw" data-rup-pw hidden>' +
+              '<code data-rup-pw-value></code>' +
+              '<button type="button" class="tma-rup__btn" data-rup-pw-copy>Copy</button>' +
+            '</div>' +
+            '<p class="tma-user-info-panel__field-label tma-rup__group-label" data-rup-pw-note hidden>Shown once - share it securely. They should change it after signing in.</p>' +
+          '</div>' +
+          '<div class="tma-rup__body" data-rup-pane="activity" hidden><p class="tma-user-info-panel__field-label">Loading…</p></div>' +
+          '<div class="tma-rup__footer">' +
+            '<button type="button" class="tma-rup__btn" data-rup-close>Cancel</button>' +
+            '<button type="button" class="tma-rup__btn tma-rup__btn--primary" data-rup-save>Save</button>' +
+          '</div>';
+      host.appendChild(wrap);
+
+      wrap.querySelectorAll('[data-rup-close]').forEach(function (b) { b.addEventListener('click', closeRealPanel); });
+
+      wrap.querySelectorAll('[data-rup-tab]').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          wrap.querySelectorAll('[data-rup-tab]').forEach(function (t2) {
+            var on = t2 === tab;
+            t2.classList.toggle('tma-dash__tab--active', on);
+            t2.setAttribute('aria-selected', on ? 'true' : 'false');
+          });
+          wrap.querySelectorAll('[data-rup-pane]').forEach(function (p2) {
+            p2.hidden = p2.getAttribute('data-rup-pane') !== tab.getAttribute('data-rup-tab');
+          });
+        });
+      });
+
+      usersApi('GET', '/admin/users/' + row._id + '/activity').then(function (res) { return res.ok ? res.json() : null; }).then(function (j) {
+        var pane = wrap.querySelector('[data-rup-pane="activity"]');
+        if (!pane) return;
+        if (!j) { pane.innerHTML = '<p class="tma-user-info-panel__field-label">Couldn\'t load activity.</p>'; return; }
+        if (j.lastLogin) {
+          var la = wrap.querySelector('[data-rup-lastactive]');
+          if (la && la.textContent === '—') la.textContent = 'Signed in ' + j.lastLogin;
+        }
+        pane.innerHTML = j.events.length ? j.events.map(function (ev) {
+          var at = ev.atIso ? new Date(ev.atIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ev.when;
+          return '<div class="tma-rup__event"><strong>' + escapeHtml(ACT_LABELS[ev.event] || ev.event) + '</strong>' +
+            '<span>' + escapeHtml(at) + (ev.ip ? ' · ' + escapeHtml(ev.ip) : '') + (ev.device ? ' · ' + escapeHtml(ev.device) : '') + '</span></div>';
+        }).join('') : '<p class="tma-user-info-panel__field-label">No activity yet.</p>';
+      }).catch(function () {});
+
+      function act(url, body, done) {
+        usersApi('POST', url, body).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            if (res.ok) { if (done) done(j); loadRealUsers(); }
+            else usersToast((j && j.message) || 'That action failed.', false);
+          });
+        }).catch(function () { usersToast('That action failed.', false); });
+      }
+
+      wrap.querySelectorAll('[data-rup-act]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var kind = b.getAttribute('data-rup-act');
+          if (kind === 'approve') act('/admin/users/' + row._id + '/approve', { account_type: wrap.querySelector('[data-rup-type]').value }, function () { usersToast('Account approved', true); closeRealPanel(); });
+          if (kind === 'suspend') act('/admin/users/' + row._id + '/suspend', null, function () { usersToast('Account suspended', true); closeRealPanel(); });
+          if (kind === 'reactivate') act('/admin/users/' + row._id + '/reactivate', null, function () { usersToast('Account reactivated', true); closeRealPanel(); });
+          if (kind === 'send-reset') act('/admin/users/' + row._id + '/send-reset', null, function () { usersToast('Reset link sent to ' + row.email, true); });
+          if (kind === 'generate-password') act('/admin/users/' + row._id + '/generate-password', null, function (j) {
+            wrap.querySelector('[data-rup-pw-value]').textContent = (j && j.password) || '';
+            wrap.querySelector('[data-rup-pw]').hidden = false;
+            wrap.querySelector('[data-rup-pw-note]').hidden = false;
+          });
+        });
+      });
+
+      var pwCopy = wrap.querySelector('[data-rup-pw-copy]');
+      if (pwCopy) pwCopy.addEventListener('click', function () {
+        if (navigator.clipboard) navigator.clipboard.writeText(wrap.querySelector('[data-rup-pw-value]').textContent);
+        usersToast('Password copied', true);
+      });
+
+      wrap.querySelector('[data-rup-save]').addEventListener('click', function () {
+        usersApi('PATCH', '/admin/users/' + row._id, {
+          name: wrap.querySelector('[data-rup-name]').value,
+          account_type: wrap.querySelector('[data-rup-type]').value,
+        }).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            if (res.ok) { usersToast('Saved', true); closeRealPanel(); loadRealUsers(); }
+            else usersToast((j && j.message) || 'Could not save.', false);
+          });
+        });
+      });
+    }
+
     function openUserInfoPanel(filteredIndex) {
+      if (state.live) {
+        var filteredLive = applyPipeline(state);
+        var liveRow = filteredLive[filteredIndex];
+        if (liveRow) openRealUserPanel(liveRow);
+        return;
+      }
       if (!window.TMAUserInfoPanel) return;
       var filtered = applyPipeline(state);
       var row = filtered[filteredIndex];
@@ -702,7 +992,7 @@ if (state.filters.user) {
               '<div class="tma-dash__cc tma-dash__cc--id tma-dash__cc--head">Serial</div>' +
               '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head">User</div>' +
               '<div class="tma-dash__cc tma-dash__cc--email tma-dash__cc--head">Email</div>' +
-              '<div class="tma-dash__cc tma-dash__cc--address tma-dash__cc--head">Address</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--address tma-dash__cc--head">Account type</div>' +
               '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Registration date</div>' +
             '</div>' +
             '<div data-users-body>' + bodyHtml + '</div>' +
@@ -779,6 +1069,7 @@ if (state.filters.user) {
       });
 
       container.querySelector('[data-users-add]')?.addEventListener('click', function () {
+        if (state.live) { openInviteDialog(); return; }
         if (window.TMATableAddData && window.TMATableAddData.openAddData) {
           window.TMATableAddData.openAddData({ navId: 'users' });
         }
@@ -1079,6 +1370,7 @@ e.target.closest('[data-filter-user]') ||
     var activeMount = getActiveMount();
     if (!activeMount || !activeMount.state) return;
     var state = activeMount.state;
+    if (state.live) { openInviteDialog(); return; }
     var name = [data.firstName, data.lastName].filter(Boolean).join(' ') || 'New User';
     state.rows.unshift({
       serial: '#CM' + state.nextId++,
@@ -1090,6 +1382,63 @@ e.target.closest('[data-filter-user]') ||
     });
     state.page = 1;
     if (activeMount.render) activeMount.render();
+  }
+
+  function openInviteDialog() {
+    var existing = document.querySelector('[data-users-invite]');
+    if (existing) existing.remove();
+    var wrap = document.createElement('div');
+    wrap.className = 'tma-dash__settings-popup';
+    wrap.setAttribute('data-users-invite', '');
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', 'Invite user');
+    wrap.innerHTML =
+      '<div class="tma-dash__settings-popup-backdrop" aria-hidden="true"></div>' +
+      '<div class="tma-dash__settings-change-card">' +
+      '<button type="button" class="tma-dash__settings-change-close tma-dash__settings-change-close--desktop" data-invite-close aria-label="Close">' +
+      '<img src="images/icons/phosphor/X.svg" alt="" width="16" height="16"></button>' +
+      '<h3 class="tma-dash__settings-change-title">Invite user</h3>' +
+      '<form class="tma-dash__settings-change-form" data-invite-form>' +
+      '<label class="tma-dash__settings-flow-field"><input class="tma-dash__settings-flow-input" type="text" name="name" placeholder="Full name" autocomplete="off" aria-label="Full name" required></label>' +
+      '<label class="tma-dash__settings-flow-field"><input class="tma-dash__settings-flow-input" type="email" name="email" placeholder="Email" autocomplete="off" aria-label="Email" required></label>' +
+      '<label class="tma-dash__settings-flow-field"><select class="tma-dash__settings-flow-input" name="account_type" aria-label="Account type">' +
+      ACCOUNT_TYPES.map(function (type) { return '<option value="' + type + '">' + type + '</option>'; }).join('') +
+      '</select></label>' +
+      '<p class="tma-dash__settings-change-text" data-invite-error hidden style="color: var(--color-red);"></p>' +
+      '<button type="submit" class="tma-dash__settings-submit">Send invite</button>' +
+      '<p class="tma-dash__settings-change-text">They get an email link to set their password.</p>' +
+      '</form></div>';
+    document.body.appendChild(wrap);
+    function close() { wrap.remove(); }
+    wrap.querySelector('[data-invite-close]').addEventListener('click', close);
+    wrap.querySelector('.tma-dash__settings-popup-backdrop').addEventListener('click', close);
+    wrap.querySelector('[data-invite-form]').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var form = ev.target;
+      usersApi('POST', '/admin/users', {
+        name: form.querySelector('[name="name"]').value,
+        email: form.querySelector('[name="email"]').value,
+        account_type: form.querySelector('[name="account_type"]').value,
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (j) {
+          if (res.ok) {
+            close();
+            usersToast('Invite sent', true);
+            var m2 = getActiveMount();
+            if (m2 && m2.state && m2.state.reloadReal) m2.state.reloadReal();
+          } else {
+            var e2 = wrap.querySelector('[data-invite-error]');
+            var msg = 'Could not send the invite.';
+            if (j && j.errors) { var k = Object.keys(j.errors); if (k.length) msg = j.errors[k[0]][0]; }
+            else if (j && j.message) msg = j.message;
+            e2.textContent = msg;
+            e2.hidden = false;
+          }
+        });
+      });
+    });
+    wrap.querySelector('input[name="name"]').focus();
   }
 
   window.TMAUsers = {

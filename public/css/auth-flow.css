@@ -48,6 +48,13 @@ a.tma-auth__chip-btn {
   text-decoration: none;
 }
 
+/* the horizontal logo PNG is ~500px wide at its fixed 180px height in
+   auth.css — keep it inside narrow viewports without changing its box */
+.tma-auth__brand img {
+  max-width: 100%;
+  object-fit: contain;
+}
+
 /* ── Field groups + inline validation ── */
 
 .tma-auth__group {
