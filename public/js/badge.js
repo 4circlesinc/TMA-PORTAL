@@ -1,4 +1,4 @@
-/* TMA — Badge component (Figma 32792:840) */
+/* TMA - Badge component (Figma 32792:840) */
 (function () {
   'use strict';
 

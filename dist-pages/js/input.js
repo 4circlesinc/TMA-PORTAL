@@ -1,4 +1,4 @@
-/* TMA — Input component */
+/* TMA - Input component */
 (function () {
   'use strict';
 

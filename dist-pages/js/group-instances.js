@@ -1,4 +1,4 @@
-/* TMA — Group instances showcase (Figma 32729:396128) — absolute layout */
+/* TMA - Group instances showcase (Figma 32729:396128) - absolute layout */
 (function () {
   'use strict';
 

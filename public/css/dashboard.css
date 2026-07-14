@@ -1,5 +1,5 @@
 /*
- * TMA — Default Dashboard page (Figma node 32546:96098 "Overview")
+ * TMA - Default Dashboard page (Figma node 32546:96098 "Overview")
  * https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96098
  *
  * Load order: tokens.css -> theme.css -> dashboard.css
@@ -15,12 +15,12 @@
   --dash-gutter: var(--space-28);
 
   /* Figma surface tints */
-  --dash-card-1: var(--color-1);        /* #e6f6fd — tint of #03a5e9 */
-  --dash-card-2: var(--color-2);        /* #e7f0f6 — tint of #136da0 */
-  --dash-panel-bg: var(--color-bg-card);/* #f9f9fa — chart panels */
+  --dash-card-1: var(--color-1);        /* #e6f6fd - tint of #03a5e9 */
+  --dash-card-2: var(--color-2);        /* #e7f0f6 - tint of #136da0 */
+  --dash-panel-bg: var(--color-bg-card);/* #f9f9fa - chart panels */
   --dash-border: var(--color-border-soft);
 
-  /* Icon sizing — consistent tiers across dashboard chrome */
+  /* Icon sizing - consistent tiers across dashboard chrome */
   --dash-icon-sm: var(--icon-size-sm);
   --dash-icon-md: var(--icon-size-md);
   --dash-icon-lg: var(--icon-size-lg);
@@ -45,7 +45,7 @@
 
 /* ─────────────────────────────────────────
  * RESPONSIVE TYPE + ICONS (desktop / laptop)
- * Fluid scale as viewport narrows — keeps sidebars on one line.
+ * Fluid scale as viewport narrows - keeps sidebars on one line.
  * ───────────────────────────────────────── */
 
 @media (min-width: 1025px) {
@@ -352,7 +352,7 @@
 /* favorites items: dot bullet + label */
 .tma-dash__nav-item--fav { gap: var(--space-8); }
 
-/* expandable nav items are <button>s — reset to match the link items */
+/* expandable nav items are <button>s - reset to match the link items */
 .tma-dash__nav-item--expand {
   appearance: none;
   border: 0;
@@ -620,7 +620,7 @@
   color: var(--color-text-placeholder);
 }
 
-/* Search field — shared chrome (email search bar pattern) */
+/* Search field - shared chrome (email search bar pattern) */
 .tma-dash__search,
 .tma-dash__toolbar-search,
 .tma-dash__email-search,
@@ -950,7 +950,7 @@
   width: 100%;
 }
 
-/* Metric cards — Figma 32546:96097 (112px tall, scales with card width) */
+/* Metric cards - Figma 32546:96097 (112px tall, scales with card width) */
 .tma-dash__card {
   container-type: inline-size;
   display: flex;
@@ -1604,7 +1604,7 @@
   font-size: var(--text-size-14);
 }
 
-/* Add Data view — Input form instances (32728:395270–273) */
+/* Add Data view - Input form instances (32728:395270–273) */
 .tma-dash__add-data {
   display: flex;
   flex-direction: column;
@@ -1891,7 +1891,7 @@
 .tma-dash__cc--user img { width: var(--dash-icon-lg); height: var(--dash-icon-lg); border-radius: var(--radius-pill); object-fit: cover; flex: 0 0 var(--dash-icon-lg); }
 .tma-dash__cc--date img { width: var(--dash-icon-sm); height: var(--dash-icon-sm); opacity: 0.4; flex: 0 0 var(--dash-icon-sm); }
 .tma-dash__cc-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Design-system checkbox — TMA glyphs (icons/tma/Checkbox*.svg), not native rendering */
+/* Design-system checkbox - TMA glyphs (icons/tma/Checkbox*.svg), not native rendering */
 .tma-dash__check {
   appearance: none;
   -webkit-appearance: none;
@@ -2444,7 +2444,7 @@
   min-height: 342px;
 }
 
-/* Total Users — tab header + legend */
+/* Total Users - tab header + legend */
 .tma-dash__panel-head {
   display: flex;
   align-items: center;
@@ -2827,7 +2827,7 @@
 }
 
 /* ─────────────────────────────────────────
- * APP CHROME — toggles, search palette, theme
+ * APP CHROME - toggles, search palette, theme
  * ───────────────────────────────────────── */
 
 /* Favorited (star pressed) */
@@ -2854,7 +2854,7 @@
 }
 .tma-dash__cmd[hidden] { display: none; }
 
-/* Desktop collapse — sidebar becomes an icon-only rail; rightbar hides */
+/* Desktop collapse - sidebar becomes an icon-only rail; rightbar hides */
 @media (min-width: 1025px) {
   .tma-dash.is-sidebar-collapsed .tma-dash__sidebar {
     padding-left: var(--space-12);
@@ -2917,7 +2917,7 @@
 }
 
 /* ─────────────────────────────────────────
- * DARK THEME — scoped token overrides
+ * DARK THEME - scoped token overrides
  * ───────────────────────────────────────── */
 
 .tma-dash[data-theme="dark"] {
@@ -2970,7 +2970,7 @@
 .tma-dash[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
 
 /* ─────────────────────────────────────────
- * MOBILE — bottom TabBar + iOS-style menu (Figma 32548:116275)
+ * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
  * ───────────────────────────────────────── */
 
 .tma-dash__tabbar {
@@ -3475,7 +3475,7 @@
     display: flex !important;
   }
 
-  /* Invisible hit area — tap outside a panel to close (no visual dimming) */
+  /* Invisible hit area - tap outside a panel to close (no visual dimming) */
   .tma-dash.is-nav-open .tma-dash__scrim,
   .tma-dash.is-rb-open .tma-dash__scrim {
     display: block;
@@ -3551,7 +3551,7 @@
     padding-right: max(var(--dash-mobile-gutter), env(safe-area-inset-right, 0px));
   }
 
-  /* Footer follows content — scrolls with the page, not pinned to viewport */
+  /* Footer follows content - scrolls with the page, not pinned to viewport */
   .tma-dash__view {
     flex: 0 1 auto;
     min-height: auto;
@@ -5534,7 +5534,7 @@
   filter: invert(1) brightness(1.6);
 }
 
-/* Overview tab tables — desktop column grid (shared row template) */
+/* Overview tab tables - desktop column grid (shared row template) */
 @media (min-width: 768px) {
   .tma-dash__users--overview [data-users-body],
   .tma-dash__files--overview [data-files-body],
@@ -5634,7 +5634,7 @@
   }
 }
 
-/* Overview tab tables — mobile row cards (override tab-specific desktop table rules) */
+/* Overview tab tables - mobile row cards (override tab-specific desktop table rules) */
 @media (max-width: 767px) {
   .tma-dash__users--overview,
   .tma-dash__files--overview,
@@ -5795,7 +5795,7 @@
     text-overflow: clip;
   }
 
-  /* Files tab — mobile file library list */
+  /* Files tab - mobile file library list */
   .tma-dash__files--overview [data-files-body] {
     gap: 0;
   }
@@ -5984,7 +5984,7 @@
   }
 }
 
-/* Overview tab tables — narrow panel layout (container width, any viewport) */
+/* Overview tab tables - narrow panel layout (container width, any viewport) */
 @container overview-panel (max-width: 720px) {
   .tma-dash__users--overview,
   .tma-dash__files--overview,
@@ -7023,7 +7023,7 @@
   }
 }
 
-/* ── Account — Security (Figma 32546:96108) ── */
+/* ── Account - Security (Figma 32546:96108) ── */
 
 .tma-dash__account-security-top {
   display: flex;
@@ -7265,7 +7265,7 @@
   }
 }
 
-/* ── Account — Logs (Figma 32546:96109) ── */
+/* ── Account - Logs (Figma 32546:96109) ── */
 
 .tma-dash__account-panel--logs .tma-table-b-sessions {
   width: 100%;
@@ -7349,7 +7349,7 @@
   }
 }
 
-/* ── Account — Billing (Figma 32546:96113) ── */
+/* ── Account - Billing (Figma 32546:96113) ── */
 
 .tma-dash__account-block-title--lg {
   font-size: var(--text-size-18);
@@ -7475,7 +7475,7 @@
   width: 100%;
 }
 
-/* Payment Methods — Figma 32546:96113, Settings 30919:278127 */
+/* Payment Methods - Figma 32546:96113, Settings 30919:278127 */
 .tma-dash__account-billing-cards--payment .tma-card--credit,
 .tma-dash__settings-payment-cards .tma-card--credit,
 .tma-dash__settings-payment-cards .tma-card--credit-paypal {
@@ -7535,7 +7535,7 @@
   line-height: 20px;
 }
 
-/* Billing Address — Figma 32546:96113 */
+/* Billing Address - Figma 32546:96113 */
 .tma-dash__account-billing-cards--address .tma-card--address {
   flex: 1 0 200px;
   width: auto;
@@ -7654,7 +7654,7 @@
   height: 16px;
 }
 
-/* ── Account — Referrals (Figma 32546:96110) ── */
+/* ── Account - Referrals (Figma 32546:96110) ── */
 
 .tma-dash__account-referrals-stats {
   display: flex;
@@ -7766,7 +7766,7 @@
   min-width: 0;
 }
 
-/* ── Account — Statements (Figma 32546:96107) ── */
+/* ── Account - Statements (Figma 32546:96107) ── */
 
 .tma-dash__account-block--statements-earnings,
 .tma-dash__account-block--statements-invoices {
@@ -7992,7 +7992,7 @@
   }
 }
 
-/* ── Account — API Keys (Figma 32546:96112) ── */
+/* ── Account - API Keys (Figma 32546:96112) ── */
 
 .tma-dash__account-panel--api-keys {
   display: flex;
@@ -11658,7 +11658,7 @@
   }
 }
 
-/* Email — compose (Figma 32546:96128) */
+/* Email - compose (Figma 32546:96128) */
 
 .tma-dash__email-compose {
   flex: 1;
@@ -11941,7 +11941,7 @@
   color: var(--color-text-white);
 }
 
-/* Email — compose window (Gmail-style bottom panel) */
+/* Email - compose window (Gmail-style bottom panel) */
 
 .tma-dash__email-compose-stack {
   position: fixed;
@@ -16726,7 +16726,7 @@
   }
 }
 
-/* Email templates — authentication mobile (Figma 32534:3782+) */
+/* Email templates - authentication mobile (Figma 32534:3782+) */
 
 .tma-dash__email-template-canvas--mobile {
   width: 100%;
@@ -20313,7 +20313,7 @@ button.tma-dash__header-popup-item:focus-visible {
   overflow: hidden;
   border: 2px solid transparent;
   box-sizing: border-box;
-  /* Literal colors — previews must not follow dark-mode token swaps */
+  /* Literal colors - previews must not follow dark-mode token swaps */
   background: #ffffff;
 }
 
@@ -20795,7 +20795,7 @@ button.tma-dash__header-popup-item:focus-visible {
   background: rgba(255, 255, 255, 0.4);
 }
 
-/* Settings — mobile profile + change name (≤960px) */
+/* Settings - mobile profile + change name (≤960px) */
 @media (max-width: 960px) {
   .tma-dash__settings-panel[data-settings-panel="profile"].is-active {
     gap: 0;
@@ -22127,7 +22127,7 @@ button.tma-dash__header-popup-item:focus-visible {
     display: none !important;
   }
 
-  /* Payment — bottom sheet (not full-height flow) */
+  /* Payment - bottom sheet (not full-height flow) */
   .tma-dash__settings.is-settings-popup-open .tma-dash__settings-popup--payment.tma-dash__settings-popup--sheet:not([hidden]) {
     justify-content: flex-end;
     align-items: stretch;

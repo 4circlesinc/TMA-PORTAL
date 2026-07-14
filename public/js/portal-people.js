@@ -1,5 +1,5 @@
 /*
- * TMA — Portal People section
+ * TMA - Portal People section
  * Manage users home, Browse employees, Browse client contacts,
  * Browse prospects, Shared / Personal address books, Distribution
  * groups, Resend welcome emails.
@@ -130,7 +130,7 @@
         (p.admin ? ' <span class="tma-portal-chip">Admin</span>' : '') +
         '</span></td>' +
         '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(p.lastLogin || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(p.lastLogin || '-') + '</td>' +
         '<td><div class="tma-portal-row-actions">' +
         '<button type="button" class="tma-portal-icon-btn" data-people-manage="' + p.id + '" title="Manage" aria-label="Manage ' + ui().esc(p.firstName) + '"><img src="images/icons/phosphor/GearSix.svg" alt=""></button>' +
         '</div></td></tr>';
@@ -161,7 +161,7 @@
         '<td><label class="tma-portal-checkbox"><input type="checkbox" data-people-select="' + p.id + '"' + (state.selected[p.id] ? ' checked' : '') + '></label></td>' +
         '<td><strong>' + ui().esc(displayName(p)) + '</strong></td>' +
         '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(p.company || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(p.company || '-') + '</td>' +
         '</tr>';
     }).join('');
 
@@ -313,10 +313,10 @@
 
     /* employees */
     function createEmployee() {
-      if (s.employees.length >= s.trial.employeeLimit) { ui().toast('Employee limit reached — upgrade to add more users'); return; }
+      if (s.employees.length >= s.trial.employeeLimit) { ui().toast('Employee limit reached - upgrade to add more users'); return; }
       personModal('employee', function (record) {
         record.id = data().uid('emp');
-        record.lastLogin = '—';
+        record.lastLogin = '-';
         record.admin = false;
         s.employees.push(record);
         data().save();

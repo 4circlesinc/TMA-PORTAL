@@ -1,5 +1,5 @@
 /**
- * TMA Table Filter and sort — Plan A interactive filtering + sorting.
+ * TMA Table Filter and sort - Plan A interactive filtering + sorting.
  */
 (function () {
   'use strict';

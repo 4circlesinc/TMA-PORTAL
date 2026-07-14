@@ -1,4 +1,4 @@
-/* TMA — Rightbar interactive guidance panel (Figma 30484:299250) */
+/* TMA - Rightbar interactive guidance panel (Figma 30484:299250) */
 (function () {
   'use strict';
 

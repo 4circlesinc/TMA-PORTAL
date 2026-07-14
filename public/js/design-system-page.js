@@ -1,4 +1,4 @@
-/* TMA — Design system board (Figma 15098:130290) */
+/* TMA - Design system board (Figma 15098:130290) */
 (function () {
   'use strict';
 
@@ -83,8 +83,8 @@
       if (!content) return;
       content.innerHTML =
         '<div class="dr-row__text">' +
-          '<p><strong>TM ANTOINE brand</strong> — official horizontal logo, circular mark, and favicon. Use <code>TMALogo.renderTMALogo()</code> with <code>variant: &quot;horizontal&quot;</code> or <code>&quot;mark&quot;</code>.</p>' +
-          '<p><strong>Third-party marks</strong> — 24×24 and 40×40 SVG brand icons for buttons, frames, and task rows. Browse <a href="brand-logos.html">brand-logos.html ↗</a>.</p>' +
+          '<p><strong>TM ANTOINE brand</strong> - official horizontal logo, circular mark, and favicon. Use <code>TMALogo.renderTMALogo()</code> with <code>variant: &quot;horizontal&quot;</code> or <code>&quot;mark&quot;</code>.</p>' +
+          '<p><strong>Third-party marks</strong> - 24×24 and 40×40 SVG brand icons for buttons, frames, and task rows. Browse <a href="brand-logos.html">brand-logos.html ↗</a>.</p>' +
         '</div>' +
         window.TMALogo.renderBrandLogosPanel({ assetBase: ASSET_BASE });
     });

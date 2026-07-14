@@ -1,5 +1,5 @@
 /*
- * TMA — Dashboard application controller
+ * TMA - Dashboard application controller
  * Wires navigation, header controls, theme, search palette, and drawers.
  * Global: window.TMADashboard
  */
@@ -352,7 +352,7 @@
 
     function syncUrl(opts) {
       if (opts.skipUrl) return;
-      if (window.TMA_CLASSIC) return; /* classic shell lives at /classic — no URL sync */
+      if (window.TMA_CLASSIC) return; /* classic shell lives at /classic - no URL sync */
       var next = pathForRoute(opts.navId, opts.view, opts);
       var current = normalizePath(window.location.pathname);
       if (current === next) return;

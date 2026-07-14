@@ -1,4 +1,4 @@
-/* TMA — Layout interactive guidance panel (Figma 30484:299256) */
+/* TMA - Layout interactive guidance panel (Figma 30484:299256) */
 (function () {
   'use strict';
 

@@ -4,7 +4,7 @@
   "documentationNodeId": "32267:8033",
   "instancesNodeId": "33160:10064",
   "name": "Card",
-  "description": "Card component — composable rows for project progress, credit card, and other compact summaries.",
+  "description": "Card component - composable rows for project progress, credit card, and other compact summaries.",
   "cssPath": "public/css/card.css",
   "jsPath": "public/js/card.js",
   "iconJsPath": "public/js/card-icons.js",
@@ -22,8 +22,8 @@
   "documentation": {
     "purpose": "The Card component makes it easier to design cards.",
     "features": [
-      "Count — the number of rows of content, you can add more rows in the component.",
-      "State — Default, Hover, Selected, No interaction."
+      "Count - the number of rows of content, you can add more rows in the component.",
+      "State - Default, Hover, Selected, No interaction."
     ],
     "correlation": "Instances inside the Card can be replaced with any instance except itself.",
     "examples": [
@@ -37,16 +37,16 @@
   ],
   "instances": [
     { "nodeId": "33250:2266", "name": "CodeBlock" },
-    { "nodeId": "33160:10066", "name": "Stat — Current Projects" },
-    { "nodeId": "33160:10067", "name": "Stat — Project Finance" },
-    { "nodeId": "33160:10068", "name": "Stat — Our Clients" },
-    { "nodeId": "33160:10069", "name": "Progress — TMA" },
-    { "nodeId": "33160:10070", "name": "Progress — Coffee detail page" },
-    { "nodeId": "33160:10081", "name": "Task — Meeting with customer" },
-    { "nodeId": "33160:10093", "name": "Price — PRO version" },
-    { "nodeId": "33160:10096", "name": "Usage — Precise Usage" },
-    { "nodeId": "33160:10099", "name": "Credit — ByeWind Visa" },
-    { "nodeId": "33160:10102", "name": "Address — ByeWind's house" },
+    { "nodeId": "33160:10066", "name": "Stat - Current Projects" },
+    { "nodeId": "33160:10067", "name": "Stat - Project Finance" },
+    { "nodeId": "33160:10068", "name": "Stat - Our Clients" },
+    { "nodeId": "33160:10069", "name": "Progress - TMA" },
+    { "nodeId": "33160:10070", "name": "Progress - Coffee detail page" },
+    { "nodeId": "33160:10081", "name": "Task - Meeting with customer" },
+    { "nodeId": "33160:10093", "name": "Price - PRO version" },
+    { "nodeId": "33160:10096", "name": "Usage - Precise Usage" },
+    { "nodeId": "33160:10099", "name": "Credit - ByeWind Visa" },
+    { "nodeId": "33160:10102", "name": "Address - ByeWind's house" },
     { "nodeId": "33160:10104", "name": "Add Address" }
   ]
 }

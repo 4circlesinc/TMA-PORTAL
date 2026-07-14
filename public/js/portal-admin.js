@@ -1,5 +1,5 @@
 /*
- * TMA — Portal Account settings (admin area)
+ * TMA - Portal Account settings (admin area)
  * Secondary nav + admin pages: Admin Overview, Background Operations,
  * Account and Reporting, Billing, Client hub management, Security,
  * Connectors, Connection Manager, Storage, Advanced Preferences.
@@ -21,16 +21,13 @@
       { id: 'notification-history', label: 'Notification History' },
       { id: 'branding', label: 'Edit Company Branding' },
     ] },
-    { group: 'billing-group', label: 'Billing', items: [
-      { id: 'billing-convert', label: 'Convert Free Trial' },
-      { id: 'billing-cancel', label: 'Cancel Trial' },
-    ] },
     { group: 'clienthub-group', label: 'Client hub management', items: [
       { id: 'clienthub-access', label: 'Client hub access' },
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
     ] },
     { group: 'security-group', label: 'Security', items: [
+      { id: 'account-security', label: 'Account security' },
       { id: 'security-insights', label: 'Security Insights' },
       { id: 'dlp', label: 'Data loss prevention' },
       { id: 'signin-policy', label: 'Sign in policy' },
@@ -94,6 +91,29 @@
     return checked ? checked.value : fallback;
   }
 
+  /* ── real security backend (Fortify) ───────────── */
+  function xsrf() {
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function secApi(method, url, body) {
+    return fetch(url, {
+      method: method,
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': xsrf(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
+
+  var SEC = { codesOnce: null };
+
+
   /* ── pages ──────────────────────────────────────── */
   var PAGES = {};
 
@@ -102,13 +122,12 @@
       var sigLeft = Math.max(0, s.trial.signatureLimit - s.trial.signatureUsed);
       return ui().section('Account',
         '<p><strong>Account name:</strong> ' + ui().esc(s.branding.accountName) + '</p>' +
-        '<p><strong>Plan:</strong> Premium' + (s.trial.active ? ' (Trial — ' + s.trial.daysLeft + ' days left)' : '') + '</p>' +
+        '<p><strong>Plan:</strong> Premium' + (s.trial.active ? ' (Trial - ' + s.trial.daysLeft + ' days left)' : '') + '</p>' +
         '<p><strong>Employees:</strong> ' + s.employees.length + ' of ' + s.trial.employeeLimit + '</p>' +
         '<p><strong>Signature requests remaining:</strong> ' + sigLeft + '</p>') +
         ui().section('Quick links',
           '<ul>' +
           '<li><button type="button" class="tma-portal-link" data-admin-go="branding">Edit company branding</button></li>' +
-          '<li><button type="button" class="tma-portal-link" data-admin-go="billing-convert">Convert free trial</button></li>' +
           '<li><button type="button" class="tma-portal-link" data-admin-go="device-security">Configure device security</button></li>' +
           '<li><button type="button" class="tma-portal-link" data-admin-go="email-settings">Email settings</button></li>' +
           '</ul>');
@@ -265,7 +284,7 @@
       });
       var defaults = el.querySelector('[data-brand-defaults]');
       if (defaults) defaults.addEventListener('click', function () {
-        s.branding.pageTitle = 'TM ANTOINE Advisory — Where Companies Connect';
+        s.branding.pageTitle = 'TM ANTOINE Advisory - Where Companies Connect';
         s.branding.headerColor = '#FFFFFF';
         s.branding.accentColor = '#0C0C0C';
         s.branding.logoName = '';
@@ -329,7 +348,7 @@
                 s.trial.active = false;
                 s.plan = name;
                 data().save();
-                data().logNotification('Order confirmation — ' + name + ' plan', s.user.email);
+                data().logNotification('Order confirmation - ' + name + ' plan', s.user.email);
                 ui().closeModal();
                 ui().toast('Welcome to ' + name + '!');
                 render();
@@ -389,7 +408,7 @@
             host.querySelector('[data-cancel-keep]').addEventListener('click', function () { ui().closeModal(); });
             host.querySelector('[data-cancel-confirm]').addEventListener('click', function () {
               ui().closeModal();
-              ui().toast('Cancellation request received — check your email');
+              ui().toast('Cancellation request received - check your email');
               data().logNotification('Trial cancellation confirmation', s.user.email);
             });
           },
@@ -511,15 +530,466 @@
     },
   };
 
+  var SEC_STATUS = {
+    login: { label: 'Signed in', badge: 'tma-auth__badge--done' },
+    logout: { label: 'Signed out', badge: '' },
+    login_failed: { label: 'Failed', badge: 'tma-auth__badge--danger' },
+    lockout: { label: 'Blocked', badge: 'tma-auth__badge--danger' },
+    registered: { label: 'Account created', badge: '' },
+    email_verified: { label: 'Email verified', badge: '' },
+    password_reset: { label: 'Password reset', badge: '' },
+    social_connected: { label: 'Google connected', badge: 'tma-auth__badge--done' },
+    social_disconnected: { label: 'Google disconnected', badge: '' },
+  };
+
+  function secEnsureStyles() {
+    ['css/auth.css', 'css/auth-flow.css'].forEach(function (href) {
+      if (!document.querySelector('link[href*="' + href + '"]')) {
+        var l = document.createElement('link');
+        l.rel = 'stylesheet';
+        l.href = href;
+        document.head.appendChild(l);
+      }
+    });
+  }
+
+  PAGES['account-security'] = {
+    render: function () {
+      secEnsureStyles();
+      return '<div data-sec-root><p class="tma-portal-note">Loading…</p></div>';
+    },
+    wire: function (el) {
+      var root = el.querySelector('[data-sec-root]');
+      if (!root) return;
+      var esc = ui().esc;
+
+      function refresh() { window.TMAPortalAdmin.setPage('account-security'); }
+
+      secApi('GET', '/security-settings/data').then(function (r) { return r.json(); }).then(function (d) {
+        var on = d.twoFactor === 'on';
+
+        var sessionRows = d.sessions.map(function (s2) {
+          return '<tr><td>' + esc(s2.device) + (s2.current ? ' <span class="tma-auth__badge tma-auth__badge--done">This device</span>' : '') + '</td>' +
+            '<td>' + esc(s2.ip || '') + '</td><td>' + esc(s2.lastActive) + '</td><td></td></tr>';
+        }).join('');
+
+        var eventRows = d.events.map(function (ev) {
+          var s3 = SEC_STATUS[ev.event] || { label: ev.event, badge: '' };
+          var at = ev.atIso ? new Date(ev.atIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' }) : ev.when;
+          return '<tr><td>' + esc(at) + '</td><td>' + esc(ev.ip || '') + '</td><td>' + esc(ev.device || '') + '</td>' +
+            '<td><span class="tma-auth__badge ' + s3.badge + '">' + esc(s3.label) + '</span></td></tr>';
+        }).join('');
+
+        root.innerHTML =
+          '<div class="tma-security">' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-password">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-password"><img src="images/icons/phosphor/Password.svg" alt="" aria-hidden="true">Password</h2>' +
+          '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#change-password-dialog"><span>Change password</span></button></div>' +
+          '<p class="tma-security__desc">Use a password you don\'t use anywhere else.</p></section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-connected">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-connected"><img src="images/icons/phosphor/Plugs.svg" alt="" aria-hidden="true">Connected accounts</h2></div>' +
+          '<p class="tma-security__desc">Sign in with Google or Microsoft alongside your password. Only accounts with your portal email can be connected.</p>' +
+          '<div class="tma-security__row">' +
+          '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Google16.svg" alt=""></span>' +
+          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Google</span>' +
+          (d.google && d.google.connected
+            ? '<span class="tma-security__row-sub tma-auth__provider-status tma-auth__provider-status--on">Connected as ' + esc(d.google.email || '') + '</span>'
+            : '<span class="tma-security__row-sub">Not connected</span>') +
+          '</span>' +
+          (d.google && d.google.connected
+            ? '<button type="button" class="tma-auth__chip-btn" data-sec-gdisconnect><span>Disconnect</span></button>'
+            : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect"><span>Connect</span></a>') +
+          '</div>' +
+          '<div class="tma-security__row">' +
+          '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Microsoft16.svg" alt=""></span>' +
+          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Microsoft</span><span class="tma-security__row-sub">Not connected</span></span>' +
+          '<button type="button" class="tma-auth__chip-btn" data-sec-connect="Microsoft"><span>Connect</span></button></div></section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-phone">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-phone"><img src="images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">Phone number</h2></div>' +
+          '<p class="tma-security__desc">Used for security alerts and account recovery only - never marketing.</p>' +
+          '<div class="tma-security__empty">' +
+          '<img src="images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">' +
+          '<span>No phone number added yet.</span>' +
+          '<button type="button" class="tma-auth__chip-btn" data-sec-connect="Phone verification"><span>Add phone number</span></button></div></section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-tfa">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-tfa"><img src="images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">Two-factor authentication</h2>' +
+          (on ? '<span class="tma-auth__badge tma-auth__badge--done">On</span>' : '<span class="tma-auth__badge">Off</span>') + '</div>' +
+          '<p class="tma-security__desc">A 6-digit code from your authenticator app is required when signing in.</p>' +
+          (on
+            ? '<div class="tma-security__row">' +
+              '<span class="tma-security__row-copy"><span class="tma-security__row-name">Authenticator app</span>' +
+              '<span class="tma-security__row-sub">Added ' + esc(d.twoFactorSince || '') + '</span></span>' +
+              '<button type="button" class="tma-auth__chip-btn" data-sec-setup><span>Set up again</span></button>' +
+              '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#disable-tfa-dialog"><span>Turn off</span></button></div>'
+            : '<div class="tma-security__empty">' +
+              '<img src="images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">' +
+              '<span>Two-factor authentication is off.</span>' +
+              '<button type="button" class="tma-auth__chip-btn" data-sec-setup><span>Turn on</span></button></div>') +
+          '</section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-codes">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-codes"><img src="images/icons/phosphor/Key.svg" alt="" aria-hidden="true">Recovery codes</h2></div>' +
+          (on
+            ? '<div class="tma-security__row">' +
+              '<span class="tma-security__row-copy"><span class="tma-security__row-name">' + d.recoveryCodesCount + ' codes available</span>' +
+              '<span class="tma-security__row-sub">Each code signs you in once if you can\'t use your authenticator app. Codes are only shown when generated.</span></span>' +
+              '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#regenerate-dialog"><span>Generate new codes</span></button></div>'
+            : '<p class="tma-security__desc">Available once two-factor authentication is turned on.</p>') +
+          '</section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-trusted">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-trusted"><img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">Trusted devices</h2></div>' +
+          '<p class="tma-security__desc">These devices skip the two-factor code for 30 days. Remove any device you don\'t recognize.</p>' +
+          '<div class="tma-security__empty">' +
+          '<img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">' +
+          '<span>No trusted devices yet.</span></div></section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-sessions">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-sessions"><img src="images/icons/phosphor/Desktop.svg" alt="" aria-hidden="true">Active sessions</h2>' +
+          '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#signout-all-dialog"><span>Sign out of all other devices</span></button></div>' +
+          '<p class="tma-security__desc">Everywhere you\'re currently signed in. Sign out anything you don\'t recognize.</p>' +
+          '<div class="tma-security__table-wrap"><table class="tma-security__table">' +
+          '<thead><tr><th scope="col">Device</th><th scope="col">Location</th><th scope="col">Last active</th><th scope="col"></th></tr></thead>' +
+          '<tbody>' + sessionRows + '</tbody></table></div></section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-history">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-history"><img src="images/icons/phosphor/ClockCounterClockwise.svg" alt="" aria-hidden="true">Recent login activity</h2></div>' +
+          '<p class="tma-security__desc">The last sign-ins and attempts on your account. If something looks wrong, change your password and sign out of all devices.</p>' +
+          (d.events.length
+            ? '<div class="tma-security__table-wrap"><table class="tma-security__table">' +
+              '<thead><tr><th scope="col">When</th><th scope="col">Location</th><th scope="col">Device</th><th scope="col">Status</th></tr></thead>' +
+              '<tbody>' + eventRows + '</tbody></table></div>'
+            : '<div class="tma-security__empty">' +
+              '<img src="images/icons/phosphor/ClockCounterClockwise.svg" alt="" aria-hidden="true">' +
+              '<span>No login activity to show yet.</span></div>') +
+          '</section>' +
+
+          '<section class="tma-security__card" aria-labelledby="sec-notify">' +
+          '<div class="tma-security__head">' +
+          '<h2 class="tma-security__title" id="sec-notify"><img src="images/icons/phosphor/Bell.svg" alt="" aria-hidden="true">Security notifications</h2></div>' +
+          '<p class="tma-security__desc">Emails we send to keep you informed about your account. Alerts for sign-ins from new devices can\'t be turned off.</p>' +
+          '<div class="tma-security__row">' +
+          '<span class="tma-security__row-copy"><span class="tma-security__row-name">New device sign-in</span>' +
+          '<span class="tma-security__row-sub">Always on - sent whenever a new device signs in</span></span>' +
+          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked disabled aria-label="New device sign-in alerts (always on)"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
+          '<div class="tma-security__row">' +
+          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Password changes</span></span>' +
+          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked aria-label="Password change alerts"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
+          '<div class="tma-security__row">' +
+          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Two-factor authentication changes</span></span>' +
+          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked aria-label="Two-factor authentication change alerts"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
+          '<div class="tma-security__row">' +
+          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Monthly security summary</span>' +
+          '<span class="tma-security__row-sub">A short overview of recent account activity</span></span>' +
+          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" aria-label="Monthly security summary"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
+          '</section>' +
+          '</div>' +
+
+          /* ── dialogs (from the design prototype) ── */
+          '<div class="tma-auth__dialog" id="change-password-dialog" role="dialog" aria-modal="true" hidden>' +
+          '<div class="tma-auth__dialog-card">' +
+          '<h2 class="tma-auth__dialog-title">Change password</h2>' +
+          '<form class="tma-auth__form" data-sec-form="password" action="#" novalidate>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="password" name="current_password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"></label>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="password" name="password" placeholder="New password" autocomplete="new-password" aria-label="New password"></label>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="password" name="password_confirmation" placeholder="Confirm new password" autocomplete="new-password" aria-label="Confirm new password"></label>' +
+          '<p class="tma-auth__hint">At least 10 characters. Changing it signs out your other devices.</p>' +
+          '<p class="tma-auth__hint" data-sec-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
+          '<button type="submit" class="tma-auth__submit">Update password</button></div></form></div></div>' +
+
+          '<div class="tma-auth__dialog" id="disable-tfa-dialog" role="dialog" aria-modal="true" hidden>' +
+          '<div class="tma-auth__dialog-card">' +
+          '<h2 class="tma-auth__dialog-title">Turn off two-factor authentication?</h2>' +
+          '<p class="tma-auth__dialog-text">Your recovery codes will stop working too.</p>' +
+          '<p class="tma-auth__hint" data-sec-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Keep it on</button>' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--danger" data-sec-disable>Turn off</button></div></div></div>' +
+
+          '<div class="tma-auth__dialog" id="regenerate-dialog" role="dialog" aria-modal="true" hidden>' +
+          '<div class="tma-auth__dialog-card">' +
+          '<h2 class="tma-auth__dialog-title">Generate new recovery codes?</h2>' +
+          '<p class="tma-auth__dialog-text">Your old codes stop working immediately. Save the new set right away.</p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
+          '<button type="button" class="tma-auth__submit" data-sec-regen>Generate new codes</button></div></div></div>' +
+
+          '<div class="tma-auth__dialog" id="signout-all-dialog" role="dialog" aria-modal="true" hidden>' +
+          '<div class="tma-auth__dialog-card">' +
+          '<h2 class="tma-auth__dialog-title">Sign out of all other devices?</h2>' +
+          '<p class="tma-auth__dialog-text">Every session except this one will end immediately.</p>' +
+          '<form class="tma-auth__form" data-sec-form="logout-all" action="#" novalidate>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="password" name="password" placeholder="Confirm your password" autocomplete="current-password" aria-label="Confirm your password"></label>' +
+          '<p class="tma-auth__hint" data-sec-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
+          '<button type="submit" class="tma-auth__submit">Sign out other devices</button></div></form></div></div>' +
+
+          '<div class="tma-auth__dialog" id="tfa-setup-dialog" role="dialog" aria-modal="true" hidden>' +
+          '<div class="tma-auth__dialog-card">' +
+          '<div data-sec-step="confirm" hidden>' +
+          '<h2 class="tma-auth__dialog-title">Confirm your password</h2>' +
+          '<form class="tma-auth__form" data-sec-form="confirm" action="#" novalidate>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password"></label>' +
+          '<p class="tma-auth__hint" data-sec-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
+          '<button type="submit" class="tma-auth__submit">Continue</button></div></form></div>' +
+          '<div data-sec-step="scan" hidden>' +
+          '<h2 class="tma-auth__dialog-title">Scan this QR code</h2>' +
+          '<p class="tma-auth__dialog-text">Choose "Add account" in your authenticator app, then scan.</p>' +
+          '<div class="tma-auth__qr" data-sec-qr role="img" aria-label="QR code for authenticator setup"></div>' +
+          '<div class="tma-auth__manual-key"><code data-sec-key></code>' +
+          '<button type="button" class="tma-auth__chip-btn" data-sec-copy-key><span>Copy</span></button></div>' +
+          '<form class="tma-auth__form" data-sec-form="verify" action="#" novalidate>' +
+          '<div class="tma-auth__otp tma-auth__otp--6" data-sec-otp role="group" aria-label="6 digit code">' +
+          '<input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1">' +
+          '<input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">' +
+          '<input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">' +
+          '<input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">' +
+          '<input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 5">' +
+          '<input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 6">' +
+          '</div>' +
+          '<p class="tma-auth__hint" data-sec-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
+          '<button type="submit" class="tma-auth__submit">Verify code</button></div></form></div>' +
+          '<div data-sec-step="codes" hidden>' +
+          '<h2 class="tma-auth__dialog-title">Save your recovery codes</h2>' +
+          '<p class="tma-auth__dialog-text">Each code signs you in once. They won\'t be shown again.</p>' +
+          '<ul class="tma-auth__codes" data-sec-codes></ul>' +
+          '<div class="tma-auth__actions">' +
+          '<button type="button" class="tma-auth__chip-btn" data-sec-copy-codes><img src="images/icons/phosphor/Copy.svg" alt="" width="14" height="14" aria-hidden="true"><span>Copy</span></button>' +
+          '<button type="button" class="tma-auth__chip-btn" data-sec-download-codes><img src="images/icons/phosphor/DownloadSimple.svg" alt="" width="14" height="14" aria-hidden="true"><span>Download</span></button>' +
+          '<button type="button" class="tma-auth__chip-btn" data-sec-print-codes><img src="images/icons/phosphor/Printer.svg" alt="" width="14" height="14" aria-hidden="true"><span>Print</span></button></div>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit" data-sec-done>Done</button></div></div>' +
+          '</div></div>';
+
+        /* ── dialog plumbing ── */
+        function closeDialogs() { root.querySelectorAll('.tma-auth__dialog').forEach(function (dg) { dg.hidden = true; }); }
+        root.querySelectorAll('[data-dialog-open]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            closeDialogs();
+            var dg = root.querySelector(b.getAttribute('data-dialog-open'));
+            if (dg) { dg.hidden = false; var f = dg.querySelector('input'); if (f) f.focus(); }
+          });
+        });
+        root.querySelectorAll('[data-dialog-close]').forEach(function (b) {
+          b.addEventListener('click', closeDialogs);
+        });
+        root.querySelectorAll('.tma-auth__dialog').forEach(function (dg) {
+          dg.addEventListener('click', function (ev2) { if (ev2.target === dg) closeDialogs(); });
+        });
+
+        var setupDialog = root.querySelector('#tfa-setup-dialog');
+        function showStep(id) {
+          setupDialog.querySelectorAll('[data-sec-step]').forEach(function (s2) { s2.hidden = s2.getAttribute('data-sec-step') !== id; });
+          closeDialogs();
+          setupDialog.hidden = false;
+          var f = setupDialog.querySelector('[data-sec-step="' + id + '"] input');
+          if (f) f.focus();
+        }
+        function errorIn(scope, msg) {
+          var e = scope.querySelector('[data-sec-error]');
+          if (e) { e.hidden = !msg; e.textContent = msg || ''; }
+        }
+        function firstError(json, fallback) {
+          if (json && json.errors) { var k = Object.keys(json.errors); if (k.length) return json.errors[k[0]][0]; }
+          return (json && json.message) || fallback;
+        }
+
+        /* otp auto-advance */
+        var digits = root.querySelectorAll('[data-sec-otp] input');
+        digits.forEach(function (input, i) {
+          input.addEventListener('input', function () {
+            input.value = input.value.replace(/\D/g, '').slice(-1);
+            if (input.value && digits[i + 1]) digits[i + 1].focus();
+          });
+          input.addEventListener('keydown', function (ev2) {
+            if (ev2.key === 'Backspace' && !input.value && digits[i - 1]) digits[i - 1].focus();
+          });
+          input.addEventListener('paste', function (ev2) {
+            var text = (ev2.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+            if (!text) return;
+            ev2.preventDefault();
+            for (var k2 = 0; k2 < digits.length - i && k2 < text.length; k2++) digits[i + k2].value = text.charAt(k2);
+          });
+        });
+
+        /* coming-soon connects */
+        root.querySelectorAll('[data-sec-connect]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            ui().toast(b.getAttribute('data-sec-connect') + ' is coming in a later phase');
+          });
+        });
+
+        /* Google disconnect */
+        var gdis = root.querySelector('[data-sec-gdisconnect]');
+        if (gdis) gdis.addEventListener('click', function () {
+          secApi('POST', '/auth/social/google/disconnect').then(function (res) {
+            return res.json().then(function (j) {
+              ui().toast((j && j.message) || (res.ok ? 'Google disconnected.' : 'Could not disconnect.'));
+              if (res.ok) refresh();
+            });
+          }).catch(function () { ui().toast('Could not disconnect.'); });
+        });
+
+        /* two-factor setup flow */
+        var afterConfirm = null;
+        function startSetup() {
+          secApi('POST', '/auth/user/two-factor-authentication').then(function (res) {
+            if (res.status === 423) { afterConfirm = startSetup; showStep('confirm'); return; }
+            if (res.ok) loadScan();
+          });
+        }
+        function loadScan() {
+          showStep('scan');
+          secApi('GET', '/auth/user/two-factor-qr-code').then(function (r) { return r.json(); }).then(function (j) {
+            var qr = root.querySelector('[data-sec-qr]');
+            qr.innerHTML = j.svg;
+            var svg = qr.querySelector('svg');
+            if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.width = '100%'; svg.style.height = '100%'; }
+          }).catch(function () {});
+          secApi('GET', '/auth/user/two-factor-secret-key').then(function (r) { return r.json(); }).then(function (j) {
+            root.querySelector('[data-sec-key]').textContent = (j.secretKey.match(/.{1,4}/g) || [j.secretKey]).join(' ');
+            root.querySelector('[data-sec-copy-key]').onclick = function () {
+              navigator.clipboard && navigator.clipboard.writeText(j.secretKey);
+              ui().toast('Setup key copied');
+            };
+          }).catch(function () {});
+        }
+        var lastCodes = [];
+        function showCodes() {
+          secApi('GET', '/auth/user/two-factor-recovery-codes').then(function (r) { return r.json(); }).then(function (codes) {
+            lastCodes = codes;
+            root.querySelector('[data-sec-codes]').innerHTML = codes.map(function (c) { return '<li class="tma-auth__code">' + esc(c) + '</li>'; }).join('');
+            showStep('codes');
+          });
+        }
+        root.querySelectorAll('[data-sec-setup]').forEach(function (b) {
+          b.addEventListener('click', startSetup);
+        });
+        var copyCodes = root.querySelector('[data-sec-copy-codes]');
+        if (copyCodes) copyCodes.addEventListener('click', function () {
+          navigator.clipboard && navigator.clipboard.writeText(lastCodes.join('\n'));
+          ui().toast('Recovery codes copied');
+        });
+        var dlCodes = root.querySelector('[data-sec-download-codes]');
+        if (dlCodes) dlCodes.addEventListener('click', function () {
+          var blob = new Blob(['TM ANTOINE Advisory - recovery codes\n\n' + lastCodes.join('\n') + '\n'], { type: 'text/plain' });
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'tma-recovery-codes.txt';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+        });
+        var prCodes = root.querySelector('[data-sec-print-codes]');
+        if (prCodes) prCodes.addEventListener('click', function () { window.print(); });
+        var doneBtn = root.querySelector('[data-sec-done]');
+        if (doneBtn) doneBtn.addEventListener('click', function () { closeDialogs(); refresh(); });
+
+        var regen = root.querySelector('[data-sec-regen]');
+        if (regen) regen.addEventListener('click', function () {
+          var run = function () {
+            secApi('POST', '/auth/user/two-factor-recovery-codes').then(function (res) {
+              if (res.status === 423) { afterConfirm = run; showStep('confirm'); return; }
+              if (res.ok) showCodes();
+            });
+          };
+          run();
+        });
+        var disable = root.querySelector('[data-sec-disable]');
+        if (disable) disable.addEventListener('click', function () {
+          var run = function () {
+            secApi('DELETE', '/auth/user/two-factor-authentication').then(function (res) {
+              if (res.status === 423) { afterConfirm = run; showStep('confirm'); return; }
+              if (res.ok) { closeDialogs(); ui().toast('Two-factor authentication turned off'); refresh(); }
+            });
+          };
+          run();
+        });
+
+        /* forms */
+        root.querySelectorAll('form[data-sec-form]').forEach(function (form) {
+          form.addEventListener('submit', function (ev2) {
+            ev2.preventDefault();
+            var kind = form.getAttribute('data-sec-form');
+
+            if (kind === 'confirm') {
+              secApi('POST', '/auth/user/confirm-password', { password: form.querySelector('input').value }).then(function (res) {
+                if (res.ok) { errorIn(form, ''); form.reset(); if (afterConfirm) afterConfirm(); }
+                else res.json().then(function (j) { errorIn(form, firstError(j, 'That password didn\'t match.')); });
+              });
+            }
+
+            if (kind === 'verify') {
+              var code = '';
+              form.querySelectorAll('.tma-auth__otp-digit').forEach(function (i2) { code += i2.value; });
+              secApi('POST', '/auth/user/confirmed-two-factor-authentication', { code: code }).then(function (res) {
+                if (res.ok) showCodes();
+                else errorIn(form, 'That code didn\'t match - enter the newest one.');
+              });
+            }
+
+            if (kind === 'password') {
+              secApi('PUT', '/auth/user/password', {
+                current_password: form.querySelector('[name="current_password"]').value,
+                password: form.querySelector('[name="password"]').value,
+                password_confirmation: form.querySelector('[name="password_confirmation"]').value,
+              }).then(function (res) {
+                if (res.ok) { closeDialogs(); ui().toast('Password updated'); form.reset(); }
+                else res.json().then(function (j) { errorIn(form, firstError(j, 'Could not update password.')); });
+              });
+            }
+
+            if (kind === 'logout-all') {
+              secApi('POST', '/security-settings/logout-others', { password: form.querySelector('input').value }).then(function (res) {
+                if (res.ok) { closeDialogs(); ui().toast('Other sessions ended'); refresh(); }
+                else res.json().then(function (j) { errorIn(form, firstError(j, 'Could not end sessions.')); });
+              });
+            }
+          });
+        });
+      }).catch(function () {
+        root.innerHTML = '<p class="tma-portal-note">Couldn\'t load security data. Refresh to try again.</p>';
+      });
+    },
+  };
+
   PAGES['security-insights'] = {
     render: function (s) {
       return '<p class="tma-portal-subtitle">A summary of your account’s security posture.</p>' +
         '<div class="tma-portal-two-col">' +
-        ui().section('Sign-ins', '<p><strong>0</strong> failed sign-in attempts in the last 7 days</p>') +
-        ui().section('Device security', '<p>Default mode: <strong>' + (s.settings.deviceSecurity.defaultMode === 'secure' ? 'Secure' : 'Standard') + '</strong></p>') +
-        ui().section('Data loss prevention', '<p>Content-based limits: <strong>' + (s.settings.dlp.limitAccess === 'yes' ? 'On' : 'Off') + '</strong></p>') +
+        ui().section('Sign-ins', '<p data-si-signins>Loading…</p>') +
+        ui().section('Two-factor authentication', '<p data-si-tfa>Loading…</p>') +
+        ui().section('Active sessions', '<p data-si-sessions>Loading…</p>') +
         ui().section('Quarantine', '<p><strong>' + s.quarantinedFiles.length + '</strong> quarantined files</p>') +
         '</div>';
+    },
+    wire: function (el) {
+      secApi('GET', '/security-settings/data').then(function (r) { return r.json(); }).then(function (d) {
+        var si = el.querySelector('[data-si-signins]');
+        var tfa = el.querySelector('[data-si-tfa]');
+        var ses = el.querySelector('[data-si-sessions]');
+        if (si) si.innerHTML = '<strong>' + d.failedSignins7d + '</strong> failed sign-in attempt' + (d.failedSignins7d === 1 ? '' : 's') + ' in the last 7 days';
+        if (tfa) tfa.innerHTML = d.twoFactor === 'on' ? '<strong>On</strong>' : '<strong>Off</strong> — turn it on under Account security';
+        if (ses) ses.innerHTML = '<strong>' + d.sessions.length + '</strong> active session' + (d.sessions.length === 1 ? '' : 's');
+      }).catch(function () {});
     },
   };
 
@@ -531,7 +1001,7 @@
         function row(action, actionLabel) {
           return '<tr><td>' + actionLabel + '</td>' +
             ['anonymous', 'client', 'employee'].map(function (role) {
-              return '<td><input type="checkbox" data-dlp="' + key + '.' + action + '.' + role + '"' + (m[action][role] ? ' checked' : '') + ' aria-label="' + actionLabel + ' — ' + role + '"></td>';
+              return '<td><input type="checkbox" data-dlp="' + key + '.' + action + '.' + role + '"' + (m[action][role] ? ' checked' : '') + ' aria-label="' + actionLabel + ' - ' + role + '"></td>';
             }).join('') + '</tr>';
         }
         return ui().section(label,
@@ -560,80 +1030,113 @@
   };
 
   PAGES['signin-policy'] = {
-    render: function (s) {
-      var p = s.settings.signInPolicy;
-      return '<h3 class="tma-portal-section__title">Password requirements</h3>' +
-        '<p class="tma-portal-subtitle">Configure the complexity requirements for portal credentials.</p>' +
-        ui().section('',
-          '<p>Minimum length:<br><strong>' + p.minLength + ' characters</strong></p>' +
-          '<p>Numbers required:<br><strong>' + p.numbersRequired + '</strong></p>' +
-          '<p>Special characters required:<br><strong>' + p.specialRequired + '</strong></p>' +
-          '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Edit', icon: 'PencilSimple', variant: 'ghost', attrs: 'data-signin-edit' }) + '</div>') +
-        '<h3 class="tma-portal-section__title">Multi-Factor authentication</h3>' +
-        '<p class="tma-portal-subtitle">Allow users to setup an authenticator app or phone number to provide an additional factor for authentication. Users can enroll a method in their Personal settings.</p>' +
-        (s.trial.active ? ui().banner('warning', 'Multi-Factor authentication is unavailable for trial accounts.') :
-          ui().section('', '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require multi-factor authentication</span>' + ui().toggle(false, 'data-signin-mfa', 'Require MFA') + '</div>'));
+    render: function () {
+      return '<div data-pol-root><p class="tma-portal-note">Loading…</p></div>';
     },
-    wire: function (el, s) {
-      var edit = el.querySelector('[data-signin-edit]');
-      if (edit) edit.addEventListener('click', function () {
-        var p = s.settings.signInPolicy;
-        ui().openModal({
-          title: 'Edit password requirements',
-          body:
-            ui().field('Minimum length (characters)', ui().input({ type: 'number', value: String(p.minLength), attrs: 'data-signin-len min="8" max="32"' })) +
-            ui().field('Numbers required', ui().input({ type: 'number', value: String(p.numbersRequired), attrs: 'data-signin-num min="0" max="4"' })) +
-            ui().field('Special characters required', ui().input({ type: 'number', value: String(p.specialRequired), attrs: 'data-signin-special min="0" max="4"' })) +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-signin-save' }) + '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-signin-save]').addEventListener('click', function () {
-              p.minLength = Math.max(8, parseInt(host.querySelector('[data-signin-len]').value, 10) || 8);
-              p.numbersRequired = Math.max(0, parseInt(host.querySelector('[data-signin-num]').value, 10) || 0);
-              p.specialRequired = Math.max(0, parseInt(host.querySelector('[data-signin-special]').value, 10) || 0);
-              data().save(); ui().closeModal(); ui().toast('Password policy updated'); render();
-            });
-          },
+    wire: function (el) {
+      var root = el.querySelector('[data-pol-root]');
+      if (!root) return;
+      secApi('GET', '/admin/security-policies').then(function (r) { return r.json(); }).then(function (all) {
+        var p = all.signInPolicy;
+        var admin = all.isAdmin;
+        root.innerHTML = '<h3 class="tma-portal-section__title">Password requirements</h3>' +
+          '<p class="tma-portal-subtitle">Applies to registration, password changes, and password resets.</p>' +
+          (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
+          ui().section('',
+            '<p>Minimum length:<br><strong>' + p.minLength + ' characters</strong></p>' +
+            '<p>Numbers required:<br><strong>' + p.numbersRequired + '</strong></p>' +
+            '<p>Special characters required:<br><strong>' + p.specialRequired + '</strong></p>' +
+            (admin ? '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Edit', icon: 'PencilSimple', variant: 'ghost', attrs: 'data-signin-edit' }) + '</div>' : '')) +
+          '<h3 class="tma-portal-section__title">Multi-Factor authentication</h3>' +
+          '<p class="tma-portal-subtitle">Require every user to set up an authenticator app. Anyone without one is sent to Security settings at sign-in.</p>' +
+          ui().section('', '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require multi-factor authentication</span>' +
+            ui().toggle(p.requireMfa, 'data-signin-mfa' + (admin ? '' : ' disabled'), 'Require MFA') + '</div>');
+
+        function save(done) {
+          secApi('PUT', '/admin/security-policies/sign-in', p).then(function (res) {
+            if (res.ok) { ui().toast('Sign in policy saved'); if (done) done(true); }
+            else res.json().then(function (j) { ui().toast((j && j.message) || 'Could not save'); if (done) done(false); }).catch(function () { if (done) done(false); });
+          });
+        }
+
+        var mfa = root.querySelector('[data-signin-mfa]');
+        if (mfa) mfa.addEventListener('change', function () { p.requireMfa = mfa.checked; save(); });
+
+        var edit = root.querySelector('[data-signin-edit]');
+        if (edit) edit.addEventListener('click', function () {
+          ui().openModal({
+            title: 'Edit password requirements',
+            body:
+              ui().field('Minimum length (characters)', ui().input({ type: 'number', value: String(p.minLength), attrs: 'data-signin-len min="8" max="64"' })) +
+              ui().field('Numbers required', ui().input({ type: 'number', value: String(p.numbersRequired), attrs: 'data-signin-num min="0" max="4"' })) +
+              ui().field('Special characters required', ui().input({ type: 'number', value: String(p.specialRequired), attrs: 'data-signin-special min="0" max="4"' })) +
+              '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-signin-save' }) + '</div>',
+            onMount: function (host) {
+              host.querySelector('[data-signin-save]').addEventListener('click', function () {
+                p.minLength = Math.min(64, Math.max(8, parseInt(host.querySelector('[data-signin-len]').value, 10) || 8));
+                p.numbersRequired = Math.max(0, parseInt(host.querySelector('[data-signin-num]').value, 10) || 0);
+                p.specialRequired = Math.max(0, parseInt(host.querySelector('[data-signin-special]').value, 10) || 0);
+                save(function (ok) { if (ok) { ui().closeModal(); window.TMAPortalAdmin.setPage('signin-policy'); } });
+              });
+            },
+          });
         });
-      });
+      }).catch(function () { root.innerHTML = '<p class="tma-portal-note">Couldn\'t load the sign in policy. Refresh to try again.</p>'; });
     },
   };
 
   PAGES['security-policy'] = {
-    render: function (s) {
-      var p = s.settings.securityPolicy;
-      var toggles = [
-        ['impossibleTravel', 'Impossible travel access from multiple countries'],
-        ['downloadTrend', 'High download activity: change in download activity trend'],
-        ['ipCountChange', 'Access from high number of IPs: change in IP count trend'],
-        ['failedSignIns', 'Multiple failed sign-in attempts'],
-        ['suspiciousIp', 'Suspicious IP activity'],
-      ];
-      return '<h3 class="tma-portal-section__title">Trusted domains</h3>' +
-        ui().section('',
-          '<p class="tma-portal-note">You can enter one or more domains below to allow iframe embedding and Cross-Origin Resource Sharing (CORS).</p>' +
-          '<div class="tma-portal-field"><span class="tma-portal-field__label">Allowed domains (comma separated list):</span>' +
-          '<textarea class="tma-portal-textarea" data-secpol-domains placeholder="example.com, app.example.com">' + ui().esc(p.trustedDomains) + '</textarea></div>') +
-        '<h3 class="tma-portal-section__title">Auto-remediation</h3>' +
-        ui().section('',
-          '<p class="tma-portal-note">Auto-remediation automatically fixes big security problems on its own. It uses smart technology to detect and solve these issues without needing any action from you. This helps keep your account safe without you having to worry about it.</p>' +
-          '<p><strong>Scenarios</strong></p>' +
-          toggles.map(function (t) {
-            return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">' + t[1] + '</span>' +
-              ui().toggle(p.autoRemediation[t[0]], 'data-secpol-toggle="' + t[0] + '"', t[1]) + '</div>';
-          }).join('')) +
-        saveBtn('data-secpol-save');
+    render: function () {
+      return '<div data-pol-root><p class="tma-portal-note">Loading…</p></div>';
     },
-    wire: function (el, s) {
-      var p = s.settings.securityPolicy;
-      el.querySelectorAll('[data-secpol-toggle]').forEach(function (t) {
-        t.addEventListener('change', function () {
-          p.autoRemediation[t.getAttribute('data-secpol-toggle')] = t.checked;
-          data().save();
+    wire: function (el) {
+      var root = el.querySelector('[data-pol-root]');
+      if (!root) return;
+      secApi('GET', '/admin/security-policies').then(function (r) { return r.json(); }).then(function (all) {
+        var p = all.securityPolicy;
+        var admin = all.isAdmin;
+        var toggles = [
+          ['impossibleTravel', 'Impossible travel access from multiple countries'],
+          ['downloadTrend', 'High download activity: change in download activity trend'],
+          ['ipCountChange', 'Access from high number of IPs: change in IP count trend'],
+          ['failedSignIns', 'Multiple failed sign-in attempts'],
+          ['suspiciousIp', 'Suspicious IP activity'],
+        ];
+        root.innerHTML = '<h3 class="tma-portal-section__title">Trusted domains</h3>' +
+          (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
+          ui().section('',
+            '<p class="tma-portal-note">Domains listed here may embed the portal in an iframe. Sent to browsers as a Content-Security-Policy header.</p>' +
+            '<div class="tma-portal-field"><span class="tma-portal-field__label">Allowed domains (comma separated list):</span>' +
+            '<textarea class="tma-portal-textarea" data-secpol-domains placeholder="example.com, app.example.com"' + (admin ? '' : ' disabled') + '>' + ui().esc(p.trustedDomains) + '</textarea></div>') +
+          '<h3 class="tma-portal-section__title">Auto-remediation</h3>' +
+          ui().section('',
+            '<p class="tma-portal-note">Scenarios flagged for automatic follow-up in the suspicious-login checks.</p>' +
+            '<p><strong>Scenarios</strong></p>' +
+            toggles.map(function (t2) {
+              return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">' + t2[1] + '</span>' +
+                ui().toggle(p.autoRemediation[t2[0]], 'data-secpol-toggle="' + t2[0] + '"' + (admin ? '' : ' disabled'), t2[1]) + '</div>';
+            }).join('')) +
+          (admin ? saveBtn('data-secpol-save') : '');
+
+        function save() {
+          secApi('PUT', '/admin/security-policies/security', p).then(function (res) {
+            if (res.ok) ui().toast('Security policy saved');
+            else res.json().then(function (j) { ui().toast((j && j.message) || 'Could not save'); }).catch(function () {});
+          });
+        }
+
+        root.querySelectorAll('[data-secpol-toggle]').forEach(function (t2) {
+          t2.addEventListener('change', function () {
+            p.autoRemediation[t2.getAttribute('data-secpol-toggle')] = t2.checked;
+            save();
+          });
         });
-      });
-      wireSave(el, 'data-secpol-save', function () {
-        p.trustedDomains = el.querySelector('[data-secpol-domains]').value.trim();
-      });
+        var saveB = root.querySelector('[data-secpol-save]');
+        if (saveB) saveB.addEventListener('click', function () {
+          p.trustedDomains = root.querySelector('[data-secpol-domains]').value.trim();
+          save();
+        });
+      }).catch(function () { root.innerHTML = '<p class="tma-portal-note">Couldn\'t load the security policy. Refresh to try again.</p>'; });
     },
   };
 
@@ -653,7 +1156,7 @@
         events.map(function (ev) {
           return '<tr><td>' + ev[1] + '</td>' +
             ['admin', 'employees', 'clients'].map(function (who) {
-              return '<td><input type="checkbox" data-alert="' + ev[0] + '.' + who + '"' + (a[ev[0]][who] ? ' checked' : '') + ' aria-label="' + ev[1] + ' — ' + who + '"></td>';
+              return '<td><input type="checkbox" data-alert="' + ev[0] + '.' + who + '"' + (a[ev[0]][who] ? ' checked' : '') + ' aria-label="' + ev[1] + ' - ' + who + '"></td>';
             }).join('') + '</tr>';
         }).join('') +
         '</tbody></table>' +
@@ -674,39 +1177,54 @@
   };
 
   PAGES['device-security'] = {
-    render: function (s) {
-      var d = s.settings.deviceSecurity;
-      return ui().section('Standard (Most Accessible)',
-        '<p class="tma-portal-note">Standard mode provides users with the most flexible options for accessing their account.</p>' +
-        '<ul>' +
-        '<li>Self Destruct is disabled</li>' +
-        '<li>External Applications are enabled</li>' +
-        '<li>Offline Access to Files is enabled</li>' +
-        '<li>Require Pin Lock is disabled</li>' +
-        '<li>Restrict Modified Devices is disabled</li>' +
-        '<li>Automatic Login is enabled</li>' +
-        '</ul>' +
-        '<label class="tma-portal-checkbox"><input type="radio" name="device-default" value="standard"' + (d.defaultMode === 'standard' ? ' checked' : '') + ' data-device-default>' +
-        '<span>Set as the Default Security Setting</span></label>') +
-        ui().section('Secure (Common Safeguards)',
-          '<p class="tma-portal-note">Secure mode provides default settings that lock down access to documents while offline.</p>' +
-          ui().field('Self Destruct — accounts are automatically removed:', ui().select(['Never', 'After 1 day offline', 'After 7 days offline', 'After 30 days offline'], d.selfDestruct, 'data-device-destruct')) +
-          '<ul>' +
-          '<li>External Applications are disabled</li>' +
-          '<li>Offline Access to Files is disabled</li>' +
-          '<li>Require Pin Lock is enabled</li>' +
-          '<li>Restrict Modified Devices is enabled</li>' +
-          '<li>Automatic Login is disabled</li>' +
-          '</ul>' +
-          '<label class="tma-portal-checkbox"><input type="radio" name="device-default" value="secure"' + (d.defaultMode === 'secure' ? ' checked' : '') + ' data-device-default>' +
-          '<span>Set as the Default Security Setting</span></label>') +
-        saveBtn('data-device-save');
+    render: function () {
+      return '<div data-pol-root><p class="tma-portal-note">Loading…</p></div>';
     },
-    wire: function (el, s) {
-      wireSave(el, 'data-device-save', function () {
-        s.settings.deviceSecurity.defaultMode = radioValue(el, 'device-default', 'standard');
-        s.settings.deviceSecurity.selfDestruct = el.querySelector('[data-device-destruct]').value;
-      });
+    wire: function (el) {
+      var root = el.querySelector('[data-pol-root]');
+      if (!root) return;
+      secApi('GET', '/admin/security-policies').then(function (r) { return r.json(); }).then(function (all) {
+        var d = all.deviceSecurity;
+        var admin = all.isAdmin;
+        var dis = admin ? '' : ' disabled';
+        root.innerHTML =
+          (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
+          ui().section('Standard (Most Accessible)',
+            '<p class="tma-portal-note">Standard mode provides users with the most flexible options for accessing their account.</p>' +
+            '<ul>' +
+            '<li>Self Destruct is disabled</li>' +
+            '<li>External Applications are enabled</li>' +
+            '<li>Offline Access to Files is enabled</li>' +
+            '<li>Require Pin Lock is disabled</li>' +
+            '<li>Restrict Modified Devices is disabled</li>' +
+            '<li>Automatic Login is enabled</li>' +
+            '</ul>' +
+            '<label class="tma-portal-checkbox"><input type="radio" name="device-default" value="standard"' + (d.defaultMode === 'standard' ? ' checked' : '') + dis + ' data-device-default>' +
+            '<span>Set as the Default Security Setting</span></label>') +
+          ui().section('Secure (Common Safeguards)',
+            '<p class="tma-portal-note">Secure mode provides default settings that lock down access to documents while offline.</p>' +
+            ui().field('Self Destruct - accounts are automatically removed:', ui().select(['Never', 'After 1 day offline', 'After 7 days offline', 'After 30 days offline'], d.selfDestruct, 'data-device-destruct' + dis)) +
+            '<ul>' +
+            '<li>External Applications are disabled</li>' +
+            '<li>Offline Access to Files is disabled</li>' +
+            '<li>Require Pin Lock is enabled</li>' +
+            '<li>Restrict Modified Devices is enabled</li>' +
+            '<li>Automatic Login is disabled</li>' +
+            '</ul>' +
+            '<label class="tma-portal-checkbox"><input type="radio" name="device-default" value="secure"' + (d.defaultMode === 'secure' ? ' checked' : '') + dis + ' data-device-default>' +
+            '<span>Set as the Default Security Setting</span></label>') +
+          (admin ? saveBtn('data-device-save') : '');
+
+        var saveB = root.querySelector('[data-device-save]');
+        if (saveB) saveB.addEventListener('click', function () {
+          d.defaultMode = radioValue(root, 'device-default', 'standard');
+          d.selfDestruct = root.querySelector('[data-device-destruct]').value;
+          secApi('PUT', '/admin/security-policies/device', d).then(function (res) {
+            if (res.ok) ui().toast('Device security saved');
+            else res.json().then(function (j) { ui().toast((j && j.message) || 'Could not save'); }).catch(function () {});
+          });
+        });
+      }).catch(function () { root.innerHTML = '<p class="tma-portal-note">Couldn\'t load device security. Refresh to try again.</p>'; });
     },
   };
 
@@ -736,7 +1254,7 @@
             '<td><label class="tma-portal-checkbox"><input type="checkbox" data-super-select="' + p.id + '"' + (self.selected[p.id] ? ' checked' : '') + '></label></td>' +
             '<td><span class="tma-portal-avatar-cell"><img src="images/avatars/AvatarByewind.png" alt=""><strong>' + ui().esc(p.lastName + ', ' + p.firstName) + '</strong></span></td>' +
             '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
-            '<td class="tma-portal-table__muted">' + ui().esc(p.company || '—') + '</td></tr>';
+            '<td class="tma-portal-table__muted">' + ui().esc(p.company || '-') + '</td></tr>';
         }).join('') || '<tr class="tma-portal-table__empty"><td colspan="4">No members match your filters.</td></tr>') +
         '<label class="tma-portal-checkbox"><input type="checkbox" data-super-hide' + (s.hideSuperGroup ? ' checked' : '') + '>' +
         '<span>Hide Super Group from Folder Access List</span></label>';
@@ -1156,7 +1674,7 @@
         b.addEventListener('click', function () {
           var f = s.remoteUploadForms.filter(function (x) { return x.id === b.getAttribute('data-ruf-code'); })[0];
           ui().openModal({
-            title: 'Embed code — ' + (f ? f.name : ''),
+            title: 'Embed code - ' + (f ? f.name : ''),
             body: '<p>Paste this snippet into your website:</p>' +
               '<div class="tma-portal-section__card"><code style="font-size:var(--text-size-12);word-break:break-all">&lt;iframe src="https://portal.tmantoinelaw.com/upload/' + (f ? f.id : '') + '" width="100%" height="480"&gt;&lt;/iframe&gt;</code></div>',
           });

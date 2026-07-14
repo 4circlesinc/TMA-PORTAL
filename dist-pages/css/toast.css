@@ -1,4 +1,4 @@
-/* TMA — Toast */
+/* TMA - Toast */
 
 .tma-toast {
   display: inline-flex;
@@ -65,7 +65,7 @@
   width: 174px;
 }
 
-/* Floating toast — viewport placement (toast.js showFloatingToast) */
+/* Floating toast - viewport placement (toast.js showFloatingToast) */
 
 .tma-toast-floating-host {
   position: fixed;

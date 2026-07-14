@@ -2,7 +2,7 @@
   "slug": "button-group",
   "nodeId": "33067:4918",
   "name": "Button Group",
-  "description": "TMA Button Group — use the Group component to combine buttons for pagination, toolbars, auth, navigation, and social sign-in.",
+  "description": "TMA Button Group - use the Group component to combine buttons for pagination, toolbars, auth, navigation, and social sign-in.",
   "cssPath": "public/css/button-group.css",
   "docJsPath": "public/js/button-group-doc.js",
   "docIconJsPath": "public/js/button-group-doc-icons.js",

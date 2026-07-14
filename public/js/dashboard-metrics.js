@@ -1,5 +1,5 @@
 /*
- * TMA — Default Dashboard metrics (Figma 32546:96097 / 32546:96098)
+ * TMA - Default Dashboard metrics (Figma 32546:96097 / 32546:96098)
  * Global: window.TMADashboardMetrics
  */
 (function () {

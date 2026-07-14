@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recovery Codes - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="fresh copied saved regenerate"
+        data-state="fresh"
+        data-demo-next="auth/getting-started/?state=complete">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="codes-title">
+        <div class="tma-auth__icon" aria-hidden="true">
+          <img src="/images/icons/phosphor/Key.svg" alt="" width="80" height="80">
+        </div>
+
+        <div class="tma-auth__intro">
+          <h1 class="tma-auth__title" id="codes-title">Save your recovery codes</h1>
+          <p class="tma-auth__subtitle">Each code signs you in once if you can't use your app.</p>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="fresh regenerate" role="status">
+          <img src="/images/icons/phosphor/Warning.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span data-show="fresh"><strong>Store these somewhere safe.</strong> They won't be shown again.</span>
+          <span data-show="regenerate"><strong>Generating new codes replaces these.</strong> All of your previous codes will stop working immediately.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="copied" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>Copied. Paste them somewhere safe.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="saved" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>Saved. Keep your codes private.</span>
+        </div>
+
+        <ul class="tma-auth__codes" data-show="fresh copied saved">
+          <li class="tma-auth__code">4XKT-9RMB</li>
+          <li class="tma-auth__code">H2LD-P7QN</li>
+          <li class="tma-auth__code">M8VW-3JCF</li>
+          <li class="tma-auth__code">T6BY-KX0S</li>
+          <li class="tma-auth__code">R1GP-Z5MH</li>
+          <li class="tma-auth__code">C9DN-W4TL</li>
+          <li class="tma-auth__code">F7SQ-B2XV</li>
+          <li class="tma-auth__code">J3KM-N8RD</li>
+          <li class="tma-auth__code">Y5WC-G6PZ</li>
+          <li class="tma-auth__code">Q0HT-V1FB</li>
+        </ul>
+
+        <div class="tma-auth__actions" data-show="fresh copied saved">
+          <button type="button" class="tma-auth__chip-btn" data-copy data-copy-target=".tma-auth__code">
+            <img src="/images/icons/phosphor/Copy.svg" alt="" width="14" height="14" aria-hidden="true">
+            <span>Copy</span>
+          </button>
+          <button type="button" class="tma-auth__chip-btn" data-download-codes>
+            <img src="/images/icons/phosphor/DownloadSimple.svg" alt="" width="14" height="14" aria-hidden="true">
+            <span>Download</span>
+          </button>
+          <button type="button" class="tma-auth__chip-btn" data-print>
+            <img src="/images/icons/phosphor/Printer.svg" alt="" width="14" height="14" aria-hidden="true">
+            <span>Print</span>
+          </button>
+        </div>
+
+        <label class="tma-auth__check" data-show="fresh copied saved">
+          <input type="checkbox" data-gate="#codes-continue">
+          <span>
+            I've saved my recovery codes somewhere safe
+          </span>
+        </label>
+
+        <a class="tma-auth__submit" id="codes-continue" data-show="fresh copied saved" href="/design/auth/getting-started?state=complete">Continue</a>
+
+        <div class="tma-auth__nav-actions" data-show="regenerate">
+          <button type="button" class="tma-auth__submit tma-auth__submit--previous" data-set-state="fresh">Cancel</button>
+          <button type="button" class="tma-auth__submit" data-set-state="fresh">Generate new codes</button>
+        </div>
+
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 /*
- * TMA — Client portal view dispatcher + shared UI helpers
+ * TMA - Client portal view dispatcher + shared UI helpers
  * Portal page modules register mount functions per view name;
  * the dashboard controller activates them on navigation.
  * Globals: window.TMAPortalViews, window.TMAPortalUI
@@ -41,7 +41,7 @@
     return '<img src="' + ICON + esc(name) + '.svg" alt="" width="' + px + '" height="' + px + '" aria-hidden="true">';
   }
 
-  /* Primary / secondary buttons — reuse the no-data CTA recipe */
+  /* Primary / secondary buttons - reuse the no-data CTA recipe */
   function btn(opts) {
     var o = opts || {};
     var cls = 'tma-no-data__btn';
@@ -88,7 +88,7 @@
       '</div>';
   }
 
-  /* Search — reuses documented table toolbar search chrome (dashboard.css) */
+  /* Search - reuses documented table toolbar search chrome (dashboard.css) */
   function searchInput(placeholder, dataAttr, value, opts) {
     var o = opts || {};
     var v = value || '';
@@ -174,7 +174,7 @@
     return '<div class="tma-portal-radio-row">' + one('yes', 'Yes') + one('no', 'No') + '</div>';
   }
 
-  /* Toggle switch — same markup as settings switch (dashboard.css) */
+  /* Toggle switch - same markup as settings switch (dashboard.css) */
   function toggle(checked, dataAttr, ariaLabel) {
     return '<label class="tma-dash__settings-switch">' +
       '<input class="tma-dash__settings-switch-input" type="checkbox"' + (checked ? ' checked' : '') +
@@ -209,7 +209,7 @@
       '</div>';
   }
 
-  /* Modal — settings popup chrome (title inside card, single close button) */
+  /* Modal - settings popup chrome (title inside card, single close button) */
   var modalHost = null;
 
   function closeModal() {
@@ -250,7 +250,7 @@
     return modalHost;
   }
 
-  /* Underline tab group — reuses .tma-tab-group markup + PortalTabGroup */
+  /* Underline tab group - reuses .tma-tab-group markup + PortalTabGroup */
   function tabs(items, activeKey) {
     return '<div class="tma-tab-group tma-tab-group--underline" role="tablist">' +
       items.map(function (it, i) {
@@ -277,7 +277,7 @@
     }
   }
 
-  /* Head dropdown — same pattern as Clients main-head buttons */
+  /* Head dropdown - same pattern as Clients main-head buttons */
   function headDropdown(opts) {
     var o = opts || {};
     var variant = o.primary ? 'primary' : 'secondary';

@@ -1,4 +1,4 @@
-/* TMA — Interactive guidance navigation rails (Figma 30992:280837–839) */
+/* TMA - Interactive guidance navigation rails (Figma 30992:280837–839) */
 (function () {
   'use strict';
 

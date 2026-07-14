@@ -1,4 +1,4 @@
-/* TMA — Text component renderer (Figma 32814:289) */
+/* TMA - Text component renderer (Figma 32814:289) */
 (function () {
   'use strict';
 

@@ -1,5 +1,5 @@
 /*
- * TMA — Main-head dropdown buttons (Clients, Today, etc.)
+ * TMA - Main-head dropdown buttons (Clients, Today, etc.)
  * Global: window.TMAHeadDropdown
  */
 (function () {

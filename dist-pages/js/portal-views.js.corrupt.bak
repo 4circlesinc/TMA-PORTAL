@@ -1,5 +1,5 @@
 
-  /* Search — reuses documented table toolbar search chrome (dashboard.css) */
+  /* Search - reuses documented table toolbar search chrome (dashboard.css) */
   function searchInput(placeholder, dataAttr, value, opts) {
     var o = opts || {};
     var v = value || '';
@@ -50,7 +50,7 @@
 
     sync();
     return '<div class="tma-portal-table-wrap"><table class="tma-portal-table' + (o.cls ? ' ' + esc(o.cls) : '') + '"' + (o.tableAttrs || '') + '>' +
-  /* Head dropdown — same pattern as Clients main-head buttons */
+  /* Head dropdown - same pattern as Clients main-head buttons */
   function headDropdown(opts) {
     var o = opts || {};
     var variant = o.primary ? 'primary' : 'secondary';

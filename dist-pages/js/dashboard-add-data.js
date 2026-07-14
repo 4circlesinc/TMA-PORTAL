@@ -1,5 +1,5 @@
 /**
- * TMA Dashboard — Add Data view
+ * TMA Dashboard - Add Data view
  * Input form instances + DatePicker (date-picker-form / form-instances).
  */
 (function () {

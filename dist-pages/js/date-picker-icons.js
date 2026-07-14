@@ -1,4 +1,4 @@
-/* TMA — DatePicker inline SVG icons */
+/* TMA - DatePicker inline SVG icons */
 (function () {
   'use strict';
   const ICONS = {

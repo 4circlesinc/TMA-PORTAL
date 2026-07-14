@@ -100,7 +100,7 @@
 
   function primaryContactValue(id) {
     var profile = PROFILES[id];
-    if (!profile) return '—';
+    if (!profile) return '-';
     var emails = profile.emails || [];
     for (var i = 0; i < emails.length; i++) {
       if (emails[i].value) return emails[i].value;
@@ -109,7 +109,7 @@
     for (var j = 0; j < phones.length; j++) {
       if (phones[j].value) return phones[j].value;
     }
-    return '—';
+    return '-';
   }
 
   function clientTableColumns(item) {

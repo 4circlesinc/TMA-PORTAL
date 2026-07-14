@@ -1,5 +1,5 @@
 /*
- * TMA — My Projects page ( /projects ) — Figma 32546:96122
+ * TMA - My Projects page ( /projects ) - Figma 32546:96122
  * Uses TMACard + shared dashboard list/grid toggle (TMATableViewToggle).
  * Global: window.TMAProjects
  */

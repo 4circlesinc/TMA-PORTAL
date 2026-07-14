@@ -1,5 +1,5 @@
 /*
- * TMA — Pricing page ( /pricing ) — Figma 32546:96132
+ * TMA - Pricing page ( /pricing ) - Figma 32546:96132
  * Global: window.TMAPricing
  */
 (function () {

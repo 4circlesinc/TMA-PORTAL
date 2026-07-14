@@ -54,7 +54,7 @@ Laravel:
 
 ### 3. User chip (avatar + name)
 
-Figma `AvatarNames` pattern — used in tables, chat lists, sidebars:
+Figma `AvatarNames` pattern - used in tables, chat lists, sidebars:
 ```tsx
 <div className="flex items-center gap-[8px]">
   <Avatar size={24} src={img} />
@@ -97,7 +97,7 @@ Blade loop over all demo users:
 
 ### 5. Avatar group (stacked)
 
-Figma `AvatarGroup` — overlapping 24px avatars with `-8px` margin, ends with `+3`:
+Figma `AvatarGroup` - overlapping 24px avatars with `-8px` margin, ends with `+3`:
 ```blade
 <div class="flex items-center">
     @foreach (['AvatarByewind', 'AvatarFemale01', 'AvatarMale02'] as $key)
@@ -119,7 +119,7 @@ Figma `AvatarGroup` — overlapping 24px avatars with `-8px` margin, ends with `
 | Aliah Davis | AvatarFemale02 | photo |
 | Alexander Williams | AvatarMale06 | photo |
 | ByeWind | AvatarByewind | photo |
-| Bruce Wayne | — | initials `B` / `#7dbbff` |
+| Bruce Wayne | - | initials `B` / `#7dbbff` |
 | James Wilson | AvatarMale05 | photo |
 | Brie Larson | AvatarFemale03 | photo |
 | Christopher Davis | Avatar3d01 | photo |
@@ -134,7 +134,7 @@ Figma `AvatarGroup` — overlapping 24px avatars with `-8px` margin, ends with `
 | Koray Okumus | AvatarMale04 | photo |
 | Melody Macy | AvatarFemale05 | photo |
 | Matthew Johnson | AvatarAbstract02 | photo |
-| Michael Brown | — | initials `M` / `#71dd8c` |
+| Michael Brown | - | initials `M` / `#71dd8c` |
 | Natali Craig | AvatarFemale06 | photo |
 | Orlando Diggs | AvatarMale03 | photo |
 | Olivia Johnson | Avatar3d02 | photo |

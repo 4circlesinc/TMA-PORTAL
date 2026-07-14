@@ -1,5 +1,5 @@
 /*
- * TMA — Settings (30919:278108 Profile, change email/name/password, 2-step popups)
+ * TMA - Settings (30919:278108 Profile, change email/name/password, 2-step popups)
  * Global: window.TMASettings
  */
 (function () {

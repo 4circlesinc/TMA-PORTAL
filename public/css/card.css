@@ -1,4 +1,4 @@
-/* TMA — Card */
+/* TMA - Card */
 
 .tma-card,
 .tma-card *,
@@ -20,7 +20,7 @@
   --tma-card-content-inset: 4px;
 }
 
-/* Progress card — 32267:8047 */
+/* Progress card - 32267:8047 */
 
 .tma-card--progress {
   width: 278.667px;
@@ -176,7 +176,7 @@
   color: var(--color-text-primary);
 }
 
-/* Credit card — 32267:8050 */
+/* Credit card - 32267:8050 */
 
 .tma-card--credit {
   position: relative;
@@ -327,7 +327,7 @@
   max-width: 40px;
 }
 
-/* Documentation page — 32267:8033 */
+/* Documentation page - 32267:8033 */
 
 .tma-card-doc {
   background: #fff;
@@ -571,7 +571,7 @@
   padding-right: 0;
 }
 
-/* Progress board variant — 33160 instances */
+/* Progress board variant - 33160 instances */
 
 .tma-card--progress-board {
   width: 280px;
@@ -613,7 +613,7 @@
   flex-shrink: 0;
 }
 
-/* Stat card — 33160:10066 */
+/* Stat card - 33160:10066 */
 
 .tma-card--stat {
   container-type: inline-size;
@@ -719,7 +719,7 @@
   object-fit: contain;
 }
 
-/* Task card — 33160:10081 */
+/* Task card - 33160:10081 */
 
 .tma-card--task {
   width: 280px;
@@ -786,7 +786,7 @@
   color: var(--color-text-secondary);
 }
 
-/* Price card — 33160:10093 */
+/* Price card - 33160:10093 */
 
 .tma-card--price {
   width: 372px;
@@ -873,7 +873,7 @@
   background: rgba(0, 0, 0, 0.85);
 }
 
-/* Usage card — 33160:10096 */
+/* Usage card - 33160:10096 */
 
 .tma-card--usage {
   display: flex;
@@ -1011,7 +1011,7 @@
   height: 14px;
 }
 
-/* Address card — 33160:10102 */
+/* Address card - 33160:10102 */
 
 .tma-card--address {
   position: relative;
@@ -1064,7 +1064,7 @@
   color: var(--color-text-secondary);
 }
 
-/* Add address card — 33160:10104 */
+/* Add address card - 33160:10104 */
 
 .tma-card--add-address {
   display: flex;
@@ -1103,7 +1103,7 @@
   color: currentColor;
 }
 
-/* Code block — 33250:2266 */
+/* Code block - 33250:2266 */
 
 .tma-card--code-block {
   position: relative;
@@ -1235,7 +1235,7 @@
   color: var(--color-text-primary);
 }
 
-/* Card instances page — 33160:10064 */
+/* Card instances page - 33160:10064 */
 
 .tma-card-instances-page {
   font-family: Inter, system-ui, sans-serif;

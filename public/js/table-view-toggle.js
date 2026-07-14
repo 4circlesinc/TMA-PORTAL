@@ -1,5 +1,5 @@
 /*
- * TMA — List / grid view toggle for data table pages (Clients, Users, …)
+ * TMA - List / grid view toggle for data table pages (Clients, Users, …)
  * Global: window.TMATableViewToggle
  */
 (function () {

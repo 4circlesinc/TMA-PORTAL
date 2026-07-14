@@ -5,7 +5,7 @@
   <base href="/TMA-PORTAL/">
   <script>window.__TMA_SITE_ROOT="/TMA-PORTAL";</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Coming Soon — TM ANTOINE Advisory</title>
+  <title>Coming Soon - TM ANTOINE Advisory</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/TMA-PORTAL/css/tokens.css">
   <link rel="stylesheet" href="/TMA-PORTAL/css/theme.css">
@@ -75,5 +75,9 @@
     <p class="tma-coming-soon__copyright" data-node-id="I32546:96131;33319:172579">&copy; 2026 TM ANTOINE Advisory</p>
   </main>
   <script src="/TMA-PORTAL/js/coming-soon.js"></script>
+  <script>
+    /* prototype only - no auth backend yet; keep demo forms from posting */
+    document.addEventListener("submit", function (e) { e.preventDefault(); });
+  </script>
 </body>
 </html>

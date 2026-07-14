@@ -1,5 +1,5 @@
 /*
- * TMA — User information side panel (Figma 32546:96148)
+ * TMA - User information side panel (Figma 32546:96148)
  * Global: window.TMAUserInfoPanel
  */
 (function () {

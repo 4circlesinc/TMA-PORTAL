@@ -1,4 +1,4 @@
-/* TMA — Pagination */
+/* TMA - Pagination */
 
 .tma-pagination-bar {
   --pagination-width: 892px;
@@ -159,7 +159,7 @@
   max-height: var(--pagination-page-size-icon-size);
 }
 
-/* Table A — equal-width stretch pagination (Figma 33160:33563) */
+/* Table A - equal-width stretch pagination (Figma 33160:33563) */
 .tma-pagination-bar--stretch {
   display: block;
   width: 100%;

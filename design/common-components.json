@@ -5,7 +5,7 @@
     "frameName": "Tab, Segmented",
     "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=28002-98904"
   },
-  "description": "TMA Common Components — interactive UI building blocks. Implemented incrementally as Blade components with CSS and optional JS.",
+  "description": "TMA Common Components - interactive UI building blocks. Implemented incrementally as Blade components with CSS and optional JS.",
   "cssPath": "public/css/components.css",
   "setup": "@include('partials.components') then <x-tab-group />",
   "categories": [
@@ -321,7 +321,7 @@
     },
     {
       "nodeId": "32722:24623",
-      "name": "Table B — Sign in Sessions",
+      "name": "Table B - Sign in Sessions",
       "slug": "table-b-sessions",
       "category": "data",
       "component": "table-b-sessions",

@@ -1,4 +1,4 @@
-/* TMA — Frame instances inline SVG icons (Figma 33159:3529) */
+/* TMA - Frame instances inline SVG icons (Figma 33159:3529) */
 (function () {
   'use strict';
 

@@ -1,4 +1,4 @@
-/* TMA — country calling codes for 2-step phone picker */
+/* TMA - country calling codes for 2-step phone picker */
 window.TMA_TWO_STEP_COUNTRIES = [
   { flag: '🇦🇫', name: 'Afghanistan', code: '+93' },
   { flag: '🇦🇱', name: 'Albania', code: '+355' },

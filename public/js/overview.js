@@ -1,5 +1,5 @@
 /*
- * TMA — Dashboard Overview (Figma 32546:96118, Targets 32546:96121, Budget 32546:96117, Files 32546:96116, Activity 32546:96119, Settings 32546:96115)
+ * TMA - Dashboard Overview (Figma 32546:96118, Targets 32546:96121, Budget 32546:96117, Files 32546:96116, Activity 32546:96119, Settings 32546:96115)
  * Global: window.TMAOverview
  */
 (function () {

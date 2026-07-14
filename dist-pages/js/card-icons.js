@@ -1,4 +1,4 @@
-/* TMA — Card inline SVG icons */
+/* TMA - Card inline SVG icons */
 (function () {
   'use strict';
 

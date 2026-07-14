@@ -1,5 +1,5 @@
 /*
- * TMA — Email page ( /email )
+ * TMA - Email page ( /email )
  * Global: window.TMAEmail
  */
 (function () {
@@ -781,7 +781,7 @@
     { type: 'email', label: 'byewind@twitter.com' },
   ];
 
-  var COMPOSE_SUBJECT = 'Invoice #VL25000355 — TM ANTOINE Advisory';
+  var COMPOSE_SUBJECT = 'Invoice #VL25000355 - TM ANTOINE Advisory';
 
   var FOLDERS = [
     { id: 'compose', label: 'Compose', icon: 'PencilSimpleLine', compose: true },
@@ -848,7 +848,7 @@
       id: 'chatgpt',
       sender: 'ChatGPT',
       subject: 'Welcome to ChatGPT',
-      body: 'Welcome to ChatGPT — your AI assistant is ready when you are.',
+      body: 'Welcome to ChatGPT - your AI assistant is ready when you are.',
       time: 'Mar 12',
       brand: 'ChatGPT24',
     },
@@ -1716,7 +1716,7 @@
       '<p>We\'re glad to see that you\'ve started using Slack. Join <strong>TM ANTOINE Advisory Community</strong> on Slack.</p>' +
       '<p>Your team name is <strong>TM ANTOINE Advisory Community</strong></p>' +
       '<p>Slack is a place where your team comes together to collaborate, stay connected, and get things done. ' +
-      'From project kickoffs to quick questions, Slack keeps everyone in sync — no matter where they\'re working from.</p>' +
+      'From project kickoffs to quick questions, Slack keeps everyone in sync - no matter where they\'re working from.</p>' +
       '<button type="button" class="tma-dash__email-cta">Invite People</button>' +
       '<div class="tma-dash__email-avatar-grid" aria-hidden="true">' +
       ['AvatarFemale06', 'AvatarMale01', 'AvatarFemale04', 'AvatarMale03']
@@ -2514,7 +2514,7 @@
       '<span class="tma-dash__email-row-subject">' +
       '<span class="tma-dash__email-row-subject-text">' + esc(subject) + '</span>';
     if (body && body !== subject) {
-      html += '<span class="tma-dash__email-row-body"> — ' + esc(body) + '</span>';
+      html += '<span class="tma-dash__email-row-body"> - ' + esc(body) + '</span>';
     }
     return html + '</span>';
   }

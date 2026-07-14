@@ -1,0 +1,1377 @@
+/*
+ * Auth flow - new authentication & onboarding screens (public/auth/*)
+ * Additive layer on top of tokens.css + theme.css + auth.css.
+ * Reuses the tma-auth block; adds only components that don't exist yet:
+ * alerts, requirement list, 6-digit OTP, captcha slot, checklist/progress,
+ * wizard steps, QR + manual key, recovery codes, provider rows, badges,
+ * dialogs, spinners, field errors - plus the dark theme for auth pages.
+ *
+ * Load order: tokens.css → theme.css → auth.css → auth-flow.css
+ * Dark mode: [data-theme="dark"] is set on <html> (same tma.themeMode /
+ * tma.theme localStorage keys the dashboard uses).
+ */
+
+/* ── Page-level ── */
+
+/* auth.css scopes its [hidden] rule under .tma-auth; the security-settings
+   page uses these components inside the .tma-dash shell, so guard globally */
+[hidden] {
+  display: none !important;
+}
+
+[data-theme="dark"] body {
+  background: #161616;
+}
+
+.tma-auth a:focus-visible,
+.tma-auth button:focus-visible,
+.tma-preview select:focus-visible,
+.tma-preview a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* text fields rely on the design system's border darkening (auth.css
+   :focus-within) instead of an outline ring */
+.tma-auth input:focus-visible,
+.tma-auth select:focus-visible {
+  outline: 0;
+}
+
+/* buttons rendered as links (CTAs, provider sign-in, chip actions) */
+a.tma-auth__submit,
+a.tma-auth__social-btn,
+a.tma-auth__chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+/* ── Field groups + inline validation ── */
+
+.tma-auth__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+}
+
+.tma-auth__field--error,
+.tma-auth__field--error:focus-within {
+  border-color: var(--color-red);
+}
+
+/* a field whose inline message is visible renders in its error style */
+.tma-auth__group:has(> .tma-auth__field-msg:not([hidden])) .tma-auth__field,
+.tma-auth__group:has(> .tma-auth__field-msg:not([hidden])) .tma-auth__otp-digit {
+  border-color: var(--color-red);
+}
+
+.tma-auth__field-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-red);
+  text-align: left;
+}
+
+.tma-auth__field-msg img {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  margin-top: 2px;
+}
+
+/* ── Alerts ── */
+
+.tma-auth__alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  width: min(384px, 100%);
+  padding: var(--space-10) var(--space-12);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-hover);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-primary);
+  text-align: left;
+  flex-shrink: 0;
+}
+
+.tma-auth__alert img {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-top: 1px;
+}
+
+.tma-auth__alert strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.tma-auth__alert a {
+  color: var(--color-text-link);
+  text-decoration: none;
+}
+
+.tma-auth__alert a:hover {
+  text-decoration: underline;
+}
+
+.tma-auth__alert--success {
+  background: color-mix(in srgb, var(--color-green) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-green) 40%, transparent);
+}
+
+.tma-auth__alert--warning {
+  background: color-mix(in srgb, var(--color-orange) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-orange) 45%, transparent);
+}
+
+.tma-auth__alert--error {
+  background: color-mix(in srgb, var(--color-red) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-red) 35%, transparent);
+}
+
+.tma-auth__alert--info {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+/* ── Password requirement list ── */
+
+.tma-auth__req-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4) var(--space-12);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tma-auth__req {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.tma-auth__req::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border-medium);
+  flex: 0 0 6px;
+}
+
+.tma-auth__req[data-met="true"] {
+  color: var(--color-text-primary);
+}
+
+.tma-auth__req[data-met="true"]::before {
+  background: var(--color-green);
+}
+
+.tma-auth__req--missed::before {
+  background: var(--color-red);
+}
+
+@media (max-width: 560px) {
+  .tma-auth__req-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── 6-digit OTP variant ── */
+
+.tma-auth__otp--6 {
+  width: min(384px, 100%);
+  height: 48px;
+  gap: var(--space-6);
+}
+
+.tma-auth__otp--6 .tma-auth__otp-digit {
+  padding: var(--space-8) var(--space-4);
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+}
+
+.tma-auth__otp-digit--error {
+  border-color: var(--color-red);
+}
+
+/* ── Human verification (captcha placeholder) ── */
+
+.tma-auth__captcha {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  width: min(384px, 100%);
+  min-height: 56px;
+  padding: var(--space-10) var(--space-12);
+  border: 0.5px dashed var(--color-border-medium);
+  border-radius: var(--radius-12);
+  background: var(--color-hover);
+  flex-shrink: 0;
+}
+
+.tma-auth__captcha-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1.5px solid var(--color-border-medium);
+  border-radius: var(--radius-4);
+  background: var(--color-white);
+  cursor: pointer;
+}
+
+.tma-auth__captcha-box img {
+  width: 14px;
+  height: 14px;
+  display: none;
+}
+
+.tma-auth__captcha[data-checked="true"] .tma-auth__captcha-box {
+  border-color: var(--color-green);
+}
+
+.tma-auth__captcha[data-checked="true"] .tma-auth__captcha-box img {
+  display: block;
+}
+
+.tma-auth__captcha-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.tma-auth__captcha-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 12px;
+  color: var(--color-text-placeholder);
+}
+
+.tma-auth__captcha-brand img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.5;
+}
+
+/* quiet variant - a hint line instead of a widget */
+.tma-auth__captcha--passive {
+  min-height: 0;
+  padding: var(--space-6) var(--space-10);
+  border-style: solid;
+  border-color: transparent;
+  background: transparent;
+  justify-content: center;
+}
+
+.tma-auth__captcha--passive .tma-auth__captcha-copy {
+  color: var(--color-text-placeholder);
+  text-align: center;
+  flex: 0 1 auto;
+}
+
+.tma-auth__captcha--passive img {
+  width: 14px;
+  height: 14px;
+  opacity: 0.4;
+}
+
+/* ── Progress (getting started) ── */
+
+.tma-auth__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: min(384px, 100%);
+  flex-shrink: 0;
+}
+
+.tma-auth__progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-12);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-auth__progress-row strong {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.tma-auth__progress-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hover-deep);
+  overflow: hidden;
+}
+
+.tma-auth__progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+/* ── Checklist tasks ── */
+
+.tma-auth__checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: min(384px, 100%);
+  flex-shrink: 0;
+}
+
+.tma-auth__task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-14);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  transition: background var(--transition-base);
+}
+
+a.tma-auth__task:hover {
+  background: var(--color-hover);
+}
+
+.tma-auth__task-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-hover);
+}
+
+.tma-auth__task-icon img {
+  width: 16px;
+  height: 16px;
+}
+
+.tma-auth__task--done .tma-auth__task-icon {
+  background: color-mix(in srgb, var(--color-green) 16%, transparent);
+}
+
+.tma-auth__task-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tma-auth__task-name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+}
+
+.tma-auth__task-desc {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-auth__task-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+}
+
+.tma-auth__task-side > img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.4;
+}
+
+.tma-auth__task--locked {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ── Badges ── */
+
+.tma-auth__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-auth__badge--done {
+  background: color-mix(in srgb, var(--color-green) 16%, transparent);
+  color: var(--color-text-primary);
+}
+
+.tma-auth__badge--recommended {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-text-primary);
+}
+
+.tma-auth__badge--required {
+  background: color-mix(in srgb, var(--color-orange) 18%, transparent);
+  color: var(--color-text-primary);
+}
+
+.tma-auth__badge--danger {
+  background: color-mix(in srgb, var(--color-red) 12%, transparent);
+  color: var(--color-text-primary);
+}
+
+/* ── Wizard step indicator ── */
+
+.tma-auth__steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  flex-shrink: 0;
+}
+
+.tma-auth__step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hover-deep);
+  transition: width var(--transition-base), background var(--transition-base);
+}
+
+.tma-auth__step-dot--done {
+  background: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+.tma-auth__step-dot--active {
+  width: 20px;
+  background: var(--color-primary);
+}
+
+/* ── QR + manual key ── */
+
+.tma-auth__qr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 176px;
+  height: 176px;
+  padding: var(--space-12);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  /* QR codes must stay dark-on-light in both themes */
+  background: #ffffff;
+}
+
+.tma-auth__qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: #000000;
+}
+
+.tma-auth__manual-key {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: min(384px, 100%);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
+  border-radius: var(--radius-12);
+  background: var(--color-hover);
+  flex-shrink: 0;
+}
+
+.tma-auth__manual-key code {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  letter-spacing: 0.08em;
+  color: var(--color-text-primary);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/* ── Small chip buttons (copy / download / print / row actions) ── */
+
+.tma-auth__chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-12);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-base);
+}
+
+.tma-auth__chip-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-auth__chip-btn img {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.tma-auth__chip-btn[data-copied="true"] {
+  border-color: color-mix(in srgb, var(--color-green) 45%, transparent);
+}
+
+.tma-auth__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  width: min(384px, 100%);
+  flex-shrink: 0;
+}
+
+/* ── Recovery codes ── */
+
+.tma-auth__codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-6) var(--space-16);
+  width: min(384px, 100%);
+  margin: 0;
+  padding: var(--space-16);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-hover);
+  list-style: none;
+  flex-shrink: 0;
+}
+
+.tma-auth__code {
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-16);
+  letter-spacing: 0.06em;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.tma-auth__code--used {
+  text-decoration: line-through;
+  color: var(--color-text-placeholder);
+}
+
+/* ── Provider rows (connected accounts) ── */
+
+.tma-auth__provider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: min(384px, 100%);
+  padding: var(--space-12) var(--space-14);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  flex-shrink: 0;
+}
+
+.tma-auth__provider-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.tma-auth__provider-ico img {
+  width: 20px;
+  height: 20px;
+}
+
+.tma-auth__provider-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.tma-auth__provider-name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+}
+
+.tma-auth__provider-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.tma-auth__provider-status--on::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-green);
+}
+
+/* ── Checkbox rows (stay signed in / trust device / confirm saved) ── */
+
+.tma-auth__check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  width: min(384px, 100%);
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tma-auth__check input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--color-black);
+  cursor: pointer;
+}
+
+.tma-auth__check-hint {
+  display: block;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-auth__row-split {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+  width: min(384px, 100%);
+  flex-shrink: 0;
+}
+
+.tma-auth__row-split .tma-auth__check {
+  width: auto;
+  flex: 1 1 auto;
+}
+
+.tma-auth__row-split .tma-auth__forgot {
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
+/* ── Buttons: extra variants ── */
+
+.tma-auth__submit--ghost {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-black);
+}
+
+.tma-auth__submit--danger {
+  background: var(--color-red);
+  color: #ffffff;
+}
+
+.tma-auth__submit:disabled,
+.tma-auth__submit[aria-disabled="true"],
+.tma-auth__chip-btn:disabled,
+.tma-auth__social-btn:disabled {
+  opacity: var(--opacity-inactive);
+  cursor: default;
+  pointer-events: none;
+}
+
+.tma-auth__submit--loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  pointer-events: none;
+}
+
+.tma-auth__link-btn {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-link);
+  cursor: pointer;
+}
+
+.tma-auth__link-btn:hover {
+  text-decoration: underline;
+}
+
+/* ── Spinners / loading ── */
+
+.tma-auth__spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-top-color: var(--color-black);
+  animation: tma-auth-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.tma-auth__submit .tma-auth__spinner {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+}
+
+.tma-auth__spinner--lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+.tma-auth__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+@keyframes tma-auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-auth__spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+/* ── Confirm dialog ── */
+
+.tma-auth__dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.tma-auth__dialog-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  width: min(420px, 100%);
+  padding: var(--space-24);
+  border-radius: var(--radius-24);
+  background: var(--color-white);
+  box-shadow: var(--shadow-popup);
+  text-align: left;
+}
+
+.tma-auth__dialog-title {
+  margin: 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+}
+
+.tma-auth__dialog-text {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+}
+
+.tma-auth__dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8);
+}
+
+.tma-auth__dialog-actions .tma-auth__submit {
+  width: auto;
+  min-height: 36px;
+  padding: var(--space-6) var(--space-16);
+}
+
+/* ── Countdown ── */
+
+.tma-auth__countdown strong {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Fixed page chrome: theme toggle + preview panel ── */
+
+.tma-auth__theme {
+  position: fixed;
+  top: var(--space-16);
+  right: var(--space-16);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: 50%;
+  background: var(--color-bg-popup);
+  backdrop-filter: var(--blur-40);
+  -webkit-backdrop-filter: var(--blur-40);
+  cursor: pointer;
+}
+
+.tma-auth__theme img {
+  width: 18px;
+  height: 18px;
+}
+
+.tma-preview {
+  position: fixed;
+  right: var(--space-16);
+  bottom: var(--space-16);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-10) var(--space-12);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-popup);
+  backdrop-filter: var(--blur-40);
+  -webkit-backdrop-filter: var(--blur-40);
+  box-shadow: var(--shadow-popup);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-preview__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.tma-preview label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  white-space: nowrap;
+}
+
+/* the panel is appended to <body>, outside the themed .tma-auth scope */
+[data-theme="dark"] .tma-preview {
+  background: rgba(28, 28, 28, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="dark"] .tma-preview select {
+  background: #1c1c1c;
+  border-color: rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.tma-preview select {
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  padding: var(--space-2) var(--space-6);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+}
+
+.tma-preview a {
+  color: var(--color-text-link);
+  text-decoration: none;
+}
+
+.tma-preview a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .tma-preview {
+    right: var(--space-8);
+    bottom: var(--space-8);
+  }
+}
+
+/* ── Wide card (flow index) ── */
+
+.tma-auth__card--wide {
+  width: 960px;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-24);
+}
+
+.tma-auth__card--wide .tma-auth__intro {
+  width: 100%;
+  text-align: left;
+  align-items: flex-start;
+}
+
+.tma-flowmap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  width: 100%;
+}
+
+.tma-flowmap__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-flowmap__group-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+}
+
+.tma-flowmap__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: var(--space-8);
+}
+
+.tma-flowmap__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-14);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--transition-base);
+}
+
+.tma-flowmap__item:hover {
+  background: var(--color-hover);
+}
+
+.tma-flowmap__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-black);
+}
+
+.tma-flowmap__name img {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+a.tma-flowmap__name {
+  text-decoration: none;
+}
+
+a.tma-flowmap__name:hover {
+  text-decoration: underline;
+}
+
+.tma-flowmap__desc {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-flowmap__states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.tma-flowmap__state {
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.tma-flowmap__state:hover {
+  background: var(--color-hover-deep);
+  color: var(--color-text-primary);
+}
+
+/* ── Security settings (inside the tma-dash shell) ── */
+
+.tma-security {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  width: 100%;
+  max-width: 760px;
+}
+
+.tma-security__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-20);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--card-bg);
+}
+
+.tma-security__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.tma-security__title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.tma-security__title img {
+  width: 18px;
+  height: 18px;
+}
+
+.tma-security__desc {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-security__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-10) 0;
+  border-top: 0.5px solid var(--color-border-soft);
+}
+
+.tma-security__row:first-of-type {
+  border-top: 0;
+}
+
+.tma-security__row-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-security__row-name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+}
+
+.tma-security__row-sub {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.tma-security__row-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.tma-security__row-ico img {
+  width: 18px;
+  height: 18px;
+}
+
+.tma-security__table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.tma-security__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--table-font-size);
+  line-height: var(--table-line-height);
+}
+
+.tma-security__table th {
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 0.5px solid var(--table-border);
+  color: var(--table-header-color);
+  font-weight: var(--font-weight-regular);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tma-security__table td {
+  padding: var(--space-10) var(--space-12);
+  border-bottom: 0.5px solid var(--table-border);
+  color: var(--color-text-primary);
+  vertical-align: top;
+}
+
+.tma-security__table tr:last-child td {
+  border-bottom: 0;
+}
+
+.tma-security__table tbody tr:hover {
+  background: var(--table-row-hover);
+}
+
+.tma-security__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-24);
+  border: 0.5px dashed var(--color-border-soft);
+  border-radius: var(--radius-12);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.tma-security__empty img {
+  width: 24px;
+  height: 24px;
+  opacity: 0.4;
+}
+
+.tma-dash[data-theme="dark"] .tma-security img[src*="/icons/phosphor/"] {
+  filter: invert(1) brightness(1.6);
+}
+
+.tma-dash[data-theme="dark"] .tma-security__card {
+  border-color: var(--dash-border, rgba(255, 255, 255, 0.12));
+}
+
+/* ── Print (recovery codes) ── */
+
+@media print {
+  .tma-preview,
+  .tma-auth__theme,
+  .tma-auth__actions,
+  .tma-auth__check,
+  .tma-auth__submit,
+  .tma-auth__alert,
+  .tma-auth__alt-link,
+  .tma-auth__back-link {
+    display: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════
+ * DARK THEME - auth pages
+ * Mirrors .tma-dash[data-theme="dark"] in dashboard.css: remap the
+ * primitive tokens auth.css consumes, then patch its hardcoded rgba()
+ * values. Scoped under html[data-theme="dark"] so the attribute can be
+ * applied before <body> renders (no flash).
+ * ═══════════════════════════════════════════ */
+
+[data-theme="dark"] .tma-auth {
+  --color-white: #1c1c1c;
+  --color-black: #ffffff;
+  --color-text-primary: rgba(255, 255, 255, 0.9);
+  --color-text-secondary: rgba(255, 255, 255, 0.45);
+  --color-text-placeholder: rgba(255, 255, 255, 0.25);
+  --color-border-soft: rgba(255, 255, 255, 0.12);
+  --color-border-medium: rgba(255, 255, 255, 0.28);
+  --color-border-strong: rgba(255, 255, 255, 0.5);
+  --color-hover: rgba(255, 255, 255, 0.08);
+  --color-hover-deep: rgba(255, 255, 255, 0.12);
+  --color-bg-card: #161616;
+  --color-bg-input: rgba(255, 255, 255, 0.06);
+  --color-bg-popup: rgba(28, 28, 28, 0.9);
+  --card-bg: #1c1c1c;
+  --table-border: rgba(255, 255, 255, 0.12);
+  --table-row-hover: rgba(255, 255, 255, 0.06);
+}
+
+/* inputs, otp digits, option tiles - auth.css hardcodes light rgba() */
+[data-theme="dark"] .tma-auth .tma-auth__field,
+[data-theme="dark"] .tma-auth .tma-auth__otp-digit,
+[data-theme="dark"] .tma-auth .tma-auth__team-size-option {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__field:focus-within,
+[data-theme="dark"] .tma-auth .tma-auth__otp-digit:focus {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__field--error,
+[data-theme="dark"] .tma-auth .tma-auth__field--error:focus-within,
+[data-theme="dark"] .tma-auth .tma-auth__otp-digit--error {
+  border-color: var(--color-red);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__select:invalid {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__social-btn {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__divider::before,
+[data-theme="dark"] .tma-auth .tma-auth__divider::after {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__strength-seg {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__strength-seg--active {
+  background: var(--color-primary);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__submit--previous,
+[data-theme="dark"] .tma-auth .tma-auth__submit--ghost {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__submit--danger {
+  background: var(--color-red);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__account-card {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__switch-track {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__switch-thumb {
+  background: #ffffff;
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__spinner {
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__submit .tma-auth__spinner {
+  border-color: rgba(0, 0, 0, 0.25);
+  border-top-color: #1c1c1c;
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__dialog {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* monochrome phosphor glyphs flip to light; brand marks stay untouched */
+[data-theme="dark"] .tma-auth img[src*="/icons/phosphor/"] {
+  filter: invert(1) brightness(1.6);
+}
+
+[data-theme="dark"] .tma-auth .tma-auth__brand img {
+  filter: brightness(1.15);
+}
+
+/* the split-layout stage tint mixes with the remapped card color */
+[data-theme="dark"] .tma-auth.tma-auth--split .tma-auth__stage {
+  background: color-mix(in srgb, var(--color-primary) 12%, #161616);
+}

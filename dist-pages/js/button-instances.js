@@ -1,4 +1,4 @@
-/* TMA — Button instances showcase (Figma 33159:7810) — absolute layout */
+/* TMA - Button instances showcase (Figma 33159:7810) - absolute layout */
 (function () {
   'use strict';
 

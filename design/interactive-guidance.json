@@ -2,7 +2,7 @@
   "slug": "interactive-guidance",
   "pageNodeId": "12779:273712",
   "name": "Interactive guidance",
-  "description": "TMA interactive guidance canvas — three rows of navigation rails and component guidance boards.",
+  "description": "TMA interactive guidance canvas - three rows of navigation rails and component guidance boards.",
   "cssPath": "public/css/interactive-guidance-page.css",
   "jsPath": "public/js/interactive-guidance-page.js",
   "demoPath": "public/demo/interactive-guidance.html",

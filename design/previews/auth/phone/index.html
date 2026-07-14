@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Phone Number - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="enter sending code invalid expired too-many success"
+        data-state="enter"
+        data-demo-next="/design/auth/two-factor-setup">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card" aria-labelledby="phone-title">
+        <div class="tma-auth__icon" aria-hidden="true">
+          <img src="/images/icons/phosphor/DeviceMobile.svg" alt="" width="80" height="80">
+        </div>
+
+        <!-- step 1 - enter number -->
+        <div class="tma-auth__intro" data-show="enter sending">
+          <h1 class="tma-auth__title" id="phone-title">Add your phone number</h1>
+          <p class="tma-auth__subtitle">Optional - used for security alerts and account recovery.</p>
+        </div>
+
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="enter sending"
+              data-demo data-loading-state="sending" data-submit-state="code">
+          <div class="tma-auth__group">
+            <label class="tma-auth__field tma-auth__field--select">
+              <select class="tma-auth__select" name="country" aria-label="Country code" required>
+                <option value="" disabled>Country</option>
+                <option value="+1" selected>United States (+1)</option>
+                <option value="+1c">Canada (+1)</option>
+                <option value="+44">United Kingdom (+44)</option>
+                <option value="+27">South Africa (+27)</option>
+                <option value="+61">Australia (+61)</option>
+                <option value="+33">France (+33)</option>
+                <option value="+49">Germany (+49)</option>
+                <option value="+852">Hong Kong (+852)</option>
+              </select>
+              <img class="tma-auth__select-icon" src="/images/icons/phosphor/CaretDown.svg" alt="" width="16" height="16" aria-hidden="true">
+            </label>
+          </div>
+          <div class="tma-auth__group">
+            <label class="tma-auth__field">
+              <input class="tma-auth__input" type="tel" name="phone" placeholder="Phone number" autocomplete="tel-national" aria-label="Phone number" data-autofocus="enter">
+            </label>
+          </div>
+          <button type="submit" class="tma-auth__submit" data-show="enter">Send verification code</button>
+          <button type="button" class="tma-auth__submit tma-auth__submit--loading" data-show="sending" disabled>
+            <span class="tma-auth__spinner" aria-hidden="true"></span>
+            <span>Sending code…</span>
+          </button>
+        </form>
+
+        <!-- step 2 - verify code -->
+        <div class="tma-auth__intro" data-show="code invalid expired too-many">
+          <h1 class="tma-auth__title">Enter the verification code</h1>
+          <p class="tma-auth__subtitle">We sent a 6-digit code by text message to</p>
+        </div>
+
+        <p class="tma-auth__phone" data-show="code invalid expired too-many">+1 ••• ••• ••89</p>
+
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="too-many" role="alert">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Too many incorrect attempts.</strong> Request a new code to try again.</span>
+        </div>
+
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="code invalid expired too-many"
+              data-demo data-submit-state="success">
+          <div class="tma-auth__group">
+            <div class="tma-auth__otp tma-auth__otp--6" data-otp role="group" aria-label="6 digit verification code">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1" data-autofocus="code">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 5">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 6">
+            </div>
+            <p class="tma-auth__field-msg" data-show="invalid">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>That code didn't match. Check the newest text message and try again.</span>
+            </p>
+            <p class="tma-auth__field-msg" data-show="expired">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>That code has expired - request a new one.</span>
+            </p>
+          </div>
+          <button type="submit" class="tma-auth__submit" data-show="code invalid expired">Verify</button>
+          <button type="button" class="tma-auth__submit" data-show="too-many" disabled>Verify</button>
+        </form>
+
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-show="code invalid expired too-many"
+                data-resend data-resend-state="code">Resend code</button>
+        <p class="tma-auth__hint tma-auth__countdown" data-countdown data-seconds="30" data-show="code" aria-live="off">
+          You can resend in <strong data-countdown-num>30</strong>s
+        </p>
+        <p class="tma-auth__alt-link" data-show="code invalid expired too-many">
+          <button type="button" class="tma-auth__link-btn" data-set-state="enter">Change phone number</button>
+        </p>
+
+        <!-- success -->
+        <div class="tma-auth__intro" data-show="success">
+          <h1 class="tma-auth__title">Phone number verified</h1>
+        </div>
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="success" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>+1 ••• ••• ••89</strong> is now linked to your account.</span>
+        </div>
+        <a class="tma-auth__submit" data-show="success" href="/design/auth/getting-started?state=partial">Back to checklist</a>
+
+        <p class="tma-auth__alt-link" data-show="enter sending"><a href="/design/auth/getting-started">Skip for now</a></p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-/* TMA — Form instances board (Figma 32728:395248) */
+/* TMA - Form instances board (Figma 32728:395248) */
 (function () {
   'use strict';
 

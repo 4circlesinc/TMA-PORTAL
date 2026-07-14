@@ -1,4 +1,4 @@
-/* TMA — Dashboard guidance panels (Header, Sidebar, Rightbar, Layout) */
+/* TMA - Dashboard guidance panels (Header, Sidebar, Rightbar, Layout) */
 (function () {
   'use strict';
 

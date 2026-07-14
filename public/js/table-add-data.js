@@ -1,5 +1,5 @@
 /**
- * TMA Table Add data — modal + staging behavior.
+ * TMA Table Add data - modal + staging behavior.
  *
  * Rules:
  * 1. Only the close (×) button dismisses the modal (no backdrop / Escape).
@@ -166,8 +166,8 @@
       user: name,
       avatarSrc: data.avatarSrc || '',
       avatar: 'AvatarMale06',
-      project: data.email || '—',
-      address: '—',
+      project: data.email || '-',
+      address: '-',
       date: data.date || formatCreationDate(),
       status: 'in-progress',
       statusLabel: 'In Progress'
@@ -317,7 +317,7 @@
       },
       onSave: function () {
         stageCurrent();
-        showToast('Draft saved — close (×) to dismiss');
+        showToast('Draft saved - close (×) to dismiss');
       },
     });
 

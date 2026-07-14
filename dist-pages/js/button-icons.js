@@ -1,4 +1,4 @@
-/* TMA — Button inline SVG icons (Figma DefaultIcon placeholder) */
+/* TMA - Button inline SVG icons (Figma DefaultIcon placeholder) */
 (function () {
   'use strict';
 

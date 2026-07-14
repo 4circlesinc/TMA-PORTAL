@@ -1,4 +1,4 @@
-/* TMA — Strip inline SVG icons */
+/* TMA - Strip inline SVG icons */
 (function () {
   'use strict';
 

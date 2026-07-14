@@ -1,4 +1,4 @@
-/* TMA — Tag component (Figma 33307:661) */
+/* TMA - Tag component (Figma 33307:661) */
 (function () {
   'use strict';
 

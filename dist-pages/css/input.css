@@ -1,4 +1,4 @@
-/* TMA — Input */
+/* TMA - Input */
 
 .tma-input,
 .tma-input *,
@@ -26,7 +26,7 @@
   border-color: rgba(0, 0, 0, 0.4);
 }
 
-/* 1 row — 32728:395059 */
+/* 1 row - 32728:395059 */
 
 .tma-input--1row,
 .tma-input--select {
@@ -196,7 +196,7 @@
   color: rgba(0, 0, 0, 0.4);
 }
 
-/* Textarea — 32728:395054 */
+/* Textarea - 32728:395054 */
 
 .tma-input--textarea-wrap {
   position: relative;
@@ -260,7 +260,7 @@
   height: 16px;
 }
 
-/* Title + input vertical — 32728:395057 */
+/* Title + input vertical - 32728:395057 */
 
 .tma-input--title-input {
   justify-content: center;
@@ -269,7 +269,7 @@
   padding: 12px 16px;
 }
 
-/* Select — 32728:395056 */
+/* Select - 32728:395056 */
 
 .tma-input__select-row {
   display: flex;
@@ -292,7 +292,7 @@
   color: #000;
 }
 
-/* Command input — 32728:395062 */
+/* Command input - 32728:395062 */
 
 .tma-input--command {
   width: 320px;
@@ -358,7 +358,7 @@
   height: 20px;
 }
 
-/* Tag input — 32728:395063 */
+/* Tag input - 32728:395063 */
 
 .tma-input--tags {
   width: 320px;
@@ -404,7 +404,7 @@
   color: #000;
 }
 
-/* Documentation page — 32728:395033 */
+/* Documentation page - 32728:395033 */
 
 .tma-input-doc {
   background: #fff;
@@ -606,7 +606,7 @@
   }
 }
 
-/* Forms guidance page — 32257:116552 */
+/* Forms guidance page - 32257:116552 */
 
 .tma-forms-guidance-page {
   max-width: none;
@@ -1134,7 +1134,7 @@
   height: 28px;
 }
 
-/* Form field composites — 32728:395248 */
+/* Form field composites - 32728:395248 */
 
 .tma-input--form-1row {
   justify-content: center;
@@ -1242,7 +1242,7 @@
   margin: 0;
 }
 
-/* Form instances page — 32728:395248 */
+/* Form instances page - 32728:395248 */
 
 .tma-form-instances-page {
   font-family: Inter, system-ui, sans-serif;
@@ -1404,7 +1404,7 @@
   margin-top: 16px;
 }
 
-/* Component state guidance — 30484:299251 */
+/* Component state guidance - 30484:299251 */
 
 .ig-component-state__intro {
   padding-top: 48px;

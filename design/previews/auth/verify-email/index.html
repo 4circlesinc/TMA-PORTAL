@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Verification - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="verifying success expired used invalid failed sent-new"
+        data-state="verifying"
+        data-demo-next="/design/auth/getting-started">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card" aria-labelledby="verify-title">
+
+        <!-- verifying -->
+        <div class="tma-auth__loading" data-show="verifying">
+          <span class="tma-auth__spinner tma-auth__spinner--lg" aria-hidden="true"></span>
+          <div class="tma-auth__intro">
+            <h1 class="tma-auth__title">Verifying your email…</h1>
+          </div>
+        </div>
+
+        <!-- success -->
+        <div class="tma-auth__icon" data-show="success" aria-hidden="true">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="success">
+          <h1 class="tma-auth__title" id="verify-title">Email verified</h1>
+        </div>
+        <a class="tma-auth__submit" data-show="success" href="/design/auth/getting-started">Secure my account</a>
+
+        <!-- expired -->
+        <div class="tma-auth__icon" data-show="expired" aria-hidden="true">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="expired">
+          <h1 class="tma-auth__title">This link has expired</h1>
+        </div>
+        <button type="button" class="tma-auth__submit" data-show="expired" data-set-state="sent-new">Email me a new link</button>
+
+        <!-- used -->
+        <div class="tma-auth__icon" data-show="used" aria-hidden="true">
+          <img src="/images/icons/phosphor/Info.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="used">
+          <h1 class="tma-auth__title">This link was already used</h1>
+        </div>
+        <a class="tma-auth__submit" data-show="used" href="/design/auth/sign-in">Go to sign in</a>
+        <p class="tma-auth__alt-link" data-show="used">
+          Not verified yet? <button type="button" class="tma-auth__link-btn" data-set-state="sent-new">Send a new link</button>
+        </p>
+
+        <!-- invalid -->
+        <div class="tma-auth__icon" data-show="invalid" aria-hidden="true">
+          <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="invalid">
+          <h1 class="tma-auth__title">This link isn't valid</h1>
+        </div>
+        <button type="button" class="tma-auth__submit" data-show="invalid" data-set-state="sent-new">Email me a new link</button>
+
+        <!-- failed -->
+        <div class="tma-auth__icon" data-show="failed" aria-hidden="true">
+          <img src="/images/icons/phosphor/Warning.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="failed">
+          <h1 class="tma-auth__title">Something went wrong</h1>
+        </div>
+        <div class="tma-auth__nav-actions" data-show="failed">
+          <button type="button" class="tma-auth__submit tma-auth__submit--previous" data-set-state="verifying">Try again</button>
+          <button type="button" class="tma-auth__submit" data-set-state="sent-new">Email me a new link</button>
+        </div>
+
+        <!-- sent-new -->
+        <div class="tma-auth__icon" data-show="sent-new" aria-hidden="true">
+          <img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="sent-new">
+          <h1 class="tma-auth__title">Check your inbox</h1>
+          <p class="tma-auth__subtitle">A new confirmation link is on its way to <strong>vernon@example.com</strong>.</p>
+        </div>
+
+        <p class="tma-auth__alt-link" data-show="expired invalid failed sent-new"><a href="/design/auth/sign-in">Back to sign in</a></p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-/* TMA — Table search inline SVG icons */
+/* TMA - Table search inline SVG icons */
 (function () {
   'use strict';
 

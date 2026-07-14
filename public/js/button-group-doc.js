@@ -1,4 +1,4 @@
-/* TMA — Button Group documentation (Figma 33067:4918) */
+/* TMA - Button Group documentation (Figma 33067:4918) */
 (function () {
   'use strict';
 

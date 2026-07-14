@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Settings - TM ANTOINE Advisory</title>
+  <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css?v=2">
+  <link rel="stylesheet" href="css/theme.css?v=2">
+  <link rel="stylesheet" href="css/dashboard.css?v=9">
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    body { background: var(--color-white); }
+    [data-theme="dark"] body { background: #1c1c1c; }
+  </style>
+</head>
+<body>
+  <div class="tma-dash" data-theme-scope>
+
+    <!-- ── Sidebar ─────────────────────────────────────── -->
+    <aside class="tma-dash__sidebar" aria-label="Primary">
+      <div class="tma-dash__sidebar-logo" aria-label="TM ANTOINE Advisory">
+        <div class="tma-dash__logo-expanded">
+          <img class="tma-dash__logo-horizontal" src="images/brand/tma/tma-logo-horizontal.png" alt="TM ANTOINE Advisory" loading="lazy">
+        </div>
+        <div class="tma-dash__logo-collapsed">
+          <img class="tma-dash__logo-mark" src="images/brand/tma/tma-logo-mark.png" alt="TM ANTOINE Advisory" width="40" height="40" loading="lazy">
+        </div>
+      </div>
+
+      <div class="tma-dash__sidebar-nav">
+        <div class="tma-dash__nav-section">
+          <div class="tma-dash__group-label">Dashboards</div>
+          <a class="tma-dash__nav-item" href="/">
+            <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+            <img class="tma-dash__nav-icon" src="images/icons/phosphor/House.svg" alt="">
+            <span>Dashboard</span>
+          </a>
+          <a class="tma-dash__nav-item" href="/overview">
+            <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+            <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChartPieSlice.svg" alt="">
+            <span>Overview</span>
+          </a>
+        </div>
+
+        <div class="tma-dash__nav-section">
+          <div class="tma-dash__group-label">Account settings</div>
+          <a class="tma-dash__nav-item" href="/settings">
+            <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+            <img class="tma-dash__nav-icon" src="images/icons/phosphor/GearSix.svg" alt="">
+            <span>Settings</span>
+          </a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--active" href="/design/security-settings" aria-current="page">
+            <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+            <img class="tma-dash__nav-icon" src="images/icons/phosphor/ShieldCheck.svg" alt="">
+            <span>Security</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="tma-dash__profile">
+        <img class="tma-dash__profile-avatar" src="images/avatars/AvatarByewind.png" alt="Vernon Francis avatar" width="24" height="24">
+        <div class="tma-dash__profile-meta">
+          <span class="tma-dash__profile-name">Vernon Francis</span>
+          <span class="tma-dash__profile-email">vfrancis@tmantoinelaw.com</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Header ──────────────────────────────────────── -->
+    <header class="tma-dash__header">
+      <div class="tma-dash__header-left">
+        <button type="button" class="tma-dash__icon-btn" aria-label="Toggle sidebar"><img src="images/icons/phosphor/Sidebar.svg" alt=""></button>
+        <nav class="tma-dash__breadcrumb" aria-label="Breadcrumb">
+          <span class="tma-dash__crumb--current">Settings / Security</span>
+        </nav>
+      </div>
+      <div class="tma-dash__header-center"></div>
+      <div class="tma-dash__header-right">
+        <div class="tma-dash__header-icons">
+          <button type="button" class="tma-dash__icon-btn" data-action="toggle-theme" aria-label="Toggle theme"><img src="images/icons/phosphor/Sun.svg" alt=""></button>
+          <button type="button" class="tma-dash__icon-btn" aria-label="Notifications"><img src="images/icons/phosphor/Bell.svg" alt=""></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Main ────────────────────────────────────────── -->
+    <main class="tma-dash__main" data-auth-flow data-states="populated empty" data-state="populated">
+      <div class="tma-dash__main-head">
+        <div class="tma-dash__main-head-left">
+          <h1 class="tma-dash__page-title">Security</h1>
+        </div>
+      </div>
+
+      <div class="tma-dash__view">
+        <div class="tma-security">
+
+          <!-- Password -->
+          <section class="tma-security__card" aria-labelledby="sec-password">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-password"><img src="images/icons/phosphor/Password.svg" alt="" aria-hidden="true">Password</h2>
+              <button type="button" class="tma-auth__chip-btn" data-dialog-open="#change-password-dialog"><span>Change password</span></button>
+            </div>
+            <p class="tma-security__desc">Last changed 3 months ago. Use a password you don't use anywhere else.</p>
+          </section>
+
+          <!-- Connected accounts -->
+          <section class="tma-security__card" aria-labelledby="sec-connected">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-connected"><img src="images/icons/phosphor/Plugs.svg" alt="" aria-hidden="true">Connected accounts</h2>
+            </div>
+            <p class="tma-security__desc">Sign in with Google or Microsoft alongside your password. Only accounts with your portal email can be connected.</p>
+            <div class="tma-security__row">
+              <span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Google16.svg" alt=""></span>
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">Google</span>
+                <span class="tma-security__row-sub" data-show="populated">Connected as vernon@gmail.com</span>
+                <span class="tma-security__row-sub" data-show="empty">Not connected</span>
+              </span>
+              <button type="button" class="tma-auth__chip-btn" data-show="populated" data-dialog-open="#disconnect-dialog"><span>Disconnect</span></button>
+              <a class="tma-auth__chip-btn" data-show="empty" href="/design/auth/connect"><span>Connect</span></a>
+            </div>
+            <div class="tma-security__row">
+              <span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Microsoft16.svg" alt=""></span>
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">Microsoft</span>
+                <span class="tma-security__row-sub">Not connected</span>
+              </span>
+              <a class="tma-auth__chip-btn" href="/design/auth/connect"><span>Connect</span></a>
+            </div>
+          </section>
+
+          <!-- Phone -->
+          <section class="tma-security__card" aria-labelledby="sec-phone">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-phone"><img src="images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">Phone number</h2>
+            </div>
+            <p class="tma-security__desc">Used for security alerts and account recovery only - never marketing.</p>
+            <div class="tma-security__row" data-show="populated">
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">+1 ••• ••• ••89</span>
+                <span class="tma-security__row-sub">Verified 12 Jan 2026</span>
+              </span>
+              <a class="tma-auth__chip-btn" href="/design/auth/phone"><span>Change</span></a>
+              <button type="button" class="tma-auth__chip-btn" data-dialog-open="#remove-phone-dialog"><span>Remove</span></button>
+            </div>
+            <div class="tma-security__empty" data-show="empty">
+              <img src="images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">
+              <span>No phone number added yet.</span>
+              <a class="tma-auth__chip-btn" href="/design/auth/phone"><span>Add phone number</span></a>
+            </div>
+          </section>
+
+          <!-- Two-factor authentication -->
+          <section class="tma-security__card" aria-labelledby="sec-tfa">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-tfa"><img src="images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">Two-factor authentication</h2>
+              <span class="tma-auth__badge tma-auth__badge--done" data-show="populated">On</span>
+              <span class="tma-auth__badge" data-show="empty">Off</span>
+            </div>
+            <p class="tma-security__desc">A 6-digit code from your authenticator app is required when signing in from a device we don't recognize.</p>
+            <div class="tma-security__row" data-show="populated">
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">Authenticator app</span>
+                <span class="tma-security__row-sub">Microsoft Authenticator · added 12 Jan 2026</span>
+              </span>
+              <a class="tma-auth__chip-btn" href="/design/auth/two-factor-setup"><span>Set up again</span></a>
+              <button type="button" class="tma-auth__chip-btn" data-dialog-open="#disable-tfa-dialog"><span>Turn off</span></button>
+            </div>
+            <div class="tma-security__empty" data-show="empty">
+              <img src="images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">
+              <span>Two-factor authentication is off.</span>
+              <a class="tma-auth__chip-btn" href="/design/auth/two-factor-setup"><span>Turn on</span></a>
+            </div>
+          </section>
+
+          <!-- Recovery codes -->
+          <section class="tma-security__card" aria-labelledby="sec-codes">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-codes"><img src="images/icons/phosphor/Key.svg" alt="" aria-hidden="true">Recovery codes</h2>
+            </div>
+            <div class="tma-security__row" data-show="populated">
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">7 of 10 codes remaining</span>
+                <span class="tma-security__row-sub">Each code signs you in once if you can't use your authenticator app. Codes are only shown when generated.</span>
+              </span>
+              <button type="button" class="tma-auth__chip-btn" data-dialog-open="#regenerate-dialog"><span>Generate new codes</span></button>
+            </div>
+            <p class="tma-security__desc" data-show="empty">Available once two-factor authentication is turned on.</p>
+          </section>
+
+          <!-- Trusted devices -->
+          <section class="tma-security__card" aria-labelledby="sec-trusted">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-trusted"><img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">Trusted devices</h2>
+            </div>
+            <p class="tma-security__desc">These devices skip the two-factor code for 30 days. Remove any device you don't recognize.</p>
+            <div class="tma-security__table-wrap" data-show="populated">
+              <table class="tma-security__table">
+                <thead>
+                  <tr><th scope="col">Device</th><th scope="col">Added</th><th scope="col">Last used</th><th scope="col"></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>MacBook Pro · Safari</td>
+                    <td>12 Jan 2026</td>
+                    <td>Today</td>
+                    <td><button type="button" class="tma-auth__chip-btn"><span>Remove</span></button></td>
+                  </tr>
+                  <tr>
+                    <td>iPhone 15 · Safari</td>
+                    <td>18 Feb 2026</td>
+                    <td>Yesterday</td>
+                    <td><button type="button" class="tma-auth__chip-btn"><span>Remove</span></button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tma-security__empty" data-show="empty">
+              <img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">
+              <span>No trusted devices yet.</span>
+            </div>
+          </section>
+
+          <!-- Active sessions -->
+          <section class="tma-security__card" aria-labelledby="sec-sessions">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-sessions"><img src="images/icons/phosphor/Desktop.svg" alt="" aria-hidden="true">Active sessions</h2>
+              <button type="button" class="tma-auth__chip-btn" data-dialog-open="#signout-all-dialog"><span>Sign out of all other devices</span></button>
+            </div>
+            <p class="tma-security__desc">Everywhere you're currently signed in. Sign out anything you don't recognize.</p>
+            <div class="tma-security__table-wrap">
+              <table class="tma-security__table">
+                <thead>
+                  <tr><th scope="col">Device</th><th scope="col">Location</th><th scope="col">Last active</th><th scope="col"></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>MacBook Pro · Safari <span class="tma-auth__badge tma-auth__badge--done">This device</span></td>
+                    <td>New York, US</td>
+                    <td>Now</td>
+                    <td></td>
+                  </tr>
+                  <tr data-show="populated">
+                    <td>iPhone 15 · Safari</td>
+                    <td>New York, US</td>
+                    <td>2 hours ago</td>
+                    <td><button type="button" class="tma-auth__chip-btn"><span>Sign out</span></button></td>
+                  </tr>
+                  <tr data-show="populated">
+                    <td>Windows PC · Edge</td>
+                    <td>Boston, US</td>
+                    <td>3 days ago</td>
+                    <td><button type="button" class="tma-auth__chip-btn"><span>Sign out</span></button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Login history -->
+          <section class="tma-security__card" aria-labelledby="sec-history">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-history"><img src="images/icons/phosphor/ClockCounterClockwise.svg" alt="" aria-hidden="true">Recent login activity</h2>
+            </div>
+            <p class="tma-security__desc">The last sign-ins and attempts on your account. If something looks wrong, change your password and sign out of all devices.</p>
+            <div class="tma-security__table-wrap" data-show="populated">
+              <table class="tma-security__table">
+                <thead>
+                  <tr><th scope="col">When</th><th scope="col">Location</th><th scope="col">Device</th><th scope="col">Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Today, 09:12</td><td>New York, US</td><td>MacBook Pro · Safari</td><td><span class="tma-auth__badge tma-auth__badge--done">Signed in</span></td></tr>
+                  <tr><td>Yesterday, 18:47</td><td>New York, US</td><td>iPhone 15 · Safari</td><td><span class="tma-auth__badge tma-auth__badge--done">Signed in</span></td></tr>
+                  <tr><td>3 Jul 2026, 02:31</td><td>Unknown location</td><td>Chrome · Linux</td><td><span class="tma-auth__badge tma-auth__badge--danger">Blocked</span></td></tr>
+                  <tr><td>1 Jul 2026, 11:05</td><td>Boston, US</td><td>Windows PC · Edge</td><td><span class="tma-auth__badge tma-auth__badge--done">Signed in</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tma-security__empty" data-show="empty">
+              <img src="images/icons/phosphor/ClockCounterClockwise.svg" alt="" aria-hidden="true">
+              <span>No login activity to show yet.</span>
+            </div>
+          </section>
+
+          <!-- Security notifications -->
+          <section class="tma-security__card" aria-labelledby="sec-notify">
+            <div class="tma-security__head">
+              <h2 class="tma-security__title" id="sec-notify"><img src="images/icons/phosphor/Bell.svg" alt="" aria-hidden="true">Security notifications</h2>
+            </div>
+            <p class="tma-security__desc">Emails we send to keep you informed about your account. Alerts for sign-ins from new devices can't be turned off.</p>
+            <div class="tma-security__row">
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">New device sign-in</span>
+                <span class="tma-security__row-sub">Always on - sent whenever a new device signs in</span>
+              </span>
+              <label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked disabled aria-label="New device sign-in alerts (always on)"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label>
+            </div>
+            <div class="tma-security__row">
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">Password changes</span>
+              </span>
+              <label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked aria-label="Password change alerts"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label>
+            </div>
+            <div class="tma-security__row">
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">Two-factor authentication changes</span>
+              </span>
+              <label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked aria-label="Two-factor authentication change alerts"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label>
+            </div>
+            <div class="tma-security__row">
+              <span class="tma-security__row-copy">
+                <span class="tma-security__row-name">Monthly security summary</span>
+                <span class="tma-security__row-sub">A short overview of recent account activity</span>
+              </span>
+              <label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" aria-label="Monthly security summary"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Dialogs ─────────────────────────────────────── -->
+  <div class="tma-auth__dialog" id="change-password-dialog" role="dialog" aria-modal="true" aria-labelledby="cpw-title" hidden>
+    <div class="tma-auth__dialog-card">
+      <h2 class="tma-auth__dialog-title" id="cpw-title">Change password</h2>
+      <form class="tma-auth__form" action="#" method="post" novalidate data-demo>
+        <label class="tma-auth__field"><input class="tma-auth__input" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"></label>
+        <label class="tma-auth__field"><input class="tma-auth__input" type="password" placeholder="New password" autocomplete="new-password" aria-label="New password"></label>
+        <label class="tma-auth__field"><input class="tma-auth__input" type="password" placeholder="Confirm new password" autocomplete="new-password" aria-label="Confirm new password"></label>
+        <p class="tma-auth__hint">At least 10 characters. Changing it signs out your other devices.</p>
+      </form>
+      <div class="tma-auth__dialog-actions">
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>
+        <button type="button" class="tma-auth__submit" data-dialog-close>Update password</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tma-auth__dialog" id="disconnect-dialog" role="dialog" aria-modal="true" aria-labelledby="disc-title" hidden>
+    <div class="tma-auth__dialog-card">
+      <h2 class="tma-auth__dialog-title" id="disc-title">Disconnect Google?</h2>
+      <p class="tma-auth__dialog-text">You can still sign in with your password, and reconnect anytime.</p>
+      <div class="tma-auth__dialog-actions">
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Keep connected</button>
+        <button type="button" class="tma-auth__submit tma-auth__submit--danger" data-dialog-close>Disconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tma-auth__dialog" id="remove-phone-dialog" role="dialog" aria-modal="true" aria-labelledby="rmp-title" hidden>
+    <div class="tma-auth__dialog-card">
+      <h2 class="tma-auth__dialog-title" id="rmp-title">Remove phone number?</h2>
+      <p class="tma-auth__dialog-text">You'll no longer get text alerts or phone-based recovery.</p>
+      <div class="tma-auth__dialog-actions">
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Keep number</button>
+        <button type="button" class="tma-auth__submit tma-auth__submit--danger" data-dialog-close>Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tma-auth__dialog" id="disable-tfa-dialog" role="dialog" aria-modal="true" aria-labelledby="dtfa-title" hidden>
+    <div class="tma-auth__dialog-card">
+      <h2 class="tma-auth__dialog-title" id="dtfa-title">Turn off two-factor authentication?</h2>
+      <p class="tma-auth__dialog-text">Your recovery codes will stop working too.</p>
+      <div class="tma-auth__dialog-actions">
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Keep it on</button>
+        <button type="button" class="tma-auth__submit tma-auth__submit--danger" data-dialog-close>Turn off</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tma-auth__dialog" id="regenerate-dialog" role="dialog" aria-modal="true" aria-labelledby="regen-title" hidden>
+    <div class="tma-auth__dialog-card">
+      <h2 class="tma-auth__dialog-title" id="regen-title">Generate new recovery codes?</h2>
+      <p class="tma-auth__dialog-text">Your old codes stop working immediately. Save the new set right away.</p>
+      <div class="tma-auth__dialog-actions">
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>
+        <a class="tma-auth__submit" href="/design/auth/recovery-codes">Generate new codes</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="tma-auth__dialog" id="signout-all-dialog" role="dialog" aria-modal="true" aria-labelledby="soa-title" hidden>
+    <div class="tma-auth__dialog-card">
+      <h2 class="tma-auth__dialog-title" id="soa-title">Sign out of all other devices?</h2>
+      <p class="tma-auth__dialog-text">Every session except this one will end immediately.</p>
+      <div class="tma-auth__dialog-actions">
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>
+        <button type="button" class="tma-auth__submit" data-dialog-close>Sign out other devices</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

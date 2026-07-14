@@ -1,4 +1,4 @@
-/* TMA — Card instances board (Figma 33160:10064) */
+/* TMA - Card instances board (Figma 33160:10064) */
 (function () {
   'use strict';
 

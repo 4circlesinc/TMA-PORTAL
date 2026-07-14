@@ -1,4 +1,4 @@
-/* TMA ChartMotion — vertical bar chart with Y-axis grid */
+/* TMA ChartMotion - vertical bar chart with Y-axis grid */
 :root {
   --chart-cyan: #a0bce8;
   --chart-mint: #6be6d3;
@@ -241,7 +241,7 @@
   }
 }
 
-/* ── ChartMotion 02 — horizontal bar chart ── */
+/* ── ChartMotion 02 - horizontal bar chart ── */
 .tma-chart-motion-horizontal {
   display: flex;
   gap: 16px;
@@ -462,7 +462,7 @@
   }
 }
 
-/* ── ChartMotion 03 — line / area chart ── */
+/* ── ChartMotion 03 - line / area chart ── */
 .tma-chart-motion-line {
   --chart-line-y-pad-bottom: 16px;
   display: flex;
@@ -671,7 +671,7 @@
   }
 }
 
-/* ── Vertical 01 — compact bar graphic (240×160) ── */
+/* ── Vertical 01 - compact bar graphic (240×160) ── */
 .tma-chart-vertical-01 {
   width: 100%;
   max-width: 240px;
@@ -780,7 +780,7 @@
   }
 }
 
-/* ── Vertical 02 — layered track + pill bars (240×160) ── */
+/* ── Vertical 02 - layered track + pill bars (240×160) ── */
 .tma-chart-vertical-02 {
   width: 100%;
   max-width: 240px;
@@ -900,7 +900,7 @@
   }
 }
 
-/* ── Vertical 03 — segmented stack bars (240×160) ── */
+/* ── Vertical 03 - segmented stack bars (240×160) ── */
 .tma-chart-vertical-03 {
   width: 100%;
   max-width: 240px;
@@ -1022,7 +1022,7 @@
   }
 }
 
-/* ── Vertical 04 — block stack bars (240×160) ── */
+/* ── Vertical 04 - block stack bars (240×160) ── */
 .tma-chart-vertical-04 {
   --v04-primary: #b899eb;
   --v04-accent: #adadfb;
@@ -1160,7 +1160,7 @@
   }
 }
 
-/* ── Vertical 05 — opacity block stack bars (240×160) ── */
+/* ── Vertical 05 - opacity block stack bars (240×160) ── */
 .tma-chart-vertical-05 {
   --v05-solid: #000000;
   --v05-accent: #adadfb;
@@ -1295,7 +1295,7 @@
   }
 }
 
-/* ── Vertical 06 — variable gradient stack bars (240×160) ── */
+/* ── Vertical 06 - variable gradient stack bars (240×160) ── */
 .tma-chart-vertical-06 {
   --v06-color: #000000;
   --v06-chart-height: 160;
@@ -1417,7 +1417,7 @@
   }
 }
 
-/* ── Vertical 07 — dual pin bars (240×160) ── */
+/* ── Vertical 07 - dual pin bars (240×160) ── */
 .tma-chart-vertical-07 {
   --v07-color: #a0bce8;
   --v07-muted-opacity: 0.5;
@@ -1545,7 +1545,7 @@
   }
 }
 
-/* ── Vertical 08 — split pin bars (240×160) ── */
+/* ── Vertical 08 - split pin bars (240×160) ── */
 .tma-chart-vertical-08 {
   --v08-solid: #000000;
   --v08-accent: #adadfb;
@@ -1673,7 +1673,7 @@
   }
 }
 
-/* ── Vertical 12 — layered pill bars (240×160) ── */
+/* ── Vertical 12 - layered pill bars (240×160) ── */
 .tma-chart-vertical-12 {
   --v12-color: #000000;
   --v12-track-opacity: 0.1;
@@ -1794,7 +1794,7 @@
   }
 }
 
-/* ── Vertical 11 — solid pill bars (240×160) ── */
+/* ── Vertical 11 - solid pill bars (240×160) ── */
 .tma-chart-vertical-11 {
   --v11-color: #000000;
   --v11-chart-height: 160;
@@ -1905,7 +1905,7 @@
   }
 }
 
-/* ── ProportionStatistics — three-column tick chart (440×200) ── */
+/* ── ProportionStatistics - three-column tick chart (440×200) ── */
 .tma-chart-proportion {
   --prop-color: #000000;
   --prop-muted-opacity: 0.4;
@@ -2019,7 +2019,7 @@
   }
 }
 
-/* ── Vertical 10 — dense strip bars (440×138) ── */
+/* ── Vertical 10 - dense strip bars (440×138) ── */
 .tma-chart-vertical-10 {
   --v10-chart-width: 440;
   --v10-chart-height: 138;
@@ -2126,7 +2126,7 @@
   }
 }
 
-/* ── Vertical 09 — stacked 3-segment strips (1100×212) ── */
+/* ── Vertical 09 - stacked 3-segment strips (1100×212) ── */
 .tma-chart-vertical-09 {
   --v09-chart-width: 1100;
   --v09-chart-height: 212;
@@ -2227,7 +2227,7 @@
   }
 }
 
-/* ── Horizontal 01 — colored pill bars (160×240) ── */
+/* ── Horizontal 01 - colored pill bars (160×240) ── */
 .tma-chart-horizontal-01 {
   --h01-bar-height: 28px;
   width: 100%;
@@ -2329,7 +2329,7 @@
   }
 }
 
-/* ── Horizontal 02 — layered track + pill bars (160×240) ── */
+/* ── Horizontal 02 - layered track + pill bars (160×240) ── */
 .tma-chart-horizontal-02 {
   --h02-bar-height: 28px;
   --h02-track-opacity: 0.2;
@@ -2443,7 +2443,7 @@
   }
 }
 
-/* ── Horizontal 03 — 3-segment opacity pills (160×240) ── */
+/* ── Horizontal 03 - 3-segment opacity pills (160×240) ── */
 .tma-chart-horizontal-03 {
   width: 100%;
   max-width: 160px;
@@ -2543,7 +2543,7 @@
   }
 }
 
-/* ── Horizontal 04 — horizontal block pills (160×240) ── */
+/* ── Horizontal 04 - horizontal block pills (160×240) ── */
 .tma-chart-horizontal-04 {
   --h04-color: #000000;
   --h04-block-height: 2px;
@@ -2649,7 +2649,7 @@
   }
 }
 
-/* ── SemicircleChart — gauge arcs (250×126) ── */
+/* ── SemicircleChart - gauge arcs (250×126) ── */
 .tma-chart-semicircle {
   --sc-chart-width: 250;
   --sc-chart-height: 126;
@@ -2778,7 +2778,7 @@
   }
 }
 
-/* ── DonutChart — ring segments (120×120) ── */
+/* ── DonutChart - ring segments (120×120) ── */
 .tma-chart-donut {
   --donut-chart-width: 121;
   --donut-chart-height: 120;

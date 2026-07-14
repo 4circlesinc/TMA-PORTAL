@@ -1,5 +1,5 @@
 /*
- * TMA — File type icon paths (TMA Office marks + phosphor media)
+ * TMA - File type icon paths (TMA Office marks + phosphor media)
  * Global: window.TMAFileIcons
  *
  * TMA file marks (Figma 32730:413851–413858):

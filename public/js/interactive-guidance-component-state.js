@@ -1,4 +1,4 @@
-/* TMA — Component state panel (Figma 30484:299251) */
+/* TMA - Component state panel (Figma 30484:299251) */
 (function () {
   'use strict';
 

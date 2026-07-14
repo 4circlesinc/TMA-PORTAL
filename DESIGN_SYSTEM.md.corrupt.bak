@@ -1,10 +1,10 @@
 
-> `--color-primary` (`#03a5e9`) and `--color-primary-dark` (`#136da0`, sampled from the TMA logo) are the brand blues. Every primary accent — links, badges, highlights, progress fills, **selected table rows**, **selection toolbars**, **checkbox `accent-color`**, focus rings, upload overlay tints — must render the brand blue, never purple/indigo. Use `--color-accent` (alias of `--color-primary-dark`) and `--color-accent-bg` / `--color-accent-bg-hover` for selection tints. `--color-indigo` and `--color-purple` are **remapped to `var(--color-primary-dark)`** so legacy consumers pick this up automatically; do not reintroduce `#adadfb` or `#9747ff` for UI accents. Violet (`--color-violet`, `--chart-purple`) remains only for chart series, status chips, and categorical tones — not for primary interaction states.
-| `--color-primary` | `#03a5e9` | **TMA brand blue** (bright) — tints, emphasis, links |
+> `--color-primary` (`#03a5e9`) and `--color-primary-dark` (`#136da0`, sampled from the TMA logo) are the brand blues. Every primary accent - links, badges, highlights, progress fills, **selected table rows**, **selection toolbars**, **checkbox `accent-color`**, focus rings, upload overlay tints - must render the brand blue, never purple/indigo. Use `--color-accent` (alias of `--color-primary-dark`) and `--color-accent-bg` / `--color-accent-bg-hover` for selection tints. `--color-indigo` and `--color-purple` are **remapped to `var(--color-primary-dark)`** so legacy consumers pick this up automatically; do not reintroduce `#adadfb` or `#9747ff` for UI accents. Violet (`--color-violet`, `--chart-purple`) remains only for chart series, status chips, and categorical tones - not for primary interaction states.
+| `--color-primary` | `#03a5e9` | **TMA brand blue** (bright) - tints, emphasis, links |
 | `--color-accent` | `var(--color-primary-dark)` | Selection actions, checked controls, focus |
 | `--color-accent-bg` | `color-mix(… primary-dark 8%)` | Selected row background |
 | `--color-accent-bg-hover` | `color-mix(… primary-dark 12%)` | Selected row hover |
-| `--color-indigo` | `var(--color-primary-dark)` | Legacy alias — links, highlights (remapped) |
-| `--color-purple` | `var(--color-primary-dark)` | Legacy alias — do **not** use for chart data |
+| `--color-indigo` | `var(--color-primary-dark)` | Legacy alias - links, highlights (remapped) |
+| `--color-purple` | `var(--color-primary-dark)` | Legacy alias - do **not** use for chart data |
 | `--color-violet` | `#b899eb` | Chips, progress, **chart series only** |
-| 2026-07-07 | **Global accent sweep** — `--color-purple` remapped to brand blue; added `--color-accent`, `--color-accent-bg`, `--color-accent-bg-hover`; replaced hardcoded `#9747ff` in component CSS; portal selection toolbar + table checkboxes use brand blue |
+| 2026-07-07 | **Global accent sweep** - `--color-purple` remapped to brand blue; added `--color-accent`, `--color-accent-bg`, `--color-accent-bg-hover`; replaced hardcoded `#9747ff` in component CSS; portal selection toolbar + table checkboxes use brand blue |

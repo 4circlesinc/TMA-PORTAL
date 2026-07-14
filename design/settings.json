@@ -1,7 +1,7 @@
 {
   "slug": "settings",
   "nodeId": "30919:278108",
-  "name": "Settings — Profile",
+  "name": "Settings - Profile",
   "description": "Dashboard-integrated settings with sidebar nav, profile/account security rows, and change-name/email popups.",
   "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30919-278108",
   "htmlPath": "public/settings/index.html",

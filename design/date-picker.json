@@ -4,7 +4,7 @@
   "guidanceNodeId": "33304:16630",
   "documentationNodeId": "33304:16614",
   "name": "DatePicker",
-  "description": "DatePicker interactive guidance — date only, date and time, date range, and date range and time variants with calendar, month, year, and time views.",
+  "description": "DatePicker interactive guidance - date only, date and time, date range, and date range and time variants with calendar, month, year, and time views.",
   "cssPath": "public/css/date-picker.css",
   "jsPath": "public/js/date-picker.js",
   "iconJsPath": "public/js/date-picker-icons.js",
@@ -24,11 +24,11 @@
   "documentation": {
     "purpose": "Used to select a date and time. The top date display area can be selected or the date can be entered.",
     "guidance": [
-      "Select date only — calendar, month, and year views with Back navigation.",
-      "Select date and time — time picker with AM/PM, hours, and minutes.",
-      "Select date range — start and end dates with in-range highlight.",
-      "Select date range and time — range plus time for active date.",
-      "The click range in the top area — segmented header hit areas; scale 1.5× or 2× if too small."
+      "Select date only - calendar, month, and year views with Back navigation.",
+      "Select date and time - time picker with AM/PM, hours, and minutes.",
+      "Select date range - start and end dates with in-range highlight.",
+      "Select date range and time - range plus time for active date.",
+      "The click range in the top area - segmented header hit areas; scale 1.5× or 2× if too small."
     ]
   },
   "iconSources": {

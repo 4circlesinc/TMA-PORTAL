@@ -1,4 +1,4 @@
-/* tma-portal — TM ANTOINE brand logo */
+/* tma-portal - TM ANTOINE brand logo */
 (function () {
   'use strict';
 

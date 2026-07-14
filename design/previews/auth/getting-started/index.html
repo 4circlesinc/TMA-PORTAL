@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secure Your Account - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="fresh partial complete reminder"
+        data-state="fresh"
+        data-demo-next="/design/auth/pending-approval">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="getting-started-title">
+        <div class="tma-auth__icon" aria-hidden="true">
+          <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="80" height="80">
+        </div>
+
+        <div class="tma-auth__intro">
+          <h1 class="tma-auth__title" id="getting-started-title">Secure your account</h1>
+          <p class="tma-auth__subtitle">A few quick steps to keep your account protected.</p>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="complete" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>All set.</strong> Manage these anytime in Security settings.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--info" data-show="reminder" role="status">
+          <img src="/images/icons/phosphor/Info.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>Turn on two-factor authentication anytime under <strong>Settings → Security</strong>.</span>
+        </div>
+
+        <div class="tma-auth__progress" data-show="fresh reminder" aria-hidden="true">
+          <div class="tma-auth__progress-row"><span><strong>1 of 5</strong> complete</span><span>Takes about 3 minutes</span></div>
+          <div class="tma-auth__progress-track"><div class="tma-auth__progress-fill" style="width: 20%;"></div></div>
+        </div>
+        <div class="tma-auth__progress" data-show="partial" aria-hidden="true">
+          <div class="tma-auth__progress-row"><span><strong>3 of 5</strong> complete</span><span>Almost there</span></div>
+          <div class="tma-auth__progress-track"><div class="tma-auth__progress-fill" style="width: 60%;"></div></div>
+        </div>
+        <div class="tma-auth__progress" data-show="complete" aria-hidden="true">
+          <div class="tma-auth__progress-row"><span><strong>5 of 5</strong> complete</span><span></span></div>
+          <div class="tma-auth__progress-track"><div class="tma-auth__progress-fill" style="width: 100%;"></div></div>
+        </div>
+
+        <!-- fresh / reminder checklist -->
+        <div class="tma-auth__checklist" data-show="fresh reminder">
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Email verified</span>
+              <span class="tma-auth__task-desc">vernon@example.com</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <a class="tma-auth__task" href="/design/auth/connect">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/Password.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Connect a sign-in method</span>
+              <span class="tma-auth__task-desc">Also sign in with Google or Microsoft</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge">Optional</span></span>
+          </a>
+          <a class="tma-auth__task" href="/design/auth/phone">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/DeviceMobile.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Add your phone number</span>
+              <span class="tma-auth__task-desc">For security alerts and account recovery</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge">Optional</span></span>
+          </a>
+          <a class="tma-auth__task" href="/design/auth/two-factor-setup">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Turn on two-factor authentication</span>
+              <span class="tma-auth__task-desc">A 6-digit app code protects your sign-in</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--recommended">Recommended</span></span>
+          </a>
+          <div class="tma-auth__task tma-auth__task--locked">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/Key.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Save your recovery codes</span>
+              <span class="tma-auth__task-desc">Available after two-factor setup</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--recommended">Recommended</span></span>
+          </div>
+        </div>
+
+        <!-- partial checklist -->
+        <div class="tma-auth__checklist" data-show="partial">
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Email verified</span>
+              <span class="tma-auth__task-desc">vernon@example.com</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/Password.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Sign-in method connected</span>
+              <span class="tma-auth__task-desc">Google - vernon@gmail.com</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/DeviceMobile.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Phone number added</span>
+              <span class="tma-auth__task-desc">+1 ••• ••• ••89</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <a class="tma-auth__task" href="/design/auth/two-factor-setup">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Turn on two-factor authentication</span>
+              <span class="tma-auth__task-desc">A 6-digit app code protects your sign-in</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--recommended">Recommended</span></span>
+          </a>
+          <div class="tma-auth__task tma-auth__task--locked">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/Key.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Save your recovery codes</span>
+              <span class="tma-auth__task-desc">Available after two-factor setup</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--recommended">Recommended</span></span>
+          </div>
+        </div>
+
+        <!-- complete checklist -->
+        <div class="tma-auth__checklist" data-show="complete">
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Email verified</span>
+              <span class="tma-auth__task-desc">vernon@example.com</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/Password.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Sign-in method connected</span>
+              <span class="tma-auth__task-desc">Google - vernon@gmail.com</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/DeviceMobile.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Phone number added</span>
+              <span class="tma-auth__task-desc">+1 ••• ••• ••89</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Two-factor authentication on</span>
+              <span class="tma-auth__task-desc">Authenticator app connected</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+          <div class="tma-auth__task tma-auth__task--done">
+            <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/phosphor/Key.svg" alt="" width="16" height="16"></span>
+            <span class="tma-auth__task-copy">
+              <span class="tma-auth__task-name">Recovery codes saved</span>
+              <span class="tma-auth__task-desc">10 codes available</span>
+            </span>
+            <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
+          </div>
+        </div>
+
+        <a class="tma-auth__submit" href="/design/auth/pending-approval">Continue to portal</a>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

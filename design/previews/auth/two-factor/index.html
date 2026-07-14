@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Two-Step Verification - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="default invalid expired too-many locked recovery recovery-ok recovery-used"
+        data-state="default"
+        data-demo-next="/design/auth/stay-signed-in">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card" aria-labelledby="tfa-login-title">
+        <div class="tma-auth__icon" aria-hidden="true">
+          <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="80" height="80">
+        </div>
+
+        <div class="tma-auth__intro" data-show="default invalid expired too-many locked">
+          <h1 class="tma-auth__title" id="tfa-login-title">Two-step verification</h1>
+          <p class="tma-auth__subtitle">Enter the 6-digit code from your authenticator app.</p>
+        </div>
+
+        <div class="tma-auth__intro" data-show="recovery recovery-ok recovery-used">
+          <h1 class="tma-auth__title">Use a recovery code</h1>
+          <p class="tma-auth__subtitle">Enter one of your saved recovery codes.</p>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="too-many" role="alert">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Too many incorrect codes.</strong> Wait a few minutes or use a recovery code.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="locked" role="alert">
+          <img src="/images/icons/phosphor/LockKey.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Temporarily locked.</strong> Try again in about 30 minutes.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="recovery-ok" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Recovery code accepted.</strong> 7 codes left.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--error" data-show="recovery-used" role="alert">
+          <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>That code was already used - try a different one.</span>
+        </div>
+
+        <!-- authenticator code -->
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="default invalid expired too-many locked"
+              data-demo data-demo-href="/design/auth/stay-signed-in">
+          <div class="tma-auth__group">
+            <div class="tma-auth__otp tma-auth__otp--6" data-otp role="group" aria-label="6 digit authenticator code">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1" data-autofocus="default">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 5">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 6">
+            </div>
+            <p class="tma-auth__field-msg" data-show="invalid">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>That code didn't match - enter the newest one.</span>
+            </p>
+            <p class="tma-auth__field-msg" data-show="expired">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>That code just expired. Enter the new code your app is showing now.</span>
+            </p>
+          </div>
+
+          <label class="tma-auth__check">
+            <input type="checkbox" name="trust" value="1">
+            <span>
+              Trust this device for 30 days
+            </span>
+          </label>
+
+          <button type="submit" class="tma-auth__submit" data-show="default invalid expired">Verify</button>
+          <button type="button" class="tma-auth__submit" data-show="too-many locked" disabled>Verify</button>
+        </form>
+
+        <!-- recovery code -->
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="recovery recovery-ok recovery-used"
+              data-demo data-submit-state="recovery-ok">
+          <div class="tma-auth__group">
+            <label class="tma-auth__field">
+              <input class="tma-auth__input" type="text" name="recovery_code" placeholder="Recovery code (e.g. 4XKT-9RMB)" autocomplete="off" spellcheck="false" aria-label="Recovery code" data-autofocus="recovery">
+            </label>
+          </div>
+          <button type="submit" class="tma-auth__submit" data-show="recovery recovery-used">Verify recovery code</button>
+          <a class="tma-auth__submit" data-show="recovery-ok" href="/design/auth/stay-signed-in">Continue</a>
+        </form>
+
+ 
+        <p class="tma-auth__alt-link" data-show="recovery recovery-used">
+          Found your phone? <button type="button" class="tma-auth__link-btn" data-set-state="default">Use the authenticator app</button>
+        </p>
+
+        
+
+        <p class="tma-auth__alt-link"><a href="/design/auth/sign-in">Back to sign in</a></p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create a New Password - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="form weak expired invalid success"
+        data-state="form"
+        data-demo-next="/design/auth/sign-in">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card" aria-labelledby="reset-title">
+        <div class="tma-auth__icon" data-show="form weak" aria-hidden="true">
+          <img src="/images/icons/phosphor/Password.svg" alt="" width="80" height="80">
+        </div>
+
+        <div class="tma-auth__intro" data-show="form weak">
+          <h1 class="tma-auth__title" id="reset-title">Create a new password</h1>
+          <p class="tma-auth__subtitle">Setting a new password for <strong>vernon@example.com</strong></p>
+        </div>
+
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="form weak"
+              data-demo data-submit-state="success">
+          <div class="tma-auth__group">
+            <label class="tma-auth__field tma-auth__field--password">
+              <input class="tma-auth__input" type="password" name="password" placeholder="New password" autocomplete="new-password" aria-label="New password" data-password-meter data-autofocus="form">
+              <button type="button" class="tma-auth__toggle-pwd" data-toggle-password aria-label="Show password" aria-pressed="false">
+                <img src="/images/icons/phosphor/EyeSlash.svg" alt="" width="16" height="16" aria-hidden="true">
+              </button>
+            </label>
+            <div class="tma-auth__strength" aria-hidden="true">
+              <span class="tma-auth__strength-seg"></span>
+              <span class="tma-auth__strength-seg"></span>
+              <span class="tma-auth__strength-seg"></span>
+              <span class="tma-auth__strength-seg"></span>
+            </div>
+            <ul class="tma-auth__req-list">
+              <li class="tma-auth__req" data-req="length" data-met="false">At least 10 characters</li>
+              <li class="tma-auth__req" data-req="case" data-met="false">Upper &amp; lower case</li>
+              <li class="tma-auth__req" data-req="number" data-met="false">At least one number</li>
+              <li class="tma-auth__req" data-req="symbol" data-met="false">At least one symbol</li>
+            </ul>
+            <p class="tma-auth__field-msg" data-show="weak">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>This password doesn't meet the requirements yet.</span>
+            </p>
+          </div>
+
+          <div class="tma-auth__group">
+            <label class="tma-auth__field tma-auth__field--password">
+              <input class="tma-auth__input" type="password" name="password_confirm" placeholder="Confirm new password" autocomplete="new-password" aria-label="Confirm new password" data-password-confirm>
+              <button type="button" class="tma-auth__toggle-pwd" data-toggle-password aria-label="Show password" aria-pressed="false">
+                <img src="/images/icons/phosphor/EyeSlash.svg" alt="" width="16" height="16" aria-hidden="true">
+              </button>
+            </label>
+            <p class="tma-auth__field-msg" data-mismatch-msg hidden>
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>Passwords don't match yet.</span>
+            </p>
+          </div>
+
+          <label class="tma-auth__check">
+            <input type="checkbox" name="signout_others" value="1" checked>
+            <span>
+              Sign out of all other devices
+            </span>
+          </label>
+
+          <button type="submit" class="tma-auth__submit">Update password</button>
+        </form>
+
+        <!-- expired link -->
+        <div class="tma-auth__icon" data-show="expired" aria-hidden="true">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="expired">
+          <h1 class="tma-auth__title">This reset link has expired</h1>
+          <p class="tma-auth__subtitle">Reset links last 60 minutes - request a new one.</p>
+        </div>
+        <a class="tma-auth__submit" data-show="expired" href="/design/auth/forgot-password">Request a new link</a>
+
+        <!-- invalid link -->
+        <div class="tma-auth__icon" data-show="invalid" aria-hidden="true">
+          <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="invalid">
+          <h1 class="tma-auth__title">This link isn't valid</h1>
+          <p class="tma-auth__subtitle">Request a fresh link to continue.</p>
+        </div>
+        <a class="tma-auth__submit" data-show="invalid" href="/design/auth/forgot-password">Request a new link</a>
+
+        <!-- success -->
+        <div class="tma-auth__icon" data-show="success" aria-hidden="true">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="success">
+          <h1 class="tma-auth__title">Password updated</h1>
+        </div>
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="success" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>All other devices have been signed out.</span>
+        </div>
+        <a class="tma-auth__submit" data-show="success" href="/design/auth/sign-in">Sign in with your new password</a>
+
+        <p class="tma-auth__alt-link" data-show="form weak expired invalid"><a href="/design/auth/sign-in">Back to sign in</a></p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

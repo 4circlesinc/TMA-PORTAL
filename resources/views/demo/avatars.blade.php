@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal — Avatar Demo</title>
+    <title>Portal - Avatar Demo</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: Inter, sans-serif; background: #f5f5f7; padding: 48px; margin: 0; }
@@ -67,9 +67,9 @@
 </head>
 <body>
 
-{{-- AvatarNames — exact Figma demonstration --}}
+{{-- AvatarNames - exact Figma demonstration --}}
 <div class="section">
-<p class="section-title">AvatarNames — as used in tables, chat lists &amp; sidebars</p>
+<p class="section-title">AvatarNames - as used in tables, chat lists &amp; sidebars</p>
 <div class="frame">
     <div class="nav-card">
         <h1>AvatarNames</h1>
@@ -88,9 +88,9 @@
 </div>
 </div>
 
-{{-- Avatars grid — 64px components --}}
+{{-- Avatars grid - 64px components --}}
 <div class="section">
-<p class="section-title">Avatars — 64px components</p>
+<p class="section-title">Avatars - 64px components</p>
 <div class="frame">
     <div class="nav-card">
         <h1>Avatars</h1>

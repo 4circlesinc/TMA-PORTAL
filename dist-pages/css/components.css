@@ -151,7 +151,7 @@
   opacity: 1;
 }
 
-/* Solid variant — no track, gray active background */
+/* Solid variant - no track, gray active background */
 .tma-tab-group--solid {
   display: inline-flex;
   flex-wrap: wrap;
@@ -182,7 +182,7 @@
   display: none;
 }
 
-/* Filled variant — black active on gray track */
+/* Filled variant - black active on gray track */
 .tma-tab-group--filled {
   display: inline-flex;
   flex-wrap: wrap;
@@ -221,7 +221,7 @@
   display: none;
 }
 
-/* Icon variant — same as filled, tuned for icon toggles */
+/* Icon variant - same as filled, tuned for icon toggles */
 .tma-tab-group--icon {
   display: inline-flex;
   flex-wrap: wrap;

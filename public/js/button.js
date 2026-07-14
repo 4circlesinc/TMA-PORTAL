@@ -1,4 +1,4 @@
-/* TMA — Button component (Figma 33311:3641 component set) */
+/* TMA - Button component (Figma 33311:3641 component set) */
 (function () {
   'use strict';
 

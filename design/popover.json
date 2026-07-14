@@ -4,7 +4,7 @@
   "guidanceNodeId": "33303:7653",
   "instancesNodeId": "33303:7642",
   "name": "Popover",
-  "description": "Popover and select dropdown — simple text menus (1–8 options), rich property menus with search, grouping, and nested levels.",
+  "description": "Popover and select dropdown - simple text menus (1–8 options), rich property menus with search, grouping, and nested levels.",
   "cssPath": "public/css/popover.css",
   "jsPath": "public/js/popover.js",
   "iconJsPath": "public/js/popover-icons.js",
@@ -29,11 +29,11 @@
   "documentation": {
     "purpose": "Popover menus surface contextual actions and select dropdown options.",
     "guidance": [
-      "Select dropdown — 1 through 8 text options (Figma 33303:7655–7662).",
-      "Basic interaction — search, icons, shortcuts, switch, and destructive delete.",
-      "Search — no input, no results, and filtered results states.",
-      "Second level menu — nested popover beside parent item.",
-      "With grouping — tags, avatars, partial selection, and collapsible groups."
+      "Select dropdown - 1 through 8 text options (Figma 33303:7655–7662).",
+      "Basic interaction - search, icons, shortcuts, switch, and destructive delete.",
+      "Search - no input, no results, and filtered results states.",
+      "Second level menu - nested popover beside parent item.",
+      "With grouping - tags, avatars, partial selection, and collapsible groups."
     ]
   },
   "items": [
@@ -47,12 +47,12 @@
     { "nodeId": "33303:7662", "variant": "options-8" }
   ],
   "instances": [
-    { "nodeId": "33303:7643", "name": "Property menu — Hide in View / Wrap Column" },
-    { "nodeId": "33303:7644", "name": "Focused search — no results" },
-    { "nodeId": "33303:7645", "name": "Focused search — Ask AI hover" },
-    { "nodeId": "33303:7646", "name": "Value input — filter operators" },
+    { "nodeId": "33303:7643", "name": "Property menu - Hide in View / Wrap Column" },
+    { "nodeId": "33303:7644", "name": "Focused search - no results" },
+    { "nodeId": "33303:7645", "name": "Focused search - Ask AI hover" },
+    { "nodeId": "33303:7646", "name": "Value input - filter operators" },
     { "nodeId": "33303:7647", "name": "Field picker" },
-    { "nodeId": "33303:7648", "name": "Text filter — grouped avatars" },
+    { "nodeId": "33303:7648", "name": "Text filter - grouped avatars" },
     { "nodeId": "33303:7649", "name": "Timezone list" },
     { "nodeId": "33303:7650", "name": "Language list" },
     { "nodeId": "33303:7651", "name": "Cookie settings" },

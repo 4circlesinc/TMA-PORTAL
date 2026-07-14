@@ -65,8 +65,8 @@ def build_phosphor() -> dict:
             "frameName": "Phosphor Icons",
             "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32730-413932",
         },
-        "description": "Phosphor Icons 2.0 Regular — synced from @phosphor-icons/core (matches Figma frame).",
-        "attribution": "Phosphor Icons by Tobias Fried & Helena Zhang — MIT. https://phosphoricons.com",
+        "description": "Phosphor Icons 2.0 Regular - synced from @phosphor-icons/core (matches Figma frame).",
+        "attribution": "Phosphor Icons by Tobias Fried & Helena Zhang - MIT. https://phosphoricons.com",
         "exportPath": "public/images/icons/phosphor",
         "export": {
             "format": "svg",

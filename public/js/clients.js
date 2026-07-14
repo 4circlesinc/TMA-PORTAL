@@ -1,5 +1,5 @@
 /*
- * TMA — Clients page ( /clients )
+ * TMA - Clients page ( /clients )
  * Global: window.TMAClients
  */
 (function () {
@@ -87,7 +87,7 @@
   };
 
   var DEFAULT_FOLDERS = [
-    { id: 'documents', name: 'Documents', count: 0, updated: '—' },
+    { id: 'documents', name: 'Documents', count: 0, updated: '-' },
   ];
 
   var CONTACT_ASSIGNED = {
@@ -744,7 +744,7 @@
 
   function primaryContactValue(id) {
     var profile = PROFILES[id];
-    if (!profile) return '—';
+    if (!profile) return '-';
     var emails = profile.emails || [];
     for (var i = 0; i < emails.length; i++) {
       if (emails[i].value) return emails[i].value;
@@ -753,7 +753,7 @@
     for (var j = 0; j < phones.length; j++) {
       if (phones[j].value) return phones[j].value;
     }
-    return '—';
+    return '-';
   }
 
   function clientTableColumns(item) {

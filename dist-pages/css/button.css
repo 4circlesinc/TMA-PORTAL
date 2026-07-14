@@ -1,4 +1,4 @@
-/* TMA — Button */
+/* TMA - Button */
 
 .tma-button,
 .tma-button *,
@@ -52,7 +52,7 @@
   display: block;
 }
 
-/* Sizes — icon-only square uses size radius; text layouts use full pill below */
+/* Sizes - icon-only square uses size radius; text layouts use full pill below */
 
 .tma-button--small {
   min-height: 24px;
@@ -110,7 +110,7 @@
   padding: 6px;
 }
 
-/* Text buttons — full pill (radius = half height) */
+/* Text buttons - full pill (radius = half height) */
 
 .tma-button--layout-leading,
 .tma-button--layout-trailing,
@@ -123,7 +123,7 @@
   aspect-ratio: 1;
 }
 
-/* Variants — default */
+/* Variants - default */
 
 .tma-button--borderless {
   background: transparent;
@@ -147,7 +147,7 @@
   color: #fff;
 }
 
-/* Variants — hover (static matrix + interactive) */
+/* Variants - hover (static matrix + interactive) */
 
 .tma-button--borderless.tma-button--state-hover,
 .tma-button--borderless:not([aria-hidden="true"]):hover {
@@ -170,7 +170,7 @@
   background: rgba(0, 0, 0, 0.8);
 }
 
-/* Component set matrix — 33311:3641 */
+/* Component set matrix - 33311:3641 */
 
 .tma-button-set {
   position: relative;
@@ -387,7 +387,7 @@
   }
 }
 
-/* ── Button documentation — 33159:7245 ── */
+/* ── Button documentation - 33159:7245 ── */
 
 .tma-button-doc {
   background: #fff;
@@ -986,7 +986,7 @@
   }
 }
 
-/* ── Button instances showcase — 33159:7810 ── */
+/* ── Button instances showcase - 33159:7810 ── */
 
 .tma-btn-inst {
   position: relative;

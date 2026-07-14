@@ -1,4 +1,4 @@
-/* TMA — Button instances inline SVG icons (Figma 33159:7810) */
+/* TMA - Button instances inline SVG icons (Figma 33159:7810) */
 (function () {
   'use strict';
 

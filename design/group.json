@@ -3,7 +3,7 @@
   "nodeId": "33302:3387",
   "instancesNodeId": "32729:396128",
   "name": "Group",
-  "description": "TMA Group — combine any instances (text, icon, avatar, button, IconText, tabs, tags) with configurable count, direction, and order.",
+  "description": "TMA Group - combine any instances (text, icon, avatar, button, IconText, tabs, tags) with configurable count, direction, and order.",
   "cssPath": "public/css/group.css",
   "docJsPath": "public/js/group-doc.js",
   "docIconJsPath": "public/js/group-doc-icons.js",

@@ -1,4 +1,4 @@
-/* TMA — Data formats panel (Figma 30484:299253) */
+/* TMA - Data formats panel (Figma 30484:299253) */
 (function () {
   'use strict';
 

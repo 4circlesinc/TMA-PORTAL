@@ -1,5 +1,5 @@
 /**
- * Tooltip — TMA hover behavior (Figma documentation).
+ * Tooltip - TMA hover behavior (Figma documentation).
  *
  * - First hover: 1.5s delay (configurable per trigger)
  * - Same type while visible: switch immediately

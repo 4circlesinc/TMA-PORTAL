@@ -1,5 +1,5 @@
 /*
- * TMA — Client portal shared data store
+ * TMA - Client portal shared data store
  * localStorage-backed state for the client-portal feature set
  * (dashboard, folders, projects, workflows, templates, signatures,
  * inbox, people, account settings). Seeded from the trial-environment
@@ -50,7 +50,7 @@
       },
       branding: {
         accountName: 'Testing',
-        pageTitle: 'TM ANTOINE Advisory — Where Companies Connect',
+        pageTitle: 'TM ANTOINE Advisory - Where Companies Connect',
         logoName: '',
         headerColor: '#FFFFFF',
         accentColor: '#0C0C0C',

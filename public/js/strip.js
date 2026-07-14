@@ -1,4 +1,4 @@
-/* TMA — Strip component (Figma 32792:9423) */
+/* TMA - Strip component (Figma 32792:9423) */
 (function () {
   'use strict';
 

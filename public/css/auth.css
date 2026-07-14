@@ -1,10 +1,12 @@
 /*
- * Auth pages — Figma Authentication frames
+ * Auth pages - Figma Authentication frames
  * Forgot Password (32546:96140), Billing Details card (32546:96134), Billing Details (32546:96135), Account Info (32546:96136), Choose Account Type (32546:96137), Sign In (32546:96142),
  * Sign Up (32546:96141), Two Step Verification (32546:96139), Setup New Password (32546:96138)
  */
 
 .tma-auth {
+  /* vertical space around the card: body padding + copyright row */
+  --auth-chrome: 90px;
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -35,20 +37,22 @@
 .tma-auth__card {
   width: 680px;
   max-width: 100%;
-  height: 656px;
+  min-height: min(656px, calc(100vh - var(--auth-chrome)));
+  min-height: min(656px, calc(100dvh - var(--auth-chrome)));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-28);
-  padding: 0 var(--space-24);
+  padding: var(--space-24);
   border-radius: var(--radius-24);
   background: var(--color-white);
 }
 
 .tma-auth__card--account-info,
 .tma-auth__card--tall {
-  height: 784px;
+  min-height: min(784px, calc(100vh - var(--auth-chrome)));
+  min-height: min(784px, calc(100dvh - var(--auth-chrome)));
 }
 
 .tma-auth__icon {
@@ -747,7 +751,7 @@
 .tma-auth__copyright {
   flex-shrink: 0;
   margin: 0;
-  padding-bottom: var(--space-48);
+  padding-bottom: var(--space-24);
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
@@ -763,12 +767,13 @@
 }
 
 .tma-auth__social-btn {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-8);
+  white-space: nowrap;
   height: 40px;
   padding: var(--space-4) var(--space-12);
   border: 0.5px solid rgba(0, 0, 0, 0.1);
@@ -821,20 +826,190 @@
   text-decoration: none;
 }
 
+/* ── Split layout (Sign In) - flat illustration stage + form panel ── */
+
+.tma-auth--split {
+  flex-direction: row;
+  background: var(--color-white);
+}
+
+.tma-auth__stage {
+  flex: 1 1 55%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: clamp(32px, 5vw, 72px);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-white));
+}
+
+.tma-auth__stage-art {
+  width: min(620px, 84%);
+  height: auto;
+  margin-bottom: clamp(16px, 9vh, 110px);
+}
+
+.tma-auth__panel {
+  flex: 1 1 45%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-24) clamp(24px, 4vw, 56px);
+  background: var(--color-white);
+}
+
+.tma-auth__brand {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tma-auth__brand img {
+  /* the horizontal logo PNG carries generous transparent padding */
+  height: 180px;
+  width: auto;
+}
+
+.tma-auth__panel-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-28);
+  min-height: 0;
+}
+
+/* stacked providers - each label stays on one line */
+.tma-auth--split .tma-auth__social {
+  flex-direction: column;
+}
+
+/* two-step flow: provider list first, email form on demand */
+.tma-auth [hidden] {
+  display: none !important;
+}
+
+.tma-auth__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-auth__back:hover {
+  color: var(--color-black);
+}
+
+.tma-auth__back svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+/* page-load reveal */
+@media (prefers-reduced-motion: no-preference) {
+  .tma-auth__stage-art,
+  .tma-auth__panel-body > * {
+    animation: tma-auth-rise 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  .tma-auth__stage-art { animation-delay: 0.15s; }
+  .tma-auth__panel-body > :nth-child(1) { animation-delay: 0.1s; }
+  .tma-auth__panel-body > :nth-child(2) { animation-delay: 0.16s; }
+  .tma-auth__panel-body > :nth-child(3) { animation-delay: 0.22s; }
+  .tma-auth__panel-body > :nth-child(4) { animation-delay: 0.28s; }
+  .tma-auth__panel-body > :nth-child(5) { animation-delay: 0.34s; }
+
+  /* re-run the rise when a step is revealed */
+  .tma-auth__social[data-auth-providers],
+  .tma-auth__form[data-auth-email] {
+    animation: tma-auth-rise 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+}
+
+@keyframes tma-auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .tma-auth__stage {
+    display: none;
+  }
+}
+
+/* Short viewports - tighten vertical rhythm so pages fit without scrolling */
+@media (max-height: 760px) {
+  .tma-auth {
+    --auth-chrome: 66px;
+  }
+
+  .tma-auth__body {
+    padding: var(--space-16) var(--space-24);
+  }
+
+  .tma-auth__card {
+    gap: var(--space-20);
+    padding: var(--space-16) var(--space-24);
+  }
+
+  .tma-auth__panel-body {
+    gap: var(--space-20);
+  }
+
+  .tma-auth__brand img {
+    height: 96px;
+  }
+
+  .tma-auth__form,
+  .tma-auth__fields {
+    gap: var(--space-12);
+  }
+
+  .tma-auth__section {
+    gap: var(--space-8);
+  }
+
+  .tma-auth__field--textarea {
+    height: 64px;
+  }
+
+  .tma-auth__account-card {
+    padding: var(--space-16);
+  }
+
+  .tma-auth__copyright {
+    padding-bottom: var(--space-16);
+  }
+}
+
 @media (max-width: 720px) {
+  .tma-auth {
+    --auth-chrome: 74px;
+  }
+
   .tma-auth__body {
     padding: var(--space-16);
   }
 
   .tma-auth__card {
-    height: auto;
-    min-height: 656px;
     padding: var(--space-28) var(--space-16);
-  }
-
-  .tma-auth__card--account-info,
-  .tma-auth__card--tall {
-    min-height: 784px;
   }
 
   .tma-auth__team-size {

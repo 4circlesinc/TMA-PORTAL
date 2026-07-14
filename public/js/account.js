@@ -1,5 +1,5 @@
 /*
- * TMA — Account (32546:96114 Overview, 32546:96111 Settings, 32546:96108 Security, 32546:96113 Billing, 32546:96107 Statements, 32546:96110 Referrals, 32546:96112 API Keys, 32546:96109 Logs)
+ * TMA - Account (32546:96114 Overview, 32546:96111 Settings, 32546:96108 Security, 32546:96113 Billing, 32546:96107 Statements, 32546:96110 Referrals, 32546:96112 API Keys, 32546:96109 Logs)
  * Global: window.TMAAccount
  */
 (function () {

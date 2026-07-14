@@ -1,5 +1,5 @@
 /*
- * Coming Soon — live countdown (32546:96131)
+ * Coming Soon - live countdown (32546:96131)
  */
 (function () {
   'use strict';

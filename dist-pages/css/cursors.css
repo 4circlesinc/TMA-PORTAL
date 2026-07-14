@@ -1,4 +1,4 @@
-/* TMA Cursors — production setup (transparent 32x32 PNG) */
+/* TMA Cursors - production setup (transparent 32x32 PNG) */
 :root {
   --cursor-default: url('../images/cursors/CursorsDefault.png') 15 14, default;
   --cursor-beachball: url('../images/cursors/CursorsBeachball.png') 16 16, wait;

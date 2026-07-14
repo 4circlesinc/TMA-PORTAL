@@ -1,4 +1,4 @@
-/* TMA — Popover / Select dropdown */
+/* TMA - Popover / Select dropdown */
 (function () {
   'use strict';
 

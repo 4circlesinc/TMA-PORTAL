@@ -1,4 +1,4 @@
-/* TMA — Unified forms demo */
+/* TMA - Unified forms demo */
 (function () {
   'use strict';
 

@@ -1,5 +1,5 @@
 /*
- * TMA — Users page ( /users )
+ * TMA - Users page ( /users )
  * Search, filter, sort, add row, pagination (table-search + filter-sort guidance rules).
  * Global: window.TMAUsers
  */

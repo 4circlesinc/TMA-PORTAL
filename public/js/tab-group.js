@@ -1,5 +1,5 @@
 /**
- * TabGroup — keyboard and click selection for TMA tabs.
+ * TabGroup - keyboard and click selection for TMA tabs.
  */
 (function () {
   const GROUP_SELECTOR = '.tma-tab-group';

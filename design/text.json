@@ -6,7 +6,7 @@
   "instancesNodeId": "32708:1064",
   "referenceGridNodeId": "32253:107748",
   "name": "Text",
-  "description": "TMA Text — extensible text component with configurable count, state, vertical layout, and text styles.",
+  "description": "TMA Text - extensible text component with configurable count, state, vertical layout, and text styles.",
   "cssPath": "public/css/text.css",
   "jsPath": "public/js/text.js",
   "docJsPath": "public/js/text-doc.js",

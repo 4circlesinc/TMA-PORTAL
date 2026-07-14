@@ -1,5 +1,5 @@
 /*
- * TMA — Overview Files tab (Figma 32546:96116)
+ * TMA - Overview Files tab (Figma 32546:96116)
  * Global: window.TMAOverviewFiles
  */
 (function () {

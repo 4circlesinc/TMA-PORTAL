@@ -1,6 +1,6 @@
 # tma-portal
 
-tma-portal — TM ANTOINE Advisory application based on the [Portal Design](https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design) Figma file.
+tma-portal - TM ANTOINE Advisory application based on the [Portal Design](https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design) Figma file.
 
 ## Stack
 
@@ -24,9 +24,9 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 1. Push this repo to GitHub, GitLab, or Bitbucket.
 2. Create a new application at [cloud.laravel.com](https://cloud.laravel.com).
-3. Connect the repository — Laravel Cloud auto-detects Laravel.
+3. Connect the repository - Laravel Cloud auto-detects Laravel.
 4. Set environment variables (minimum):
-   - `APP_KEY` — run `php artisan key:generate --show` locally and paste the value
+   - `APP_KEY` - run `php artisan key:generate --show` locally and paste the value
    - `APP_ENV=production`
    - `APP_DEBUG=false`
 5. **Build command:** `composer install --no-dev --optimize-autoloader`
@@ -52,7 +52,7 @@ Connected via Figma MCP as **Vernon Francis** (`igraphixmarketingco@gmail.com`).
 
 ## Design system
 
-- **tma-portal** — TM ANTOINE Advisory
+- **tma-portal** - TM ANTOINE Advisory
 - Primary font: **Inter**
 - Dark UI with gradient headings and backdrop blur effects
 

@@ -1,8 +1,8 @@
 {
   "slug": "account-info",
   "nodeId": "32546:96136",
-  "name": "Authentication — Account Info",
-  "description": "Sign-up step — team size, account name, and plan selection with Previous / Continue navigation.",
+  "name": "Authentication - Account Info",
+  "description": "Sign-up step - team size, account name, and plan selection with Previous / Continue navigation.",
   "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96136",
   "htmlPath": "public/account-info/index.html",
   "cssPath": "public/css/auth.css"

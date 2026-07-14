@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Check - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="new-device new-location unusual attempts captcha locked confirm-email"
+        data-state="new-device"
+        data-demo-next="/design/auth/two-factor">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card" aria-labelledby="check-title">
+
+        <!-- new device - confirm with an email code -->
+        <div class="tma-auth__icon" data-show="new-device" aria-hidden="true">
+          <img src="/images/icons/phosphor/Devices.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="new-device">
+          <h1 class="tma-auth__title" id="check-title">Let's confirm it's you</h1>
+          <p class="tma-auth__subtitle">New device detected. We sent a code to <strong>vernon@example.com</strong>.</p>
+        </div>
+
+        <!-- new location -->
+        <div class="tma-auth__icon" data-show="new-location" aria-hidden="true">
+          <img src="/images/icons/phosphor/Globe.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="new-location">
+          <h1 class="tma-auth__title">Let's confirm it's you</h1>
+          <p class="tma-auth__subtitle">New sign-in location. We sent a code to <strong>vernon@example.com</strong>.</p>
+        </div>
+
+        <!-- shared email-code form for new-device / new-location -->
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="new-device new-location"
+              data-demo data-demo-href="/design/auth/two-factor">
+          <div class="tma-auth__group">
+            <div class="tma-auth__otp tma-auth__otp--6" data-otp role="group" aria-label="6 digit email code">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1" data-autofocus="new-device">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 5">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 6">
+            </div>
+          </div>
+          <button type="submit" class="tma-auth__submit">Confirm</button>
+        </form>
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-show="new-device new-location" data-resend>Resend code</button>
+        <p class="tma-auth__hint tma-auth__countdown" data-countdown data-seconds="30" data-show="new-device new-location" aria-live="off">
+          Resend in <strong data-countdown-num>30</strong>s
+        </p>
+
+        <!-- unusual activity -->
+        <div class="tma-auth__icon" data-show="unusual" aria-hidden="true">
+          <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="unusual">
+          <h1 class="tma-auth__title">A quick extra check</h1>
+          <p class="tma-auth__subtitle">This sign-in looks different from usual. Confirm your email to continue.</p>
+        </div>
+        <button type="button" class="tma-auth__submit" data-show="unusual" data-set-state="confirm-email">Send confirmation email</button>
+
+        <!-- too many attempts -->
+        <div class="tma-auth__icon" data-show="attempts" aria-hidden="true">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="attempts">
+          <h1 class="tma-auth__title">Too many attempts</h1>
+          <p class="tma-auth__subtitle">Sign-in is paused for about 15 minutes.</p>
+        </div>
+        <a class="tma-auth__submit tma-auth__submit--ghost" data-show="attempts" href="/design/auth/forgot-password">Reset my password</a>
+
+        <!-- captcha challenge -->
+        <div class="tma-auth__icon" data-show="captcha" aria-hidden="true">
+          <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="captcha">
+          <h1 class="tma-auth__title">Quick check</h1>
+          <p class="tma-auth__subtitle">Confirm you're human to continue.</p>
+        </div>
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="captcha"
+              data-demo data-demo-href="/design/auth/sign-in">
+          <div class="tma-auth__captcha" data-captcha data-checked="false">
+            <button type="button" class="tma-auth__captcha-box" role="checkbox" aria-checked="false" aria-label="Confirm you are human">
+              <img src="/images/icons/phosphor/Check.svg" alt="" width="14" height="14" aria-hidden="true">
+            </button>
+            <span class="tma-auth__captcha-copy">I'm human</span>
+            <span class="tma-auth__captcha-brand" aria-hidden="true">
+              <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16">
+              <span>verify</span>
+            </span>
+          </div>
+          <button type="submit" class="tma-auth__submit">Continue</button>
+        </form>
+
+        <!-- temporarily locked -->
+        <div class="tma-auth__icon" data-show="locked" aria-hidden="true">
+          <img src="/images/icons/phosphor/LockKey.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="locked">
+          <h1 class="tma-auth__title">Your account is temporarily locked</h1>
+          <p class="tma-auth__subtitle">We've emailed you instructions to unlock it.</p>
+        </div>
+        <div class="tma-auth__alert tma-auth__alert--info" data-show="locked" role="note">
+          <img src="/images/icons/phosphor/Info.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>No email? Check spam or <a href="#">contact support</a>.</span>
+        </div>
+
+        <!-- email confirmation required -->
+        <div class="tma-auth__icon" data-show="confirm-email" aria-hidden="true">
+          <img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="confirm-email">
+          <h1 class="tma-auth__title">Confirm your email to continue</h1>
+          <p class="tma-auth__subtitle">We sent a confirmation link to <strong>vernon@example.com</strong>.</p>
+        </div>
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-show="confirm-email" data-resend>Resend email</button>
+
+        <p class="tma-auth__hint" data-show="new-device new-location unusual">
+          Wasn't you? <a href="/design/auth/forgot-password" class="tma-auth__link-btn">Reset your password</a>
+        </p>
+
+        <p class="tma-auth__alt-link"><a href="/design/auth/sign-in">Back to sign in</a></p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

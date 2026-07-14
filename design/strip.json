@@ -3,7 +3,7 @@
   "nodeId": "32792:9423",
   "documentationNodeId": "32421:48401",
   "name": "Strip",
-  "description": "Strip component — segmented bars for progress, strength indicators, and horizontal bar charts.",
+  "description": "Strip component - segmented bars for progress, strength indicators, and horizontal bar charts.",
   "cssPath": "public/css/strip.css",
   "jsPath": "public/js/strip.js",
   "iconJsPath": "public/js/strip-icons.js",

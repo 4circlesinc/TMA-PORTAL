@@ -1,4 +1,4 @@
-/* TMA — Interactive input behaviors */
+/* TMA - Interactive input behaviors */
 (function () {
   'use strict';
 

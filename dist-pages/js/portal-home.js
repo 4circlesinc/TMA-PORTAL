@@ -1,5 +1,5 @@
 /*
- * TMA — Portal Dashboard (home) view
+ * TMA - Portal Dashboard (home) view
  * Greeting, KPI cards (reuses tma-dash__card recipe), Recent Files,
  * Shortcuts, and Getting Started tutorials.
  * Registers view: 'dashboard' in TMAPortalViews.
@@ -55,7 +55,7 @@
     return '<div class="tma-dash__cards">' +
       kpiCard('blue', 'Avg. Client Response', 'ClockCountdown', '3h 24m', '-12.4%', false) +
       kpiCard('purple', 'Files Shared', 'Share', '128', '+11.02%', true) +
-      kpiCard('blue', 'Active Projects', 'Kanban', String(activeProjects), activeProjects ? '+' + activeProjects + ' new' : '—', true) +
+      kpiCard('blue', 'Active Projects', 'Kanban', String(activeProjects), activeProjects ? '+' + activeProjects + ' new' : '-', true) +
       kpiCard('purple', 'Signature Requests Left', 'Signature', String(sigLeft), s.trial.active ? 'Trial' : 'Plan', true) +
       '</div>';
   }
@@ -155,12 +155,12 @@
           if (!first || !email) { host.querySelector(first ? '[data-home-nu-email]' : '[data-home-nu-first]').focus(); return; }
           if (s.employees.length >= s.trial.employeeLimit) {
             ui().closeModal();
-            ui().toast('Employee limit reached — upgrade to add more users');
+            ui().toast('Employee limit reached - upgrade to add more users');
             return;
           }
           s.employees.push({
             id: data().uid('emp'), firstName: first, lastName: last, email: email,
-            company: s.branding.accountName, lastLogin: '—', admin: false,
+            company: s.branding.accountName, lastLogin: '-', admin: false,
           });
           s.folders.personal.push({ id: data().uid('folder'), name: first + ' ' + last, kind: 'folder', items: 0, created: data().shortDate() });
           data().save();
@@ -287,12 +287,15 @@
     el.innerHTML =
       '<div class="tma-portal-page" data-node-id="portal-home">' +
       '<div class="tma-portal-hello">' +
+      '<div class="tma-portal-hello__main">' +
       '<img class="tma-portal-hello__avatar" src="/TMA-PORTAL/images/avatars/AvatarByewind.png" alt="">' +
+      '<div class="tma-portal-hello__copy">' +
       '<h2 class="tma-portal-hello__title">Hello ' + ui().esc(s.user.firstName) + '</h2>' +
-      '<button type="button" class="tma-portal-link" data-home-add-picture>Add profile picture</button>' +
-      '<span class="tma-portal-hello__spacer"></span>' +
-      ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', attrs: 'data-home-edit' }) +
-      '</div>' +
+      '<button type="button" class="tma-portal-link tma-portal-hello__picture-link" data-home-add-picture>Add profile picture</button>' +
+      '</div></div>' +
+      '<div class="tma-portal-hello__actions">' +
+      ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
+      '</div></div>' +
       renderKpis(s) +
       ((show.recentFiles || show.shortcuts || show.favorites || show.tutorials)
         ? '<div class="tma-portal-home-grid">' +

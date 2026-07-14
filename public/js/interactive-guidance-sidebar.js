@@ -1,4 +1,4 @@
-/* TMA — Sidebar interactive guidance panel (Figma 30484:299255) */
+/* TMA - Sidebar interactive guidance panel (Figma 30484:299255) */
 (function () {
   'use strict';
 

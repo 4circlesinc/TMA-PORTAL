@@ -5,7 +5,7 @@
   <base href="/TMA-PORTAL/">
   <script>window.__TMA_SITE_ROOT="/TMA-PORTAL";</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Billing Details — Card — TM ANTOINE Advisory</title>
+  <title>Billing Details - Card - TM ANTOINE Advisory</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/TMA-PORTAL/css/tokens.css">
   <link rel="stylesheet" href="/TMA-PORTAL/css/theme.css">
@@ -126,5 +126,9 @@
   </main>
   <script src="/TMA-PORTAL/js/payment-methods.js"></script>
   <script src="/TMA-PORTAL/js/billing-card.js"></script>
+  <script>
+    /* prototype only - no auth backend yet; keep demo forms from posting */
+    document.addEventListener("submit", function (e) { e.preventDefault(); });
+  </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 
-  --color-purple:  var(--color-primary-dark);   /* legacy alias — do not use for chart series */
-  --color-violet:  var(--color-primary);   /* progress strip, chip label — brand blue */
+  --color-purple:  var(--color-primary-dark);   /* legacy alias - do not use for chart series */
+  --color-violet:  var(--color-primary);   /* progress strip, chip label - brand blue */
 
   /* Selection / focus tints derived from brand blue */
   --color-accent:             var(--color-primary-dark);

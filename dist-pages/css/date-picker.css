@@ -1,4 +1,4 @@
-/* TMA — DatePicker */
+/* TMA - DatePicker */
 
 .tma-date-picker {
   display: flex;
@@ -103,7 +103,7 @@
   white-space: nowrap;
 }
 
-/* Reset native button chrome — keep TMA pill/cell styling */
+/* Reset native button chrome - keep TMA pill/cell styling */
 .tma-date-picker--interactive button {
   appearance: none;
   -webkit-appearance: none;
@@ -476,7 +476,7 @@
   align-items: center;
 }
 
-/* Guidance page — Figma 33304:16630 */
+/* Guidance page - Figma 33304:16630 */
 
 .tma-date-picker-guidance-page {
   max-width: none;

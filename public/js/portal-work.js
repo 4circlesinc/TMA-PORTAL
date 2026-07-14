@@ -1,5 +1,5 @@
 /*
- * TMA — Portal Work (Workflows, Templates, Signatures)
+ * TMA - Portal Work (Workflows, Templates, Signatures)
  */
 (function () {
   'use strict';
@@ -438,9 +438,9 @@
         ? '<div class="tma-portal-sig-card__assign">' +
           '<span class="tma-portal-sig-card__assign-label">Assigned to</span>' +
           '<span class="tma-portal-sig-card__avatar" aria-hidden="true">' + ui().esc(r.assigneeInitials || sigAssigneeInitials(r.assigneeName || r.to)) + '</span>' +
-          '<span class="tma-portal-sig-card__assign-name">' + ui().esc(r.assigneeName || r.to || '—') + '</span>' +
+          '<span class="tma-portal-sig-card__assign-name">' + ui().esc(r.assigneeName || r.to || '-') + '</span>' +
           '</div>'
-        : '<span class="tma-portal-sig-card__meta">' + ui().esc(r.to || '—') + '</span>';
+        : '<span class="tma-portal-sig-card__meta">' + ui().esc(r.to || '-') + '</span>';
     var action = isDraft
       ? ui().btn({ label: 'Delete', variant: 'ghost', small: true, attrs: 'data-sig-delete="' + r.id + '"' })
       : isCompleted

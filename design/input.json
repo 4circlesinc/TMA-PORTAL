@@ -6,7 +6,7 @@
   "instancesNodeId": "32728:395248",
   "demoPath": "public/demo/forms.html",
   "name": "Input",
-  "description": "Input component — composable text fields for single-line, multi-row, textarea, select, command, and tag variants.",
+  "description": "Input component - composable text fields for single-line, multi-row, textarea, select, command, and tag variants.",
   "cssPath": "public/css/input.css",
   "jsPath": "public/js/input.js",
   "iconJsPath": "public/js/input-icons.js",
@@ -32,14 +32,14 @@
   "documentation": {
     "purpose": "The Input component is used to create various Inputs. Input defaults to the Content instance, which can be replaced with other instances.",
     "guidance": [
-      "Buttons — Sign in with Apple, form button bar, saved toast.",
-      "Input states — 1 row, title vertical, textarea, textarea counter, title + input, and select across seven states.",
+      "Buttons - Sign in with Apple, form button bar, saved toast.",
+      "Input states - 1 row, title vertical, textarea, textarea counter, title + input, and select across seven states.",
       "Radio, checkbox, and switch controls with default, hover, and disabled variants.",
       "Error messages display below fields and push content down."
     ],
     "features": [
-      "Type — 1 row, 2row vertical, 2 row horizontal, Textarea.",
-      "State — Default, Hover, Focus, No interaction."
+      "Type - 1 row, 2row vertical, 2 row horizontal, Textarea.",
+      "State - Default, Hover, Focus, No interaction."
     ],
     "correlation": "Instances within the Input are replaceable with any instance except itself.",
     "examples": [

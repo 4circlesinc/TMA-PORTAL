@@ -3,7 +3,7 @@
   "nodeId": "32722:24624",
   "guidanceNodeId": "32722:24624",
   "name": "Table Add Data",
-  "description": "Add data interactive guidance — New modal, avatar upload, form fields, and staged row insertion.",
+  "description": "Add data interactive guidance - New modal, avatar upload, form fields, and staged row insertion.",
   "cssPath": "public/css/table-add-data.css",
   "jsPath": "public/js/table-add-data.js",
   "defaultVariant": "live",

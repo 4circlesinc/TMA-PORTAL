@@ -1,4 +1,4 @@
-/* TMA — Group instances inline SVG icons (Figma 32729:396128) */
+/* TMA - Group instances inline SVG icons (Figma 32729:396128) */
 (function () {
   'use strict';
 

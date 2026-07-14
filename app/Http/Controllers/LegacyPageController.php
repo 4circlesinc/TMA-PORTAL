@@ -7,35 +7,48 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class LegacyPageController extends Controller
 {
-    public const PAGES = [
+    /** Publicly reachable static pages (stay in public/). */
+    public const PUBLIC_PAGES = [
         '404',
+        'coming-soon',
+        'maintenance',
+        'pricing',
+    ];
+
+    /**
+     * Portal pages - static prototypes served from resources/portal-pages/
+     * so they can only be reached through the authenticated route.
+     */
+    public const PORTAL_PAGES = [
         'account',
         'account-info',
         'billing-details',
+        'billing-details/card',
         'calendar',
         'choose-account-type',
         'classic',
-        'coming-soon',
-        'demo',
+        'clients',
         'email',
-        'forgot-password',
-        'maintenance',
+        'email/templates',
         'overview',
-        'pricing',
         'projects',
         'settings',
-        'setup-new-password',
-        'sign-in',
-        'sign-up',
-        'two-step-verification',
+        'settings/change-email',
+        'social/feed',
+        'social/messages',
         'users',
+        'users/new',
     ];
 
     public function __invoke(Request $request, string $page): BinaryFileResponse
     {
-        abort_unless(in_array($page, self::PAGES, true), 404);
-
-        $path = public_path($page.'/index.html');
+        if (in_array($page, self::PUBLIC_PAGES, true)) {
+            $path = public_path($page.'/index.html');
+        } elseif (in_array($page, self::PORTAL_PAGES, true)) {
+            $path = resource_path('portal-pages/'.$page.'/index.html');
+        } else {
+            abort(404);
+        }
 
         abort_unless(is_file($path), 404);
 

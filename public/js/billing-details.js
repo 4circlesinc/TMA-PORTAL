@@ -1,5 +1,5 @@
 /*
- * Billing Details — business info step (32546:96135)
+ * Billing Details - business info step (32546:96135)
  */
 (function () {
   'use strict';

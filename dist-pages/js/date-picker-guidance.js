@@ -1,4 +1,4 @@
-/* TMA — DatePicker interactive guidance (Figma 33304:16630) */
+/* TMA - DatePicker interactive guidance (Figma 33304:16630) */
 (function () {
   'use strict';
 

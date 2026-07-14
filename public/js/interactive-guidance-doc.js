@@ -1,4 +1,4 @@
-/* TMA — shared documentation footer for interactive guidance panels */
+/* TMA - shared documentation footer for interactive guidance panels */
 (function () {
   'use strict';
 

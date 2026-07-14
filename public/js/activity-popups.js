@@ -1,5 +1,5 @@
 /*
- * TMA — Notifications & Activities header popups (Figma 32546:96099)
+ * TMA - Notifications & Activities header popups (Figma 32546:96099)
  * Global: window.TMAActivityPopups
  */
 (function () {

@@ -1,4 +1,4 @@
-/* TMA — Toast inline SVG icons */
+/* TMA - Toast inline SVG icons */
 (function () {
   'use strict';
   const ICONS = {

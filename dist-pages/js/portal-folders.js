@@ -1,5 +1,5 @@
 /*
- * TMA — Portal Folders + Client hub views
+ * TMA - Portal Folders + Client hub views
  * Folders: Personal / Shared / Favorites / File Box / Recycle Bin
  * sections with create-folder and upload actions. File Box shows the
  * 180-day retention default.
@@ -130,7 +130,7 @@
     render();
   }
 
-  /* native checkbox — same pattern as Users/Files tables (empty box when unchecked) */
+  /* native checkbox - same pattern as Users/Files tables (empty box when unchecked) */
   function checkboxInput(attr, checked, label) {
     return '<input type="checkbox" class="tma-dash__check" ' + attr +
       (checked ? ' checked' : '') +
@@ -239,12 +239,12 @@
           (showStar ? '<td class="tma-portal-cell--tight">' + starBtn(f) + '</td>' : '');
       var itemsLabel = f.kind === 'filebox'
         ? fileboxList(s).length + ' items'
-        : (f.items != null ? f.items + ' items' : '—');
+        : (f.items != null ? f.items + ' items' : '-');
       return '<tr' + rowSelected + ' data-folders-row data-item-id="' + ui().esc(f.id) + '" data-item-kind="' + ui().esc(f.kind) + '">' + controls +
         renderItemNameCell(f) +
         '<td class="tma-portal-table__muted">' + (f.kind === 'file' ? 'File' : f.kind === 'filebox' ? 'File Box' : 'Folder') + '</td>' +
         '<td class="tma-portal-table__muted">' + itemsLabel + '</td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(f.created || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(f.created || '-') + '</td>' +
         '</tr>';
     }).join('');
 
@@ -318,7 +318,7 @@
     menu.setAttribute('role', 'menu');
     menu.innerHTML = FILE_CONTEXT_MENU.map(function (label, i) {
       return '<button type="button" class="tma-portal-context-menu__item" role="menuitem" data-ctx-index="' + i + '">' +
-        ui().esc(label) + '</button>';
+        '<span class="tma-portal-context-menu__label">' + ui().esc(label) + '</span></button>';
     }).join('');
     document.body.appendChild(menu);
     contextMenuEl = menu;
@@ -804,7 +804,7 @@
         ? ui().table(['Client', 'Email', 'Company'], s.clientContacts.map(function (c) {
             return '<tr><td><strong>' + ui().esc(c.firstName + ' ' + c.lastName) + '</strong></td>' +
               '<td class="tma-portal-table__muted">' + ui().esc(c.email) + '</td>' +
-              '<td class="tma-portal-table__muted">' + ui().esc(c.company || '—') + '</td></tr>';
+              '<td class="tma-portal-table__muted">' + ui().esc(c.company || '-') + '</td></tr>';
           }).join(''))
         : ui().emptyState({
             illustration: 'Illustration14',

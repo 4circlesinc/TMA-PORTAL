@@ -1,4 +1,4 @@
-/* TMA — Button documentation inline SVG icons (Figma 33159:7245) */
+/* TMA - Button documentation inline SVG icons (Figma 33159:7245) */
 (function () {
   'use strict';
 

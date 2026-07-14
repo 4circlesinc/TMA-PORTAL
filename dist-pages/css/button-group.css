@@ -1,4 +1,4 @@
-/* TMA — Button Group documentation — 33067:4918 */
+/* TMA - Button Group documentation - 33067:4918 */
 
 .tma-button-group-doc {
   background: #fff;
@@ -66,7 +66,7 @@
   border-radius: 8px;
 }
 
-/* Pagination — 33067:4925 */
+/* Pagination - 33067:4925 */
 
 .tma-button-group-doc__group--pagination {
   width: 100%;
@@ -126,7 +126,7 @@
   line-height: 0;
 }
 
-/* Icon toolbar — 33067:4926 */
+/* Icon toolbar - 33067:4926 */
 
 .tma-button-group-doc__group--icons {
   gap: 8px;
@@ -198,7 +198,7 @@
   color: rgba(255, 255, 255, 0.4);
 }
 
-/* Auth — 33067:4927 */
+/* Auth - 33067:4927 */
 
 .tma-button-group-doc__group--auth {
   border-radius: 12px;
@@ -244,7 +244,7 @@
   transform: scale(0.98);
 }
 
-/* Nav — 33067:4928 */
+/* Nav - 33067:4928 */
 
 .tma-button-group-doc__group--nav {
   gap: 16px;
@@ -299,7 +299,7 @@
   flex-shrink: 0;
 }
 
-/* Social brands — 33067:4929 */
+/* Social brands - 33067:4929 */
 
 .tma-button-group-doc__group--social {
   width: 400px;

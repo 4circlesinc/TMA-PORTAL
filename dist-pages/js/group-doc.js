@@ -1,4 +1,4 @@
-/* TMA — Group documentation (Figma 33302:3387) */
+/* TMA - Group documentation (Figma 33302:3387) */
 (function () {
   'use strict';
 

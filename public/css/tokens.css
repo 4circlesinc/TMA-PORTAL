@@ -10,7 +10,7 @@
 :root {
 
   /* ─────────────────────────────────────────
-   * COLOR — Brand
+   * COLOR - Brand
    * ───────────────────────────────────────── */
 
   --color-black:  #000000;
@@ -21,7 +21,7 @@
   --color-primary-dark:  #136da0;
 
   /* ─────────────────────────────────────────
-   * COLOR — Accent palette
+   * COLOR - Accent palette
    * Source: design/tokens.json, design/button.json,
    *         design/card.json, chart JSON color maps
    * ───────────────────────────────────────── */
@@ -29,9 +29,9 @@
   /* Primary accent = TMA brand blue. --color-indigo is remapped to the
      brand primary so every accent consumer (links, badges, highlights,
      progress fills) renders the branding blue. Legacy value: #adadfb. */
-  --color-indigo:  var(--color-primary-dark);   /* link, highlight, accent — brand blue */
-  --color-purple:  var(--color-primary-dark);   /* legacy alias — do not use for chart series */
-  --color-violet:  var(--color-primary);   /* progress strip, chip label — brand blue */
+  --color-indigo:  var(--color-primary-dark);   /* link, highlight, accent - brand blue */
+  --color-purple:  var(--color-primary-dark);   /* legacy alias - do not use for chart series */
+  --color-violet:  var(--color-primary);   /* progress strip, chip label - brand blue */
   --color-blue:    #7dbbff;   /* secondary blue, badge bg */
 
   /* Selection / focus tints derived from brand blue */
@@ -47,7 +47,7 @@
   --color-red:     #ff4747;   /* error / danger */
 
   /* ─────────────────────────────────────────
-   * COLOR — Surface / Background
+   * COLOR - Surface / Background
    * ───────────────────────────────────────── */
 
   --color-bg-page:         #f5f5f7;           /* outer page shell */
@@ -59,12 +59,12 @@
   --color-bg-tag:          var(--color-1);
   --color-bg-code:         #1e1e1e;           /* code block dark bg */
 
-  /* Theme tints — 90% white mix of brand primaries */
-  --color-1:               #e6f6fd;           /* Color 1 — tint of #03a5e9 */
-  --color-2:               #e7f0f6;           /* Color 2 — tint of #136da0 */
+  /* Theme tints - 90% white mix of brand primaries */
+  --color-1:               #e6f6fd;           /* Color 1 - tint of #03a5e9 */
+  --color-2:               #e7f0f6;           /* Color 2 - tint of #136da0 */
 
   /* ─────────────────────────────────────────
-   * COLOR — Interactive states (transparent overlays)
+   * COLOR - Interactive states (transparent overlays)
    * Source: design/button.json variants
    * ───────────────────────────────────────── */
 
@@ -74,7 +74,7 @@
   --color-inactive:    rgba(0, 0, 0, 0.40);   /* disabled / secondary opacity */
 
   /* ─────────────────────────────────────────
-   * COLOR — Text
+   * COLOR - Text
    * ───────────────────────────────────────── */
 
   --color-text-primary:      #000000;
@@ -85,7 +85,7 @@
   --color-text-hint:         var(--color-primary-dark);
 
   /* ─────────────────────────────────────────
-   * COLOR — Border
+   * COLOR - Border
    * ───────────────────────────────────────── */
 
   --color-border-soft:    rgba(0, 0, 0, 0.10);
@@ -101,7 +101,7 @@
   --color-overlay-80:  rgba(0, 0, 0, 0.80);
 
   /* ─────────────────────────────────────────
-   * TYPOGRAPHY — Family & Features
+   * TYPOGRAPHY - Family & Features
    * Source: design/tokens.json
    * ───────────────────────────────────────── */
 
@@ -113,7 +113,7 @@
   --letter-spacing:       0;
 
   /* ─────────────────────────────────────────
-   * TYPOGRAPHY — Size / Line-height pairs
+   * TYPOGRAPHY - Size / Line-height pairs
    * Source: design/tokens.json typography scale
    * ───────────────────────────────────────── */
 
@@ -181,7 +181,7 @@
   --radius-32:  32px;   /* large panel */
   --radius-40:  40px;   /* doc card outer, cover card */
   --radius-48:  48px;   /* documentation shell */
-  --radius-pill: 80px;  /* full pill — text buttons, tags */
+  --radius-pill: 80px;  /* full pill - text buttons, tags */
 
   /* ─────────────────────────────────────────
    * COMPONENT MINIMUM HEIGHTS
@@ -204,7 +204,7 @@
   --shadow-pill:     0 2px  4px rgba(0, 0, 0, 0.10);
   --shadow-popup:    0 8px 28px rgba(0, 0, 0, 0.10);
 
-  /* Effect Styles — from Figma node 33305:140101 */
+  /* Effect Styles - from Figma node 33305:140101 */
   --shadow-glass-1:  0 4px 16px rgba(0, 0, 0, 0.04);   /* Glass 1: light drop + blur 16px */
   --shadow-glass-2:  0 8px 28px rgba(0, 0, 0, 0.10);   /* Glass 2: medium drop + blur 40px */
   --shadow-glow:     0 0 10px 6px rgba(0, 0, 0, 0.07), 0 0 10px 6px rgba(255, 255, 255, 0.05);
@@ -214,7 +214,7 @@
   --shadow-inner:    inset 0 -0.5px 1px rgba(255, 255, 255, 0.30), inset 1px 1.5px 4px rgba(0, 0, 0, 0.08);
 
   /* ─────────────────────────────────────────
-   * EFFECTS — Blur / Backdrop
+   * EFFECTS - Blur / Backdrop
    * Source: design/tokens.json effects,
    *         tooltip + frosted-glass components
    * ───────────────────────────────────────── */

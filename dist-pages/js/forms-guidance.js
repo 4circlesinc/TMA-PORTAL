@@ -1,4 +1,4 @@
-/* TMA — Forms interactive guidance (Figma 32257:116552) */
+/* TMA - Forms interactive guidance (Figma 32257:116552) */
 (function () {
   'use strict';
 

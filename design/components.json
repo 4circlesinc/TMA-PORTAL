@@ -3,7 +3,7 @@
   "pageNodeId": "8300:425",
   "boardNodeId": "33320:6937",
   "name": "Components",
-  "description": "TMA Components catalog — full component matrix with hero panels and section links.",
+  "description": "TMA Components catalog - full component matrix with hero panels and section links.",
   "cssPath": "public/css/components-page.css",
   "jsPath": "public/js/components-page.js",
   "demoPath": "public/demo/components.html",

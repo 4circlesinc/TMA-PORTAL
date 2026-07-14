@@ -12,6 +12,6 @@ echo
 
 while true; do
   python3 "$ROOT/scripts/dev_server.py" --host "$HOST" --port "$PORT" || true
-  echo "[tma-dev-server] exited — restarting in 1s..."
+  echo "[tma-dev-server] exited - restarting in 1s..."
   sleep 1
 done

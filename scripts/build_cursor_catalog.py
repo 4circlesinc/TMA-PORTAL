@@ -80,7 +80,7 @@ def main() -> None:
     )
 
     lines = [
-        "/* TMA Cursors — production setup (transparent 32x32 PNG) */",
+        "/* TMA Cursors - production setup (transparent 32x32 PNG) */",
         ":root {",
     ]
     for item in items:

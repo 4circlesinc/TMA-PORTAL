@@ -1,4 +1,4 @@
-/* TMA — Frame documentation inline SVG icons (Figma 33302:2140) */
+/* TMA - Frame documentation inline SVG icons (Figma 33302:2140) */
 (function () {
   'use strict';
 

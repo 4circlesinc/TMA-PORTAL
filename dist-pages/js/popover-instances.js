@@ -1,4 +1,4 @@
-/* TMA — Popover instances board (Figma 33303:7642) */
+/* TMA - Popover instances board (Figma 33303:7642) */
 (function () {
   'use strict';
 

@@ -1,4 +1,4 @@
-/* TMA — Global search interactive guidance */
+/* TMA - Global search interactive guidance */
 
 :root {
   --tma-global-search-highlight: var(--color-primary, #03a5e9);
@@ -897,7 +897,7 @@
   }
 }
 
-/* Dashboard header search overlay — Figma SearchPopup 33257:43316 */
+/* Dashboard header search overlay - Figma SearchPopup 33257:43316 */
 .tma-dash__cmd-mount {
   width: min(480px, 92vw);
   max-height: min(70vh, 640px);
@@ -916,7 +916,7 @@
   min-height: 0;
 }
 
-/* Sidebar drawer — inline global search (replaces nav list) */
+/* Sidebar drawer - inline global search (replaces nav list) */
 .tma-search-popup--sidebar {
   position: relative;
   left: auto;

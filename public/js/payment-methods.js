@@ -1,5 +1,5 @@
 /*
- * Shared payment method storage — Settings, billing-details/card
+ * Shared payment method storage - Settings, billing-details/card
  * Global: window.TMAPaymentMethods
  */
 (function () {

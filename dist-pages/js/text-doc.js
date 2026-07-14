@@ -1,4 +1,4 @@
-/* TMA — Text documentation (Figma 32722:4768) */
+/* TMA - Text documentation (Figma 32722:4768) */
 (function () {
   'use strict';
 

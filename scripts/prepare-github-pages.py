@@ -38,6 +38,14 @@ def prepare(repo_name: str) -> None:
         shutil.rmtree(dst)
     shutil.copytree(src, dst)
 
+    # Portal pages live outside the web root (auth-gated in the Laravel app)
+    # but remain part of the public static design demo on GitHub Pages.
+    portal = pathlib.Path("resources/portal-pages")
+    if portal.exists():
+        for child in portal.iterdir():
+            if child.is_dir():
+                shutil.copytree(child, dst / child.name)
+
     head_inject = (
         f'<base href="{root}/">\n'
         f'  <script>window.__TMA_SITE_ROOT="{root}";</script>'

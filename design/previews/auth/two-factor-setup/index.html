@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Two-Factor Authentication Setup - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="intro app scan qr-expired confirm wrong expired-code locked done already cancel"
+        data-state="intro"
+        data-demo-next="/design/auth/recovery-codes">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card tma-auth__card--tall" aria-labelledby="tfa-title">
+
+        <!-- step 1 - intro -->
+        <div class="tma-auth__steps" data-show="intro" aria-hidden="true">
+          <span class="tma-auth__step-dot tma-auth__step-dot--active"></span>
+          <span class="tma-auth__step-dot"></span>
+          <span class="tma-auth__step-dot"></span>
+          <span class="tma-auth__step-dot"></span>
+        </div>
+        <div class="tma-auth__icon" data-show="intro" aria-hidden="true">
+          <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="intro">
+          <h1 class="tma-auth__title" id="tfa-title">Two-factor authentication</h1>
+          <p class="tma-auth__subtitle">Sign in with your password plus a 6-digit code from your phone.</p>
+        </div>
+        <button type="button" class="tma-auth__submit" data-show="intro" data-set-state="app">Get started</button>
+        <p class="tma-auth__alt-link" data-show="intro"><a href="/design/auth/getting-started?state=reminder">Not now</a></p>
+
+        <!-- step 2 - choose app -->
+        <div class="tma-auth__steps" data-show="app" aria-hidden="true">
+          <span class="tma-auth__step-dot tma-auth__step-dot--done"></span>
+          <span class="tma-auth__step-dot tma-auth__step-dot--active"></span>
+          <span class="tma-auth__step-dot"></span>
+          <span class="tma-auth__step-dot"></span>
+        </div>
+        <div class="tma-auth__intro" data-show="app">
+          <h1 class="tma-auth__title">Choose your authenticator app</h1>
+          <p class="tma-auth__subtitle">Pick whichever you prefer.</p>
+        </div>
+        <div class="tma-auth__account-options" data-show="app">
+          <label class="tma-auth__account-card tma-auth__account-card--compact">
+            <input class="tma-auth__account-input" type="radio" name="tfa-app" value="microsoft" checked>
+            <span class="tma-auth__account-radio" aria-hidden="true">
+              <svg class="tma-auth__account-radio-svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm45.66,85.66-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32Z"/></svg>
+            </span>
+            <span class="tma-auth__account-row">
+              <span class="tma-auth__account-icon"><img src="/images/icons/brands/Microsoft16.svg" alt="" width="32" height="32"></span>
+              <span class="tma-auth__account-copy">
+                <span class="tma-auth__account-name">Microsoft Authenticator</span>
+                <span class="tma-auth__account-desc">Free on iOS and Android</span>
+              </span>
+            </span>
+          </label>
+          <label class="tma-auth__account-card tma-auth__account-card--compact">
+            <input class="tma-auth__account-input" type="radio" name="tfa-app" value="google">
+            <span class="tma-auth__account-radio" aria-hidden="true">
+              <svg class="tma-auth__account-radio-svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm45.66,85.66-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32Z"/></svg>
+            </span>
+            <span class="tma-auth__account-row">
+              <span class="tma-auth__account-icon"><img src="/images/icons/brands/Google16.svg" alt="" width="32" height="32"></span>
+              <span class="tma-auth__account-copy">
+                <span class="tma-auth__account-name">Google Authenticator</span>
+                <span class="tma-auth__account-desc">Free on iOS and Android</span>
+              </span>
+            </span>
+          </label>
+          <label class="tma-auth__account-card tma-auth__account-card--compact">
+            <input class="tma-auth__account-input" type="radio" name="tfa-app" value="other">
+            <span class="tma-auth__account-radio" aria-hidden="true">
+              <svg class="tma-auth__account-radio-svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm45.66,85.66-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32Z"/></svg>
+            </span>
+            <span class="tma-auth__account-row">
+              <span class="tma-auth__account-icon"><img src="/images/icons/phosphor/DeviceMobile.svg" alt="" width="32" height="32"></span>
+              <span class="tma-auth__account-copy">
+                <span class="tma-auth__account-name">Another authenticator app</span>
+                <span class="tma-auth__account-desc">1Password, Authy, or any app with time-based codes</span>
+              </span>
+            </span>
+          </label>
+        </div>
+        <div class="tma-auth__nav-actions" data-show="app">
+          <button type="button" class="tma-auth__submit tma-auth__submit--previous" data-set-state="intro">Previous</button>
+          <button type="button" class="tma-auth__submit" data-set-state="scan">Continue</button>
+        </div>
+
+        <!-- step 3 - scan QR (also hosts the qr-expired warning) -->
+        <div class="tma-auth__steps" data-show="scan qr-expired" aria-hidden="true">
+          <span class="tma-auth__step-dot tma-auth__step-dot--done"></span>
+          <span class="tma-auth__step-dot tma-auth__step-dot--done"></span>
+          <span class="tma-auth__step-dot tma-auth__step-dot--active"></span>
+          <span class="tma-auth__step-dot"></span>
+        </div>
+        <div class="tma-auth__intro" data-show="scan qr-expired">
+          <h1 class="tma-auth__title">Scan this QR code</h1>
+          <p class="tma-auth__subtitle">Choose "Add account" in your app, then scan.</p>
+        </div>
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="qr-expired" role="alert">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>This QR code has expired.</strong> Generate a fresh one to continue.</span>
+        </div>
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-show="qr-expired" data-set-state="scan">Generate a new QR code</button>
+        <div class="tma-auth__qr" data-show="scan" role="img" aria-label="QR code for authenticator setup">
+          <svg viewBox="0 0 29 29" xmlns="http://www.w3.org/2000/svg">
+            <path fill="currentColor" d="M0 0h7v7H0zM22 0h7v7h-7zM0 22h7v7H0z"/>
+            <path fill="#ffffff" d="M1 1h5v5H1zM23 1h5v5h-5zM1 23h5v5H1z"/>
+            <path fill="currentColor" d="M2 2h3v3H2zM24 2h3v3h-3zM2 24h3v3H2z"/>
+            <path fill="currentColor" d="M9 0h1v1H9zM11 0h2v1h-2zM14 1h1v2h-1zM10 2h1v1h-1zM12 3h2v1h-2zM9 4h1v1H9zM15 4h1v1h-1zM11 5h1v1h-1zM13 6h1v1h-1zM9 8h2v1H9zM16 8h2v1h-2zM20 8h1v1h-1zM24 9h1v1h-1zM2 9h1v1H2zM5 10h2v1H5zM10 10h1v2h-1zM13 10h1v1h-1zM18 10h2v1h-2zM22 10h1v1h-1zM26 10h2v1h-2zM0 12h2v1H0zM4 12h1v1H4zM8 12h2v1H8zM12 12h1v2h-1zM15 12h2v1h-2zM19 13h1v1h-1zM23 12h2v1h-2zM27 13h1v1h-1zM1 14h1v1H1zM6 14h2v1H6zM10 14h1v1h-1zM14 14h1v1h-1zM17 15h2v1h-2zM21 14h1v2h-1zM25 15h1v1h-1zM3 16h1v1H3zM8 16h1v1H8zM12 16h2v1h-2zM16 17h1v1h-1zM20 17h2v1h-2zM24 17h1v1h-1zM27 16h1v2h-1zM5 18h1v1H5zM9 18h2v1H9zM13 18h1v1h-1zM18 19h1v1h-1zM22 19h2v1h-2zM26 19h1v1h-1zM9 22h1v1H9zM12 22h2v1h-2zM16 22h1v2h-1zM20 22h1v1h-1zM24 22h2v1h-2zM10 24h2v1h-2zM14 25h1v1h-1zM19 24h2v1h-2zM23 24h1v2h-1zM27 24h1v1h-1zM9 26h1v1H9zM13 27h2v1h-2zM17 26h2v1h-2zM21 27h1v1h-1zM25 27h2v1h-2z"/>
+          </svg>
+        </div>
+        <div class="tma-auth__section" data-show="scan">
+          <p class="tma-auth__section-label">Can't scan it?</p>
+          <div class="tma-auth__manual-key">
+            <code>JBSW Y3DP EHPK 3PXP MFRG G43F MZQW Y2LB</code>
+            <button type="button" class="tma-auth__chip-btn" data-copy data-copy-text="JBSWY3DPEHPK3PXPMFRGG43FMZQWY2LB">
+              <img src="/images/icons/phosphor/Copy.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>Copy</span>
+            </button>
+          </div>
+          <p class="tma-auth__section-hint">Choose "Enter a setup key" in your app and pick time-based.</p>
+        </div>
+        <div class="tma-auth__nav-actions" data-show="scan">
+          <button type="button" class="tma-auth__submit tma-auth__submit--previous" data-set-state="app">Previous</button>
+          <button type="button" class="tma-auth__submit" data-set-state="confirm">Continue</button>
+        </div>
+
+        <!-- step 4 - confirm code (also hosts wrong / expired-code / locked) -->
+        <div class="tma-auth__steps" data-show="confirm wrong expired-code locked" aria-hidden="true">
+          <span class="tma-auth__step-dot tma-auth__step-dot--done"></span>
+          <span class="tma-auth__step-dot tma-auth__step-dot--done"></span>
+          <span class="tma-auth__step-dot tma-auth__step-dot--done"></span>
+          <span class="tma-auth__step-dot tma-auth__step-dot--active"></span>
+        </div>
+        <div class="tma-auth__intro" data-show="confirm wrong expired-code locked">
+          <h1 class="tma-auth__title">Enter the code from your app</h1>
+          <p class="tma-auth__subtitle">Enter the 6-digit code from your app.</p>
+        </div>
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="locked" role="alert">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Too many incorrect codes.</strong> Try again in 15 minutes.</span>
+        </div>
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="confirm wrong expired-code locked"
+              data-demo data-submit-state="done">
+          <div class="tma-auth__group">
+            <div class="tma-auth__otp tma-auth__otp--6" data-otp role="group" aria-label="6 digit authenticator code">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1" data-autofocus="confirm">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 5">
+              <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 6">
+            </div>
+            <p class="tma-auth__field-msg" data-show="wrong">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>That code didn't match - enter the newest one.</span>
+            </p>
+            <p class="tma-auth__field-msg" data-show="expired-code">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>That code just expired. Enter the new code your app is showing now.</span>
+            </p>
+          </div>
+          <button type="submit" class="tma-auth__submit" data-show="confirm wrong expired-code">Turn on two-factor authentication</button>
+          <button type="button" class="tma-auth__submit" data-show="locked" disabled>Turn on two-factor authentication</button>
+        </form>
+        <div class="tma-auth__nav-actions" data-show="confirm wrong expired-code locked">
+          <button type="button" class="tma-auth__submit tma-auth__submit--previous" data-set-state="scan">Previous</button>
+        </div>
+
+        <!-- done -->
+        <div class="tma-auth__icon" data-show="done" aria-hidden="true">
+          <img src="/images/icons/phosphor/SealCheck.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="done">
+          <h1 class="tma-auth__title">Two-factor authentication is on</h1>
+          <p class="tma-auth__subtitle">One last step: save your recovery codes in case you lose your phone.</p>
+        </div>
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="done" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>Connected to <strong>Microsoft Authenticator</strong>.</span>
+        </div>
+        <a class="tma-auth__submit" data-show="done" href="/design/auth/recovery-codes">Save recovery codes</a>
+
+        <!-- already connected -->
+        <div class="tma-auth__icon" data-show="already" aria-hidden="true">
+          <img src="/images/icons/phosphor/Info.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="already">
+          <h1 class="tma-auth__title">An authenticator is already connected</h1>
+          <p class="tma-auth__subtitle">Already on for this account. Manage it in Security settings.</p>
+        </div>
+        <a class="tma-auth__submit" data-show="already" href="/design/security-settings">Open Security settings</a>
+
+        <!-- cancel confirmation -->
+        <div class="tma-auth__icon" data-show="cancel" aria-hidden="true">
+          <img src="/images/icons/phosphor/Warning.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="cancel">
+          <h1 class="tma-auth__title">Stop setting up?</h1>
+          <p class="tma-auth__subtitle">You can restart setup anytime from Security settings.</p>
+        </div>
+        <div class="tma-auth__nav-actions" data-show="cancel">
+          <button type="button" class="tma-auth__submit tma-auth__submit--previous" data-set-state="scan">Keep setting up</button>
+          <a class="tma-auth__submit" href="/design/auth/getting-started?state=reminder">Stop for now</a>
+        </div>
+
+        <p class="tma-auth__alt-link" data-show="app scan qr-expired confirm wrong expired-code locked">
+          <button type="button" class="tma-auth__link-btn" data-set-state="cancel">Cancel setup</button>
+        </p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

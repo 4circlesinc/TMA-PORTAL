@@ -1,4 +1,4 @@
-/* TMA — Components board (Figma 33320:6937) */
+/* TMA - Components board (Figma 33320:6937) */
 (function () {
   'use strict';
 

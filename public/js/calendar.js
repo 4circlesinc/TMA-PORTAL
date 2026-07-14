@@ -1,5 +1,5 @@
 /*
- * TMA — Calendar page ( /calendar )
+ * TMA - Calendar page ( /calendar )
  * Global: window.TMACalendar
  */
 (function () {
@@ -124,7 +124,7 @@
         start: 14.5,
         end: 16.5,
         tone: 'purple',
-        location: 'Office — Desk 12',
+        location: 'Office - Desk 12',
         description: 'Discuss contract terms and delivery timeline.',
         avatars: ['AvatarMale02'],
       },
@@ -145,7 +145,7 @@
         end: 14,
         tone: 'purple',
         location: 'Riverfront Bistro',
-        description: 'Informal team lunch — all welcome.',
+        description: 'Informal team lunch - all welcome.',
       },
       {
         title: 'Project Kick off',
@@ -164,7 +164,7 @@
         end: 16,
         tone: 'purple',
         location: 'Rooftop Lounge',
-        description: 'Birthday celebration for Drew — snacks provided.',
+        description: 'Birthday celebration for Drew - snacks provided.',
         avatars: ['AvatarByewind', 'AvatarMale01'],
         extra: 9,
       },

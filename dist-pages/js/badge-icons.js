@@ -1,4 +1,4 @@
-/* TMA — Badge documentation inline SVG icons (Figma 32726:1920) */
+/* TMA - Badge documentation inline SVG icons (Figma 32726:1920) */
 (function () {
   'use strict';
 

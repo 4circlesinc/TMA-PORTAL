@@ -1,11 +1,11 @@
-# TM ANTOINE Advisory Design System — tma-portal
+# TM ANTOINE Advisory Design System - tma-portal
 
 **Single source of truth** for all developers, AI coding agents, and contributors working on this project.
 
 This repository already contains the design language, assets, components, layouts, and documentation required to build and scale the application. **Reuse and extend what exists. Do not reinvent.**
 
-> **Mandatory — read before any code change**  
-> **Always read this entire file (`DESIGN_SYSTEM.md`) before writing or modifying code** — including AI agents and automated tools. Search the codebase and component registry first. **Do not recreate** components, CSS classes, buttons, toggles, toasts, or layout patterns that already exist. If something similar is documented here or in `design/common-components.json`, **reuse it**.
+> **Mandatory - read before any code change**  
+> **Always read this entire file (`DESIGN_SYSTEM.md`) before writing or modifying code** - including AI agents and automated tools. Search the codebase and component registry first. **Do not recreate** components, CSS classes, buttons, toggles, toasts, or layout patterns that already exist. If something similar is documented here or in `design/common-components.json`, **reuse it**.
 
 ---
 
@@ -32,63 +32,63 @@ tokens.css → theme.css → component CSS → (optional) page CSS
 
 ## Development Rules
 
-### Rule 1 — Reuse Before Creating
+### Rule 1 - Reuse Before Creating
 
 Always search the existing codebase before creating anything new. If a component, style, icon, layout, pattern, utility, token, asset, or design element already exists, **reuse it**.
 
 Search locations (in order):
 
-1. `design/common-components.json` — registered components
-2. `design/{slug}.json` — component preset
-3. `public/js/{component}.js` — render/mount API
-4. `public/css/{component}.css` — styles
-5. `public/demo/` — working examples
-6. `resources/views/components/` — Blade components
-7. `app/Support/` — PHP data helpers
+1. `design/common-components.json` - registered components
+2. `design/{slug}.json` - component preset
+3. `public/js/{component}.js` - render/mount API
+4. `public/css/{component}.css` - styles
+5. `public/demo/` - working examples
+6. `resources/views/components/` - Blade components
+7. `app/Support/` - PHP data helpers
 
-### Rule 2 — No New Styling Systems
+### Rule 2 - No New Styling Systems
 
 Do **not** create new color palettes, spacing systems, typography systems, button styles, card styles, table styles, icon styles, or design patterns. Use tokens and existing component CSS only.
 
-### Rule 3 — Follow the Existing Design System
+### Rule 3 - Follow the Existing Design System
 
 Every screen, page, feature, and component must match the established TM ANTOINE Advisory design system. No visual deviations unless explicitly approved.
 
-### Rule 4 — Functionality First
+### Rule 4 - Functionality First
 
-When implementing new requirements: focus on functionality; reuse existing UI components, styling, layouts, and assets. Extend the system — do not reinvent it.
+When implementing new requirements: focus on functionality; reuse existing UI components, styling, layouts, and assets. Extend the system - do not reinvent it.
 
-### Rule 5 — No Duplicate Components
+### Rule 5 - No Duplicate Components
 
 Never create a new component if a similar or identical one exists. Extend or compose existing primitives (`Text`, `Frame`, `Group`, `Button`, `Input`, etc.).
 
-### Rule 6 — Preserve Brand Consistency
+### Rule 6 - Preserve Brand Consistency
 
 Maintain consistency with brand identity, colors, typography, icons, illustrations, logos, and design language.
 
-### Rule 7 — Document Everything
+### Rule 7 - Document Everything
 
 Update this file whenever new approved components or patterns are added.
 
-### Rule 8 — Hover States Are Restricted (read before adding any `:hover`)
+### Rule 8 - Hover States Are Restricted (read before adding any `:hover`)
 
 Hover affordances are **only** allowed on the elements that have a documented Hover state in the Component State matrix (`interactive-guidance-component-state.js`): **buttons, text buttons, icon buttons, tabs, tags, text links, popover/menu items, table titles, breadcrumb segments, avatars, and the scrollbar**. The documented hover treatment is a **subtle `var(--color-hover)` (rgba(0,0,0,0.04)) background overlay only**.
 
-**Prohibited — never add these on hover:**
+**Prohibited - never add these on hover:**
 
 - ❌ Elevation / lift on cards, metric cards, panels, or any container (`transform: translateY(...)`, `scale(...)`).
 - ❌ Added `box-shadow` / glow on hover for cards, panels, charts, or containers.
 - ❌ Dimming, scaling, recoloring, or animating chart bars, donut segments, or lines on hover.
 
-**Cards** (`design/card.json` → states `default / hover / selected / no-interaction`): the hover state is a background change only — **never** elevation or shadow.
+**Cards** (`design/card.json` → states `default / hover / selected / no-interaction`): the hover state is a background change only - **never** elevation or shadow.
 
-**Charts/graphs:** the *only* hover affordance is the **value tooltip** (reuse the TMA Tooltip component — `components.css` + `tooltip.js`). Do not alter the bar/segment/line itself on hover.
+**Charts/graphs:** the *only* hover affordance is the **value tooltip** (reuse the TMA Tooltip component - `components.css` + `tooltip.js`). Do not alter the bar/segment/line itself on hover.
 
 If a design appears to need a new hover behavior, it must be added to the Component State matrix and approved before use.
 
-### Rule 9 — Responsive layout, cards, and text
+### Rule 9 - Responsive layout, cards, and text
 
-These rules apply to **every page and view** in the application shell — main content, sidebars, panels, stat cards, tables, and compact list areas.
+These rules apply to **every page and view** in the application shell - main content, sidebars, panels, stat cards, tables, and compact list areas.
 
 **Spacing inside surfaces**
 
@@ -97,7 +97,7 @@ These rules apply to **every page and view** in the application shell — main c
 
 **Fluid scaling**
 
-- As the window or container narrows, **type and card content scale down proportionally** — prefer `clamp()`, container queries (`container-type: inline-size`), and existing token steps over fixed pixel sizes or hard breakpoint jumps.
+- As the window or container narrows, **type and card content scale down proportionally** - prefer `clamp()`, container queries (`container-type: inline-size`), and existing token steps over fixed pixel sizes or hard breakpoint jumps.
 - Cards should **keep their intended shape** (padding, hierarchy, row layout) while shrinking; only at a minimum width should layout change.
 
 **Card grids and rows**
@@ -115,7 +115,7 @@ These rules apply to **every page and view** in the application shell — main c
 
 **Scroll and footer (mobile)**
 
-- On small viewports, the **page footer belongs to the content** — it scrolls with the page, not pinned to the viewport bottom. Fixed chrome (e.g. bottom tab bar) stays fixed; everything else in the main column scrolls as one flow.
+- On small viewports, the **page footer belongs to the content** - it scrolls with the page, not pinned to the viewport bottom. Fixed chrome (e.g. bottom tab bar) stays fixed; everything else in the main column scrolls as one flow.
 - Full-page flows that manage their own scroll (e.g. settings) may keep internal sticky footer behavior.
 
 **Tables (≤767px)**
@@ -125,17 +125,17 @@ These rules apply to **every page and view** in the application shell — main c
 **Implementation**
 
 - Reuse spacing tokens from `tokens.css` / `theme.css`. Where the app shell defines shared inset/gap variables, use those rather than one-off values.
-- Reference implementations: `public/css/dashboard.css`, `public/css/card.css` — patterns there should be copied to new pages, not re-invented.
+- Reference implementations: `public/css/dashboard.css`, `public/css/card.css` - patterns there should be copied to new pages, not re-invented.
 
 ---
 
 ## Required Workflow (Before Writing Code)
 
-> **Stop:** Re-read the mandatory notice at the top of this file. Every task starts here — not with new markup or CSS.
+> **Stop:** Re-read the mandatory notice at the top of this file. Every task starts here - not with new markup or CSS.
 
 1. **Read `DESIGN_SYSTEM.md`** (this file) and check `design/figma.json` for the relevant Figma node.
 2. Search `design/common-components.json`, `public/demo/`, and existing page modules (`public/js/{page}.js`) for reusable pieces.
-3. Identify reusable components, tokens, and assets — **extend; do not duplicate**.
+3. Identify reusable components, tokens, and assets - **extend; do not duplicate**.
 4. Check `public/demo/` for a working reference.
 5. Implement using existing CSS/JS/Blade patterns only.
 6. Add or update the matching `design/{slug}.json` entry when introducing an approved component.
@@ -219,20 +219,20 @@ Panel positions and sizes come from `design/{page}.json` (e.g. `interactive-guid
 
 ### Colors
 
-> **Rule — the primary accent color is the TMA branding blue.**
-> `--color-primary` (`#03a5e9`) and `--color-primary-dark` (`#136da0`, sampled from the TMA logo) are the brand blues. Every primary accent — links, badges, highlights, progress fills, **selected table rows**, **selection toolbars**, **checkbox `accent-color`**, focus rings, upload overlay tints — must render the brand blue, never purple/indigo. Use `--color-accent` (alias of `--color-primary-dark`) and `--color-accent-bg` / `--color-accent-bg-hover` for selection tints. `--color-indigo` and `--color-purple` are **remapped to `var(--color-primary-dark)`** so legacy consumers pick this up automatically; do not reintroduce `#adadfb` or `#9747ff` for UI accents. Violet (`--color-violet`, `--chart-purple`) remains only for chart series, status chips, and categorical tones — not for primary interaction states.
+> **Rule - the primary accent color is the TMA branding blue.**
+> `--color-primary` (`#03a5e9`) and `--color-primary-dark` (`#136da0`, sampled from the TMA logo) are the brand blues. Every primary accent - links, badges, highlights, progress fills, **selected table rows**, **selection toolbars**, **checkbox `accent-color`**, focus rings, upload overlay tints - must render the brand blue, never purple/indigo. Use `--color-accent` (alias of `--color-primary-dark`) and `--color-accent-bg` / `--color-accent-bg-hover` for selection tints. `--color-indigo` and `--color-purple` are **remapped to `var(--color-primary-dark)`** so legacy consumers pick this up automatically; do not reintroduce `#adadfb` or `#9747ff` for UI accents. Violet (`--color-violet`, `--chart-purple`) remains only for chart series, status chips, and categorical tones - not for primary interaction states.
 
 | Token | Value | Usage |
 |-------|-------|-------|
 | `--color-black` | `#000000` | Primary text, filled buttons |
 | `--color-white` | `#ffffff` | Surfaces on dark, filled button text |
-| `--color-primary` | `#03a5e9` | **TMA brand blue** (bright) — tints, emphasis, links |
-| `--color-primary-dark` | `#136da0` | **TMA brand blue** (deep) — the primary accent |
+| `--color-primary` | `#03a5e9` | **TMA brand blue** (bright) - tints, emphasis, links |
+| `--color-primary-dark` | `#136da0` | **TMA brand blue** (deep) - the primary accent |
 | `--color-accent` | `var(--color-primary-dark)` | Selection actions, checked controls, focus |
 | `--color-accent-bg` | `color-mix(… primary-dark 8%)` | Selected row background |
 | `--color-accent-bg-hover` | `color-mix(… primary-dark 12%)` | Selected row hover |
-| `--color-indigo` | `var(--color-primary-dark)` | Legacy alias — links, highlights (remapped) |
-| `--color-purple` | `var(--color-primary-dark)` | Legacy alias — do **not** use for chart data |
+| `--color-indigo` | `var(--color-primary-dark)` | Legacy alias - links, highlights (remapped) |
+| `--color-purple` | `var(--color-primary-dark)` | Legacy alias - do **not** use for chart data |
 | `--color-violet` | `#b899eb` | Chips, progress, **chart series only** |
 | `--color-blue` | `#7dbbff` | Secondary blue, badges |
 | `--color-mint` | `#6be6d3` | Chart accent |
@@ -286,7 +286,7 @@ Dashboard layout gutters: **212px** sidebar, **280px** rightbar, **28px** conten
 | `--shadow-popup` | `0 8px 28px rgba(0,0,0,0.10)` |
 | `--shadow-glass-1` | `0 4px 16px rgba(0,0,0,0.04)` + blur 16px |
 | `--shadow-glass-2` | `0 8px 28px rgba(0,0,0,0.10)` + blur 40px |
-| `--blur-40` | `blur(40px)` — inputs, toasts, popups |
+| `--blur-40` | `blur(40px)` - inputs, toasts, popups |
 
 ### Layout
 
@@ -311,20 +311,20 @@ Dashboard layout gutters: **212px** sidebar, **280px** rightbar, **28px** conten
 
 `public/css/theme.css` maps tokens to component slots:
 
-- `--btn-*` — Button sizes, radii, colors
-- `--card-*` — Card background, chip colors
-- `--input-*` — Input border, radius, placeholder
-- `--tag-*` — Tag fill, close opacity
-- `--tab-*` — Tab track, pill, segmented
-- `--tooltip-*` — Tooltip sizing, arrow
-- `--table-*` — Row hover, cell padding
-- `--search-*` — Global search popup
-- `--toast-*` — Toast blur, shadow
-- `--badge-*` — Status colors
-- `--chart-1` … `--chart-10` — Chart series
+- `--btn-*` - Button sizes, radii, colors
+- `--card-*` - Card background, chip colors
+- `--input-*` - Input border, radius, placeholder
+- `--tag-*` - Tag fill, close opacity
+- `--tab-*` - Tab track, pill, segmented
+- `--tooltip-*` - Tooltip sizing, arrow
+- `--table-*` - Row hover, cell padding
+- `--search-*` - Global search popup
+- `--toast-*` - Toast blur, shadow
+- `--badge-*` - Status colors
+- `--chart-1` … `--chart-10` - Chart series
 - `--pagination-*`, `--filter-*`, `--popover-*`
 
-Override at page or section scope by redefining these variables — never hardcode hex values in new CSS.
+Override at page or section scope by redefining these variables - never hardcode hex values in new CSS.
 
 ---
 
@@ -366,7 +366,7 @@ All registered components live in `design/common-components.json`. Each has a `d
 | Tooltip | `tooltip` | `components.css` | `tooltip.js` | `tooltip.html` | compact, button, multiline, rich, data |
 | Popover | `popover` | `popover.css` | `popover.js`, `popover-guidance.js` | `popover-guidance.html`, `select-dropdown-demo.html` | options 1–8 (menus, property panels) |
 
-**Alerts:** Use Toast (`toast.js`) for transient feedback. No separate alert component — reuse toast variants.
+**Alerts:** Use Toast (`toast.js`) for transient feedback. No separate alert component - reuse toast variants.
 
 **Modals:** Table Add Data (`table-add-data.js`) implements modal pattern. Reuse its structure for new modals.
 
@@ -446,7 +446,7 @@ Dashboard scene includes: header bar, sidebar nav, metric cards, charts, notific
 
 | Pattern | Implementation |
 |---------|----------------|
-| Sidebar nav | `tma-overview__sidebar` — brand, favorites, dashboard groups |
+| Sidebar nav | `tma-overview__sidebar` - brand, favorites, dashboard groups |
 | Header bar | Breadcrumb + icon group + search pill + actions |
 | Rightbar | Notifications, Activities, Contacts panels |
 | Doc hero/footer | `TMAInteractiveGuidanceDoc.renderDocHero/Footer()` |
@@ -484,7 +484,7 @@ Builder: `public/js/interactive-guidance-doc.js`
 | Brand logos | 23 | `public/images/icons/brands/` | Filenames listed below |
 | Social (footer) | 7 | `public/images/icons/tma/*Social.svg` | Used in `ig-doc__footer` |
 
-#### Mandatory rule — use local asset files only
+#### Mandatory rule - use local asset files only
 
 **Never invent, redraw, or hand-code SVG for brand logos or icons when a file already exists in this repo.**
 
@@ -509,7 +509,7 @@ Builder: `public/js/interactive-guidance-doc.js`
 **Card / Projects pattern:**
 
 ```js
-// Progress card brand logo — always via TMACard (loads local SVG file)
+// Progress card brand logo - always via TMACard (loads local SVG file)
 TMACard.renderProgressCard({ logoIcon: 'Figma', ... });
 
 // List row logo
@@ -518,19 +518,19 @@ TMACard.brandLogoSrc('Github'); // → images/icons/brands/Github40.svg
 
 **Icon JS registries** (`*-icons.js`): legacy inline SVG for demos and a few UI glyphs (e.g. chip status dot). **Do not** add brand logos to these registries. Prefer file-based `<img>` for anything that exists under `public/images/icons/`.
 
-#### Mandatory rule — no SnowUI branding in the live application
+#### Mandatory rule - no SnowUI branding in the live application
 
 **The tma-portal application (`public/index.html` and its view modules) must never display SnowUI product branding.**
 
 | Forbidden in the app | Required instead |
 |----------------------|------------------|
-| Text **"SnowUI"** (titles, breadcrumbs, project names, copy) | Neutral names — e.g. **"Overview"**, **"Advisory Portal"**, **"Project Overview"** |
+| Text **"SnowUI"** (titles, breadcrumbs, project names, copy) | Neutral names - e.g. **"Overview"**, **"Advisory Portal"**, **"Project Overview"** |
 | **`SnowLogo40.svg`** / **`SnowLogo`** in nav, hero cards, or project cards | Phosphor UI icons in sidebar nav; other brand logos from `icons/brands/` for third-party project cards (Figma, Slack, …) |
-| SnowUI wordmarks or sidebar footer logos | **TMA** identity only — `TMALogo.renderTMALogo()` + `images/brand/tma/` |
+| SnowUI wordmarks or sidebar footer logos | **TMA** identity only - `TMALogo.renderTMALogo()` + `images/brand/tma/` |
 
-**Overview hero card (`/overview`):** metrics row only (Status, Total Tasks, Due Date, Budget Spent) + avatar group — **no** project title row and **no** logo above the metrics.
+**Overview hero card (`/overview`):** metrics row only (Status, Total Tasks, Due Date, Budget Spent) + avatar group - **no** project title row and **no** logo above the metrics.
 
-**Breadcrumb for project Overview:** `Dashboard / Overview` — not `… / SnowUI`.
+**Breadcrumb for project Overview:** `Dashboard / Overview` - not `… / SnowUI`.
 
 Component demos under `public/demo/` and Figma-derived frame docs may still reference SnowUI assets for catalog purposes; the **live app shell and its views do not**.
 
@@ -622,29 +622,29 @@ Each loads its `design/{slug}.json` and exposes `catalog()`, preset data, and as
 - **Rows:** Shared, Dashboard, Table
 - **Dashboard panels:** Layout, Block, Sidebar, Rightbar, Header
 
-### Application — Default Dashboard (Overview)
+### Application - Default Dashboard (Overview)
 
 - **App entry:** `public/index.html` (the application home, not a demo)
 - **Spec:** `design/dashboard.json` (Figma [`32546:96118`](https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96118))
 - **CSS:** `public/css/dashboard.css` (prefix `tma-dash-*`, overview block `tma-dash__overview-*`)
-- **JS:** `public/js/dashboard.js` — `window.TMADashboard.mount(root)`; `public/js/overview.js` — `window.TMAOverview.mount(container)`
-- **Layout:** three columns — 212px sidebar / flex main / 280px rightbar, 28px content gap
-- **Sections (Overview, Figma `32546:96118`):** underline tab bar + actions, project hero (status strip / tasks / due date / budget / avatars — **no SnowUI title or logo**), What's on the road timeline, Latest Files, Project Spendings table, footer, rightbar (Notifications / Activities / Contacts)
-- **Icons:** local files only — `icons/phosphor/FilePdf.svg`, `FileJpg.svg`, `FileXls.svg`, `Plus.svg`, `DownloadSimple.svg`, `ChartPieSlice.svg` (Overview nav), `icons/tma/ThreeDots-16.svg`
-- **Interactions:** nav active-state + breadcrumb/title sync, expandable page groups, Favorites/Recently toggle, sidebar collapses to a **72px icon-only rail** on desktop / rightbar drawer on mobile, light/dark theme, `/` command palette — state persisted in `localStorage`
-- **Views:** the app shell hosts multiple views (`.tma-dash__view[data-view]`). **Dashboard** (`dashboard`, Figma `32546:96097`) — metric cards, donut, tasks table, bar chart at `/`. **Overview** (`overview`, Figma `32546:96118`) — project detail at `/overview`. Also: `projects`, `clients`, `users`.
+- **JS:** `public/js/dashboard.js` - `window.TMADashboard.mount(root)`; `public/js/overview.js` - `window.TMAOverview.mount(container)`
+- **Layout:** three columns - 212px sidebar / flex main / 280px rightbar, 28px content gap
+- **Sections (Overview, Figma `32546:96118`):** underline tab bar + actions, project hero (status strip / tasks / due date / budget / avatars - **no SnowUI title or logo**), What's on the road timeline, Latest Files, Project Spendings table, footer, rightbar (Notifications / Activities / Contacts)
+- **Icons:** local files only - `icons/phosphor/FilePdf.svg`, `FileJpg.svg`, `FileXls.svg`, `Plus.svg`, `DownloadSimple.svg`, `ChartPieSlice.svg` (Overview nav), `icons/tma/ThreeDots-16.svg`
+- **Interactions:** nav active-state + breadcrumb/title sync, expandable page groups, Favorites/Recently toggle, sidebar collapses to a **72px icon-only rail** on desktop / rightbar drawer on mobile, light/dark theme, `/` command palette - state persisted in `localStorage`
+- **Views:** the app shell hosts multiple views (`.tma-dash__view[data-view]`). **Dashboard** (`dashboard`, Figma `32546:96097`) - metric cards, donut, tasks table, bar chart at `/`. **Overview** (`overview`, Figma `32546:96118`) - project detail at `/overview`. Also: `projects`, `clients`, `users`.
 - **Responsive:** three columns → rightbar drawer ≤1024px → single column ≤1024px with **bottom TabBar + iOS-style "Home" menu** (Figma `32548:116275`: House / History / Bell / Gear / Avatar tabs, Favorites + Dashboards grouped cards) → phone tuning ≤560px
 
 ### Data table pages (Clients, Users, Projects, …)
 
-All list/grid data pages share one shell pattern. **Do not** add a separate tab-group or custom toggle — reuse what Clients and Users already use.
+All list/grid data pages share one shell pattern. **Do not** add a separate tab-group or custom toggle - reuse what Clients and Users already use.
 
 | Piece | Location | Notes |
 |-------|----------|-------|
 | View container | `.tma-dash__view[data-view="…"]` | Add **`data-table-view`** so the header toggle shows |
-| Grid variant (optional) | `data-table-grid="avatar"` on view | Users only — avatar mosaic grid instead of card grid |
+| Grid variant (optional) | `data-table-grid="avatar"` on view | Users only - avatar mosaic grid instead of card grid |
 | Page title row | `.tma-dash__main-head` in `index.html` | Title left; **`data-page-view-toggle`** right (shared, one instance) |
-| List/grid toggle | `[data-page-view-toggle]` + `.tma-dash__view-toggle` | Icons: **`ListDashes`** (list), **`SquaresFour`** (grid). Active = `--color-overlay-4` fill, 16×16 icons — **not** the filled black pill from `tab-segmented` |
+| List/grid toggle | `[data-page-view-toggle]` + `.tma-dash__view-toggle` | Icons: **`ListDashes`** (list), **`SquaresFour`** (grid). Active = `--color-overlay-4` fill, 16×16 icons - **not** the filled black pill from `tab-segmented` |
 | Toggle controller | `public/js/table-view-toggle.js` | `window.TMATableViewToggle` |
 | Page module | `public/js/{page}.js` | On mount, **`register(viewId, { getViewMode, setViewMode, render })`** |
 | View modes | `'list'` \| `'grid'` | Persist in `localStorage` per page. Default: Clients/Users = `list`; Projects = `grid` |
@@ -661,17 +661,17 @@ window.TMATableViewToggle.register('projects', {
 
 After each `render()`, call `TMATableViewToggle.sync('projects')` so the header buttons match.
 
-**Projects-specific:** card grid uses `TMACard.renderStatCard()` + `TMACard.renderProgressCard()` (`card.js`, `card.css`). Brand logos load from `public/images/icons/brands/` via `TMACard.brandLogoSrc()` — **not** `card-icons.js`. Demo references: `public/demo/card-documentation.html`, `card-instances.html`.
+**Projects-specific:** card grid uses `TMACard.renderStatCard()` + `TMACard.renderProgressCard()` (`card.js`, `card.css`). Brand logos load from `public/images/icons/brands/` via `TMACard.brandLogoSrc()` - **not** `card-icons.js`. Demo references: `public/demo/card-documentation.html`, `card-instances.html`.
 
-**Clients / Users:** toolbar (add, filter, sort, search), filter bar, table or grid body, pagination — see `clients.js`, `users.js`.
+**Clients / Users:** toolbar (add, filter, sort, search), filter bar, table or grid body, pagination - see `clients.js`, `users.js`.
 
 **Adding a new table page checklist:**
 
 1. `[data-view="foo"]` + `data-table-view` on the view block in `index.html`
 2. Nav item with `data-view="foo"` and route in `dashboard.js`
 3. Page JS: mount, render, register with `TMATableViewToggle`
-4. Do **not** duplicate `[data-page-view-toggle]` markup — it is shared in the main head
-5. Do **not** use `PortalTabGroup` / `tma-tab-group--filled` for list/grid — that is for content tabs, not view mode
+4. Do **not** duplicate `[data-page-view-toggle]` markup - it is shared in the main head
+5. Do **not** use `PortalTabGroup` / `tma-tab-group--filled` for list/grid - that is for content tabs, not view mode
 
 ### Client portal pages (Dashboard home, Folders, Projects, Workflows, Templates, Signatures, Inbox, People, Account settings)
 
@@ -679,42 +679,42 @@ The app shell's primary navigation mirrors the client-portal feature set replica
 
 | Piece | Location | Notes |
 |-------|----------|-------|
-| Shared data store | `public/js/portal-data.js` | `window.TMAPortalData` — seed data + persistence (`tma.portal.v1`); business constants: deleted-project retention **45 days**, File Box retention **180 days**, trial limits (3 employees, 5 signature requests) |
+| Shared data store | `public/js/portal-data.js` | `window.TMAPortalData` - seed data + persistence (`tma.portal.v1`); business constants: deleted-project retention **45 days**, File Box retention **180 days**, trial limits (3 employees, 5 signature requests) |
 | View dispatcher + UI helpers | `public/js/portal-views.js` | `window.TMAPortalViews.register(view, mountFn)` + `window.TMAPortalUI` (buttons reuse the no-data CTA recipe, toggle reuses `tma-dash__settings-switch`, tabs reuse `tma-tab-group--underline`, modals reuse `tma-dash__settings-change-card` chrome, toasts via `TMAToast`) |
-| Page modules | `public/js/portal-{home,projects,folders,work,people,admin}.js` | One module per area; mounted into `.tma-dash__view [data-portal-mount]` on `activate()`. (`portal-inbox.js` exists on disk but is not loaded — the sidebar uses the original Email client instead.) |
-| Page CSS | `public/css/portal.css` | `tma-portal-*` classes; tokens/theme variables only — no new palettes |
+| Page modules | `public/js/portal-{home,projects,folders,work,people,admin}.js` | One module per area; mounted into `.tma-dash__view [data-portal-mount]` on `activate()`. (`portal-inbox.js` exists on disk but is not loaded - the sidebar uses the original Email client instead.) |
+| Page CSS | `public/css/portal.css` | `tma-portal-*` classes; tokens/theme variables only - no new palettes |
 | Routing | `dashboard.js` | Generic fallback: any sidebar leaf's `href` deep-links (e.g. `/projects/all`, `/people/employees`, `/account-settings`); no per-route hardcoding needed for portal views |
 
 **Account settings (admin) area** uses a two-pane shell (`.tma-portal-admin`) with expandable secondary nav mirroring the brief: Admin Overview, Background Operations, Account and Reporting, Billing, Client hub management, Security (8 pages), Connectors, Connection Manager, Storage, Advanced Preferences (8 pages). Deep-open a page via `TMAPortalAdmin.setPage(id)` or `TMADashboard.navigate({ …, adminPage: id })`.
 
-**Sidebar (current)** — two labeled groups like the classic shell:
-- **Dashboards:** Dashboard, Overview (original project overview), Client hub (**original Clients pages** — `clients.js`, label kept "Client hub"), Email (original mail client, not the portal Inbox), Messages, Feed, Calendar, Users (original page)
+**Sidebar (current)** - two labeled groups like the classic shell:
+- **Dashboards:** Dashboard, Overview (original project overview), Client hub (**original Clients pages** - `clients.js`, label kept "Client hub"), Email (original mail client, not the portal Inbox), Messages, Feed, Calendar, Users (original page)
 - **Pages:** Folders, Projects, Workflows, Templates, Signatures, People, Account settings
 - Bottom: **Classic design** link
 
 There is no trial banner strip. The Dashboard view hides the main-head title row (the greeting is its header; Recent Files/Shortcuts panels stretch to equal height) and includes the Overview "What's on the road?" timeline via `TMAOverview.renderRoad()`. Remaining legacy views (My Projects, Account, Settings) are URL-reachable but not in the sidebar.
 
-**Classic design** — the pre-replication shell is preserved at **`/classic`** (`public/classic/index.html`): original sidebar (Dashboards / Pages groups), metrics dashboard, and script set. It sets `window.TMA_CLASSIC = true`, which makes the shared `dashboard.js` skip URL sync (navigation stays at `/classic`), point the mobile header logo at `/classic`, and keep the classic dashboard's title row + Today selector. It links back to the new design ("New design" item); the new shell links to it ("Classic design" item).
+**Classic design** - the pre-replication shell is preserved at **`/classic`** (`public/classic/index.html`): original sidebar (Dashboards / Pages groups), metrics dashboard, and script set. It sets `window.TMA_CLASSIC = true`, which makes the shared `dashboard.js` skip URL sync (navigation stays at `/classic`), point the mobile header logo at `/classic`, and keep the classic dashboard's title row + Today selector. It links back to the new design ("New design" item); the new shell links to it ("Classic design" item).
 
 ### Calendar page
 
-Frontend-only calendar at `/calendar` (`public/js/calendar.js`, mount target `[data-calendar]`). **Reuse existing Contacts / Pricing / Tab Group patterns — do not add parallel calendar-specific UI primitives.**
+Frontend-only calendar at `/calendar` (`public/js/calendar.js`, mount target `[data-calendar]`). **Reuse existing Contacts / Pricing / Tab Group patterns - do not add parallel calendar-specific UI primitives.**
 
 | Piece | Reuse (required) | Do **not** create |
 |-------|------------------|-------------------|
-| View switcher (Week / Month / Agenda) | `tma-tab-group tma-tab-group--segmented` + `PortalTabGroup` (`tab-group.js`) — same markup as `pricing.js` billing toggle | Custom `.tma-dash__calendar-view-toggle` / `-view-btn` |
+| View switcher (Week / Month / Agenda) | `tma-tab-group tma-tab-group--segmented` + `PortalTabGroup` (`tab-group.js`) - same markup as `pricing.js` billing toggle | Custom `.tma-dash__calendar-view-toggle` / `-view-btn` |
 | New event action | `tma-dash__contacts-add-btn` (Contacts sidebar add button) with toolbar width override | Custom `.tma-dash__calendar-new-btn` |
 | Week grid | `TMASchedule.render()` (`schedule.js`) + `.tma-dash__contacts-schedule-*` / `.tma-dash__contacts-event-*` | Custom week grid or event card styles |
 | Month grid | `TMADatePicker.buildCalendarGrid()` (`date-picker.js`) + calendar month cell classes in `dashboard.css` | Custom month picker from scratch |
 | Schedule nav (prev / next / today) | `.tma-dash__contacts-schedule-nav`, `.tma-dash__contacts-icon-btn`, `.tma-dash__contacts-today-btn` | Custom nav buttons |
 | Event form / panel fields | `.tma-dash__contacts-form-*`, `.tma-dash__contacts-icon-btn` | Custom form field wrappers |
-| Transient feedback | `toast.js` + `toast.css` — `TMAToast.showFloatingToast()` | Custom `.tma-dash__calendar-toast` or ad-hoc toast markup |
+| Transient feedback | `toast.js` + `toast.css` - `TMAToast.showFloatingToast()` | Custom `.tma-dash__calendar-toast` or ad-hoc toast markup |
 
 **Scripts:** `date-picker.js`, `schedule.js`, `tab-group.js`, `calendar.js` (see `public/calendar/index.html` / app shell).
 
-**Figma reference:** Contacts profile schedule — “His schedule” (`32546:96130` in Portal-Design).
+**Figma reference:** Contacts profile schedule - “His schedule” (`32546:96130` in Portal-Design).
 
-**Responsive (Rule 9):** Week view uses `.tma-dash__contacts-schedule-scroll` for vertical + horizontal scroll on narrow viewports; do not clip columns — scroll instead.
+**Responsive (Rule 9):** Week view uses `.tma-dash__contacts-schedule-scroll` for vertical + horizontal scroll on narrow viewports; do not clip columns - scroll instead.
 
 ---
 
@@ -759,7 +759,7 @@ Key entry points (full list in `design/figma.json`):
 
 ### Settings popups (dashboard)
 
-Figma **Settings** flows (Payment, Change email, 2-step verification, etc.) often show a full-page frame with `SettingsPopoverTitle` — large title plus back and close buttons **outside** the white card. In the live app, all settings modals share one chrome pattern:
+Figma **Settings** flows (Payment, Change email, 2-step verification, etc.) often show a full-page frame with `SettingsPopoverTitle` - large title plus back and close buttons **outside** the white card. In the live app, all settings modals share one chrome pattern:
 
 | Rule | Implementation |
 |------|----------------|
@@ -767,13 +767,13 @@ Figma **Settings** flows (Payment, Change email, 2-step verification, etc.) ofte
 | **No outer title row** | Do not render Figma's external title/back/close row; it bleeds over the settings panel behind the modal |
 | **Title inside card** | Use `.tma-dash__settings-change-title` inside `.tma-dash__settings-change-card` |
 | **Close padding** | Add the card modifier to the `--settings-close-reserve` group in `dashboard.css` so content clears the X |
-| **Multi-step flows** | Step content lives inside the card; optional in-card text **Back** link (`data-payment-back`) — never a second chrome button beside close |
+| **Multi-step flows** | Step content lives inside the card; optional in-card text **Back** link (`data-payment-back`) - never a second chrome button beside close |
 
 Reference: `public/js/settings.js` (`renderAddPaymentMethodPopup`, `renderChangeEmailPopup`, `renderTwoStepPopup`).
 
 ---
 
-## Adding New Work — Checklist
+## Adding New Work - Checklist
 
 - [ ] Searched `design/common-components.json` and `public/demo/` for existing component
 - [ ] Reused `tokens.css` / `theme.css` variables (no new hex values)
@@ -793,27 +793,27 @@ Reference: `public/js/settings.js` (`renderAddPaymentMethodPopup`, `renderChange
 |------|--------|
 | 2026-06-14 | Initial comprehensive document created from codebase analysis |
 | 2026-06-14 | Dashboard Layout panel: three/two/one column responsive scenes (`interactive-guidance-layout.js`) |
-| 2026-06-14 | Default Dashboard page built from Figma `32546:96098` (`public/demo/dashboard.html`, `public/css/dashboard.css`, `design/dashboard.json`) — reuses tokens, icons, avatars; charts built in code |
-| 2026-06-14 | Repaired malformed icon assets (unclosed `<g>`): `icons/tma/ArrowRise.svg`, `ArrowFall.svg`, `Rightbar.svg` — fixes broken rendering project-wide |
+| 2026-06-14 | Default Dashboard page built from Figma `32546:96098` (`public/demo/dashboard.html`, `public/css/dashboard.css`, `design/dashboard.json`) - reuses tokens, icons, avatars; charts built in code |
+| 2026-06-14 | Repaired malformed icon assets (unclosed `<g>`): `icons/tma/ArrowRise.svg`, `ArrowFall.svg`, `Rightbar.svg` - fixes broken rendering project-wide |
 | 2026-06-14 | Promoted Dashboard from demo to application: moved to `public/index.html`, added interactive controller `public/js/dashboard.js` (nav, theme, search, drawers, persistence) + responsive off-canvas drawers; removed `public/demo/dashboard.html` |
 | 2026-06-14 | Mobile: bottom TabBar + iOS-style "Home" menu from Figma `32548:116275`; repaired malformed emoji assets (unbalanced `<g>`): `emoji/RobotEmoji.svg`, `GrinningCat.svg`, `SmilingFaceHearts.svg` |
-| 2026-06-14 | Chart hover tooltips: reused TMA tooltip component (`components.css` + `tooltip.js`) for bar values (Device + Marketing) — the only allowed chart hover affordance |
-| 2026-06-14 | Added **Rule 8 — Hover States Are Restricted**. Removed prohibited hover effects (card lift/translate, panel shadow, bar dim); hover elevation on cards/panels/charts is not permitted |
-| 2026-06-14 | **Icons/assets rule:** brand logos and UI icons must use files in `public/images/icons/` — never hand-coded inline SVG substitutes; `TMACard.brandLogoSrc()` + local `<img>` for Projects/cards; `DESIGN_SYSTEM.md` updated |
+| 2026-06-14 | Chart hover tooltips: reused TMA tooltip component (`components.css` + `tooltip.js`) for bar values (Device + Marketing) - the only allowed chart hover affordance |
+| 2026-06-14 | Added **Rule 8 - Hover States Are Restricted**. Removed prohibited hover effects (card lift/translate, panel shadow, bar dim); hover elevation on cards/panels/charts is not permitted |
+| 2026-06-14 | **Icons/assets rule:** brand logos and UI icons must use files in `public/images/icons/` - never hand-coded inline SVG substitutes; `TMACard.brandLogoSrc()` + local `<img>` for Projects/cards; `DESIGN_SYSTEM.md` updated |
 | 2026-06-14 | Collapsed sidebar now shows an icon-only rail (72px) instead of hiding; equal-height panel row + Tasks Overview pinned to its own full-width row |
 | 2026-06-14 | Added **Clients** page (Figma `32546:96123` Order List): multi-view shell (`.tma-dash__view`), toolbar, selectable data table, pagination; new sidebar + mobile-menu nav item |
 | 2026-06-15 | Added **Projects** page (Figma `32546:96122`): `TMACard` stat/progress cards, list/grid via shared `TMATableViewToggle` |
 | 2026-06-15 | **Overview page** rebuilt to Figma `32546:96118`: tab bar, project hero (metrics + avatars only), timeline, files, spendings table; `public/js/overview.js` + `TMAOverview.mount()` |
-| 2026-06-15 | **No SnowUI branding in live app** — removed SnowUI title/logo from Overview hero; breadcrumbs and Projects sample data updated; rule documented in `DESIGN_SYSTEM.md` |
-| 2026-06-23 | **Settings popup chrome** — Payment (and all settings modals) use in-card title + single close button only; documented Figma vs app divergence for `SettingsPopoverTitle` frames |
-| 2026-06-22 | **Rule 9 — Responsive layout, cards, and text** — general app-wide rules: surface inset, fluid scaling, card grids stay side-by-side until min breakpoint, main vs compact truncation, mobile footer scrolls with content |
-| 2026-06-27 | **Calendar page reuse map** — documented required components (Tab Group segmented, Contacts schedule/add btn, `toast.js` floating toast); mandatory read-before-code notice for AI agents |
-| 2026-07-06 | **Client portal replication** — sidebar rebuilt to the ShareFile-brief structure (Dashboard, Client hub, Folders, Projects, Workflows, Templates, Signatures, Inbox, People, Account settings); ~35 functional pages added via `portal-*.js` modules + `portal.css`; shared localStorage store (`portal-data.js`); generic leaf-href routing fallback in `dashboard.js`; trial banner; legacy views kept URL-reachable |
-| 2026-07-06 | **Nav revision per client feedback** — removed the trial banner strip; portal Inbox replaced by the original **Email** client in the sidebar (`portal-inbox.js` unloaded); **Messages** and **Feed** restored as sidebar items |
-| 2026-07-07 | **Classic design preserved** — previous shell restored at `/classic` (`public/classic/index.html`, `window.TMA_CLASSIC` mode in `dashboard.js`); two-way links between designs; removed redundant "Dashboard" title row on the new portal home |
-| 2026-07-07 | **Primary accent = TMA brand blue** — `--color-indigo` remapped to `var(--color-primary-dark)` (`#136da0`); accent picker "indigo" swatch updated in `dashboard.js`; rule documented under Design Tokens › Colors. Purple/indigo must not be used for primary accents |
-| 2026-07-07 | **Global accent sweep** — `--color-purple` remapped to brand blue; added `--color-accent`, `--color-accent-bg`, `--color-accent-bg-hover`; replaced hardcoded `#9747ff` in component CSS; portal selection toolbar + table checkboxes use brand blue |
+| 2026-06-15 | **No SnowUI branding in live app** - removed SnowUI title/logo from Overview hero; breadcrumbs and Projects sample data updated; rule documented in `DESIGN_SYSTEM.md` |
+| 2026-06-23 | **Settings popup chrome** - Payment (and all settings modals) use in-card title + single close button only; documented Figma vs app divergence for `SettingsPopoverTitle` frames |
+| 2026-06-22 | **Rule 9 - Responsive layout, cards, and text** - general app-wide rules: surface inset, fluid scaling, card grids stay side-by-side until min breakpoint, main vs compact truncation, mobile footer scrolls with content |
+| 2026-06-27 | **Calendar page reuse map** - documented required components (Tab Group segmented, Contacts schedule/add btn, `toast.js` floating toast); mandatory read-before-code notice for AI agents |
+| 2026-07-06 | **Client portal replication** - sidebar rebuilt to the ShareFile-brief structure (Dashboard, Client hub, Folders, Projects, Workflows, Templates, Signatures, Inbox, People, Account settings); ~35 functional pages added via `portal-*.js` modules + `portal.css`; shared localStorage store (`portal-data.js`); generic leaf-href routing fallback in `dashboard.js`; trial banner; legacy views kept URL-reachable |
+| 2026-07-06 | **Nav revision per client feedback** - removed the trial banner strip; portal Inbox replaced by the original **Email** client in the sidebar (`portal-inbox.js` unloaded); **Messages** and **Feed** restored as sidebar items |
+| 2026-07-07 | **Classic design preserved** - previous shell restored at `/classic` (`public/classic/index.html`, `window.TMA_CLASSIC` mode in `dashboard.js`); two-way links between designs; removed redundant "Dashboard" title row on the new portal home |
+| 2026-07-07 | **Primary accent = TMA brand blue** - `--color-indigo` remapped to `var(--color-primary-dark)` (`#136da0`); accent picker "indigo" swatch updated in `dashboard.js`; rule documented under Design Tokens › Colors. Purple/indigo must not be used for primary accents |
+| 2026-07-07 | **Global accent sweep** - `--color-purple` remapped to brand blue; added `--color-accent`, `--color-accent-bg`, `--color-accent-bg-hover`; replaced hardcoded `#9747ff` in component CSS; portal selection toolbar + table checkboxes use brand blue |
 
 ---
 
-*TM ANTOINE Advisory Design System — tma-portal. Figma file `58ZXC7sZYQsbenzf0foWCH`. Documentation at [tma-portal](#).*
+*TM ANTOINE Advisory Design System - tma-portal. Figma file `58ZXC7sZYQsbenzf0foWCH`. Documentation at [tma-portal](#).*

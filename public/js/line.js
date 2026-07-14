@@ -1,4 +1,4 @@
-/* TMA — Line component (Figma 32792:1923) */
+/* TMA - Line component (Figma 32792:1923) */
 (function () {
   'use strict';
 

@@ -1,5 +1,5 @@
 /*
- * Billing Details — card form (32546:96134)
+ * Billing Details - card form (32546:96134)
  */
 (function () {
   'use strict';

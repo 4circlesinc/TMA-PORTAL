@@ -3,7 +3,7 @@
   "nodeId": "32792:840",
   "documentationNodeId": "32726:1920",
   "name": "Badge",
-  "description": "Badge component — dot and number notification indicators for icons, avatars, and buttons.",
+  "description": "Badge component - dot and number notification indicators for icons, avatars, and buttons.",
   "cssPath": "public/css/badge.css",
   "jsPath": "public/js/badge.js",
   "iconJsPath": "public/js/badge-icons.js",

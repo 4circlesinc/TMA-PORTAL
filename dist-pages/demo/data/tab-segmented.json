@@ -57,7 +57,7 @@
   "examples": [
     {
       "id": "underline-medium-7",
-      "label": "Underline — Medium (7 tabs)",
+      "label": "Underline - Medium (7 tabs)",
       "variant": "underline",
       "size": "medium",
       "tabs": [
@@ -72,7 +72,7 @@
     },
     {
       "id": "underline-small",
-      "label": "Underline — Small",
+      "label": "Underline - Small",
       "variant": "underline",
       "size": "small",
       "tabs": [
@@ -83,7 +83,7 @@
     },
     {
       "id": "underline-large",
-      "label": "Underline — Large",
+      "label": "Underline - Large",
       "variant": "underline",
       "size": "large",
       "tabs": [
@@ -94,7 +94,7 @@
     },
     {
       "id": "pill-small",
-      "label": "Pill — Small",
+      "label": "Pill - Small",
       "variant": "pill",
       "size": "small",
       "tabs": [
@@ -104,7 +104,7 @@
     },
     {
       "id": "pill-medium",
-      "label": "Pill — Medium",
+      "label": "Pill - Medium",
       "variant": "pill",
       "size": "medium",
       "tabs": [
@@ -114,7 +114,7 @@
     },
     {
       "id": "pill-large",
-      "label": "Pill — Large",
+      "label": "Pill - Large",
       "variant": "pill",
       "size": "large",
       "tabs": [
@@ -124,7 +124,7 @@
     },
     {
       "id": "pill-icon-toggle",
-      "label": "Pill — Icon toggle (small)",
+      "label": "Pill - Icon toggle (small)",
       "variant": "pill",
       "size": "small",
       "tabs": [
@@ -134,7 +134,7 @@
     },
     {
       "id": "segmented-small-2",
-      "label": "Segmented — Small",
+      "label": "Segmented - Small",
       "variant": "segmented",
       "size": "small",
       "tabs": [
@@ -144,7 +144,7 @@
     },
     {
       "id": "segmented-icon-large",
-      "label": "Segmented — Icon + label (large)",
+      "label": "Segmented - Icon + label (large)",
       "variant": "segmented",
       "size": "large",
       "tabs": [
@@ -154,7 +154,7 @@
     },
     {
       "id": "solid-small",
-      "label": "Solid — Small",
+      "label": "Solid - Small",
       "variant": "solid",
       "size": "small",
       "tabs": [
@@ -164,7 +164,7 @@
     },
     {
       "id": "solid-large",
-      "label": "Solid — Large",
+      "label": "Solid - Large",
       "variant": "solid",
       "size": "large",
       "tabs": [
@@ -174,7 +174,7 @@
     },
     {
       "id": "filled-small-stretch",
-      "label": "Filled — Monthly / Yearly (stretch)",
+      "label": "Filled - Monthly / Yearly (stretch)",
       "variant": "filled",
       "size": "small",
       "stretch": true,
@@ -185,7 +185,7 @@
     },
     {
       "id": "filled-large-3",
-      "label": "Filled — Daily / Weekly / Monthly",
+      "label": "Filled - Daily / Weekly / Monthly",
       "variant": "filled",
       "size": "large",
       "tabs": [
@@ -196,7 +196,7 @@
     },
     {
       "id": "filled-rounded-icons",
-      "label": "Filled — Card / list (rounded 80px)",
+      "label": "Filled - Card / list (rounded 80px)",
       "variant": "filled",
       "size": "large",
       "rounded": true,
@@ -207,7 +207,7 @@
     },
     {
       "id": "icon-sun-moon",
-      "label": "Icon — Sun / Moon (icon only)",
+      "label": "Icon - Sun / Moon (icon only)",
       "variant": "icon",
       "size": "large",
       "iconOnly": true,
@@ -218,7 +218,7 @@
     },
     {
       "id": "icon-only-rounded",
-      "label": "Filled — Icon only (rounded 80px)",
+      "label": "Filled - Icon only (rounded 80px)",
       "variant": "filled",
       "size": "large",
       "rounded": true,

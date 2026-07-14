@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect a Sign-In Method - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="default connecting connected already-linked mismatch cancelled failed create-password password-created"
+        data-state="default"
+        data-demo-next="/design/auth/phone">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card" aria-labelledby="connect-title">
+        <div class="tma-auth__icon" data-show="default connecting connected already-linked mismatch cancelled failed" aria-hidden="true">
+          <img src="/images/icons/phosphor/Password.svg" alt="" width="80" height="80">
+        </div>
+
+        <div class="tma-auth__intro" data-show="default connecting connected already-linked mismatch cancelled failed">
+          <h1 class="tma-auth__title" id="connect-title">Connect another sign-in method</h1>
+          <p class="tma-auth__subtitle">Add a second way to sign in. Your password keeps working.</p>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="connected" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Google connected.</strong> You can now sign in with either method.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--error" data-show="already-linked" role="alert">
+          <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>That Google account is already connected to a different portal account.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--error" data-show="mismatch" role="alert">
+          <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>That Microsoft account's email doesn't match your portal email.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--info" data-show="cancelled" role="status">
+          <img src="/images/icons/phosphor/Info.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>Connection cancelled - nothing was changed.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--error" data-show="failed" role="alert">
+          <img src="/images/icons/phosphor/Warning.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>We couldn't complete the connection. Please try again in a moment.</span>
+        </div>
+
+        <div class="tma-auth__section" data-show="default connecting connected already-linked mismatch cancelled failed">
+          <div class="tma-auth__provider-row">
+            <span class="tma-auth__provider-ico" aria-hidden="true"><img src="/images/icons/brands/Google16.svg" alt="" width="20" height="20"></span>
+            <span class="tma-auth__provider-copy">
+              <span class="tma-auth__provider-name">Google</span>
+              <span class="tma-auth__provider-status" data-show="default connecting already-linked mismatch cancelled failed">Not connected</span>
+              <span class="tma-auth__provider-status tma-auth__provider-status--on" data-show="connected">Connected as vernon@gmail.com</span>
+            </span>
+            <button type="button" class="tma-auth__chip-btn" data-show="default already-linked mismatch cancelled failed" data-set-state="connecting"><span>Connect</span></button>
+            <span class="tma-auth__chip-btn" data-show="connecting" aria-hidden="true"><span class="tma-auth__spinner"></span><span>Connecting…</span></span>
+            <button type="button" class="tma-auth__chip-btn" data-show="connected" data-dialog-open="#disconnect-dialog"><span>Disconnect</span></button>
+          </div>
+
+          <div class="tma-auth__provider-row">
+            <span class="tma-auth__provider-ico" aria-hidden="true"><img src="/images/icons/brands/Microsoft16.svg" alt="" width="20" height="20"></span>
+            <span class="tma-auth__provider-copy">
+              <span class="tma-auth__provider-name">Microsoft</span>
+              <span class="tma-auth__provider-status">Not connected</span>
+            </span>
+            <button type="button" class="tma-auth__chip-btn" data-set-state="connecting"><span>Connect</span></button>
+          </div>
+
+        </div>
+
+        <!-- create a password (for accounts registered with Google / Microsoft) -->
+        <div class="tma-auth__icon" data-show="create-password" aria-hidden="true">
+          <img src="/images/icons/phosphor/LockKey.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="create-password">
+          <h1 class="tma-auth__title">Create a password</h1>
+          <p class="tma-auth__subtitle">Add a password as a backup - Google keeps working too.</p>
+        </div>
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="create-password"
+              data-demo data-submit-state="password-created">
+          <div class="tma-auth__group">
+            <label class="tma-auth__field tma-auth__field--password">
+              <input class="tma-auth__input" type="password" name="password" placeholder="Password" autocomplete="new-password" aria-label="Password" data-password-meter>
+              <button type="button" class="tma-auth__toggle-pwd" data-toggle-password aria-label="Show password" aria-pressed="false">
+                <img src="/images/icons/phosphor/EyeSlash.svg" alt="" width="16" height="16" aria-hidden="true">
+              </button>
+            </label>
+            <div class="tma-auth__strength" aria-hidden="true">
+              <span class="tma-auth__strength-seg"></span>
+              <span class="tma-auth__strength-seg"></span>
+              <span class="tma-auth__strength-seg"></span>
+              <span class="tma-auth__strength-seg"></span>
+            </div>
+            <ul class="tma-auth__req-list">
+              <li class="tma-auth__req" data-req="length" data-met="false">At least 10 characters</li>
+              <li class="tma-auth__req" data-req="case" data-met="false">Upper &amp; lower case</li>
+              <li class="tma-auth__req" data-req="number" data-met="false">At least one number</li>
+              <li class="tma-auth__req" data-req="symbol" data-met="false">At least one symbol</li>
+            </ul>
+          </div>
+          <div class="tma-auth__group">
+            <label class="tma-auth__field tma-auth__field--password">
+              <input class="tma-auth__input" type="password" name="password_confirm" placeholder="Confirm password" autocomplete="new-password" aria-label="Confirm password" data-password-confirm>
+              <button type="button" class="tma-auth__toggle-pwd" data-toggle-password aria-label="Show password" aria-pressed="false">
+                <img src="/images/icons/phosphor/EyeSlash.svg" alt="" width="16" height="16" aria-hidden="true">
+              </button>
+            </label>
+            <p class="tma-auth__field-msg" data-mismatch-msg hidden>
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>Passwords don't match yet.</span>
+            </p>
+          </div>
+          <button type="submit" class="tma-auth__submit">Create password</button>
+        </form>
+
+        <div class="tma-auth__icon" data-show="password-created" aria-hidden="true">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="80" height="80">
+        </div>
+        <div class="tma-auth__intro" data-show="password-created">
+          <h1 class="tma-auth__title">Password created</h1>
+          <p class="tma-auth__subtitle">Sign in with your password or Google - both work now.</p>
+        </div>
+        <a class="tma-auth__submit" data-show="password-created" href="/design/auth/getting-started?state=partial">Back to checklist</a>
+
+        <p class="tma-auth__alt-link" data-show="default connecting connected already-linked mismatch cancelled failed create-password">
+          <a href="/design/auth/getting-started">Back to Getting started</a>
+        </p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+
+    <div class="tma-auth__dialog" id="disconnect-dialog" role="dialog" aria-modal="true" aria-labelledby="disconnect-title" hidden>
+      <div class="tma-auth__dialog-card">
+        <h2 class="tma-auth__dialog-title" id="disconnect-title">Disconnect Google?</h2>
+        <p class="tma-auth__dialog-text">You can still sign in with your password, and reconnect anytime.</p>
+        <div class="tma-auth__dialog-actions">
+          <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Keep connected</button>
+          <button type="button" class="tma-auth__submit tma-auth__submit--danger" data-dialog-close data-set-state="default">Disconnect</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

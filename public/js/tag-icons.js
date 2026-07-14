@@ -1,4 +1,4 @@
-/* TMA — Tag inline SVG icons */
+/* TMA - Tag inline SVG icons */
 (function () {
   'use strict';
 

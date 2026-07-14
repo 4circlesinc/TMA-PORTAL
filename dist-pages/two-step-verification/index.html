@@ -5,48 +5,12 @@
   <base href="/TMA-PORTAL/">
   <script>window.__TMA_SITE_ROOT="/TMA-PORTAL";</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Two Step Verification — TM ANTOINE Advisory</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/TMA-PORTAL/css/tokens.css">
-  <link rel="stylesheet" href="/TMA-PORTAL/css/theme.css">
-  <link rel="stylesheet" href="/TMA-PORTAL/css/auth.css">
-  <style>
-    html, body { margin: 0; min-height: 100%; }
-  </style>
+  <title>Two-Step Verification — TM ANTOINE Advisory</title>
+  <!-- this page moved to the official auth flow -->
+  <meta http-equiv="refresh" content="0; url=auth/two-factor-challenge">
+  <script>location.replace((window.__TMA_SITE_ROOT || "") + "/auth/two-factor-challenge");</script>
 </head>
 <body>
-  <main class="tma-auth" data-node-id="32546:96139">
-    <div class="tma-auth__body">
-      <section class="tma-auth__card" data-node-id="I32546:96139;387056:47968" aria-labelledby="verify-title">
-        <div class="tma-auth__icon" data-node-id="I32546:96139;387056:47969" aria-hidden="true">
-          <img src="/TMA-PORTAL/images/icons/phosphor/DeviceMobile.svg" alt="" width="80" height="80">
-        </div>
-
-        <div class="tma-auth__intro" data-node-id="I32546:96139;387056:47970">
-          <h1 class="tma-auth__title" id="verify-title">Two Step Verification</h1>
-          <p class="tma-auth__subtitle">Enter the verification code we sent to</p>
-        </div>
-
-        <form class="tma-auth__card-form" id="verify-form" action="#" method="post" novalidate>
-          <p class="tma-auth__phone" data-node-id="I32546:96139;387056:47971">+852 19850622</p>
-
-          <p class="tma-auth__code-label" data-node-id="I32546:96139;387056:47972">Type your 4 digit security code</p>
-
-          <div class="tma-auth__otp" data-node-id="I32546:96139;387056:47973" role="group" aria-label="4 digit security code">
-            <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1">
-            <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">
-            <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">
-            <input class="tma-auth__otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">
-          </div>
-
-          <button type="submit" class="tma-auth__submit tma-auth__submit--verify" data-node-id="I32546:96139;387056:47974">Submit</button>
-        </form>
-
-        <p class="tma-auth__alt-link" data-node-id="I32546:96139;387056:47975">Didn&rsquo;t get the code ? <a href="#">Resend</a> or <a href="#">Call Us</a></p>
-      </section>
-    </div>
-
-    <p class="tma-auth__copyright" data-node-id="I32546:96139;387056:47967">&copy; 2026 TM ANTOINE Advisory</p>
-  </main>
+  <p style="font-family: Inter, system-ui, sans-serif; padding: 24px;">Redirecting to <a href="auth/two-factor-challenge">Two-Step Verification</a>&hellip;</p>
 </body>
 </html>

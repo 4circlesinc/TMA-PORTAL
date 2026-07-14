@@ -3,7 +3,7 @@
   "nodeId": "32722:24626",
   "guidanceNodeId": "32722:24626",
   "name": "Table C",
-  "description": "Full interactive table implementing Table A interactive guidance — selection, function bar states, delete/duplicate, pagination footer, popover, and toast.",
+  "description": "Full interactive table implementing Table A interactive guidance - selection, function bar states, delete/duplicate, pagination footer, popover, and toast.",
   "cssPath": "public/css/table-c.css",
   "jsPath": "public/js/table-c.js",
   "defaultVariant": "default",

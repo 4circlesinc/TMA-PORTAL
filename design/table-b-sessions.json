@@ -1,7 +1,7 @@
 {
   "slug": "table-b-sessions",
   "nodeId": "32722:24623",
-  "name": "Table B — Sign in Sessions",
+  "name": "Table B - Sign in Sessions",
   "cssPath": "public/css/table-b-sessions.css",
   "jsPath": "public/js/table-b.js",
   "defaultVariant": "expand",

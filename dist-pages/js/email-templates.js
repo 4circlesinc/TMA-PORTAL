@@ -1,5 +1,5 @@
 /*
- * TMA — Email templates
+ * TMA - Email templates
  * Global: window.TMAEmailTemplates
  * Figma: Email template page 12780:88498
  */
@@ -357,7 +357,7 @@
       name: 'Email Sign In',
       category: 'Authentication',
       subject: 'Sign in to ' + SITE_NAME,
-      preview: 'Welcome — click to sign in.',
+      preview: 'Welcome - click to sign in.',
       thumb: 'auth',
       nodeId: '32534:3772',
       mobileNodeId: '32534:3782',
@@ -428,7 +428,7 @@
       id: 'invoice',
       name: 'Invoice',
       category: 'Transactional',
-      subject: 'Invoice #VL25000355 — TM ANTOINE Advisory',
+      subject: 'Invoice #VL25000355 - TM ANTOINE Advisory',
       preview: 'Your invoice from TM ANTOINE Advisory. Total due: $340.94',
       thumb: 'invoice',
       nodeId: '32546:96133',

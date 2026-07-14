@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm Your Email - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow
+        data-states="sent countdown resent change wrong-email too-many"
+        data-state="sent"
+        data-demo-next="auth/verify-email/?state=success">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card" aria-labelledby="check-email-title">
+        <div class="tma-auth__icon" aria-hidden="true">
+          <img src="/images/icons/phosphor/EnvelopeSimpleOpen.svg" alt="" width="80" height="80">
+        </div>
+
+        <div class="tma-auth__intro">
+          <h1 class="tma-auth__title" id="check-email-title">Confirm your email address</h1>
+          <p class="tma-auth__subtitle">We sent a confirmation link to</p>
+        </div>
+
+        <p class="tma-auth__phone" data-show="sent countdown resent too-many">vernon@example.com</p>
+
+        <form class="tma-auth__form" action="#" method="post" novalidate data-show="change wrong-email"
+              data-demo data-submit-state="resent">
+          <div class="tma-auth__group">
+            <label class="tma-auth__field">
+              <input class="tma-auth__input" type="email" name="email" placeholder="New email address" autocomplete="email" aria-label="New email address" value="vernon@example.com" data-autofocus="change">
+            </label>
+            <p class="tma-auth__field-msg" data-show="wrong-email">
+              <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+              <span>That doesn't look like a valid email address.</span>
+            </p>
+          </div>
+          <div class="tma-auth__nav-actions">
+            <button type="button" class="tma-auth__submit tma-auth__submit--previous" data-set-state="sent">Cancel</button>
+            <button type="submit" class="tma-auth__submit">Save &amp; resend</button>
+          </div>
+        </form>
+
+        <div class="tma-auth__alert tma-auth__alert--success" data-show="resent" role="status">
+          <img src="/images/icons/phosphor/CheckCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>A new confirmation email is on its way.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="too-many" role="alert">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Resend limit reached.</strong> Wait 15 minutes and check your spam folder.</span>
+        </div>
+
+
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-show="sent countdown resent"
+                data-resend data-resend-state="resent">Resend email</button>
+
+        <p class="tma-auth__hint tma-auth__countdown" data-countdown data-seconds="60" data-show="countdown resent" aria-live="off">
+          You can resend in <strong data-countdown-num>60</strong>s
+        </p>
+
+        <p class="tma-auth__alt-link" data-show="sent countdown resent too-many">
+          Wrong address? <button type="button" class="tma-auth__link-btn" data-set-state="change">Use a different email</button>
+        </p>
+
+
+        <p class="tma-auth__alt-link"><a href="/design/auth/sign-in">Back to sign in</a></p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

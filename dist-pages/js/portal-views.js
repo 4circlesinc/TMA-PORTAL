@@ -1,5 +1,5 @@
 /*
- * TMA — Client portal view dispatcher + shared UI helpers
+ * TMA - Client portal view dispatcher + shared UI helpers
  * Portal page modules register mount functions per view name;
  * the dashboard controller activates them on navigation.
  * Globals: window.TMAPortalViews, window.TMAPortalUI
@@ -41,7 +41,7 @@
     return '<img src="' + ICON + esc(name) + '.svg" alt="" width="' + px + '" height="' + px + '" aria-hidden="true">';
   }
 
-  /* Primary / secondary buttons — reuse the no-data CTA recipe */
+  /* Primary / secondary buttons - reuse the no-data CTA recipe */
   function btn(opts) {
     var o = opts || {};
     var cls = 'tma-no-data__btn';
@@ -53,7 +53,7 @@
       : '';
     return '<button type="button" class="' + cls + '"' + (o.attrs || '') + (o.disabled ? ' disabled' : '') + '>' +
       iconHtml + '<span>' + esc(o.label) + '</span>' +
-      (o.caret ? '<img class="tma-no-data__btn-icon tma-portal-btn__caret" src="/TMA-PORTAL/images/icons/tma/ArrowLineDown-16.svg" alt="" width="16" height="16">' : '') +
+      (o.caret ? '<img class="tma-no-data__btn-icon tma-portal-btn__caret" src="/TMA-PORTAL/images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10">' : '') +
       '</button>';
   }
 
@@ -88,7 +88,7 @@
       '</div>';
   }
 
-  /* Search — reuses documented table toolbar search chrome (dashboard.css) */
+  /* Search - reuses documented table toolbar search chrome (dashboard.css) */
   function searchInput(placeholder, dataAttr, value, opts) {
     var o = opts || {};
     var v = value || '';
@@ -174,7 +174,7 @@
     return '<div class="tma-portal-radio-row">' + one('yes', 'Yes') + one('no', 'No') + '</div>';
   }
 
-  /* Toggle switch — same markup as settings switch (dashboard.css) */
+  /* Toggle switch - same markup as settings switch (dashboard.css) */
   function toggle(checked, dataAttr, ariaLabel) {
     return '<label class="tma-dash__settings-switch">' +
       '<input class="tma-dash__settings-switch-input" type="checkbox"' + (checked ? ' checked' : '') +
@@ -209,7 +209,7 @@
       '</div>';
   }
 
-  /* Modal — settings popup chrome (title inside card, single close button) */
+  /* Modal - settings popup chrome (title inside card, single close button) */
   var modalHost = null;
 
   function closeModal() {
@@ -232,9 +232,11 @@
     modalHost.innerHTML =
       '<div class="tma-portal-modal__backdrop" data-portal-modal-close></div>' +
       '<div class="tma-dash__settings-change-card tma-portal-modal__card" role="dialog" aria-modal="true" aria-label="' + esc(o.title || 'Dialog') + '">' +
+      '<div class="tma-portal-modal__head">' +
+      (o.title ? '<h2 class="tma-portal-modal__title">' + esc(o.title) + '</h2>' : '<span class="tma-portal-modal__title" aria-hidden="true"></span>') +
       '<button type="button" class="tma-dash__settings-change-close" data-portal-modal-close aria-label="Close">' +
       '<img src="' + ICON + 'X.svg" alt=""></button>' +
-      (o.title ? '<h2 class="tma-portal-modal__title">' + esc(o.title) + '</h2>' : '') +
+      '</div>' +
       '<div class="tma-portal-modal__body">' + (o.body || '') + '</div>' +
       '</div>';
     document.body.appendChild(modalHost);
@@ -248,7 +250,7 @@
     return modalHost;
   }
 
-  /* Underline tab group — reuses .tma-tab-group markup + PortalTabGroup */
+  /* Underline tab group - reuses .tma-tab-group markup + PortalTabGroup */
   function tabs(items, activeKey) {
     return '<div class="tma-tab-group tma-tab-group--underline" role="tablist">' +
       items.map(function (it, i) {
@@ -275,7 +277,7 @@
     }
   }
 
-  /* Head dropdown — same pattern as Clients main-head buttons */
+  /* Head dropdown - same pattern as Clients main-head buttons */
   function headDropdown(opts) {
     var o = opts || {};
     var variant = o.primary ? 'primary' : 'secondary';
@@ -290,7 +292,7 @@
       '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap' + wrapAttr + '>' +
       '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--' + variant + '" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
       esc(o.label || '') +
-      '<img class="tma-dash__head-dropdown-caret" src="/TMA-PORTAL/images/icons/tma/ArrowLineDown-16.svg" alt="" aria-hidden="true">' +
+      '<img class="tma-dash__head-dropdown-caret" src="/TMA-PORTAL/images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10" aria-hidden="true">' +
       '</button>' +
       '<div class="tma-dash__menu tma-dash__head-dropdown-menu' + align + '" data-head-dropdown-menu hidden role="menu" aria-label="' + esc(o.menuLabel || o.label || 'Menu') + '">' +
       items +
@@ -332,15 +334,20 @@
       menu.className = 'tma-portal-menu-pop';
       menu.setAttribute('role', 'menu');
       menu.innerHTML = items.map(function (it, i) {
-        return '<button type="button" class="tma-portal-menu-pop__item" role="menuitem" data-menu-index="' + i + '"' + (it.disabled ? ' disabled' : '') + '>' + esc(it.label) + '</button>';
+        return '<button type="button" class="tma-portal-menu-pop__item" role="menuitem" data-menu-index="' + i + '"' + (it.disabled ? ' disabled' : '') + '><span class="tma-portal-menu-pop__label">' + esc(it.label) + '</span></button>';
       }).join('');
       document.body.appendChild(menu);
       var r = trigger.getBoundingClientRect();
       menu.style.position = 'fixed';
       menu.style.zIndex = '260';
-      var left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8));
+      menu.style.visibility = 'hidden';
+      menu.style.left = '0';
+      menu.style.top = '0';
+      var menuWidth = menu.offsetWidth;
+      var left = Math.max(8, Math.min(r.left, window.innerWidth - menuWidth - 8));
       menu.style.top = (r.bottom + 4) + 'px';
       menu.style.left = left + 'px';
+      menu.style.visibility = '';
       function dismiss() {
         menu.remove();
         document.removeEventListener('click', dismiss);

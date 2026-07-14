@@ -1,4 +1,4 @@
-/* TMA — Table Filter and sort guidance */
+/* TMA - Table Filter and sort guidance */
 
 .tma-table-filter-sort-guidance__doc {
   display: inline-flex;
@@ -238,6 +238,7 @@
 .tma-filter-popover__item-label {
   flex: 1 1 auto;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .tma-filter-popover__item-meta {

@@ -1,8 +1,8 @@
 {
   "slug": "billing-details",
   "nodeId": "32546:96135",
-  "name": "Authentication — Billing Details",
-  "description": "Sign-up step — business billing fields with Previous / Continue navigation.",
+  "name": "Authentication - Billing Details",
+  "description": "Sign-up step - business billing fields with Previous / Continue navigation.",
   "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96135",
   "htmlPath": "public/billing-details/index.html",
   "cssPath": "public/css/auth.css"

@@ -1,4 +1,4 @@
-/* TMA — Frame instances showcase (Figma 33159:3529) — absolute layout */
+/* TMA - Frame instances showcase (Figma 33159:3529) - absolute layout */
 (function () {
   'use strict';
 

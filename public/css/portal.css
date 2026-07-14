@@ -1,5 +1,5 @@
 /*
- * TMA — Client portal pages (dashboard home, folders, projects,
+ * TMA - Client portal pages (dashboard home, folders, projects,
  * workflows, templates, signatures, inbox, people, account settings).
  * Page-level CSS only: composes tokens.css / theme.css variables and
  * existing component recipes (no-data CTA button, settings switch,
@@ -49,7 +49,7 @@
   display: inline-flex;
 }
 
-/* toolbar actions — compact size (legacy no-data CTA buttons) */
+/* toolbar actions - compact size (legacy no-data CTA buttons) */
 .tma-portal-head__actions .tma-no-data__btn {
   min-height: 28px;
   min-width: 0;
@@ -263,11 +263,11 @@
   line-height: var(--text-lh-14);
 }
 
-/* ── tables — follow the documented table recipe ─────
+/* ── tables - follow the documented table recipe ─────
    (public/css/table.css + table-a.css: 12/16 Regular cells,
    40px row height, muted 12px header over rgba(0,0,0,0.2) rule,
    rgba(0,0,0,0.04) row hairlines, --color-hover row hover,
-   borderless sheet — no boxed card) */
+   borderless sheet - no boxed card) */
 .tma-portal-table-wrap {
   overflow-x: auto;
 }
@@ -305,7 +305,7 @@
   vertical-align: middle;
 }
 
-/* documented table cells are 12 Regular — name cells carry no extra weight */
+/* documented table cells are 12 Regular - name cells carry no extra weight */
 .tma-portal-table strong { font-weight: var(--tma-table-font-weight-regular, 400); }
 
 .tma-portal-table tbody tr:last-child td { border-bottom: 0; }
@@ -322,7 +322,7 @@
   white-space: nowrap;
 }
 
-/* bulk checkbox — design-system glyph styling comes from .tma-dash__check (dashboard.css) */
+/* bulk checkbox - design-system glyph styling comes from .tma-dash__check (dashboard.css) */
 .tma-portal-table .tma-dash__check {
   vertical-align: middle;
 }
@@ -340,7 +340,7 @@
   background: var(--color-accent-bg-hover);
 }
 
-/* selection toolbar — icon-only; label expands on hover to stay one line */
+/* selection toolbar - icon-only; label expands on hover to stay one line */
 .tma-portal-selection-bar {
   display: flex;
   align-items: center;
@@ -513,7 +513,7 @@
 
 .tma-portal-context-menu__item:hover { background: var(--color-hover); }
 
-/* favorite star — always visible; muted outline, full opacity when starred (column after checkbox) */
+/* favorite star - always visible; muted outline, full opacity when starred (column after checkbox) */
 .tma-portal-star img { opacity: 0.4; }
 
 .tma-portal-star.is-starred img { opacity: 1; }
@@ -1152,7 +1152,7 @@
   }
 }
 
-/* always two equal columns — a lone tile stays half width, never full width */
+/* always two equal columns - a lone tile stays half width, never full width */
 .tma-portal-home-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1443,7 +1443,7 @@
 }
 
 /* ── signature request wizard (fullscreen) ────────── */
-/* Do NOT lock .tma-dash__main overflow — a stuck wizard class
+/* Do NOT lock .tma-dash__main overflow - a stuck wizard class
    would permanently kill wheel/touch scrolling in the content area.
    The fixed overlay already covers the viewport. */
 html.tma-dash--signatures-wizard,
@@ -2569,7 +2569,7 @@ html.tma-dash--signatures-wizard body {
 
 .tma-portal-avatar-cell img { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; }
 
-/* file name — edit icon only when hovering the name */
+/* file name - edit icon only when hovering the name */
 .tma-portal-file-name {
   display: inline-flex;
   align-items: center;

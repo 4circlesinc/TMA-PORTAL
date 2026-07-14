@@ -3,7 +3,7 @@
   "nodeId": "32722:24625",
   "guidanceNodeId": "32722:24625",
   "name": "Table Filter and Sort",
-  "description": "Filter and sort interactive guidance — Plan A popover filtering, Plan B inline filters, column menus, and live table.",
+  "description": "Filter and sort interactive guidance - Plan A popover filtering, Plan B inline filters, column menus, and live table.",
   "cssPath": "public/css/table-filter-sort.css",
   "jsPath": "public/js/table-filter-sort.js",
   "defaultVariant": "live",

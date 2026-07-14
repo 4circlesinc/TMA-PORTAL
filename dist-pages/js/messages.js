@@ -1,5 +1,5 @@
 /*
- * TMA — Messages page ( /social/messages )
+ * TMA - Messages page ( /social/messages )
  * Global: window.TMAMessages
  */
 (function () {

@@ -1,7 +1,7 @@
 {
   "slug": "404",
   "nodeId": "32546:96102",
-  "name": "Error Page — Page Not Found",
+  "name": "Error Page - Page Not Found",
   "description": "404 state with Illustration03, title, and Back to Home Page action.",
   "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96102",
   "htmlPath": "public/404/index.html",

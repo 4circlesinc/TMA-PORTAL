@@ -3,7 +3,7 @@
   "nodeId": "32260:171686",
   "guidanceNodeId": "32260:171686",
   "name": "Global Search",
-  "description": "Global search interactive guidance — SearchPopup over Overview dashboard with recent, results, and no-results states.",
+  "description": "Global search interactive guidance - SearchPopup over Overview dashboard with recent, results, and no-results states.",
   "cssPath": "public/css/global-search.css",
   "jsPath": "public/js/global-search.js",
   "defaultVariant": "live",

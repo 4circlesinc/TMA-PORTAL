@@ -1,4 +1,4 @@
-/* TMA — Colors documentation card (Figma 30484:266540) */
+/* TMA - Colors documentation card (Figma 30484:266540) */
 (function () {
   'use strict';
 
@@ -6,7 +6,7 @@
 
   const THEMES = ['TMA-Light', 'TMA-Dark', 'iOS-Light', 'iOS-Dark'];
 
-  /* TMA brand — primary pair + 90% white tints */
+  /* TMA brand - primary pair + 90% white tints */
   const BRAND = {
     primary: '#03a5e9',
     primaryDark: '#136da0',

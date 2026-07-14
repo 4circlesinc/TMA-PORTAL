@@ -3,7 +3,7 @@
   "nodeId": "33307:661",
   "documentationNodeId": "33307:764",
   "name": "Tag",
-  "description": "Tag component — labeled chips with optional close icon, typically used for options.",
+  "description": "Tag component - labeled chips with optional close icon, typically used for options.",
   "cssPath": "public/css/tag.css",
   "jsPath": "public/js/tag.js",
   "iconJsPath": "public/js/tag-icons.js",

@@ -1,4 +1,4 @@
-/* TMA — DatePicker renderer */
+/* TMA - DatePicker renderer */
 (function () {
   'use strict';
 

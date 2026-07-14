@@ -1,5 +1,5 @@
 /*
- * TMA — Liquid glass tab bar indicator
+ * TMA - Liquid glass tab bar indicator
  * Single shared pill that spring-animates between tab positions.
  * Global: window.TMATabbarIndicator
  */

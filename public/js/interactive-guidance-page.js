@@ -1,4 +1,4 @@
-/* TMA — Interactive guidance board (Figma 12779:273712) */
+/* TMA - Interactive guidance board (Figma 12779:273712) */
 (function () {
   'use strict';
 

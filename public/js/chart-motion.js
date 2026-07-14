@@ -1,5 +1,5 @@
 /**
- * ChartMotion interactions — bar tooltips (touch) and line chart cursor tracking.
+ * ChartMotion interactions - bar tooltips (touch) and line chart cursor tracking.
  */
 (function () {
   const CHART_SELECTOR = '.tma-chart-motion, .tma-chart-motion-horizontal, .tma-chart-motion-line, .tma-chart-vertical-01, .tma-chart-vertical-02, .tma-chart-vertical-03, .tma-chart-vertical-04, .tma-chart-vertical-05, .tma-chart-vertical-06, .tma-chart-vertical-07, .tma-chart-vertical-08, .tma-chart-vertical-09, .tma-chart-vertical-10, .tma-chart-vertical-11, .tma-chart-vertical-12, .tma-chart-horizontal-01, .tma-chart-horizontal-02, .tma-chart-horizontal-03, .tma-chart-horizontal-04, .tma-chart-semicircle, .tma-chart-donut';

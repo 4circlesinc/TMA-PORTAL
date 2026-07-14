@@ -1,5 +1,5 @@
 /*
- * TMA Portal — recovery overrides (yesterday's session)
+ * TMA Portal - recovery overrides (yesterday's session)
  * Loaded after dashboard.css. Restores sidebar width, nav nowrap,
  * liquid-glass tab bar + indicator, mobile header/sidebar, email toggle.
  */
@@ -27,7 +27,7 @@
 /* favorites items: dot bullet + label */
 .tma-dash__nav-item--fav { gap: var(--space-8); }
 
-/* expandable nav items are <button>s — reset to match the link items */
+/* expandable nav items are <button>s - reset to match the link items */
 .tma-dash__nav-item--expand {
   appearance: none;
   border: 0;
@@ -72,7 +72,7 @@
 }
 
 /* ─────────────────────────────────────────
- * MOBILE — bottom TabBar + iOS-style menu (Figma 32548:116275)
+ * MOBILE - bottom TabBar + iOS-style menu (Figma 32548:116275)
  * ───────────────────────────────────────── */
 
 .tma-dash__tabbar {
@@ -471,7 +471,7 @@ a.tma-dash__tab-btn:visited {
     display: none !important;
   }
 
-  /* Desktop header: search only — mobile logo must not appear in center */
+  /* Desktop header: search only - mobile logo must not appear in center */
   .tma-dash__header-logo {
     display: none !important;
   }
@@ -992,7 +992,7 @@ a.tma-dash__tab-btn:visited {
     display: none !important;
   }
 
-  /* Desktop header: search only — mobile logo must not appear in center */
+  /* Desktop header: search only - mobile logo must not appear in center */
   .tma-dash__header-logo {
     display: none !important;
   }
@@ -1007,7 +1007,7 @@ a.tma-dash__tab-btn:visited {
 }
 
 
-/* Email page — keep sidebar toggle visible on desktop (yesterday fix) */
+/* Email page - keep sidebar toggle visible on desktop (yesterday fix) */
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header-left [data-action="toggle-sidebar"] {
   display: grid !important;
 }
@@ -1022,7 +1022,7 @@ a.tma-dash__tab-btn:visited {
   background: var(--color-primary);
 }
 
-/* Email layout — tighter sidebar gap (yesterday) */
+/* Email layout - tighter sidebar gap (yesterday) */
 .tma-dash__email-layout {
   gap: var(--space-8);
 }
@@ -1067,7 +1067,7 @@ a.tma-dash__tab-btn:visited {
 
 .tma-dash__icon-btn-badge[hidden] { display: none; }
 
-/* Collapsed sidebar — keep count badges visible on icons */
+/* Collapsed sidebar - keep count badges visible on icons */
 @media (min-width: 1025px) {
   .tma-dash.is-sidebar-collapsed .tma-dash__nav-item {
     overflow: visible;
@@ -1088,7 +1088,7 @@ a.tma-dash__tab-btn:visited {
   }
 }
 
-/* ── Overview accents — brand blue (Portal Designs copy still uses purple) ── */
+/* ── Overview accents - brand blue (Portal Designs copy still uses purple) ── */
 .tma-dash__overview-status-fill,
 .tma-dash__overview-budget-seg--indigo {
   background: var(--color-primary);

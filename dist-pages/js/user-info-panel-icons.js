@@ -1,4 +1,4 @@
-/* TMA — User info panel inline SVG icons (Figma 32546:96148) */
+/* TMA - User info panel inline SVG icons (Figma 32546:96148) */
 (function () {
   'use strict';
 

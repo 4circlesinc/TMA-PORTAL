@@ -1,4 +1,4 @@
-/* TMA — Text instances showcase (Figma 32708:1064) */
+/* TMA - Text instances showcase (Figma 32708:1064) */
 (function () {
   'use strict';
 

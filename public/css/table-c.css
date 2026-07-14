@@ -1,4 +1,4 @@
-/* TMA — Table C (interactive guidance) */
+/* TMA - Table C (interactive guidance) */
 
 .tma-table-c {
   position: relative;
@@ -8,7 +8,7 @@
   width: var(--table-a-width);
 }
 
-/* Function bar — toggle default / selected */
+/* Function bar - toggle default / selected */
 .tma-table-c__toolbar {
   width: 100%;
 }
@@ -25,7 +25,7 @@
   display: block;
 }
 
-/* Select-all header checkbox — only on sheet hover per guidance */
+/* Select-all header checkbox - only on sheet hover per guidance */
 .tma-table-c .tma-table-a__row--head .tma-table-a__checkbox-btn {
   opacity: 0;
 }

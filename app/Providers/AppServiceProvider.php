@@ -19,6 +19,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // App\Listeners\RecordAuthEvent is picked up by Laravel's automatic
+        // listener discovery - do not also register it manually, or every
+        // auth event gets recorded twice.
     }
 }

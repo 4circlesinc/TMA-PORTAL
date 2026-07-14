@@ -1,5 +1,5 @@
 /*
- * TMA — Weekly schedule widget (shared by Clients + Calendar pages)
+ * TMA - Weekly schedule widget (shared by Clients + Calendar pages)
  * Global: window.TMASchedule
  */
 (function () {

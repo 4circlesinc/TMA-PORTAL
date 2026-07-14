@@ -1,4 +1,4 @@
-/* TMA — Popover interactive guidance (Figma 33303:7653) */
+/* TMA - Popover interactive guidance (Figma 33303:7653) */
 (function () {
   'use strict';
 
@@ -129,7 +129,7 @@
   }
 
   function renderSelectDropdownLive() {
-    return section('Working select dropdown', `<p class="tma-popover-guidance-page__design-label" style="margin-bottom:20px">Live example — click the field to open the popover menu</p>
+    return section('Working select dropdown', `<p class="tma-popover-guidance-page__design-label" style="margin-bottom:20px">Live example - click the field to open the popover menu</p>
       <div data-select-field></div>`);
   }
 

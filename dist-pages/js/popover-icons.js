@@ -1,4 +1,4 @@
-/* TMA — Popover inline SVG icons */
+/* TMA - Popover inline SVG icons */
 (function () {
   'use strict';
 

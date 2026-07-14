@@ -1,14 +1,14 @@
 /*
- * TMA Theme — Semantic Component Variables
+ * TMA Theme - Semantic Component Variables
  *
  * Imports tokens.css primitives and maps them to named component slots.
  * Use this file (after tokens.css) when you need component-scoped overrides
  * or want to theme a page/section without touching token values.
  *
  * Load order in HTML:
- *   1. tokens.css   — primitive design tokens (:root)
- *   2. theme.css    — semantic component aliases (:root + component roots)
- *   3. components.css / button.css / card.css … — component styles
+ *   1. tokens.css   - primitive design tokens (:root)
+ *   2. theme.css    - semantic component aliases (:root + component roots)
+ *   3. components.css / button.css / card.css … - component styles
  */
 
 /* ─── Global resets (scoped to TMA pages) ─── */

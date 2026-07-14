@@ -3,7 +3,7 @@
   "nodeId": "32260:171687",
   "guidanceNodeId": "32260:171687",
   "name": "Table Search",
-  "description": "Search results interactive guidance — no-results state, search results table, search field states, and footer.",
+  "description": "Search results interactive guidance - no-results state, search results table, search field states, and footer.",
   "cssPath": "public/css/table-search.css",
   "jsPath": "public/js/table-search-icons.js",
   "defaultVariant": "search-results",

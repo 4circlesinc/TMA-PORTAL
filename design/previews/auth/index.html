@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth Flow - Design Preview - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth" data-auth-flow>
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <div class="tma-auth__body">
+      <section class="tma-auth__card tma-auth__card--wide" aria-labelledby="flowmap-title">
+        <div class="tma-auth__intro">
+          <h1 class="tma-auth__title" id="flowmap-title">Authentication &amp; onboarding - design preview</h1>
+          <p class="tma-auth__subtitle">Every screen and state of the new sign-up, sign-in, and account-security flow. Open a screen, then use the “Preview state” control (bottom right) to walk through its states - the chips below deep-link to each state directly. Design spec: <code>AUTH_DESIGN.md</code>.</p>
+        </div>
+
+        <div class="tma-flowmap">
+
+          <div class="tma-flowmap__group">
+            <h2 class="tma-flowmap__group-title">1 · Registration</h2>
+            <div class="tma-flowmap__grid">
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/sign-up"><img src="/images/icons/phosphor/UserCircle.svg" alt="" aria-hidden="true">Create account</a>
+                <span class="tma-flowmap__desc">Email + password, Google, Microsoft. Strength meter, requirements, terms, human verification.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/sign-up?state=default">default</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-up?state=loading">loading</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-up?state=errors">errors</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-up?state=breached">breached</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-up?state=captcha">captcha</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-up?state=locked">locked</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/check-email"><img src="/images/icons/phosphor/EnvelopeSimpleOpen.svg" alt="" aria-hidden="true">Check your email</a>
+                <span class="tma-flowmap__desc">Confirmation sent. Resend with countdown, change address, spam hint, resend limits.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/check-email?state=sent">sent</a>
+                  <a class="tma-flowmap__state" href="/design/auth/check-email?state=countdown">countdown</a>
+                  <a class="tma-flowmap__state" href="/design/auth/check-email?state=resent">resent</a>
+                  <a class="tma-flowmap__state" href="/design/auth/check-email?state=change">change</a>
+                  <a class="tma-flowmap__state" href="/design/auth/check-email?state=wrong-email">wrong-email</a>
+                  <a class="tma-flowmap__state" href="/design/auth/check-email?state=too-many">too-many</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/verify-email?state=success"><img src="/images/icons/phosphor/CheckCircle.svg" alt="" aria-hidden="true">Verification result</a>
+                <span class="tma-flowmap__desc">What the confirmation link lands on - success and every failure.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/verify-email?state=verifying">verifying</a>
+                  <a class="tma-flowmap__state" href="/design/auth/verify-email?state=success">success</a>
+                  <a class="tma-flowmap__state" href="/design/auth/verify-email?state=expired">expired</a>
+                  <a class="tma-flowmap__state" href="/design/auth/verify-email?state=used">used</a>
+                  <a class="tma-flowmap__state" href="/design/auth/verify-email?state=invalid">invalid</a>
+                  <a class="tma-flowmap__state" href="/design/auth/verify-email?state=failed">failed</a>
+                  <a class="tma-flowmap__state" href="/design/auth/verify-email?state=sent-new">sent-new</a>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tma-flowmap__group">
+            <h2 class="tma-flowmap__group-title">2 · Security onboarding</h2>
+            <div class="tma-flowmap__grid">
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/getting-started"><img src="/images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">Getting started</a>
+                <span class="tma-flowmap__desc">Security checklist with progress - email, sign-in method, phone, 2FA, recovery codes.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/getting-started?state=fresh">fresh</a>
+                  <a class="tma-flowmap__state" href="/design/auth/getting-started?state=partial">partial</a>
+                  <a class="tma-flowmap__state" href="/design/auth/getting-started?state=complete">complete</a>
+                  <a class="tma-flowmap__state" href="/design/auth/getting-started?state=reminder">reminder</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/connect"><img src="/images/icons/phosphor/Password.svg" alt="" aria-hidden="true">Connect sign-in method</a>
+                <span class="tma-flowmap__desc">Link Google / Microsoft, or create a password if you registered with one of them.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=default">default</a>
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=connecting">connecting</a>
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=connected">connected</a>
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=already-linked">already-linked</a>
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=mismatch">mismatch</a>
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=cancelled">cancelled</a>
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=failed">failed</a>
+                  <a class="tma-flowmap__state" href="/design/auth/connect?state=create-password">create-password</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/phone"><img src="/images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">Add &amp; verify phone</a>
+                <span class="tma-flowmap__desc">Country code, number, 6-digit SMS code, resend, change number.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/phone?state=enter">enter</a>
+                  <a class="tma-flowmap__state" href="/design/auth/phone?state=sending">sending</a>
+                  <a class="tma-flowmap__state" href="/design/auth/phone?state=code">code</a>
+                  <a class="tma-flowmap__state" href="/design/auth/phone?state=invalid">invalid</a>
+                  <a class="tma-flowmap__state" href="/design/auth/phone?state=expired">expired</a>
+                  <a class="tma-flowmap__state" href="/design/auth/phone?state=too-many">too-many</a>
+                  <a class="tma-flowmap__state" href="/design/auth/phone?state=success">success</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/two-factor-setup"><img src="/images/icons/phosphor/QrCode.svg" alt="" aria-hidden="true">Two-factor setup</a>
+                <span class="tma-flowmap__desc">Explain → choose app (Microsoft / Google / any TOTP) → QR + manual key → confirm code → done.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=intro">intro</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=app">app</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=scan">scan</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=qr-expired">qr-expired</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=confirm">confirm</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=wrong">wrong</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=expired-code">expired-code</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=locked">locked</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=done">done</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=already">already</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor-setup?state=cancel">cancel</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/recovery-codes"><img src="/images/icons/phosphor/Key.svg" alt="" aria-hidden="true">Recovery codes</a>
+                <span class="tma-flowmap__desc">Copy / download / print, confirm saved, regenerate warning. Shown once.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/recovery-codes?state=fresh">fresh</a>
+                  <a class="tma-flowmap__state" href="/design/auth/recovery-codes?state=copied">copied</a>
+                  <a class="tma-flowmap__state" href="/design/auth/recovery-codes?state=saved">saved</a>
+                  <a class="tma-flowmap__state" href="/design/auth/recovery-codes?state=regenerate">regenerate</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/pending-approval"><img src="/images/icons/phosphor/Hourglass.svg" alt="" aria-hidden="true">Pending approval</a>
+                <span class="tma-flowmap__desc">Admin reviews the account, approves it, and assigns the account type.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/pending-approval?state=pending">pending</a>
+                  <a class="tma-flowmap__state" href="/design/auth/pending-approval?state=approved">approved</a>
+                  <a class="tma-flowmap__state" href="/design/auth/pending-approval?state=info-needed">info-needed</a>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tma-flowmap__group">
+            <h2 class="tma-flowmap__group-title">3 · Sign in</h2>
+            <div class="tma-flowmap__grid">
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/sign-in"><img src="/images/icons/phosphor/SignOut.svg" alt="" aria-hidden="true">Sign in</a>
+                <span class="tma-flowmap__desc">Email + password, Google, Microsoft. Stay-signed-in with trusted-device note.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/sign-in?state=default">default</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-in?state=loading">loading</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-in?state=error">error</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-in?state=captcha">captcha</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-in?state=locked">locked</a>
+                  <a class="tma-flowmap__state" href="/design/auth/sign-in?state=unverified">unverified</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/two-factor"><img src="/images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">Two-factor challenge</a>
+                <span class="tma-flowmap__desc">6-digit authenticator code, trust device, recovery-code fallback.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=default">default</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=invalid">invalid</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=expired">expired</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=too-many">too-many</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=locked">locked</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=recovery">recovery</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=recovery-ok">recovery-ok</a>
+                  <a class="tma-flowmap__state" href="/design/auth/two-factor?state=recovery-used">recovery-used</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/stay-signed-in"><img src="/images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">Stay signed in?</a>
+                <span class="tma-flowmap__desc">One-time confirmation per trusted device, with a personal-device caution.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/stay-signed-in">default</a>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tma-flowmap__group">
+            <h2 class="tma-flowmap__group-title">4 · Recovery &amp; safeguards</h2>
+            <div class="tma-flowmap__grid">
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/forgot-password"><img src="/images/icons/phosphor/LockKey.svg" alt="" aria-hidden="true">Forgot password</a>
+                <span class="tma-flowmap__desc">Neutral wording - never reveals whether an account exists.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/forgot-password?state=form">form</a>
+                  <a class="tma-flowmap__state" href="/design/auth/forgot-password?state=loading">loading</a>
+                  <a class="tma-flowmap__state" href="/design/auth/forgot-password?state=sent">sent</a>
+                  <a class="tma-flowmap__state" href="/design/auth/forgot-password?state=too-many">too-many</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/reset-password"><img src="/images/icons/phosphor/Password.svg" alt="" aria-hidden="true">Reset password</a>
+                <span class="tma-flowmap__desc">New password with strength + requirements, sign out other devices.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/reset-password?state=form">form</a>
+                  <a class="tma-flowmap__state" href="/design/auth/reset-password?state=weak">weak</a>
+                  <a class="tma-flowmap__state" href="/design/auth/reset-password?state=expired">expired</a>
+                  <a class="tma-flowmap__state" href="/design/auth/reset-password?state=invalid">invalid</a>
+                  <a class="tma-flowmap__state" href="/design/auth/reset-password?state=success">success</a>
+                </span>
+              </div>
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/auth/security-check"><img src="/images/icons/phosphor/Detective.svg" alt="" aria-hidden="true">Security check</a>
+                <span class="tma-flowmap__desc">New device / location, unusual activity, rate limits, captcha, lockout.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/design/auth/security-check?state=new-device">new-device</a>
+                  <a class="tma-flowmap__state" href="/design/auth/security-check?state=new-location">new-location</a>
+                  <a class="tma-flowmap__state" href="/design/auth/security-check?state=unusual">unusual</a>
+                  <a class="tma-flowmap__state" href="/design/auth/security-check?state=attempts">attempts</a>
+                  <a class="tma-flowmap__state" href="/design/auth/security-check?state=captcha">captcha</a>
+                  <a class="tma-flowmap__state" href="/design/auth/security-check?state=locked">locked</a>
+                  <a class="tma-flowmap__state" href="/design/auth/security-check?state=confirm-email">confirm-email</a>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tma-flowmap__group">
+            <h2 class="tma-flowmap__group-title">5 · In-app settings</h2>
+            <div class="tma-flowmap__grid">
+              <div class="tma-flowmap__item">
+                <a class="tma-flowmap__name" href="/design/security-settings"><img src="/images/icons/phosphor/GearSix.svg" alt="" aria-hidden="true">Security settings</a>
+                <span class="tma-flowmap__desc">Password, connected accounts, phone, 2FA, recovery codes, trusted devices, sessions, login history, notifications.</span>
+                <span class="tma-flowmap__states">
+                  <a class="tma-flowmap__state" href="/security-settings/?state=populated">populated</a>
+                  <a class="tma-flowmap__state" href="/security-settings/?state=empty">empty</a>
+                </span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <p class="tma-auth__hint">Prototype only - no real authentication runs on these pages. Light/dark follows your portal theme; use the toggle in the top right.</p>
+      </section>
+    </div>
+
+    <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+  </main>
+
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

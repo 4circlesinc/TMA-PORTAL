@@ -3,7 +3,7 @@
   "nodeId": "32546:96118",
   "altNodeId": "32546:96098",
   "name": "Default Dashboard (Overview)",
-  "description": "Application home — tma-portal Overview dashboard (My Projects — Overview). Three-column layout (sidebar / main / rightbar) with project tab bar, SnowUI hero summary, What's on the road timeline, Latest Files, Project Spendings table, footer, and notifications / activities / contacts. Fully interactive (navigation, expandable groups, theme, search, drawers).",
+  "description": "Application home - tma-portal Overview dashboard (My Projects - Overview). Three-column layout (sidebar / main / rightbar) with project tab bar, SnowUI hero summary, What's on the road timeline, Latest Files, Project Spendings table, footer, and notifications / activities / contacts. Fully interactive (navigation, expandable groups, theme, search, drawers).",
   "appEntry": "public/index.html",
   "cssPath": "public/css/dashboard.css",
   "jsPath": "public/js/dashboard.js",
@@ -12,7 +12,7 @@
   "overviewGlobal": "window.TMAOverview",
   "views": {
     "dashboard": "Default dashboard metrics (Figma 32546:96097 / 32546:96098)",
-    "overview": "Project Overview — SnowUI (Figma 32546:96118)",
+    "overview": "Project Overview - SnowUI (Figma 32546:96118)",
     "projects": {
       "nav": "Projects",
       "source": "My Projects (Figma 32546:96122)",
@@ -64,7 +64,7 @@
     "favoritesRecently": "Sidebar list toggle",
     "header": "Sidebar collapses to a 72px icon-only rail on desktop (labels hidden, hover shows native tooltip) or opens the mobile menu; rightbar collapses/hides on desktop or opens as a drawer; favorite (star); theme toggle (light/dark); recently; notifications",
     "overviewTabs": "Underline tab bar (Overview / Targets / Budget / Users / Files / Activity / Settings) + Add User / Add Target actions",
-    "search": "Command palette — '/' to open, type to filter pages, arrow keys + Enter to navigate"
+    "search": "Command palette - '/' to open, type to filter pages, arrow keys + Enter to navigate"
   },
   "layout": {
     "sceneWidth": 1440,
@@ -89,8 +89,8 @@
   "sections": [
     { "name": "Sidebar" },
     { "name": "Header" },
-    { "name": "Tab bar — Overview / Targets / Budget / Users / Files / Activity / Settings" },
-    { "name": "Hero — SnowUI summary (status strip, tasks, due date, budget, SnowLogo40, avatar group)" },
+    { "name": "Tab bar - Overview / Targets / Budget / Users / Files / Activity / Settings" },
+    { "name": "Hero - SnowUI summary (status strip, tasks, due date, budget, SnowLogo40, avatar group)" },
     { "name": "What's on the road? (week picker + activity timeline)" },
     { "name": "Latest Files (FilePdf / FileJpg / FileXls + upload drop zone)" },
     { "name": "Project Spendings (Manager / Date / Amount / Status table)" },
@@ -107,7 +107,7 @@
   "reuses": {
     "tokens": "public/css/tokens.css",
     "theme": "public/css/theme.css",
-    "tabs": "components.css — tma-tab-group--underline",
+    "tabs": "components.css - tma-tab-group--underline",
     "icons": [
       "icons/phosphor/ChartPieSlice.svg",
       "icons/phosphor/ShoppingBagOpen.svg",
@@ -131,5 +131,5 @@
       "AvatarFemale01", "AvatarFemale02", "AvatarAbstract01", "AvatarMale05"
     ]
   },
-  "notes": "Overview content rendered by TMAOverview.mount() into [data-overview]. Brand logo: icons/brands/SnowLogo40.svg only — no inline SVG."
+  "notes": "Overview content rendered by TMAOverview.mount() into [data-overview]. Brand logo: icons/brands/SnowLogo40.svg only - no inline SVG."
 }

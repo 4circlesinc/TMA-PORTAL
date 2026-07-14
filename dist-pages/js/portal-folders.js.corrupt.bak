@@ -20,7 +20,7 @@
   function selectableItems(section) {
     return sectionItems(section).filter(function (f) { return f.kind !== 'filebox'; });
   }
-  /* native checkbox — same pattern as Users/Files tables (empty box when unchecked) */
+  /* native checkbox - same pattern as Users/Files tables (empty box when unchecked) */
   function checkboxInput(attr, checked, label) {
     return '<input type="checkbox" class="tma-dash__check" ' + attr +
       (checked ? ' checked' : '') +

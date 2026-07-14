@@ -33,7 +33,7 @@ if cleanup_stale_pid; then
 fi
 
 if is_listening; then
-  echo "[tma-dev-server] port $PORT is in use — stopping old server..."
+  echo "[tma-dev-server] port $PORT is in use - stopping old server..."
   lsof -tiTCP:"$PORT" -sTCP:LISTEN | xargs kill 2>/dev/null || true
   sleep 0.5
 fi

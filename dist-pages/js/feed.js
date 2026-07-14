@@ -1,5 +1,5 @@
 /*
- * TMA — Social Feed ( /social/feed )
+ * TMA - Social Feed ( /social/feed )
  * Global: window.TMAFeed
  */
 (function () {

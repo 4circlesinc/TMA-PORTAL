@@ -1,5 +1,5 @@
 /*
- * TMA — Overview Activity tab (Figma 32546:96119)
+ * TMA - Overview Activity tab (Figma 32546:96119)
  * Global: window.TMAOverviewActivity
  */
 (function () {

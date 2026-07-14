@@ -1,5 +1,5 @@
 /*
- * TMA — Portal Inbox (Received / Sent / Archived) + Compose
+ * TMA - Portal Inbox (Received / Sent / Archived) + Compose
  * Secure message center: composing creates a Sent item and a
  * notification-history entry; received messages can be archived.
  * Registers view: 'inbox'.

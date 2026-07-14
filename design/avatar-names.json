@@ -4,7 +4,7 @@
     "name": "AvatarNames",
     "url": "https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=30485-156802"
   },
-  "description": "TMA user chips — avatar (24px) + name label (14px Inter). Maps display names to avatar assets.",
+  "description": "TMA user chips - avatar (24px) + name label (14px Inter). Maps display names to avatar assets.",
   "layout": {
     "gap": "8px",
     "avatarSize": 24,

@@ -1,4 +1,4 @@
-/* TMA — Primary Interactive Guide (Figma 30484:299252) */
+/* TMA - Primary Interactive Guide (Figma 30484:299252) */
 (function () {
   'use strict';
 

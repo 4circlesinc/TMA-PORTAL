@@ -5,7 +5,7 @@
   "documentationNodeId": "33159:7245",
   "instancesNodeId": "33159:7810",
   "name": "Button",
-  "description": "TMA Button — borderless, grey, outline, and filled variants across four sizes with icon layouts.",
+  "description": "TMA Button - borderless, grey, outline, and filled variants across four sizes with icon layouts.",
   "cssPath": "public/css/button.css",
   "jsPath": "public/js/button.js",
   "iconJsPath": "public/js/button-icons.js",

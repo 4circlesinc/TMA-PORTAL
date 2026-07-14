@@ -3,7 +3,7 @@
   "nodeId": "33302:2140",
   "instancesNodeId": "33159:3529",
   "name": "Frame",
-  "description": "TMA Frame — flexible content carrier combining icon, text, avatar, and nested IconText with configurable layout (vertical, flip, state).",
+  "description": "TMA Frame - flexible content carrier combining icon, text, avatar, and nested IconText with configurable layout (vertical, flip, state).",
   "cssPath": "public/css/frame.css",
   "docJsPath": "public/js/frame-doc.js",
   "docIconJsPath": "public/js/frame-doc-icons.js",

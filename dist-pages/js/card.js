@@ -1,4 +1,4 @@
-/* TMA — Card component */
+/* TMA - Card component */
 (function () {
   'use strict';
 

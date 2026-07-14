@@ -1,5 +1,5 @@
 /*
- * TMA — Portal Projects (All / Closed / Deleted)
+ * TMA - Portal Projects (All / Closed / Deleted)
  * Create projects (blank or from template), close, reopen, delete,
  * restore; deleted projects are retained for 45 days.
  * Registers view: 'projects-hub'.
@@ -91,7 +91,7 @@
       (p.template ? ' <span class="tma-portal-chip">' + ui().esc(p.template) + '</span>' : '') +
       (p.description ? '<div class="tma-portal-table__muted">' + ui().esc(p.description) + '</div>' : '') + '</td>' +
       '<td class="tma-portal-table__muted">' + ui().esc(metaLabel) + '</td>' +
-      '<td class="tma-portal-table__muted">' + ui().esc(p.due || '—') + '</td>' +
+      '<td class="tma-portal-table__muted">' + ui().esc(p.due || '-') + '</td>' +
       '<td><div class="tma-portal-row-actions">' + actionsHtml + '</div></td>' +
       '</tr>';
   }
@@ -160,7 +160,7 @@
       return projectRow(p,
         iconBtn('ArrowsCounterClockwise', 'Reopen project', 'data-proj-reopen="' + p.id + '"') +
         iconBtn('Trash', 'Delete project', 'data-proj-delete="' + p.id + '"'),
-        'Closed ' + (p.closedOn || '—'));
+        'Closed ' + (p.closedOn || '-'));
     }).join('');
     return head + ui().table(['Project', 'Closed', 'Due date', { html: '<span class="tma-portal-row-actions">Actions</span>' }], rows);
   }
@@ -183,7 +183,7 @@
       return projectRow(p,
         iconBtn('ArrowsCounterClockwise', 'Restore project', 'data-proj-restore="' + p.id + '"') +
         iconBtn('Trash', 'Delete permanently', 'data-proj-purge="' + p.id + '"'),
-        'Deleted ' + (p.deletedOn || '—'));
+        'Deleted ' + (p.deletedOn || '-'));
     }).join('');
     return head + ui().table(['Project', 'Deleted', 'Due date', { html: '<span class="tma-portal-row-actions">Actions</span>' }], rows);
   }

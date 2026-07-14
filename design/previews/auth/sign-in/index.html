@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/" id="tma-site-base">
+  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In - TM ANTOINE Advisory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/auth.css">
+  <link rel="stylesheet" href="/css/auth-flow.css">
+  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+  </style>
+</head>
+<body>
+  <main class="tma-auth tma-auth--split" data-auth-flow
+        data-states="default email loading error captcha locked unverified"
+        data-state="default"
+        data-demo-next="/design/auth/two-factor">
+    <button class="tma-auth__theme" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">
+      <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
+    </button>
+
+    <section class="tma-auth__stage" aria-hidden="true">
+      <img class="tma-auth__stage-art" src="/images/illustrations/Illustration28.svg" alt="" width="100" height="75">
+    </section>
+
+    <section class="tma-auth__panel" aria-labelledby="sign-in-title">
+      <header class="tma-auth__brand">
+        <a href="/" class="tma-auth__brand-link">
+          <img src="/images/brand/tma/tma-logo-horizontal.png" alt="TM ANTOINE Partners">
+        </a>
+      </header>
+
+      <div class="tma-auth__panel-body">
+        <div class="tma-auth__intro">
+          <h1 class="tma-auth__title" id="sign-in-title">Sign in</h1>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--error" data-show="error" role="alert">
+          <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span>That email and password combination didn't work.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="locked" role="alert">
+          <img src="/images/icons/phosphor/ClockCountdown.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Too many attempts.</strong> Try again in about 15 minutes.</span>
+        </div>
+
+        <div class="tma-auth__alert tma-auth__alert--warning" data-show="unverified" role="alert">
+          <img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16" aria-hidden="true">
+          <span><strong>Please confirm your email first.</strong> Check your inbox.</span>
+        </div>
+        <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-show="unverified" data-resend>Resend confirmation email</button>
+
+        <div class="tma-auth__social" data-show="default">
+          <a class="tma-auth__social-btn" href="/design/auth/two-factor">
+            <img src="/images/icons/brands/Google16.svg" alt="" width="16" height="16" aria-hidden="true">
+            <span>Sign in with Google</span>
+          </a>
+          <a class="tma-auth__social-btn" href="/design/auth/two-factor">
+            <img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16" aria-hidden="true">
+            <span>Sign in with Microsoft</span>
+          </a>
+          <button type="button" class="tma-auth__social-btn" data-set-state="email">
+            <img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16" aria-hidden="true">
+            <span>Sign in with Email</span>
+          </button>
+        </div>
+
+        <form class="tma-auth__form" id="sign-in-form" action="#" method="post" novalidate
+              data-show="email loading error captcha locked unverified"
+              data-demo data-loading-state="loading" data-demo-href="/design/auth/two-factor">
+          <button type="button" class="tma-auth__back" data-set-state="default">
+            <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"/></svg>
+            <span>All sign in options</span>
+          </button>
+          <label class="tma-auth__field">
+            <input class="tma-auth__input" type="email" name="email" placeholder="Email" autocomplete="email" aria-label="Email" data-autofocus="email">
+          </label>
+          <label class="tma-auth__field tma-auth__field--password">
+            <input class="tma-auth__input" type="password" name="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+            <button type="button" class="tma-auth__toggle-pwd" data-toggle-password aria-label="Show password" aria-pressed="false">
+              <img src="/images/icons/phosphor/EyeSlash.svg" alt="" width="16" height="16" aria-hidden="true">
+            </button>
+          </label>
+
+          <div class="tma-auth__row-split">
+            <label class="tma-auth__check">
+              <input type="checkbox" name="remember" value="1">
+              <span>
+                Stay signed in
+              </span>
+            </label>
+            <a class="tma-auth__forgot" href="/design/auth/forgot-password">Forgot password?</a>
+          </div>
+
+          <div class="tma-auth__captcha" data-captcha data-checked="false" data-show="captcha">
+            <button type="button" class="tma-auth__captcha-box" role="checkbox" aria-checked="false" aria-label="Confirm you are human">
+              <img src="/images/icons/phosphor/Check.svg" alt="" width="14" height="14" aria-hidden="true">
+            </button>
+            <span class="tma-auth__captcha-copy">Confirm you're human to continue.</span>
+            <span class="tma-auth__captcha-brand" aria-hidden="true">
+              <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16">
+              <span>verify</span>
+            </span>
+          </div>
+
+          <button type="submit" class="tma-auth__submit" data-show="email error captcha unverified">Sign in</button>
+          <button type="button" class="tma-auth__submit tma-auth__submit--loading" data-show="loading" disabled>
+            <span class="tma-auth__spinner" aria-hidden="true"></span>
+            <span>Signing in…</span>
+          </button>
+          <button type="button" class="tma-auth__submit" data-show="locked" disabled>Sign in</button>
+        </form>
+
+        <p class="tma-auth__alt-link">New to the portal? <a href="/design/auth/sign-up">Create an account</a></p>
+      </div>
+
+      <p class="tma-auth__copyright">&copy; 2026 TM ANTOINE Advisory</p>
+    </section>
+  </main>
+
+  <script src="/js/prototype-forms.js"></script>
+  <script src="/js/auth-flow.js"></script>
+</body>
+</html>

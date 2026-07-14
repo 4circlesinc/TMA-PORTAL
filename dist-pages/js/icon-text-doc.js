@@ -1,4 +1,4 @@
-/* TMA — IconText documentation (Figma 33302:488) */
+/* TMA - IconText documentation (Figma 33302:488) */
 (function () {
   'use strict';
 
