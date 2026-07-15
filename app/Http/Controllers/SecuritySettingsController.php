@@ -10,28 +10,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
 
 class SecuritySettingsController extends Controller
 {
-    public function show(Request $request): View
-    {
-        $user = $request->user();
-
-        // Recovery codes are displayed only immediately after being (re)generated.
-        $showRecoveryCodes = in_array(session('status'), [
-            'two-factor-authentication-confirmed',
-            'recovery-codes-generated',
-        ], true);
-
-        return view('security.settings', [
-            'user' => $user,
-            'sessions' => $this->sessionsFor($user, $request->session()->getId()),
-            'events' => AuthEvent::where('user_id', $user->id)->orderByDesc('created_at')->limit(20)->get(),
-            'showRecoveryCodes' => $showRecoveryCodes,
-        ]);
-    }
-
     /**
      * JSON feed for the Account settings > Security pages (portal-admin.js).
      */
@@ -64,8 +45,24 @@ class SecuritySettingsController extends Controller
             'google' => ['connected' => (bool) $google, 'email' => $google?->email],
             'microsoft' => ['connected' => (bool) $microsoft, 'email' => $microsoft?->email],
             'hasRealPassword' => ! $user->password_auto,
+            'syncAvailable' => [
+                'google' => (bool) config('services.google.sync'),
+                'microsoft' => (bool) config('services.microsoft.sync'),
+            ],
+            'trustedDevices' => $user->trustedDevices()
+                ->where('expires_at', '>', now())
+                ->orderByDesc('last_used_at')
+                ->get()
+                ->map(fn ($device) => [
+                    'id' => $device->id,
+                    'device' => $device->device,
+                    'ip' => $device->ip,
+                    'lastUsed' => $device->last_used_at?->diffForHumans(),
+                    'expires' => $device->expires_at->diffForHumans(),
+                ]),
             'twoFactor' => $user->two_factor_confirmed_at ? 'on' : ($user->two_factor_secret ? 'pending' : 'off'),
             'twoFactorSince' => $user->two_factor_confirmed_at?->format('j M Y'),
+            'twoFactorApp' => \App\Support\AuthenticatorApp::meta($user->two_factor_app),
             'recoveryCodesCount' => $user->two_factor_confirmed_at ? count($user->recoveryCodes()) : 0,
             'failedSignins7d' => $failed,
             'sessions' => $this->sessionsFor($user, $request->session()->getId())->values(),
@@ -73,7 +70,32 @@ class SecuritySettingsController extends Controller
         ]);
     }
 
-    public function logoutOtherDevices(Request $request): JsonResponse|RedirectResponse
+    public function revokeTrustedDevice(Request $request, int $device): JsonResponse
+    {
+        $request->user()->trustedDevices()->where('id', $device)->delete();
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    public function revokeAllTrustedDevices(Request $request): JsonResponse
+    {
+        $request->user()->trustedDevices()->delete();
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    public function setTwoFactorApp(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'app' => ['required', \Illuminate\Validation\Rule::in(\App\Support\AuthenticatorApp::KEYS)],
+        ]);
+
+        $request->user()->forceFill(['two_factor_app' => $data['app']])->save();
+
+        return response()->json(['status' => 'ok']);
+    }
+
+        public function logoutOtherDevices(Request $request): JsonResponse|RedirectResponse
     {
         $request->validate([
             'password' => ['required', 'current_password'],

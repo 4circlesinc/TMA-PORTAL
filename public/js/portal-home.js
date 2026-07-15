@@ -345,8 +345,18 @@
       });
     });
 
-    var addPic = el.querySelector('[data-home-add-picture]');
-    if (addPic) addPic.addEventListener('click', function () { ui().toast('Profile pictures can be changed in Settings'); });
+    /* the picker is owned by current-user.js (delegated click) */
+    if (window.TMACurrentUser) {
+      var meNow = window.TMACurrentUser.get();
+      if (meNow) {
+        var hello = el.querySelector('.tma-portal-hello__title');
+        if (hello) hello.textContent = 'Hello ' + meNow.firstName;
+        var heroAvatar = el.querySelector('.tma-portal-hello__avatar');
+        if (heroAvatar) heroAvatar.src = window.TMACurrentUser.avatarSrc(meNow.avatar, meNow.name);
+        var picLink = el.querySelector('[data-home-add-picture]');
+        if (picLink) picLink.textContent = meNow.hasAvatar ? 'Change profile picture' : 'Add profile picture';
+      }
+    }
 
     var edit = el.querySelector('[data-home-edit]');
     if (edit) edit.addEventListener('click', function () { editDashboardModal(rerender); });

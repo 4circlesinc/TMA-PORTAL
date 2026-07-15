@@ -480,3 +480,7 @@
 .tma-function-bar__action[data-filter-trigger][aria-pressed="true"] {
   background: rgba(0, 0, 0, 0.04);
 }
+
+/* filter field: chevron points down while its submenu is open */
+.tma-filter-popover__item-chevron { transition: transform 0.15s ease; }
+.tma-filter-popover__item.is-open .tma-filter-popover__item-chevron { transform: rotate(90deg); }

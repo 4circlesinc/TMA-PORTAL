@@ -32,6 +32,11 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL').'/auth/social/google/callback'),
+        // Email/calendar sync. Off until the Gmail + Calendar APIs are enabled
+        // in Google Cloud and the app is verified for these restricted scopes.
+        'sync' => (bool) env('GOOGLE_SYNC_ENABLED', false),
+        'scope_email' => 'https://www.googleapis.com/auth/gmail.readonly',
+        'scope_calendar' => 'https://www.googleapis.com/auth/calendar.readonly',
     ],
 
     'microsoft' => [
@@ -39,7 +44,18 @@ return [
         'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
         'redirect' => env('MICROSOFT_REDIRECT_URI', env('APP_URL').'/auth/social/microsoft/callback'),
         'tenant' => env('MICROSOFT_TENANT', 'common'),
-        'include_avatar_size' => false,
+        // We fetch the profile photo ourselves (SocialAuthController) via the
+        // unsized Graph /me/photo/$value endpoint, which works for both work and
+        // personal accounts — the driver's sized /photos/{size} endpoint 404s on
+        // many accounts. So the driver's own avatar fetch stays off.
+        'include_avatar' => false,
+        // Email/calendar sync via Microsoft Graph. Off until Mail.Read +
+        // Calendars.Read delegated permissions are added to the Entra app.
+        'sync' => (bool) env('MICROSOFT_SYNC_ENABLED', false),
+        'scope_email' => 'Mail.Read',
+        'scope_calendar' => 'Calendars.Read',
+        'scope_onedrive' => 'Files.Read',
+        'scope_sharepoint' => 'Sites.Read.All',
     ],
 
     'slack' => [

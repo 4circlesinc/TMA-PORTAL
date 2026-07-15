@@ -2301,12 +2301,10 @@ html.tma-dash--signatures-wizard body {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-8);
-  background: var(--color-bg-card);
   flex-shrink: 0;
 }
 
-.tma-portal-connector__logo img { width: 22px; height: 22px; }
+.tma-portal-connector__logo img { width: 32px; height: 32px; object-fit: contain; }
 
 .tma-portal-connector__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 
@@ -2629,3 +2627,270 @@ html.tma-dash--signatures-wizard body {
   background: var(--dash-panel-bg, var(--color-bg-card));
   color: inherit;
 }
+
+
+/* ═══ Account settings: the Settings page's layout ═══
+ * Flush left rail on the card surface, white content pane, flat sections with
+ * hairline dividers - the same visual language as /settings, not floating
+ * grey boxes.
+ */
+/* the Account settings view fills the panel: cancel the main area's padding
+   so the left rail sits flush against the edges, like /settings does */
+.tma-dash__view[data-view="admin"]:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  margin: calc(var(--space-28) * -1) calc(var(--space-28) * -1) calc(var(--space-12) * -1);
+}
+
+/* the page area itself stops scrolling so the rail can run full height */
+.tma-dash__main:has(.tma-dash__view[data-view="admin"]:not([hidden])) {
+  overflow: hidden;
+}
+
+/* the height chain: view -> [data-portal-mount] -> page -> admin */
+.tma-dash__view[data-view="admin"] > [data-portal-mount] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tma-dash__view[data-view="admin"] .tma-portal-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.tma-portal-admin {
+  gap: 0;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 0;
+  background: var(--color-white);
+  overflow: hidden;
+}
+
+/* ── left rail ── */
+.tma-portal-admin__nav {
+  width: 260px;
+  gap: var(--space-4);
+  padding: var(--space-16) var(--space-8);
+  border-radius: 0;
+  border-right: 0.5px solid var(--color-border-soft);
+  background: var(--color-bg-card);
+  position: static;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tma-portal-admin__nav-item {
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-12);
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+.tma-portal-admin__nav-item:hover,
+.tma-portal-admin__nav-item.is-active {
+  background: var(--color-hover);
+  font-weight: 400;
+}
+
+.tma-portal-admin__subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--space-12);
+}
+
+/* ── content pane ── */
+.tma-portal-admin__content {
+  padding: var(--space-20) var(--space-24);
+  gap: var(--space-8);
+  overflow-y: auto;
+  background: var(--color-white);
+}
+
+.tma-portal-admin__page-title {
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: 600;
+  margin-bottom: var(--space-8);
+}
+
+/* sections read as grouped rows, not cards */
+.tma-portal-admin__content .tma-portal-section {
+  gap: var(--space-4);
+  padding: var(--space-16) 0;
+  border-top: 0.5px solid var(--color-border-soft);
+}
+
+.tma-portal-admin__content .tma-portal-section:first-of-type {
+  border-top: 0;
+  padding-top: var(--space-4);
+}
+
+.tma-portal-admin__content .tma-portal-section__title {
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  padding-bottom: var(--space-4);
+}
+
+.tma-portal-admin__content .tma-portal-section__card {
+  padding: 0;
+  gap: var(--space-12);
+  border-radius: 0;
+  background: transparent;
+}
+
+/* the security pages' own cards flatten to match */
+.tma-portal-admin__content .tma-security { gap: 0; }
+
+.tma-portal-admin__content .tma-security__card {
+  padding: var(--space-16) 0;
+  border: 0;
+  border-top: 0.5px solid var(--color-border-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.tma-portal-admin__content .tma-security__card:first-child {
+  border-top: 0;
+}
+
+@media (max-width: 900px) {
+  .tma-portal-admin { flex-direction: column; }
+  .tma-portal-admin__nav {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 0.5px solid var(--color-border-soft);
+  }
+}
+
+/* nav icons, matching the Settings rail */
+.tma-portal-admin__nav-icon {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  opacity: 0.85;
+}
+
+.tma-dash[data-theme="dark"] .tma-portal-admin__nav-icon {
+  filter: invert(1) brightness(1.6);
+}
+
+/* An embedded settings panel drops its own chrome: the Account settings rail
+   is the only menu, so the panel's internal nav must never render. */
+.tma-portal-admin__content [data-settings-embed] {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings,
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings-layout,
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: transparent;
+}
+
+/* the second menu - gone */
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings-nav,
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings-sidebar,
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings-mobile-head,
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings-back {
+  display: none !important;
+}
+
+.tma-portal-admin__content [data-settings-embed] .tma-dash__settings-content {
+  display: flex !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+
+/* the rail's first row is the signed-in user */
+.tma-portal-admin__nav-user {
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  margin-bottom: var(--space-4);
+}
+
+.tma-portal-admin__nav-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tma-portal-admin__nav-user-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: left;
+}
+
+.tma-portal-admin__nav-user-name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-admin__nav-user-email {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the profile entry is the signed-in identity: picture, name, email */
+.tma-portal-admin__nav-user {
+  gap: var(--space-8);
+}
+
+.tma-portal-admin__nav-user-avatar {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tma-portal-admin__nav-user-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-portal-admin__nav-user-name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-admin__nav-user-email {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-chip--ok { background: color-mix(in srgb, var(--color-green) 18%, transparent); color: var(--color-text-primary); }

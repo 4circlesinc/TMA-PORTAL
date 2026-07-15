@@ -100,7 +100,7 @@ return [
         'login' => '/',
         'logout' => '/auth/login',
         'password-reset' => '/auth/login?reset=1',
-        'email-verification' => '/auth/getting-started',
+        'email-verification' => '/auth/profile-setup',
     ],
 
     /*
@@ -126,6 +126,26 @@ return [
     | specify a custom rate limiter to call then you may specify it here.
     |
     */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Login Pipeline
+    |--------------------------------------------------------------------------
+    |
+    | Fortify's default pipeline, with our two-factor step swapped in: it lets
+    | a device the user already trusted skip the challenge. EnsureLoginIsNot-
+    | Throttled is omitted because the 'login' rate limiter below covers it.
+    |
+    */
+
+    'pipelines' => [
+        'login' => [
+            \Laravel\Fortify\Actions\CanonicalizeUsername::class,
+            \App\Actions\Fortify\RedirectIfTwoFactorAuthenticatable::class,
+            \Laravel\Fortify\Actions\AttemptToAuthenticate::class,
+            \Laravel\Fortify\Actions\PrepareAuthenticatedSession::class,
+        ],
+    ],
 
     'limiters' => [
         'login' => 'login',

@@ -22,6 +22,7 @@ class EnforceTwoFactor
             $user
             && $user->two_factor_confirmed_at === null
             && ! $request->routeIs('security-settings*')
+            && ! $request->is('settings', 'account-settings')
             && SecurityPolicies::get('sign-in')['requireMfa']
         ) {
             return redirect()->route('security-settings')->with('status', 'mfa-required');

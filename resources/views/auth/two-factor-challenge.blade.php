@@ -11,12 +11,17 @@
     <div class="tma-auth__body">
       <section class="tma-auth__card" aria-labelledby="tfa-title">
         <div class="tma-auth__icon" aria-hidden="true">
-          <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="80" height="80">
+          <img src="{{ $authApp['logo'] }}" alt="" width="80" height="80"
+               @if ($authApp['key'] !== 'other') style="object-fit: contain; border-radius: 18px;" @endif>
         </div>
 
         <div class="tma-auth__intro" data-tfa-intro>
           <h1 class="tma-auth__title" id="tfa-title">Two-step verification</h1>
-          <p class="tma-auth__subtitle">Enter the 6-digit code from your authenticator app.</p>
+          @if ($authApp['key'] === 'other')
+            <p class="tma-auth__subtitle">Enter the 6-digit code from your authenticator app.</p>
+          @else
+            <p class="tma-auth__subtitle">Open <strong>{{ $authApp['name'] }}</strong> and enter the 6-digit code for TM ANTOINE Advisory.</p>
+          @endif
         </div>
 
         <div class="tma-auth__intro" data-recovery-intro hidden>
@@ -42,6 +47,13 @@
               @endfor
             </div>
           </div>
+
+          <label class="tma-auth__check">
+            <input type="checkbox" name="trust_device" value="1">
+            <span>
+              Trust this device for 30 days
+            </span>
+          </label>
           <button type="submit" class="tma-auth__submit">Verify</button>
         </form>
 
@@ -53,6 +65,13 @@
               <input class="tma-auth__input" type="text" name="recovery_code" placeholder="Recovery code (e.g. 4XKT-9RMB)" autocomplete="off" spellcheck="false" aria-label="Recovery code">
             </label>
           </div>
+
+          <label class="tma-auth__check">
+            <input type="checkbox" name="trust_device" value="1">
+            <span>
+              Trust this device for 30 days
+            </span>
+          </label>
           <button type="submit" class="tma-auth__submit">Verify recovery code</button>
         </form>
 

@@ -37,6 +37,8 @@
   /* ── real user directory (database-backed, admin only) ── */
   var ACCOUNT_TYPES = ['Client', 'Employee', 'Administrator'];
   var AVATARS = ['AvatarMale01', 'AvatarFemale01', 'AvatarMale03', 'AvatarFemale04', 'AvatarFemale06'];
+  /* the design system's own avatar set - filled from the server */
+  var SYSTEM_AVATARS = [];
 
   function usersApi(method, url, body) {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
@@ -53,6 +55,11 @@
     });
   }
 
+  function refreshPendingBadge() {
+    var d = document.querySelector('.tma-dash');
+    if (d && d._syncPendingUsersBadge) d._syncPendingUsersBadge();
+  }
+
   function usersToast(message, ok) {
     if (window.TMAToast && window.TMAToast.showFloatingToast) {
       window.TMAToast.showFloatingToast(message, { state: ok ? 'positive' : 'negative' });
@@ -63,7 +70,7 @@
     return {
       serial: '#U' + String(u.id).padStart(4, '0'),
       user: u.name,
-      avatar: AVATARS[u.id % AVATARS.length],
+      avatar: u.avatar || initialsAvatar(u.name, u.id),
       email: u.email,
       address: u.accountType || 'Not assigned',
       date: u.joined,
@@ -71,9 +78,72 @@
       _status: u.status,
       _id: u.id,
       _self: u.self,
+      firstName: u.firstName || '',
+      middleName: u.middleName || '',
+      lastName: u.lastName || '',
+      phone: u.phone || '',
+      jobTitle: u.jobTitle || '',
+      gender: u.gender || '',
+      bio: u.bio || '',
+      linkedin: u.linkedin || '',
       _twoFactor: u.twoFactor,
       _lastActive: u.lastActive,
+      note: u.note || '',
     };
+  }
+
+  var ACT_LABELS = {
+    registered: 'Account created', email_verified: 'Email verified', login: 'Signed in',
+    logout: 'Signed out', login_failed: 'Failed sign-in attempt', password_reset: 'Password reset',
+    lockout: 'Sign-in locked', social_connected: 'Sign-in method connected',
+    social_disconnected: 'Sign-in method disconnected', user_invited: 'Invited to the portal',
+    account_approved: 'Account approved', account_suspended: 'Account suspended',
+    account_reactivated: 'Account reactivated', account_updated: 'Profile updated by admin',
+    password_reset_link_sent: 'Password reset link sent', password_generated: 'Temporary password generated',
+    account_deleted: 'Account deleted',
+  };
+
+  function renderActivityPane(row, el, type) {
+    el.innerHTML = '<p class="tma-user-info-panel__field-label">Loading…</p>';
+    usersApi('GET', '/admin/users/' + row._id + '/activity?type=' + type).then(function (res) {
+      return res.ok ? res.json() : null;
+    }).then(function (j) {
+      if (!j) { el.innerHTML = '<p class="tma-user-info-panel__field-label">Couldn\'t load activity.</p>'; return; }
+      var last = (type === 'login' && j.lastLogin)
+        ? '<div class="tma-user-info-panel__field tma-user-info-panel__field--muted">' +
+          '<p class="tma-user-info-panel__field-label">Last signed in</p>' +
+          '<div class="tma-user-info-panel__field-row"><span class="tma-user-info-panel__field-value">' + escapeHtml(j.lastLogin) + '</span></div></div>'
+        : '';
+      var empty = type === 'login'
+        ? 'No sign-ins yet.'
+        : 'No application activity yet - this fills in as they use the portal.';
+      var rows = j.events.length ? j.events.map(function (ev) {
+        var at = ev.atIso ? new Date(ev.atIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ev.when;
+        return '<div class="tma-rup__event"><strong>' + escapeHtml(ACT_LABELS[ev.event] || ev.event) + '</strong>' +
+          '<span>' + escapeHtml(at) + (ev.ip ? ' · ' + escapeHtml(ev.ip) : '') + (ev.device ? ' · ' + escapeHtml(ev.device) : '') + '</span></div>';
+      }).join('') : '<p class="tma-user-info-panel__field-label">' + empty + '</p>';
+      el.innerHTML = last + '<div>' + rows + '</div>';
+    }).catch(function () {
+      el.innerHTML = '<p class="tma-user-info-panel__field-label">Couldn\'t load activity.</p>';
+    });
+  }
+
+  function initialsAvatar(name, id) {
+    var initials = String(name || '?').trim().split(/\s+/).slice(0, 2)
+      .map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
+    var colors = ['#136da0', '#03a5e9', '#0f9d8c', '#3f9142', '#c77d18', '#b5497e', '#3b6fb8'];
+    var bg = colors[Math.abs(id || 0) % colors.length];
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<rect width="40" height="40" rx="20" fill="' + bg + '"/>' +
+      '<text x="20" y="21" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600" ' +
+      'fill="#ffffff" text-anchor="middle" dominant-baseline="central">' + initials + '</text></svg>';
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  }
+
+  function avatarUrl(name) {
+    // Real photos: an absolute URL, an inline data-URI (initials), or an
+    // uploaded /storage/… path. Anything else is a legacy system-avatar name.
+    return /^(https?:|data:|\/)/.test(name || '') ? name : 'images/avatars/' + name + '.png';
   }
 
   function statusBadge(row) {
@@ -338,6 +408,11 @@ if (state.filters.user) {
         var diff = normalize(a.email).localeCompare(normalize(b.email));
         return state.sort.direction === 'asc' ? diff : -diff;
       });
+    } else if (state.sort.column === 'address') {
+      rows.sort(function (a, b) {
+        var diff = normalize(a.address).localeCompare(normalize(b.address));
+        return state.sort.direction === 'asc' ? diff : -diff;
+      });
     }
 
     return rows;
@@ -348,7 +423,7 @@ if (state.filters.user) {
     var selected = checked ? ' tma-dash__ctr--selected' : '';
     return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-users-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + escapeHtml(row.user) + '"></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--user"><img src="images/avatars/' + escapeHtml(row.avatar) + '.png" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user"><img src="' + escapeHtml(avatarUrl(row.avatar)) + '" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--email"><span class="tma-dash__cc-truncate">' + escapeHtml(row.email) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--overview-date">' + escapeHtml(row.date) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--actions">' +
@@ -363,7 +438,7 @@ if (state.filters.user) {
     return '<div class="tma-dash__ctr tma-dash__ctr--body' + selected + active + '" data-row-index="' + index + '" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-users-check' + (checked ? ' checked' : '') + '></div>' +
       '<div class="tma-dash__cc tma-dash__cc--id">' + escapeHtml(row.serial) + '</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--user"><img src="images/avatars/' + escapeHtml(row.avatar) + '.png" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user"><img src="' + escapeHtml(avatarUrl(row.avatar)) + '" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--email"><span class="tma-dash__cc-truncate">' + escapeHtml(row.email) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--address">' +
         '<span class="tma-dash__cc-truncate">' + escapeHtml(row.address) + '</span>' +
@@ -376,7 +451,7 @@ if (state.filters.user) {
     var selected = checked ? ' tma-dash__uavatar-tile--selected' : '';
     var active = infoOpen ? ' tma-dash__uavatar-tile--info-open' : '';
     var tipId = 'users-avatar-tip-' + index;
-    var avatarSrc = 'images/avatars/' + escapeHtml(row.avatar) + '.png';
+    var avatarSrc = escapeHtml(avatarUrl(row.avatar));
     return '<button type="button" class="tma-dash__uavatar-tile' + selected + active + '" data-row-index="' + index + '" aria-label="' + escapeHtml(row.user) + '" aria-pressed="' + (checked ? 'true' : 'false') + '" aria-describedby="' + tipId + '" data-tooltip-trigger data-tooltip-type="avatar" data-tooltip-position="top" data-tooltip-initial-delay="1500" data-tooltip-rehover-delay="500" data-tooltip-rehover-window="30000">' +
       '<img src="' + avatarSrc + '" alt="">' +
       '<div id="' + tipId + '" class="tma-tooltip tma-tooltip--profile tma-tooltip--top tma-tooltip-trigger__tip" role="tooltip" aria-hidden="true" style="--tooltip-font-size:12px;--tooltip-line-height:16px;--tooltip-padding-x:8px;--tooltip-padding-y:4px;--tooltip-radius:12px;">' +
@@ -436,7 +511,6 @@ if (state.filters.user) {
             '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
             '<span class="tma-dash__toolbar-selection" data-users-selection-count aria-live="polite">' + selectionLabel + '</span>' +
             renderBulkToolBtn('delete', ICONS.Trash, 'Delete selected users') +
-            renderBulkToolBtn('duplicate', ICONS.Copy, 'Duplicate selected users') +
           '</div>' +
         '</div>' +
         renderSearchBar(state) +
@@ -615,13 +689,16 @@ if (state.filters.user) {
         if (!res.ok) return; // not an admin (or design preview): demo rows stay
         return res.json().then(function (j) {
           if (j.accountTypes) ACCOUNT_TYPES = j.accountTypes;
+        if (j.avatarChoices) SYSTEM_AVATARS = j.avatarChoices;
           state.rows = (j.users || []).map(realRow);
           state.live = true;
           state.selected = {};
           state.page = 1;
           render();
         });
-      }).catch(function () {});
+      }).catch(function (err) {
+        if (window.console && console.warn) console.warn('Users: failed to load real accounts —', err);
+      });
     }
     state.reloadReal = loadRealUsers;
     loadRealUsers();
@@ -634,7 +711,7 @@ if (state.filters.user) {
     function statusAction(url, body) {
       usersApi('POST', url, body).then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (j) {
-          if (res.ok) { usersToast('Done', true); loadRealUsers(); }
+          if (res.ok) { usersToast('Done', true); loadRealUsers(); refreshPendingBadge(); }
           else usersToast((j && j.message) || 'That action failed.', false);
         });
       }).catch(function () { usersToast('That action failed.', false); });
@@ -656,9 +733,9 @@ if (state.filters.user) {
         items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="reactivate">Reactivate account</button>';
       } else if (!row._self) {
         items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="suspend">Suspend account</button>';
-      } else {
-        items = '<button type="button" class="tma-dash__menu-item" role="menuitem" disabled>This is your account</button>';
       }
+      items += '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="send-reset">Email password reset link</button>' +
+        '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="generate-password">Generate temporary password</button>';
 
       var menu = document.createElement('div');
       menu.className = 'tma-dash__menu';
@@ -680,6 +757,19 @@ if (state.filters.user) {
         if (kind === 'approve') statusAction('/admin/users/' + row._id + '/approve', { account_type: act.getAttribute('data-ustatus-type') });
         if (kind === 'suspend') statusAction('/admin/users/' + row._id + '/suspend');
         if (kind === 'reactivate') statusAction('/admin/users/' + row._id + '/reactivate');
+        if (kind === 'send-reset') {
+          usersApi('POST', '/admin/users/' + row._id + '/send-reset').then(function (res) {
+            usersToast(res.ok ? 'Reset link sent to ' + row.email : 'Could not send the link.', res.ok);
+          });
+        }
+        if (kind === 'generate-password') {
+          usersApi('POST', '/admin/users/' + row._id + '/generate-password').then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (j) {
+              if (!res.ok || !j.password) { usersToast('Could not generate a password.', false); return; }
+              window.prompt('Temporary password for ' + row.user + ' - shown once, share it securely:', j.password);
+            });
+          });
+        }
       });
       window.setTimeout(function () {
         document.addEventListener('click', function once(ev3) {
@@ -688,7 +778,25 @@ if (state.filters.user) {
       }, 0);
     }
 
+    function toggleSort(col) {
+      if (state.sort.column === col) {
+        state.sort.direction = state.sort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sort.column = col;
+        state.sort.direction = 'asc';
+      }
+      state.page = 1;
+      render();
+    }
+
+    container.addEventListener('keydown', function (e) {
+      var head = e.target.closest('[data-sort-col]');
+      if (head && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleSort(head.getAttribute('data-sort-col')); }
+    });
+
     container.addEventListener('click', function (e) {
+      var sortHeadEl = e.target.closest('[data-sort-col]');
+      if (sortHeadEl) { toggleSort(sortHeadEl.getAttribute('data-sort-col')); return; }
       var statusBtn = e.target.closest('[data-users-status]');
       if (statusBtn) {
         e.preventDefault();
@@ -714,161 +822,78 @@ if (state.filters.user) {
       openUserInfoPanel(parseInt(rowEl.getAttribute('data-row-index'), 10));
     });
 
-    var ACT_LABELS = {
-      registered: 'Account created', email_verified: 'Email verified', login: 'Signed in',
-      logout: 'Signed out', login_failed: 'Failed sign-in attempt', password_reset: 'Password reset',
-      lockout: 'Sign-in locked', social_connected: 'Sign-in method connected',
-      social_disconnected: 'Sign-in method disconnected', user_invited: 'Invited to the portal',
-      account_approved: 'Account approved', account_suspended: 'Account suspended',
-      account_reactivated: 'Account reactivated', account_updated: 'Profile updated by admin',
-      password_reset_link_sent: 'Password reset link sent', password_generated: 'Temporary password generated',
-    };
-
-    function closeRealPanel() {
-      var el = document.querySelector('[data-real-user-panel]');
-      if (el) {
-        var host = el.parentNode;
-        el.remove();
-        if (host && host.classList) host.classList.remove('tma-dash__view--split');
+    // Shared delete confirmation. run() must return the fetch promise.
+    function openDeleteConfirm(opts) {
+      var existing = document.querySelector('[data-users-delete]');
+      if (existing) existing.remove();
+      var wrap = document.createElement('div');
+      wrap.className = 'tma-dash__settings-popup';
+      wrap.setAttribute('data-users-delete', '');
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.setAttribute('aria-label', opts.title);
+      wrap.innerHTML =
+        '<div class="tma-dash__settings-popup-backdrop" aria-hidden="true"></div>' +
+        '<div class="tma-dash__settings-change-card tma-users-dialog">' +
+        '<h3 class="tma-dash__settings-change-title">' + escapeHtml(opts.title) + '</h3>' +
+        '<p class="tma-dash__settings-change-text">' + escapeHtml(opts.text) + '</p>' +
+        '<p class="tma-dash__settings-change-text" data-del-error hidden style="color: var(--color-red);"></p>' +
+        '<div class="tma-users-delete-actions">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-del-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn tma-users-delete-confirm" data-del-confirm>' + escapeHtml(opts.confirmLabel) + '</button>' +
+        '</div></div>';
+      document.body.appendChild(wrap);
+      function close() { wrap.remove(); }
+      function fail(msg) {
+        wrap.querySelector('[data-del-confirm]').disabled = false;
+        var e = wrap.querySelector('[data-del-error]');
+        e.textContent = msg;
+        e.hidden = false;
       }
+      wrap.querySelector('[data-del-cancel]').addEventListener('click', close);
+      wrap.querySelector('.tma-dash__settings-popup-backdrop').addEventListener('click', close);
+      document.addEventListener('keydown', function esc(ev) {
+        if (ev.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+      });
+      wrap.querySelector('[data-del-confirm]').addEventListener('click', function () {
+        wrap.querySelector('[data-del-confirm]').disabled = true;
+        opts.run().then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            if (!res.ok) { fail((j && j.message) || 'Could not delete.'); return; }
+            close();
+            usersToast(opts.success || 'Deleted', true);
+            state.selected = {};
+            state.infoPanelIndex = null;
+            if (window.TMAUserInfoPanel && window.TMAUserInfoPanel.isOpen()) window.TMAUserInfoPanel.close();
+            loadRealUsers();
+            refreshPendingBadge();
+          });
+        }).catch(function () { fail('Could not delete.'); });
+      });
+      wrap.querySelector('[data-del-cancel]').focus();
     }
 
-    function openRealUserPanel(row) {
-      closeRealPanel();
-      var statusLabel = row._status === 'pending' ? 'Pending' : (row._status === 'suspended' ? 'Suspended' : 'Active');
-      var host = container.closest('.tma-dash__view') || container.parentNode;
-      host.classList.add('tma-dash__view--split');
-      var wrap = document.createElement('aside');
-      wrap.className = 'tma-rup';
-      wrap.setAttribute('data-real-user-panel', '');
-      wrap.setAttribute('aria-label', 'User details');
-      wrap.innerHTML =
-          '<div class="tma-rup__head">' +
-            '<div>' +
-              '<h2 class="tma-user-info-panel__heading-title">' + escapeHtml(row.user) + '</h2>' +
-              '<p class="tma-user-info-panel__heading-id">' + escapeHtml(row.serial) + ' <span class="tma-dash__ustatus tma-dash__ustatus--' + row._status + '" style="cursor: default;">' + statusLabel + '</span></p>' +
-            '</div>' +
-            '<button type="button" class="tma-user-info-panel__icon-btn" data-rup-close aria-label="Close"><img src="images/icons/phosphor/X.svg" alt="" width="16" height="16"></button>' +
-          '</div>' +
-          '<div class="tma-rup__tabs" role="tablist">' +
-            '<button type="button" class="tma-dash__tab tma-dash__tab--active" data-rup-tab="details" role="tab" aria-selected="true">Details</button>' +
-            '<button type="button" class="tma-dash__tab" data-rup-tab="activity" role="tab" aria-selected="false">Activity</button>' +
-          '</div>' +
-          '<div class="tma-rup__body" data-rup-pane="details">' +
-            '<label class="tma-user-info-panel__field tma-rup__field"><span class="tma-user-info-panel__field-label">Name</span>' +
-              '<input class="tma-user-info-panel__field-input" data-rup-name value="' + escapeHtml(row.user) + '" aria-label="Name"></label>' +
-            '<div class="tma-user-info-panel__field tma-rup__field tma-user-info-panel__field--muted"><span class="tma-user-info-panel__field-label">Email</span>' +
-              '<span class="tma-user-info-panel__field-value">' + escapeHtml(row.email) + '</span></div>' +
-            '<label class="tma-user-info-panel__field tma-rup__field"><span class="tma-user-info-panel__field-label">Account type</span>' +
-              '<select class="tma-user-info-panel__field-input" data-rup-type aria-label="Account type">' +
-              ACCOUNT_TYPES.map(function (tp) { return '<option value="' + tp + '"' + (row.address === tp ? ' selected' : '') + '>' + tp + '</option>'; }).join('') +
-              '</select></label>' +
-            '<div class="tma-rup__meta">' +
-              '<div class="tma-rup__meta-row"><span>Two-factor authentication</span><strong>' + (row._twoFactor ? 'On' : 'Off') + '</strong></div>' +
-              '<div class="tma-rup__meta-row"><span>Joined</span><strong>' + escapeHtml(row.date) + '</strong></div>' +
-              '<div class="tma-rup__meta-row"><span>Last active</span><strong data-rup-lastactive>' + escapeHtml(row._lastActive || '—') + '</strong></div>' +
-            '</div>' +
-            '<p class="tma-user-info-panel__field-label tma-rup__group-label">Admin controls</p>' +
-            '<div class="tma-rup__actions">' +
-              (row._status === 'pending' ? '<button type="button" class="tma-rup__btn tma-rup__btn--primary" data-rup-act="approve">Approve</button>' : '') +
-              '<button type="button" class="tma-rup__btn" data-rup-act="send-reset">Email password reset link</button>' +
-              '<button type="button" class="tma-rup__btn" data-rup-act="generate-password">Generate temporary password</button>' +
-              (row._status === 'approved' && !row._self ? '<button type="button" class="tma-rup__btn tma-rup__btn--danger" data-rup-act="suspend">Suspend account</button>' : '') +
-              (row._status === 'suspended' ? '<button type="button" class="tma-rup__btn" data-rup-act="reactivate">Reactivate account</button>' : '') +
-            '</div>' +
-            '<div class="tma-rup__pw" data-rup-pw hidden>' +
-              '<code data-rup-pw-value></code>' +
-              '<button type="button" class="tma-rup__btn" data-rup-pw-copy>Copy</button>' +
-            '</div>' +
-            '<p class="tma-user-info-panel__field-label tma-rup__group-label" data-rup-pw-note hidden>Shown once - share it securely. They should change it after signing in.</p>' +
-          '</div>' +
-          '<div class="tma-rup__body" data-rup-pane="activity" hidden><p class="tma-user-info-panel__field-label">Loading…</p></div>' +
-          '<div class="tma-rup__footer">' +
-            '<button type="button" class="tma-rup__btn" data-rup-close>Cancel</button>' +
-            '<button type="button" class="tma-rup__btn tma-rup__btn--primary" data-rup-save>Save</button>' +
-          '</div>';
-      host.appendChild(wrap);
-
-      wrap.querySelectorAll('[data-rup-close]').forEach(function (b) { b.addEventListener('click', closeRealPanel); });
-
-      wrap.querySelectorAll('[data-rup-tab]').forEach(function (tab) {
-        tab.addEventListener('click', function () {
-          wrap.querySelectorAll('[data-rup-tab]').forEach(function (t2) {
-            var on = t2 === tab;
-            t2.classList.toggle('tma-dash__tab--active', on);
-            t2.setAttribute('aria-selected', on ? 'true' : 'false');
-          });
-          wrap.querySelectorAll('[data-rup-pane]').forEach(function (p2) {
-            p2.hidden = p2.getAttribute('data-rup-pane') !== tab.getAttribute('data-rup-tab');
-          });
-        });
+    function confirmDeleteUser(row) {
+      openDeleteConfirm({
+        title: 'Delete ' + row.user + '?',
+        text: "This permanently removes their account, sign-in methods, sessions, and connected accounts. This can't be undone.",
+        confirmLabel: 'Delete account',
+        success: 'Account deleted',
+        run: function () { return usersApi('DELETE', '/admin/users/' + row._id); },
       });
+    }
 
-      usersApi('GET', '/admin/users/' + row._id + '/activity').then(function (res) { return res.ok ? res.json() : null; }).then(function (j) {
-        var pane = wrap.querySelector('[data-rup-pane="activity"]');
-        if (!pane) return;
-        if (!j) { pane.innerHTML = '<p class="tma-user-info-panel__field-label">Couldn\'t load activity.</p>'; return; }
-        if (j.lastLogin) {
-          var la = wrap.querySelector('[data-rup-lastactive]');
-          if (la && la.textContent === '—') la.textContent = 'Signed in ' + j.lastLogin;
-        }
-        pane.innerHTML = j.events.length ? j.events.map(function (ev) {
-          var at = ev.atIso ? new Date(ev.atIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ev.when;
-          return '<div class="tma-rup__event"><strong>' + escapeHtml(ACT_LABELS[ev.event] || ev.event) + '</strong>' +
-            '<span>' + escapeHtml(at) + (ev.ip ? ' · ' + escapeHtml(ev.ip) : '') + (ev.device ? ' · ' + escapeHtml(ev.device) : '') + '</span></div>';
-        }).join('') : '<p class="tma-user-info-panel__field-label">No activity yet.</p>';
-      }).catch(function () {});
-
-      function act(url, body, done) {
-        usersApi('POST', url, body).then(function (res) {
-          return res.json().catch(function () { return {}; }).then(function (j) {
-            if (res.ok) { if (done) done(j); loadRealUsers(); }
-            else usersToast((j && j.message) || 'That action failed.', false);
-          });
-        }).catch(function () { usersToast('That action failed.', false); });
-      }
-
-      wrap.querySelectorAll('[data-rup-act]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var kind = b.getAttribute('data-rup-act');
-          if (kind === 'approve') act('/admin/users/' + row._id + '/approve', { account_type: wrap.querySelector('[data-rup-type]').value }, function () { usersToast('Account approved', true); closeRealPanel(); });
-          if (kind === 'suspend') act('/admin/users/' + row._id + '/suspend', null, function () { usersToast('Account suspended', true); closeRealPanel(); });
-          if (kind === 'reactivate') act('/admin/users/' + row._id + '/reactivate', null, function () { usersToast('Account reactivated', true); closeRealPanel(); });
-          if (kind === 'send-reset') act('/admin/users/' + row._id + '/send-reset', null, function () { usersToast('Reset link sent to ' + row.email, true); });
-          if (kind === 'generate-password') act('/admin/users/' + row._id + '/generate-password', null, function (j) {
-            wrap.querySelector('[data-rup-pw-value]').textContent = (j && j.password) || '';
-            wrap.querySelector('[data-rup-pw]').hidden = false;
-            wrap.querySelector('[data-rup-pw-note]').hidden = false;
-          });
-        });
-      });
-
-      var pwCopy = wrap.querySelector('[data-rup-pw-copy]');
-      if (pwCopy) pwCopy.addEventListener('click', function () {
-        if (navigator.clipboard) navigator.clipboard.writeText(wrap.querySelector('[data-rup-pw-value]').textContent);
-        usersToast('Password copied', true);
-      });
-
-      wrap.querySelector('[data-rup-save]').addEventListener('click', function () {
-        usersApi('PATCH', '/admin/users/' + row._id, {
-          name: wrap.querySelector('[data-rup-name]').value,
-          account_type: wrap.querySelector('[data-rup-type]').value,
-        }).then(function (res) {
-          return res.json().catch(function () { return {}; }).then(function (j) {
-            if (res.ok) { usersToast('Saved', true); closeRealPanel(); loadRealUsers(); }
-            else usersToast((j && j.message) || 'Could not save.', false);
-          });
-        });
+    function confirmBulkDelete(ids) {
+      openDeleteConfirm({
+        title: 'Delete ' + ids.length + (ids.length === 1 ? ' user' : ' users') + '?',
+        text: "This permanently removes the selected accounts, their sign-in methods, sessions, and connected accounts. This can't be undone. (Your own account is never deleted.)",
+        confirmLabel: 'Delete ' + ids.length + (ids.length === 1 ? ' account' : ' accounts'),
+        success: 'Accounts deleted',
+        run: function () { return usersApi('POST', '/admin/users/bulk-delete', { ids: ids }); },
       });
     }
 
     function openUserInfoPanel(filteredIndex) {
-      if (state.live) {
-        var filteredLive = applyPipeline(state);
-        var liveRow = filteredLive[filteredIndex];
-        if (liveRow) openRealUserPanel(liveRow);
-        return;
-      }
       if (!window.TMAUserInfoPanel) return;
       var filtered = applyPipeline(state);
       var row = filtered[filteredIndex];
@@ -880,7 +905,62 @@ if (state.filters.user) {
         row: row,
         rows: filtered,
         index: filteredIndex,
+        fieldLabels: state.live ? { address: 'Account type' } : null,
+        hideDuplicate: !!state.live,
+        addressOptions: state.live ? ACCOUNT_TYPES : null,
+        avatarChoices: state.live ? SYSTEM_AVATARS : null,
+        profileFields: !!state.live,
+        nameParts: !!state.live,
+        extraTabs: state.live ? [
+          { id: 'logins', label: 'Logins', render: function (r2, el) { renderActivityPane(r2, el, 'login'); } },
+          { id: 'activity', label: 'Activity', render: function (r2, el) { renderActivityPane(r2, el, 'app'); } },
+        ] : null,
         onSave: function (targetRow, index, data) {
+          if (state.live) {
+            usersApi('PATCH', '/admin/users/' + targetRow._id, {
+              first_name: data.firstName,
+              middle_name: data.middleName,
+              last_name: data.lastName,
+              email: data.email,
+              account_type: ACCOUNT_TYPES.indexOf(data.address) !== -1 ? data.address : null,
+              note: data.note,
+              avatar: SYSTEM_AVATARS.indexOf(data.avatar) !== -1 ? data.avatar : null,
+              phone: data.phone,
+              job_title: data.jobTitle,
+              gender: data.gender || null,
+              bio: data.bio,
+              linkedin_url: data.linkedin,
+            }).then(function (res) {
+              return res.json().catch(function () { return {}; }).then(function (j) {
+                if (!res.ok) {
+                  var msg = (j && j.message) || 'Could not save.';
+                  if (j && j.errors) { var k = Object.keys(j.errors); if (k.length) msg = j.errors[k[0]][0]; }
+                  usersToast(msg, false);
+                  return;
+                }
+                usersToast('Saved', true);
+                targetRow.firstName = data.firstName;
+                targetRow.middleName = data.middleName;
+                targetRow.lastName = data.lastName;
+                targetRow.user = [data.firstName, data.middleName, data.lastName]
+                  .filter(function (s) { return s; }).join(' ');
+                targetRow.email = data.email;
+                if (ACCOUNT_TYPES.indexOf(data.address) !== -1) targetRow.address = data.address;
+                targetRow.note = data.note;
+                targetRow.phone = data.phone;
+                targetRow.jobTitle = data.jobTitle;
+                targetRow.bio = data.bio;
+                targetRow.linkedin = data.linkedin;
+                render();
+                if (window.TMAUserInfoPanel.isOpen()) {
+                  var nf = applyPipeline(state);
+                  window.TMAUserInfoPanel.syncRows(nf, index);
+                }
+                loadRealUsers();
+              });
+            }).catch(function () { usersToast('Could not save.', false); });
+            return;
+          }
           targetRow.user = data.user || targetRow.user;
           targetRow.email = data.email || targetRow.email;
           targetRow.address = data.address || targetRow.address;
@@ -894,18 +974,11 @@ if (state.filters.user) {
           }
         },
         onDelete: function (targetRow) {
+          if (state.live) { confirmDeleteUser(targetRow); return; }
           var idx = state.rows.indexOf(targetRow);
           if (idx >= 0) state.rows.splice(idx, 1);
           state.infoPanelIndex = null;
           window.TMAUserInfoPanel.close();
-          render();
-        },
-        onDuplicate: function (targetRow) {
-          var copy = Object.assign({}, targetRow, {
-            serial: '#CM' + state.nextId++,
-            note: targetRow.note || '',
-          });
-          state.rows.unshift(copy);
           render();
         },
         onNavigate: function (targetRow, index) {
@@ -986,14 +1059,21 @@ if (state.filters.user) {
       } else if (isGrid) {
         dataBlock = '<div class="tma-dash__uavatar-grid" role="list" aria-label="Users">' + bodyHtml + '</div>';
       } else {
+        function sortHead(cls, col, label) {
+          var active = state.sort.column === col;
+          var arrow = active ? (state.sort.direction === 'asc' ? '↑' : '↓') : '';
+          return '<div class="tma-dash__cc ' + cls + ' tma-dash__cc--head tma-dash__cc--sortable' + (active ? ' is-sorted' : '') + '"' +
+            ' data-sort-col="' + col + '" role="button" tabindex="0" aria-label="Sort by ' + label + (active ? (state.sort.direction === 'asc' ? ', ascending' : ', descending') : '') + '">' +
+            label + (arrow ? '<span class="tma-dash__sort-arrow" aria-hidden="true">' + arrow + '</span>' : '') + '</div>';
+        }
         dataBlock = '<div class="tma-dash__ctable" role="table" aria-label="Users">' +
             '<div class="tma-dash__ctr tma-dash__ctr--head">' +
               '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head"><input type="checkbox" class="tma-dash__check" data-users-selectall aria-label="Select all"></div>' +
-              '<div class="tma-dash__cc tma-dash__cc--id tma-dash__cc--head">Serial</div>' +
-              '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head">User</div>' +
-              '<div class="tma-dash__cc tma-dash__cc--email tma-dash__cc--head">Email</div>' +
-              '<div class="tma-dash__cc tma-dash__cc--address tma-dash__cc--head">Account type</div>' +
-              '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Registration date</div>' +
+              sortHead('tma-dash__cc--id', 'serial', 'Serial') +
+              sortHead('tma-dash__cc--user', 'user', 'User') +
+              sortHead('tma-dash__cc--email', 'email', 'Email') +
+              sortHead('tma-dash__cc--address', 'address', 'Account type') +
+              sortHead('tma-dash__cc--date', 'date', 'Registration date') +
             '</div>' +
             '<div data-users-body>' + bodyHtml + '</div>' +
           '</div>';
@@ -1083,7 +1163,7 @@ if (state.filters.user) {
           e.preventDefault();
           e.stopPropagation();
           if (popoverEls.fields.hasAttribute('data-open')) closePopovers();
-          else openPopover(popoverEls.fields, filterBtn);
+          else { markOpenField(null); openPopover(popoverEls.fields, filterBtn); }
         });
       }
 
@@ -1196,6 +1276,15 @@ if (id === 'user') delete state.filters.user;
           var keys = Object.keys(state.selected);
           if (!keys.length) return;
           if (action === 'delete') {
+            if (state.live) {
+              var ids = keys.map(function (key) {
+                var row = state.rows.find(function (r) { return rowKey(r, state) === key; });
+                return row && row._id;
+              }).filter(Boolean);
+              if (!ids.length) return;
+              confirmBulkDelete(ids);
+              return;
+            }
             state.rows = state.rows.filter(function (row) {
               return !state.selected[rowKey(row, state)];
             });
@@ -1204,38 +1293,53 @@ if (id === 'user') delete state.filters.user;
             render();
             return;
           }
-          if (action === 'duplicate') {
-            var copies = [];
-            keys.forEach(function (key) {
-              var source = state.rows.find(function (row) { return rowKey(row, state) === key; });
-              if (!source) return;
-              var copy = Object.assign({}, source, {
-                orderId: '#CM' + state.nextId,
-                user: source.user + ' (copy)',
-              });
-              state.nextId += 1;
-              state.rows.push(copy);
-              copies.push(rowKey(copy, state));
-            });
-            state.selected = {};
-            copies.forEach(function (key) { state.selected[key] = true; });
-            render();
-          }
         });
       });
+    }
+
+    function markOpenField(id) {
+      if (!popoverEls.fields) return;
+      popoverEls.fields.querySelectorAll('[data-filter-field]').forEach(function (b) {
+        b.classList.toggle('is-open', b.getAttribute('data-filter-field') === id);
+      });
+    }
+
+    function fillUsersPopover() {
+      if (!popoverEls.users) return;
+      var seen = {};
+      var items = state.rows.filter(function (r) {
+        if (seen[r.user]) return false;
+        seen[r.user] = 1;
+        return true;
+      }).map(function (r) {
+        return '<button type="button" class="tma-filter-popover__item" data-filter-user="' + escapeHtml(r.user) + '">' +
+          '<span class="tma-filter-popover__user-row"><img src="' + escapeHtml(avatarUrl(r.avatar)) + '" alt="" class="tma-filter-popover__user-avatar" width="24" height="24">' +
+          '<span class="tma-filter-popover__item-label">' + escapeHtml(r.user) + '</span></span></button>';
+      }).join('');
+      popoverEls.users.innerHTML = items ||
+        '<div class="tma-filter-popover__item" style="opacity:0.5;pointer-events:none">No users</div>';
     }
 
     popoverEls.host.addEventListener('click', function (e) {
       var fieldItem = e.target.closest('[data-filter-field]');
       if (fieldItem && popoverEls.fields && popoverEls.fields.contains(fieldItem)) {
         e.preventDefault();
-        var anchorRect = fieldItem.getBoundingClientRect();
-        state.activeField = {
-          id: fieldItem.getAttribute('data-filter-field'),
-          label: fieldItem.getAttribute('data-filter-field-label'),
-        };
+        var fieldId = fieldItem.getAttribute('data-filter-field');
+        var sub = fieldId === 'user' ? popoverEls.users : popoverEls.operators;
 
-        if (state.activeField.id === 'user' && popoverEls.users) {
+        // clicking a field whose submenu is already open collapses it
+        if (sub && sub.hasAttribute('data-open') && state.activeField && state.activeField.id === fieldId) {
+          closePopovers(popoverEls.fields);
+          markOpenField(null);
+          return;
+        }
+
+        var anchorRect = fieldItem.getBoundingClientRect();
+        state.activeField = { id: fieldId, label: fieldItem.getAttribute('data-filter-field-label') };
+        markOpenField(fieldId);
+
+        if (fieldId === 'user' && popoverEls.users) {
+          fillUsersPopover();
           openPopover(popoverEls.users, fieldItem, { rect: anchorRect, keep: [popoverEls.fields] });
           return;
         }
@@ -1402,6 +1506,7 @@ e.target.closest('[data-filter-user]') ||
       '<form class="tma-dash__settings-change-form" data-invite-form>' +
       '<label class="tma-dash__settings-flow-field"><input class="tma-dash__settings-flow-input" type="text" name="name" placeholder="Full name" autocomplete="off" aria-label="Full name" required></label>' +
       '<label class="tma-dash__settings-flow-field"><input class="tma-dash__settings-flow-input" type="email" name="email" placeholder="Email" autocomplete="off" aria-label="Email" required></label>' +
+      '<label class="tma-dash__settings-flow-field"><input class="tma-dash__settings-flow-input" type="tel" name="phone" placeholder="Phone number (optional)" autocomplete="off" aria-label="Phone number"></label>' +
       '<label class="tma-dash__settings-flow-field"><select class="tma-dash__settings-flow-input" name="account_type" aria-label="Account type">' +
       ACCOUNT_TYPES.map(function (type) { return '<option value="' + type + '">' + type + '</option>'; }).join('') +
       '</select></label>' +
@@ -1419,6 +1524,7 @@ e.target.closest('[data-filter-user]') ||
       usersApi('POST', '/admin/users', {
         name: form.querySelector('[name="name"]').value,
         email: form.querySelector('[name="email"]').value,
+        phone: form.querySelector('[name="phone"]').value,
         account_type: form.querySelector('[name="account_type"]').value,
       }).then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (j) {

@@ -12,7 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password', 'status', 'account_type', 'phone'])]
+#[Fillable(['name', 'first_name', 'middle_name', 'last_name', 'gender', 'email', 'password', 'status', 'account_type', 'phone', 'job_title', 'bio', 'linkedin_url'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -32,11 +32,31 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'profile_completed_at' => 'datetime',
+            'onboarding_completed_at' => 'datetime',
             'approved_at' => 'datetime',
             'phone_verified_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
             'password' => 'hashed',
+            'preferences' => 'array',
         ];
+    }
+
+    /**
+     * Build the display name from its parts. `name` stays the single source
+     * for everything that shows a user (sidebar, tables, emails).
+     */
+    public function syncDisplayName(): void
+    {
+        $full = trim(implode(' ', array_filter([
+            $this->first_name,
+            $this->middle_name,
+            $this->last_name,
+        ])));
+
+        if ($full !== '') {
+            $this->name = $full;
+        }
     }
 
     public function isApproved(): bool
@@ -52,6 +72,16 @@ class User extends Authenticatable implements MustVerifyEmail
     public function connectedAccounts(): HasMany
     {
         return $this->hasMany(ConnectedAccount::class);
+    }
+
+    public function trustedDevices(): HasMany
+    {
+        return $this->hasMany(TrustedDevice::class);
+    }
+
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class);
     }
 
     public function connectedAccount(string $provider): ?ConnectedAccount

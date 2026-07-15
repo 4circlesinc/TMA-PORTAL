@@ -19,7 +19,7 @@
         window.TMAFileIcons.fileIconFromFilename('x.' + (f.type || '')) ||
         window.TMAFileIcons.fileIconSrc('DefaultIcon');
     }
-    return '/TMA-PORTAL/images/icons/phosphor/File.svg';
+    return 'images/icons/phosphor/File.svg';
   }
 
   var SHORTCUTS = [
@@ -43,10 +43,10 @@
   function kpiCard(tone, label, iconName, value, delta, deltaUp) {
     return '<article class="tma-dash__card tma-dash__card--' + tone + '">' +
       '<div class="tma-dash__card-head"><span class="tma-dash__card-label">' + ui().esc(label) + '</span>' +
-      '<img class="tma-dash__card-ico" src="/TMA-PORTAL/images/icons/phosphor/' + iconName + '.svg" alt=""></div>' +
+      '<img class="tma-dash__card-ico" src="images/icons/phosphor/' + iconName + '.svg" alt=""></div>' +
       '<div class="tma-dash__card-row"><div class="tma-dash__card-value">' + ui().esc(value) + '</div>' +
       '<div class="tma-dash__card-delta"><span class="tma-dash__card-delta-text">' + ui().esc(delta) + '</span>' +
-      '<img src="/TMA-PORTAL/images/icons/tma/' + (deltaUp ? 'ArrowRise' : 'ArrowFall') + '.svg" alt="' + (deltaUp ? 'up' : 'down') + '"></div></div></article>';
+      '<img src="images/icons/tma/' + (deltaUp ? 'ArrowRise' : 'ArrowFall') + '.svg" alt="' + (deltaUp ? 'up' : 'down') + '"></div></div></article>';
   }
 
   function renderKpis(s) {
@@ -81,7 +81,7 @@
       '<div class="tma-portal-shortcuts">' +
       SHORTCUTS.map(function (sc) {
         return '<button type="button" class="tma-portal-shortcut" data-home-shortcut="' + sc.id + '">' +
-          '<span class="tma-portal-shortcut__icon"><img src="/TMA-PORTAL/images/icons/phosphor/' + sc.icon + '.svg" alt=""></span>' +
+          '<span class="tma-portal-shortcut__icon"><img src="images/icons/phosphor/' + sc.icon + '.svg" alt=""></span>' +
           '<span>' + ui().esc(sc.label) + '</span></button>';
       }).join('') +
       '</div></section>';
@@ -98,7 +98,7 @@
       '<div class="tma-portal-tutorials">' +
       s.tutorials.map(function (t) {
         return '<button type="button" class="tma-portal-tutorial' + (t.done ? ' is-done' : '') + ' tma-portal-file-row" data-home-tutorial="' + ui().esc(t.id) + '" aria-pressed="' + t.done + '">' +
-          '<span class="tma-portal-tutorial__check">' + (t.done ? '<img src="/TMA-PORTAL/images/icons/phosphor/Check.svg" alt="" width="12" height="12">' : '') + '</span>' +
+          '<span class="tma-portal-tutorial__check">' + (t.done ? '<img src="images/icons/phosphor/Check.svg" alt="" width="12" height="12">' : '') + '</span>' +
           '<span class="tma-portal-tutorial__label">' + ui().esc(t.label) + '</span>' +
           '</button>';
       }).join('') +
@@ -267,7 +267,7 @@
     var favs = (s.folders && s.folders.favorites) || [];
     var rows = favs.map(function (f) {
       return '<div class="tma-portal-file-row">' +
-        '<img src="/TMA-PORTAL/images/icons/phosphor/Star.svg" alt="">' +
+        '<img src="images/icons/phosphor/Star.svg" alt="">' +
         '<span class="tma-portal-file-row__meta">' +
         '<span class="tma-portal-file-row__name">' + ui().esc(f.name) + '</span>' +
         '</span></div>';
@@ -288,7 +288,7 @@
       '<div class="tma-portal-page" data-node-id="portal-home">' +
       '<div class="tma-portal-hello">' +
       '<div class="tma-portal-hello__main">' +
-      '<img class="tma-portal-hello__avatar" src="/TMA-PORTAL/images/avatars/AvatarByewind.png" alt="">' +
+      '<img class="tma-portal-hello__avatar" src="images/avatars/AvatarByewind.png" alt="">' +
       '<div class="tma-portal-hello__copy">' +
       '<h2 class="tma-portal-hello__title">Hello ' + ui().esc(s.user.firstName) + '</h2>' +
       '<button type="button" class="tma-portal-link tma-portal-hello__picture-link" data-home-add-picture>Add profile picture</button>' +
@@ -345,8 +345,18 @@
       });
     });
 
-    var addPic = el.querySelector('[data-home-add-picture]');
-    if (addPic) addPic.addEventListener('click', function () { ui().toast('Profile pictures can be changed in Settings'); });
+    /* the picker is owned by current-user.js (delegated click) */
+    if (window.TMACurrentUser) {
+      var meNow = window.TMACurrentUser.get();
+      if (meNow) {
+        var hello = el.querySelector('.tma-portal-hello__title');
+        if (hello) hello.textContent = 'Hello ' + meNow.firstName;
+        var heroAvatar = el.querySelector('.tma-portal-hello__avatar');
+        if (heroAvatar) heroAvatar.src = window.TMACurrentUser.avatarSrc(meNow.avatar, meNow.name);
+        var picLink = el.querySelector('[data-home-add-picture]');
+        if (picLink) picLink.textContent = meNow.hasAvatar ? 'Change profile picture' : 'Add profile picture';
+      }
+    }
 
     var edit = el.querySelector('[data-home-edit]');
     if (edit) edit.addEventListener('click', function () { editDashboardModal(rerender); });

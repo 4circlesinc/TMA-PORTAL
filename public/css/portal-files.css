@@ -1,0 +1,203 @@
+/*
+ * TMA - File & Folder manager styles.
+ * Gap-filling only: grid cards, the global upload panel, breadcrumb, details,
+ * destination picker and context-menu extras. Everything is built on the
+ * existing design tokens (tokens.css) and reuses portal.css chrome
+ * (toolbar, table, selection bar, context menu, chips).
+ */
+
+/* ── page head ─────────────────────────────────────── */
+.tma-portal-page__desc {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-files__body { margin-top: var(--space-12); }
+
+.tma-portal-files__loading {
+  display: flex; align-items: center; gap: var(--space-8);
+  padding: var(--space-32); justify-content: center;
+  color: var(--color-text-secondary); font-size: var(--text-size-14);
+}
+.tma-portal-files__loading img { animation: tma-files-spin 0.9s linear infinite; }
+@keyframes tma-files-spin { to { transform: rotate(360deg); } }
+
+/* ── breadcrumb ────────────────────────────────────── */
+.tma-portal-breadcrumb {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4);
+  margin-top: var(--space-12); font-size: var(--text-size-14);
+}
+.tma-portal-breadcrumb__item {
+  background: none; border: 0; padding: 2px var(--space-4); cursor: pointer;
+  color: var(--color-text-link); border-radius: var(--radius-6); font: inherit;
+}
+.tma-portal-breadcrumb__item:hover { background: var(--color-hover); }
+.tma-portal-breadcrumb__item--current { color: var(--color-text-primary); font-weight: 600; cursor: default; }
+.tma-portal-breadcrumb__item--current:hover { background: none; }
+.tma-portal-breadcrumb__sep { color: var(--color-text-hint); }
+
+/* ── toolbar buttons ───────────────────────────────── */
+.tma-portal-tool {
+  display: inline-flex; align-items: center; gap: var(--space-6, 6px);
+  min-height: 32px; padding: var(--space-4) var(--space-10);
+  border: 0.5px solid var(--color-border-medium); border-radius: var(--radius-pill);
+  background: var(--color-white); color: var(--color-text-primary);
+  font-size: var(--text-size-14); line-height: 1; cursor: pointer;
+}
+.tma-portal-tool:hover:not(:disabled) { background: var(--color-hover); }
+.tma-portal-tool:disabled { opacity: 0.45; cursor: not-allowed; }
+.tma-portal-tool--icon { padding: var(--space-4); }
+.tma-portal-tool img { display: block; }
+
+.tma-portal-view-toggle {
+  display: inline-flex; border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-pill); overflow: hidden;
+}
+.tma-portal-view-toggle__btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 30px; border: 0; background: var(--color-white); cursor: pointer;
+}
+.tma-portal-view-toggle__btn.is-active { background: var(--color-accent-bg); }
+.tma-portal-view-toggle__btn:hover:not(.is-active) { background: var(--color-hover); }
+
+.tma-portal-files__sort, .tma-portal-files__filter { flex-direction: row; align-items: center; gap: var(--space-4); }
+
+/* ── table extras ──────────────────────────────────── */
+.tma-portal-check { width: 16px; height: 16px; accent-color: var(--color-accent); cursor: pointer; }
+.tma-portal-file-link {
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: var(--color-text-primary); text-align: left;
+}
+.tma-portal-file-link:hover { color: var(--color-text-link); text-decoration: underline; }
+.tma-portal-row-menu {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 0; border-radius: var(--radius-6);
+  background: none; cursor: pointer;
+}
+.tma-portal-row-menu:hover { background: var(--color-hover); }
+
+.tma-portal-star { background: none; border: 0; padding: 2px; cursor: pointer; line-height: 0; opacity: 0.55; }
+.tma-portal-star:hover, .tma-portal-star.is-on { opacity: 1; }
+
+.tma-portal-chip--shared { background: var(--color-accent-bg); color: var(--color-accent); }
+
+/* ── grid view ─────────────────────────────────────── */
+.tma-portal-grid {
+  display: grid; gap: var(--space-12);
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  margin-top: var(--space-4);
+}
+.tma-portal-file-card {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-8); padding: var(--space-16) var(--space-12);
+  border: 0.5px solid var(--color-border-soft); border-radius: var(--radius-12);
+  background: var(--color-white); text-align: center;
+}
+.tma-portal-file-card:hover { background: var(--color-hover); border-color: var(--color-border-medium); }
+.tma-portal-file-card.is-selected { border-color: var(--color-accent); background: var(--color-accent-bg); }
+.tma-portal-file-card__check { position: absolute; top: var(--space-8); left: var(--space-8); }
+.tma-portal-file-card__star { position: absolute; top: var(--space-4); right: var(--space-4); }
+.tma-portal-file-card__thumb {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 72px; border: 0; background: none; cursor: pointer;
+}
+.tma-portal-file-card__thumb-img { max-width: 100%; max-height: 72px; border-radius: var(--radius-6); object-fit: cover; }
+.tma-portal-file-card__name {
+  background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-weight: 600;
+  color: var(--color-text-primary); font-size: var(--text-size-14); line-height: var(--text-lh-14);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tma-portal-file-card__name:hover { color: var(--color-text-link); }
+.tma-portal-file-card__meta { font-size: var(--text-size-12); color: var(--color-text-secondary); }
+
+/* ── context menu extras (base in portal.css) ──────── */
+.tma-portal-context-menu__sep { height: 1px; margin: var(--space-4) 0; background: var(--color-border-soft); }
+.tma-portal-context-menu__item--danger { color: var(--color-red); }
+.tma-portal-context-menu__item:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── modal extras ──────────────────────────────────── */
+.tma-portal-modal__foot { display: flex; justify-content: flex-end; gap: var(--space-8); margin-top: var(--space-16); }
+.tma-portal-modal__text { font-size: var(--text-size-14); line-height: 1.5; color: var(--color-text-primary); margin: 0 0 var(--space-8); }
+.tma-portal-modal__error {
+  background: var(--color-accent-bg); color: var(--color-red);
+  border-radius: var(--radius-8); padding: var(--space-8) var(--space-12);
+  font-size: var(--text-size-14); margin-bottom: var(--space-12);
+}
+.tma-portal-conflict { display: flex; flex-direction: column; gap: var(--space-8); }
+.tma-portal-btn--danger { background: var(--color-red) !important; color: var(--color-white) !important; }
+
+/* ── details ───────────────────────────────────────── */
+.tma-portal-details { min-width: 320px; }
+.tma-portal-details__head {
+  display: flex; align-items: center; gap: var(--space-10);
+  margin-bottom: var(--space-12); font-size: var(--text-size-16, 16px);
+}
+.tma-portal-details__row {
+  display: flex; justify-content: space-between; gap: var(--space-16);
+  padding: var(--space-8) 0; border-bottom: 1px solid var(--color-border-soft);
+  font-size: var(--text-size-14);
+}
+.tma-portal-details__label { color: var(--color-text-secondary); flex: 0 0 auto; }
+.tma-portal-details__value { color: var(--color-text-primary); text-align: right; word-break: break-word; }
+
+/* ── destination picker ────────────────────────────── */
+.tma-portal-picker { min-width: 360px; }
+.tma-portal-picker__crumbs { font-size: var(--text-size-12); color: var(--color-text-secondary); margin-bottom: var(--space-8); }
+.tma-portal-picker__crumb { background: none; border: 0; padding: 0 2px; color: var(--color-text-link); cursor: pointer; font: inherit; }
+.tma-portal-picker__list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.tma-portal-picker__folder {
+  display: flex; align-items: center; gap: var(--space-8); width: 100%;
+  padding: var(--space-8) var(--space-10); border: 0; border-radius: var(--radius-8);
+  background: none; cursor: pointer; font: inherit; text-align: left; color: var(--color-text-primary);
+}
+.tma-portal-picker__folder:hover { background: var(--color-hover); }
+.tma-portal-picker__empty, .tma-portal-picker__loading { padding: var(--space-16); color: var(--color-text-secondary); font-size: var(--text-size-14); }
+
+/* ── upload panel (bottom-right, global) ───────────── */
+.tma-portal-upload {
+  position: fixed; right: var(--space-20); bottom: var(--space-20);
+  width: 360px; max-width: calc(100vw - 32px); z-index: 400;
+  background: var(--color-white); border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-12); box-shadow: var(--shadow-popup);
+  overflow: hidden; font-size: var(--text-size-14);
+}
+.tma-portal-upload__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-10) var(--space-12); background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.tma-portal-upload__title { font-weight: 600; color: var(--color-text-primary); }
+.tma-portal-upload__head-actions { display: flex; gap: var(--space-4); }
+.tma-portal-upload__icon {
+  width: 24px; height: 24px; border: 0; border-radius: var(--radius-6);
+  background: none; cursor: pointer; color: var(--color-text-secondary); font-size: 12px;
+}
+.tma-portal-upload__icon:hover { background: var(--color-hover); }
+.tma-portal-upload__list { list-style: none; margin: 0; padding: var(--space-4); max-height: 320px; overflow-y: auto; }
+.tma-portal-upload__item { padding: var(--space-8); border-radius: var(--radius-8); }
+.tma-portal-upload__item + .tma-portal-upload__item { margin-top: 2px; }
+.tma-portal-upload__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+.tma-portal-upload__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-primary); }
+.tma-portal-upload__actions { display: flex; gap: var(--space-4); flex: 0 0 auto; }
+.tma-portal-upload__act {
+  border: 0; background: none; cursor: pointer; color: var(--color-text-link);
+  font-size: var(--text-size-12); padding: 2px 4px; border-radius: var(--radius-4);
+}
+.tma-portal-upload__act:hover { background: var(--color-hover); }
+.tma-portal-upload__bar {
+  height: 6px; margin: var(--space-6, 6px) 0 var(--space-4); border-radius: var(--radius-pill);
+  background: var(--color-border-soft); overflow: hidden;
+}
+.tma-portal-upload__fill { display: block; height: 100%; background: var(--color-accent); transition: width 0.2s ease; }
+.tma-portal-upload__meta { display: flex; justify-content: space-between; font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-portal-upload__item--completed .tma-portal-upload__fill { background: var(--color-green); }
+.tma-portal-upload__item--failed .tma-portal-upload__fill { background: var(--color-red); }
+.tma-portal-upload__item--failed .tma-portal-upload__meta { color: var(--color-red); }
+.tma-portal-upload__item--cancelled { opacity: 0.6; }
+
+@media (max-width: 560px) {
+  .tma-portal-upload { right: var(--space-8); bottom: var(--space-8); left: var(--space-8); width: auto; }
+  .tma-portal-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

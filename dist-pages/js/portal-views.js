@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var ICON = '/TMA-PORTAL/images/icons/phosphor/';
+  var ICON = 'images/icons/phosphor/';
 
   /* ── view registry ─────────────────────────────── */
   var pages = {};
@@ -22,6 +22,12 @@
     var mountEl = root.querySelector('.tma-dash__view[data-view="' + view + '"] [data-portal-mount]');
     if (!mountEl) return false;
     fn(mountEl, opts || {});
+    // A view just (re)rendered its markup — let shared chrome (the signed-in
+    // user's name/avatar in current-user.js) re-apply itself so re-created
+    // elements don't keep placeholder/broken images.
+    try {
+      document.dispatchEvent(new CustomEvent('tma:view-rendered', { detail: { view: view } }));
+    } catch (e) {}
     return true;
   }
 
@@ -53,7 +59,7 @@
       : '';
     return '<button type="button" class="' + cls + '"' + (o.attrs || '') + (o.disabled ? ' disabled' : '') + '>' +
       iconHtml + '<span>' + esc(o.label) + '</span>' +
-      (o.caret ? '<img class="tma-no-data__btn-icon tma-portal-btn__caret" src="/TMA-PORTAL/images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10">' : '') +
+      (o.caret ? '<img class="tma-no-data__btn-icon tma-portal-btn__caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10">' : '') +
       '</button>';
   }
 
@@ -62,7 +68,7 @@
     var o = opts || {};
     var ill = o.illustration || 'Illustration07';
     return '<div class="tma-portal-empty">' +
-      '<img class="tma-portal-empty__illustration" src="/TMA-PORTAL/images/illustrations/' + esc(ill) + '.svg" alt="" width="120" height="120" decoding="async">' +
+      '<img class="tma-portal-empty__illustration" src="images/illustrations/' + esc(ill) + '.svg" alt="" width="120" height="120" decoding="async">' +
       '<p class="tma-portal-empty__title">' + esc(o.title || 'Nothing here yet') + '</p>' +
       (o.subtitle ? '<p class="tma-portal-empty__subtitle">' + esc(o.subtitle) + '</p>' : '') +
       (o.button ? '<div class="tma-portal-empty__cta">' + o.button + '</div>' : '') +
@@ -97,12 +103,12 @@
     if (o.focused || hasValue) classes.push('tma-dash__toolbar-search--focused');
     if (hasValue) classes.push('tma-dash__toolbar-search--has-value');
     return '<div class="' + classes.join(' ') + '" role="search" data-portal-search-wrap>' +
-      '<img src="/TMA-PORTAL/images/icons/tma/Search-16.svg" alt="" width="16" height="16">' +
+      '<img src="images/icons/tma/Search-16.svg" alt="" width="16" height="16">' +
       '<input type="search" class="tma-dash__search-input" ' + (dataAttr || '') +
       ' placeholder="' + esc(placeholder || 'Search') + '" value="' + esc(v) + '"' +
       ' aria-label="' + esc(placeholder || 'Search') + '" autocomplete="off" spellcheck="false">' +
       '<button type="button" class="tma-dash__search-clear" aria-label="Clear search" data-search-clear>' +
-      '<img src="/TMA-PORTAL/images/icons/phosphor/XCircle.svg" alt="" width="16" height="16"></button>' +
+      '<img src="images/icons/phosphor/XCircle.svg" alt="" width="16" height="16"></button>' +
       '<kbd class="tma-dash__kbd" data-search-shortcut>/</kbd>' +
       '</div>';
   }
@@ -292,7 +298,7 @@
       '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap' + wrapAttr + '>' +
       '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--' + variant + '" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
       esc(o.label || '') +
-      '<img class="tma-dash__head-dropdown-caret" src="/TMA-PORTAL/images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10" aria-hidden="true">' +
+      '<img class="tma-dash__head-dropdown-caret" src="images/icons/tma/ArrowLineDown-16.svg" alt="" width="10" height="10" aria-hidden="true">' +
       '</button>' +
       '<div class="tma-dash__menu tma-dash__head-dropdown-menu' + align + '" data-head-dropdown-menu hidden role="menu" aria-label="' + esc(o.menuLabel || o.label || 'Menu') + '">' +
       items +

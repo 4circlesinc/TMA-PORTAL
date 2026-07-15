@@ -144,6 +144,14 @@
           openChangeEmail: true,
         };
       }
+      if (p === '/account-settings') {
+        return {
+          navId: 'account-settings',
+          view: 'admin',
+          title: 'Settings',
+          crumb: 'Settings',
+        };
+      }
       if (p === '/settings') {
         var settingsParams = typeof URLSearchParams !== 'undefined'
           ? new URLSearchParams(window.location.search)
@@ -1231,6 +1239,22 @@
 
     root._syncNavBadges = syncNavBadges;
 
+    function syncPendingUsersBadge() {
+      fetch('/admin/users/pending-count', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      })
+        .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
+        .then(function (j) {
+          var n = (j && j.count) || 0;
+          setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="users"]'), n);
+          setNavCount(root.querySelector('.tma-dash__mrow[data-nav="users"]'), n);
+        })
+        .catch(function () {});
+    }
+    root._syncPendingUsersBadge = syncPendingUsersBadge;
+    syncPendingUsersBadge();
+
     function ensureTabBadge(btn, kind) {
       var host = btn.querySelector('.tma-dash__tab-btn-icon') || btn;
       var badge = host.querySelector('.tma-dash__tab-badge');
@@ -2016,13 +2040,24 @@
     if (hiddenAccountNav[savedNav]) savedNav = 'ac-overview';
     if (!leaves.some(function (l) { return l.getAttribute('data-nav') === savedNav; })) savedNav = 'dash-dashboard';
     var bootRoute = routeFromPath(window.location.pathname);
+    var bootSettingsPage = null;
+    try { bootSettingsPage = new URLSearchParams(window.location.search).get('settings-page'); } catch (e) {}
     if (window.TMAPortalSignatures && window.TMAPortalSignatures.clearLock) {
       window.TMAPortalSignatures.clearLock();
     } else {
       root.classList.remove('tma-dash--signatures-wizard');
       document.documentElement.classList.remove('tma-dash--signatures-wizard');
     }
-    if (bootRoute) {
+    if (bootSettingsPage) {
+      activate('account-settings', {
+        view: 'admin',
+        adminPage: bootSettingsPage,
+        title: 'Account settings',
+        crumb: 'Account settings',
+        keepDrawer: true,
+        skipUrl: true,
+      });
+    } else if (bootRoute) {
       activate(bootRoute.navId, {
         view: bootRoute.view,
         title: bootRoute.title,

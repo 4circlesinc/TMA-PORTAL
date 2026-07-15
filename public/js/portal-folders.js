@@ -824,7 +824,9 @@
   }
 
   if (window.TMAPortalViews) {
-    window.TMAPortalViews.register('folders', mountFolders);
+    // The 'folders' view is now owned entirely by portal-files.js (real,
+    // server-backed). This prototype only still provides 'client-hub' so its
+    // localStorage mock folder/file data can never render again.
     window.TMAPortalViews.register('client-hub', mountClientHub);
   }
 })();

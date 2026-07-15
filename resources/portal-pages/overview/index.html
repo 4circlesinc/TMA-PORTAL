@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="css/table.css">
   <link rel="stylesheet" href="css/table-a.css">
   <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/portal-files.css">
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -122,9 +123,12 @@
           <span>Folders</span>
         </button>
         <div class="tma-dash__subnav" data-subnav="folders" hidden>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/all" data-nav="folders-all" data-title="All Files" data-crumb="Folders / All Files" data-view="folders">All Files</a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/personal" data-nav="folders-personal" data-title="Personal Folders" data-crumb="Folders / Personal Folders" data-view="folders">Personal Folders</a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/shared" data-nav="folders-shared" data-title="Shared Folders" data-crumb="Folders / Shared Folders" data-view="folders">Shared Folders</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/shared-with-me" data-nav="folders-sharedwithme" data-title="Shared with me" data-crumb="Folders / Shared with me" data-view="folders">Shared with me</a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/favorites" data-nav="folders-favorites" data-title="Favorites" data-crumb="Folders / Favorites" data-view="folders">Favorites</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recent" data-nav="folders-recent" data-title="Recent" data-crumb="Folders / Recent" data-view="folders">Recent</a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/filebox" data-nav="folders-filebox" data-title="File Box" data-crumb="Folders / File Box" data-view="folders">File Box</a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recycle" data-nav="folders-recycle" data-title="Recycle Bin" data-crumb="Folders / Recycle Bin" data-view="folders">Recycle Bin</a>
         </div>
@@ -177,10 +181,10 @@
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/people/resend-welcome-emails" data-nav="people-resend" data-title="Resend Welcome Emails" data-crumb="People / Resend Welcome Emails" data-view="people">Resend welcome emails</a>
         </div>
 
-        <a class="tma-dash__nav-item" href="/account-settings" data-nav="account-settings" data-title="Account settings" data-crumb="Account settings" data-view="admin">
+        <a class="tma-dash__nav-item" href="/account-settings" data-nav="account-settings" data-title="Settings" data-crumb="Settings" data-view="admin">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <img class="tma-dash__nav-icon" src="images/icons/phosphor/GearSix.svg" alt="">
-          <span>Account settings</span>
+          <span>Settings</span>
         </a>
       </div>
 
@@ -199,6 +203,7 @@
           <span class="tma-dash__profile-name">Vernon Francis</span>
           <span class="tma-dash__profile-email">vfrancis@tmantoinelaw.com</span>
         </div>
+        <a class="tma-dash__profile-action-btn" href="/account-settings" aria-label="Settings" title="Settings"><img src="images/icons/phosphor/GearSix.svg" alt="" width="16" height="16"></a>
         <button type="button" class="tma-dash__profile-action-btn" data-action="sign-out" aria-label="Sign out" title="Sign out"><img src="images/icons/phosphor/SignOut.svg" alt="" width="16" height="16"></button>
       </div>
     </aside>
@@ -518,8 +523,8 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="people-home" data-title="Manage users" data-crumb="People / Manage users" data-view="people">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>People</span>
         </button>
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="account-settings" data-title="Account settings" data-crumb="Account settings" data-view="admin">
-          <img src="images/icons/phosphor/GearSix.svg" alt="" class="tma-dash__mrow-icon"><span>Account settings</span>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="account-settings" data-title="Settings" data-crumb="Settings" data-view="admin">
+          <img src="images/icons/phosphor/GearSix.svg" alt="" class="tma-dash__mrow-icon"><span>Settings</span>
         </button>
         <a class="tma-dash__mrow" href="/classic">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ClockCounterClockwise.svg" alt=""><span>Classic design</span>
@@ -595,10 +600,15 @@
   <script src="js/portal-home.js"></script>
   <script src="js/portal-projects.js"></script>
   <script src="js/portal-folders.js"></script>
+  <script src="js/portal-upload-manager.js"></script>
+  <script src="js/portal-files.js"></script>
   <script src="js/portal-work.js"></script>
   <script src="js/portal-people.js"></script>
   <script src="js/portal-admin.js"></script>
   <script src="js/dashboard.js"></script>
+  <script src="js/phone-input.js"></script>
+  <script src="js/avatar-cropper.js"></script>
+  <script src="js/current-user.js"></script>
   <script src="js/sign-out.js"></script>
 </body>
 </html>

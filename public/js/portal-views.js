@@ -22,6 +22,12 @@
     var mountEl = root.querySelector('.tma-dash__view[data-view="' + view + '"] [data-portal-mount]');
     if (!mountEl) return false;
     fn(mountEl, opts || {});
+    // A view just (re)rendered its markup — let shared chrome (the signed-in
+    // user's name/avatar in current-user.js) re-apply itself so re-created
+    // elements don't keep placeholder/broken images.
+    try {
+      document.dispatchEvent(new CustomEvent('tma:view-rendered', { detail: { view: view } }));
+    } catch (e) {}
     return true;
   }
 

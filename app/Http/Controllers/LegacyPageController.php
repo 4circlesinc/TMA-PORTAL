@@ -21,6 +21,7 @@ class LegacyPageController extends Controller
      */
     public const PORTAL_PAGES = [
         'account',
+        'account-settings',
         'account-info',
         'billing-details',
         'billing-details/card',
@@ -45,7 +46,10 @@ class LegacyPageController extends Controller
         if (in_array($page, self::PUBLIC_PAGES, true)) {
             $path = public_path($page.'/index.html');
         } elseif (in_array($page, self::PORTAL_PAGES, true)) {
-            $path = resource_path('portal-pages/'.$page.'/index.html');
+            // Account settings is the same shell as Settings; the sidebar's
+            // data-view="admin" link decides which view opens.
+            $shell = $page === 'account-settings' ? 'settings' : $page;
+            $path = resource_path('portal-pages/'.$shell.'/index.html');
         } else {
             abort(404);
         }

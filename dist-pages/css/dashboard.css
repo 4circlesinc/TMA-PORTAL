@@ -1462,6 +1462,12 @@
   pointer-events: none;
   z-index: 1200;
 }
+
+/* the host is pointer-events:none so it never blocks the page; the open
+   popover must re-enable clicks or they pass through to the table behind it */
+.tma-dash__users-popover-host [data-open] {
+  pointer-events: auto;
+}
 .tma-dash__users .tma-pagination-bar {
   --pagination-width: 100%;
   width: 100%;
@@ -22794,3 +22800,142 @@ button.tma-dash__header-popup-item:focus-visible {
   }
 }
 
+
+
+/* ═══ Loaded by every portal shell: profile link, picker, my-profile page ═══
+ * (previously lived in dashboard-tma-overrides.css, which only the
+ * dashboard page loads - so these styles never reached /users, /settings…)
+ */
+
+/* ── Profile picture picker (portal shell) ── */
+.tma-ap__preview {
+  border-radius: 50%;
+  align-self: center;
+  object-fit: cover;
+  background: var(--color-bg-muted, #eee);
+}
+.tma-ap__sources,
+.tma-pf__sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: var(--space-8) 0;
+}
+.tma-ap__source,
+.tma-pf__source {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--font-size-14, 0.875rem);
+  cursor: pointer;
+}
+.tma-ap__upload,
+.tma-pf__upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  cursor: pointer;
+}
+.tma-pf__current img { object-fit: cover; background: var(--color-bg-muted, #eee); }
+.tma-pf__connected {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+.tma-pf__connect { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-8); }
+
+/* ── Sidebar profile block links to the user's own profile ── */
+.tma-dash__profile-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-4);
+  margin: calc(var(--space-4) * -1);
+  border-radius: var(--radius-8);
+  color: inherit;
+  text-decoration: none;
+}
+.tma-dash__profile-link:hover { background: var(--color-hover); }
+.tma-dash__profile-link .tma-dash__profile-meta { display: flex; flex-direction: column; min-width: 0; }
+
+/* ── My profile page ── */
+.tma-profile-current {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding-bottom: var(--space-8);
+}
+.tma-profile-current img { border-radius: 50%; }
+.tma-profile-current p { margin: 0; }
+
+.tma-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-16);
+}
+.tma-profile-field { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.tma-profile-field--wide { grid-column: 1 / -1; }
+.tma-profile-field__label {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+.tma-profile-field__input {
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-8) var(--space-12);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-input);
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+}
+.tma-profile-field__input:focus { border-color: var(--color-border-strong); outline: 0; }
+.tma-profile-field__input--area { resize: vertical; }
+.tma-profile-field__error {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-red);
+}
+.tma-profile-actions { display: flex; justify-content: flex-end; padding-top: var(--space-8); }
+
+/* country hint under phone fields (phone-input.js) */
+.tma-phone-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-phone-hint[hidden] { display: none; }
+
+/* inside the panel's boxed field, tuck it under the value quietly */
+.tma-user-info-panel__field .tma-phone-hint {
+  margin-top: 2px;
+}
+
+/* ── Users table: click-to-sort column headers ── */
+.tma-dash__cc--sortable { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; }
+.tma-dash__cc--sortable:hover { color: var(--color-text-primary); }
+.tma-dash__cc--sortable.is-sorted { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
+.tma-dash__cc--sortable:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; border-radius: var(--radius-4); }
+.tma-dash__sort-arrow { font-size: 11px; line-height: 1; }
+
+/* Users: delete confirmation dialog — left-aligned, red confirm */
+.tma-users-dialog { text-align: left; align-items: stretch; }
+.tma-users-dialog .tma-dash__settings-change-title,
+.tma-users-dialog .tma-dash__settings-change-text { text-align: left; }
+.tma-users-delete-actions { display: flex; justify-content: flex-start; gap: var(--space-8); margin-top: var(--space-16); }
+.tma-users-dialog .tma-users-delete-confirm { background: var(--color-red); border-color: var(--color-red); color: #fff; }
+.tma-users-dialog .tma-users-delete-confirm:hover { filter: brightness(0.94); }
+.tma-users-dialog .tma-users-delete-confirm:disabled { opacity: 0.5; pointer-events: none; }

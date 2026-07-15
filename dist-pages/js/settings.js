@@ -17,6 +17,7 @@
     { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
+    { id: 'account-security', label: 'Account security', icon: 'ShieldCheck' },
     { id: 'payment', label: 'Payment', icon: 'CurrencyCircleDollar' },
     { id: 'plugins', label: 'Plugins', icon: 'Plugs' },
   ];
@@ -340,6 +341,45 @@
     syncThemePanelUI(root);
   }
 
+  /* localStorage key ↔ server preference key, for settings we persist to the
+     account (Time and language). Changing one of these write-through saves to
+     /me/preferences; on mount we hydrate localStorage from the server. */
+  var PREF_SERVER_KEYS = {
+    'tma.autoTimezone': 'autoTimezone',
+    'tma.timezone': 'timezone',
+    'tma.language': 'language',
+    'tma.voice': 'voice',
+  };
+
+  function prefXsrf() {
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  var prefPending = {}, prefTimer = null;
+  function queuePrefSync(serverKey, localKey, rawValue) {
+    prefPending[serverKey] = localKey === 'tma.autoTimezone'
+      ? (rawValue === '1' || rawValue === true)
+      : rawValue;
+    if (prefTimer) clearTimeout(prefTimer);
+    prefTimer = setTimeout(flushPrefSync, 400);
+  }
+  function flushPrefSync() {
+    var body = prefPending; prefPending = {}; prefTimer = null;
+    if (!Object.keys(body).length) return;
+    fetch('/me/preferences', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': prefXsrf(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify(body),
+    }).catch(function () {});
+  }
+
   var store = {
     get: function (k, d) {
       try {
@@ -353,8 +393,40 @@
       try {
         localStorage.setItem(k, v);
       } catch (e) {}
+      if (PREF_SERVER_KEYS[k]) queuePrefSync(PREF_SERVER_KEYS[k], k, v);
     },
   };
+
+  function applyLanguage() {
+    try {
+      var lang = localStorage.getItem('tma.language');
+      if (lang) document.documentElement.setAttribute('lang', lang);
+    } catch (e) {}
+  }
+
+  var prefsHydrated = false;
+  function hydratePrefs(root) {
+    fetch('/me/preferences', {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
+      if (!p) return;
+      var changed = false;
+      Object.keys(PREF_SERVER_KEYS).forEach(function (localKey) {
+        var serverKey = PREF_SERVER_KEYS[localKey];
+        if (p[serverKey] === undefined || p[serverKey] === null) return;
+        var val = localKey === 'tma.autoTimezone' ? (p[serverKey] ? '1' : '0') : String(p[serverKey]);
+        if (localStorage.getItem(localKey) !== val) {
+          try { localStorage.setItem(localKey, val); } catch (e) {}
+          changed = true;
+        }
+      });
+      applyLanguage();
+      if (changed && root && document.body.contains(root)) {
+        try { syncTimePanelUI(root); } catch (e) {}
+      }
+    }).catch(function () {});
+  }
 
   var TIMEZONES = [
     { id: 'utc-12', label: 'UTC-12 Baker Island Time' },
@@ -2718,6 +2790,12 @@
     }).join('');
   }
 
+  function renderAccountSecurityPanel() {
+    return '<section class="tma-dash__settings-panel" data-settings-panel="account-security" hidden>' +
+      '<div data-account-security-mount><p class="tma-dash__settings-change-text">Loading…</p></div>' +
+      '</section>';
+  }
+
   function render(activeNav) {
     return '<div class="tma-dash__settings-layout" data-node-id="30919:278108">' +
       '<div class="tma-dash__settings-card" data-settings-card>' +
@@ -2730,6 +2808,7 @@
       '<button type="button" class="tma-dash__settings-mobile-more" data-settings-mobile-more hidden aria-label="More options">' +
       '<img src="' + ICON + 'DotsThree.svg" alt="" width="24" height="24"></button></div>' +
       renderProfilePanel() +
+      renderAccountSecurityPanel() +
       renderThemePanel() +
       renderTimePanel() +
       renderNotificationsPanel() +
@@ -3978,6 +4057,10 @@
     root.querySelectorAll('[data-settings-nav]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         activateNav(root, btn.getAttribute('data-settings-nav'));
+        if (btn.getAttribute('data-settings-nav') === 'account-security' && window.TMAAccountSecurity) {
+          var mountEl = root.querySelector('[data-account-security-mount]');
+          if (mountEl) window.TMAAccountSecurity.mount(mountEl);
+        }
       });
     });
 
@@ -4093,6 +4176,10 @@
 
   function mount(root, opts) {
     if (!root) return;
+    // Pull the account's saved Time-and-language prefs into localStorage (once
+    // per page load), so the panels reflect what's stored on the account.
+    applyLanguage();
+    if (!prefsHydrated) { prefsHydrated = true; hydratePrefs(root); }
     var initialNav = (opts && (opts.activeNav || opts.settingsNav)) || 'profile';
     var openDetailOnMobile = !!(opts && (opts.activeNav || opts.settingsNav || opts.paymentAdded || opts.openChangeEmail));
     root.innerHTML = render(initialNav);

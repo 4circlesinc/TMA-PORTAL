@@ -144,6 +144,14 @@
           openChangeEmail: true,
         };
       }
+      if (p === '/account-settings') {
+        return {
+          navId: 'account-settings',
+          view: 'admin',
+          title: 'Settings',
+          crumb: 'Settings',
+        };
+      }
       if (p === '/settings') {
         var settingsParams = typeof URLSearchParams !== 'undefined'
           ? new URLSearchParams(window.location.search)
@@ -409,7 +417,7 @@
       searchTrigger.setAttribute('data-sidebar-mobile-search-toggle', '');
       searchTrigger.setAttribute('aria-label', 'Search');
       searchTrigger.innerHTML =
-        '<img src="/TMA-PORTAL/images/icons/tma/Search-16.svg" alt="" aria-hidden="true">' +
+        '<img src="images/icons/tma/Search-16.svg" alt="" aria-hidden="true">' +
         '<span class="tma-dash__search-text">Search</span>';
 
       var logo = sidebar.querySelector('.tma-dash__sidebar-logo');
@@ -448,10 +456,10 @@
         logo.setAttribute('aria-label', 'TM ANTOINE Advisory home');
         logo.innerHTML =
           '<span class="tma-dash__logo-expanded">' +
-          '<img class="tma-dash__logo-horizontal" src="/TMA-PORTAL/images/brand/tma/tma-logo-horizontal.png" alt="" loading="lazy">' +
+          '<img class="tma-dash__logo-horizontal" src="images/brand/tma/tma-logo-horizontal.png" alt="" loading="lazy">' +
           '</span>' +
           '<span class="tma-dash__logo-collapsed">' +
-          '<img class="tma-dash__logo-mark" src="/TMA-PORTAL/images/brand/tma/tma-logo-mark.png" alt="TM ANTOINE Advisory" width="32" height="32" loading="lazy">' +
+          '<img class="tma-dash__logo-mark" src="images/brand/tma/tma-logo-mark.png" alt="TM ANTOINE Advisory" width="32" height="32" loading="lazy">' +
           '</span>';
 
         headerCenter.insertBefore(logo, headerCenter.firstChild);
@@ -579,9 +587,9 @@
       actions.setAttribute('data-sidebar-profile-actions', '');
       actions.innerHTML =
         '<button type="button" class="tma-dash__profile-action-btn" data-sidebar-profile-action="settings" aria-label="Settings">' +
-        '<img src="/TMA-PORTAL/images/icons/phosphor/GearSix.svg" alt="" aria-hidden="true"></button>' +
+        '<img src="images/icons/phosphor/GearSix.svg" alt="" aria-hidden="true"></button>' +
         '<button type="button" class="tma-dash__profile-action-btn" data-sidebar-profile-action="logout" aria-label="Log out">' +
-        '<img src="/TMA-PORTAL/images/icons/phosphor/SignOut.svg" alt="" aria-hidden="true"></button>';
+        '<img src="images/icons/phosphor/SignOut.svg" alt="" aria-hidden="true"></button>';
       profile.appendChild(actions);
     }
 
@@ -1003,7 +1011,7 @@
       else root.removeAttribute('data-theme');
       if (themeBtn) {
         var img = themeBtn.querySelector('img');
-        if (img) img.src = resolved === 'dark' ? '/TMA-PORTAL/images/icons/phosphor/MoonStars.svg' : '/TMA-PORTAL/images/icons/phosphor/Sun.svg';
+        if (img) img.src = resolved === 'dark' ? 'images/icons/phosphor/MoonStars.svg' : 'images/icons/phosphor/Sun.svg';
       }
       store.set('tma.theme', resolved);
     }
@@ -1097,8 +1105,8 @@
       }
     }
 
-    var SIDEBAR_TOGGLE_ICON = '/TMA-PORTAL/images/icons/phosphor/Sidebar.svg';
-    var MOBILE_MENU_ICON = '/TMA-PORTAL/images/icons/phosphor/List.svg';
+    var SIDEBAR_TOGGLE_ICON = 'images/icons/phosphor/Sidebar.svg';
+    var MOBILE_MENU_ICON = 'images/icons/phosphor/List.svg';
 
     function syncSidebarToggleIcon() {
       var btn = root.querySelector('[data-action="toggle-sidebar"]');
@@ -1141,7 +1149,7 @@
           btn.setAttribute('aria-label', 'Dashboard');
           var icon = btn.querySelector('img');
           if (icon) {
-            icon.src = '/TMA-PORTAL/images/icons/phosphor/House.svg';
+            icon.src = 'images/icons/phosphor/House.svg';
             icon.alt = '';
           }
         }
@@ -1230,6 +1238,22 @@
     }
 
     root._syncNavBadges = syncNavBadges;
+
+    function syncPendingUsersBadge() {
+      fetch('/admin/users/pending-count', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      })
+        .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
+        .then(function (j) {
+          var n = (j && j.count) || 0;
+          setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="users"]'), n);
+          setNavCount(root.querySelector('.tma-dash__mrow[data-nav="users"]'), n);
+        })
+        .catch(function () {});
+    }
+    root._syncPendingUsersBadge = syncPendingUsersBadge;
+    syncPendingUsersBadge();
 
     function ensureTabBadge(btn, kind) {
       var host = btn.querySelector('.tma-dash__tab-btn-icon') || btn;
@@ -2016,13 +2040,24 @@
     if (hiddenAccountNav[savedNav]) savedNav = 'ac-overview';
     if (!leaves.some(function (l) { return l.getAttribute('data-nav') === savedNav; })) savedNav = 'dash-dashboard';
     var bootRoute = routeFromPath(window.location.pathname);
+    var bootSettingsPage = null;
+    try { bootSettingsPage = new URLSearchParams(window.location.search).get('settings-page'); } catch (e) {}
     if (window.TMAPortalSignatures && window.TMAPortalSignatures.clearLock) {
       window.TMAPortalSignatures.clearLock();
     } else {
       root.classList.remove('tma-dash--signatures-wizard');
       document.documentElement.classList.remove('tma-dash--signatures-wizard');
     }
-    if (bootRoute) {
+    if (bootSettingsPage) {
+      activate('account-settings', {
+        view: 'admin',
+        adminPage: bootSettingsPage,
+        title: 'Account settings',
+        crumb: 'Account settings',
+        keepDrawer: true,
+        skipUrl: true,
+      });
+    } else if (bootRoute) {
       activate(bootRoute.navId, {
         view: bootRoute.view,
         title: bootRoute.title,

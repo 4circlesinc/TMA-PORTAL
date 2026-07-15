@@ -383,17 +383,12 @@ a.tma-auth__task:hover {
   flex: 0 0 32px;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: var(--color-hover);
+  /* Naked icons — no circle, no tinted background. */
 }
 
 .tma-auth__task-icon img {
-  width: 16px;
-  height: 16px;
-}
-
-.tma-auth__task--done .tma-auth__task-icon {
-  background: color-mix(in srgb, var(--color-green) 16%, transparent);
+  width: 20px;
+  height: 20px;
 }
 
 .tma-auth__task-copy {
@@ -1382,3 +1377,107 @@ a.tma-flowmap__name:hover {
 [data-theme="dark"] .tma-auth.tma-auth--split .tma-auth__stage {
   background: color-mix(in srgb, var(--color-primary) 12%, #161616);
 }
+
+/* ── Profile setup: system avatar chooser ── */
+.tma-profile-photo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  cursor: pointer;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+}
+.tma-profile-photo img { border-radius: 50%; }
+.tma-profile-photo:has(input:checked) { border-color: var(--color-primary); }
+.tma-profile-photo input { accent-color: var(--color-black); }
+
+.tma-profile-avatars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: var(--space-8);
+  width: 100%;
+}
+.tma-profile-avatar { cursor: pointer; line-height: 0; }
+.tma-profile-avatar input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.tma-profile-avatar img {
+  width: 100%;
+  height: auto;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-12);
+  display: block;
+}
+.tma-profile-avatar:hover img { border-color: var(--color-border-medium); }
+.tma-profile-avatar:has(input:checked) img { border-color: var(--color-primary); }
+.tma-profile-avatar:has(input:focus-visible) img { border-color: var(--color-primary); }
+
+/* leading brand icon inside an auth field */
+.tma-auth__field--icon-start {
+  gap: var(--space-8);
+}
+.tma-auth__field--icon-start > img {
+  flex: 0 0 16px;
+  opacity: 0.75;
+}
+/* brand marks keep their own colour in dark mode */
+
+/* country hint on phone fields: a right-hand suffix inside the field box */
+.tma-auth__field .tma-phone-hint {
+  order: 9;
+  margin-left: auto;
+  padding-left: var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-phone-hint[hidden] { display: none; }
+
+/* selects share the field look instead of the OS widget (profile setup Gender) */
+select.tma-auth__input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("../images/icons/phosphor/CaretUpDown.svg");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 14px 14px;
+  cursor: pointer;
+}
+
+/* ── Authenticator app chooser (2FA setup) ── */
+.tma-authapps { display: flex; flex-direction: column; gap: var(--space-8); margin: var(--space-8) 0; }
+.tma-authapp {
+  display: flex; align-items: center; gap: var(--space-12);
+  padding: var(--space-10) var(--space-12);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--transition-base), border-color var(--transition-base);
+}
+.tma-authapp:hover { background: var(--color-hover); border-color: var(--color-border-medium); }
+.tma-authapp__logo { width: 32px; height: 32px; flex: 0 0 32px; object-fit: contain; border-radius: 7px; }
+.tma-authapp__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tma-authapp__name { font-size: var(--text-size-14); line-height: var(--text-lh-14); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.tma-authapp__desc { font-size: var(--text-size-12); line-height: var(--text-lh-12); color: var(--color-text-secondary); }
+.tma-authapp__caret { width: 16px; height: 16px; flex: 0 0 16px; opacity: 0.4; }
+[data-theme="dark"] .tma-authapp img[src*="phosphor/"], .tma-dash[data-theme="dark"] .tma-authapp img[src*="phosphor/"] { filter: invert(1) brightness(1.6); }
+
+/* ── Profile photo upload (setup) ── */
+.tma-photo__row { display: flex; align-items: center; gap: var(--space-16); width: min(384px, 100%); }
+.tma-photo__preview { position: relative; flex: 0 0 72px; width: 72px; height: 72px; border-radius: 50%; overflow: hidden; background: var(--color-hover); border: 0.5px solid var(--color-border-soft); display: flex; align-items: center; justify-content: center; }
+.tma-photo__preview img[data-photo-preview] { width: 100%; height: 100%; object-fit: cover; }
+.tma-photo__placeholder { display: flex; align-items: center; justify-content: center; opacity: 0.45; }
+.tma-photo__side { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-6); align-items: flex-start; }
+.tma-photo__btn { cursor: pointer; }

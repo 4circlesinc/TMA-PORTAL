@@ -5,10 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\AuthEvent;
 use App\Models\ConnectedAccount;
 use App\Models\User;
+use App\Support\AvatarService;
+use App\Support\TrustedDevices;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as OAuthUser;
@@ -17,6 +21,8 @@ use Throwable;
 class SocialAuthController extends Controller
 {
     private const PROVIDERS = ['google', 'microsoft'];
+
+    private const SYNC_EXTRAS = ['email', 'calendar', 'onedrive', 'sharepoint'];
 
     public function redirect(Request $request, string $provider): RedirectResponse
     {
@@ -46,10 +52,42 @@ class SocialAuthController extends Controller
         }
 
         $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
+        $request->session()->put(
+            'social.return',
+            in_array($request->query('return'), ['getting-started', 'connectors', 'profile'], true) ? $request->query('return') : 'security-settings',
+        );
 
-        return Socialite::driver($provider)
-            ->with(['prompt' => 'select_account'])
-            ->redirect();
+        // Data sync opt-in (email, calendar, OneDrive, SharePoint). Only
+        // requests extra scopes when the provider's sync is configured;
+        // otherwise this is a normal sign-in.
+        $extras = self::SYNC_EXTRAS;
+        $wanted = [];
+        foreach ($extras as $extra) {
+            $wanted[$extra] = $request->boolean("sync_{$extra}");
+            $request->session()->put("social.sync_{$extra}", $wanted[$extra]);
+        }
+
+        $driver = Socialite::driver($provider);
+        $params = ['prompt' => 'select_account'];
+
+        if (config("services.{$provider}.sync") && array_filter($wanted)) {
+            $scopes = [];
+            foreach ($extras as $extra) {
+                if ($wanted[$extra] && config("services.{$provider}.scope_{$extra}")) {
+                    $scopes[] = config("services.{$provider}.scope_{$extra}");
+                }
+            }
+            $driver->scopes(array_filter($scopes));
+
+            if ($provider === 'google') {
+                // needed to receive a refresh token for offline access
+                $params = ['access_type' => 'offline', 'prompt' => 'consent'];
+            } else {
+                $driver->scopes(['offline_access']);
+            }
+        }
+
+        return $driver->with($params)->redirect();
     }
 
     public function callback(Request $request, string $provider): RedirectResponse
@@ -122,12 +160,27 @@ class SocialAuthController extends Controller
 
         $user->connectedAccounts()->updateOrCreate(
             ['provider' => $provider],
-            ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
+            array_merge(
+                ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
+                $this->syncPayload($request, $oauth),
+            ),
         );
+
+        $this->rememberAvatar($user, $oauth, $provider);
 
         $this->record($user->id, 'social_connected');
 
-        return redirect()->route('security-settings')->with('status', 'social-connected');
+        $return = $request->session()->pull('social.return', 'security-settings');
+
+        // Reconnecting specifically to pull the account photo: report whether we
+        // actually found one so the profile page can say so.
+        if ($return === 'profile') {
+            $hasPhoto = (bool) $user->fresh()->provider_avatar_url;
+
+            return redirect('/account-settings?page=profile&notice='.($hasPhoto ? 'photo-added' : 'photo-none'));
+        }
+
+        return $this->returnTo($return, true, 'social-connected');
     }
 
     private function authenticate(Request $request, string $provider, OAuthUser $oauth, bool $verified): RedirectResponse
@@ -147,8 +200,16 @@ class SocialAuthController extends Controller
         $user = User::where('email', Str::lower($oauth->getEmail()))->first();
 
         if (! $user) {
+            $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');
+            $parts = preg_split('/\s+/', trim($display), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $first = array_shift($parts) ?: $display;
+            $last = count($parts) ? array_pop($parts) : null;
+
             $user = new User([
-                'name' => $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@'),
+                'name' => $display,
+                'first_name' => $first,
+                'middle_name' => count($parts) ? implode(' ', $parts) : null,
+                'last_name' => $last,
                 'email' => Str::lower($oauth->getEmail()),
                 'password' => Str::password(32),
             ]);
@@ -162,7 +223,10 @@ class SocialAuthController extends Controller
 
         $user->connectedAccounts()->updateOrCreate(
             ['provider' => $provider],
-            ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
+            array_merge(
+                ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
+                $this->syncPayload($request, $oauth),
+            ),
         );
 
         // A Google-verified matching email also settles our own verification.
@@ -170,13 +234,16 @@ class SocialAuthController extends Controller
             $user->forceFill(['email_verified_at' => now()])->save();
         }
 
+        $this->rememberAvatar($user, $oauth, $provider);
+
         return $this->login($request, $user);
     }
 
     private function login(Request $request, User $user): RedirectResponse
     {
-        // Respect two-factor authentication: hand off to Fortify's challenge.
-        if ($user->hasTwoFactorEnabled()) {
+        // Respect two-factor authentication: hand off to Fortify's challenge,
+        // unless this is a device the user already trusted.
+        if ($user->hasTwoFactorEnabled() && ! TrustedDevices::trusts($user, $request)) {
             $request->session()->put([
                 'login.id' => $user->getKey(),
                 'login.remember' => false,
@@ -191,10 +258,30 @@ class SocialAuthController extends Controller
         return redirect()->intended('/');
     }
 
+    private function returnTo(string $return, bool $ok, string $message): RedirectResponse
+    {
+        if ($return === 'connectors') {
+            return redirect('/account-settings?settings-page=connectors&notice='.($ok ? 'social-connected' : 'social-error')
+                .($ok ? '' : '&reason='.urlencode($message)));
+        }
+
+        if ($return === 'profile') {
+            return redirect('/account-settings?page=profile'.($ok ? '&notice=photo-added' : '&notice=social-error&reason='.urlencode($message)));
+        }
+
+        $route = $return === 'getting-started' ? 'getting-started' : 'security-settings';
+
+        return redirect()->route($route)->with($ok ? 'status' : 'social_error', $ok ? 'social-connected' : $message);
+    }
+
     private function fail(Request $request, string $message): RedirectResponse
     {
         if ($request->user()) {
-            return redirect()->route('security-settings')->with('social_error', $message);
+            return $this->returnTo(
+                $request->session()->pull('social.return', 'security-settings'),
+                false,
+                $message,
+            );
         }
 
         return redirect()->route('login')->with('social_error', $message);
@@ -207,6 +294,118 @@ class SocialAuthController extends Controller
         }
 
         return redirect()->route('security-settings')->with($ok ? 'status' : 'social_error', $ok ? 'social-disconnected' : $message);
+    }
+
+    /**
+     * Refresh token + granted scopes + sync flags to persist on the connected
+     * account, only when the user opted into sync and we received a token.
+     */
+    private function syncPayload(Request $request, OAuthUser $oauth): array
+    {
+        $wanted = [];
+        foreach (self::SYNC_EXTRAS as $extra) {
+            $wanted[$extra] = (bool) $request->session()->pull("social.sync_{$extra}", false);
+        }
+
+        if (! array_filter($wanted)) {
+            return [];
+        }
+
+        $granted = $oauth->accessTokenResponseBody['scope'] ?? '';
+
+        return [
+            'token' => $oauth->refreshToken ?: null,
+            'scopes' => $granted ? explode(' ', $granted) : null,
+            'sync_email' => $wanted['email'],
+            'sync_calendar' => $wanted['calendar'],
+            'sync_onedrive' => $wanted['onedrive'],
+            'sync_sharepoint' => $wanted['sharepoint'],
+        ];
+    }
+
+    /**
+     * Remember the provider's profile photo so the user can keep it instead of
+     * uploading. Google hands us a public image URL; for Microsoft we pull the
+     * photo bytes from Graph ourselves and store them as a file we can serve.
+     */
+    private function rememberAvatar(User $user, OAuthUser $oauth, string $provider): void
+    {
+        $oldProvider = (string) $user->provider_avatar_url;
+        $providerUrl = null;
+
+        if ($provider === 'microsoft') {
+            $bytes = $this->fetchMicrosoftPhoto($oauth);
+            if ($bytes !== null) {
+                $providerUrl = AvatarService::storeBinary($bytes, $oldProvider);
+            }
+        } else {
+            $avatar = $oauth->getAvatar();
+            if ($avatar && str_starts_with($avatar, 'https://')) {
+                // A public URL (Google). Drop any file we stored for a previous
+                // provider photo so it doesn't orphan.
+                AvatarService::deletePrevious($oldProvider);
+                $providerUrl = $avatar;
+            }
+        }
+
+        if (! $providerUrl) {
+            return;
+        }
+
+        $current = (string) $user->avatar_url;
+        // Adopt the provider photo unless they've set a *real* photo of their own
+        // (an uploaded /storage/ file or another https URL). Empty values and
+        // legacy system-avatar names count as "no real photo".
+        $hasRealPhoto = str_starts_with($current, '/storage/')
+            || (str_starts_with($current, 'https://') && $current !== $oldProvider);
+        $wasUsingProviderPhoto = ! $hasRealPhoto || $current === $oldProvider;
+
+        $fill = ['provider_avatar_url' => $providerUrl];
+        if ($wasUsingProviderPhoto) {
+            $fill['avatar_url'] = $providerUrl;
+        }
+
+        $user->forceFill($fill)->save();
+    }
+
+    /**
+     * Fetch the signed-in Microsoft user's profile photo bytes from Graph.
+     * Uses the unsized /me/photo/$value endpoint, which works for both
+     * work/school and personal accounts (the sized /photos/{size} endpoint the
+     * Socialite driver uses 404s on many accounts). Returns null if there's no
+     * photo or the call fails.
+     */
+    private function fetchMicrosoftPhoto(OAuthUser $oauth): ?string
+    {
+        // If the driver already supplied base64 photo bytes, use them.
+        $existing = $oauth->getAvatar();
+        if ($existing && ! str_starts_with($existing, 'http')) {
+            $bin = base64_decode($existing, true);
+            if ($bin !== false && $bin !== '') {
+                return $bin;
+            }
+        }
+
+        $token = $oauth->token ?? null;
+        if (! $token) {
+            return null;
+        }
+
+        try {
+            $resp = Http::withToken($token)
+                ->withHeaders(['Accept' => 'image/jpeg'])
+                ->get('https://graph.microsoft.com/v1.0/me/photo/$value');
+
+            if ($resp->successful() && $resp->body() !== '') {
+                return $resp->body();
+            }
+
+            Log::info('Microsoft photo unavailable', ['status' => $resp->status()]);
+        } catch (Throwable $e) {
+            Log::info('Microsoft photo fetch error', ['error' => $e->getMessage()]);
+        }
+
+        return null;
     }
 
     private function record(?int $userId, string $event): void

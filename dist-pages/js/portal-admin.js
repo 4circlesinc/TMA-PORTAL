@@ -11,22 +11,39 @@
   function ui() { return window.TMAPortalUI; }
   function data() { return window.TMAPortalData; }
 
-  var state = { el: null, page: 'admin-overview', expanded: {} };
+  var state = { el: null, page: 'profile', expanded: {} };
+
+  /* Personal sections reuse the real panels from settings.js */
+  var SETTINGS_PAGES = [
+    { id: 'theme', label: 'Theme', icon: 'Palette' },
+    { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
+    { id: 'notifications', label: 'Notifications', icon: 'Bell' },
+    { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
+    { id: 'payment', label: 'Payment', icon: 'CurrencyCircleDollar' },
+    { id: 'plugins', label: 'Plugins', icon: 'Plugs' },
+  ];
 
   var NAV = [
-    { id: 'admin-overview', label: 'Admin Overview' },
-    { id: 'background-ops', label: 'Background Operations' },
-    { group: 'reporting-group', label: 'Account and Reporting', items: [
+    { id: 'profile', label: 'My profile', icon: 'UserCircle' },
+    { id: 'theme', label: 'Theme', icon: 'Palette' },
+    { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
+    { id: 'notifications', label: 'Notifications', icon: 'Bell' },
+    { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
+    { id: 'payment', label: 'Payment', icon: 'CurrencyCircleDollar' },
+    { id: 'plugins', label: 'Plugins', icon: 'Plugs' },
+    { id: 'admin-overview', label: 'Admin Overview', icon: 'SquaresFour' },
+    { id: 'background-ops', label: 'Background Operations', icon: 'ArrowsClockwise' },
+    { group: 'reporting-group', label: 'Account and Reporting', icon: 'ChartBar', items: [
       { id: 'reporting', label: 'Reporting' },
       { id: 'notification-history', label: 'Notification History' },
       { id: 'branding', label: 'Edit Company Branding' },
     ] },
-    { group: 'clienthub-group', label: 'Client hub management', items: [
+    { group: 'clienthub-group', label: 'Client hub management', icon: 'UsersThree', items: [
       { id: 'clienthub-access', label: 'Client hub access' },
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
     ] },
-    { group: 'security-group', label: 'Security', items: [
+    { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
       { id: 'account-security', label: 'Account security' },
       { id: 'security-insights', label: 'Security Insights' },
       { id: 'dlp', label: 'Data loss prevention' },
@@ -37,12 +54,12 @@
       { id: 'super-users', label: 'Edit super user group' },
       { id: 'quarantined', label: 'Quarantined files' },
     ] },
-    { id: 'connectors', label: 'Connectors' },
-    { id: 'connection-manager', label: 'Connection Manager' },
-    { group: 'storage-group', label: 'Storage', items: [
+    { id: 'connectors', label: 'Connectors', icon: 'Plugs' },
+    { id: 'connection-manager', label: 'Connection Manager', icon: 'LinkSimple' },
+    { group: 'storage-group', label: 'Storage', icon: 'HardDrives', items: [
       { id: 'storage-usage', label: 'Usage' },
     ] },
-    { group: 'prefs-group', label: 'Advanced Preferences', items: [
+    { group: 'prefs-group', label: 'Advanced Preferences', icon: 'SlidersHorizontal', items: [
       { id: 'ai-settings', label: 'AI Settings' },
       { id: 'email-settings', label: 'Email Settings' },
       { id: 'permissions', label: 'Permissions' },
@@ -530,6 +547,11 @@
     },
   };
 
+  var AUTH_APPS = {
+    microsoft: { name: 'Microsoft Authenticator', logo: 'images/icons/brands/MicrosoftAuthenticator.webp', desc: 'iOS, Android' },
+    google: { name: 'Google Authenticator', logo: 'images/icons/brands/GoogleAuthenticator.svg', desc: 'iOS, Android' },
+  };
+
   var SEC_STATUS = {
     login: { label: 'Signed in', badge: 'tma-auth__badge--done' },
     logout: { label: 'Signed out', badge: '' },
@@ -547,7 +569,30 @@
     account_updated: { label: 'Profile updated by admin', badge: '' },
     password_reset_link_sent: { label: 'Password reset link sent', badge: '' },
     password_generated: { label: 'Temporary password generated', badge: '' },
+    account_deleted: { label: 'Account deleted', badge: 'tma-auth__badge--danger' },
+    two_factor_reset: { label: 'Two-factor reset by admin', badge: '' },
   };
+
+  function secField(label, name, value, placeholder, icon) {
+    var input = '<input class="tma-pf__input" data-pf="' + name + '" value="' + ui().esc(value || '') + '"' +
+      (placeholder ? ' placeholder="' + ui().esc(placeholder) + '"' : '') + '>';
+    if (icon) {
+      input = '<span class="tma-pf__input-wrap">' +
+        '<img class="tma-pf__input-icon" src="images/icons/' + ui().esc(icon) + '.svg" alt="" width="16" height="16" aria-hidden="true">' +
+        input + '</span>';
+    }
+    return '<label class="tma-pf__field"><span class="tma-pf__label">' + ui().esc(label) + '</span>' + input + '</label>';
+  }
+
+  function secSelect(label, name, value, choices) {
+    return '<label class="tma-pf__field"><span class="tma-pf__label">' + ui().esc(label) + '</span>' +
+      '<select class="tma-pf__input" data-pf="' + name + '">' +
+      '<option value=""' + (!value ? ' selected' : '') + '></option>' +
+      choices.map(function (c) {
+        return '<option value="' + ui().esc(c) + '"' + (value === c ? ' selected' : '') + '>' + ui().esc(c) + '</option>';
+      }).join('') +
+      '</select></label>';
+  }
 
   function secEnsureStyles() {
     ['css/auth.css', 'css/auth-flow.css'].forEach(function (href) {
@@ -560,6 +605,229 @@
     });
   }
 
+  SETTINGS_PAGES.forEach(function (sp) {
+    PAGES[sp.id] = {
+      render: function () {
+        return '<div data-settings-embed></div>';
+      },
+      wire: function (el) {
+        var host = el.querySelector('[data-settings-embed]');
+        if (!host || !window.TMASettings) return;
+        window.TMASettings.mount(host, { activeNav: sp.id });
+        var card = host.querySelector('.tma-dash__settings-card');
+        if (card) card.classList.add('is-settings-detail');
+      },
+    };
+  });
+
+  PAGES['profile'] = {
+    hideTitle: true,
+    render: function () {
+      secEnsureStyles();
+      return '<div data-pf-root><p class="tma-portal-note">Loading…</p></div>';
+    },
+    wire: function (el) {
+      var root = el.querySelector('[data-pf-root]');
+      if (!root) return;
+      var esc = ui().esc;
+
+      /* returning from an account-photo re-sign-in lands here with a notice */
+      try {
+        var pq = new URLSearchParams(window.location.search);
+        var pNotice = pq.get('notice');
+        var pReason = pq.get('reason') || '';
+        if (pNotice) {
+          pq.delete('notice'); pq.delete('reason'); pq.delete('page');
+          history.replaceState(null, '', window.location.pathname + (pq.toString() ? '?' + pq.toString() : ''));
+          if (pNotice === 'photo-added') ui().toast('Photo added from your account');
+          else if (pNotice === 'photo-none') ui().toast('No photo found on that account');
+          else if (pNotice === 'social-error') ui().toast(pReason || 'That didn\'t complete.');
+        }
+      } catch (e0) {}
+
+      secApi('GET', '/me/profile').then(function (r) { return r.json(); }).then(function (me) {
+        var photoFile = null;            // a File the user picked
+        var photoSource = 'keep';        // 'keep' | 'upload' | 'provider'
+        var hasProvider = !!me.providerPhoto;
+
+        function initials(seed) {
+          var s = String(me.name || '?').trim().split(/\s+/).slice(0, 2)
+            .map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
+          var colors = ['#136da0', '#03a5e9', '#0f9d8c', '#3f9142', '#c77d18', '#b5497e', '#3b6fb8'];
+          var n = 0, k = String(seed || me.email || me.name || '');
+          for (var i = 0; i < k.length; i++) n = (n + k.charCodeAt(i)) % 997;
+          var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+            '<rect width="40" height="40" rx="20" fill="' + colors[n % colors.length] + '"/>' +
+            '<text x="20" y="21" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600" ' +
+            'fill="#ffffff" text-anchor="middle" dominant-baseline="central">' + s + '</text></svg>';
+          return 'data:image/svg+xml,' + encodeURIComponent(svg);
+        }
+
+        function avatarSrc(name) {
+          if (name && /^(https?:|\/storage\/|data:)/.test(name)) return name;
+          return initials();
+        }
+
+        root.innerHTML =
+          '<div class="tma-security">' +
+
+          '<section class="tma-security__card" aria-label="Profile picture">' +
+          '<div class="tma-pf__current">' +
+          '<img data-pf-preview src="' + esc(avatarSrc(me.avatar)) + '" alt="" width="72" height="72">' +
+          '<span class="tma-security__row-copy">' +
+          '<span class="tma-security__row-name" data-pf-display>' + esc(me.name) + '</span>' +
+          '<span class="tma-security__row-sub">' + esc(me.accountType || 'Member') + '</span></span>' +
+          '</div>' +
+          (hasProvider
+            ? '<div class="tma-pf__sources">' +
+                '<label class="tma-pf__source"><input type="radio" name="pf-source" value="keep" checked><span>Keep current photo</span></label>' +
+                '<label class="tma-pf__source"><input type="radio" name="pf-source" value="provider"><span>Use my account photo</span></label>' +
+                '<label class="tma-pf__source"><input type="radio" name="pf-source" value="upload"><span>Upload a new photo</span></label>' +
+              '</div>'
+            : '') +
+          '<label class="tma-auth__chip-btn tma-pf__upload" data-pf-uploadbtn>' +
+          '<img src="images/icons/tma/UploadCloud.svg" alt="" width="14" height="14" aria-hidden="true">' +
+          '<span data-pf-uploadlabel>' + (me.avatar ? 'Change photo' : 'Upload a photo') + '</span>' +
+          '<input type="file" accept="image/jpeg,image/png,image/webp" hidden data-pf-file></label>' +
+          // No provider photo cached yet, but they have a connected account:
+          // offer to pull it (needs a quick re-sign-in to that account).
+          (!hasProvider && me.connected && me.connected.length
+            ? '<div class="tma-pf__connected">' +
+              me.connected.map(function (c) {
+                var logo = c.key === 'google' ? 'Google16' : (c.key === 'microsoft' ? 'Microsoft16' : null);
+                return '<a class="tma-auth__chip-btn tma-pf__connect" href="/auth/social/' + esc(c.key) + '/redirect?return=profile">' +
+                  (logo ? '<img src="images/icons/brands/' + logo + '.svg" alt="" width="14" height="14" aria-hidden="true">' : '') +
+                  '<span>Use my ' + esc(c.name) + ' account photo</span></a>';
+              }).join('') +
+              '</div>'
+            : '') +
+          '</section>' +
+
+          '<section class="tma-security__card" aria-label="Your details">' +
+          '<div class="tma-pf__grid">' +
+          secField('First name', 'first_name', me.firstName) +
+          secField('Middle name', 'middle_name', me.middleName) +
+          secField('Last name', 'last_name', me.lastName) +
+          secSelect('Gender', 'gender', me.gender, ['Female', 'Male', 'Non-binary', 'Prefer not to say']) +
+          secField('Phone', 'phone', me.phone, '+1 555 123 4567') +
+          secField('Role', 'job_title', me.jobTitle) +
+          secField('LinkedIn', 'linkedin_url', me.linkedin, 'linkedin.com/in/your-name', 'brands/LinkedIn16') +
+          '<label class="tma-pf__field tma-pf__field--wide"><span class="tma-pf__label">About you</span>' +
+          '<textarea class="tma-pf__input tma-pf__input--area" data-pf="bio" rows="4" maxlength="1000">' + esc(me.bio || '') + '</textarea></label>' +
+          '</div>' +
+          '<div class="tma-security__row">' +
+          '<span class="tma-security__row-copy">' +
+          '<span class="tma-security__row-name">Email</span>' +
+          '<span class="tma-security__row-sub">' + esc(me.email) + ' - an administrator can change this</span></span>' +
+          '<button type="button" class="tma-auth__chip-btn" data-pf-security><span>Security</span></button>' +
+          '</div>' +
+          '<p class="tma-portal-note" data-pf-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save profile', attrs: 'data-pf-save' }) + '</div>' +
+          '</section></div>';
+
+        var previewEl = root.querySelector('[data-pf-preview]');
+        var uploadBtn = root.querySelector('[data-pf-uploadbtn]');
+        var uploadLabel = root.querySelector('[data-pf-uploadlabel]');
+        var fileInput = root.querySelector('[data-pf-file]');
+
+        fileInput.addEventListener('change', function () {
+          var picked = fileInput.files && fileInput.files[0];
+          if (!picked) return;
+          var up = root.querySelector('input[name="pf-source"][value="upload"]');
+          var useIt = function (blob, dataUrl) {
+            photoFile = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+            photoSource = 'upload';
+            previewEl.src = dataUrl || URL.createObjectURL(blob);
+            uploadLabel.textContent = 'Change photo';
+            if (up) up.checked = true;
+          };
+          if (window.TMAAvatarCropper) {
+            window.TMAAvatarCropper.open(picked, useIt);
+          } else {
+            photoFile = picked;
+            photoSource = 'upload';
+            previewEl.src = URL.createObjectURL(picked);
+            uploadLabel.textContent = 'Change photo';
+            if (up) up.checked = true;
+          }
+          fileInput.value = '';
+        });
+
+        root.querySelectorAll('input[name="pf-source"]').forEach(function (radio) {
+          radio.addEventListener('change', function () {
+            photoSource = radio.value;
+            if (photoSource === 'upload') {
+              fileInput.click();
+            } else if (photoSource === 'provider') {
+              photoFile = null;
+              fileInput.value = '';
+              previewEl.src = avatarSrc(me.providerPhoto);
+            } else {
+              photoFile = null;
+              fileInput.value = '';
+              previewEl.src = avatarSrc(me.avatar);
+            }
+          });
+        });
+
+        var secBtn = root.querySelector('[data-pf-security]');
+        if (secBtn) secBtn.addEventListener('click', function () { window.TMAPortalAdmin.setPage('account-security'); });
+
+        root.querySelector('[data-pf-save]').addEventListener('click', function () {
+          function val(name) {
+            var f = root.querySelector('[data-pf="' + name + '"]');
+            return f ? f.value.trim() : '';
+          }
+          var fd = new FormData();
+          fd.append('_method', 'PUT');
+          fd.append('first_name', val('first_name'));
+          fd.append('middle_name', val('middle_name'));
+          fd.append('last_name', val('last_name'));
+          fd.append('phone', val('phone'));
+          fd.append('job_title', val('job_title'));
+          fd.append('linkedin_url', val('linkedin_url'));
+          fd.append('gender', val('gender'));
+          fd.append('bio', val('bio'));
+          if (photoSource === 'upload' && photoFile) {
+            fd.append('source', 'upload');
+            fd.append('avatar_photo', photoFile);
+          } else if (photoSource === 'provider') {
+            fd.append('source', 'provider');
+          }
+
+          var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+          fetch('/profile', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Accept': 'application/json',
+              'X-XSRF-TOKEN': m ? decodeURIComponent(m[1]) : '',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: fd,
+          }).then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (j) {
+              var err = root.querySelector('[data-pf-error]');
+              if (!res.ok) {
+                var msg = (j && j.message) || 'Could not save your profile.';
+                if (j && j.errors) { var k = Object.keys(j.errors); if (k.length) msg = j.errors[k[0]][0]; }
+                err.textContent = msg;
+                err.hidden = false;
+                return;
+              }
+              err.hidden = true;
+              ui().toast('Profile saved');
+              if (window.TMACurrentUser) window.TMACurrentUser.load();
+              window.TMAPortalAdmin.setPage('profile');
+            });
+          });
+        });
+      }).catch(function () {
+        root.innerHTML = '<p class="tma-portal-note">Couldn\'t load your profile. Refresh to try again.</p>';
+      });
+    },
+  };
+
   PAGES['account-security'] = {
     render: function () {
       secEnsureStyles();
@@ -569,6 +837,24 @@
       var root = el.querySelector('[data-sec-root]');
       if (!root) return;
       var esc = ui().esc;
+
+      /* full-page round-trips (OAuth, MFA gate) land here with a notice */
+      var notice = null;
+      var noticeReason = '';
+      try {
+        var qs = new URLSearchParams(window.location.search);
+        notice = qs.get('notice');
+        noticeReason = qs.get('reason') || '';
+        if (qs.get('settings-page') || notice) {
+          qs.delete('settings-page');
+          qs.delete('notice');
+          qs.delete('reason');
+          history.replaceState(null, '', window.location.pathname + (qs.toString() ? '?' + qs.toString() : ''));
+        }
+      } catch (e2) {}
+      if (notice === 'social-connected') ui().toast('Sign-in method connected');
+      if (notice === 'social-disconnected') ui().toast('Sign-in method disconnected');
+      if (notice === 'social-error') ui().toast(noticeReason || 'That connection didn\'t complete.');
 
       function refresh() { window.TMAPortalAdmin.setPage('account-security'); }
 
@@ -589,6 +875,11 @@
 
         root.innerHTML =
           '<div class="tma-security">' +
+          (notice === 'mfa-required'
+            ? '<div class="tma-auth__alert tma-auth__alert--warning" role="status" style="width: 100%; max-width: none;">' +
+              '<img src="images/icons/phosphor/ShieldCheck.svg" alt="" width="16" height="16" aria-hidden="true">' +
+              '<span>Your administrator requires two-factor authentication. Set it up below.</span></div>'
+            : '') +
 
           '<section class="tma-security__card" aria-labelledby="sec-password">' +
           '<div class="tma-security__head">' +
@@ -600,6 +891,7 @@
           '<div class="tma-security__head">' +
           '<h2 class="tma-security__title" id="sec-connected"><img src="images/icons/phosphor/Plugs.svg" alt="" aria-hidden="true">Connected accounts</h2></div>' +
           '<p class="tma-security__desc">Sign in with Google or Microsoft alongside your password. Only accounts with your portal email can be connected.</p>' +
+          ((d.syncAvailable && (d.syncAvailable.google || d.syncAvailable.microsoft)) ? '<p class="tma-security__desc"><strong>Connecting also lets you sync your email and calendar</strong> into the portal, so you can use it instead of Gmail or Outlook.</p>' : '') +
           '<div class="tma-security__row">' +
           '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Google16.svg" alt=""></span>' +
           '<span class="tma-security__row-copy"><span class="tma-security__row-name">Google</span>' +
@@ -609,7 +901,7 @@
           '</span>' +
           (d.google && d.google.connected
             ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="google"><span>Disconnect</span></button>'
-            : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect"><span>Connect</span></a>') +
+            : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect' + (d.syncAvailable && d.syncAvailable.google ? '?sync_email=1&sync_calendar=1' : '') + '"><span>Connect</span></a>') +
           '</div>' +
           '<div class="tma-security__row">' +
           '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Microsoft16.svg" alt=""></span>' +
@@ -620,7 +912,7 @@
           '</span>' +
           (d.microsoft && d.microsoft.connected
             ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="microsoft"><span>Disconnect</span></button>'
-            : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect"><span>Connect</span></a>') +
+            : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect' + (d.syncAvailable && d.syncAvailable.microsoft ? '?sync_email=1&sync_calendar=1' : '') + '"><span>Connect</span></a>') +
           '</div></section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-phone">' +
@@ -639,8 +931,12 @@
           '<p class="tma-security__desc">A 6-digit code from your authenticator app is required when signing in.</p>' +
           (on
             ? '<div class="tma-security__row">' +
-              '<span class="tma-security__row-copy"><span class="tma-security__row-name">Authenticator app</span>' +
+              (d.twoFactorApp && d.twoFactorApp.key !== 'other'
+                ? '<span class="tma-security__row-ico"><img src="' + esc(d.twoFactorApp.logo.replace(/^\//, '')) + '" alt="" style="width:24px;height:24px;object-fit:contain;border-radius:6px"></span>'
+                : '') +
+              '<span class="tma-security__row-copy"><span class="tma-security__row-name">' + esc(d.twoFactorApp ? d.twoFactorApp.name : 'Authenticator app') + '</span>' +
               '<span class="tma-security__row-sub">Added ' + esc(d.twoFactorSince || '') + '</span></span>' +
+              '<button type="button" class="tma-auth__chip-btn" data-sec-relabel><span>' + (d.twoFactorApp && d.twoFactorApp.key !== 'other' ? 'Change app' : 'Set your app') + '</span></button>' +
               '<button type="button" class="tma-auth__chip-btn" data-sec-setup><span>Set up again</span></button>' +
               '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#disable-tfa-dialog"><span>Turn off</span></button></div>'
             : '<div class="tma-security__empty">' +
@@ -662,11 +958,22 @@
 
           '<section class="tma-security__card" aria-labelledby="sec-trusted">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-trusted"><img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">Trusted devices</h2></div>' +
+          '<h2 class="tma-security__title" id="sec-trusted"><img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">Trusted devices</h2>' +
+          ((d.trustedDevices || []).length ? '<button type="button" class="tma-auth__chip-btn" data-sec-trust-revoke-all><span>Remove all</span></button>' : '') +
+          '</div>' +
           '<p class="tma-security__desc">These devices skip the two-factor code for 30 days. Remove any device you don\'t recognize.</p>' +
-          '<div class="tma-security__empty">' +
-          '<img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">' +
-          '<span>No trusted devices yet.</span></div></section>' +
+          ((d.trustedDevices || []).length
+            ? '<div class="tma-security__table-wrap"><table class="tma-security__table">' +
+              '<thead><tr><th scope="col">Device</th><th scope="col">IP address</th><th scope="col">Last used</th><th scope="col">Expires</th><th scope="col"></th></tr></thead><tbody>' +
+              d.trustedDevices.map(function (td) {
+                return '<tr><td>' + esc(td.device || 'Unknown device') + '</td><td>' + esc(td.ip || '') + '</td>' +
+                  '<td>' + esc(td.lastUsed || '') + '</td><td>' + esc(td.expires || '') + '</td>' +
+                  '<td><button type="button" class="tma-auth__chip-btn" data-sec-trust-revoke="' + td.id + '"><span>Remove</span></button></td></tr>';
+              }).join('') + '</tbody></table></div>'
+            : '<div class="tma-security__empty">' +
+              '<img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">' +
+              '<span>No trusted devices yet.</span></div>') +
+          '</section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-sessions">' +
           '<div class="tma-security__head">' +
@@ -755,6 +1062,20 @@
 
           '<div class="tma-auth__dialog" id="tfa-setup-dialog" role="dialog" aria-modal="true" hidden>' +
           '<div class="tma-auth__dialog-card">' +
+          '<div data-sec-step="app" hidden>' +
+          '<h2 class="tma-auth__dialog-title">Choose your authenticator app</h2>' +
+          '<p class="tma-auth__dialog-text">Pick the app you\'ll scan the code with.</p>' +
+          '<div class="tma-authapps">' +
+          ['microsoft', 'google'].map(function (k) {
+            var a = AUTH_APPS[k];
+            return '<button type="button" class="tma-authapp" data-sec-app="' + k + '">' +
+              '<img class="tma-authapp__logo" src="' + a.logo + '" alt="">' +
+              '<span class="tma-authapp__text"><span class="tma-authapp__name">' + a.name + '</span>' +
+              '<span class="tma-authapp__desc">' + a.desc + '</span></span>' +
+              '<img class="tma-authapp__caret" src="images/icons/phosphor/CaretRight.svg" alt=""></button>';
+          }).join('') +
+          '</div>' +
+          '<div class="tma-auth__dialog-actions"><button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button></div></div>' +
           '<div data-sec-step="confirm" hidden>' +
           '<h2 class="tma-auth__dialog-title">Confirm your password</h2>' +
           '<form class="tma-auth__form" data-sec-form="confirm" action="#" novalidate>' +
@@ -765,7 +1086,7 @@
           '<button type="submit" class="tma-auth__submit">Continue</button></div></form></div>' +
           '<div data-sec-step="scan" hidden>' +
           '<h2 class="tma-auth__dialog-title">Scan this QR code</h2>' +
-          '<p class="tma-auth__dialog-text">Choose "Add account" in your authenticator app, then scan.</p>' +
+          '<p class="tma-auth__dialog-text">Choose "Add account" in <strong data-sec-scan-app>your authenticator app</strong>, then scan the code below.</p>' +
           '<div class="tma-auth__qr" data-sec-qr role="img" aria-label="QR code for authenticator setup"></div>' +
           '<div class="tma-auth__manual-key"><code data-sec-key></code>' +
           '<button type="button" class="tma-auth__chip-btn" data-sec-copy-key><span>Copy</span></button></div>' +
@@ -852,6 +1173,23 @@
           });
         });
 
+        /* trusted devices */
+        root.querySelectorAll('[data-sec-trust-revoke]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            secApi('DELETE', '/security-settings/trusted-devices/' + b.getAttribute('data-sec-trust-revoke')).then(function (res) {
+              if (res.ok) { ui().toast('Device removed'); refresh(); }
+              else ui().toast('Could not remove that device.');
+            });
+          });
+        });
+        var revokeAll = root.querySelector('[data-sec-trust-revoke-all]');
+        if (revokeAll) revokeAll.addEventListener('click', function () {
+          if (!window.confirm('Remove all trusted devices? Every device will ask for a two-factor code next time.')) return;
+          secApi('DELETE', '/security-settings/trusted-devices').then(function (res) {
+            if (res.ok) { ui().toast('Trusted devices removed'); refresh(); }
+          });
+        });
+
         /* provider disconnects */
         root.querySelectorAll('[data-sec-sdisconnect]').forEach(function (b) {
           b.addEventListener('click', function () {
@@ -897,8 +1235,29 @@
             showStep('codes');
           });
         }
+        var chosenApp = 'other';
+        var relabelOnly = false;   // just recording which app, not re-running setup
         root.querySelectorAll('[data-sec-setup]').forEach(function (b) {
-          b.addEventListener('click', startSetup);
+          b.addEventListener('click', function () { relabelOnly = false; showStep('app'); });
+        });
+        // "Set your app / Change app": record the authenticator without touching
+        // the existing secret, so the challenge screen shows the right logo.
+        root.querySelectorAll('[data-sec-relabel]').forEach(function (b) {
+          b.addEventListener('click', function () { relabelOnly = true; showStep('app'); });
+        });
+        root.querySelectorAll('[data-sec-app]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            chosenApp = b.getAttribute('data-sec-app');
+            var save = secApi('POST', '/security-settings/two-factor-app', { app: chosenApp });
+            if (relabelOnly) {
+              relabelOnly = false;
+              save.then(function () { closeDialogs(); ui().toast('Authenticator app updated'); refresh(); });
+              return;
+            }
+            var scanName = root.querySelector('[data-sec-scan-app]');
+            if (scanName) scanName.textContent = AUTH_APPS[chosenApp].name;
+            startSetup();
+          });
         });
         var copyCodes = root.querySelector('[data-sec-copy-codes]');
         if (copyCodes) copyCodes.addEventListener('click', function () {
@@ -1338,48 +1697,97 @@
     },
   };
 
+  var CONNECTOR_CATALOG = [
+    { id: 'box', name: 'Box', desc: 'Enable users to connect to their own Box account', brand: 'Box40' },
+    { id: 'dropbox', name: 'Dropbox', desc: 'Enable users to connect to their own Dropbox account', brand: 'DropboxBlue40' },
+    { id: 'googledrive', name: 'Google Drive', desc: 'Enable users to connect to their own Google Drive account', brand: 'GoogleDrive40' },
+    { id: 'onedrive', name: 'OneDrive', desc: 'Enable users to connect to their own OneDrive account', brand: 'OneDrive40' },
+    { id: 'sharepoint', name: 'SharePoint Online', desc: 'Enable users to connect to their own SharePoint Online account', brand: 'SharePoint40' },
+  ];
+
   PAGES['connectors'] = {
-    render: function (s) {
-      var LOGOS = {
-        box: { icon: 'Package' },
-        dropbox: { brand: 'Dropbox40' },
-        googledrive: { icon: 'HardDrives' },
-        onedrive: { icon: 'Cloud' },
-        onedrivebusiness: { icon: 'CloudCheck' },
-        sharepoint: { icon: 'Buildings' },
-      };
-      return '<h3 class="tma-portal-section__title">Add Connectors</h3>' +
-        '<p class="tma-portal-subtitle">Choose from the following services to add access through the portal.</p>' +
-        '<div class="tma-portal-connector-list">' +
-        s.connectors.map(function (c) {
-          var logo = LOGOS[c.id] || { icon: 'Plug' };
-          var src = logo.brand ? 'images/icons/brands/' + logo.brand + '.svg' : 'images/icons/phosphor/' + logo.icon + '.svg';
-          return '<div class="tma-portal-connector">' +
-            '<span class="tma-portal-connector__logo"><img src="' + src + '" alt=""></span>' +
-            '<div class="tma-portal-connector__body">' +
-            '<span class="tma-portal-connector__name">' + ui().esc(c.name) + '</span>' +
-            '<span class="tma-portal-connector__desc">' + ui().esc(c.description) + '</span>' +
-            '</div>' +
-            (c.enabled
-              ? '<span class="tma-portal-chip">Enabled</span>' + ui().btn({ label: 'Disable', variant: 'ghost', small: true, attrs: 'data-connector-off="' + c.id + '"' })
-              : ui().btn({ label: c.action, small: true, attrs: 'data-connector-on="' + c.id + '"' })) +
-            '</div>';
-        }).join('') +
-        '</div>';
+    render: function () {
+      secEnsureStyles();
+      return '<div data-conn-root><p class="tma-portal-note">Loading…</p></div>';
     },
-    wire: function (el, s) {
-      function find(id) { return s.connectors.filter(function (c) { return c.id === id; })[0]; }
-      el.querySelectorAll('[data-connector-on]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var c = find(b.getAttribute('data-connector-on'));
-          if (c) { c.enabled = true; data().save(); ui().toast(c.name + ' connector enabled'); render(); }
+    wire: function (el) {
+      var root = el.querySelector('[data-conn-root]');
+      if (!root) return;
+      var esc = ui().esc;
+
+      try {
+        var qs = new URLSearchParams(window.location.search);
+        var notice = qs.get('notice');
+        if (notice) {
+          if (notice === 'social-connected') ui().toast('Storage account connected');
+          else if (notice === 'social-error') ui().toast(qs.get('reason') || "That connection didn't complete");
+          qs.delete('notice'); qs.delete('reason'); qs.delete('settings-page');
+          history.replaceState(null, '', window.location.pathname + (qs.toString() ? '?' + qs.toString() : ''));
+        }
+      } catch (e) {}
+
+      function scopeParam(id) {
+        return id === 'sharepoint' ? 'sync_sharepoint=1' : 'sync_onedrive=1';
+      }
+
+      secApi('GET', '/admin/connectors').then(function (r) { return r.json(); }).then(function (d) {
+        var enabled = d.enabled || [];
+        var connectable = d.connectable || [];
+        var linked = d.linked || {};
+
+        root.innerHTML =
+          '<h3 class="tma-portal-section__title">Storage connectors</h3>' +
+          '<p class="tma-portal-subtitle">' +
+          (d.isAdmin ? 'Enable a service org-wide, then everyone can link their own account. OneDrive &amp; SharePoint connect through Microsoft.'
+                     : 'Link your own storage accounts. OneDrive &amp; SharePoint are available.') + '</p>' +
+          '<div class="tma-portal-connector-list">' +
+          CONNECTOR_CATALOG.map(function (c) {
+            var isOn = enabled.indexOf(c.id) !== -1;
+            var isMs = connectable.indexOf(c.id) !== -1;
+            var isLinked = !!linked[c.id];
+            var right = '';
+
+            if (d.isAdmin) {
+              right += isOn
+                ? '<span class="tma-portal-chip">Enabled</span>' + ui().btn({ label: 'Disable', variant: 'ghost', small: true, attrs: 'data-conn-toggle="' + c.id + '" data-conn-to="0"' })
+                : ui().btn({ label: 'Enable', small: true, attrs: 'data-conn-toggle="' + c.id + '" data-conn-to="1"' });
+            }
+
+            // per-user connect for enabled Microsoft connectors
+            if (isOn && isMs && d.microsoftReady) {
+              right += isLinked
+                ? '<span class="tma-portal-chip tma-portal-chip--ok" style="margin-left:8px">Connected</span>'
+                : '<a class="tma-auth__chip-btn" style="margin-left:8px" href="/auth/social/microsoft/redirect?' + scopeParam(c.id) + '&return=connectors"><span>Connect my account</span></a>';
+            } else if (isOn && isMs && !d.microsoftReady) {
+              right += '<span class="tma-portal-note" style="margin-left:8px">Needs Microsoft sync enabled</span>';
+            } else if (isOn && !isMs) {
+              right += '<span class="tma-portal-note" style="margin-left:8px">Linking coming soon</span>';
+            }
+
+            return '<div class="tma-portal-connector">' +
+              '<span class="tma-portal-connector__logo"><img src="images/icons/brands/' + c.brand + '.svg" alt=""></span>' +
+              '<div class="tma-portal-connector__body">' +
+              '<span class="tma-portal-connector__name">' + esc(c.name) + '</span>' +
+              '<span class="tma-portal-connector__desc">' + esc(c.desc) + '</span></div>' +
+              '<div class="tma-portal-connector__actions" style="display:flex;align-items:center;gap:4px">' + right + '</div>' +
+              '</div>';
+          }).join('') +
+          '</div>';
+
+        root.querySelectorAll('[data-conn-toggle]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var id = b.getAttribute('data-conn-toggle');
+            var to = b.getAttribute('data-conn-to') === '1';
+            secApi('PUT', '/admin/connectors', { id: id, enabled: to }).then(function (res) {
+              return res.json().catch(function () { return {}; }).then(function (j) {
+                if (res.ok) { ui().toast('Saved'); window.TMAPortalAdmin.setPage('connectors'); }
+                else ui().toast((j && j.message) || 'Could not save');
+              });
+            });
+          });
         });
-      });
-      el.querySelectorAll('[data-connector-off]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var c = find(b.getAttribute('data-connector-off'));
-          if (c) { c.enabled = false; data().save(); ui().toast(c.name + ' connector disabled'); render(); }
-        });
+      }).catch(function () {
+        root.innerHTML = '<p class="tma-portal-note">Couldn\'t load connectors. Refresh to try again.</p>';
       });
     },
   };
@@ -1776,13 +2184,47 @@
   };
 
   /* ── shell ──────────────────────────────────────── */
+  function navIcon(name) {
+    return name
+      ? '<img class="tma-portal-admin__nav-icon" src="images/icons/phosphor/' + ui().esc(name) + '.svg" alt="" width="20" height="20" aria-hidden="true">'
+      : '';
+  }
+
+  function navInitials(me) {
+    var s = String((me && me.name) || '?').trim().split(/\s+/).slice(0, 2)
+      .map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
+    var colors = ['#136da0', '#03a5e9', '#0f9d8c', '#3f9142', '#c77d18', '#b5497e', '#3b6fb8'];
+    var n = 0, k = String((me && (me.email || me.name)) || '');
+    for (var i = 0; i < k.length; i++) n = (n + k.charCodeAt(i)) % 997;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+      '<rect width="40" height="40" rx="20" fill="' + colors[n % colors.length] + '"/>' +
+      '<text x="20" y="21" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600" ' +
+      'fill="#ffffff" text-anchor="middle" dominant-baseline="central">' + s + '</text></svg>';
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  }
+
+  function renderNavUser(active) {
+    var e = ui().esc;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    var avatar = me && me.avatar && /^(https?:|\/storage\/|data:)/.test(me.avatar)
+      ? me.avatar
+      : navInitials(me);
+    return '<button type="button" class="tma-portal-admin__nav-item tma-portal-admin__nav-user' + (active ? ' is-active' : '') + '" data-admin-nav="profile">' +
+      '<img class="tma-portal-admin__nav-user-avatar" src="' + e(avatar) + '" alt="">' +
+      '<span class="tma-portal-admin__nav-user-meta">' +
+      '<span class="tma-portal-admin__nav-user-name">' + e(me ? me.name : 'My profile') + '</span>' +
+      (me ? '<span class="tma-portal-admin__nav-user-email">' + e(me.email) + '</span>' : '') +
+      '</span></button>';
+  }
+
   function renderNav() {
     return NAV.map(function (n) {
       if (!n.items) {
-        return '<button type="button" class="tma-portal-admin__nav-item' + (state.page === n.id ? ' is-active' : '') + '" data-admin-nav="' + n.id + '">' + ui().esc(n.label) + '</button>';
+        if (n.id === 'profile') return renderNavUser(state.page === n.id);
+        return '<button type="button" class="tma-portal-admin__nav-item' + (state.page === n.id ? ' is-active' : '') + '" data-admin-nav="' + n.id + '">' + navIcon(n.icon) + ui().esc(n.label) + '</button>';
       }
       var open = !!state.expanded[n.group];
-      return '<button type="button" class="tma-portal-admin__nav-item" data-admin-group="' + n.group + '" aria-expanded="' + open + '">' + ui().esc(n.label) +
+      return '<button type="button" class="tma-portal-admin__nav-item" data-admin-group="' + n.group + '" aria-expanded="' + open + '">' + navIcon(n.icon) + ui().esc(n.label) +
         '<img class="tma-portal-admin__caret" src="images/icons/phosphor/CaretRight.svg" alt=""></button>' +
         (open
           ? '<div class="tma-portal-admin__subnav">' +
@@ -1795,7 +2237,7 @@
   }
 
   function setPage(pageId) {
-    state.page = PAGES[pageId] ? pageId : 'admin-overview';
+    state.page = PAGES[pageId] ? pageId : 'profile';
     var group = groupForPage(state.page);
     if (group) state.expanded[group] = true;
     render();
@@ -1807,13 +2249,21 @@
     var s = data().state();
     var page = PAGES[state.page];
 
+    /* the rail is rebuilt on every page change - keep the reader where they
+       were instead of snapping back to the top of the list */
+    var priorNav = el.querySelector('.tma-portal-admin__nav');
+    var navScroll = priorNav ? priorNav.scrollTop : 0;
+
     el.innerHTML =
       '<div class="tma-portal-page"><div class="tma-portal-admin">' +
-      '<nav class="tma-portal-admin__nav" aria-label="Account settings sections">' + renderNav() + '</nav>' +
+      '<nav class="tma-portal-admin__nav" aria-label="Settings sections">' + renderNav() + '</nav>' +
       '<div class="tma-portal-admin__content">' +
-      '<h2 class="tma-portal-admin__page-title">' + ui().esc(pageTitle(state.page)) + '</h2>' +
+      (page.hideTitle ? '' : '<h2 class="tma-portal-admin__page-title">' + ui().esc(pageTitle(state.page)) + '</h2>') +
       page.render(s) +
       '</div></div></div>';
+
+    var nav = el.querySelector('.tma-portal-admin__nav');
+    if (nav && navScroll) nav.scrollTop = navScroll;
 
     el.querySelectorAll('[data-admin-nav]').forEach(function (b) {
       b.addEventListener('click', function () { setPage(b.getAttribute('data-admin-nav')); });
@@ -1829,8 +2279,32 @@
     if (page.wire) page.wire(el.querySelector('.tma-portal-admin__content'), s);
   }
 
+  var meWatched = false;
+
+  function refreshNavUser() {
+    if (!state.el) return;
+    var btn = state.el.querySelector('.tma-portal-admin__nav-user');
+    if (!btn) return;
+    btn.outerHTML = renderNavUser(state.page === 'profile');
+    var fresh = state.el.querySelector('.tma-portal-admin__nav-user');
+    if (fresh) fresh.addEventListener('click', function () { setPage('profile'); });
+  }
+
   function mount(el, opts) {
     state.el = el;
+    /* the identity in the rail arrives from /me after first paint */
+    if (!meWatched && window.TMACurrentUser) {
+      meWatched = true;
+      window.TMACurrentUser.onChange(refreshNavUser);
+    }
+    /* deep link: /settings?page=profile */
+    try {
+      var wanted = new URLSearchParams(window.location.search).get('page');
+      if (wanted && PAGES[wanted]) {
+        opts = opts || {};
+        opts.adminPage = wanted;
+      }
+    } catch (e) {}
     if (opts && opts.adminPage && PAGES[opts.adminPage]) {
       state.page = opts.adminPage;
       var group = groupForPage(state.page);
