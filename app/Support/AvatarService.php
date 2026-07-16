@@ -62,8 +62,11 @@ class AvatarService
         ob_start();
         imagejpeg($dst, null, 88);
 
+        // No explicit visibility argument: the local "public" disk sets it via
+        // config, and S3/R2 buckets reject per-object ACLs (R2 has none), so
+        // the bucket's own visibility governs access there.
         $disk = config('filesystems.avatar_disk', 'public');
-        Storage::disk($disk)->put($name, (string) ob_get_clean(), 'public');
+        Storage::disk($disk)->put($name, (string) ob_get_clean());
 
         self::deletePrevious($previousUrl);
 
