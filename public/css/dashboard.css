@@ -255,8 +255,8 @@
 }
 
 .tma-dash__profile-action-btn img {
-  width: 22px;
-  height: 22px;
+  width: 15px;
+  height: 15px;
   opacity: 0.75;
 }
 
@@ -3439,15 +3439,15 @@
   }
 
   .tma-dash__sidebar .tma-dash__profile-action-btn {
-    width: 36px;
-    height: 36px;
-    flex-basis: 36px;
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
     padding: var(--space-6);
   }
 
   .tma-dash__sidebar .tma-dash__profile-action-btn img {
-    width: 20px;
-    height: 20px;
+    width: 15px;
+    height: 15px;
   }
 
   .tma-dash__sidebar .tma-dash__profile-avatar {

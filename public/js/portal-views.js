@@ -368,10 +368,24 @@
     });
   }
 
+  /* Global skeleton loading placeholder for any portal view that awaits data.
+     opts: { count, grid, inline, trailing, width }. Falls back to text if the
+     shared skeleton (current-user.js) hasn't defined window.TMASkeleton yet. */
+  function loading(opts) {
+    opts = opts || {};
+    if (window.TMASkeleton) {
+      if (opts.inline) return window.TMASkeleton.line(opts.width || '60%');
+      if (opts.grid) return window.TMASkeleton.cards(opts.count || 8, opts);
+      return window.TMASkeleton.rows(opts.count || 6, opts);
+    }
+    return '<div class="tma-portal-loading" role="status" aria-live="polite">Loading…</div>';
+  }
+
   window.TMAPortalUI = {
     esc: esc,
     icon: icon,
     btn: btn,
+    loading: loading,
     headDropdown: headDropdown,
     wireHeadDropdown: wireHeadDropdown,
     wireHeadDropdownAll: wireHeadDropdownAll,

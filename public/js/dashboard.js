@@ -586,8 +586,6 @@
       actions.className = 'tma-dash__profile-actions';
       actions.setAttribute('data-sidebar-profile-actions', '');
       actions.innerHTML =
-        '<button type="button" class="tma-dash__profile-action-btn" data-sidebar-profile-action="settings" aria-label="Settings">' +
-        '<img src="images/icons/phosphor/GearSix.svg" alt="" aria-hidden="true"></button>' +
         '<button type="button" class="tma-dash__profile-action-btn" data-sidebar-profile-action="logout" aria-label="Log out">' +
         '<img src="images/icons/phosphor/SignOut.svg" alt="" aria-hidden="true"></button>';
       profile.appendChild(actions);

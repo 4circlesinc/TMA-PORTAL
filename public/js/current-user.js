@@ -11,6 +11,127 @@
   var me = null;
   var listeners = [];
 
+  // 1x1 transparent GIF — lets an <img> show its skeleton background with no
+  // broken-image icon and, crucially, no dummy photo.
+  var TRANSPARENT = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  var SKELETON_TEXT = '.tma-dash__profile-name, .tma-dash__profile-email, .tma-portal-hello__title';
+  var SKELETON_AVATAR = '.tma-dash__profile-avatar, .tma-dash__account-avatar, .tma-portal-hello__avatar, .tma-dash__tab-btn--profile .tma-dash__tab-btn-icon img';
+
+  // A shimmering placeholder shown WHILE the signed-in user loads, so the
+  // shells never flash their hardcoded dummy name/photo. Injected once.
+  function injectSkeletonCss() {
+    if (document.getElementById('tma-skeleton-css')) return;
+    var style = document.createElement('style');
+    style.id = 'tma-skeleton-css';
+    style.textContent =
+      '.tma-skeleton{background:linear-gradient(90deg,#e6eaf0 25%,#f2f5f8 37%,#e6eaf0 63%)!important;' +
+      'background-size:400% 100%!important;animation:tma-shimmer 1.4s ease infinite!important;' +
+      'color:transparent!important;border-radius:6px}' +
+      '.tma-skeleton--text{display:inline-block;height:.72em;vertical-align:middle;min-width:80px}' +
+      '.tma-skeleton--avatar{border-radius:50%!important}' +
+      '.tma-skeleton--block{display:block;border-radius:8px;height:16px;min-width:24px}' +
+      '.tma-skeleton--line{display:block;height:.7em;border-radius:6px;margin:.4em 0}' +
+      '.tma-skeleton--circle{border-radius:50%!important;flex:0 0 auto}' +
+      '.tma-skeleton-stack{display:flex;flex-direction:column;gap:6px;padding:4px 0}' +
+      '.tma-skeleton-row{display:flex;align-items:center;gap:12px;padding:10px 4px}' +
+      '.tma-skeleton-row__grow{flex:1;min-width:0}' +
+      '.tma-dash__profile-name.tma-skeleton{min-width:92px}' +
+      '.tma-dash__profile-email.tma-skeleton{min-width:124px;height:.62em}' +
+      '.tma-portal-hello__title.tma-skeleton{min-width:150px;height:1.05em}' +
+      '@keyframes tma-shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}' +
+      '@media (prefers-color-scheme:dark){.tma-skeleton{background:linear-gradient(90deg,#2a2f37 25%,#353b45 37%,#2a2f37 63%)!important}}';
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function setLoading() {
+    injectSkeletonCss();
+    document.querySelectorAll(SKELETON_TEXT).forEach(function (el) {
+      el.classList.add('tma-skeleton', 'tma-skeleton--text');
+      el.textContent = '';
+    });
+    document.querySelectorAll(SKELETON_AVATAR).forEach(function (el) {
+      el.classList.add('tma-skeleton', 'tma-skeleton--avatar');
+      el.src = TRANSPARENT;
+      el.alt = '';
+    });
+  }
+
+  function clearLoading(el) {
+    el.classList.remove('tma-skeleton', 'tma-skeleton--text', 'tma-skeleton--avatar');
+  }
+
+  /* ── Global skeleton API ──────────────────────────
+     Any view that loads data can show a shimmering placeholder instead of a
+     spinner or (worse) dummy data. Usage:
+       window.TMASkeleton.rows(6)                 // list/table loading
+       window.TMASkeleton.cards(8)                // grid loading
+       window.TMASkeleton.apply(el, 'text')       // turn an element into a bar
+       window.TMASkeleton.clear(el)               // restore it
+       window.TMASkeleton.line('60%')             // a single placeholder line   */
+  var Skeleton = {
+    css: injectSkeletonCss,
+    apply: function (el, variant) {
+      if (!el) return;
+      injectSkeletonCss();
+      el.classList.add('tma-skeleton', 'tma-skeleton--' + (variant || 'text'));
+      if (el.tagName === 'IMG') { el.src = TRANSPARENT; el.alt = ''; } else { el.textContent = ''; }
+    },
+    clear: function (el) {
+      if (!el) return;
+      el.classList.remove('tma-skeleton', 'tma-skeleton--text', 'tma-skeleton--avatar',
+        'tma-skeleton--block', 'tma-skeleton--line', 'tma-skeleton--circle');
+    },
+    line: function (width) {
+      injectSkeletonCss();
+      return '<span class="tma-skeleton tma-skeleton--line"' + (width ? ' style="width:' + width + '"' : '') + '></span>';
+    },
+    block: function (opts) {
+      injectSkeletonCss();
+      opts = opts || {};
+      var s = (opts.width ? 'width:' + opts.width + ';' : '') +
+        (opts.height ? 'height:' + opts.height + ';' : '') +
+        (opts.radius ? 'border-radius:' + opts.radius + ';' : '');
+      return '<span class="tma-skeleton tma-skeleton--block"' + (s ? ' style="' + s + '"' : '') + '></span>';
+    },
+    circle: function (size) {
+      injectSkeletonCss();
+      size = size || '32px';
+      return '<span class="tma-skeleton tma-skeleton--circle" style="display:inline-block;width:' + size + ';height:' + size + '"></span>';
+    },
+    /* A vertical stack of loading list items (leading circle + 1–2 lines). */
+    rows: function (n, opts) {
+      injectSkeletonCss();
+      opts = opts || {};
+      n = n || 6;
+      var out = '<div class="tma-skeleton-stack" role="status" aria-live="polite" aria-label="Loading">';
+      for (var i = 0; i < n; i++) {
+        out += '<div class="tma-skeleton-row">' +
+          (opts.leading === false ? '' : this.circle(opts.leadingSize || '28px')) +
+          '<div class="tma-skeleton-row__grow">' +
+          this.line(opts.width1 || '55%') +
+          (opts.lines === 1 ? '' : this.line(opts.width2 || '32%')) +
+          '</div>' +
+          (opts.trailing ? this.block({ width: '52px', height: '12px' }) : '') +
+          '</div>';
+      }
+      return out + '</div>';
+    },
+    /* A responsive grid of loading cards (thumbnail + two lines). */
+    cards: function (n, opts) {
+      injectSkeletonCss();
+      opts = opts || {};
+      n = n || 8;
+      var out = '<div class="tma-skeleton-cards" role="status" aria-live="polite" aria-label="Loading" ' +
+        'style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px">';
+      for (var i = 0; i < n; i++) {
+        out += '<div>' + this.block({ height: opts.thumbHeight || '92px', radius: '10px' }) +
+          '<div style="padding:10px 2px">' + this.line('70%') + this.line('40%') + '</div></div>';
+      }
+      return out + '</div>';
+    },
+  };
+  window.TMASkeleton = Skeleton;
+
   function api(method, url, body) {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
     return fetch(url, {
@@ -58,21 +179,26 @@
     if (!me) return;
 
     document.querySelectorAll('.tma-dash__profile-name').forEach(function (el) {
+      clearLoading(el);
       el.textContent = me.name;
     });
     document.querySelectorAll('.tma-dash__profile-email').forEach(function (el) {
+      clearLoading(el);
       el.textContent = me.email;
     });
-    document.querySelectorAll('.tma-dash__profile-avatar, .tma-dash__account-avatar').forEach(function (el) {
+    document.querySelectorAll('.tma-dash__profile-avatar, .tma-dash__account-avatar, .tma-dash__tab-btn--profile .tma-dash__tab-btn-icon img').forEach(function (el) {
+      clearLoading(el);
       el.src = avatarSrc(me.avatar, me.name);
       el.alt = me.name;
     });
 
     /* dashboard greeting */
     document.querySelectorAll('.tma-portal-hello__title').forEach(function (el) {
+      clearLoading(el);
       el.textContent = 'Hello ' + me.firstName;
     });
     document.querySelectorAll('.tma-portal-hello__avatar').forEach(function (el) {
+      clearLoading(el);
       el.src = avatarSrc(me.avatar, me.name);
       el.alt = me.name;
     });
@@ -254,12 +380,22 @@
     repaint: paint,
   };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', load);
-  } else {
+  function boot() {
+    // Show the loading skeleton first, so the shells' hardcoded dummy
+    // name/photo is never what the user sees.
+    if (me) { paint(); } else { setLoading(); }
     load();
   }
 
-  /* portal views repaint their own markup; keep the chrome in sync */
-  document.addEventListener('tma:view-rendered', paint);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+  /* portal views repaint their own markup; keep the chrome in sync. If the
+     user hasn't loaded yet, the freshly rendered markup gets the skeleton too. */
+  document.addEventListener('tma:view-rendered', function () {
+    if (me) { paint(); } else { setLoading(); }
+  });
 })();

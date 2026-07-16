@@ -104,7 +104,7 @@
   };
 
   function renderActivityPane(row, el, type) {
-    el.innerHTML = '<p class="tma-user-info-panel__field-label">Loading…</p>';
+    el.innerHTML = window.TMASkeleton ? window.TMASkeleton.rows(3, { leading: false }) : '<p class="tma-user-info-panel__field-label">Loading…</p>';
     usersApi('GET', '/admin/users/' + row._id + '/activity?type=' + type).then(function (res) {
       return res.ok ? res.json() : null;
     }).then(function (j) {

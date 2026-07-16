@@ -31,6 +31,25 @@ class FolderTree
         ]);
     }
 
+    /**
+     * Create a folder whose name is auto-numbered to avoid clashing with a
+     * sibling: "Untitled folder", "Untitled folder (1)", … Used by the
+     * instant "New folder" action.
+     */
+    public static function createAutoNamed(User $user, string $baseName, ?Folder $parent): Folder
+    {
+        $baseName = Naming::assertValid($baseName);
+        $name = Naming::nextAvailable($baseName, fn ($candidate) => self::siblingExists($candidate, $parent, null));
+
+        return Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => $name,
+            'parent_id' => $parent?->id,
+            'owner_id' => $parent?->owner_id ?? $user->id,
+            'created_by' => $user->id,
+        ]);
+    }
+
     public static function rename(Folder $folder, string $name): Folder
     {
         $name = Naming::assertValid($name);

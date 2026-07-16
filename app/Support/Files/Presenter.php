@@ -78,7 +78,10 @@ class Presenter
             'favorite' => isset($this->favFile[$file->id]),
             'permissions' => $this->filePerms($file),
             'downloadUrl' => route('files.download', $file->uuid),
-            'previewUrl' => FileType::isPreviewable($ext) ? route('files.preview', $file->uuid) : null,
+            'previewUrl' => FileType::isPreviewable($ext)
+                ? route('files.preview', $file->uuid)
+                : (strtolower($ext) === 'svg' ? route('files.thumb', $file->uuid) : null),
+            'thumbUrl' => Thumbnail::supportsExt($ext) ? route('files.thumb', $file->uuid) : null,
         ];
     }
 

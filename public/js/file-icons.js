@@ -33,6 +33,13 @@
     gif: 'FileImage.svg',
     webp: 'FileImage.svg',
     svg: 'FileImage.svg',
+    avif: 'FileImage.svg',
+    heic: 'FileImage.svg',
+    heif: 'FileImage.svg',
+    bmp: 'FileImage.svg',
+    tif: 'FileImage.svg',
+    tiff: 'FileImage.svg',
+    ico: 'FileImage.svg',
   };
 
   var ICON_SRC = {

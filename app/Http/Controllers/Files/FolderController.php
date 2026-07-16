@@ -14,14 +14,20 @@ class FolderController extends BaseFilesController
 {
     public function store(Request $request): JsonResponse
     {
-        $request->validate(['name' => ['required', 'string', 'max:255'], 'parent' => ['nullable', 'string']]);
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'parent' => ['nullable', 'string'],
+            'auto' => ['sometimes', 'boolean'],
+        ]);
 
         $user = $this->user($request);
         $parent = $this->resolveTarget($request, 'parent');
 
         abort_unless(FileAccess::canUploadTo($user, $parent), 403, 'Permission denied.');
 
-        $folder = FolderTree::create($user, $request->input('name'), $parent);
+        $folder = $request->boolean('auto')
+            ? FolderTree::createAutoNamed($user, $request->input('name'), $parent)
+            : FolderTree::create($user, $request->input('name'), $parent);
         Activity::forFolder($user->id, $folder, 'create');
 
         return response()->json($this->presenter($request)->folder($folder), 201);

@@ -624,7 +624,7 @@
     hideTitle: true,
     render: function () {
       secEnsureStyles();
-      return '<div data-pf-root><p class="tma-portal-note">Loading…</p></div>';
+      return '<div data-pf-root>' + ui().loading() + '</div>';
     },
     wire: function (el) {
       var root = el.querySelector('[data-pf-root]');
@@ -831,7 +831,7 @@
   PAGES['account-security'] = {
     render: function () {
       secEnsureStyles();
-      return '<div data-sec-root><p class="tma-portal-note">Loading…</p></div>';
+      return '<div data-sec-root>' + ui().loading() + '</div>';
     },
     wire: function (el) {
       var root = el.querySelector('[data-sec-root]');
@@ -1350,9 +1350,9 @@
     render: function (s) {
       return '<p class="tma-portal-subtitle">A summary of your account’s security posture.</p>' +
         '<div class="tma-portal-two-col">' +
-        ui().section('Sign-ins', '<p data-si-signins>Loading…</p>') +
-        ui().section('Two-factor authentication', '<p data-si-tfa>Loading…</p>') +
-        ui().section('Active sessions', '<p data-si-sessions>Loading…</p>') +
+        ui().section('Sign-ins', '<div data-si-signins>' + ui().loading({ count: 2 }) + '</div>') +
+        ui().section('Two-factor authentication', '<div data-si-tfa>' + ui().loading({ count: 2 }) + '</div>') +
+        ui().section('Active sessions', '<div data-si-sessions>' + ui().loading({ count: 2 }) + '</div>') +
         ui().section('Quarantine', '<p><strong>' + s.quarantinedFiles.length + '</strong> quarantined files</p>') +
         '</div>';
     },
@@ -1406,7 +1406,7 @@
 
   PAGES['signin-policy'] = {
     render: function () {
-      return '<div data-pol-root><p class="tma-portal-note">Loading…</p></div>';
+      return '<div data-pol-root>' + ui().loading() + '</div>';
     },
     wire: function (el) {
       var root = el.querySelector('[data-pol-root]');
@@ -1462,7 +1462,7 @@
 
   PAGES['security-policy'] = {
     render: function () {
-      return '<div data-pol-root><p class="tma-portal-note">Loading…</p></div>';
+      return '<div data-pol-root>' + ui().loading() + '</div>';
     },
     wire: function (el) {
       var root = el.querySelector('[data-pol-root]');
@@ -1553,7 +1553,7 @@
 
   PAGES['device-security'] = {
     render: function () {
-      return '<div data-pol-root><p class="tma-portal-note">Loading…</p></div>';
+      return '<div data-pol-root>' + ui().loading() + '</div>';
     },
     wire: function (el) {
       var root = el.querySelector('[data-pol-root]');
@@ -1708,7 +1708,7 @@
   PAGES['connectors'] = {
     render: function () {
       secEnsureStyles();
-      return '<div data-conn-root><p class="tma-portal-note">Loading…</p></div>';
+      return '<div data-conn-root>' + ui().loading() + '</div>';
     },
     wire: function (el) {
       var root = el.querySelector('[data-conn-root]');

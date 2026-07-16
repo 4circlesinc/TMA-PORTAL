@@ -288,9 +288,9 @@
       '<div class="tma-portal-page" data-node-id="portal-home">' +
       '<div class="tma-portal-hello">' +
       '<div class="tma-portal-hello__main">' +
-      '<img class="tma-portal-hello__avatar" src="images/avatars/AvatarByewind.png" alt="">' +
+      '<img class="tma-portal-hello__avatar tma-skeleton tma-skeleton--avatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">' +
       '<div class="tma-portal-hello__copy">' +
-      '<h2 class="tma-portal-hello__title">Hello ' + ui().esc(s.user.firstName) + '</h2>' +
+      '<h2 class="tma-portal-hello__title tma-skeleton tma-skeleton--text"></h2>' +
       '<button type="button" class="tma-portal-link tma-portal-hello__picture-link" data-home-add-picture>Add profile picture</button>' +
       '</div></div>' +
       '<div class="tma-portal-hello__actions">' +

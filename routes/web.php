@@ -125,6 +125,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/files/{uuid}/force', [FileController::class, 'forceDelete'])->name('force');
         Route::get('/files/{uuid}/download', [FileController::class, 'download'])->name('download');
         Route::get('/files/{uuid}/preview', [FileController::class, 'preview'])->name('preview');
+        Route::get('/files/{uuid}/thumb', [\App\Http\Controllers\Files\ThumbnailController::class, 'show'])->name('thumb');
 
         Route::post('/uploads', [UploadController::class, 'init'])->name('uploads.init');
         Route::post('/uploads/{uuid}/chunk', [UploadController::class, 'chunk'])->name('uploads.chunk');
@@ -135,6 +136,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/favorites/toggle', [FavoriteController::class, 'toggle'])->name('favorites.toggle');
         Route::post('/recycle-bin/empty', [RecycleBinController::class, 'empty'])->name('recycle.empty');
         Route::post('/bulk', [BulkController::class, 'handle'])->name('bulk');
+
+        Route::get('/shares', [\App\Http\Controllers\Files\ShareController::class, 'index'])->name('shares.index');
+        Route::post('/shares', [\App\Http\Controllers\Files\ShareController::class, 'store'])->name('shares.store');
+        Route::patch('/shares/{uuid}', [\App\Http\Controllers\Files\ShareController::class, 'update'])->name('shares.update');
+        Route::delete('/shares/{uuid}', [\App\Http\Controllers\Files\ShareController::class, 'destroy'])->name('shares.destroy');
     });
 
     Route::get('/{page}', LegacyPageController::class)
@@ -185,6 +191,16 @@ Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'ca
 Route::post('/auth/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])
     ->middleware(['auth', 'verified'])
     ->name('social.disconnect');
+
+/*
+ * Public share links (no login). Keyed off the random token only — never a
+ * storage path or database id.
+ */
+Route::get('/s/{token}', [\App\Http\Controllers\Files\PublicShareController::class, 'show'])->name('share.show');
+Route::post('/s/{token}/unlock', [\App\Http\Controllers\Files\PublicShareController::class, 'unlock'])->name('share.unlock');
+Route::get('/s/{token}/preview', [\App\Http\Controllers\Files\PublicShareController::class, 'preview'])->name('share.preview');
+Route::get('/s/{token}/download', [\App\Http\Controllers\Files\PublicShareController::class, 'download'])->name('share.download');
+Route::get('/s/{token}/file/{fileUuid}', [\App\Http\Controllers\Files\PublicShareController::class, 'file'])->name('share.file');
 
 /*
  * Friendly aliases from the design-phase URLs.

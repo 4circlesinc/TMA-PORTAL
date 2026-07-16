@@ -2792,7 +2792,7 @@
 
   function renderAccountSecurityPanel() {
     return '<section class="tma-dash__settings-panel" data-settings-panel="account-security" hidden>' +
-      '<div data-account-security-mount><p class="tma-dash__settings-change-text">Loading…</p></div>' +
+      '<div data-account-security-mount>' + (window.TMASkeleton ? window.TMASkeleton.rows(4) : '<p class="tma-dash__settings-change-text">Loading…</p>') + '</div>' +
       '</section>';
   }
 

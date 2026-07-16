@@ -18,7 +18,7 @@ class FileAccess
     private const RANK = ['viewer' => 1, 'downloader' => 2, 'editor' => 3, 'full' => 4];
 
     private const CAPS = [
-        'viewer'     => ['view'],
+        'viewer'     => ['view', 'preview'],
         'downloader' => ['view', 'preview', 'download'],
         'editor'     => ['view', 'preview', 'download', 'upload', 'rename', 'move', 'copy'],
         'full'       => ['view', 'preview', 'download', 'upload', 'rename', 'move', 'copy',
