@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Avatar Disk
+    |--------------------------------------------------------------------------
+    |
+    | Disk used for user-uploaded profile photos. Local disks are ephemeral on
+    | Laravel Cloud (wiped on deploy, not shared across instances), so set
+    | AVATAR_DISK=s3 in production to persist uploads in a bucket.
+    |
+    */
+
+    'avatar_disk' => env('AVATAR_DISK', 'public'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |

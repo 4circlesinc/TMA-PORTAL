@@ -61,18 +61,34 @@ class AvatarService
         $name = 'avatars/'.Str::uuid()->toString().'.jpg';
         ob_start();
         imagejpeg($dst, null, 88);
-        Storage::disk('public')->put($name, (string) ob_get_clean());
+
+        $disk = config('filesystems.avatar_disk', 'public');
+        Storage::disk($disk)->put($name, (string) ob_get_clean(), 'public');
 
         self::deletePrevious($previousUrl);
 
-        return '/storage/'.$name;
+        return Storage::disk($disk)->url($name);
     }
 
     /** Remove a previously uploaded photo (leaves provider/system URLs alone). */
     public static function deletePrevious(?string $url): void
     {
-        if ($url && str_starts_with($url, '/storage/')) {
+        if (! $url) {
+            return;
+        }
+
+        // Legacy uploads written to the local public disk (/storage/avatars/…).
+        if (str_starts_with($url, '/storage/')) {
             Storage::disk('public')->delete(substr($url, strlen('/storage/')));
+
+            return;
+        }
+
+        // Uploads on the configured avatar disk all live under avatars/. This
+        // only matches our own objects, so provider/system URLs are left alone.
+        $path = parse_url($url, PHP_URL_PATH) ?: '';
+        if (preg_match('#(?:^|/)(avatars/[^/]+\.jpg)$#', $path, $m)) {
+            Storage::disk(config('filesystems.avatar_disk', 'public'))->delete($m[1]);
         }
     }
 }
