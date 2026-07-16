@@ -664,7 +664,7 @@
         }
 
         function avatarSrc(name) {
-          if (name && /^(https?:|\/storage\/|data:)/.test(name)) return name;
+          if (name && /^(https?:|\/(storage|media)\/|data:)/.test(name)) return name;
           return initials();
         }
 
@@ -2206,7 +2206,7 @@
   function renderNavUser(active) {
     var e = ui().esc;
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
-    var avatar = me && me.avatar && /^(https?:|\/storage\/|data:)/.test(me.avatar)
+    var avatar = me && me.avatar && /^(https?:|\/(storage|media)\/|data:)/.test(me.avatar)
       ? me.avatar
       : navInitials(me);
     return '<button type="button" class="tma-portal-admin__nav-item tma-portal-admin__nav-user' + (active ? ' is-active' : '') + '" data-admin-nav="profile">' +

@@ -6,6 +6,7 @@ use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\GettingStartedController;
+use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
@@ -71,6 +72,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::post('/me/avatar', [MeController::class, 'updateAvatar'])->name('me.avatar');
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
+    Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
 
     Route::get('/admin/users', [AdminUsersController::class, 'index'])->name('admin.users');
     Route::get('/admin/users/pending-count', [AdminUsersController::class, 'pendingCount'])->name('admin.users.pending-count');

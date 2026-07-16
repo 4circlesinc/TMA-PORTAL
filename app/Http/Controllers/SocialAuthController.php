@@ -357,6 +357,7 @@ class SocialAuthController extends Controller
         // (an uploaded /storage/ file or another https URL). Empty values and
         // legacy system-avatar names count as "no real photo".
         $hasRealPhoto = str_starts_with($current, '/storage/')
+            || str_starts_with($current, '/media/')
             || (str_starts_with($current, 'https://') && $current !== $oldProvider);
         $wasUsingProviderPhoto = ! $hasRealPhoto || $current === $oldProvider;
 

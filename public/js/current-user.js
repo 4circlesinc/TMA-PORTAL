@@ -164,7 +164,7 @@
   // A real photo (uploaded /storage/… or a provider https URL) if there is one;
   // otherwise the person's initials. System avatars are no longer used.
   function avatarSrc(avatar, displayName) {
-    if (avatar && /^(https?:|\/storage\/|data:)/.test(avatar)) return avatar;
+    if (avatar && /^(https?:|\/(storage|media)\/|data:)/.test(avatar)) return avatar;
     return initialsAvatar(displayName || (me && me.name), me && me.email);
   }
 

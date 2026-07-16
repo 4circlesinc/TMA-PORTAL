@@ -62,15 +62,16 @@ class AvatarService
         ob_start();
         imagejpeg($dst, null, 88);
 
-        // No explicit visibility argument: the local "public" disk sets it via
-        // config, and S3/R2 buckets reject per-object ACLs (R2 has none), so
-        // the bucket's own visibility governs access there.
+        // No explicit visibility argument: the bucket stays private and photos
+        // are served through the app (AvatarController), so confidential file
+        // manager documents in the same bucket are never publicly reachable.
         $disk = config('filesystems.avatar_disk', 'public');
         Storage::disk($disk)->put($name, (string) ob_get_clean());
 
         self::deletePrevious($previousUrl);
 
-        return Storage::disk($disk)->url($name);
+        // App route that streams the photo (never a public bucket URL).
+        return '/media/'.$name;
     }
 
     /** Remove a previously uploaded photo (leaves provider/system URLs alone). */
