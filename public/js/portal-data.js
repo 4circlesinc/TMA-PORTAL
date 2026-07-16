@@ -97,38 +97,6 @@
       customTemplates: [],
       workflows: [],
       workflowRuns: [],
-      signatureRequests: [
-        {
-          id: 'sig-seed-1',
-          doc: 'Design Brief – Healthy Smiles Dental Logo Project Overview.pdf',
-          status: 'Draft',
-          autoDeleteDays: 30,
-          created: '07/08/2026',
-          onlySigner: true,
-          recipientName: 'Travis Francis',
-          recipientEmail: 'igraphixmarketingco@gmail.com',
-          recipientRole: 'Signer',
-        },
-        {
-          id: 'sig-seed-2',
-          doc: 'Design Brief – Healthy Smiles Dental Logo Project Overview.pdf',
-          status: 'Draft',
-          autoDeleteDays: 30,
-          created: '07/07/2026',
-          onlySigner: true,
-          recipientName: 'Travis Francis',
-          recipientEmail: 'igraphixmarketingco@gmail.com',
-          recipientRole: 'Signer',
-        },
-        {
-          id: 'sig-seed-3',
-          doc: 'Nexus Client Post',
-          status: 'Completed',
-          assigneeName: 'Vernon Francis',
-          assigneeInitials: 'VF',
-          completed: '07/01/2026',
-        },
-      ],
       messages: [],
       employees: [
         {
@@ -267,9 +235,9 @@
         if (state.folders && state.folders.personal) {
           state.folders.personal = state.folders.personal.filter(function (f) { return f.kind !== 'filebox'; });
         }
-        if (!Array.isArray(state.signatureRequests) || !state.signatureRequests.length) {
-          state.signatureRequests = fresh.signatureRequests.slice();
-        }
+        // Signature requests are server-backed now; drop any seeded copies a
+        // browser still holds from the prototype so nothing stale can surface.
+        delete state.signatureRequests;
         return state;
       }
     } catch (e) { /* fall through to seed */ }

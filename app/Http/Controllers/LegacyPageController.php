@@ -35,6 +35,7 @@ class LegacyPageController extends Controller
         'projects',
         'settings',
         'settings/change-email',
+        'signatures',
         'social/feed',
         'social/messages',
         'users',

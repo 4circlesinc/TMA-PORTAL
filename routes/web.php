@@ -21,6 +21,9 @@ use App\Http\Controllers\Files\FileController;
 use App\Http\Controllers\Files\FolderController;
 use App\Http\Controllers\Files\RecycleBinController;
 use App\Http\Controllers\Files\UploadController;
+use App\Http\Controllers\Signatures\PublicSigningController;
+use App\Http\Controllers\Signatures\SignatureFieldController;
+use App\Http\Controllers\Signatures\SignatureRequestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -145,6 +148,30 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/shares/{uuid}', [\App\Http\Controllers\Files\ShareController::class, 'destroy'])->name('shares.destroy');
     });
 
+    /*
+     * Signature requests API. Addressed by public uuid; ownership and the
+     * status rules are re-checked in the controller on every action. Signing
+     * tokens are never returned here — they only exist in a recipient's link.
+     */
+    Route::prefix('portal/signatures')->name('signatures.')->group(function () {
+        Route::get('/', [SignatureRequestController::class, 'index'])->name('index');
+        Route::get('/documents', [SignatureRequestController::class, 'documents'])->name('documents');
+        Route::get('/people', [SignatureRequestController::class, 'people'])->name('people');
+        Route::post('/', [SignatureRequestController::class, 'store'])->name('store');
+        Route::get('/{uuid}', [SignatureRequestController::class, 'show'])->name('show');
+        Route::patch('/{uuid}', [SignatureRequestController::class, 'update'])->name('update');
+        Route::delete('/{uuid}', [SignatureRequestController::class, 'destroy'])->name('destroy');
+        Route::post('/{uuid}/cancel', [SignatureRequestController::class, 'cancel'])->name('cancel');
+        Route::post('/{uuid}/send', [SignatureRequestController::class, 'send'])->name('send');
+        Route::post('/{uuid}/remind', [SignatureRequestController::class, 'remind'])->name('remind');
+        Route::get('/{uuid}/links', [SignatureRequestController::class, 'links'])->name('links');
+
+        // The editor: the document itself, and the fields placed on it.
+        Route::get('/{uuid}/document', [SignatureFieldController::class, 'document'])->name('document');
+        Route::get('/{uuid}/fields', [SignatureFieldController::class, 'index'])->name('fields.index');
+        Route::put('/{uuid}/fields', [SignatureFieldController::class, 'store'])->name('fields.store');
+    });
+
     Route::get('/{page}', LegacyPageController::class)
         ->whereIn('page', LegacyPageController::PORTAL_PAGES);
 });
@@ -193,6 +220,21 @@ Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'ca
 Route::post('/auth/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])
     ->middleware(['auth', 'verified'])
     ->name('social.disconnect');
+
+/*
+ * Public signing links (no login, no portal). The token is the only
+ * credential: it identifies one recipient of one request, and the controller
+ * re-checks their turn on every action. Rate-limited because these are the
+ * only unauthenticated write endpoints in the app — a valid token is 64 chars
+ * of CSPRNG output, so the limit is about abuse of a known link, not guessing.
+ */
+Route::middleware('throttle:signing')->group(function () {
+    Route::get('/sign/{token}', [PublicSigningController::class, 'show'])->name('sign.show');
+    Route::get('/sign/{token}/document', [PublicSigningController::class, 'document'])->name('sign.document');
+    Route::post('/sign/{token}/progress', [PublicSigningController::class, 'progress'])->name('sign.progress');
+    Route::post('/sign/{token}/submit', [PublicSigningController::class, 'submit'])->name('sign.submit');
+    Route::post('/sign/{token}/decline', [PublicSigningController::class, 'decline'])->name('sign.decline');
+});
 
 /*
  * Public share links (no login). Keyed off the random token only — never a

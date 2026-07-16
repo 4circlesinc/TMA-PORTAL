@@ -277,10 +277,18 @@
     });
   }
 
-  function toast(message) {
+  /* opts.state: 'successful' (default) | 'failure'. A message that reports a
+     problem must not arrive wearing a green tick. */
+  function toast(message, opts) {
     if (window.TMAToast && window.TMAToast.showFloatingToast) {
-      window.TMAToast.showFloatingToast(message, { variant: 'successful' });
+      window.TMAToast.showFloatingToast(message, {
+        state: (opts && opts.state) || 'successful',
+      });
     }
+  }
+
+  function toastError(message) {
+    toast(message, { state: 'failure' });
   }
 
   /* Head dropdown - same pattern as Clients main-head buttons */
@@ -404,6 +412,7 @@
     openModal: openModal,
     closeModal: closeModal,
     toast: toast,
+    toastError: toastError,
     wireMenu: wireMenu,
     tabs: tabs,
     wireTabs: wireTabs,

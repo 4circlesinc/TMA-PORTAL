@@ -71,7 +71,11 @@
   position: fixed;
   left: 50%;
   bottom: calc(48px + env(safe-area-inset-bottom, 0px));
-  z-index: 150;
+  /* Above full-screen overlays (the signature wizard is 280, modals 260, the
+     file context menu 500). A toast is the app talking to you: at 150 it was
+     painted underneath the wizard's footer, so errors raised from inside it
+     were invisible and the page looked like it had simply ignored the click. */
+  z-index: 600;
   transform: translateX(-50%);
   pointer-events: none;
 }

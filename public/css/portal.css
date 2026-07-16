@@ -609,6 +609,18 @@
   min-width: 0;
 }
 
+/* Validation state, shown against the input rather than only in a toast. */
+.tma-portal-field--error .tma-portal-input,
+.tma-portal-field--error .tma-portal-select {
+  border-color: var(--color-red);
+}
+
+.tma-portal-field__error {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-red);
+}
+
 .tma-portal-field__label {
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
@@ -875,7 +887,10 @@
 .tma-portal-modal {
   position: fixed;
   inset: 0;
-  z-index: 240;
+  /* Above the full-screen signature wizard (280). At 240 a modal opened from
+     inside the wizard - the recipient picker, the signed-copy folder picker -
+     was painted behind it: present in the DOM, but invisible and unclickable. */
+  z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1429,6 +1444,28 @@
   outline-offset: 2px;
 }
 
+.tma-portal-sig-card__menu {
+  margin-left: var(--space-4);
+}
+
+/* Read-only link + copy button, side by side. */
+.tma-portal-sig-link-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-portal-sig-link-row .tma-portal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  font-size: var(--text-size-12);
+}
+
+.tma-portal-muted {
+  color: var(--color-text-secondary);
+}
+
 .tma-portal-sig-card__actions {
   display: flex;
   align-items: center;
@@ -1698,6 +1735,137 @@ html.tma-dash--signatures-wizard body {
   white-space: nowrap;
 }
 
+/* ── signature document picker (create modal) ─────── */
+.tma-portal-sig-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tma-portal-sig-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.tma-portal-sig-picker__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid transparent;
+  border-radius: var(--radius-8);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-sig-picker__row:hover {
+  background: var(--color-hover);
+}
+
+.tma-portal-sig-picker__row.is-selected {
+  border-color: var(--color-primary);
+  background: var(--color-accent-bg, var(--color-hover));
+}
+
+.tma-portal-sig-picker__row img {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.tma-portal-sig-picker__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tma-portal-sig-picker__name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-portal-sig-picker__folder {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+/* ── choose a recipient from the portal ───────────── */
+.tma-portal-sig-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid transparent;
+  border-radius: var(--radius-8);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-portal-sig-person:hover {
+  background: var(--color-hover);
+}
+
+.tma-portal-sig-person__avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tma-portal-sig-person__avatar--initials {
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-12);
+}
+
+.tma-portal-sig-person__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tma-portal-sig-person__name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+}
+
+.tma-portal-sig-person__meta {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-portal-sig-wizard__pick-person {
+  margin-right: var(--space-4);
+  font-size: var(--text-size-12);
+}
+
+.tma-portal-sig-wizard__recipients {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
 .tma-portal-sig-wizard__recipient {
   display: flex;
   flex-direction: column;
@@ -1706,6 +1874,43 @@ html.tma-dash--signatures-wizard body {
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
   background: var(--color-white);
+}
+
+.tma-portal-sig-wizard__recipient-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-portal-sig-wizard__recipient-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.tma-portal-sig-wizard__recipient-tools .tma-portal-icon-btn[disabled] {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.tma-portal-sig-wizard__add-recipient {
+  align-self: flex-start;
+}
+
+.tma-portal-sig-wizard__optional {
+  margin-left: var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-sig-wizard__message {
+  min-height: 72px;
+  max-width: none;
+  resize: vertical;
+  font-family: inherit;
 }
 
 .tma-portal-sig-wizard__recipient-label {
@@ -1851,6 +2056,10 @@ html.tma-dash--signatures-wizard body {
   border-right: 1px solid var(--color-border-soft);
   background: var(--color-white);
   min-width: 0;
+  /* Seven field types plus the assign panel outgrow a short viewport; without
+     this the assignment control sits below the fold and can't be reached. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .tma-portal-sig-wizard__fields-head {
@@ -1931,6 +2140,7 @@ html.tma-dash--signatures-wizard body {
 }
 
 .tma-portal-sig-wizard__doc-sheet {
+  position: relative; /* anchors the field layer over the page */
   width: min(100%, 720px);
   margin: 0 auto;
   padding: var(--space-28) var(--space-32);
@@ -1943,87 +2153,119 @@ html.tma-dash--signatures-wizard body {
   color: var(--color-black);
 }
 
-.tma-portal-sig-wizard__doc-sheet--art {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 420px;
+/* Real document page: the canvas paints it, the layer holds the fields. */
+.tma-portal-sig-wizard__doc-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-4);
 }
 
-.tma-portal-sig-wizard__doc-brand {
+.tma-portal-sig-wizard__field-layer {
+  position: absolute;
+  inset: var(--space-28) var(--space-32);
+}
+
+.tma-portal-sig-wizard__doc-loading {
+  width: min(100%, 720px);
+  margin: 0 auto;
+}
+
+.tma-portal-sig-field {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 2px;
+  border: 1px solid var(--sig-field-color, var(--color-primary));
+  border-radius: var(--radius-4);
+  background: color-mix(in srgb, var(--sig-field-color, var(--color-primary)) 14%, transparent);
+  cursor: move;
+  touch-action: none;
+}
+
+.tma-portal-sig-field.is-selected {
+  outline: 2px solid var(--sig-field-color, var(--color-primary));
+  outline-offset: 1px;
+}
+
+.tma-portal-sig-field__label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--color-black);
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tma-portal-sig-field__label img { opacity: 0.75; flex-shrink: 0; }
+.tma-portal-sig-field__label > span { overflow: hidden; text-overflow: ellipsis; }
+
+.tma-portal-sig-field__optional {
+  flex-shrink: 0;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.tma-portal-sig-field__remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 50%;
+  background: var(--color-white);
+  cursor: pointer;
+}
+
+.tma-portal-sig-field:hover .tma-portal-sig-field__remove,
+.tma-portal-sig-field.is-selected .tma-portal-sig-field__remove {
+  display: grid;
+}
+
+.tma-portal-sig-field__resize {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--color-white);
+  border-radius: 2px;
+  background: var(--sig-field-color, var(--color-primary));
+  cursor: nwse-resize;
+}
+
+.tma-portal-sig-wizard__assign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-16);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.tma-portal-sig-wizard__assign-title {
+  margin: 0;
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--color-text-secondary);
+  color: var(--color-black);
 }
 
-.tma-portal-sig-wizard__doc-heading {
-  margin: var(--space-12) 0 var(--space-16);
-  font-size: var(--text-size-16);
-  line-height: var(--text-lh-16);
-  font-weight: 600;
-}
-
-.tma-portal-sig-wizard__doc-meta {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: var(--space-16);
-  font-size: var(--text-size-12);
-}
-
-.tma-portal-sig-wizard__doc-meta th,
-.tma-portal-sig-wizard__doc-meta td {
-  padding: var(--space-4) var(--space-8);
-  border: 1px solid var(--color-border-soft);
-  text-align: left;
-  font-weight: 400;
-}
-
-.tma-portal-sig-wizard__doc-meta th {
-  background: var(--color-bg-card);
-  color: var(--color-text-secondary);
-  width: 18%;
-}
-
-.tma-portal-sig-wizard__doc-subhead {
-  margin: var(--space-16) 0 var(--space-8);
-  font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
-  font-weight: 600;
-}
-
-.tma-portal-sig-wizard__doc-copy {
-  margin: 0 0 var(--space-12);
-  color: var(--color-text-secondary);
-}
-
-.tma-portal-sig-wizard__doc-list {
+.tma-portal-sig-wizard__assign-note {
   margin: 0;
-  padding-left: var(--space-20);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
-}
-
-.tma-portal-sig-wizard__logo-mark {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-12);
-}
-
-.tma-portal-sig-wizard__logo-leaf {
-  width: 96px;
-  height: 96px;
-  border-radius: 50% 50% 50% 0;
-  background: linear-gradient(135deg, #71dd8c, #2f9e44);
-  transform: rotate(-45deg);
-}
-
-.tma-portal-sig-wizard__logo-text {
-  font-size: var(--text-size-18);
-  line-height: var(--text-lh-18);
-  font-weight: 600;
-  color: #2f9e44;
 }
 
 .tma-portal-sig-wizard__pages-panel {
@@ -2054,6 +2296,7 @@ html.tma-dash--signatures-wizard body {
 }
 
 .tma-portal-sig-wizard__page-thumb {
+  position: relative; /* anchors the placed-field count badge */
   display: block;
   width: 100%;
   padding: var(--space-4);
@@ -2067,25 +2310,37 @@ html.tma-dash--signatures-wizard body {
   border-color: var(--color-black);
 }
 
+/* Height comes from the page's own aspect ratio once painted, so a landscape
+   or A5 page isn't squashed into a portrait box. */
 .tma-portal-sig-wizard__page-mini {
   display: block;
   width: 100%;
-  aspect-ratio: 0.77;
+  height: auto;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-4);
   background: var(--color-white);
 }
 
-.tma-portal-sig-wizard__page-mini--brief {
-  background:
-    linear-gradient(var(--color-bg-card) 12px, transparent 12px) 0 8px / 100% 18px repeat-y,
-    var(--color-white);
+.tma-portal-sig-wizard__page-num {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--color-text-secondary);
 }
 
-.tma-portal-sig-wizard__page-mini--logo {
-  background:
-    radial-gradient(circle at 50% 42%, #71dd8c 0 18%, transparent 19%),
-    var(--color-white);
+.tma-portal-sig-wizard__page-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
 }
 
 @media (max-width: 900px) {

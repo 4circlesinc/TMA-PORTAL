@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use SocialiteProviders\Manager\SocialiteWasCalled;
 use SocialiteProviders\Microsoft\MicrosoftExtendSocialite;
@@ -27,5 +30,13 @@ class AppServiceProvider extends ServiceProvider
         // auth event gets recorded twice.
 
         Event::listen(SocialiteWasCalled::class, MicrosoftExtendSocialite::class);
+
+        // Public signing links are the only unauthenticated write endpoints in
+        // the app. Keyed by IP: a signer legitimately saves progress often, so
+        // this is generous enough not to interrupt real signing while still
+        // capping automated abuse of a leaked link.
+        RateLimiter::for('signing', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
+        });
     }
 }

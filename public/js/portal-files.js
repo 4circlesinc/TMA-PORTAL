@@ -375,7 +375,11 @@
     var canDelete = sel.every(function (i) { return perm(i, 'delete'); });
     var canMove = sel.every(function (i) { return perm(i, 'move'); });
     var canCopy = sel.every(function (i) { return perm(i, 'copy'); });
+    // A request signs exactly one document, so this appears only for a single
+    // signable file - never for a folder or a multi-selection.
+    var signable = sel.length === 1 && sel[0].type === 'file' && canSendForSignature(sel[0]);
     return toolBtn('ArrowLineDown', 'bulk-download', 'Download') +
+      (signable ? toolBtn('Signature', 'bulk-signature', 'Send for signature') : '') +
       toolBtn('ArrowsOutCardinal', 'bulk-move', 'Move', { disabled: !canMove }) +
       toolBtn('Copy', 'bulk-copy', 'Copy', { disabled: !canCopy }) +
       toolBtn('Star', 'bulk-favorite', 'Add to favourites') +
@@ -979,6 +983,7 @@
       case 'empty-bin': return emptyBin();
       case 'clear-selection': return clearSelection();
       case 'bulk-download': return bulkDownload();
+      case 'bulk-signature': return sendSelectionForSignature();
       case 'bulk-move': return bulkDestination('move');
       case 'bulk-copy': return bulkDestination('copy');
       case 'bulk-delete': return bulkDelete();
@@ -1459,6 +1464,25 @@
   function onCtxKey(e) { if (e.key === 'Escape') closeContextMenu(); }
   function onDocCtx(e) { if (ctxEl && !ctxEl.contains(e.target)) closeContextMenu(); }
 
+  /* Only offer signing for files the pipeline accepts, that aren't in the
+     recycle bin, and that the viewer may actually read. */
+  function canSendForSignature(item) {
+    if (isRecycle() || !window.TMAPortalSignatures) return false;
+    if (!window.TMAPortalSignatures.isSignableName(item.name)) return false;
+    return perm(item, 'download') || perm(item, 'preview');
+  }
+
+  function sendForSignature(item) {
+    window.TMAPortalSignatures.sendFileForSignature(item.id)
+      .catch(function () { /* toast already shown */ });
+  }
+
+  function sendSelectionForSignature() {
+    var sel = selectedItems();
+    if (sel.length !== 1 || !canSendForSignature(sel[0])) return;
+    sendForSignature(sel[0]);
+  }
+
   function contextItems(item) {
     var list = [];
     var isFolder = item.type === 'folder';
@@ -1471,6 +1495,9 @@
     }
     list.push({ label: isFolder ? 'Open' : 'Preview', icon: isFolder ? 'FolderOpen' : 'Eye', fn: function () { openItem(item.id); } });
     if (perm(item, 'download')) list.push({ label: isFolder ? 'Download as ZIP' : 'Download', icon: 'ArrowLineDown', fn: function () { downloadItem(item); } });
+    if (!isFolder && canSendForSignature(item)) {
+      list.push({ label: 'Send for signature', icon: 'Signature', fn: function () { sendForSignature(item); } });
+    }
     list.push({ sep: true });
     if (perm(item, 'share')) list.push({ label: 'Share', icon: 'ShareNetwork', fn: function () { openShareModal(item); } });
     if (perm(item, 'assign')) list.push({ label: 'Assign to people', icon: 'UserPlus', fn: function () { openAssignModal(item); } });
