@@ -245,25 +245,33 @@ class FolderTree
             throw new FileValidationException('The ZIP file could not be created.');
         }
 
-        self::addFolderToZip($zip, $folder, self::sanitizeZipSegment($folder->name));
+        // ZipArchive reads added files lazily at close(), so any temp copies we
+        // pull down from remote storage must survive until after close().
+        $tempCopies = [];
+        self::addFolderToZip($zip, $folder, self::sanitizeZipSegment($folder->name), $tempCopies);
         $zip->close();
+
+        foreach ($tempCopies as $tmp) {
+            Vault::cleanupLocalCopy($tmp);
+        }
 
         return $zipPath;
     }
 
-    private static function addFolderToZip(ZipArchive $zip, Folder $folder, string $prefix): void
+    private static function addFolderToZip(ZipArchive $zip, Folder $folder, string $prefix, array &$tempCopies): void
     {
         $zip->addEmptyDir($prefix);
 
         foreach ($folder->files()->get() as $file) {
-            $abs = Vault::absolutePath($file);
-            if (is_file($abs)) {
+            $abs = Vault::localCopy($file);
+            if ($abs !== null && is_file($abs)) {
                 $zip->addFile($abs, $prefix.'/'.self::sanitizeZipSegment($file->name));
+                $tempCopies[] = $abs;
             }
         }
 
         foreach ($folder->children()->get() as $child) {
-            self::addFolderToZip($zip, $child, $prefix.'/'.self::sanitizeZipSegment($child->name));
+            self::addFolderToZip($zip, $child, $prefix.'/'.self::sanitizeZipSegment($child->name), $tempCopies);
         }
     }
 

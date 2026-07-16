@@ -28,6 +28,11 @@ return [
 
     'avatar_disk' => env('AVATAR_DISK', 'public'),
 
+    // Disk that stores file-manager (vault) bytes. 'local' for dev; 's3' (R2)
+    // in production so uploads persist across deploys. Chunk assembly and
+    // thumbnail caches always use local scratch regardless of this.
+    'files_disk' => env('FILES_DISK', 'local'),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks

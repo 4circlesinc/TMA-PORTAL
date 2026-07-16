@@ -43,50 +43,54 @@ class Thumbnail
             return null;
         }
 
-        $cacheDir = Vault::root().'/thumbs';
+        $cacheDir = Vault::tempRoot().'/thumbs';
         $cachePath = $cacheDir.'/'.$file->uuid.'.jpg';
         if (is_file($cachePath)) {
             return $cachePath;
         }
 
-        $source = Vault::absolutePath($file);
-        if (! is_file($source)) {
+        $source = Vault::localCopy($file);
+        if ($source === null) {
             return null;
         }
 
-        $data = @file_get_contents($source);
-        if ($data === false) {
-            return null;
+        try {
+            $data = @file_get_contents($source);
+            if ($data === false) {
+                return null;
+            }
+
+            $img = @imagecreatefromstring($data);
+            if (! $img) {
+                return null;
+            }
+
+            if (in_array(strtolower((string) $file->extension), ['jpg', 'jpeg'], true)) {
+                $img = self::applyExifOrientation($img, $source);
+            }
+
+            $w = imagesx($img);
+            $h = imagesy($img);
+            $scale = min(1, self::MAX / max($w, $h));
+            $nw = max(1, (int) round($w * $scale));
+            $nh = max(1, (int) round($h * $scale));
+
+            $thumb = imagecreatetruecolor($nw, $nh);
+            $white = imagecolorallocate($thumb, 255, 255, 255); // flatten transparency for JPEG
+            imagefilledrectangle($thumb, 0, 0, $nw, $nh, $white);
+            imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+
+            if (! is_dir($cacheDir)) {
+                @mkdir($cacheDir, 0775, true);
+            }
+            @imagejpeg($thumb, $cachePath, 82);
+            imagedestroy($img);
+            imagedestroy($thumb);
+
+            return is_file($cachePath) ? $cachePath : null;
+        } finally {
+            Vault::cleanupLocalCopy($source);
         }
-
-        $img = @imagecreatefromstring($data);
-        if (! $img) {
-            return null;
-        }
-
-        if (in_array(strtolower((string) $file->extension), ['jpg', 'jpeg'], true)) {
-            $img = self::applyExifOrientation($img, $source);
-        }
-
-        $w = imagesx($img);
-        $h = imagesy($img);
-        $scale = min(1, self::MAX / max($w, $h));
-        $nw = max(1, (int) round($w * $scale));
-        $nh = max(1, (int) round($h * $scale));
-
-        $thumb = imagecreatetruecolor($nw, $nh);
-        $white = imagecolorallocate($thumb, 255, 255, 255); // flatten transparency for JPEG
-        imagefilledrectangle($thumb, 0, 0, $nw, $nh, $white);
-        imagecopyresampled($thumb, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
-
-        if (! is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0775, true);
-        }
-        @imagejpeg($thumb, $cachePath, 82);
-        imagedestroy($img);
-        imagedestroy($thumb);
-
-        return is_file($cachePath) ? $cachePath : null;
     }
 
     /**
@@ -100,29 +104,34 @@ class Thumbnail
             return null;
         }
 
-        $cacheDir = Vault::root().'/thumbs';
+        $cacheDir = Vault::tempRoot().'/thumbs';
         $cachePath = $cacheDir.'/'.$file->uuid.'.svg';
         if (is_file($cachePath)) {
             return $cachePath;
         }
 
-        $source = Vault::absolutePath($file);
-        if (! is_file($source)) {
-            return null;
-        }
-        $svg = @file_get_contents($source);
-        if ($svg === false) {
+        $source = Vault::localCopy($file);
+        if ($source === null) {
             return null;
         }
 
-        $svg = self::sanitizeSvg($svg);
+        try {
+            $svg = @file_get_contents($source);
+            if ($svg === false) {
+                return null;
+            }
 
-        if (! is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0775, true);
+            $svg = self::sanitizeSvg($svg);
+
+            if (! is_dir($cacheDir)) {
+                @mkdir($cacheDir, 0775, true);
+            }
+            @file_put_contents($cachePath, $svg);
+
+            return is_file($cachePath) ? $cachePath : null;
+        } finally {
+            Vault::cleanupLocalCopy($source);
         }
-        @file_put_contents($cachePath, $svg);
-
-        return is_file($cachePath) ? $cachePath : null;
     }
 
     private static function sanitizeSvg(string $svg): string
@@ -139,7 +148,7 @@ class Thumbnail
     public static function delete(FileItem $file): void
     {
         foreach (['jpg', 'svg'] as $ext) {
-            $path = Vault::root().'/thumbs/'.$file->uuid.'.'.$ext;
+            $path = Vault::tempRoot().'/thumbs/'.$file->uuid.'.'.$ext;
             if (is_file($path)) {
                 @unlink($path);
             }
