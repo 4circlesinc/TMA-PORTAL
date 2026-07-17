@@ -292,10 +292,10 @@ class SignatureStampingTest extends TestCase
         ]);
 
         // The signer gets their copy...
-        Mail::assertSent(SignatureCompleted::class, fn ($m) => $m->hasTo('dana@example.com'));
+        Mail::assertQueued(SignatureCompleted::class, fn ($m) => $m->hasTo('dana@example.com'));
         // ...and so does the sender.
-        Mail::assertSent(SignatureCompleted::class, fn ($m) => $m->hasTo($user->email));
-        Mail::assertSent(SignatureCompleted::class, 2);
+        Mail::assertQueued(SignatureCompleted::class, fn ($m) => $m->hasTo($user->email));
+        Mail::assertQueued(SignatureCompleted::class, 2);
     }
 
     public function test_the_completed_email_carries_the_signed_pdf(): void
@@ -305,7 +305,7 @@ class SignatureStampingTest extends TestCase
             ['type' => 'signature', 'page' => 1, 'x' => 0.1, 'y' => 0.8, 'width' => 0.2, 'height' => 0.05],
         ]);
 
-        Mail::assertSent(SignatureCompleted::class, function ($mail) use ($request) {
+        Mail::assertQueued(SignatureCompleted::class, function ($mail) use ($request) {
             $attachments = $mail->attachments();
 
             return count($attachments) === 1
@@ -419,6 +419,6 @@ class SignatureStampingTest extends TestCase
             ->assertOk();
 
         $this->assertNull($request->fresh()->signed_file_id);
-        Mail::assertNotSent(SignatureCompleted::class);
+        Mail::assertNotQueued(SignatureCompleted::class);
     }
 }

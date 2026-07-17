@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
+use App\Http\Controllers\ClientAssignmentController;
+use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ConnectorsController;
+use App\Http\Controllers\FileLibraryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\GettingStartedController;
@@ -175,6 +178,37 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/{uuid}/document', [SignatureFieldController::class, 'document'])->name('document');
         Route::get('/{uuid}/fields', [SignatureFieldController::class, 'index'])->name('fields.index');
         Route::put('/{uuid}/fields', [SignatureFieldController::class, 'store'])->name('fields.store');
+    });
+
+    /*
+     * Client directory API (the "Client hub"). Staff-only, re-checked in the
+     * controller. Clients are addressed by their public uid; the full contact
+     * record is stored and returned verbatim under `profile`.
+     */
+    Route::prefix('portal/clients')->name('clients.')->group(function () {
+        Route::get('/', [ClientsController::class, 'index'])->name('index');
+        Route::post('/', [ClientsController::class, 'store'])->name('store');
+        Route::post('/bulk-delete', [ClientsController::class, 'bulkDestroy'])->name('bulk-delete');
+        // Literal paths before /{uid} so they aren't swallowed by the wildcard.
+        Route::get('/assigned-to-me', [ClientAssignmentController::class, 'mine'])->name('assigned-to-me');
+        Route::get('/{uid}/assignments', [ClientAssignmentController::class, 'index'])->name('assignments.index');
+        Route::post('/{uid}/assignments', [ClientAssignmentController::class, 'store'])->name('assignments.store');
+        Route::delete('/{uid}/assignments/{userId}', [ClientAssignmentController::class, 'destroy'])->name('assignments.destroy');
+        Route::get('/{uid}', [ClientsController::class, 'show'])->name('show');
+        Route::patch('/{uid}', [ClientsController::class, 'update'])->name('update');
+        Route::delete('/{uid}', [ClientsController::class, 'destroy'])->name('destroy');
+        Route::post('/{uid}/duplicate', [ClientsController::class, 'duplicate'])->name('duplicate');
+    });
+
+    /*
+     * Administrator File Library configuration: default client subfolders,
+     * the staff-folder toggle, and organization (shared internal) folders.
+     */
+    Route::prefix('portal/file-library')->name('file-library.')->group(function () {
+        Route::get('/settings', [FileLibraryController::class, 'show'])->name('settings.show');
+        Route::put('/settings', [FileLibraryController::class, 'updateSettings'])->name('settings.update');
+        Route::post('/organization-folders', [FileLibraryController::class, 'storeOrganizationFolder'])->name('org.store');
+        Route::patch('/organization-folders/{uuid}', [FileLibraryController::class, 'updateOrganizationFolder'])->name('org.update');
     });
 
     Route::get('/{page}', LegacyPageController::class)

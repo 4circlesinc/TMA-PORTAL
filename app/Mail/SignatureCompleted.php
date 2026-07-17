@@ -5,6 +5,7 @@ namespace App\Mail;
 use App\Models\FileItem;
 use App\Models\SignatureRequest;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
@@ -18,7 +19,7 @@ use Illuminate\Queue\SerializesModels;
  * and the signing link is dead by now - a link would be useless to exactly the
  * people who most need the document.
  */
-class SignatureCompleted extends Mailable
+class SignatureCompleted extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

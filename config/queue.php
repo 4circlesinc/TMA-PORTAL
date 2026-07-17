@@ -41,7 +41,10 @@ return [
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
-            'after_commit' => false,
+            // Signature mail is dispatched around transactions that write the
+            // tokens the email links to. Waiting for the commit stops a worker
+            // racing ahead and mailing a link that isn't in the database yet.
+            'after_commit' => true,
         ],
 
         'beanstalkd' => [

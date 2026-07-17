@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Models\ClientAssignment;
 use App\Models\Folder;
 use App\Models\FolderShortcut;
+use App\Models\User;
 use App\Support\Files\FileAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +24,47 @@ class ShortcutController extends BaseFilesController
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json(['shortcuts' => $this->listFor($request)]);
+        $user = $this->user($request);
+
+        return response()->json([
+            'shortcuts' => $this->listFor($request),
+            'groups' => $this->autoGroups($user),
+        ]);
+    }
+
+    /**
+     * Folders that appear in the sidebar automatically, without pinning:
+     * the staff member's assigned client folders, the organization folders
+     * they may see, and their own staff folder. Grouped so the sidebar can
+     * label each section instead of mixing them with manual pins.
+     *
+     * @return array<string, array<int, array{id: string, name: string}>>
+     */
+    private function autoGroups(User $user): array
+    {
+        $assignedClients = Folder::where('folder_type', Folder::TYPE_CLIENT)
+            ->whereIn('client_id', ClientAssignment::where('user_id', $user->id)->pluck('client_id'))
+            ->orderBy('name')->get();
+
+        $organization = Folder::where('folder_type', Folder::TYPE_ORGANIZATION)
+            ->where('is_archived', false)
+            ->orderBy('name')->get()
+            ->filter(fn (Folder $f) => FileAccess::can($user, 'view', $f));
+
+        $staff = Folder::where('folder_type', Folder::TYPE_STAFF)
+            ->where('subject_user_id', $user->id)
+            ->orderBy('name')->get();
+
+        $map = fn ($folders) => $folders->map(fn (Folder $f) => [
+            'id' => $f->uuid,
+            'name' => $f->name,
+        ])->values()->all();
+
+        return [
+            'assignedClients' => $map($assignedClients),
+            'organization' => $map($organization),
+            'staff' => $map($staff),
+        ];
     }
 
     public function store(Request $request): JsonResponse

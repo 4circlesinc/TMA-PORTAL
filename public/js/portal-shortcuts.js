@@ -17,7 +17,8 @@
   function esc(s) { return ui() ? ui().esc(s) : String(s == null ? '' : s); }
 
   var host = null;
-  var items = null;      // null = not loaded yet
+  var items = null;      // null = not loaded yet (pinned folders)
+  var groups = null;     // server-provided auto sections (assigned/org/staff)
   var status = 'idle';   // 'idle' | 'loading' | 'ready' | 'error'
   var inFlight = null;
 
@@ -28,21 +29,34 @@
     return row + row + row;
   }
 
-  function itemHtml(it) {
+  function itemHtml(it, opts) {
+    opts = opts || {};
     // The parent name only rides along in the tooltip, so a nested folder is
     // still identifiable when several siblings share a name.
     var title = it.parent ? it.parent + ' / ' + it.name : it.name;
-    return '<div class="tma-dash__shortcut" data-shortcut="' + esc(it.id) + '" draggable="true" role="listitem">' +
+    var pinned = opts.pinned;
+    return '<div class="tma-dash__shortcut" data-shortcut="' + esc(it.id) + '"' +
+      (pinned ? ' draggable="true"' : '') + ' role="listitem">' +
       '<a class="tma-dash__nav-item tma-dash__nav-item--shortcut" href="/folders/all" data-shortcut-open="' + esc(it.id) + '" title="' + esc(title) + '">' +
       '<span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>' +
       '<img class="tma-dash__nav-icon" src="images/icons/phosphor/FolderFilled.svg" alt="">' +
       '<span>' + esc(it.name) + '</span>' +
       '</a>' +
-      '<button type="button" class="tma-dash__shortcut-remove" data-shortcut-remove="' + esc(it.id) + '"' +
-      ' aria-label="Remove ' + esc(it.name) + ' from Folder Shortcuts">' +
-      '<img src="images/icons/phosphor/X.svg" alt="" width="12" height="12">' +
-      '</button>' +
+      (pinned
+        ? '<button type="button" class="tma-dash__shortcut-remove" data-shortcut-remove="' + esc(it.id) + '"' +
+          ' aria-label="Remove ' + esc(it.name) + ' from Folder Shortcuts">' +
+          '<img src="images/icons/phosphor/X.svg" alt="" width="12" height="12">' +
+          '</button>'
+        : '') +
       '</div>';
+  }
+
+  // An automatic (server-provided) section: a labelled group of folders the
+  // user didn't pin. Rendered only when it has folders.
+  function groupHtml(label, list) {
+    if (!list || !list.length) return '';
+    return '<div class="tma-dash__group-label">' + esc(label) + '</div>' +
+      list.map(function (it) { return itemHtml(it, { pinned: false }); }).join('');
   }
 
   function render() {
@@ -53,17 +67,31 @@
         '<button type="button" class="tma-dash__shortcut-retry" data-shortcut-retry>Retry</button></p>';
       return;
     }
-    if (!items || !items.length) {
+
+    var g = groups || {};
+    var auto =
+      groupHtml('Assigned Clients', g.assignedClients) +
+      groupHtml('Organization Folders', g.organization) +
+      groupHtml('My Staff Folder', g.staff);
+
+    var pinned = (items && items.length)
+      ? '<div class="tma-dash__group-label">Pinned Folders</div>' +
+        items.map(function (it) { return itemHtml(it, { pinned: true }); }).join('')
+      : '';
+
+    if (!auto && !pinned) {
       host.innerHTML = '<p class="tma-dash__shortcut-note">Add folders from the File Library for quick access.</p>';
       return;
     }
-    host.innerHTML = items.map(itemHtml).join('');
+
+    host.innerHTML = auto + pinned;
   }
 
   /* ── data ──────────────────────────────────────────── */
 
   function apply(res) {
     items = (res && res.shortcuts) || [];
+    groups = (res && res.groups) || {};
     status = 'ready';
     render();
     return items;
@@ -140,8 +168,10 @@
 
   var dragged = null;
 
+  // Only pinned rows are draggable; auto sections (assigned/org/staff) stay put.
   function rowFrom(target) {
-    return target && target.closest ? target.closest('[data-shortcut]') : null;
+    var row = target && target.closest ? target.closest('[data-shortcut]') : null;
+    return row && row.getAttribute('draggable') === 'true' ? row : null;
   }
 
   function bindDrag() {
@@ -173,7 +203,7 @@
       dragged.classList.remove('is-dragging');
       dragged = null;
       var order = Array.prototype.map.call(
-        host.querySelectorAll('[data-shortcut]'),
+        host.querySelectorAll('[data-shortcut][draggable="true"]'),
         function (r) { return r.getAttribute('data-shortcut'); }
       );
       // Re-seat the cache in DOM order so a failed save can be rolled back.

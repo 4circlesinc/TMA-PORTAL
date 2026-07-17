@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Files;
 
 use App\Models\FileItem;
 use App\Models\Folder;
+use App\Models\Share;
 use App\Models\User;
 use App\Support\Files\FileAccess;
 use Illuminate\Database\Eloquent\Builder;
@@ -146,7 +147,12 @@ class BrowserController extends BaseFilesController
     private function visibleFolders(User $user): Builder
     {
         return Folder::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user) {
-            $ids = FileAccess::sharedFolderIds($user);
+            // Owned, shared to them, or reachable through a system rule
+            // (organization folders, their staff folder, assigned clients).
+            $ids = array_merge(
+                FileAccess::sharedFolderIds($user),
+                FileAccess::systemVisibleFolderIds($user),
+            );
             $q->where(fn ($w) => $w->where('owner_id', $user->id)->orWhereIn('id', $ids ?: [0]));
         });
     }
@@ -185,7 +191,7 @@ class BrowserController extends BaseFilesController
 
     private function sharedOutFolders(User $user): Builder
     {
-        $ids = \App\Models\Share::query()
+        $ids = Share::query()
             ->where('item_type', 'folder')->whereNull('revoked_at')
             ->pluck('item_id')->unique()->all();
 

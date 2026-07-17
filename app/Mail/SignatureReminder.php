@@ -5,13 +5,14 @@ namespace App\Mail;
 use App\Models\SignatureRecipient;
 use App\Models\SignatureRequest;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 /** A nudge for a link that's already out. Same link, not a new one. */
-class SignatureReminder extends Mailable
+class SignatureReminder extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

@@ -144,243 +144,139 @@
     { value: 'other', label: 'Other' },
   ];
 
-  var DIRECTORY = [
-    { letter: 'A', items: [{ id: 'andi', name: 'Andi Lane', avatar: 'AvatarFemale01' }] },
-    {
-      letter: 'B',
-      items: [
-        { id: 'byewind', name: 'ByeWind', avatar: 'AvatarByewind' },
-        { id: 'bruce', name: 'Bruce Wayne', initial: 'B', initialColor: 'blue' },
-      ],
-    },
-    { letter: 'D', items: [{ id: 'drew', name: 'Drew Cano', avatar: 'AvatarMale01' }] },
-    { letter: 'E', items: [{ id: 'emma', name: 'Emma Smith', avatar: 'Avatar3d04' }] },
-    { letter: 'J', items: [{ id: 'john', name: 'John Smith', avatar: 'AvatarMale02' }] },
-    {
-      letter: 'K',
-      items: [
-        { id: 'kate', name: 'Kate Morrison', avatar: 'AvatarFemale04' },
-        { id: 'koray', name: 'Koray Okumus', avatar: 'AvatarMale04' },
-      ],
-    },
-    {
-      letter: 'M',
-      items: [
-        { id: 'michael', name: 'Michael Brown', initial: 'M', initialColor: 'green' },
-        { id: 'melody', name: 'Melody Macy', avatar: 'AvatarFemale05' },
-      ],
-    },
-    { letter: 'N', items: [{ id: 'natali', name: 'Natali Craig', avatar: 'AvatarFemale06' }] },
-    { letter: 'O', items: [{ id: 'orlando', name: 'Orlando Diggs', avatar: 'AvatarMale03' }] },
-    { letter: 'W', items: [{ id: 'william', name: 'William Johnson', avatar: 'AvatarAbstract04' }] },
-  ];
+  var DIRECTORY = [];
+  var PROFILES = {};
 
-  var PROFILES = {
-    byewind: {
-      firstName: 'ByeWind',
-      lastName: '',
-      nickname: 'Bye',
-      phones: [
-        { type: 'mobile', value: '+852 19850622' },
-        { type: 'office', value: '+852 2800 1234' },
-      ],
-      emails: [{ type: 'work', value: 'byewind@twitter.com' }],
-      work: { jobTitle: 'Developer', department: 'Engineering', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'SF, Bay Area', state: '', zip: '', country: 'USA' }],
-      website: 'https://byewind.com',
-      birthday: '1990-03-15',
-      importantDates: [
-        { type: 'birthday', label: '', date: '1990-03-15' },
-        { type: 'custom', label: 'Company anniversary', date: '2018-09-01' },
-      ],
-      linkedIn: 'https://linkedin.com/in/byewind',
-      notes: 'Primary engineering contact for advisory portal work.',
-      projects: '75',
-      workingGroup: '23',
-      likes: '1,123',
+  /* ── server persistence ─────────────────────────────────────────
+   * The directory is populated from /portal/clients on mount and kept in
+   * sync as records are created, edited, and removed. The full contact
+   * record round-trips verbatim under `profile`.
+   */
+  var CLIENTS_ROOT = window.__TMA_SITE_ROOT || '';
+  var CLIENTS_BASE = CLIENTS_ROOT + '/portal/clients';
+
+  function clientsCsrf() {
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function clientsFetch(url, opts) {
+    opts = opts || {};
+    var headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    if (opts.method && opts.method !== 'GET') headers['X-XSRF-TOKEN'] = clientsCsrf();
+    if (opts.json !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(opts.json);
+    }
+    return fetch(url, {
+      method: opts.method || 'GET',
+      credentials: 'same-origin',
+      headers: Object.assign(headers, opts.headers || {}),
+      body: opts.body,
+    }).then(function (res) {
+      var ct = res.headers.get('content-type') || '';
+      var parse = ct.indexOf('application/json') !== -1 ? res.json() : Promise.resolve(null);
+      return parse.then(function (data) {
+        if (!res.ok) {
+          var err = new Error((data && data.message) || 'Request failed');
+          err.status = res.status;
+          err.data = data;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  var ClientsAPI = {
+    list: function () { return clientsFetch(CLIENTS_BASE); },
+    create: function (payload) { return clientsFetch(CLIENTS_BASE, { method: 'POST', json: payload }); },
+    update: function (uid, payload) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload });
     },
-    andi: {
-      firstName: 'Andi',
-      lastName: 'Lane',
-      nickname: 'Andi',
-      phones: [{ type: 'mobile', value: '+1 555 0101' }],
-      emails: [{ type: 'work', value: 'andi@example.com' }],
-      work: { jobTitle: 'Designer', department: 'Product Design', company: 'TM ANTOINE' },
-      addresses: [{ type: 'home', street: '', city: 'LA, California', state: '', zip: '', country: 'USA' }],
-      website: 'https://andilane.design',
-      linkedIn: 'https://linkedin.com/in/andilane',
-      socials: [
-        { type: 'twitter', value: 'https://twitter.com/andilane' },
-        { type: 'instagram', value: 'https://instagram.com/andilane' },
-      ],
-      importantDates: [{ type: 'birthday', label: '', date: '1991-04-22' }],
-      notes: 'Design lead for TM ANTOINE. Best reached in the afternoon PST.',
-      projects: '42',
-      workingGroup: '18',
-      likes: '890',
+    remove: function (uid) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid), { method: 'DELETE' });
     },
-    drew: {
-      firstName: 'Drew',
-      lastName: 'Cano',
-      phones: [{ type: 'mobile', value: '+1 555 0102' }],
-      emails: [{ type: 'work', value: 'drew@example.com' }],
-      work: { jobTitle: 'Product Manager', department: 'Product', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Austin, TX', state: '', zip: '', country: 'USA' }],
-      website: 'https://drewcano.com',
-      linkedIn: 'https://linkedin.com/in/drewcano',
-      socials: [{ type: 'twitter', value: 'https://twitter.com/drewcano' }],
-      importantDates: [{ type: 'birthday', label: '', date: '1988-11-03' }],
-      notes: 'Owns roadmap planning and stakeholder reviews.',
-      projects: '31',
-      workingGroup: '12',
-      likes: '654',
+    bulkRemove: function (uids) {
+      return clientsFetch(CLIENTS_BASE + '/bulk-delete', { method: 'POST', json: { uids: uids } });
     },
-    bruce: {
-      firstName: 'Bruce',
-      lastName: 'Wayne',
-      phones: [{ type: 'office', value: '+1 555 0199' }],
-      emails: [{ type: 'work', value: 'bruce@wayneent.com' }],
-      work: { jobTitle: 'Executive', department: 'Leadership', company: 'Wayne Enterprises' },
-      addresses: [{ type: 'work', street: '1007 Mountain Drive', city: 'Gotham City', state: 'NJ', zip: '', country: 'USA' }],
-      website: 'https://wayneenterprises.com',
-      linkedIn: 'https://linkedin.com/in/brucewayne',
-      socials: [{ type: 'twitter', value: 'https://twitter.com/wayneent' }],
-      notes: 'Executive sponsor for enterprise accounts.',
-      projects: '18',
-      workingGroup: '6',
-      likes: '2,401',
-    },
-    emma: {
-      firstName: 'Emma',
-      lastName: 'Smith',
-      phones: [{ type: 'mobile', value: '+1 555 0114' }],
-      emails: [{ type: 'work', value: 'emma@example.com' }],
-      work: { jobTitle: 'Marketing Lead', department: 'Marketing', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Chicago, IL', state: '', zip: '', country: 'USA' }],
-      projects: '29',
-      workingGroup: '14',
-      likes: '512',
-    },
-    john: {
-      firstName: 'John',
-      lastName: 'Smith',
-      phones: [{ type: 'mobile', value: '+1 555 0122' }],
-      emails: [{ type: 'work', value: 'john@example.com' }],
-      work: { jobTitle: 'Engineer', department: 'Engineering', company: 'TM ANTOINE' },
-      addresses: [{ type: 'home', street: '', city: 'Seattle, WA', state: '', zip: '', country: 'USA' }],
-      projects: '36',
-      workingGroup: '11',
-      likes: '430',
-    },
-    kate: {
-      firstName: 'Kate',
-      lastName: 'Morrison',
-      phones: [{ type: 'mobile', value: '+1 555 0133' }],
-      emails: [{ type: 'work', value: 'kate@example.com' }],
-      work: { jobTitle: 'Operations', department: 'Operations', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Denver, CO', state: '', zip: '', country: 'USA' }],
-      website: 'https://katemorrison.io',
-      linkedIn: 'https://linkedin.com/in/katemorrison',
-      socials: [{ type: 'instagram', value: 'https://instagram.com/katemorrison' }],
-      notes: 'Operations point of contact for CRM rollout.',
-      projects: '22',
-      workingGroup: '9',
-      likes: '318',
-    },
-    koray: {
-      firstName: 'Koray',
-      lastName: 'Okumus',
-      phones: [{ type: 'mobile', value: '+90 555 0100' }],
-      emails: [{ type: 'work', value: 'koray@example.com' }],
-      work: { jobTitle: 'Analyst', department: 'Strategy', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Istanbul', state: '', zip: '', country: 'Turkey' }],
-      website: 'https://korayokumus.com',
-      linkedIn: 'https://linkedin.com/in/korayokumus',
-      socials: [{ type: 'twitter', value: 'https://twitter.com/korayokumus' }],
-      notes: 'Strategy and research partner for search UX.',
-      projects: '27',
-      workingGroup: '10',
-      likes: '275',
-    },
-    michael: {
-      firstName: 'Michael',
-      lastName: 'Brown',
-      phones: [{ type: 'mobile', value: '+1 555 0144' }],
-      emails: [{ type: 'work', value: 'michael@example.com' }],
-      work: { jobTitle: 'Consultant', department: 'Advisory', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Boston, MA', state: '', zip: '', country: 'USA' }],
-      projects: '19',
-      workingGroup: '7',
-      likes: '198',
-    },
-    melody: {
-      firstName: 'Melody',
-      lastName: 'Macy',
-      phones: [{ type: 'mobile', value: '+1 555 0155' }],
-      emails: [{ type: 'work', value: 'melody@example.com' }],
-      work: { jobTitle: 'Creative Director', department: 'Creative', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Portland, OR', state: '', zip: '', country: 'USA' }],
-      projects: '33',
-      workingGroup: '15',
-      likes: '621',
-    },
-    natali: {
-      firstName: 'Natali',
-      lastName: 'Craig',
-      nickname: 'Nat',
-      phones: [
-        { type: 'mobile', value: '+1 555 0166' },
-        { type: 'office', value: '+1 555 2800' },
-      ],
-      emails: [
-        { type: 'work', value: 'natali@example.com' },
-        { type: 'personal', value: 'natalicraig@example.com' },
-      ],
-      work: { jobTitle: 'Support Lead', department: 'Support', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Miami, FL', state: '', zip: '', country: 'USA' }],
-      website: 'https://natalicraig.com',
-      linkedIn: 'https://linkedin.com/in/natali-craig',
-      socials: [
-        { type: 'twitter', value: 'https://twitter.com/natalicraig' },
-        { type: 'instagram', value: 'https://instagram.com/natalicraig' },
-        { type: 'threads', value: 'https://threads.net/@natalicraig' },
-      ],
-      importantDates: [{ type: 'birthday', label: '', date: '1992-06-14' }],
-      notes: 'Primary support contact. Prefers messages during business hours.',
-      projects: '24',
-      workingGroup: '13',
-      likes: '402',
-    },
-    orlando: {
-      firstName: 'Orlando',
-      lastName: 'Diggs',
-      phones: [{ type: 'mobile', value: '+1 555 0177' }],
-      emails: [{ type: 'work', value: 'orlando@example.com' }],
-      work: { jobTitle: 'Sales Manager', department: 'Sales', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Atlanta, GA', state: '', zip: '', country: 'USA' }],
-      website: 'https://orlandodiggs.com',
-      linkedIn: 'https://linkedin.com/in/orlandodiggs',
-      socials: [{ type: 'twitter', value: 'https://twitter.com/orlandodiggs' }],
-      notes: 'Sales lead for mid-market accounts.',
-      projects: '28',
-      workingGroup: '16',
-      likes: '367',
-    },
-    william: {
-      firstName: 'William',
-      lastName: 'Johnson',
-      phones: [{ type: 'mobile', value: '+1 555 0188' }],
-      emails: [{ type: 'work', value: 'william@example.com' }],
-      work: { jobTitle: 'Account Manager', department: 'Sales', company: 'TM ANTOINE' },
-      addresses: [{ type: 'work', street: '', city: 'Phoenix, AZ', state: '', zip: '', country: 'USA' }],
-      website: 'https://williamjohnson.co',
-      linkedIn: 'https://linkedin.com/in/williamjohnson',
-      notes: 'Account manager for advisory portal clients.',
-      projects: '16',
-      workingGroup: '8',
-      likes: '210',
+    duplicate: function (uid) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/duplicate', { method: 'POST' });
     },
   };
+
+  var clientsLoaded = false;
+
+  function firstDirectoryItem() {
+    for (var i = 0; i < DIRECTORY.length; i++) {
+      if (DIRECTORY[i].items && DIRECTORY[i].items.length) return DIRECTORY[i].items[0];
+    }
+    return null;
+  }
+
+  // Per-client server metadata that isn't part of the editable profile:
+  // the linked File Library folder and whether the client has a login.
+  var CLIENT_META = {};
+
+  function rememberMeta(rec) {
+    if (!rec || !rec.id) return;
+    CLIENT_META[rec.id] = { folderUuid: rec.folderUuid || null, hasLogin: !!rec.hasLogin };
+  }
+
+  function clientFolderUuid(id) {
+    return CLIENT_META[id] ? CLIENT_META[id].folderUuid : null;
+  }
+
+  // Rebuild the in-memory directory + profile map from server records.
+  function hydrateClients(records) {
+    DIRECTORY.length = 0;
+    CLIENT_META = {};
+    Object.keys(PROFILES).forEach(function (k) { delete PROFILES[k]; });
+    (records || []).forEach(function (rec) {
+      if (!rec || !rec.id) return;
+      PROFILES[rec.id] = rec.profile || {};
+      rememberMeta(rec);
+      var item = { id: rec.id, name: rec.name || 'Client' };
+      if (rec.initial) item.initial = rec.initial;
+      if (rec.initialColor) item.initialColor = rec.initialColor;
+      insertContact(item);
+    });
+    clientsLoaded = true;
+  }
+
+  // Open a client's main folder in the File Library (by folder uuid).
+  function openClientFolder(id) {
+    var uuid = clientFolderUuid(id);
+    if (!uuid || !window.TMADashboard || !window.TMADashboard.navigate) return;
+    var contact = directoryItemFor(id);
+    window.TMADashboard.navigate({
+      navId: 'folders-all',
+      view: 'folders',
+      title: contact ? contact.name : 'Client folder',
+      crumb: 'Folders / ' + (contact ? contact.name : 'Client'),
+      folderId: uuid,
+    });
+  }
+
+  function clientsToast(message, state) {
+    if (window.TMAToast && window.TMAToast.showFloatingToast) {
+      window.TMAToast.showFloatingToast(message, { state: state || 'positive' });
+    }
+  }
+
+  // The payload the server stores: the full draft as `profile`, plus the
+  // display name and avatar fallback the directory list needs.
+  function draftPayload(draft, id) {
+    var name = displayName(draft) || 'New Client';
+    var existing = directoryItemFor(id);
+    return {
+      uid: id,
+      name: name,
+      initial: name.charAt(0).toUpperCase(),
+      initialColor: (existing && existing.initialColor) || 'blue',
+      profile: cloneDraft(draft),
+    };
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -487,7 +383,7 @@
   }
 
   function contactFor(id) {
-    var item = directoryItemFor(id) || directoryItemFor('byewind');
+    var item = directoryItemFor(id) || firstDirectoryItem() || { id: id || '', name: '' };
     var extra = PROFILES[item.id] || {};
     var contact = legacyToContact(item, extra);
     contact.id = item.id;
@@ -1523,19 +1419,187 @@
   }
 
   function renderFoldersPanel(contactId, hidden) {
-    var folders = foldersFor(contactId);
+    var uuid = clientFolderUuid(contactId);
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="folders" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
       '<div class="tma-dash__clients-folders-head">' +
-      '<span class="tma-dash__clients-folders-title">' + folders.length + ' folder' + (folders.length === 1 ? '' : 's') + '</span>' +
-      '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-add>' +
-      '<img src="' + ICONS.Plus + '" alt=""><span>Add folder</span></button>' +
+      '<span class="tma-dash__clients-folders-title">Client folder</span>' +
+      (uuid
+        ? '<div class="tma-dash__clients-folders-actions">' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-new>' +
+          '<img src="' + ICONS.Plus + '" alt=""><span>New folder</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-upload>' +
+          '<img src="images/icons/phosphor/ArrowLineUp.svg" alt=""><span>Upload</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-open-folder>' +
+          '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open in File Library</span></button>' +
+          '<input type="file" multiple hidden data-clients-folder-fileinput>' +
+          '</div>'
+        : '') +
       '</div>' +
-      '<div class="tma-dash__clients-folders">' +
-      folders.map(renderFolderRow).join('') +
-      '</div></div>'
+      (uuid
+        ? '<div class="tma-dash__clients-folders" data-clients-folder-drop data-folder-uuid="' + esc(uuid) + '">' +
+          '<div class="tma-dash__clients-assigned-empty" data-clients-folder-list>Loading…</div>' +
+          '</div>'
+        : '<div class="tma-dash__clients-folders">' +
+          '<div class="tma-dash__clients-assigned-empty">This client’s folder isn’t ready yet.</div></div>') +
+      '</div>'
     );
+  }
+
+  /* ── the client folder, live inside the profile ─────────────────
+   * Reuses the File Library APIs: the browse endpoint lists the folder, the
+   * global upload manager (TMAUpload) handles chunked uploads + drag-and-drop,
+   * and the folders endpoint creates subfolders. Nothing about the File
+   * Library design changes - this is just a window onto the client's folder.
+   */
+  function filesNet() { return window.TMAFilesNet; }
+
+  // "3 files · 1 folder · 1.2 MB", or "Empty" when the folder has nothing.
+  function folderMetaLabel(f) {
+    var parts = [];
+    var files = f.fileCount || 0;
+    var folders = f.folderCount || 0;
+    if (files) parts.push(files + (files === 1 ? ' file' : ' files'));
+    if (folders) parts.push(folders + (folders === 1 ? ' folder' : ' folders'));
+    if (!parts.length) return 'Empty';
+    if (f.sizeLabel) parts.push(f.sizeLabel);
+    return parts.join(' · ');
+  }
+
+  function fmtShortDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function renderClientFolderList(root, res) {
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    if (!wrap) return;
+    var folders = (res && res.folders) || [];
+    var files = (res && res.files) || [];
+    if (!folders.length && !files.length) {
+      wrap.innerHTML = '<div class="tma-dash__clients-assigned-empty" data-clients-folder-list>' +
+        'No files yet. Use “Upload”, “New folder”, or drag files here.</div>';
+      return;
+    }
+    var html = '';
+    folders.forEach(function (f) {
+      var count = (f.fileCount || 0) + (f.folderCount || 0);
+      html += '<button type="button" class="tma-dash__clients-folder" data-clients-subfolder="' + esc(f.id) + '">' +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + ICONS.FolderFilled + '" alt=""></span>' +
+        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
+        '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) + '</span></span>' +
+        '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +
+        '</button>';
+    });
+    files.forEach(function (f) {
+      var meta = [f.sizeLabel, f.modifiedAt ? 'Updated ' + fmtShortDate(f.modifiedAt) : null].filter(Boolean).join(' · ');
+      html += '<button type="button" class="tma-dash__clients-folder" data-clients-open-folder>' +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="images/icons/phosphor/File.svg" alt=""></span>' +
+        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
+        (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
+        '</span></button>';
+    });
+    wrap.innerHTML = html;
+  }
+
+  function loadClientFolder(root) {
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    if (!wrap || !filesNet()) return;
+    var uuid = wrap.getAttribute('data-folder-uuid');
+    filesNet().fetchJSON(filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200'))
+      .then(function (res) { renderClientFolderList(root, res); })
+      .catch(function () {
+        var list = wrap.querySelector('[data-clients-folder-list]') || wrap;
+        list.textContent = 'Could not load this folder.';
+      });
+  }
+
+  function uploadToClientFolder(files, uuid) {
+    if (!files || !files.length || !window.TMAUpload) return;
+    window.TMAUpload.add(files, { folderId: uuid });
+    clientsToast(files.length > 1 ? files.length + ' files uploading…' : 'Uploading…', 'neutral');
+  }
+
+  // One document-level listener refreshes the open folder panel when an upload
+  // into it finishes, wherever the upload was started from.
+  var clientFolderUploadListenerBound = false;
+  function bindClientFolderUploadRefresh() {
+    if (clientFolderUploadListenerBound) return;
+    clientFolderUploadListenerBound = true;
+    document.addEventListener('tma:upload-complete', function (e) {
+      if (!clientsMountRoot) return;
+      var wrap = clientsMountRoot.querySelector('[data-clients-folder-drop]');
+      if (!wrap) return;
+      var done = e.detail && e.detail.folderId;
+      if (!done || done === wrap.getAttribute('data-folder-uuid')) {
+        loadClientFolder(clientsMountRoot);
+      }
+    });
+  }
+
+  function wireClientFolderPanel(root) {
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    if (!wrap) return;
+    var uuid = wrap.getAttribute('data-folder-uuid');
+
+    bindClientFolderUploadRefresh();
+    loadClientFolder(root);
+
+    var newBtn = root.querySelector('[data-clients-folder-new]');
+    if (newBtn) {
+      newBtn.addEventListener('click', function () {
+        var name = window.prompt('New folder name');
+        if (!name || !name.trim() || !filesNet()) return;
+        filesNet().fetchJSON(filesNet().url('/folders'), { method: 'POST', json: { name: name.trim(), parent: uuid } })
+          .then(function () { clientsToast('Folder created', 'positive'); loadClientFolder(root); })
+          .catch(function (err) { clientsToast((err && err.message) || 'Could not create the folder', 'negative'); });
+      });
+    }
+
+    var uploadBtn = root.querySelector('[data-clients-folder-upload]');
+    var fileInput = root.querySelector('[data-clients-folder-fileinput]');
+    if (uploadBtn && fileInput) {
+      uploadBtn.addEventListener('click', function () { fileInput.click(); });
+      fileInput.addEventListener('change', function () {
+        uploadToClientFolder(fileInput.files, uuid);
+        fileInput.value = '';
+      });
+    }
+
+    root.querySelectorAll('[data-clients-subfolder]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var sub = btn.getAttribute('data-clients-subfolder');
+        if (!sub || !window.TMADashboard || !window.TMADashboard.navigate) return;
+        window.TMADashboard.navigate({
+          navId: 'folders-all', view: 'folders',
+          title: 'Client folder', crumb: 'Folders', folderId: sub,
+        });
+      });
+    });
+
+    // Drag-and-drop upload straight onto the panel.
+    var stop = function (e) { e.preventDefault(); e.stopPropagation(); };
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      wrap.addEventListener(ev, function (e) {
+        if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
+        stop(e);
+        e.dataTransfer.dropEffect = 'copy';
+        wrap.classList.add('is-drop-into');
+      });
+    });
+    ['dragleave', 'dragend'].forEach(function (ev) {
+      wrap.addEventListener(ev, function (e) {
+        if (e.target === wrap) wrap.classList.remove('is-drop-into');
+      });
+    });
+    wrap.addEventListener('drop', function (e) {
+      if (!e.dataTransfer) return;
+      stop(e);
+      wrap.classList.remove('is-drop-into');
+      uploadToClientFolder(e.dataTransfer.files, uuid);
+    });
   }
 
   function renderAssignedRow(item) {
@@ -1586,6 +1650,10 @@
       '<div class="tma-dash__clients-profile-actions">' +
       '<button type="button" class="tma-dash__clients-icon-btn" data-clients-share aria-label="Share profile">' +
       '<img src="' + ICONS.ShareNetwork + '" alt=""></button>' +
+      (clientFolderUuid(c.id)
+        ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
+          '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
+        : '') +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
       '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
@@ -1838,30 +1906,42 @@
   function deleteSelectedClients(state, render) {
     var keys = Object.keys(state.selected || {});
     if (!keys.length) return;
+    // Hide them at once, then confirm with the server; restore on failure.
     state.removedIds = state.removedIds || {};
     keys.forEach(function (key) { state.removedIds[key] = true; });
     state.selected = {};
     state.page = 1;
     render({ forceFull: true });
+    ClientsAPI.bulkRemove(keys).then(function () {
+      clientsToast(keys.length > 1 ? keys.length + ' clients removed' : 'Client removed', 'positive');
+    }).catch(function (err) {
+      keys.forEach(function (key) { delete state.removedIds[key]; });
+      render({ forceFull: true });
+      clientsToast((err && err.message) || 'Could not remove the selection', 'negative');
+    });
   }
 
   function duplicateSelectedClients(state, render) {
     var keys = Object.keys(state.selected || {});
     if (!keys.length) return;
-    var nextSelected = {};
-    keys.forEach(function (key) {
-      var item = directoryItemFor(key);
-      if (!item) return;
-      var newId = key + '-copy-' + String(Date.now() + Math.floor(Math.random() * 1000));
-      var newItem = Object.assign({}, item, { id: newId, name: item.name + ' (copy)' });
-      insertContact(newItem);
-      if (PROFILES[key]) {
-        PROFILES[newId] = JSON.parse(JSON.stringify(PROFILES[key]));
-      }
-      nextSelected[newId] = true;
+    Promise.all(keys.map(function (key) {
+      return ClientsAPI.duplicate(key).then(function (res) {
+        return res && res.client ? res.client : null;
+      });
+    })).then(function (records) {
+      var nextSelected = {};
+      records.forEach(function (rec) {
+        if (!rec || !rec.id) return;
+        PROFILES[rec.id] = rec.profile || {};
+        insertContact({ id: rec.id, name: rec.name, initial: rec.initial, initialColor: rec.initialColor });
+        nextSelected[rec.id] = true;
+      });
+      state.selected = nextSelected;
+      render({ forceFull: true });
+      clientsToast(keys.length > 1 ? keys.length + ' clients duplicated' : 'Client duplicated', 'positive');
+    }).catch(function (err) {
+      clientsToast((err && err.message) || 'Could not duplicate the selection', 'negative');
     });
-    state.selected = nextSelected;
-    render({ forceFull: true });
   }
 
   function wireTableBulkActions(root, state, render) {
@@ -2115,16 +2195,26 @@
     var saveBtn = root.querySelector('[data-clients-save]');
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
+        if (saveBtn.disabled) return;
         var draft = readFormDraft(root);
-        if (state.adding) {
-          var name = displayName(draft) || 'New Client';
-          var id = uniqueId(slugId(name));
-          saveContactRecord(id, draft, true);
-          navigate('detail', id, { forceFull: !usesPagedClientsFlow(state) });
-        } else {
-          saveContactRecord(state.selectedId, draft, false);
-          navigate('detail', state.selectedId);
-        }
+        var adding = !!state.adding;
+        var id = adding ? uniqueId(slugId(displayName(draft) || 'New Client')) : state.selectedId;
+        var payload = draftPayload(draft, id);
+
+        saveBtn.disabled = true;
+        var request = adding ? ClientsAPI.create(payload) : ClientsAPI.update(id, payload);
+        request.then(function (res) {
+          // The server owns the final uid (a proposed slug can collide), so
+          // fold the record it returns back into the local directory.
+          var savedId = res && res.client && res.client.id ? res.client.id : id;
+          saveContactRecord(savedId, draft, !directoryItemFor(savedId));
+          if (res && res.client) rememberMeta(res.client);
+          clientsToast(adding ? 'Client added' : 'Changes saved', 'positive');
+          navigate('detail', savedId, { forceFull: adding && !usesPagedClientsFlow(state) });
+        }).catch(function (err) {
+          saveBtn.disabled = false;
+          clientsToast((err && err.message) || 'Could not save this client', 'negative');
+        });
       });
     }
 
@@ -2229,6 +2319,14 @@
         }
       });
     }
+
+    root.querySelectorAll('[data-clients-open-folder]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openClientFolder(state.selectedId);
+      });
+    });
+
+    wireClientFolderPanel(root);
 
     var shareBtn = root.querySelector('[data-clients-share]');
     if (shareBtn) {
@@ -2595,7 +2693,30 @@
       syncRoute(parseClientsPath(window.location.pathname));
     });
 
-    syncRoute(parseClientsPath(window.location.pathname));
+    function startClients() {
+      // Point the default selection at a real client once loaded, so the
+      // split view opens on someone who exists rather than seed data.
+      if (!directoryItemFor(state.selectedId)) {
+        var first = firstDirectoryItem();
+        state.selectedId = first ? first.id : null;
+      }
+      syncRoute(parseClientsPath(window.location.pathname));
+    }
+
+    if (clientsLoaded) {
+      startClients();
+    } else {
+      root.innerHTML =
+        '<div class="tma-dash__clients-loading" role="status" aria-live="polite">' +
+        '<img class="tma-dash__clients-loading-spinner" src="' + ICONS.Loading16 + '" alt="" width="20" height="20">' +
+        '<span>Loading clients…</span></div>';
+      ClientsAPI.list().then(function (res) {
+        hydrateClients(res && res.clients ? res.clients : []);
+      }).catch(function () {
+        // Leave the directory empty; the list falls back to its no-data state.
+        clientsLoaded = true;
+      }).then(startClients);
+    }
   }
 
   window.TMAClients = {

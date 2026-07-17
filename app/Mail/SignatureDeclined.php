@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\SignatureRequest;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -16,7 +17,7 @@ use Illuminate\Queue\SerializesModels;
  * recipient's credential is theirs alone. Completion has its own mail
  * (SignatureCompleted) because it carries the signed document itself.
  */
-class SignatureDeclined extends Mailable
+class SignatureDeclined extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

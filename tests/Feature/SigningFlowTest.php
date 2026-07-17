@@ -126,8 +126,8 @@ class SigningFlowTest extends TestCase
 
         // ...but only the first is emailed: a link that doesn't work yet
         // sitting in an inbox is just confusing.
-        Mail::assertSent(SignatureInvitation::class, 1);
-        Mail::assertSent(SignatureInvitation::class, fn ($m) => $m->hasTo('first@example.com'));
+        Mail::assertQueued(SignatureInvitation::class, 1);
+        Mail::assertQueued(SignatureInvitation::class, fn ($m) => $m->hasTo('first@example.com'));
     }
 
     public function test_a_draft_with_no_fields_cannot_be_sent(): void
@@ -358,7 +358,7 @@ class SigningFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', Status::IN_PROGRESS);
 
-        Mail::assertSent(SignatureInvitation::class, fn ($m) => $m->hasTo('second@example.com'));
+        Mail::assertQueued(SignatureInvitation::class, fn ($m) => $m->hasTo('second@example.com'));
 
         // Now it IS the second signer's turn.
         $secondToken = $this->tokenFor($request, 'second@example.com');
@@ -374,7 +374,7 @@ class SigningFlowTest extends TestCase
         $request->recipients()->update(['signing_order' => 1]);
 
         $this->actingAs($user)->postJson('/portal/signatures/'.$request->uuid.'/send')->assertOk();
-        Mail::assertSent(SignatureInvitation::class, 2);
+        Mail::assertQueued(SignatureInvitation::class, 2);
 
         $a = $request->recipients()->where('email', 'a@example.com')->first();
         $field = $request->fields()->where('signature_recipient_id', $a->id)->first();
@@ -383,7 +383,7 @@ class SigningFlowTest extends TestCase
 
         // B is still in the current group, but was already invited at send -
         // advancing must not send them a second copy.
-        Mail::assertSent(SignatureInvitation::class, 2);
+        Mail::assertQueued(SignatureInvitation::class, 2);
     }
 
     public function test_completion_needs_every_signer(): void
@@ -404,7 +404,7 @@ class SigningFlowTest extends TestCase
             );
         }
 
-        Mail::assertSent(SignatureCompleted::class, fn ($m) => $m->hasTo('second@example.com'));
+        Mail::assertQueued(SignatureCompleted::class, fn ($m) => $m->hasTo('second@example.com'));
     }
 
     /* ── cross-recipient isolation ─────────────────── */
@@ -591,7 +591,7 @@ class SigningFlowTest extends TestCase
         // Nobody else should be able to keep signing it.
         $this->get('/sign/'.$secondToken)->assertNotFound();
 
-        Mail::assertSent(SignatureDeclined::class);
+        Mail::assertQueued(SignatureDeclined::class);
         $this->assertDatabaseHas('signature_events', [
             'signature_request_id' => $request->id,
             'action' => 'declined',
@@ -638,9 +638,9 @@ class SigningFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('reminded', 1);
 
-        Mail::assertSent(SignatureReminder::class, 1);
-        Mail::assertSent(SignatureReminder::class, fn ($m) => $m->hasTo('first@example.com'));
-        Mail::assertNotSent(SignatureReminder::class, fn ($m) => $m->hasTo('second@example.com'));
+        Mail::assertQueued(SignatureReminder::class, 1);
+        Mail::assertQueued(SignatureReminder::class, fn ($m) => $m->hasTo('first@example.com'));
+        Mail::assertNotQueued(SignatureReminder::class, fn ($m) => $m->hasTo('second@example.com'));
     }
 
     public function test_a_draft_cannot_be_reminded(): void
@@ -650,7 +650,7 @@ class SigningFlowTest extends TestCase
 
         $this->actingAs($user)->postJson('/portal/signatures/'.$request->uuid.'/remind')
             ->assertStatus(422);
-        Mail::assertNotSent(SignatureReminder::class);
+        Mail::assertNotQueued(SignatureReminder::class);
     }
 
     /* ── portal isolation ──────────────────────────── */

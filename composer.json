@@ -12,6 +12,7 @@
         "laravel/socialite": "^5.28",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.0",
+        "resend/resend-php": "^1.5",
         "setasign/fpdf": "^1.9",
         "setasign/fpdi": "^2.6",
         "socialiteproviders/microsoft": "^4.9"

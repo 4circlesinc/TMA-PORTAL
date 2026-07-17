@@ -21,6 +21,22 @@ field placement and drawing, and computed CSS only exist in a browser.
   It also measures the Dashboard nav icon's *computed* colour and box, which is
   the only way to catch a tinted icon that silently changes size or disappears
   in the collapsed rail.
+- **`clients.mjs`** — the Client hub is server-backed, not the old in-memory
+  mock: create a client through the form, confirm it survives a reload, then
+  bulk-delete it. Reads the directory back through the API so the check doesn't
+  depend on how the list renders. Needs a staff account.
+- **`file-library.mjs`** — the client/organization folder wiring: an assigned
+  client folder and an all-staff organization folder appear as labelled groups
+  ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
+  the client profile's "Open folder" action lands in the File Library. Needs an
+  administrator account.
+- **`client-folder-tab.mjs`** — the client profile's Folders tab as a live file
+  area: it lists the client folder's real subfolders, the "New folder" button
+  creates one, and "Upload" adds a file that appears in the list. Needs an
+  administrator account. **Serve with several workers**
+  (`PHP_CLI_SERVER_WORKERS=12 php artisan serve`) — the single-threaded dev
+  server drops API calls while the asset-heavy SPA is still loading, which reads
+  as a hang, not a bug.
 
 `fixtures/contract.pdf` is a hand-built two-page PDF (no library, no
 dependency) with distinct text on each page, so a wrong page or a blank canvas

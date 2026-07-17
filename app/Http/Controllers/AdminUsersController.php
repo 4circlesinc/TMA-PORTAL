@@ -3,8 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuthEvent;
+use App\Models\FileItem;
+use App\Models\FileLibrarySetting;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\AvatarService;
+use App\Support\DeviceName;
+use App\Support\Files\FolderProvisioner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +93,7 @@ class AdminUsersController extends Controller
             $this->record($uid, 'account_deleted');
         }
         DB::table('sessions')->whereIn('user_id', $ids)->delete();
+        $this->rehomeSystemFolders($ids, $request->user()->id);
         $deleted = User::whereIn('id', $ids)->delete();
 
         return response()->json(['deleted' => $deleted, 'skippedSelf' => $selfIncluded]);
@@ -102,7 +108,7 @@ class AdminUsersController extends Controller
         return response()->json(['count' => $count]);
     }
 
-        public function store(Request $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
         abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can invite users.');
 
@@ -140,6 +146,7 @@ class AdminUsersController extends Controller
         Password::broker()->sendResetLink(['email' => $user->email]);
 
         $this->record($user->id, 'user_invited');
+        $this->maybeProvisionStaffFolder($user, $request->user());
 
         return response()->json(['status' => 'ok']);
     }
@@ -266,7 +273,7 @@ class AdminUsersController extends Controller
                 'when' => $event->created_at->diffForHumans(),
                 'atIso' => $event->created_at->toIso8601String(),
                 'ip' => $event->ip,
-                'device' => \App\Support\DeviceName::describe((string) $event->user_agent),
+                'device' => DeviceName::describe((string) $event->user_agent),
             ]);
 
         $lastLogin = AuthEvent::where('user_id', $user->id)
@@ -298,8 +305,18 @@ class AdminUsersController extends Controller
         ])->save();
 
         $this->record($user->id, 'account_approved');
+        $this->maybeProvisionStaffFolder($user->fresh(), $request->user());
 
         return response()->json(['status' => 'ok']);
+    }
+
+    /** Give a newly active staff member a personal folder, if configured. */
+    private function maybeProvisionStaffFolder(User $user, User $actor): void
+    {
+        if (in_array($user->account_type, ['Administrator', 'Employee'], true)
+            && FileLibrarySetting::autoCreateStaffFolder()) {
+            FolderProvisioner::provisionStaffFolder($user, $actor);
+        }
     }
 
     public function suspend(Request $request, User $user): JsonResponse
@@ -359,9 +376,60 @@ class AdminUsersController extends Controller
         $this->record($user->id, 'account_deleted');
 
         DB::table('sessions')->where('user_id', $user->id)->delete();
+        $this->rehomeSystemFolders([$user->id], $request->user()->id);
         $user->delete();
 
         return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * System-managed folders (the Client Files / Staff Files roots, every
+     * organization / client / staff folder, and everything nested inside them)
+     * are owned and created by an administrator so storage has a stable owner.
+     * folders and files both cascade on those columns, so before an admin is
+     * deleted we hand that whole subtree - folders and their files - to another
+     * admin. Otherwise deleting an admin would destroy client and organization
+     * content along with the account.
+     *
+     * @param  array<int, int>  $userIds
+     */
+    private function rehomeSystemFolders(array $userIds, int $actorId): void
+    {
+        $heir = User::where('account_type', 'Administrator')
+            ->whereNotIn('id', $userIds)
+            ->orderBy('id')
+            ->value('id') ?? $actorId;
+
+        // Seed from the structural system nodes, then walk down to every
+        // descendant folder so nested subfolders and files are covered too.
+        $ids = Folder::withTrashed()
+            ->whereIn('folder_type', ['root', 'organization', 'client', 'staff'])
+            ->pluck('id')->all();
+
+        $frontier = $ids;
+        while ($frontier) {
+            $children = Folder::withTrashed()->whereIn('parent_id', $frontier)->pluck('id')->all();
+            $children = array_values(array_diff($children, $ids));
+            if (! $children) {
+                break;
+            }
+            $ids = array_merge($ids, $children);
+            $frontier = $children;
+        }
+
+        if (! $ids) {
+            return;
+        }
+
+        Folder::withTrashed()->whereIn('id', $ids)
+            ->whereIn('owner_id', $userIds)->update(['owner_id' => $heir]);
+        Folder::withTrashed()->whereIn('id', $ids)
+            ->whereIn('created_by', $userIds)->update(['created_by' => $heir]);
+
+        FileItem::withTrashed()->whereIn('folder_id', $ids)
+            ->whereIn('owner_id', $userIds)->update(['owner_id' => $heir]);
+        FileItem::withTrashed()->whereIn('folder_id', $ids)
+            ->whereIn('uploaded_by', $userIds)->update(['uploaded_by' => $heir]);
     }
 
     public function reactivate(Request $request, User $user): JsonResponse
