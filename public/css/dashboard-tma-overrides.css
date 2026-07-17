@@ -60,7 +60,8 @@
 
 .tma-dash__nav-count[hidden] { display: none; }
 
-.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count) {
+/* The label span — a <span> icon (masked and tinted) keeps its own fixed box. */
+.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count):not(.tma-dash__nav-icon) {
   flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;

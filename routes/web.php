@@ -138,6 +138,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/uploads/{uuid}/complete', [UploadController::class, 'complete'])->name('uploads.complete');
         Route::delete('/uploads/{uuid}', [UploadController::class, 'abort'])->name('uploads.abort');
 
+        Route::get('/shortcuts', [\App\Http\Controllers\Files\ShortcutController::class, 'index'])->name('shortcuts.index');
+        Route::post('/shortcuts', [\App\Http\Controllers\Files\ShortcutController::class, 'store'])->name('shortcuts.store');
+        Route::put('/shortcuts/reorder', [\App\Http\Controllers\Files\ShortcutController::class, 'reorder'])->name('shortcuts.reorder');
+        Route::delete('/shortcuts/{uuid}', [\App\Http\Controllers\Files\ShortcutController::class, 'destroy'])->name('shortcuts.destroy');
+
         Route::post('/favorites/toggle', [FavoriteController::class, 'toggle'])->name('favorites.toggle');
         Route::post('/recycle-bin/empty', [RecycleBinController::class, 'empty'])->name('recycle.empty');
         Route::post('/bulk', [BulkController::class, 'handle'])->name('bulk');

@@ -52,74 +52,61 @@
       </div>
 
       <div class="tma-dash__sidebar-nav">
-      <div class="tma-dash__nav-section" hidden>
-        <div class="tma-dash__tabs" role="tablist">
-          <button type="button" class="tma-dash__tab tma-dash__tab--active" data-list-tab="favorites" role="tab" aria-selected="true">Favorites</button>
-          <button type="button" class="tma-dash__tab" data-list-tab="recently" role="tab" aria-selected="false">Recently</button>
-        </div>
-        <div class="tma-dash__list" data-list="favorites">
-          <a class="tma-dash__nav-item tma-dash__nav-item--fav" href="#" data-nav="fav-dashboard" data-title="Dashboard" data-crumb="Dashboard" data-view="dashboard" hidden>
-            <img class="tma-dash__nav-dot" src="images/icons/tma/Dot.svg" alt="">
-            <span>Dashboard</span>
-          </a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--fav" href="/projects" data-nav="fav-projects" data-title="My Projects" data-crumb="Dashboards / Projects" data-view="projects" hidden>
-            <img class="tma-dash__nav-dot" src="images/icons/tma/Dot.svg" alt="">
-            <span>Projects</span>
-          </a>
-        </div>
-        <div class="tma-dash__list" data-list="recently" hidden>
+      <div class="tma-dash__nav-section tma-dash__nav-section--tabs">
+        <div class="tma-dash__tabs" role="tablist" aria-label="Sidebar sections">
+          <button type="button" class="tma-dash__tab tma-dash__tab--active" data-list-tab="main" role="tab" aria-selected="true">Main Menu</button>
+          <button type="button" class="tma-dash__tab" data-list-tab="shortcuts" role="tab" aria-selected="false">Folder Shortcuts</button>
         </div>
       </div>
 
-      <div class="tma-dash__nav-section">
-        <div class="tma-dash__group-label">Dashboards</div>
+      <div class="tma-dash__nav-section" data-list="main">
         <a class="tma-dash__nav-item tma-dash__nav-item--active" href="/" data-nav="dash-dashboard" data-title="Dashboard" data-crumb="Dashboard" data-view="dashboard" aria-current="page">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/House.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--house" aria-hidden="true"></span>
           <span>Dashboard</span>
         </a>
         <a class="tma-dash__nav-item" href="/overview" data-nav="dash-project-overview" data-title="Project Overview" data-crumb="Dashboard / Overview" data-view="overview">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChartPieSlice.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--chartpieslice" aria-hidden="true"></span>
           <span>Overview</span>
         </a>
         <a class="tma-dash__nav-item" href="/clients" data-nav="clients" data-title="Clients" data-crumb="Clients" data-view="clients">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/UsersThree.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--usersthree" aria-hidden="true"></span>
           <span>Client hub</span>
         </a>
         <a class="tma-dash__nav-item" href="/email" data-nav="email" data-title="Email" data-crumb="Email" data-view="email">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/EnvelopeSimple.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--envelopesimple" aria-hidden="true"></span>
           <span>Email</span>
         </a>
         <a class="tma-dash__nav-item" href="/social/messages" data-nav="so-messages" data-title="Messages" data-crumb="Messages" data-view="messages">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChatsCircle.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--chatscircle" aria-hidden="true"></span>
           <span>Messages</span>
         </a>
         <a class="tma-dash__nav-item" href="/social/feed" data-nav="so-feed" data-title="Feed" data-crumb="Social / Feed" data-view="feed">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/ChatsTeardrop.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--chatsteardrop" aria-hidden="true"></span>
           <span>Feed</span>
         </a>
         <a class="tma-dash__nav-item" href="/calendar" data-nav="calendar" data-title="Calendar" data-crumb="Calendar" data-view="calendar">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/CalendarBlank.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--calendarblank" aria-hidden="true"></span>
           <span>Calendar</span>
         </a>
         <a class="tma-dash__nav-item" href="/users" data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/UserList.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--userlist" aria-hidden="true"></span>
           <span>Users</span>
         </a>
       </div>
 
-      <div class="tma-dash__nav-section">
+      <div class="tma-dash__nav-section" data-list="main">
         <div class="tma-dash__group-label">Pages</div>
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="folders" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/FolderNotch.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--foldernotch" aria-hidden="true"></span>
           <span>Folders</span>
         </button>
         <div class="tma-dash__subnav" data-subnav="folders" hidden>
@@ -135,7 +122,7 @@
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="projects" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/Kanban.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--kanban" aria-hidden="true"></span>
           <span>Projects</span>
         </button>
         <div class="tma-dash__subnav" data-subnav="projects" hidden>
@@ -146,7 +133,7 @@
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="workflows" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/ArrowsClockwise.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--arrowsclockwise" aria-hidden="true"></span>
           <span>Workflows</span>
         </button>
         <div class="tma-dash__subnav" data-subnav="workflows" hidden>
@@ -156,18 +143,18 @@
 
         <a class="tma-dash__nav-item" href="/templates" data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/Table.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--table" aria-hidden="true"></span>
           <span>Templates</span>
         </a>
         <a class="tma-dash__nav-item" href="/signatures" data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/Signature.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--signature" aria-hidden="true"></span>
           <span>Signatures</span>
         </a>
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="people" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/UserList.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--userlist" aria-hidden="true"></span>
           <span>People</span>
         </button>
         <div class="tma-dash__subnav" data-subnav="people" hidden>
@@ -183,9 +170,13 @@
 
         <a class="tma-dash__nav-item" href="/account-settings" data-nav="account-settings" data-title="Settings" data-crumb="Settings" data-view="admin">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <img class="tma-dash__nav-icon" src="images/icons/phosphor/GearSix.svg" alt="">
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--gearsix" aria-hidden="true"></span>
           <span>Settings</span>
         </a>
+      </div>
+
+      <div class="tma-dash__nav-section" data-list="shortcuts" hidden>
+        <div class="tma-dash__shortcuts" data-shortcuts role="list"></div>
       </div>
 
       </div>
@@ -594,6 +585,7 @@
   <script src="js/portal-work.js"></script>
   <script src="js/portal-people.js"></script>
   <script src="js/portal-admin.js"></script>
+  <script src="js/portal-shortcuts.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/phone-input.js"></script>
   <script src="js/avatar-cropper.js"></script>

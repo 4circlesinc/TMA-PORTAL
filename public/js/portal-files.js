@@ -89,6 +89,12 @@
     return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  /* Something happened that may change which folders exist or what they're
+     called — anything mirroring folders (the sidebar shortcuts) re-reads. */
+  function foldersChanged() {
+    try { document.dispatchEvent(new CustomEvent('tma:folders-changed')); } catch (e) {}
+  }
+
   function items() { return state.data.folders.concat(state.data.files); }
   function findItem(id) { return items().filter(function (i) { return i.id === id; })[0]; }
   function selectedIds() { return Object.keys(state.selected); }
@@ -253,6 +259,7 @@
         for (var i = 0; i < list.length; i++) { if (list[i].id === it.id) { list[i] = updated; break; } }
         sortList(list);
         render();
+        if (it.type === 'folder') foldersChanged();
       })
       .catch(function (err) { ui().toast(err.message || 'Could not rename'); render(); });
   }
@@ -1156,7 +1163,7 @@
       onConfirm: function () {
         var url = item.type === 'folder' ? '/folders/' + item.id : '/files/' + item.id;
         net().fetchJSON(net().url(url), { method: 'DELETE' })
-          .then(function () { ui().toast('Moved to recycle bin'); load(); })
+          .then(function () { ui().toast('Moved to recycle bin'); foldersChanged(); load(); })
           .catch(function (err) { ui().toast(err.message || 'Could not delete'); });
       },
     });
@@ -1165,7 +1172,7 @@
   function restoreItem(item) {
     var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/restore';
     net().fetchJSON(net().url(url), { method: 'POST' })
-      .then(function () { ui().toast('Restored'); load(); })
+      .then(function () { ui().toast('Restored'); foldersChanged(); load(); })
       .catch(function (err) { ui().toast(err.message || 'Could not restore'); });
   }
 
@@ -1177,7 +1184,7 @@
       onConfirm: function () {
         var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/force';
         net().fetchJSON(net().url(url), { method: 'DELETE' })
-          .then(function () { ui().toast('Permanently deleted'); load(); })
+          .then(function () { ui().toast('Permanently deleted'); foldersChanged(); load(); })
           .catch(function (err) { ui().toast(err.message || 'Could not delete'); });
       },
     });
@@ -1508,6 +1515,17 @@
     if (perm(item, 'move')) list.push({ label: 'Move to…', icon: 'ArrowsOutCardinal', fn: function () { bulkRun('move', [item], null, load, true); } });
     if (perm(item, 'rename')) list.push({ label: 'Rename', icon: 'PencilSimple', fn: function () { startRename(item.id); } });
     list.push({ label: item.favorite ? 'Remove from favourites' : 'Add to favourites', icon: 'Star', fn: function () { toggleStar(item.id); } });
+    if (isFolder && window.TMASidebarShortcuts) {
+      var pinned = window.TMASidebarShortcuts.isPinned(item.id);
+      list.push({
+        label: pinned ? 'Remove from Folder Shortcuts' : 'Add to Folder Shortcuts',
+        icon: pinned ? 'PushPinSlash' : 'PushPin',
+        fn: function () {
+          var s = window.TMASidebarShortcuts;
+          (pinned ? s.remove(item.id) : s.add(item.id)).catch(function () {});
+        },
+      });
+    }
     list.push({ sep: true });
     list.push({ label: 'View details', icon: 'Info', fn: function () { openDetails(item); } });
     if (perm(item, 'delete')) list.push({ label: 'Delete', icon: 'Trash', danger: true, fn: function () { deleteItem(item); } });
@@ -1605,6 +1623,7 @@
       .then(function (res) {
         if (res.errors && res.errors.length) ui().toast(res.errors[0].message);
         else ui().toast('Done');
+        if (payload.some(function (p) { return p.type === 'folder'; })) foldersChanged();
         if (onDone) onDone();
       })
       .catch(function (err) { ui().toast(err.message || 'Action failed'); });
@@ -1667,7 +1686,8 @@
     state.el = el;
     state.navId = opts.navId && NAV_SECTION[opts.navId] ? opts.navId : (opts.navId || 'folders-all');
     state.section = NAV_SECTION[state.navId] || 'all';
-    state.folder = null;
+    // A sidebar folder shortcut lands straight inside its folder.
+    state.folder = opts.folderId || null;
     state.selected = {};
     state.error = null;
     render();

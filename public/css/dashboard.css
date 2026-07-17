@@ -260,11 +260,12 @@
   opacity: 0.75;
 }
 
-/* Favorites / Recently toggle */
+/* Main Menu / Folder Shortcuts toggle */
 .tma-dash__tabs {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  min-width: 0;
 }
 .tma-dash__tab {
   appearance: none;
@@ -274,9 +275,15 @@
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   color: var(--color-text-placeholder);
-  padding: var(--space-4) var(--space-12);
+  padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-12);
   cursor: pointer;
+  /* Both labels have to survive a narrowed (resizable) sidebar. */
+  min-width: 0;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tma-dash__tab--active { color: var(--color-text-secondary); }
 
@@ -307,7 +314,9 @@
   position: relative;
   min-width: 0;
 }
-.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count) {
+/* The label span. A <span> icon (a masked, tinted one) is not a label and must
+   keep its own fixed box rather than stretching like text. */
+.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count):not(.tma-dash__nav-icon) {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -346,6 +355,142 @@
 
 .tma-dash__nav-icon { width: var(--dash-icon-md); height: var(--dash-icon-md); flex: 0 0 var(--dash-icon-md); }
 .tma-dash__nav-dot   { width: var(--dash-icon-sm); height: var(--dash-icon-sm); flex: 0 0 var(--dash-icon-sm); }
+
+/* Nav icons are <img> of black SVGs, which CSS can't recolour or swap. Each one
+   is a <span> masked by the artwork instead: --primary paints the Dashboards
+   group in the accent, --ink follows the label colour (so the Pages group stays
+   black, and both adapt to dark mode without a filter). The active item swaps
+   its mask to the filled weight.
+
+   The art is named here rather than in an inline style: a relative url() in a
+   custom property resolves against this stylesheet, so an inline --nav-icon
+   breaks on shells served from a nested path (/settings/change-email). */
+.tma-dash__nav-icon--primary,
+.tma-dash__nav-icon--ink {
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.tma-dash__nav-icon--primary { background-color: var(--color-primary); }
+.tma-dash__nav-icon--ink { background-color: currentColor; }
+
+.tma-dash__nav-icon--house {
+  -webkit-mask-image: url('../images/icons/phosphor/House.svg');
+  mask-image: url('../images/icons/phosphor/House.svg');
+}
+.tma-dash__nav-icon--chartpieslice {
+  -webkit-mask-image: url('../images/icons/phosphor/ChartPieSlice.svg');
+  mask-image: url('../images/icons/phosphor/ChartPieSlice.svg');
+}
+.tma-dash__nav-icon--usersthree {
+  -webkit-mask-image: url('../images/icons/phosphor/UsersThree.svg');
+  mask-image: url('../images/icons/phosphor/UsersThree.svg');
+}
+.tma-dash__nav-icon--envelopesimple {
+  -webkit-mask-image: url('../images/icons/phosphor/EnvelopeSimple.svg');
+  mask-image: url('../images/icons/phosphor/EnvelopeSimple.svg');
+}
+.tma-dash__nav-icon--chatscircle {
+  -webkit-mask-image: url('../images/icons/phosphor/ChatsCircle.svg');
+  mask-image: url('../images/icons/phosphor/ChatsCircle.svg');
+}
+.tma-dash__nav-icon--chatsteardrop {
+  -webkit-mask-image: url('../images/icons/phosphor/ChatsTeardrop.svg');
+  mask-image: url('../images/icons/phosphor/ChatsTeardrop.svg');
+}
+.tma-dash__nav-icon--calendarblank {
+  -webkit-mask-image: url('../images/icons/phosphor/CalendarBlank.svg');
+  mask-image: url('../images/icons/phosphor/CalendarBlank.svg');
+}
+.tma-dash__nav-icon--userlist {
+  -webkit-mask-image: url('../images/icons/phosphor/UserList.svg');
+  mask-image: url('../images/icons/phosphor/UserList.svg');
+}
+.tma-dash__nav-icon--foldernotch {
+  -webkit-mask-image: url('../images/icons/phosphor/FolderNotch.svg');
+  mask-image: url('../images/icons/phosphor/FolderNotch.svg');
+}
+.tma-dash__nav-icon--kanban {
+  -webkit-mask-image: url('../images/icons/phosphor/Kanban.svg');
+  mask-image: url('../images/icons/phosphor/Kanban.svg');
+}
+.tma-dash__nav-icon--arrowsclockwise {
+  -webkit-mask-image: url('../images/icons/phosphor/ArrowsClockwise.svg');
+  mask-image: url('../images/icons/phosphor/ArrowsClockwise.svg');
+}
+.tma-dash__nav-icon--table {
+  -webkit-mask-image: url('../images/icons/phosphor/Table.svg');
+  mask-image: url('../images/icons/phosphor/Table.svg');
+}
+.tma-dash__nav-icon--signature {
+  -webkit-mask-image: url('../images/icons/phosphor/Signature.svg');
+  mask-image: url('../images/icons/phosphor/Signature.svg');
+}
+.tma-dash__nav-icon--gearsix {
+  -webkit-mask-image: url('../images/icons/phosphor/GearSix.svg');
+  mask-image: url('../images/icons/phosphor/GearSix.svg');
+}
+
+/* Active item: same glyph, filled weight. */
+.tma-dash__nav-item--active .tma-dash__nav-icon--house {
+  -webkit-mask-image: url('../images/icons/phosphor/HouseFill.svg');
+  mask-image: url('../images/icons/phosphor/HouseFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--chartpieslice {
+  -webkit-mask-image: url('../images/icons/phosphor/ChartPieSliceFill.svg');
+  mask-image: url('../images/icons/phosphor/ChartPieSliceFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--usersthree {
+  -webkit-mask-image: url('../images/icons/phosphor/UsersThreeFill.svg');
+  mask-image: url('../images/icons/phosphor/UsersThreeFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--envelopesimple {
+  -webkit-mask-image: url('../images/icons/phosphor/EnvelopeSimpleFill.svg');
+  mask-image: url('../images/icons/phosphor/EnvelopeSimpleFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--chatscircle {
+  -webkit-mask-image: url('../images/icons/phosphor/ChatsCircleFill.svg');
+  mask-image: url('../images/icons/phosphor/ChatsCircleFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--chatsteardrop {
+  -webkit-mask-image: url('../images/icons/phosphor/ChatsTeardropFill.svg');
+  mask-image: url('../images/icons/phosphor/ChatsTeardropFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--calendarblank {
+  -webkit-mask-image: url('../images/icons/phosphor/CalendarBlankFill.svg');
+  mask-image: url('../images/icons/phosphor/CalendarBlankFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--userlist {
+  -webkit-mask-image: url('../images/icons/phosphor/UserListFill.svg');
+  mask-image: url('../images/icons/phosphor/UserListFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--foldernotch {
+  -webkit-mask-image: url('../images/icons/phosphor/FolderNotchFill.svg');
+  mask-image: url('../images/icons/phosphor/FolderNotchFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--kanban {
+  -webkit-mask-image: url('../images/icons/phosphor/KanbanFill.svg');
+  mask-image: url('../images/icons/phosphor/KanbanFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--arrowsclockwise {
+  -webkit-mask-image: url('../images/icons/phosphor/ArrowsClockwiseFill.svg');
+  mask-image: url('../images/icons/phosphor/ArrowsClockwiseFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--table {
+  -webkit-mask-image: url('../images/icons/phosphor/TableFill.svg');
+  mask-image: url('../images/icons/phosphor/TableFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--signature {
+  -webkit-mask-image: url('../images/icons/phosphor/SignatureFill.svg');
+  mask-image: url('../images/icons/phosphor/SignatureFill.svg');
+}
+.tma-dash__nav-item--active .tma-dash__nav-icon--gearsix {
+  -webkit-mask-image: url('../images/icons/phosphor/GearSixFill.svg');
+  mask-image: url('../images/icons/phosphor/GearSixFill.svg');
+}
 
 /* nested (no icon) items: indent text to align under parent label */
 .tma-dash__nav-item--nested { padding-left: calc(var(--space-4) + 1em + var(--space-8) + var(--dash-icon-md) + var(--space-8)); }
@@ -392,11 +537,67 @@
 .tma-dash__subnav[hidden] { display: none; }
 .tma-dash__subnav { display: flex; flex-direction: column; gap: var(--space-4); }
 
+/* Folder Shortcuts tab - the user's pinned folders */
+.tma-dash__shortcuts { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.tma-dash__shortcut {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  cursor: grab;
+}
+.tma-dash__shortcut.is-dragging { opacity: 0.5; cursor: grabbing; }
+.tma-dash__shortcut .tma-dash__nav-item {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Room for the remove button, so a long name never runs under it. */
+  padding-right: var(--space-24);
+}
+
+.tma-dash__shortcut-remove {
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: var(--space-2);
+  border-radius: var(--radius-8);
+  line-height: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+.tma-dash__shortcut:hover .tma-dash__shortcut-remove,
+.tma-dash__shortcut:focus-within .tma-dash__shortcut-remove { opacity: 1; }
+.tma-dash__shortcut-remove:hover { background: var(--color-hover); }
+.tma-dash__shortcut-remove img { display: block; width: 12px; height: 12px; opacity: 0.75; }
+
+.tma-dash__shortcut-note {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-placeholder);
+}
+.tma-dash__shortcut-retry {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.tma-dash__shortcut-skeleton { height: 32px; border-radius: var(--radius-12); }
+
 /* Sidebar header logo */
 .tma-dash__sidebar-logo {
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   padding: 0 var(--space-4);
   overflow: hidden;
   flex-shrink: 0;
@@ -409,6 +610,10 @@
   width: 100%;
   min-width: 0;
 }
+/* This wrapper is width:100%, so centring the bar around it does nothing — the
+   centring has to happen in here (and in object-position, for when the artwork
+   is wider than the rail and gets clamped). */
+.tma-dash__sidebar-logo .tma-dash__logo-expanded { justify-content: center; }
 .tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: none; }
 
 .tma-dash__header-logo {
@@ -420,7 +625,7 @@
   max-width: 100%;
   height: 80px;
   object-fit: contain;
-  object-position: left top;
+  object-position: center top;
 }
 .tma-dash__logo-horizontal {
   display: block;
@@ -2869,16 +3074,27 @@
   }
   .tma-dash.is-sidebar-collapsed .tma-dash__nav-section { align-items: center; width: auto; }
   .tma-dash.is-sidebar-collapsed .tma-dash__profile-meta,
+  .tma-dash.is-sidebar-collapsed .tma-dash__nav-section--tabs,
   .tma-dash.is-sidebar-collapsed .tma-dash__tabs,
   .tma-dash.is-sidebar-collapsed .tma-dash__group-label,
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-item > span:not(.tma-dash__nav-count),
+  /* Hides the label, but never a <span> that is itself an icon. */
+  .tma-dash.is-sidebar-collapsed .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon),
   .tma-dash.is-sidebar-collapsed .tma-dash__nav-caret,
   .tma-dash.is-sidebar-collapsed .tma-dash__subnav,
-  .tma-dash.is-sidebar-collapsed [data-list],
+  /* The rail has no tabs, so it always shows the main menu (dashboard.js
+     switches back to it on collapse) and never the shortcuts. */
+  .tma-dash.is-sidebar-collapsed [data-list="shortcuts"],
   .tma-dash.is-sidebar-collapsed .tma-dash__nav-item--fav,
   .tma-dash.is-sidebar-collapsed .tma-dash__sidebar-logo .tma-dash__logo-expanded { display: none; }
   .tma-dash.is-sidebar-collapsed .tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: flex; }
-  .tma-dash.is-sidebar-collapsed .tma-dash__profile { justify-content: center; padding: var(--space-12) var(--space-8) var(--space-16); }
+  /* The rail is too narrow for the avatar and sign-out side by side — they
+     overflow it. Stack them instead. */
+  .tma-dash.is-sidebar-collapsed .tma-dash__profile {
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-8);
+    padding: var(--space-12) var(--space-4) var(--space-16);
+  }
   .tma-dash.is-sidebar-collapsed .tma-dash__nav-item {
     justify-content: center;
     width: 44px;
@@ -2957,8 +3173,11 @@
 .tma-dash[data-theme="dark"] .tma-search-popup--standalone {
   background: rgba(255, 255, 255, 0.9);
 }
-/* invert monochrome icons + avatars stay; flip black line/glyph icons to light */
-.tma-dash[data-theme="dark"] .tma-dash__nav-icon,
+/* invert monochrome icons + avatars stay; flip black line/glyph icons to light.
+   Masked icons opt out: they're painted by background-color (the accent, or
+   currentColor which already follows the theme), so inverting would only shift
+   them to a wrong hue. This still catches <img> nav icons in the classic shell. */
+.tma-dash[data-theme="dark"] .tma-dash__nav-icon:not(.tma-dash__nav-icon--primary):not(.tma-dash__nav-icon--ink),
 .tma-dash[data-theme="dark"] .tma-dash__nav-dot,
 .tma-dash[data-theme="dark"] .tma-dash__nav-caret svg,
 .tma-dash[data-theme="dark"] .tma-dash__icon-btn img,

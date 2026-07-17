@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Copy Phosphor regular SVGs from @phosphor-icons/core, named to match Figma."""
+"""Copy Phosphor regular SVGs from @phosphor-icons/core, named to match Figma.
+
+Also copies the `fill` weight for the sidebar nav icons only (as `<Slug>Fill.svg`),
+which the active nav item uses. The Figma manifest covers the regular weight
+alone, so that short list lives here in NAV_FILL.
+"""
 
 import json
 import re
@@ -28,6 +33,14 @@ ALIASES = {
 }
 
 
+# Sidebar nav icons, which also need their filled weight for the active item.
+NAV_FILL = [
+    "House", "ChartPieSlice", "UsersThree", "EnvelopeSimple", "ChatsCircle",
+    "ChatsTeardrop", "CalendarBlank", "UserList", "FolderNotch", "Kanban",
+    "ArrowsClockwise", "Table", "Signature", "GearSix",
+]
+
+
 def pascal_to_kebab(name: str) -> str:
     s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1-\2", name)
     return re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", s1).lower()
@@ -40,7 +53,7 @@ def fetch_package_dir() -> Path:
     extract_to = tmp / "pkg"
     with tarfile.open(archive) as tar:
         tar.extractall(extract_to)
-    return extract_to / "package/assets/regular"
+    return extract_to / "package/assets"
 
 
 def main() -> None:
@@ -55,7 +68,7 @@ def main() -> None:
         name = item["name"]
         slug = item["slug"]
         kebab = ALIASES.get(name, pascal_to_kebab(name))
-        src = assets / f"{kebab}.svg"
+        src = assets / "regular" / f"{kebab}.svg"
         dest = OUT_DIR / f"{slug}.svg"
 
         if not src.exists():
@@ -63,6 +76,17 @@ def main() -> None:
             continue
 
         shutil.copy2(src, dest)
+        copied += 1
+
+    for slug in NAV_FILL:
+        kebab = ALIASES.get(slug, pascal_to_kebab(slug))
+        src = assets / "fill" / f"{kebab}-fill.svg"
+
+        if not src.exists():
+            missing.append({"name": slug, "kebab": f"fill/{kebab}-fill"})
+            continue
+
+        shutil.copy2(src, OUT_DIR / f"{slug}Fill.svg")
         copied += 1
 
     print(f"Copied {copied} Phosphor icons to {OUT_DIR.relative_to(ROOT)}")

@@ -737,7 +737,6 @@
 
     var crumbSectionDefaults = {
       'Dashboards': { navId: 'dash-dashboard', title: 'Dashboard', crumb: 'Dashboard' },
-      'Favorites': { navId: 'fav-dashboard', title: 'Dashboard', crumb: 'Dashboard' },
       'User Profile': { navId: 'up-overview', title: 'Overview', crumb: 'User Profile / Overview' },
       'Account': { navId: 'ac-overview', title: 'Overview', crumb: 'Account / Overview' },
       'Settings': { navId: 'settings', view: 'settings', title: 'Settings', crumb: 'Settings' },
@@ -848,6 +847,7 @@
         window.TMAPortalViews.activate(viewName, root, {
           navId: navId,
           adminPage: opts.adminPage,
+          folderId: opts.folderId,
         });
       }
       if (viewName === 'email' && window.TMAEmail) {
@@ -967,7 +967,7 @@
       });
     });
 
-    /* ── favorites / recently lists ────────────── */
+    /* ── sidebar tabs: Main Menu / Folder Shortcuts ── */
     var listTabs = Array.prototype.slice.call(root.querySelectorAll('[data-list-tab]'));
     function showList(name) {
       listTabs.forEach(function (t) {
@@ -978,9 +978,15 @@
       root.querySelectorAll('[data-list]').forEach(function (l) {
         l.hidden = l.getAttribute('data-list') !== name;
       });
+      // Shortcuts are fetched lazily, the first time the tab is opened.
+      if (name === 'shortcuts' && window.TMASidebarShortcuts) window.TMASidebarShortcuts.load();
     }
     listTabs.forEach(function (t) {
-      t.addEventListener('click', function () { showList(t.getAttribute('data-list-tab')); });
+      t.addEventListener('click', function () {
+        var name = t.getAttribute('data-list-tab');
+        showList(name);
+        store.set('tma.sidebarList', name);
+      });
     });
 
     /* ── chart tabs ────────────────────────────── */
@@ -1100,6 +1106,9 @@
         var collapsed = root.classList.toggle('is-sidebar-collapsed');
         applyRailTitles(collapsed);
         store.set('tma.sidebarCollapsed', collapsed ? '1' : '0');
+        // The icon-only rail has no room for the tabs, so it always shows the
+        // main menu — leaving the shortcuts tab active would empty the rail.
+        if (collapsed) showList('main');
       }
     }
 
@@ -2023,6 +2032,9 @@
       applyRailTitles(true);
     }
     if (window.innerWidth > RIGHTBAR_BP && store.get('tma.rightbarCollapsed', '0') === '1') root.classList.add('is-rightbar-collapsed');
+    if (!root.classList.contains('is-sidebar-collapsed') && store.get('tma.sidebarList', 'main') === 'shortcuts') {
+      showList('shortcuts');
+    }
     var savedToday = store.get('tma.today', '');
     if (savedToday && todayLabel) {
       todayLabel.textContent = savedToday;
