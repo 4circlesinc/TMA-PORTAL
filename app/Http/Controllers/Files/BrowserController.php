@@ -128,7 +128,11 @@ class BrowserController extends BaseFilesController
             ],
             'recent' => [
                 null,
-                $this->visibleFiles($user)->whereNotIn('folder_id', $this->trashedFolderIds())
+                // File Box files (folder_id null) must be included: `folder_id
+                // NOT IN (...)` is never true for NULL, so they'd silently drop.
+                $this->visibleFiles($user)
+                    ->where(fn ($q) => $q->whereNull('folder_id')
+                        ->orWhereNotIn('folder_id', $this->trashedFolderIds() ?: [0]))
                     ->orderByDesc('updated_at'),
             ],
             'recycle' => [

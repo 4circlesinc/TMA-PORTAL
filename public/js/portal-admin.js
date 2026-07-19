@@ -65,6 +65,7 @@
       { id: 'permissions', label: 'Permissions' },
       { id: 'file-settings', label: 'File Settings' },
       { id: 'tools', label: 'Enable Portal Tools' },
+      { id: 'default-folders', label: 'Default Folders' },
       { id: 'folder-templates', label: 'Folder Templates' },
       { id: 'upload-forms', label: 'Remote Upload Forms' },
       { id: 'file-drops', label: 'File Drops' },
@@ -2202,6 +2203,223 @@
       'fill="#ffffff" text-anchor="middle" dominant-baseline="central">' + s + '</text></svg>';
     return 'data:image/svg+xml,' + encodeURIComponent(svg);
   }
+
+  /* ── Default Folders (File Library configuration) ───────────────
+   * Real admin management for the organization folders, the default client
+   * subfolders, and the per-staff folder toggle. Backed by /portal/file-library.
+   */
+  var FILELIB = {
+    loaded: false, loading: false, error: null,
+    settings: { clientSubfolders: [], autoCreateStaffFolder: false }, orgFolders: [],
+  };
+
+  function filelibJson(method, url, body) {
+    return secApi(method, url, body).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (!r.ok) { throw new Error(d.message || 'Something went wrong.'); }
+        return d;
+      });
+    });
+  }
+
+  function loadFileLib() {
+    if (FILELIB.loading) return;
+    FILELIB.loading = true;
+    filelibJson('GET', '/portal/file-library/settings').then(function (d) {
+      FILELIB.settings = d.settings || FILELIB.settings;
+      FILELIB.orgFolders = d.organizationFolders || [];
+      FILELIB.loaded = true; FILELIB.loading = false; FILELIB.error = null;
+      render();
+    }).catch(function (e) {
+      FILELIB.loading = false; FILELIB.error = e.message; render();
+    });
+  }
+
+  function mergeOrg(folder) {
+    var idx = -1;
+    FILELIB.orgFolders.forEach(function (x, i) { if (x.id === folder.id) idx = i; });
+    if (idx >= 0) FILELIB.orgFolders[idx] = folder; else FILELIB.orgFolders.push(folder);
+  }
+
+  function saveSubfolders(list) {
+    filelibJson('PUT', '/portal/file-library/settings', { clientSubfolders: list })
+      .then(function (d) { FILELIB.settings = d.settings; ui().toast('Saved'); render(); })
+      .catch(function (e) { ui().toast(e.message); });
+  }
+
+  function orgAccessLabel(f) {
+    if (f.audience === 'all_staff') return 'All staff · ' + (f.role === 'editor' ? 'Can edit' : 'View only');
+    return 'Selected staff';
+  }
+
+  function orgFolderModal() {
+    ui().openModal({
+      title: 'Create organization folder',
+      body:
+        ui().field('Folder name', ui().input({ placeholder: 'e.g. Company Documents', attrs: 'data-of-name' })) +
+        ui().field('Who can access it',
+          '<label class="tma-portal-radio"><input type="radio" name="of-aud" value="all_staff" checked data-of-aud> All staff</label>' +
+          '<label class="tma-portal-radio"><input type="radio" name="of-aud" value="selected" data-of-aud> Selected staff (assign later)</label>') +
+        ui().field('Access level for all staff', ui().select(['View only', 'Can edit'], 'View only', 'data-of-role', 'Access level')) +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create', attrs: 'data-of-save' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-of-save]').addEventListener('click', function () {
+          var nameEl = host.querySelector('[data-of-name]');
+          var name = (nameEl.value || '').trim();
+          if (!name) { nameEl.focus(); return; }
+          var audEl = host.querySelector('[data-of-aud]:checked');
+          var aud = audEl ? audEl.value : 'all_staff';
+          var roleSel = host.querySelector('[data-of-role]');
+          var role = roleSel && roleSel.value === 'Can edit' ? 'editor' : 'viewer';
+          filelibJson('POST', '/portal/file-library/organization-folders', { name: name, audience: aud, role: role })
+            .then(function (d) { mergeOrg(d.folder); ui().closeModal(); ui().toast('Folder created'); render(); })
+            .catch(function (e) { ui().toast(e.message); });
+        });
+      },
+    });
+  }
+
+  function renameOrgModal(f) {
+    ui().openModal({
+      title: 'Rename folder',
+      body: ui().field('Folder name', ui().input({ value: f.name, attrs: 'data-of-rename' })) +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-of-rename-save' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-of-rename-save]').addEventListener('click', function () {
+          var name = (host.querySelector('[data-of-rename]').value || '').trim();
+          if (!name) return;
+          filelibJson('PATCH', '/portal/file-library/organization-folders/' + encodeURIComponent(f.id), { name: name })
+            .then(function (d) { mergeOrg(d.folder); ui().closeModal(); ui().toast('Renamed'); render(); })
+            .catch(function (e) { ui().toast(e.message); });
+        });
+      },
+    });
+  }
+
+  function orgAccessModal(f) {
+    ui().openModal({
+      title: 'Folder access',
+      body:
+        ui().field('Who can access it',
+          '<label class="tma-portal-radio"><input type="radio" name="oa-aud" value="all_staff"' + (f.audience === 'all_staff' ? ' checked' : '') + ' data-oa-aud> All staff</label>' +
+          '<label class="tma-portal-radio"><input type="radio" name="oa-aud" value="selected"' + (f.audience !== 'all_staff' ? ' checked' : '') + ' data-oa-aud> Selected staff</label>') +
+        ui().field('Access level for all staff', ui().select(['View only', 'Can edit'], f.role === 'editor' ? 'Can edit' : 'View only', 'data-oa-role', 'Access level')) +
+        '<p class="tma-portal-note">For “Selected staff”, share the folder with specific people from the File Library using Assign.</p>' +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-oa-save' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-oa-save]').addEventListener('click', function () {
+          var audEl = host.querySelector('[data-oa-aud]:checked');
+          var aud = audEl ? audEl.value : 'all_staff';
+          var roleSel = host.querySelector('[data-oa-role]');
+          var role = roleSel && roleSel.value === 'Can edit' ? 'editor' : 'viewer';
+          filelibJson('PATCH', '/portal/file-library/organization-folders/' + encodeURIComponent(f.id), { audience: aud, role: role })
+            .then(function (d) { mergeOrg(d.folder); ui().closeModal(); ui().toast('Access updated'); render(); })
+            .catch(function (e) { ui().toast(e.message); });
+        });
+      },
+    });
+  }
+
+  PAGES['default-folders'] = {
+    render: function () {
+      if (FILELIB.error) return '<p class="tma-portal-note">Couldn’t load the File Library settings: ' + ui().esc(FILELIB.error) + '</p>';
+      if (!FILELIB.loaded) return '<p class="tma-portal-subtitle">Loading…</p>';
+
+      var orgRows = FILELIB.orgFolders.map(function (f) {
+        return '<tr' + (f.archived ? ' class="tma-portal-table__muted"' : '') + '>' +
+          '<td><strong>' + ui().esc(f.name) + '</strong>' + (f.archived ? ' <span class="tma-portal-tag">Archived</span>' : '') + '</td>' +
+          '<td class="tma-portal-table__muted">' + ui().esc(orgAccessLabel(f)) + '</td>' +
+          '<td><div class="tma-portal-row-actions">' +
+          '<button type="button" class="tma-portal-icon-btn" data-org-rename="' + ui().esc(f.id) + '" title="Rename" aria-label="Rename folder"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+          '<button type="button" class="tma-portal-icon-btn" data-org-access="' + ui().esc(f.id) + '" title="Access" aria-label="Folder access"><img src="images/icons/phosphor/UsersThree.svg" alt=""></button>' +
+          '<button type="button" class="tma-portal-icon-btn" data-org-archive="' + ui().esc(f.id) + '" title="' + (f.archived ? 'Restore' : 'Archive') + '" aria-label="Archive folder"><img src="images/icons/phosphor/Archive.svg" alt=""></button>' +
+          '</div></td></tr>';
+      }).join('');
+
+      var orgSection = ui().section('Organization folders',
+        (FILELIB.orgFolders.length
+          ? ui().table(['Folder', 'Staff access', ''], orgRows)
+          : ui().emptyState({ illustration: 'Illustration03', title: 'No organization folders yet', subtitle: 'Shared internal folders your staff can access. Clients never see these.' })) +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create organization folder', attrs: 'data-org-create' }) + '</div>',
+        { description: 'Shared internal folders for your staff — e.g. Company Documents, Templates, Policies. Clients can’t see these unless you share a specific file or folder with them.' });
+
+      var subChips = (FILELIB.settings.clientSubfolders || []).map(function (n, i) {
+        return '<span class="tma-portal-subchip">' + ui().esc(n) +
+          '<button type="button" class="tma-portal-subchip__x" data-sub-remove="' + i + '" aria-label="Remove ' + ui().esc(n) + '">&times;</button></span>';
+      }).join('');
+      var subSection = ui().section('Default client subfolders',
+        '<div class="tma-portal-subchips">' + (subChips || '<span class="tma-portal-note">None — new clients get just their main folder.</span>') + '</div>' +
+        '<div class="tma-portal-inline-add">' + ui().input({ placeholder: 'Add a subfolder (e.g. Tax)', attrs: 'data-sub-input' }) +
+        ui().btn({ label: 'Add', small: true, attrs: 'data-sub-add' }) + '</div>',
+        { description: 'Created automatically inside every new client’s folder.' });
+
+      var staffSection = ui().section('Staff folders',
+        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Automatically create a personal folder for each new staff member</span>' +
+        ui().toggle(FILELIB.settings.autoCreateStaffFolder, 'data-staff-toggle', 'Auto-create staff folder') + '</div>',
+        { description: 'A private folder under “Staff Files” for each employee. Only they and administrators can see it.' });
+
+      return orgSection + subSection + staffSection;
+    },
+    wire: function (el) {
+      if (!FILELIB.loaded) { loadFileLib(); return; }
+
+      var createBtn = el.querySelector('[data-org-create]');
+      if (createBtn) createBtn.addEventListener('click', function () { orgFolderModal(); });
+
+      el.querySelectorAll('[data-org-rename]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = FILELIB.orgFolders.filter(function (x) { return x.id === b.getAttribute('data-org-rename'); })[0];
+          if (f) renameOrgModal(f);
+        });
+      });
+      el.querySelectorAll('[data-org-access]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = FILELIB.orgFolders.filter(function (x) { return x.id === b.getAttribute('data-org-access'); })[0];
+          if (f) orgAccessModal(f);
+        });
+      });
+      el.querySelectorAll('[data-org-archive]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var id = b.getAttribute('data-org-archive');
+          var f = FILELIB.orgFolders.filter(function (x) { return x.id === id; })[0];
+          if (!f) return;
+          filelibJson('PATCH', '/portal/file-library/organization-folders/' + encodeURIComponent(id), { archived: !f.archived })
+            .then(function (d) { mergeOrg(d.folder); ui().toast(d.folder.archived ? 'Folder archived' : 'Folder restored'); render(); })
+            .catch(function (e) { ui().toast(e.message); });
+        });
+      });
+
+      el.querySelectorAll('[data-sub-remove]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var i = parseInt(b.getAttribute('data-sub-remove'), 10);
+          var list = (FILELIB.settings.clientSubfolders || []).slice();
+          list.splice(i, 1);
+          saveSubfolders(list);
+        });
+      });
+      var addBtn = el.querySelector('[data-sub-add]');
+      var addInput = el.querySelector('[data-sub-input]');
+      function doAdd() {
+        var v = (addInput.value || '').trim();
+        if (!v) return;
+        var list = (FILELIB.settings.clientSubfolders || []).slice();
+        list.push(v);
+        saveSubfolders(list);
+      }
+      if (addBtn && addInput) {
+        addBtn.addEventListener('click', doAdd);
+        addInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+      }
+
+      var staffToggle = el.querySelector('[data-staff-toggle]');
+      if (staffToggle) staffToggle.addEventListener('change', function (e) {
+        var on = e.target.checked;
+        filelibJson('PUT', '/portal/file-library/settings', { autoCreateStaffFolder: on })
+          .then(function (d) { FILELIB.settings = d.settings; ui().toast('Saved'); })
+          .catch(function (err) { ui().toast(err.message); e.target.checked = !on; });
+      });
+    },
+  };
 
   function renderNavUser(active) {
     var e = ui().esc;

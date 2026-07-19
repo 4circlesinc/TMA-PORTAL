@@ -1424,7 +1424,7 @@
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="folders" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
       '<div class="tma-dash__clients-folders-head">' +
-      '<span class="tma-dash__clients-folders-title">Client folder</span>' +
+      '<span class="tma-dash__clients-folders-title" data-clients-folder-crumbs>Client folder</span>' +
       (uuid
         ? '<div class="tma-dash__clients-folders-actions">' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-new>' +
@@ -1438,7 +1438,7 @@
         : '') +
       '</div>' +
       (uuid
-        ? '<div class="tma-dash__clients-folders" data-clients-folder-drop data-folder-uuid="' + esc(uuid) + '">' +
+        ? '<div class="tma-dash__clients-folders" data-clients-folder-drop data-folder-uuid="' + esc(uuid) + '" data-root-uuid="' + esc(uuid) + '">' +
           '<div class="tma-dash__clients-assigned-empty" data-clients-folder-list>Loading…</div>' +
           '</div>'
         : '<div class="tma-dash__clients-folders">' +
@@ -1486,7 +1486,7 @@
     var html = '';
     folders.forEach(function (f) {
       var count = (f.fileCount || 0) + (f.folderCount || 0);
-      html += '<button type="button" class="tma-dash__clients-folder" data-clients-subfolder="' + esc(f.id) + '">' +
+      html += '<button type="button" class="tma-dash__clients-folder" data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + ICONS.FolderFilled + '" alt=""></span>' +
         '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
         '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) + '</span></span>' +
@@ -1495,7 +1495,7 @@
     });
     files.forEach(function (f) {
       var meta = [f.sizeLabel, f.modifiedAt ? 'Updated ' + fmtShortDate(f.modifiedAt) : null].filter(Boolean).join(' · ');
-      html += '<button type="button" class="tma-dash__clients-folder" data-clients-open-folder>' +
+      html += '<button type="button" class="tma-dash__clients-folder" data-clients-file="' + esc(f.id) + '">' +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="images/icons/phosphor/File.svg" alt=""></span>' +
         '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
         (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
@@ -1504,12 +1504,64 @@
     wrap.innerHTML = html;
   }
 
+  // In-place drilling: the panel tracks where inside the client folder tree the
+  // user has navigated, so folders open in place instead of leaving the profile.
+  // { rootUuid, path: [{ uuid, name }] } — path[0] is always the client folder.
+  var clientFolderNav = null;
+
+  function clientFolderCurrentUuid(root) {
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    return wrap ? wrap.getAttribute('data-folder-uuid') : null;
+  }
+
+  function renderFolderCrumbs(root) {
+    var host = root.querySelector('[data-clients-folder-crumbs]');
+    if (!host || !clientFolderNav) return;
+    var path = clientFolderNav.path;
+    host.innerHTML = path.map(function (node, i) {
+      if (i === path.length - 1) {
+        return '<span class="tma-dash__clients-crumb tma-dash__clients-crumb--current">' + esc(node.name) + '</span>';
+      }
+      return '<button type="button" class="tma-dash__clients-crumb" data-clients-crumb="' + i + '">' + esc(node.name) + '</button>' +
+        '<span class="tma-dash__clients-crumb-sep" aria-hidden="true">›</span>';
+    }).join('');
+  }
+
+  // Point the drop zone at the deepest folder in the path, then repaint.
+  function showClientFolderCurrent(root) {
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    if (!wrap || !clientFolderNav) return;
+    var current = clientFolderNav.path[clientFolderNav.path.length - 1];
+    wrap.setAttribute('data-folder-uuid', current.uuid);
+    renderFolderCrumbs(root);
+    loadClientFolder(root);
+  }
+
+  function bindClientFolderRows(root) {
+    root.querySelectorAll('[data-clients-subfolder]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!clientFolderNav) return;
+        clientFolderNav.path.push({
+          uuid: btn.getAttribute('data-clients-subfolder'),
+          name: btn.getAttribute('data-clients-subfolder-name') || 'Folder',
+        });
+        showClientFolderCurrent(root);
+      });
+    });
+    root.querySelectorAll('[data-clients-file]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var fu = btn.getAttribute('data-clients-file');
+        if (fu && filesNet()) window.open(filesNet().url('/files/' + encodeURIComponent(fu) + '/preview'), '_blank', 'noopener');
+      });
+    });
+  }
+
   function loadClientFolder(root) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap || !filesNet()) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
     filesNet().fetchJSON(filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200'))
-      .then(function (res) { renderClientFolderList(root, res); })
+      .then(function (res) { renderClientFolderList(root, res); bindClientFolderRows(root); })
       .catch(function () {
         var list = wrap.querySelector('[data-clients-folder-list]') || wrap;
         list.textContent = 'Could not load this folder.';
@@ -1542,7 +1594,18 @@
   function wireClientFolderPanel(root) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap) return;
-    var uuid = wrap.getAttribute('data-folder-uuid');
+    var rootUuid = wrap.getAttribute('data-root-uuid');
+
+    // Start a fresh drill path when opening a different client's folder; keep it
+    // (so a switch to Client info and back stays put) for the same client.
+    if (!clientFolderNav || clientFolderNav.rootUuid !== rootUuid) {
+      clientFolderNav = { rootUuid: rootUuid, path: [{ uuid: rootUuid, name: 'Client folder' }] };
+    }
+    wrap.setAttribute('data-folder-uuid', clientFolderNav.path[clientFolderNav.path.length - 1].uuid);
+    renderFolderCrumbs(root);
+
+    // New folder / uploads always target the folder currently in view.
+    var current = function () { return clientFolderCurrentUuid(root); };
 
     bindClientFolderUploadRefresh();
     loadClientFolder(root);
@@ -1552,7 +1615,7 @@
       newBtn.addEventListener('click', function () {
         var name = window.prompt('New folder name');
         if (!name || !name.trim() || !filesNet()) return;
-        filesNet().fetchJSON(filesNet().url('/folders'), { method: 'POST', json: { name: name.trim(), parent: uuid } })
+        filesNet().fetchJSON(filesNet().url('/folders'), { method: 'POST', json: { name: name.trim(), parent: current() } })
           .then(function () { clientsToast('Folder created', 'positive'); loadClientFolder(root); })
           .catch(function (err) { clientsToast((err && err.message) || 'Could not create the folder', 'negative'); });
       });
@@ -1563,23 +1626,24 @@
     if (uploadBtn && fileInput) {
       uploadBtn.addEventListener('click', function () { fileInput.click(); });
       fileInput.addEventListener('change', function () {
-        uploadToClientFolder(fileInput.files, uuid);
+        uploadToClientFolder(fileInput.files, current());
         fileInput.value = '';
       });
     }
 
-    root.querySelectorAll('[data-clients-subfolder]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var sub = btn.getAttribute('data-clients-subfolder');
-        if (!sub || !window.TMADashboard || !window.TMADashboard.navigate) return;
-        window.TMADashboard.navigate({
-          navId: 'folders-all', view: 'folders',
-          title: 'Client folder', crumb: 'Folders', folderId: sub,
-        });
+    // Breadcrumb: jump back up to any ancestor (delegated, survives repaints).
+    var crumbHost = root.querySelector('[data-clients-folder-crumbs]');
+    if (crumbHost) {
+      crumbHost.addEventListener('click', function (e) {
+        var crumb = e.target.closest('[data-clients-crumb]');
+        if (!crumb || !clientFolderNav) return;
+        var idx = parseInt(crumb.getAttribute('data-clients-crumb'), 10);
+        clientFolderNav.path = clientFolderNav.path.slice(0, idx + 1);
+        showClientFolderCurrent(root);
       });
-    });
+    }
 
-    // Drag-and-drop upload straight onto the panel.
+    // Drag-and-drop upload straight onto the panel (into the current folder).
     var stop = function (e) { e.preventDefault(); e.stopPropagation(); };
     ['dragenter', 'dragover'].forEach(function (ev) {
       wrap.addEventListener(ev, function (e) {
@@ -1598,7 +1662,7 @@
       if (!e.dataTransfer) return;
       stop(e);
       wrap.classList.remove('is-drop-into');
-      uploadToClientFolder(e.dataTransfer.files, uuid);
+      uploadToClientFolder(e.dataTransfer.files, current());
     });
   }
 

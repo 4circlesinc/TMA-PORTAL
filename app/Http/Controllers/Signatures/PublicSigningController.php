@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Signatures;
 
 use App\Http\Controllers\Controller;
+use App\Mail\SignatureChangesRequested;
 use App\Mail\SignatureDeclined;
 use App\Models\SignatureField;
 use App\Models\SignatureRecipient;
@@ -56,6 +57,19 @@ class PublicSigningController extends Controller
         }
 
         $this->markViewed($recipient);
+
+        // Approvers review and decide - they place no signature, so they get a
+        // lean review page (Approve / Request changes) instead of the editor.
+        if ($recipient->role === 'approver') {
+            return response()->view('sign.approve', [
+                'token' => $token,
+                'title' => $signatureRequest->title,
+                'recipient' => $recipient,
+                'sender' => $signatureRequest->creator?->name,
+                'message' => $signatureRequest->message,
+                'isImage' => in_array(strtolower((string) $signatureRequest->file?->extension), ['png', 'jpg', 'jpeg'], true),
+            ]);
+        }
 
         return response()->view('sign.document', [
             'token' => $token,
@@ -188,6 +202,85 @@ class PublicSigningController extends Controller
         $this->notifyDeclined($recipient, $data['reason'] ?? null);
 
         return response()->json(['done' => true, 'status' => Status::DECLINED]);
+    }
+
+    /** An approver approves the document, moving the flow on like a signature. */
+    public function approve(Request $request, string $token): JsonResponse
+    {
+        $data = $request->validate([
+            'comment' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $recipient = $this->resolve($token);
+        abort_unless($recipient instanceof SignatureRecipient, 404);
+        abort_unless($recipient->role === 'approver', 403, 'This link is not an approval link.');
+
+        if ($recipient->status === 'signed') {
+            return response()->json(['done' => true, 'alreadyDone' => true]);
+        }
+        abort_unless(SigningFlow::isTurn($recipient), 403, 'This document is not ready for you yet.');
+
+        DB::transaction(function () use ($recipient, $data, $request) {
+            $recipient->forceFill([
+                'status' => 'signed',
+                'signed_at' => now(),
+                'comment' => $data['comment'] ?? null,
+                'last_ip' => $request->ip(),
+            ])->save();
+            SigningToken::revoke($recipient);
+        });
+
+        Activity::forRecipient($recipient, Activity::APPROVED, array_filter([
+            'comment' => $data['comment'] ?? null,
+        ]));
+
+        // advance() completes + stamps + mails once everyone has acted.
+        $status = Sender::advance($recipient->request);
+
+        return response()->json(['done' => true, 'status' => $status]);
+    }
+
+    /** An approver asks for changes: the request halts and the sender is told. */
+    public function requestChanges(Request $request, string $token): JsonResponse
+    {
+        $data = $request->validate([
+            'comment' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $recipient = $this->resolve($token);
+        abort_unless($recipient instanceof SignatureRecipient, 404);
+        abort_unless($recipient->role === 'approver', 403, 'This link is not an approval link.');
+        abort_unless(SigningFlow::isTurn($recipient), 403, 'This document is not ready for you yet.');
+
+        $signatureRequest = $recipient->request;
+
+        DB::transaction(function () use ($recipient, $signatureRequest, $data, $request) {
+            $recipient->forceFill([
+                'status' => 'changes_requested',
+                'declined_at' => now(),
+                'comment' => $data['comment'],
+                'last_ip' => $request->ip(),
+            ])->save();
+            SigningToken::revoke($recipient);
+
+            $signatureRequest->forceFill([
+                'status' => Status::CHANGES_REQUESTED,
+                'declined_at' => now(),
+            ])->save();
+
+            // The request is on hold until the sender revises it: no one else
+            // should keep acting on a document that's going to change.
+            $signatureRequest->recipients()
+                ->where('id', '!=', $recipient->id)
+                ->get()
+                ->each(fn (SignatureRecipient $r) => SigningToken::revoke($r));
+        });
+
+        Activity::forRecipient($recipient, Activity::CHANGES_REQUESTED, ['comment' => $data['comment']]);
+
+        $this->notifyChangesRequested($recipient, $data['comment']);
+
+        return response()->json(['done' => true, 'status' => Status::CHANGES_REQUESTED]);
     }
 
     /* ── internals ─────────────────────────────────── */
@@ -347,6 +440,21 @@ class PublicSigningController extends Controller
         Mail::to($to)->send(new SignatureDeclined(
             $signatureRequest,
             $reason,
+            $recipient->name ?: $recipient->email,
+        ));
+    }
+
+    private function notifyChangesRequested(SignatureRecipient $recipient, string $comment): void
+    {
+        $signatureRequest = $recipient->request;
+        $to = $signatureRequest->creator?->email;
+        if (! $to) {
+            return;
+        }
+
+        Mail::to($to)->send(new SignatureChangesRequested(
+            $signatureRequest,
+            $comment,
             $recipient->name ?: $recipient->email,
         ));
     }

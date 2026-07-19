@@ -14307,6 +14307,28 @@
   gap: var(--space-4);
 }
 
+/* Breadcrumb inside the client Folders tab (in-place folder drilling). */
+.tma-dash__clients-folders-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.tma-dash__clients-crumb {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.tma-dash__clients-crumb:hover { color: var(--color-text-primary); text-decoration: underline; }
+.tma-dash__clients-crumb--current { color: var(--color-text-primary); font-weight: 600; }
+.tma-dash__clients-crumb-sep { color: var(--color-text-placeholder); }
+
 .tma-dash__clients-folders {
   display: flex;
   flex-direction: column;

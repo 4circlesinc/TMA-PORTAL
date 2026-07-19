@@ -70,6 +70,7 @@
 
     var g = groups || {};
     var auto =
+      groupHtml('Libraries', g.libraries) +
       groupHtml('Assigned Clients', g.assignedClients) +
       groupHtml('Organization Folders', g.organization) +
       groupHtml('My Staff Folder', g.staff);

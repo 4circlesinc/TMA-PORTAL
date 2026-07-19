@@ -23,6 +23,9 @@
   }
 
   var SHORTCUTS = [
+    { id: 'email', label: 'Email', icon: 'EnvelopeSimple', count: 'email', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
+    { id: 'calendar', label: 'Calendar', icon: 'CalendarBlank', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
+    { id: 'users', label: 'Users', icon: 'Users', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
     { id: 'share-files', label: 'Share Files', icon: 'Share' },
     { id: 'request-files', label: 'Request Files', icon: 'DownloadSimple' },
     { id: 'new-user-folders', label: 'Create New User Personal Folders', icon: 'UserPlus' },
@@ -49,7 +52,19 @@
       '<img src="images/icons/tma/' + (deltaUp ? 'ArrowRise' : 'ArrowFall') + '.svg" alt="' + (deltaUp ? 'up' : 'down') + '"></div></div></article>';
   }
 
+  function kpiSkeletonCard(tone) {
+    return '<article class="tma-dash__card tma-dash__card--' + tone + '" aria-hidden="true">' +
+      '<div class="tma-dash__card-head"><span class="tma-skeleton tma-skeleton--text" style="width:55%"></span></div>' +
+      '<div class="tma-dash__card-row"><span class="tma-skeleton tma-dash__card-value--skeleton"></span>' +
+      '<span class="tma-skeleton tma-dash__card-delta--skeleton"></span></div></article>';
+  }
+
   function renderKpis(s) {
+    if (!homeFilesLoaded) {
+      return '<div class="tma-dash__cards" aria-busy="true">' +
+        kpiSkeletonCard('blue') + kpiSkeletonCard('purple') + kpiSkeletonCard('blue') + kpiSkeletonCard('purple') +
+        '</div>';
+    }
     var activeProjects = s.projects.filter(function (p) { return p.status === 'open'; }).length;
     var sigLeft = Math.max(0, s.trial.signatureLimit - s.trial.signatureUsed);
     return '<div class="tma-dash__cards">' +
@@ -60,10 +75,42 @@
       '</div>';
   }
 
+  // Real Recent Files + Favorites are fetched on mount; until they arrive we
+  // show shimmering skeletons rather than empty or placeholder rows.
+  var homeFilesLoaded = false;
+
+  // Folder icon for folders; the real server thumbnail for images (falling back
+  // to the file-type icon if it can't be produced); the type icon otherwise.
+  function rowIconHtml(f) {
+    if (f.kind === 'folder') {
+      return '<img src="images/icons/phosphor/FolderFilled.svg" alt="">';
+    }
+    if (f.thumbUrl) {
+      return '<img class="tma-portal-file-row__thumb" src="' + ui().esc(f.thumbUrl) + '" alt="" loading="lazy"' +
+        ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-row__thumb\');this.src=\'' + ui().esc(fileIconSrc(f)) + '\'">';
+    }
+    return '<img src="' + ui().esc(fileIconSrc(f)) + '" alt="">';
+  }
+
+  function skeletonFileRows(n) {
+    var row = '<div class="tma-portal-file-row tma-portal-file-row--skeleton" aria-hidden="true">' +
+      '<span class="tma-skeleton tma-skeleton--icon"></span>' +
+      '<span class="tma-portal-file-row__meta" style="flex:1">' +
+      '<span class="tma-skeleton tma-skeleton--text" style="width:58%"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span>' +
+      '</span></div>';
+    return new Array(n).fill(row).join('');
+  }
+
   function renderRecentFiles(s) {
+    if (!homeFilesLoaded) {
+      return '<section class="tma-portal-panel" aria-label="Recent files" aria-busy="true">' +
+        '<h2 class="tma-portal-panel__title">Recent Files</h2>' + skeletonFileRows(3) + '</section>';
+    }
     var rows = s.recentFiles.map(function (f) {
-      return '<button type="button" class="tma-portal-file-row" data-home-file="' + ui().esc(f.id) + '">' +
-        '<img src="' + ui().esc(fileIconSrc(f)) + '" alt="">' +
+      return '<button type="button" class="tma-portal-file-row" data-home-file="' + ui().esc(f.id) + '"' +
+        (f.folderId ? ' data-home-file-folder="' + ui().esc(f.folderId) + '"' : '') + '>' +
+        rowIconHtml(f) +
         '<span class="tma-portal-file-row__meta">' +
         '<span class="tma-portal-file-row__name">' + ui().esc(f.name) + '</span>' +
         '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' +
@@ -76,18 +123,32 @@
   }
 
   function renderShortcuts() {
+    if (!homeFilesLoaded) {
+      var tile = '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
+        '<span class="tma-skeleton" style="width:44px;height:44px;border-radius:var(--radius-12)"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text" style="width:70%;height:11px"></span></div>';
+      return '<section class="tma-portal-panel" aria-label="Shortcuts" aria-busy="true">' +
+        '<h2 class="tma-portal-panel__title">Shortcuts</h2>' +
+        '<div class="tma-portal-shortcuts">' + new Array(8).fill(tile).join('') + '</div></section>';
+    }
     return '<section class="tma-portal-panel" aria-label="Shortcuts">' +
       '<h2 class="tma-portal-panel__title">Shortcuts</h2>' +
       '<div class="tma-portal-shortcuts">' +
       SHORTCUTS.map(function (sc) {
         return '<button type="button" class="tma-portal-shortcut" data-home-shortcut="' + sc.id + '">' +
-          '<span class="tma-portal-shortcut__icon"><img src="images/icons/phosphor/' + sc.icon + '.svg" alt=""></span>' +
+          '<span class="tma-portal-shortcut__icon"><img src="images/icons/phosphor/' + sc.icon + '.svg" alt="">' +
+          (sc.count ? '<span class="tma-portal-shortcut__count" data-home-shortcut-count="' + sc.count + '" hidden></span>' : '') +
+          '</span>' +
           '<span>' + ui().esc(sc.label) + '</span></button>';
       }).join('') +
       '</div></section>';
   }
 
   function renderTutorials(s) {
+    if (!homeFilesLoaded) {
+      return '<section class="tma-portal-panel" aria-label="Tutorials" aria-busy="true">' +
+        '<h2 class="tma-portal-panel__title">Tutorials</h2>' + skeletonFileRows(4) + '</section>';
+    }
     var done = s.tutorials.filter(function (t) { return t.done; }).length;
     return '<section class="tma-portal-panel" aria-label="Tutorials">' +
       '<div class="tma-portal-head" style="gap:var(--space-8)">' +
@@ -183,7 +244,7 @@
   function tiles() {
     var s = data().state();
     if (!s.dashboardTiles) {
-      s.dashboardTiles = { recentFiles: true, shortcuts: true, tutorials: false, favorites: false };
+      s.dashboardTiles = { recentFiles: true, shortcuts: true, tutorials: false, favorites: true };
       data().save();
     }
     return s.dashboardTiles;
@@ -264,13 +325,22 @@
   }
 
   function renderFavorites(s) {
+    if (!homeFilesLoaded) {
+      return '<section class="tma-portal-panel" aria-label="Favorites" aria-busy="true">' +
+        '<h2 class="tma-portal-panel__title">Favorites</h2>' +
+        '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
+        skeletonFileRows(2) + '</section>';
+    }
     var favs = (s.folders && s.folders.favorites) || [];
     var rows = favs.map(function (f) {
-      return '<div class="tma-portal-file-row">' +
-        '<img src="images/icons/phosphor/Star.svg" alt="">' +
+      return '<button type="button" class="tma-portal-file-row" data-home-favorite="' + ui().esc(f.id) + '"' +
+        ' data-home-favorite-kind="' + ui().esc(f.kind) + '"' +
+        (f.folderId ? ' data-home-favorite-folder="' + ui().esc(f.folderId) + '"' : '') + '>' +
+        rowIconHtml(f) +
         '<span class="tma-portal-file-row__meta">' +
         '<span class="tma-portal-file-row__name">' + ui().esc(f.name) + '</span>' +
-        '</span></div>';
+        (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
+        '</span></button>';
     }).join('');
     return '<section class="tma-portal-panel" aria-label="Favorites">' +
       '<h2 class="tma-portal-panel__title">Favorites</h2>' +
@@ -279,7 +349,83 @@
       '</section>';
   }
 
-  function mount(el) {
+  /* Real data for the Recent Files + Favorites widgets, from the File Library
+   * browse API (the same endpoints the file manager uses). Falls back quietly
+   * to whatever is in state if the request fails. */
+  function loadHomeFiles(el) {
+    var net = window.TMAFilesNet;
+    if (!net) { homeFilesLoaded = true; return; }
+
+    // Drop any stale, localStorage-persisted mock immediately: Recent Files and
+    // Favorites are server-owned, so old cached values must never render. They
+    // are refilled from the API below (or left empty if it fails).
+    var s0 = data().state();
+    s0.recentFiles = [];
+    s0.folders = s0.folders || {};
+    s0.folders.favorites = [];
+
+    // If the fetch stalls (slow single-threaded dev server), stop showing the
+    // skeleton after a while and fall back to the empty state. The real data is
+    // still applied whenever it eventually arrives.
+    var giveUp = setTimeout(function () {
+      if (homeFilesLoaded) return;
+      homeFilesLoaded = true;
+      if (el.isConnected) mount(el, { fromLoad: true });
+    }, 12000);
+
+    Promise.all([
+      net.fetchJSON(net.url('/?section=recent&perPage=6')).catch(function () { return null; }),
+      net.fetchJSON(net.url('/?section=favorites&perPage=8')).catch(function () { return null; }),
+    ]).then(function (res) {
+      clearTimeout(giveUp);
+      homeFilesLoaded = true;
+      var s = data().state();
+
+      // Always assign — a failed fetch yields an empty list, never stale data.
+      s.recentFiles = (res[0] && res[0].files) ? res[0].files.map(function (f) {
+        return {
+          kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+          folderId: f.folder && f.folder.id, path: (f.folder && f.folder.name) || 'File Box',
+        };
+      }) : [];
+
+      var favFolders = (res[1] && res[1].folders || []).map(function (f) {
+        return { kind: 'folder', id: f.id, name: f.name, path: (f.parent && f.parent.name) || 'Folders' };
+      });
+      var favFiles = (res[1] && res[1].files || []).map(function (f) {
+        return {
+          kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+          folderId: f.folder && f.folder.id, path: (f.folder && f.folder.name) || 'File Box',
+        };
+      });
+      s.folders = s.folders || {};
+      s.folders.favorites = favFolders.concat(favFiles);
+
+      if (el.isConnected) mount(el, { fromLoad: true });
+    });
+  }
+
+  // Email/Calendar are placeholder counts (no backend yet); Users is the real
+  // pending-approvals count.
+  function fillShortcutCounts(el) {
+    function setCount(kind, n) {
+      el.querySelectorAll('[data-home-shortcut-count="' + kind + '"]').forEach(function (b) {
+        if (n && n > 0) { b.textContent = n > 99 ? '99+' : String(n); b.hidden = false; }
+        else { b.hidden = true; b.textContent = ''; }
+      });
+    }
+    var email = (window.TMAEmail && window.TMAEmail.getInboxUnreadCount) ? window.TMAEmail.getInboxUnreadCount(null) : 0;
+    var cal = (window.TMACalendar && window.TMACalendar.getTodayEventCount) ? window.TMACalendar.getTodayEventCount() : 0;
+    setCount('email', email || 4);
+    setCount('calendar', cal || 2);
+    fetch('/admin/users/pending-count', { credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
+      .then(function (j) { setCount('users', (j && j.count) || 0); })
+      .catch(function () {});
+  }
+
+  function mount(el, opts) {
+    opts = opts || {};
     var s = data().state();
     var show = tiles();
     function rerender() { mount(el); }
@@ -297,15 +443,15 @@
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
       '</div></div>' +
       renderKpis(s) +
-      ((show.recentFiles || show.shortcuts || show.favorites || show.tutorials)
-        ? '<div class="tma-portal-home-grid">' +
-          (show.recentFiles ? renderRecentFiles(s) : '') +
-          (show.shortcuts ? renderShortcuts() : '') +
-          (show.favorites ? renderFavorites(s) : '') +
-          (show.tutorials ? renderTutorials(s) : '') +
-          '</div>'
-        : '') +
+      // Everything below the KPI row lives in one 2-column grid so no panel
+      // (including "What's on the road?") ever spans the full width.
+      '<div class="tma-portal-home-grid">' +
+      (show.recentFiles ? renderRecentFiles(s) : '') +
+      (show.shortcuts ? renderShortcuts() : '') +
+      (show.favorites ? renderFavorites(s) : '') +
+      (show.tutorials ? renderTutorials(s) : '') +
       (window.TMAOverview && window.TMAOverview.renderRoad ? window.TMAOverview.renderRoad() : '') +
+      '</div>' +
       '</div>';
 
     el.querySelectorAll('.tma-dash__overview-day').forEach(function (day) {
@@ -331,7 +477,27 @@
 
     el.querySelectorAll('[data-home-file]').forEach(function (b) {
       b.addEventListener('click', function () {
-        navigate({ navId: 'folders-personal', view: 'folders', title: 'Personal Folders', crumb: 'Folders / Personal Folders' });
+        // Open the file's own folder; fall back to the File Box when it has none.
+        var folderId = b.getAttribute('data-home-file-folder');
+        navigate(folderId
+          ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
+          : { navId: 'folders-filebox', view: 'folders', title: 'File Box', crumb: 'Folders / File Box' });
+      });
+    });
+
+    el.querySelectorAll('[data-home-favorite]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var kind = b.getAttribute('data-home-favorite-kind');
+        if (kind === 'folder') {
+          // Open the favorited folder itself.
+          navigate({ navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: b.getAttribute('data-home-favorite') });
+        } else {
+          // Open the file's folder, or fall back to the Favorites section.
+          var folderId = b.getAttribute('data-home-favorite-folder');
+          navigate(folderId
+            ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
+            : { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'Folders / Favorites' });
+        }
       });
     });
 
@@ -360,6 +526,11 @@
 
     var edit = el.querySelector('[data-home-edit]');
     if (edit) edit.addEventListener('click', function () { editDashboardModal(rerender); });
+
+    fillShortcutCounts(el);
+    // Fetch real Recent Files + Favorites once per genuine mount (not on the
+    // re-render the fetch itself triggers).
+    if (!opts.fromLoad) loadHomeFiles(el);
   }
 
   if (window.TMAPortalViews) window.TMAPortalViews.register('dashboard', mount);

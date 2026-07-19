@@ -55,6 +55,32 @@ class FolderShortcutTest extends TestCase
         ]);
     }
 
+    public function test_admins_get_the_client_and_staff_file_libraries_auto_pinned(): void
+    {
+        $admin = $this->approvedUser(['account_type' => 'Administrator']);
+
+        $libraries = collect(
+            $this->actingAs($admin)->getJson('/portal/files/shortcuts')
+                ->assertOk()->json('groups.libraries')
+        )->pluck('name');
+
+        $this->assertTrue($libraries->contains('Client Files'));
+        $this->assertTrue($libraries->contains('Staff Files'));
+    }
+
+    public function test_staff_never_see_the_client_files_library_in_shortcuts(): void
+    {
+        // Ensure the roots exist (an admin visit provisions them)…
+        $this->actingAs($this->approvedUser(['account_type' => 'Administrator']))
+            ->getJson('/portal/files/shortcuts')->assertOk();
+
+        // …a non-admin still gets none — it would list every client.
+        foreach (['Employee', 'Client'] as $type) {
+            $user = $this->approvedUser(['account_type' => $type]);
+            $this->assertSame([], $this->actingAs($user)->getJson('/portal/files/shortcuts')->json('groups.libraries'));
+        }
+    }
+
     public function test_pinning_a_folder_lists_it_with_its_parent(): void
     {
         $user = $this->approvedUser();

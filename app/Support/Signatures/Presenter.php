@@ -95,13 +95,31 @@ class Presenter
             'role' => $recipient->role,
             'order' => (int) $recipient->signing_order,
             'status' => $recipient->status,
-            'statusLabel' => ucfirst($recipient->status),
+            'statusLabel' => self::recipientStatusLabel($recipient),
             'initials' => self::initials($recipient->name ?: $recipient->email),
             'viewedAt' => optional($recipient->viewed_at)->toIso8601String(),
             'signedAt' => optional($recipient->signed_at)->toIso8601String(),
             'declinedAt' => optional($recipient->declined_at)->toIso8601String(),
             'declineReason' => $recipient->decline_reason,
+            'comment' => $recipient->comment,
         ];
+    }
+
+    /**
+     * An approver "signs" to approve, so a raw status of "signed" would read
+     * wrong for them - label it by what they actually did.
+     */
+    private static function recipientStatusLabel(SignatureRecipient $recipient): string
+    {
+        if ($recipient->status === 'changes_requested') {
+            return 'Changes requested';
+        }
+
+        if ($recipient->role === 'approver' && $recipient->status === 'signed') {
+            return 'Approved';
+        }
+
+        return ucfirst($recipient->status);
     }
 
     /**

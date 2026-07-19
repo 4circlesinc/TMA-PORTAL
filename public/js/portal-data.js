@@ -59,13 +59,11 @@
         recentFiles: true,
         shortcuts: true,
         tutorials: false,
-        favorites: false,
+        favorites: true,
       },
-      recentFiles: [
-        { id: 'file-1', name: 'Design Brief – Healthy Smiles Dental Logo Project Overview.pdf', path: 'Personal Folders > Test', type: 'pdf' },
-        { id: 'file-2', name: 'Hello_July_Saint_Lucia_Carnival_Brief_PlainBW.docx', path: 'Personal Folders > Test', type: 'doc' },
-        { id: 'file-3', name: 'WISS2026 Lanyard – Dominica.png', path: 'Personal Folders > Test', type: 'png' },
-      ],
+      // Populated from the File Library (section=recent) on the dashboard mount;
+      // starts empty so no placeholder filenames flash before the real data.
+      recentFiles: [],
       folders: {
         personal: [
           { id: 'folder-test', name: 'Test', kind: 'folder', items: 3, created: '06/28/2026' },

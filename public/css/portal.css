@@ -1225,6 +1225,43 @@
 
 .tma-portal-file-row__meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 
+/* ── skeleton loading ──────────────────────────────────────────────
+ * A shimmering placeholder shown while a widget's real data loads, so the
+ * dashboard never flashes stale or empty content during a slow fetch. */
+.tma-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
+  border-radius: 6px;
+}
+.tma-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: tma-skeleton-shimmer 1.3s ease-in-out infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .tma-skeleton { background: rgba(255, 255, 255, 0.08); }
+  .tma-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); }
+}
+:root[data-theme="dark"] .tma-skeleton { background: rgba(255, 255, 255, 0.08); }
+:root[data-theme="dark"] .tma-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); }
+:root[data-theme="light"] .tma-skeleton { background: rgba(0, 0, 0, 0.06); }
+@keyframes tma-skeleton-shimmer { 100% { transform: translateX(100%); } }
+.tma-skeleton--text { height: 12px; width: 60%; }
+.tma-skeleton--avatar { border-radius: 50%; }
+
+.tma-portal-file-row--skeleton { pointer-events: none; }
+.tma-portal-file-row--skeleton .tma-skeleton--icon { width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
+
+/* KPI stat card in its loading state. */
+.tma-dash__card--skeleton .tma-dash__card-value,
+.tma-dash__card--skeleton .tma-dash__card-delta-text { color: transparent; }
+.tma-dash__card-value--skeleton { display: inline-block; width: 84px; height: 26px; }
+.tma-dash__card-delta--skeleton { display: inline-block; width: 52px; height: 14px; }
+
 .tma-portal-file-row__name {
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
@@ -1269,6 +1306,7 @@
 .tma-portal-shortcut:hover { background: var(--color-hover); }
 
 .tma-portal-shortcut__icon {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1279,6 +1317,52 @@
 }
 
 .tma-portal-shortcut__icon img { width: 20px; height: 20px; }
+
+/* Count badge on a shortcut tile (Email / Calendar / Users). */
+.tma-portal-shortcut__count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-red, #e5484d);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* The display rule above beats the plain `hidden` attribute, so hide it here
+ * when there's no count to show. */
+.tma-portal-shortcut__count[hidden] { display: none; }
+
+/* Real image thumbnails in the dashboard file rows (Recent Files / Favorites). */
+.tma-portal-file-row__thumb { object-fit: cover; border-radius: 4px; }
+
+/* Default client subfolders editor (admin Default Folders page). */
+.tma-portal-subchips { display: flex; flex-wrap: wrap; gap: var(--space-8); }
+.tma-portal-subchip {
+  display: inline-flex; align-items: center; gap: var(--space-4);
+  padding: 4px 4px 4px 12px; border-radius: 999px;
+  background: var(--color-bg-tag); font-size: var(--text-size-13, 13px);
+  color: var(--color-text-primary);
+}
+.tma-portal-subchip__x {
+  border: 0; background: transparent; cursor: pointer; line-height: 1;
+  font-size: 16px; color: var(--color-text-secondary); padding: 0 6px; border-radius: 999px;
+}
+.tma-portal-subchip__x:hover { color: var(--color-text-primary); }
+.tma-portal-inline-add { display: flex; gap: var(--space-8); margin-top: var(--space-12); }
+.tma-portal-inline-add .tma-portal-input { flex: 1; }
+.tma-portal-tag {
+  display: inline-block; margin-left: var(--space-8); padding: 2px 8px; border-radius: 999px;
+  background: var(--color-bg-tag); font-size: 11px; color: var(--color-text-secondary); vertical-align: middle;
+}
 
 .tma-portal-tutorials { display: flex; flex-direction: column; gap: var(--space-8); }
 

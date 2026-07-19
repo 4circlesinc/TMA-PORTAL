@@ -160,18 +160,22 @@ class Sender
 
         $actors = SigningFlow::actors($request);
         if (! $actors) {
-            throw new SendValidationException('Add at least one signer before sending.');
+            throw new SendValidationException('Add at least one signer or approver before sending.');
         }
 
+        // Approvers review and decide - they place no fields. Only signers need
+        // somewhere to sign, so the field rules apply to them alone.
+        $signers = array_values(array_filter($actors, fn ($a) => $a->role === 'signer'));
         $fields = $request->fields()->get();
-        if ($fields->isEmpty()) {
+
+        if ($signers && $fields->isEmpty()) {
             throw new SendValidationException('Place at least one field before sending.');
         }
 
         // A signer with nothing to do would receive a link to a document they
         // can't act on, and the request could never complete.
         $withFields = $fields->pluck('signature_recipient_id')->filter()->unique();
-        foreach ($actors as $actor) {
+        foreach ($signers as $actor) {
             if (! $withFields->contains($actor->id)) {
                 throw new SendValidationException(
                     sprintf('%s has no fields to complete. Assign a field or remove them.', $actor->name ?: $actor->email)

@@ -15,6 +15,23 @@
   function net() { return window.TMAFilesNet; }
   function esc(s) { return ui().esc(s); }
 
+  function isAdminUser() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    return !!(me && me.isAdmin);
+  }
+
+  // Promote an existing top-level folder to a shared organization default.
+  function makeDefaultFolder(item) {
+    var url = (window.__TMA_SITE_ROOT || '') + '/portal/file-library/adopt-folder';
+    net().fetchJSON(url, { method: 'POST', json: { folder: item.id, audience: 'all_staff', role: 'viewer' } })
+      .then(function () {
+        ui().toast('“' + item.name + '” is now a default folder for all staff');
+        if (window.TMASidebarShortcuts && window.TMASidebarShortcuts.refresh) window.TMASidebarShortcuts.refresh();
+        load();
+      })
+      .catch(function (e) { ui().toast((e && e.message) || 'Couldn’t make this a default folder'); });
+  }
+
   var NAV_SECTION = {
     'folders-all': 'all',
     'folders-personal': 'my',
@@ -1525,6 +1542,11 @@
           (pinned ? s.remove(item.id) : s.add(item.id)).catch(function () {});
         },
       });
+    }
+    // Admins can promote a top-level folder to a shared organization default,
+    // which then appears in every staff member's Folder Shortcuts automatically.
+    if (isFolder && !item.parent && isAdminUser()) {
+      list.push({ label: 'Make default folder', icon: 'Buildings', fn: function () { makeDefaultFolder(item); } });
     }
     list.push({ sep: true });
     list.push({ label: 'View details', icon: 'Info', fn: function () { openDetails(item); } });

@@ -89,10 +89,17 @@ class FileLibraryController extends Controller
             ->firstOrFail();
 
         $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
             'audience' => ['sometimes', Rule::in(['all_staff', 'selected'])],
             'role' => ['sometimes', Rule::in(['viewer', 'editor'])],
             'archived' => ['sometimes', 'boolean'],
         ]);
+
+        if (isset($data['name'])) {
+            $name = Naming::clean($data['name']);
+            abort_if($name === '', 422, 'Please enter a folder name.');
+            $folder->name = $name;
+        }
 
         if (isset($data['audience'])) {
             $allStaff = $data['audience'] === 'all_staff';
@@ -107,6 +114,40 @@ class FileLibraryController extends Controller
             $folder->is_archived = $data['archived'];
         }
 
+        $folder->save();
+
+        return response()->json(['folder' => $this->presentOrg($folder)]);
+    }
+
+    /**
+     * Turn an existing top-level folder into an organization (default) folder,
+     * so it appears automatically in every staff member's Folder Shortcuts.
+     */
+    public function adoptFolder(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $data = $request->validate([
+            'folder' => ['required', 'string'],
+            'audience' => ['sometimes', Rule::in(['all_staff', 'selected'])],
+            'role' => ['sometimes', Rule::in(['viewer', 'editor'])],
+        ]);
+
+        $folder = Folder::where('uuid', $data['folder'])->firstOrFail();
+
+        abort_unless($folder->parent_id === null, 422, 'Only a top-level folder can be made a default folder.');
+        abort_if(
+            in_array($folder->folder_type, [Folder::TYPE_CLIENT, Folder::TYPE_STAFF, Folder::TYPE_ROOT], true),
+            422,
+            'Client, staff and system folders can’t be made organization folders.'
+        );
+
+        $allStaff = ($data['audience'] ?? 'all_staff') === 'all_staff';
+        $folder->folder_type = Folder::TYPE_ORGANIZATION;
+        $folder->org_wide = $allStaff;
+        $folder->audience = $allStaff ? 'all_staff' : null;
+        $folder->audience_role = $allStaff ? ($data['role'] ?? 'viewer') : null;
+        $folder->is_archived = false;
         $folder->save();
 
         return response()->json(['folder' => $this->presentOrg($folder)]);

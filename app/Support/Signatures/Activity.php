@@ -30,6 +30,10 @@ class Activity
 
     public const DECLINED = 'declined';
 
+    public const APPROVED = 'approved';
+
+    public const CHANGES_REQUESTED = 'changes_requested';
+
     public const CANCELLED = 'cancelled';
 
     public const EXPIRED = 'expired';

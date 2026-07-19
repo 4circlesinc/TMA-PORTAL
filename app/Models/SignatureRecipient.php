@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'uuid', 'signature_request_id', 'name', 'email', 'role', 'signing_order',
     'status', 'token_hash', 'token_ciphertext', 'token_expires_at', 'invited_at',
-    'reminded_at', 'viewed_at', 'signed_at', 'declined_at', 'decline_reason', 'last_ip',
+    'reminded_at', 'viewed_at', 'signed_at', 'declined_at', 'decline_reason', 'comment', 'last_ip',
 ])]
 #[Hidden(['token_hash', 'token_ciphertext'])]
 class SignatureRecipient extends Model

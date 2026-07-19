@@ -21,20 +21,22 @@ class Status
 
     public const DECLINED = 'declined';
 
+    public const CHANGES_REQUESTED = 'changes_requested';
+
     public const CANCELLED = 'cancelled';
 
     public const EXPIRED = 'expired';
 
     public const ALL = [
         self::DRAFT, self::SENT, self::VIEWED, self::IN_PROGRESS,
-        self::COMPLETED, self::DECLINED, self::CANCELLED, self::EXPIRED,
+        self::COMPLETED, self::DECLINED, self::CHANGES_REQUESTED, self::CANCELLED, self::EXPIRED,
     ];
 
     /** Out with recipients and still awaiting action. */
     public const PENDING = [self::SENT, self::VIEWED, self::IN_PROGRESS];
 
     /** Terminal - the document must never change again. */
-    public const FINAL = [self::COMPLETED, self::DECLINED, self::CANCELLED, self::EXPIRED];
+    public const FINAL = [self::COMPLETED, self::DECLINED, self::CHANGES_REQUESTED, self::CANCELLED, self::EXPIRED];
 
     private const LABELS = [
         self::DRAFT => 'Draft',
@@ -43,6 +45,7 @@ class Status
         self::IN_PROGRESS => 'In Progress',
         self::COMPLETED => 'Completed',
         self::DECLINED => 'Declined',
+        self::CHANGES_REQUESTED => 'Changes Requested',
         self::CANCELLED => 'Cancelled',
         self::EXPIRED => 'Expired',
     ];

@@ -88,6 +88,24 @@ class FileManagerTest extends TestCase
         $this->assertStringNotContainsString('vault/', json_encode($browse->json()));
     }
 
+    public function test_recent_includes_file_box_files_not_only_foldered_ones(): void
+    {
+        $user = $this->approvedUser();
+
+        // A loose file in the File Box (folder_id null) and one inside a folder.
+        $this->actingAs($user)->post('/portal/files/files', ['file' => UploadedFile::fake()->createWithContent('loose.pdf', '%PDF-1.4 a')])->assertCreated();
+        $folder = $this->actingAs($user)->postJson('/portal/files/folders', ['name' => 'Docs'])->json('id');
+        $this->actingAs($user)->post('/portal/files/files', ['file' => UploadedFile::fake()->createWithContent('filed.pdf', '%PDF-1.4 b'), 'folder' => $folder])->assertCreated();
+
+        $names = collect($this->actingAs($user)->getJson('/portal/files/?section=recent')->assertOk()->json('files'))
+            ->pluck('name');
+
+        // Regression: `folder_id NOT IN (...)` used to drop every File Box file
+        // because NULL is never "not in" a set.
+        $this->assertTrue($names->contains('loose.pdf'), 'File Box file must appear in Recent Files');
+        $this->assertTrue($names->contains('filed.pdf'), 'Foldered file must appear in Recent Files');
+    }
+
     public function test_duplicate_upload_keep_both_appends_counter(): void
     {
         $user = $this->approvedUser();

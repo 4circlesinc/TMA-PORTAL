@@ -209,6 +209,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::put('/settings', [FileLibraryController::class, 'updateSettings'])->name('settings.update');
         Route::post('/organization-folders', [FileLibraryController::class, 'storeOrganizationFolder'])->name('org.store');
         Route::patch('/organization-folders/{uuid}', [FileLibraryController::class, 'updateOrganizationFolder'])->name('org.update');
+        Route::post('/adopt-folder', [FileLibraryController::class, 'adoptFolder'])->name('adopt-folder');
     });
 
     Route::get('/{page}', LegacyPageController::class)
@@ -273,6 +274,8 @@ Route::middleware('throttle:signing')->group(function () {
     Route::post('/sign/{token}/progress', [PublicSigningController::class, 'progress'])->name('sign.progress');
     Route::post('/sign/{token}/submit', [PublicSigningController::class, 'submit'])->name('sign.submit');
     Route::post('/sign/{token}/decline', [PublicSigningController::class, 'decline'])->name('sign.decline');
+    Route::post('/sign/{token}/approve', [PublicSigningController::class, 'approve'])->name('sign.approve');
+    Route::post('/sign/{token}/request-changes', [PublicSigningController::class, 'requestChanges'])->name('sign.request-changes');
 });
 
 /*
