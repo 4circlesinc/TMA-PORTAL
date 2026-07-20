@@ -80,7 +80,9 @@
   /* ── helpers ───────────────────────────────────────── */
 
   function fileIconSrc(item) {
-    if (item.type === 'folder') return 'images/icons/phosphor/FolderFilled.svg';
+    if (item.type === 'folder') {
+      return item.fileCount === 0 ? 'images/icons/phosphor/FolderEmpty.svg' : 'images/icons/phosphor/FolderFilled.svg';
+    }
     if (window.TMAFileIcons) return window.TMAFileIcons.fileIconSrc(item.icon, item.name);
     return 'images/icons/phosphor/File.svg';
   }
@@ -1683,7 +1685,7 @@
             var listHtml = folders.length
               ? folders.map(function (f) {
                   return '<button type="button" class="tma-portal-picker__folder" data-pick-open="' + esc(f.id) + '">' +
-                    '<img src="images/icons/phosphor/FolderFilled.svg" alt="" width="20" height="20"><span>' + esc(f.name) + '</span></button>';
+                    '<img src="' + esc(fileIconSrc(f)) + '" alt="" width="20" height="20"><span>' + esc(f.name) + '</span></button>';
                 }).join('')
               : '<p class="tma-portal-picker__empty">No subfolders here.</p>';
             body.innerHTML = '<div class="tma-portal-picker__crumbs">' + crumbHtml + '</div><div class="tma-portal-picker__list">' + listHtml + '</div>';

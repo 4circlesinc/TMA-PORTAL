@@ -78,6 +78,7 @@
     FileJpg: PHOSPHOR + 'FileJpg.svg',
     FilePng: PHOSPHOR + 'FilePng.svg',
     FolderFilled: PHOSPHOR + 'FolderFilled.svg',
+    FolderEmpty: PHOSPHOR + 'FolderEmpty.svg',
     FolderNotch: PHOSPHOR + 'FolderNotch.svg',
   };
 

@@ -41,6 +41,7 @@
     ArrowLineRight: 'images/icons/tma/ArrowLineRight-16.svg',
     FolderNotch: ICON + 'FolderNotch.svg',
     FolderFilled: ICON + 'FolderFilled.svg',
+    FolderEmpty: ICON + 'FolderEmpty.svg',
     TwitterLogo: ICON + 'TwitterLogo.svg',
     InstagramLogo: ICON + 'InstagramLogo.svg',
     ThreadsLogo: ICON + 'ThreadsLogo.svg',
@@ -1486,8 +1487,9 @@
     var html = '';
     folders.forEach(function (f) {
       var count = (f.fileCount || 0) + (f.folderCount || 0);
+      var folderIcon = f.fileCount === 0 ? ICONS.FolderEmpty : ICONS.FolderFilled;
       html += '<button type="button" class="tma-dash__clients-folder" data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '">' +
-        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + ICONS.FolderFilled + '" alt=""></span>' +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + folderIcon + '" alt=""></span>' +
         '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
         '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) + '</span></span>' +
         '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +

@@ -24,6 +24,7 @@
     ArrowBendUpLeft: ICON + 'ArrowBendUpLeft.svg',
     ArrowBendUpRight: ICON + 'ArrowBendUpRight.svg',
     ArrowBendDoubleUpLeft: ICON + 'ArrowBendDoubleUpLeft.svg',
+    ArrowsClockwise: ICON + 'ArrowsClockwise.svg',
     DotsThree: ICON + 'DotsThree.svg',
     Prohibit: ICON + 'Prohibit.svg',
     Star: ICON + 'Star.svg',
@@ -689,6 +690,17 @@
       className: 'tma-dash__email-filter',
       attrs: ' data-email-filter',
       innerHtml: '<img src="' + ICONS.FunnelSimple + '" alt="">',
+    });
+  }
+
+  function renderEmailListRefreshBtn(state) {
+    var cls = 'tma-dash__email-refresh-btn' + (state.refreshing ? ' tma-dash__email-refresh-btn--spinning' : '');
+    return renderEmailIconTooltipBtn({
+      tipId: 'email-refresh-tip',
+      label: 'Refresh',
+      className: cls,
+      attrs: ' data-email-refresh' + (state.refreshing ? ' aria-busy="true"' : ''),
+      innerHtml: '<img src="' + ICONS.ArrowsClockwise + '" alt="">',
     });
   }
 
@@ -2162,6 +2174,7 @@
       '<label class="tma-dash__email-list-check">' +
       '<input type="checkbox" class="tma-dash__check" data-email-selectall' + (allChecked ? ' checked' : '') + ' aria-label="Select all">' +
       '</label>' +
+      renderEmailListRefreshBtn(state) +
       renderEmailListBulk(state) +
       renderEmailBulkMoreMenu(state) +
       renderEmailLabelMenu(state) +
@@ -4601,6 +4614,24 @@ function renderComposeToolbar() {
       syncSelectAll();
     }
 
+    root.querySelectorAll('[data-email-refresh]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (state.refreshing) return;
+        state.refreshing = true;
+        render();
+
+        api().sync().then(function (data) {
+          if (data && data.folders) state.folderCounts = data.folders;
+        }).catch(function (err) {
+          reportMailError(state, err);
+        }).then(function () {
+          state.refreshing = false;
+          reloadMessages(root, state, render);
+        });
+      });
+    });
+
     root.querySelectorAll('[data-email-star]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
@@ -5447,6 +5478,7 @@ function renderComposeToolbar() {
       total: 0,
       perPageOptions: [25, 50, 100, 200],
       bodyLoading: false,
+      refreshing: false,
       settingsOpen: false,
       settings: null,
 

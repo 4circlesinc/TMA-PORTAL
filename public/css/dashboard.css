@@ -9630,6 +9630,35 @@
   background: var(--color-hover);
 }
 
+.tma-dash__email-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: var(--space-4);
+  border: none;
+  border-radius: var(--radius-12);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__email-refresh-btn img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
+
+.tma-dash__email-refresh-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__email-refresh-btn--spinning img {
+  animation: tma-dash-spin 0.8s linear infinite;
+  opacity: 1;
+}
+
 .tma-dash__email-list-body {
   flex: 1;
   overflow: auto;
