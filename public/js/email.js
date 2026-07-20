@@ -23,6 +23,7 @@
     FunnelSimple: ICON + 'FunnelSimple.svg',
     ArrowBendUpLeft: ICON + 'ArrowBendUpLeft.svg',
     ArrowBendUpRight: ICON + 'ArrowBendUpRight.svg',
+    ArrowBendDoubleUpLeft: ICON + 'ArrowBendDoubleUpLeft.svg',
     DotsThree: ICON + 'DotsThree.svg',
     Prohibit: ICON + 'Prohibit.svg',
     Star: ICON + 'Star.svg',
@@ -284,6 +285,29 @@
     return 'Fwd: ' + trimmed;
   }
 
+  function isSelfAddress(address) {
+    var email = typeof address === 'string' ? address : address && address.email;
+    return !!email && email.toLowerCase() === (PROFILE.email || '').toLowerCase();
+  }
+
+  /* {name, email}[] -> "Name <a@b.com>, c@d.com" for an editable address field. */
+  function formatAddressList(list) {
+    if (!Array.isArray(list)) return '';
+    return list
+      .map(function (address) {
+        if (!address) return '';
+        if (typeof address === 'string') return address;
+        if (!address.email) return '';
+        return address.name ? address.name + ' <' + address.email + '>' : address.email;
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  function rowSenderEmail(row) {
+    return row.email || (row.sender.toLowerCase().replace(/\s+/g, '') + '@example.com');
+  }
+
   function renderInlineComposeAvatar() {
     return (
       '<span class="tma-dash__email-message-avatar">' +
@@ -320,38 +344,58 @@
 
   function renderInlineCompose(state, row, mode, metaEmail, metaDate, subject, bodyText) {
     var isReply = mode === 'reply';
-    var composeSubject = isReply ? getReplySubject(subject) : getForwardSubject(subject);
+    var isForward = mode === 'forward';
+    var isReplyAll = mode === 'reply-all';
+    var composeSubject = isForward ? getForwardSubject(subject) : getReplySubject(subject);
+    var ic = state.inlineCompose || {};
+
+    var toRow = isReply
+      ? '<div class="tma-dash__email-inline-compose-row">' +
+        '<span class="tma-dash__email-inline-compose-label">To</span>' +
+        '<span class="tma-dash__email-inline-compose-value">' + esc(row.sender) + ' &lt;' + esc(metaEmail) + '&gt;</span>' +
+        '</div>'
+      : '<div class="tma-dash__email-inline-compose-row">' +
+        '<span class="tma-dash__email-inline-compose-label">To</span>' +
+        '<input type="text" class="tma-dash__email-inline-compose-input" data-email-inline-compose-field="to"' +
+        ' value="' + esc(ic.to || '') + '" placeholder="Recipients" aria-label="To">' +
+        '</div>';
+
+    var ccRow = isReplyAll
+      ? '<div class="tma-dash__email-inline-compose-row">' +
+        '<span class="tma-dash__email-inline-compose-label">Cc</span>' +
+        '<input type="text" class="tma-dash__email-inline-compose-input" data-email-inline-compose-field="cc"' +
+        ' value="' + esc(ic.cc || '') + '" placeholder="Cc" aria-label="Cc">' +
+        '</div>'
+      : '';
+
+    var subjectRow = isForward
+      ? '<div class="tma-dash__email-inline-compose-row">' +
+        '<span class="tma-dash__email-inline-compose-label">Subject</span>' +
+        '<span class="tma-dash__email-inline-compose-value">' + esc(composeSubject) + '</span>' +
+        '</div>'
+      : '';
+
     return (
       '<div class="tma-dash__email-thread-actions">' +
       '<div class="tma-dash__email-inline-compose" data-email-inline-compose-panel>' +
       '<div class="tma-dash__email-inline-compose-head">' +
       renderInlineComposeAvatar() +
       '<div class="tma-dash__email-inline-compose-fields">' +
-      '<div class="tma-dash__email-inline-compose-row">' +
-      '<span class="tma-dash__email-inline-compose-label">To</span>' +
-      (isReply
-        ? '<span class="tma-dash__email-inline-compose-value">' + esc(row.sender) + ' &lt;' + esc(metaEmail) + '&gt;</span>'
-        : '<input type="text" class="tma-dash__email-inline-compose-input" placeholder="Recipients" aria-label="To">') +
-      '</div>' +
-      (!isReply
-        ? '<div class="tma-dash__email-inline-compose-row">' +
-          '<span class="tma-dash__email-inline-compose-label">Subject</span>' +
-          '<span class="tma-dash__email-inline-compose-value">' + esc(composeSubject) + '</span>' +
-          '</div>'
-        : '') +
+      toRow + ccRow + subjectRow +
       '</div>' +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-editor-wrap">' +
-      '<div class="tma-dash__email-inline-compose-editor" contenteditable="true" data-email-inline-compose-editor data-placeholder="Compose your ' + (isReply ? 'reply' : 'message') + '" aria-label="Message body" role="textbox"></div>' +
-      (isReply
-        ? renderReplyQuote(row, metaEmail, metaDate, bodyText)
-        : renderForwardQuote(row, metaEmail, metaDate, subject, bodyText)) +
+      '<div class="tma-dash__email-inline-compose-editor" contenteditable="true" data-email-inline-compose-editor data-placeholder="Compose your ' + (isForward ? 'message' : 'reply') + '" aria-label="Message body" role="textbox">' + (ic.bodyHtml || '') + '</div>' +
+      (isForward
+        ? renderForwardQuote(row, metaEmail, metaDate, subject, bodyText)
+        : renderReplyQuote(row, metaEmail, metaDate, bodyText)) +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-bar">' +
       renderComposeToolbar() +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-actions">' +
-      '<button type="button" class="tma-dash__email-inline-compose-send">Send</button>' +
+      '<button type="button" class="tma-dash__email-inline-compose-send" data-email-inline-compose-send' + (ic.sending ? ' disabled' : '') + '>' +
+      (ic.sending ? 'Sending…' : 'Send') + '</button>' +
       '<button type="button" class="tma-dash__email-inline-compose-discard" data-email-inline-compose-close aria-label="Discard draft">' +
       '<img src="' + ICONS.Trash + '" alt="">' +
       '</button>' +
@@ -373,6 +417,9 @@
       '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="reply">' +
       '<img src="' + ICONS.ArrowBendUpLeft + '" alt=""> Reply' +
       '</button>' +
+      '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="reply-all">' +
+      '<img src="' + ICONS.ArrowBendDoubleUpLeft + '" alt=""> Reply all' +
+      '</button>' +
       '<button type="button" class="tma-dash__email-thread-btn" data-email-inline-compose="forward">' +
       '<img src="' + ICONS.ArrowBendUpRight + '" alt=""> Forward' +
       '</button>' +
@@ -388,7 +435,19 @@
 
   function openInlineCompose(state, mode) {
     if (!state.selectedId) return;
-    state.inlineCompose = { mode: mode, messageId: state.selectedId };
+    var row = findRow(state, state.selectedId);
+    var to = '';
+    var cc = '';
+    if (row && mode === 'reply-all') {
+      var toList = [{ name: row.sender, email: rowSenderEmail(row) }].concat(
+        (Array.isArray(row.to) ? row.to : []).filter(function (address) { return !isSelfAddress(address); })
+      );
+      to = formatAddressList(toList);
+      cc = formatAddressList(
+        (Array.isArray(row.cc) ? row.cc : []).filter(function (address) { return !isSelfAddress(address); })
+      );
+    }
+    state.inlineCompose = { mode: mode, messageId: state.selectedId, to: to, cc: cc, bodyHtml: '', sending: false };
   }
 
   function closeInlineCompose(state) {
@@ -2449,9 +2508,12 @@ function threadRowFromPrior(prior, fallbackTo) {
     var shown = items.slice(0, LIMIT);
     var more = (known || items.length) - shown.length;
 
-    var chips = shown.map(function (a) {
+    // Each chip we have real data for opens straight into the same lightbox
+    // the full message view uses (see wireListRows) instead of just opening
+    // the message — a shortcut Gmail's own inbox offers too.
+    var chips = shown.map(function (a, i) {
       return (
-        '<span class="tma-dash__email-attachment-chip" title="' + esc(a.name) + '">' +
+        '<span class="tma-dash__email-attachment-chip" title="' + esc(a.name) + '" data-email-row-attachment-open="' + i + '">' +
         '<img src="' + esc(attachmentIconSrc(a)) + '" alt="" aria-hidden="true">' +
         '<span>' + esc(a.name) + '</span>' +
         '</span>'
@@ -2459,7 +2521,11 @@ function threadRowFromPrior(prior, fallbackTo) {
     }).join('');
 
     if (more > 0) {
-      chips += '<span class="tma-dash__email-attachment-chip tma-dash__email-attachment-chip--more">+' + more + ' more</span>';
+      // "+more" can only jump into the lightbox when the extra files are
+      // ones we actually have data for (items goes up to the server's cap of
+      // 8); beyond that it falls back to opening the message, same as before.
+      var moreOpen = items.length > shown.length ? ' data-email-row-attachment-open="' + shown.length + '"' : '';
+      chips += '<span class="tma-dash__email-attachment-chip tma-dash__email-attachment-chip--more"' + moreOpen + '>+' + more + ' more</span>';
     }
 
     return '<div class="tma-dash__email-row-attachments">' + chips + '</div>';
@@ -4257,6 +4323,14 @@ function renderComposeToolbar() {
           closeEmailRowSwipes(root);
           return;
         }
+        var chip = event.target.closest('[data-email-row-attachment-open]');
+        if (chip) {
+          var chipRow = findRow(state, rowEl.getAttribute('data-email-row'));
+          var chipItems = (chipRow && chipRow.attachmentsPreview) || [];
+          var chipIndex = parseInt(chip.getAttribute('data-email-row-attachment-open'), 10);
+          if (chipItems.length && !isNaN(chipIndex)) openAttachmentLightbox(chipItems, chipIndex);
+          return;
+        }
         var id = rowEl.getAttribute('data-email-row');
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
         openMailMessage(root, state, render, id);
@@ -4567,7 +4641,7 @@ function renderComposeToolbar() {
         var inlineComposeBtn = event.target.closest('[data-email-inline-compose]');
         if (inlineComposeBtn && !inlineComposeBtn.closest('[data-email-inline-compose-panel]')) {
           var composeMode = inlineComposeBtn.getAttribute('data-email-inline-compose');
-          if (composeMode === 'reply' || composeMode === 'forward') {
+          if (composeMode === 'reply' || composeMode === 'reply-all' || composeMode === 'forward') {
             openInlineCompose(state, composeMode);
             render();
             window.requestAnimationFrame(function () {
