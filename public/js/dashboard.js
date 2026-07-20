@@ -1778,7 +1778,11 @@
         closeMobileMenu();
         activate('settings', { view: 'settings', title: 'Settings', crumb: 'Settings' });
       } else if (profileAction === 'logout') {
-        window.location.href = '/sign-in';
+        // Hand off to the shell's shared sign-out, which POSTs to Fortify with
+        // the CSRF token. Navigating to a URL left the session signed in.
+        var out = document.querySelector('[data-action="sign-out"]');
+        if (out) out.click();
+        else window.location.href = '/auth/login';
       }
     });
     if (themeBtn) themeBtn.addEventListener('click', function () {

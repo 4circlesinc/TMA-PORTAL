@@ -1634,6 +1634,26 @@
     });
   }
 
+  /* End the portal session. Delegates to the shell's shared sign-out handler
+   * when it is present, so there is one implementation of the POST + CSRF
+   * dance; falls back to doing it here if this view is loaded on its own. */
+  function signOut() {
+    var shared = document.querySelector('[data-action="sign-out"]');
+    if (shared) { shared.click(); return; }
+
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    var done = function () { window.location.href = '/auth/login'; };
+    fetch('/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-XSRF-TOKEN': m ? decodeURIComponent(m[1]) : '',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    }).then(done, done);
+  }
+
   var profileBound = false;
 
   /* Keep PROFILE in step with the signed-in user, and repaint once the real
@@ -1725,8 +1745,10 @@
       '<img class="tma-dash__email-profile-avatar" src="' +
       esc(profileAvatarSrc()) + '" alt="' + esc(PROFILE.name) + ' avatar" width="24" height="24">' +
       '<span class="tma-dash__email-profile-meta">' +
-      '<span class="tma-dash__email-profile-name">' + esc(PROFILE.name) + '</span>' +
-      '<span class="tma-dash__email-profile-email">' + esc(PROFILE.email) + '</span>' +
+      // The rail is too narrow for a full name and work address, so the value
+      // is on the element itself — hovering shows what the ellipsis hides.
+      '<span class="tma-dash__email-profile-name" title="' + esc(PROFILE.name) + '">' + esc(PROFILE.name) + '</span>' +
+      '<span class="tma-dash__email-profile-email" title="' + esc(PROFILE.email) + '">' + esc(PROFILE.email) + '</span>' +
       '</span>' +
       '<img class="tma-dash__email-profile-caret" src="' + ICONS.CaretDown + '" alt="" aria-hidden="true">' +
       '</button>' +
@@ -4120,7 +4142,12 @@ function renderComposeToolbar() {
             openEmailSettings(root, state, render);
             return;
           }
-          if (action === 'sign-out') window.location.href = '/sign-in';
+          // Signing out is a POST to Fortify with the CSRF token — navigating
+          // to a URL only *looked* like signing out and left the session live.
+          if (action === 'sign-out') {
+            signOut();
+            return;
+          }
           render();
           return;
         }
