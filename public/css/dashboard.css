@@ -25,6 +25,16 @@
   --dash-icon-md: var(--icon-size-md);
   --dash-icon-lg: var(--icon-size-lg);
   --dash-icon-xl: var(--icon-size-xl);
+
+  /* .tma-dash__nav-item's icon doesn't actually sit at the item's own
+     padding-left: every item (including plain links) carries a hidden
+     caret placeholder before it, and visibility:hidden still reserves that
+     caret's box + the gap after it. This is that real inset, in the same
+     units nav-item uses (text-size-16, not 1em, so it's correct regardless
+     of the font-size of whatever element reads it) — the logo and the
+     Main Menu/Folder Shortcuts tabs read it too, so they land exactly
+     under the icon column instead of the item's bare padding. */
+  --dash-nav-icon-inset: calc(var(--space-4) + var(--text-size-16) + var(--space-8));
   --dash-icon-text-gap: var(--space-12);
   --dash-surface-inset: var(--space-4);
   --dash-row-card-bg: var(--color-white);
@@ -105,6 +115,8 @@
   border-right: 0.5px solid var(--dash-border);
   overflow: hidden;
   min-height: 0;
+  background: var(--color-white);
+  transition: width 0.36s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.36s ease;
 }
 
 .tma-dash__resize-handle {
@@ -173,7 +185,7 @@
 .tma-dash__nav-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-8);
   padding-bottom: var(--space-4);
   width: 100%;
   flex-shrink: 0;
@@ -266,16 +278,23 @@
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
+  /* .tma-dash__tab's own padding-left (space-8) is fixed, so nudge the
+     whole row by the gap between that and --dash-nav-icon-inset (the
+     icon's real inset, padding + hidden caret + gap) — lines "Main Menu"
+     up with the icon column instead of the item's bare padding. */
+  margin-left: calc(var(--dash-nav-icon-inset) - var(--space-8));
 }
 .tma-dash__tab {
   appearance: none;
   border: 0;
   background: transparent;
   font-family: inherit;
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
+  /* Smaller than any size in the type scale — "Folder Shortcuts" has to fit
+     next to "Main Menu" in a 225px sidebar without ellipsis-truncating. */
+  font-size: 10px;
+  line-height: 14px;
   color: var(--color-text-placeholder);
-  padding: var(--space-4) var(--space-8);
+  padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-12);
   cursor: pointer;
   /* Both labels have to survive a narrowed (resizable) sidebar. */
@@ -306,17 +325,22 @@
   gap: var(--space-8);
   padding: var(--space-8) var(--space-8) var(--space-8) var(--space-4);
   border-radius: var(--radius-12);
-  font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
   color: var(--color-text-primary);
   text-decoration: none;
   cursor: pointer;
   position: relative;
   min-width: 0;
+  /* padding-left (not justify-content) is what centers the icon in the
+     collapsed rail — a length transitions smoothly, a keyword can't, so
+     this is what keeps the rail-to-sidebar expand from snapping. */
+  transition: padding-left 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
-/* The label span. A <span> icon (a masked, tinted one) is not a label and must
-   keep its own fixed box rather than stretching like text. */
-.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count):not(.tma-dash__nav-icon) {
+/* The label span. A <span> icon (a masked, tinted one) — or its badge-anchor
+   wrapper — is not a label and must keep its own fixed box rather than
+   stretching like text. */
+.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap) {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -324,18 +348,7 @@
   white-space: nowrap;
 }
 .tma-dash__nav-item:hover { background: var(--color-hover); }
-.tma-dash__nav-item--active { background: var(--color-hover); }
-.tma-dash__nav-item--active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 1em;
-  border-radius: var(--radius-pill);
-  background: var(--color-black);
-}
+.tma-dash__nav-item--active { font-weight: 600; }
 
 .tma-dash__nav-caret {
   width: 1em;
@@ -356,6 +369,26 @@
 .tma-dash__nav-icon { width: var(--dash-icon-md); height: var(--dash-icon-md); flex: 0 0 var(--dash-icon-md); }
 .tma-dash__nav-dot   { width: var(--dash-icon-sm); height: var(--dash-icon-sm); flex: 0 0 var(--dash-icon-sm); }
 
+/* Wraps an icon that has a count badge — unmasked, so the badge (a real
+   child) isn't clipped by the icon's own mask silhouette. dashboard.js
+   creates this wrapper the first time a nav item gets a count. */
+.tma-dash__nav-icon-wrap {
+  position: relative;
+  display: block;
+  flex: 0 0 var(--dash-icon-md);
+  width: var(--dash-icon-md);
+  height: var(--dash-icon-md);
+}
+.tma-dash__nav-icon-wrap .tma-dash__nav-icon {
+  /* A plain <span> is display:inline, which ignores width/height — it was
+     only ever sized because a flex item gets auto-blockified, and nesting
+     it here removes that. */
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex: none;
+}
+
 /* Nav icons are <img> of black SVGs, which CSS can't recolour or swap. Each one
    is a <span> masked by the artwork instead: --primary paints the Dashboards
    group in the accent, --ink follows the label colour (so the Pages group stays
@@ -373,8 +406,15 @@
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
+  /* A masked shape has no stroke to thicken, so fake a touch of extra
+     weight by smearing the painted shape half a pixel in each direction. */
+  filter:
+    drop-shadow(0.3px 0 0 currentColor)
+    drop-shadow(-0.3px 0 0 currentColor)
+    drop-shadow(0 0.3px 0 currentColor)
+    drop-shadow(0 -0.3px 0 currentColor);
 }
-.tma-dash__nav-icon--primary { background-color: var(--color-primary); }
+.tma-dash__nav-icon--primary { background-color: var(--color-black); }
 .tma-dash__nav-icon--ink { background-color: currentColor; }
 
 .tma-dash__nav-icon--house {
@@ -512,16 +552,25 @@
 .tma-dash__nav-item[hidden] { display: none !important; }
 
 .tma-dash__nav-count {
-  flex-shrink: 0;
-  margin-left: auto;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  /* Sits on the icon's top edge — .tma-dash__nav-icon-wrap gives it a
+     tightly-fit, unmasked positioning parent (see dashboard.js). Anchored
+     by left (not right) so a wider count (99+) grows further right — away
+     from the icon — instead of eating into it. */
+  position: absolute;
+  top: -3px;
+  left: 55%;
+  min-width: 11px;
+  height: 11px;
+  padding: 0 2px;
   border-radius: var(--radius-pill);
+  border: 1.2px solid #fff;
   background: #ff4747;
-  font-size: 10px;
-  line-height: 16px;
-  font-weight: 500;
+  font-size: 7.5px;
+  /* border-box eats 1.2px off each side into the content box, so the line
+     box has to shrink to match (11 - 1.2*2) or the text sinks off-center
+     toward the bottom edge. */
+  line-height: 8.6px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: #fff;
   text-align: center;
@@ -529,6 +578,8 @@
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .tma-dash__nav-count[hidden] { display: none; }
@@ -598,9 +649,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 var(--space-4);
+  /* Left padding matches --dash-nav-icon-inset (nav-item's padding + its
+     hidden caret placeholder + the gap after it), so the mark's box lines
+     up with the icon column below, not with the item's bare padding. */
+  padding: 0 var(--space-4) var(--space-16) var(--dash-nav-icon-inset);
   overflow: hidden;
   flex-shrink: 0;
+  transition: padding-left 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .tma-dash__logo-expanded,
 .tma-dash__logo-collapsed {
@@ -610,11 +665,10 @@
   width: 100%;
   min-width: 0;
 }
-/* This wrapper is width:100%, so centring the bar around it does nothing — the
-   centring has to happen in here (and in object-position, for when the artwork
-   is wider than the rail and gets clamped). */
-.tma-dash__sidebar-logo .tma-dash__logo-expanded { justify-content: center; }
-.tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: none; }
+/* The sidebar shows only the mark (never the full wordmark), left-aligned,
+   at all times — collapsed rail or hover-expanded alike. */
+.tma-dash__sidebar-logo .tma-dash__logo-expanded { display: none; }
+.tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: flex; }
 
 .tma-dash__header-logo {
   display: none;
@@ -637,9 +691,9 @@
 }
 .tma-dash__logo-mark {
   display: block;
-  width: clamp(32px, 28px + 0.75vw, 40px);
-  height: clamp(32px, 28px + 0.75vw, 40px);
-  flex: 0 0 clamp(32px, 28px + 0.75vw, 40px);
+  width: clamp(24px, 21px + 0.5vw, 28px);
+  height: clamp(24px, 21px + 0.5vw, 28px);
+  flex: 0 0 clamp(24px, 21px + 0.5vw, 28px);
   object-fit: contain;
 }
 
@@ -3065,77 +3119,80 @@
 }
 .tma-dash__cmd[hidden] { display: none; }
 
-/* Desktop collapse - sidebar becomes an icon-only rail; rightbar hides */
+/* Desktop collapse - sidebar rests as an icon-only rail; rightbar hides.
+   The rail is the permanent default (see mount() in dashboard.js — it's no
+   longer a user-toggled state). Hovering or focusing the rail (mouse, or
+   Tab/click via toggleSidebar()'s focus-pin) lifts the `:not(:has(...))`
+   guard below, so every one of these rules stops applying and the sidebar
+   falls back to its normal, non-collapsed appearance while it expands as an
+   overlay — see the "hover/focus expand" block further down.
+
+   The sidebar's own padding and the logo are deliberately IDENTICAL between
+   collapsed and expanded so they never snap. The icon's centering is the
+   one exception — padding-left (a length, so it can transition smoothly,
+   unlike the justify-content:center this used to use) widens to center the
+   icon in the 72px rail, then eases back as the sidebar expands, so the
+   label smoothly uncovers to its right rather than popping in. Only content
+   that has nowhere to go in a 72px rail (tabs, subnav trees, the shortcuts
+   list) hard-hides here. The sidebar mark gets the same padding-left
+   treatment for the same reason: its expanded padding-left is sized to line
+   up with the nav icon column, not to center in a bare 72px rail. */
 @media (min-width: 1025px) {
-  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar {
-    padding-left: var(--space-12);
-    padding-right: var(--space-12);
-    align-items: center;
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item {
+    padding-left: calc((var(--dash-sidebar-collapsed-w) - var(--space-8) * 2 - var(--dash-icon-md)) / 2);
   }
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-section { align-items: center; width: auto; }
-  .tma-dash.is-sidebar-collapsed .tma-dash__profile-meta,
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-section--tabs,
-  .tma-dash.is-sidebar-collapsed .tma-dash__tabs,
-  .tma-dash.is-sidebar-collapsed .tma-dash__group-label,
-  /* Hides the label, but never a <span> that is itself an icon. */
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon),
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-caret,
-  .tma-dash.is-sidebar-collapsed .tma-dash__subnav,
-  /* The rail has no tabs, so it always shows the main menu (dashboard.js
-     switches back to it on collapse) and never the shortcuts. */
-  .tma-dash.is-sidebar-collapsed [data-list="shortcuts"],
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-item--fav,
-  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar-logo .tma-dash__logo-expanded { display: none; }
-  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: flex; }
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__sidebar-logo {
+    padding-left: calc((var(--dash-sidebar-collapsed-w) - var(--space-8) * 2 - clamp(24px, 21px + 0.5vw, 28px)) / 2);
+  }
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile-meta,
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-section--tabs,
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__group-label,
+  /* Hides the label, but never a <span> that is itself an icon (or its
+     badge-anchor wrapper). */
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap),
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-caret,
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__subnav,
+  /* The resting rail has no room for tabs, so it always shows the main menu
+     and never the shortcuts — both reappear once the rail expands. */
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) [data-list="shortcuts"],
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item--fav { display: none; }
   /* The rail is too narrow for the avatar and sign-out side by side — they
      overflow it. Stack them instead. */
-  .tma-dash.is-sidebar-collapsed .tma-dash__profile {
+  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile {
     flex-direction: column;
     justify-content: center;
     gap: var(--space-8);
     padding: var(--space-12) var(--space-4) var(--space-16);
   }
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-item {
-    justify-content: center;
-    width: 44px;
-    gap: 0;
-    overflow: visible;
-  }
-
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-count {
-    position: absolute;
-    top: 2px;
-    right: 0;
-    margin-left: 0;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 3px;
-    font-size: 9px;
-    line-height: 14px;
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-item--active::before { display: none; }
-  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar-logo {
-    justify-content: center;
-    align-items: center;
-    padding: var(--space-8) var(--space-8) var(--space-8);
-  }
-  .tma-dash.is-sidebar-collapsed .tma-dash__logo-mark {
-    width: 28px;
-    height: 28px;
-    flex: 0 0 28px;
-  }
-  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar-nav {
-    padding-top: var(--space-4);
-  }
 }
 @media (min-width: 1025px) {
+  /* The grid track itself always reserves only the rail width — the content
+     and rightbar columns never move, whether the rail is resting or the
+     sidebar is expanded over them on hover/focus. */
   .tma-dash.is-sidebar-collapsed { grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) var(--dash-rightbar-w); }
   .tma-dash.is-rightbar-collapsed { grid-template-columns: var(--dash-sidebar-w) minmax(0, 1fr) 0; }
   .tma-dash.is-sidebar-collapsed.is-rightbar-collapsed { grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) 0; }
   .tma-dash.is-rightbar-collapsed .tma-dash__rightbar { display: none; }
+
+  /* Hover/focus expand: the sidebar lifts out of the grid track (which stays
+     reserved at the rail width above) and overlays the content beside it —
+     the content column never resizes or shifts. */
+  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar:hover,
+  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar:focus-within {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--dash-sidebar-w);
+    z-index: 45;
+    box-shadow: var(--shadow-popup);
+  }
+  /* The resize handle only makes sense for a persistently-widened sidebar;
+     the hover overlay always opens at the same width. */
+  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar .tma-dash__resize-handle--sidebar {
+    display: none;
+  }
 }
 
 /* ─────────────────────────────────────────
@@ -3296,20 +3353,25 @@
   white-space: nowrap;
 }
 .tma-dash__tab-badge {
+  /* Top edge of the icon, anchored by left (not right) so a wider count
+     (99+) grows further right — away from the icon — instead of eating
+     into it. See .tma-dash__nav-count for the same fix. */
   position: absolute;
-  top: -3px;
-  right: -6px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
+  top: -2px;
+  left: 55%;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
   border-radius: var(--radius-pill);
-  font-size: 9px;
-  line-height: 14px;
+  border: 1.2px solid #fff;
+  font-size: 8px;
+  line-height: 9.6px;
   font-weight: 500;
   color: #fff;
   text-align: center;
   pointer-events: none;
   box-sizing: border-box;
+  overflow: visible;
 }
 .tma-dash__tab-badge--alerts { background: #ff4747; }
 .tma-dash__tab-badge--email { background: var(--color-primary); }
@@ -3388,6 +3450,8 @@
 .tma-dash__mrow + .tma-dash__mrow { border-top: 0.5px solid var(--color-border-soft); }
 
 .tma-dash__mrow .tma-dash__nav-count {
+  /* These rows don't get a .tma-dash__nav-icon-wrap — stay inline. */
+  position: static;
   margin-left: auto;
   min-width: 20px;
   height: 20px;
@@ -3607,10 +3671,6 @@
     font-size: var(--text-size-16);
     line-height: var(--text-lh-16);
     border-radius: var(--radius-16);
-  }
-
-  .tma-dash__sidebar .tma-dash__nav-item--active::before {
-    display: none;
   }
 
   .tma-dash__sidebar .tma-dash__nav-item--nested {
@@ -8311,7 +8371,6 @@
 @media (min-width: 1025px) {
   .tma-dash--email .tma-dash__main {
     padding-block: var(--email-pad);
-    padding-inline: 0;
     overflow: hidden;
     min-height: 0;
   }
@@ -9285,6 +9344,9 @@
 
 .tma-dash__email-list-check {
   flex: 0 0 40px;
+  /* Matches the avatar and front-actions height so the checkbox, star, flag
+     and avatar all sit on the same vertical centre (see front-actions). */
+  height: 40px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -9577,11 +9639,11 @@
 
 .tma-dash__email-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: nowrap;
   gap: var(--space-8);
   width: 100%;
-  min-height: 40px;
+  min-height: 56px;
   padding: var(--space-6) var(--email-pad);
   border: none;
   border-bottom: 1px solid var(--color-overlay-4);
@@ -9626,13 +9688,14 @@
 .tma-dash__email-row-icon,
 .tma-dash__email-row-avatar {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: var(--text-size-14);
 }
 
 .tma-dash__email-row-avatar {
@@ -9649,18 +9712,20 @@
 .tma-dash__email-row-avatar--initial {
   background: var(--color-hover);
   color: var(--color-text-secondary);
-  font-size: var(--text-size-12);
+  font-size: var(--text-size-16);
   font-weight: 600;
   line-height: 1;
 }
 
+/* Stacked, Gmail-style rows: sender / subject / preview / attachments each get
+   their own line rather than running together as one truncated sentence. */
 .tma-dash__email-row-content {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-8);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
   overflow: hidden;
 }
 
@@ -9668,16 +9733,60 @@
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  flex: 0 0 auto;
   min-width: 0;
 }
 
 .tma-dash__email-row-snippet {
-  display: none;
+  display: block;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.tma-dash__email-row-star-mobile {
-  display: none;
+/* Attachment chips on their own line under the preview — small icon-and-name
+   pills, never a full thumbnail here: a page of 50 rows must not turn into
+   dozens of image fetches at once (see the sender-photo incident above). */
+.tma-dash__email-row-attachments {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: nowrap;
+  overflow: hidden;
+  margin-top: 1px;
+}
+
+.tma-dash__email-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 160px;
+  padding: 3px var(--space-8);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-soft);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-dash__email-attachment-chip img { width: 12px; height: 12px; flex: 0 0 auto; opacity: 0.7; }
+.tma-dash__email-attachment-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__email-attachment-chip--generic { color: var(--color-text-secondary); }
+.tma-dash__email-attachment-chip--more {
+  flex: 0 0 auto;
+  background: transparent;
+  border-style: dashed;
 }
 
 .tma-dash__email-row-unread {
@@ -9703,13 +9812,16 @@
   overflow: hidden;
 }
 
+/* The sender is the strongest thing on the row on purpose — it's the first
+   thing worth scanning for, read or unread. */
 .tma-dash__email-row-sender {
-  flex: 0 0 auto;
+  flex: none;
   width: auto;
-  max-width: 34cqw;
+  max-width: 100%;
   min-width: 0;
   font-size: var(--text-size-14);
   line-height: 20px;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -9717,7 +9829,7 @@
 }
 
 .tma-dash__email-row-subject {
-  flex: 1 1 0;
+  flex: none;
   min-width: 0;
   font-size: var(--text-size-14);
   line-height: 20px;
@@ -9739,15 +9851,13 @@
 }
 
 .tma-dash__email-row--unread .tma-dash__email-row-sender {
-  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
 
+/* The old inline " - preview" span is no longer emitted (see email.js); this
+   stays only so nothing renders if a stale cached row still carries one. */
 .tma-dash__email-row-subject .tma-dash__email-row-body {
-  font-size: inherit;
-  line-height: inherit;
-  font-weight: var(--font-weight-regular);
-  color: var(--color-text-secondary);
+  display: none;
 }
 
 .tma-dash__email-row-body {
@@ -9798,6 +9908,16 @@
   align-items: center;
   gap: var(--space-2);
   flex-shrink: 0;
+  /* Matches the checkbox and avatar's own box height so all three sit on the
+     same vertical centre instead of pinning to the row's top edge. */
+  height: 40px;
+}
+
+/* Pull the star/flag in closer to the checkbox specifically — the row's
+   general gap (used between the avatar, content and side columns too) left
+   this pair looking oddly far from it. */
+.tma-dash__email-list-check + .tma-dash__email-row-front-actions {
+  margin-left: -6px;
 }
 
 .tma-dash__email-row-side {
@@ -9878,6 +9998,15 @@
   transition:
     background var(--email-duration-soft) var(--email-ease-soft),
     transform var(--email-duration-spring) var(--email-ease-spring);
+}
+
+/* Hidden by default (desktop shows the star via .tma-dash__email-row-front-actions
+   instead); the max-width:1024px block below shows this one and hides that
+   instead. Declared after .tma-dash__email-row-action on purpose — same
+   specificity, so source order decides, and this has to win the tie or the
+   row ends up with two stars on desktop. */
+.tma-dash__email-row-star-mobile {
+  display: none;
 }
 
 .tma-dash__email-row-action:active {
@@ -23536,56 +23665,168 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-dash__email-page-btn img { width: 14px; height: 14px; opacity: 0.7; }
 
 /* Attachments under a message body. */
+/* Thread view: attachments live in their own section under the body, never
+   mixed into it — a clear rule at the top, then a grid of cards. */
 .tma-dash__email-attachments {
   padding: var(--space-12) var(--space-16) var(--space-16);
   border-top: 1px solid var(--color-border-soft);
 }
 .tma-dash__email-attachments-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
   font-size: var(--text-size-12);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-10);
 }
+.tma-dash__email-attachments-head img { width: 14px; height: 14px; opacity: 0.6; }
 .tma-dash__email-attachments-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-8);
+  gap: var(--space-10);
 }
-.tma-dash__email-attachment {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  max-width: 260px;
-  padding: var(--space-8);
+
+/* Gmail-style attachment tile: a big preview on top, a filename strip fixed
+   underneath, and download/open actions that only appear on hover — clicking
+   the tile itself opens the lightbox (see wireAttachmentPreviews). */
+.tma-dash__email-attachment-tile {
+  display: block;
+  width: 210px;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-8);
   background: var(--color-white);
-  text-decoration: none;
-  color: inherit;
+  overflow: hidden;
+  cursor: pointer;
 }
-.tma-dash__email-attachment:hover {
-  background: var(--color-hover);
+.tma-dash__email-attachment-tile:hover,
+.tma-dash__email-attachment-tile:focus-visible {
   border-color: var(--color-border-medium);
+  box-shadow: var(--shadow-card, 0 2px 8px rgba(0, 0, 0, 0.06));
 }
-.tma-dash__email-attachment-thumb,
-.tma-dash__email-attachment-icon {
+.tma-dash__email-attachment-tile:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+
+.tma-dash__email-attachment-tile-preview {
+  position: relative;
+  height: 128px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  border-radius: var(--radius-6);
   background: var(--color-bg-card);
   overflow: hidden;
 }
-.tma-dash__email-attachment-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.tma-dash__email-attachment-icon img { width: 16px; height: 16px; opacity: 0.55; }
-.tma-dash__email-attachment-meta { display: flex; flex-direction: column; min-width: 0; }
-.tma-dash__email-attachment-name {
+.tma-dash__email-attachment-tile-preview img:not(.tma-dash__email-attachment-tile-icon-img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tma-dash__email-attachment-tile-icon-img { width: 44px; height: 44px; object-fit: contain; opacity: 0.8; }
+.tma-dash__email-attachment-tile-pdf-canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Full-name reveal: covers the preview in a grey scrim with the filename
+   written on it, so a truncated name in the strip below never needs a
+   separate tooltip to read in full. */
+.tma-dash__email-attachment-tile-caption {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  background: rgba(60, 60, 60, 0.72);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.tma-dash__email-attachment-tile:hover .tma-dash__email-attachment-tile-caption,
+.tma-dash__email-attachment-tile:focus-within .tma-dash__email-attachment-tile-caption {
+  opacity: 1;
+}
+.tma-dash__email-attachment-tile-caption span {
+  color: #fff;
+  font-size: var(--text-size-12);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* A small folded-page corner in the preview, echoing the paper-clip cue Gmail
+   uses on its own attachment previews. Pure CSS: two triangles, no asset. */
+.tma-dash__email-attachment-tile-corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 16px 16px;
+  border-color: transparent transparent var(--color-white) transparent;
+  filter: drop-shadow(-1px -1px 1px rgba(0, 0, 0, 0.12));
+}
+
+.tma-dash__email-attachment-tile-hover {
+  position: absolute;
+  top: var(--space-8);
+  right: var(--space-8);
+  display: flex;
+  gap: var(--space-6);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+.tma-dash__email-attachment-tile:hover .tma-dash__email-attachment-tile-hover,
+.tma-dash__email-attachment-tile:focus-within .tma-dash__email-attachment-tile-hover {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.tma-dash__email-attachment-tile-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-6);
+  background: #8a8f98;
+  text-decoration: none;
+}
+.tma-dash__email-attachment-tile-btn:hover { background: #6f7480; }
+.tma-dash__email-attachment-tile-btn img { width: 8px; height: 8px; filter: brightness(0) invert(1); }
+
+.tma-dash__email-attachment-tile-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-8);
+  border-top: 1px solid var(--color-border-soft);
+  min-width: 0;
+}
+.tma-dash__email-attachment-tile-bar-icon { width: 14px; height: 14px; flex: 0 0 auto; }
+.tma-dash__email-attachment-tile-name {
   font-size: var(--text-size-12);
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
-.tma-dash__email-attachment-size { font-size: 11px; color: var(--color-text-secondary); }
+
+/* A second click zooms the image in the lightbox — not full pinch/pan, just
+   enough to inspect a scanned document or photo at real size. */
+.tma-dash__email-lightbox-img { cursor: zoom-in; transition: max-width 0.15s ease, max-height 0.15s ease; }
+.tma-dash__email-lightbox-img.is-zoomed {
+  max-width: none !important;
+  max-height: none !important;
+  width: auto;
+  cursor: zoom-out;
+}
+/* Scoped to the zoomed state only, so the File Library's own lightbox (which
+   shares this stage class) is never affected. */
+.tma-portal-lightbox__stage:has(.tma-dash__email-lightbox-img.is-zoomed) {
+  overflow: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+}

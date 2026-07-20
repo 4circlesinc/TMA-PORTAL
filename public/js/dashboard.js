@@ -52,6 +52,9 @@
     if (!root) return;
 
     var sidebar = root.querySelector('.tma-dash__sidebar');
+    // Programmatically focusable (but not Tab-reachable) so toggleSidebar()
+    // can pin the hover-expand overlay open for click/keyboard users.
+    if (sidebar && !sidebar.hasAttribute('tabindex')) sidebar.setAttribute('tabindex', '-1');
     var scrim = root.querySelector('[data-dash-scrim]');
     var breadcrumbEl = root.querySelector('[data-breadcrumb]');
     var pageTitleEl = root.querySelector('[data-page-title]');
@@ -825,6 +828,10 @@
 
     function activate(navId, opts) {
       opts = opts || {};
+      // Navigating away is a completed interaction — release any focus-pin
+      // that's keeping the hover-expand overlay open (only touches it when
+      // focus is actually inside the sidebar, so this is a no-op otherwise).
+      closeSidebarHoverPin();
       var leaf = leaves.filter(function (l) { return l.getAttribute('data-nav') === navId; })[0];
       var navEl = leaf || root.querySelector('.tma-dash__nav-item[data-nav="' + navId + '"]');
       leaves.forEach(function (l) { l.classList.remove('tma-dash__nav-item--active'); l.removeAttribute('aria-current'); });
@@ -1090,6 +1097,12 @@
         }
       });
     }
+    function closeSidebarHoverPin() {
+      if (sidebar && sidebar.contains(document.activeElement) && document.activeElement.blur) {
+        document.activeElement.blur();
+      }
+    }
+
     function toggleSidebar() {
       if (isMobileSidebar()) {
         if (root.classList.contains('tma-dash--email')) {
@@ -1102,13 +1115,17 @@
           }
         }
         toggleNavDrawer();
-      } else {
-        var collapsed = root.classList.toggle('is-sidebar-collapsed');
-        applyRailTitles(collapsed);
-        store.set('tma.sidebarCollapsed', collapsed ? '1' : '0');
-        // The icon-only rail has no room for the tabs, so it always shows the
-        // main menu — leaving the shortcuts tab active would empty the rail.
-        if (collapsed) showList('main');
+      } else if (sidebar) {
+        // Desktop: the rail is always collapsed at rest and expands as a
+        // hover overlay (see CSS). This button pins that same expanded state
+        // open via focus, for mouse-click and keyboard users who aren't
+        // hovering it — it never leaves the sidebar permanently expanded,
+        // it just closes again on the next click, on blur, or on Escape.
+        if (sidebar.contains(document.activeElement)) {
+          closeSidebarHoverPin();
+        } else {
+          sidebar.focus({ preventScroll: true });
+        }
       }
     }
 
@@ -1210,12 +1227,27 @@
 
     function ensureNavCount(el) {
       var badge = el.querySelector('.tma-dash__nav-count');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'tma-dash__nav-count';
-        badge.setAttribute('aria-hidden', 'true');
-        el.appendChild(badge);
+      if (badge) return badge;
+      badge = document.createElement('span');
+      badge.className = 'tma-dash__nav-count';
+      badge.setAttribute('aria-hidden', 'true');
+      // The badge always sits on the icon's corner. It can't be a child of
+      // the icon itself — the icon is a masked span, and a mask clips its
+      // whole subtree, badge included — so give the icon an unmasked
+      // wrapper the first time this item gets a count.
+      var icon = el.querySelector('.tma-dash__nav-icon');
+      var host = el;
+      if (icon) {
+        var wrap = icon.parentElement;
+        if (!wrap || !wrap.classList.contains('tma-dash__nav-icon-wrap')) {
+          wrap = document.createElement('span');
+          wrap.className = 'tma-dash__nav-icon-wrap';
+          icon.parentNode.insertBefore(wrap, icon);
+          wrap.appendChild(icon);
+        }
+        host = wrap;
       }
+      host.appendChild(badge);
       return badge;
     }
 
@@ -1799,12 +1831,21 @@
           openSearch();
         }
       } else if (e.key === 'Escape') {
-        closeSearch(); closeToday(); closeDrawers(); closeMobileMenu();
+        closeSearch(); closeToday(); closeDrawers(); closeMobileMenu(); closeSidebarHoverPin();
       }
     });
     window.addEventListener('resize', function () {
       if (window.innerWidth > RIGHTBAR_BP) closeDrawers();
       if (window.innerWidth > SIDEBAR_BP) closeMobileMenu();
+      // Desktop sidebar is a permanently-collapsed rail (hover/focus expands
+      // it as an overlay); mobile uses the drawer instead. Keep the class in
+      // sync as the viewport crosses the breakpoint.
+      if (isMobileSidebar()) {
+        root.classList.remove('is-sidebar-collapsed');
+      } else if (!root.classList.contains('is-sidebar-collapsed')) {
+        root.classList.add('is-sidebar-collapsed');
+        applyRailTitles(true);
+      }
       syncSidebarToggleIcon();
       syncMobileHeaderScroll();
       syncTabBarBadges();
@@ -2031,12 +2072,20 @@
 
     /* ── restore persisted state ───────────────── */
     applyUserPreferences();
-    if (window.innerWidth > SIDEBAR_BP && store.get('tma.sidebarCollapsed', '0') === '1') {
+    // Desktop sidebar is a collapsed icon rail by default and expands only as
+    // a hover/focus overlay (see the CSS under .is-sidebar-collapsed and
+    // toggleSidebar()) — it's no longer a persisted user toggle. The HTML
+    // ships with the class already on <div class="tma-dash"> to avoid a
+    // flash of the expanded layout before this runs; this just keeps it
+    // correct if that markup is ever missing, and keeps it off on mobile.
+    if (isMobileSidebar()) {
+      root.classList.remove('is-sidebar-collapsed');
+    } else {
       root.classList.add('is-sidebar-collapsed');
       applyRailTitles(true);
     }
     if (window.innerWidth > RIGHTBAR_BP && store.get('tma.rightbarCollapsed', '0') === '1') root.classList.add('is-rightbar-collapsed');
-    if (!root.classList.contains('is-sidebar-collapsed') && store.get('tma.sidebarList', 'main') === 'shortcuts') {
+    if (store.get('tma.sidebarList', 'main') === 'shortcuts') {
       showList('shortcuts');
     }
     var savedToday = store.get('tma.today', '');

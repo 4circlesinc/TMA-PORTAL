@@ -66,7 +66,13 @@ class GraphProvider implements MailProvider
 
     public function getMessage(string $remoteId): array
     {
-        $message = $this->json($this->request()->get(self::BASE.'/messages/'.$remoteId));
+        // $expand pulls the attachment list in with the message itself — one
+        // round trip instead of two sequential ones. That second call used to
+        // cost several extra seconds on every never-before-opened message,
+        // which is most of them the first time a user reads their mailbox.
+        $message = $this->json($this->request()->get(self::BASE.'/messages/'.$remoteId, [
+            '$expand' => 'attachments($select=id,name,contentType,size,isInline,microsoft.graph.fileAttachment/contentId)',
+        ]));
 
         $normalized = $this->normalize($message, null, withBody: true);
 
@@ -74,31 +80,48 @@ class GraphProvider implements MailProvider
         // attachments are its embedded pictures, so a body that references
         // `cid:` still has to be asked about or those images never resolve.
         $body = ($normalized['body_html'] ?? '').($normalized['body_text'] ?? '');
+        $hasCidRefs = str_contains($body, 'cid:');
 
-        if (! ($message['hasAttachments'] ?? false) && ! str_contains($body, 'cid:')) {
+        if (! ($message['hasAttachments'] ?? false) && ! $hasCidRefs) {
             return $normalized + ['attachments' => []];
         }
 
-        // contentId is what an inline image's `cid:` reference points at, so
-        // without it embedded pictures can never be matched to their bytes.
-        // contentId only exists on the fileAttachment subtype, so it has to be
-        // selected through the type cast — asking for it plainly is a 400.
-        $attachments = $this->json($this->request()->get(
-            self::BASE."/messages/{$remoteId}/attachments",
-            ['$select' => 'id,name,contentType,size,isInline,microsoft.graph.fileAttachment/contentId']
-        ));
+        // The expand should already carry the list; only fall back to the
+        // dedicated endpoint on the rare message where it didn't (defensive —
+        // not observed, but cheap insurance against relying on undocumented
+        // Graph behaviour for every single message open).
+        $attachments = isset($message['attachments'])
+            ? ['value' => $message['attachments']]
+            : $this->json($this->request()->get(
+                self::BASE."/messages/{$remoteId}/attachments",
+                ['$select' => 'id,name,contentType,size,isInline,microsoft.graph.fileAttachment/contentId']
+            ));
+
+        // Outlook stamps a contentId on essentially every attachment, embedded
+        // or not - it is not a signal of inlineness by itself. A contentId
+        // only means "embedded" when the body's HTML actually points at it
+        // with `cid:`; otherwise it is a normal file attachment (a contract, a
+        // scanned ID, a utility bill) that must still show up as one. Treating
+        // "has a contentId" as "is inline" hid exactly that kind of attachment.
+        $htmlBody = $normalized['body_html'] ?? '';
 
         $normalized['attachments'] = collect($attachments['value'] ?? [])
-            ->map(fn (array $a): array => [
-                'remote_id' => (string) $a['id'],
-                'filename' => (string) ($a['name'] ?? 'attachment'),
-                'mime_type' => $a['contentType'] ?? null,
-                'size' => (int) ($a['size'] ?? 0),
-                // Graph marks an attachment inline only when the body actually
-                // references it; a contentId alone is enough to treat it so.
-                'is_inline' => (bool) ($a['isInline'] ?? false) || ! empty($a['contentId']),
-                'content_id' => $a['contentId'] ?? null,
-            ])
+            ->map(function (array $a) use ($htmlBody): array {
+                $cid = $a['contentId'] ?? null;
+                $referenced = $cid && (
+                    str_contains($htmlBody, 'cid:'.$cid)
+                    || str_contains($htmlBody, 'cid:'.rawurlencode($cid))
+                );
+
+                return [
+                    'remote_id' => (string) $a['id'],
+                    'filename' => (string) ($a['name'] ?? 'attachment'),
+                    'mime_type' => self::mimeFor($a['contentType'] ?? null, $a['name'] ?? ''),
+                    'size' => (int) ($a['size'] ?? 0),
+                    'is_inline' => (bool) ($a['isInline'] ?? false) && $referenced,
+                    'content_id' => $cid,
+                ];
+            })
             ->all();
 
         return $normalized;
@@ -439,6 +462,28 @@ class GraphProvider implements MailProvider
     }
 
     /** Portal folder name to the Outlook well-known folder it lives in. */
+    /**
+     * Some senders' mail clients hand Outlook a generic content type for a
+     * perfectly normal image, which is enough to stop the portal from
+     * thumbnailing or previewing it. A well-known extension is a better guess
+     * than trusting a contentType of "octet-stream" at face value.
+     */
+    private static function mimeFor(?string $contentType, string $filename): ?string
+    {
+        if ($contentType && $contentType !== 'application/octet-stream') {
+            return $contentType;
+        }
+
+        return match (strtolower((string) pathinfo($filename, PATHINFO_EXTENSION))) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'pdf' => 'application/pdf',
+            default => $contentType,
+        };
+    }
+
     private static function folderId(string $folder): string
     {
         return match ($folder) {

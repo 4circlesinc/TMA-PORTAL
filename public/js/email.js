@@ -50,9 +50,14 @@
     EnvelopeSimple: ICON + 'EnvelopeSimple.svg',
     Clock: ICON + 'Clock.svg',
     Tag: ICON + 'Tag.svg',
-    Important: ICON + 'TagChevron.svg',
+    // A proper flag, not a price-tag shape — TagChevron's notched silhouette
+    // read as "two icons overlapping" at toolbar size, and a tag was never
+    // the right shape for "mark as important" to begin with.
+    Important: ICON + 'Flag.svg',
     ArrowLineRight: ICON + 'ArrowLineRight.svg',
     ArrowLineLeft: ICON + 'ArrowLineLeft.svg',
+    ArrowLineDown: ICON + 'ArrowLineDown.svg',
+    Eye: ICON + 'Eye.svg',
     PaperclipHorizontal: ICON + 'PaperclipHorizontal.svg',
     SpeakerSlash: ICON + 'SpeakerSlash.svg',
     ChatCircleDots: ICON + 'ChatCircleDots.svg',
@@ -2084,42 +2089,226 @@ function threadRowFromPrior(prior, fallbackTo) {
    * Images get a thumbnail you can click to open full size; everything else is
    * a labelled row. Both go through the authenticated attachment endpoint —
    * the file is streamed from the provider, never guessed at locally. */
+  /* The message's attachments, in their own section under the body — never
+   * mixed into it. Each card previews (image thumbnail, or the file-type icon
+   * from the same set the File Library uses) and offers Download and
+   * Open/Preview separately, since a click should never trigger a surprise
+   * download (see openAttachmentLightbox). */
   function renderAttachments(row) {
     var items = (row && row.attachments) || [];
+    // Tracked here (not threaded through every intermediate render function)
+    // so the lightbox click handler knows which message's files are on screen.
+    state_lastRowAttachments = items;
     if (!items.length) return '';
 
-    var base = (window.__TMA_SITE_ROOT || '') + '/portal/mail/attachments/';
+    // Gmail-style tiles: a big preview area (the real image, or — since this
+    // stack has no Imagick/Ghostscript to rasterise a PDF server-side — its
+    // first page rendered client-side via pdf.js, see wireAttachmentPdfPreviews),
+    // a filename strip fixed under it, and download/open actions that only
+    // appear on hover. The whole tile opens the lightbox; the hover button
+    // downloads directly without opening it first.
+    var cards = items.map(function (a, i) {
+      var isImage = attachmentIsImage(a);
+      var isPdf = !isImage && attachmentIsPdf(a);
+      // The fallback icon is wired as a real listener (see wireAttachmentPreviews),
+      // not an inline onerror string: JSON.stringify()'s own double quotes would
+      // terminate this double-quoted HTML attribute early and silently truncate
+      // the handler, so it never actually ran.
+      var preview = isImage
+        ? '<img src="' + esc(attachmentUrl(a, true)) + '" alt="" loading="lazy"' +
+          ' data-email-attachment-fallback-icon="' + esc(attachmentIconSrc(a)) + '">'
+        : '<img class="tma-dash__email-attachment-tile-icon-img" src="' + esc(attachmentIconSrc(a)) + '" alt="">';
 
-    var cards = items.map(function (a) {
-      var url = base + encodeURIComponent(a.id);
-      var mime = a.mime || '';
-      // Images and PDFs open in a tab; anything else downloads.
-      var viewable = /^image\//.test(mime) || mime === 'application/pdf';
-      var viewUrl = url + '?inline=1';
       return (
-        '<a class="tma-dash__email-attachment" href="' + esc(viewable ? viewUrl : url) + '"' +
-        (viewable ? ' target="_blank" rel="noopener"' : ' download') +
-        ' title="' + esc(a.name) + '">' +
-        (/^image\//.test(mime)
-          ? '<span class="tma-dash__email-attachment-thumb"><img src="' + esc(viewUrl) + '" alt="" loading="lazy"></span>'
-          : '<span class="tma-dash__email-attachment-icon" aria-hidden="true">' +
-            '<img src="' + ICONS.PaperclipHorizontal + '" alt=""></span>') +
-        '<span class="tma-dash__email-attachment-meta">' +
-        '<span class="tma-dash__email-attachment-name">' + esc(a.name) + '</span>' +
-        '<span class="tma-dash__email-attachment-size">' + esc(formatBytes(a.size)) + '</span>' +
-        '</span></a>'
+        '<div class="tma-dash__email-attachment-tile' + (isImage ? '' : ' tma-dash__email-attachment-tile--icon') + '"' +
+        ' data-email-attachment-index="' + i + '" data-email-attachment-open="' + i + '" role="button" tabindex="0"' +
+        (isPdf ? ' data-email-attachment-pdf="' + esc(attachmentUrl(a, true)) + '"' : '') + '>' +
+        '<div class="tma-dash__email-attachment-tile-preview">' + preview +
+        // Hovering (or focusing) the tile covers the preview with the full
+        // filename — see .tma-dash__email-attachment-tile-caption — so a
+        // long or ambiguous name never needs a separate tooltip to read.
+        '<div class="tma-dash__email-attachment-tile-caption" aria-hidden="true"><span>' + esc(a.name) + '</span></div>' +
+        '<div class="tma-dash__email-attachment-tile-corner" aria-hidden="true"></div>' +
+        '<div class="tma-dash__email-attachment-tile-hover">' +
+        '<a class="tma-dash__email-attachment-tile-btn" href="' + esc(attachmentUrl(a, false)) + '" download="' + esc(a.name) + '"' +
+        ' aria-label="Download ' + esc(a.name) + '" data-email-attachment-download>' +
+        '<img src="' + ICONS.ArrowLineDown + '" alt="">' +
+        '</a>' +
+        '</div>' +
+        '</div>' +
+        '<div class="tma-dash__email-attachment-tile-bar">' +
+        '<img class="tma-dash__email-attachment-tile-bar-icon" src="' + esc(attachmentIconSrc(a)) + '" alt="">' +
+        '<span class="tma-dash__email-attachment-tile-name" title="' + esc(a.name) + '">' + esc(a.name) + '</span>' +
+        '</div>' +
+        '</div>'
       );
     }).join('');
 
     return (
-      '<div class="tma-dash__email-attachments">' +
+      '<div class="tma-dash__email-attachments" data-email-attachments>' +
       '<div class="tma-dash__email-attachments-head">' +
+      '<img src="' + ICONS.PaperclipHorizontal + '" alt="" aria-hidden="true">' +
       items.length + ' attachment' + (items.length === 1 ? '' : 's') +
       '</div>' +
       '<div class="tma-dash__email-attachments-list">' + cards + '</div>' +
       '</div>'
     );
   }
+
+  /* ── attachment lightbox ──────────────────────────────────────
+   * Reuses the File Library's lightbox CSS (.tma-portal-lightbox*) so a
+   * preview looks identical whether it was opened from Files or from Mail —
+   * this is a new, small controller rather than calling into portal-files.js
+   * directly, since that module's gallery/permissions are tied to the Vault's
+   * file model, not a mail attachment.
+   */
+  var mailLightbox = null;
+
+  function closeAttachmentLightbox() {
+    if (!mailLightbox) return;
+    document.removeEventListener('keydown', mailLightbox._key);
+    mailLightbox.remove();
+    mailLightbox = null;
+    document.body.style.overflow = '';
+  }
+
+  function attachmentLightboxStage(a) {
+    if (attachmentIsImage(a)) {
+      return '<img class="tma-portal-lightbox__img tma-dash__email-lightbox-img" src="' + esc(attachmentUrl(a, true)) + '" alt="' + esc(a.name) + '" data-email-lightbox-zoom>';
+    }
+    if (attachmentIsPdf(a)) {
+      return '<iframe class="tma-portal-lightbox__frame" src="' + esc(attachmentUrl(a, true)) + '" title="' + esc(a.name) + '"></iframe>';
+    }
+    if (/^audio\//.test(a.mime || '')) {
+      return '<div class="tma-portal-lightbox__audio"><img src="' + esc(attachmentIconSrc(a)) + '" alt="" width="64" height="64">' +
+        '<audio src="' + esc(attachmentUrl(a, true)) + '" controls autoplay></audio></div>';
+    }
+    if (/^video\//.test(a.mime || '')) {
+      return '<video class="tma-portal-lightbox__media" src="' + esc(attachmentUrl(a, true)) + '" controls autoplay playsinline></video>';
+    }
+    // Office documents, archives, and anything else a browser cannot render
+    // safely inline: an honest "here's what it is" card, not a fake viewer.
+    return (
+      '<div class="tma-portal-lightbox__nopreview">' +
+      '<img src="' + esc(attachmentIconSrc(a)) + '" alt="" width="72" height="72">' +
+      '<p class="tma-portal-lightbox__nopreview-title">' + esc(a.name) + '</p>' +
+      '<p class="tma-portal-lightbox__nopreview-text">' + esc(attachmentTypeLabel(a)) + ' · ' + esc(formatBytes(a.size)) +
+      ' · no in-browser preview for this file type</p>' +
+      '</div>'
+    );
+  }
+
+  function openAttachmentLightbox(items, index) {
+    closeAttachmentLightbox();
+
+    var idx = index;
+    var lb = document.createElement('div');
+    lb.className = 'tma-portal-lightbox';
+    lb.setAttribute('role', 'dialog');
+    lb.setAttribute('aria-modal', 'true');
+    document.body.appendChild(lb);
+    document.body.style.overflow = 'hidden';
+    mailLightbox = lb;
+
+    function paint() {
+      var a = items[idx];
+      var many = items.length > 1;
+      lb.innerHTML =
+        '<div class="tma-portal-lightbox__backdrop" data-lb-close></div>' +
+        '<div class="tma-portal-lightbox__head">' +
+        '<span class="tma-portal-lightbox__title" title="' + esc(a.name) + '">' +
+        '<img src="' + esc(attachmentIconSrc(a)) + '" alt="" width="18" height="18">' + esc(a.name) + '</span>' +
+        '<div class="tma-portal-lightbox__head-actions">' +
+        '<a class="tma-portal-tool" data-lb-download href="' + esc(attachmentUrl(a, false)) + '" download="' + esc(a.name) + '">' +
+        '<img src="' + ICONS.ArrowLineDown + '" alt="" width="16" height="16"><span>Download</span></a>' +
+        '<button type="button" class="tma-portal-tool tma-portal-tool--icon" data-lb-close aria-label="Close">' +
+        '<img src="' + ICONS.X + '" alt="" width="16" height="16"></button>' +
+        '</div></div>' +
+        (many ? '<button type="button" class="tma-portal-lightbox__nav tma-portal-lightbox__nav--prev" data-lb-prev aria-label="Previous"><img src="' + ICONS.CaretLeft + '" alt="" width="24" height="24"></button>' : '') +
+        (many ? '<button type="button" class="tma-portal-lightbox__nav tma-portal-lightbox__nav--next" data-lb-next aria-label="Next"><img src="' + ICONS.CaretRight + '" alt="" width="24" height="24"></button>' : '') +
+        '<div class="tma-portal-lightbox__stage" data-lb-stage>' + attachmentLightboxStage(a) + '</div>' +
+        '<div class="tma-portal-lightbox__foot">' + (many ? (idx + 1) + ' of ' + items.length + ' &middot; ' : '') + esc(formatBytes(a.size)) + '</div>';
+    }
+
+    function go(delta) {
+      var next = idx + delta;
+      if (next < 0 || next >= items.length) return;
+      idx = next;
+      paint();
+    }
+
+    lb.addEventListener('click', function (e) {
+      if (e.target.closest('[data-lb-close]')) { closeAttachmentLightbox(); return; }
+      if (e.target.closest('[data-lb-prev]')) { go(-1); return; }
+      if (e.target.closest('[data-lb-next]')) { go(1); return; }
+      // Click-to-zoom for images: a simple toggle rather than full pinch/pan,
+      // enough to inspect detail on a scanned document or photo.
+      var zoomImg = e.target.closest('[data-email-lightbox-zoom]');
+      if (zoomImg) { zoomImg.classList.toggle('is-zoomed'); return; }
+    });
+
+    lb._key = function (e) {
+      if (document.querySelector('.tma-portal-modal')) return;
+      if (e.key === 'Escape') closeAttachmentLightbox();
+      else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'ArrowRight') go(1);
+    };
+    document.addEventListener('keydown', lb._key);
+
+    paint();
+  }
+
+  /* Delegated so it works whichever branch of the detail render is showing. */
+  function wireAttachmentPreviews(root) {
+    root.querySelectorAll('[data-email-attachments]').forEach(function (section) {
+      if (section._wired) return;
+      section._wired = true;
+
+      function openFrom(target) {
+        // The download button sits inside the tile it downloads — let its own
+        // native download proceed rather than also opening the lightbox.
+        if (target.closest('[data-email-attachment-download]')) return;
+        var btn = target.closest('[data-email-attachment-open]');
+        if (!btn) return;
+        var index = parseInt(btn.getAttribute('data-email-attachment-open'), 10);
+        var items = state_lastRowAttachments || [];
+        if (!items.length || isNaN(index)) return;
+        openAttachmentLightbox(items, index);
+      }
+
+      section.addEventListener('click', function (e) { openFrom(e.target); });
+      // The tile is a div (role="button"), which — unlike a real <button> —
+      // needs its own Enter/Space handling to be keyboard-operable.
+      section.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (e.target.closest('[data-email-attachment-download]')) return;
+        if (!e.target.closest('[data-email-attachment-open]')) return;
+        e.preventDefault();
+        openFrom(e.target);
+      });
+
+      // A broken preview (the fake/expired-token case, or any transient
+      // provider hiccup) falls back to the file-type icon. `error` does not
+      // bubble, so this has to be bound on the capture phase to delegate.
+      section.addEventListener('error', function (e) {
+        var img = e.target;
+        if (!img || !img.matches || !img.matches('[data-email-attachment-fallback-icon]')) return;
+        var tile = img.closest('.tma-dash__email-attachment-tile');
+        if (tile) tile.classList.add('tma-dash__email-attachment-tile--icon');
+        var fallback = document.createElement('img');
+        fallback.className = 'tma-dash__email-attachment-tile-icon-img';
+        fallback.src = img.getAttribute('data-email-attachment-fallback-icon');
+        fallback.alt = '';
+        img.replaceWith(fallback);
+      }, true);
+    });
+  }
+
+  // Set right before the attachments section renders (see renderMessageBody
+  // caller) so the lightbox and the click handler always agree on which
+  // message's attachments are on screen, without threading the array through
+  // every intermediate render function.
+  var state_lastRowAttachments = [];
 
   function formatBytes(bytes) {
     var n = Number(bytes) || 0;
@@ -2128,6 +2317,152 @@ function threadRowFromPrior(prior, fallbackTo) {
     var i = -1;
     do { n /= 1024; i++; } while (n >= 1024 && i < units.length - 1);
     return (n < 10 ? n.toFixed(1) : Math.round(n)) + ' ' + units[i];
+  }
+
+  /* ── attachment type detection ────────────────────────────────
+   * One shared table for the human-readable type label; the icon itself comes
+   * from window.TMAFileIcons, the same lookup the File Library uses, so a
+   * given extension draws identically everywhere in the portal. */
+  var ATTACHMENT_TYPE_LABELS = {
+    pdf: 'PDF',
+    doc: 'Word', docx: 'Word', rtf: 'Word', odt: 'Word',
+    xls: 'Excel', xlsx: 'Excel', ods: 'Excel',
+    csv: 'CSV',
+    ppt: 'PowerPoint', pptx: 'PowerPoint', odp: 'PowerPoint',
+    jpg: 'Image', jpeg: 'Image', png: 'Image', gif: 'Image', webp: 'Image',
+    bmp: 'Image', tiff: 'Image', tif: 'Image', heic: 'Image', heif: 'Image',
+    avif: 'Image', svg: 'Image',
+    mp4: 'Video', mov: 'Video', webm: 'Video', mkv: 'Video', avi: 'Video', m4v: 'Video',
+    mp3: 'Audio', wav: 'Audio', ogg: 'Audio', m4a: 'Audio', flac: 'Audio', aac: 'Audio',
+    zip: 'Archive', rar: 'Archive', '7z': 'Archive', tar: 'Archive', gz: 'Archive',
+    txt: 'Text', md: 'Text', log: 'Text',
+  };
+
+  function attachmentExt(name) {
+    var m = /\.([a-z0-9]+)$/i.exec(String(name || ''));
+    return m ? m[1].toLowerCase() : '';
+  }
+
+  function attachmentTypeLabel(attachment) {
+    var ext = attachmentExt(attachment && attachment.name);
+    return ATTACHMENT_TYPE_LABELS[ext] || (ext ? ext.toUpperCase() : 'File');
+  }
+
+  function attachmentIconSrc(attachment) {
+    if (window.TMAFileIcons) return window.TMAFileIcons.fileIconSrc(null, attachment.name);
+    return ICONS.PaperclipHorizontal;
+  }
+
+  function attachmentIsImage(attachment) {
+    return /^image\//.test((attachment && attachment.mime) || '') || /^(jpg|jpeg|png|gif|webp|bmp|tiff|tif|heic|heif|avif)$/i.test(attachmentExt(attachment && attachment.name));
+  }
+
+  function attachmentIsPdf(attachment) {
+    return (attachment && attachment.mime) === 'application/pdf' || attachmentExt(attachment && attachment.name) === 'pdf';
+  }
+
+  var ATTACHMENT_BASE = (window.__TMA_SITE_ROOT || '') + '/portal/mail/attachments/';
+
+  function attachmentUrl(attachment, inline) {
+    return ATTACHMENT_BASE + encodeURIComponent(attachment.id) + (inline ? '?inline=1' : '');
+  }
+
+  /* pdf.js ships as ESM and weighs ~1.7 MB with its worker, so it's pulled in
+     on first use rather than at page load — see portal-work.js's identical
+     loader for the signature editor. Rendering the attachment's own first
+     page client-side sidesteps the lack of Imagick/Ghostscript server-side. */
+  var attachmentPdfjsPromise = null;
+  function loadAttachmentPdfjs() {
+    if (attachmentPdfjsPromise) return attachmentPdfjsPromise;
+    var root = window.__TMA_SITE_ROOT || '';
+    attachmentPdfjsPromise = import(root + '/js/vendor/pdf.min.mjs').then(function (lib) {
+      lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf.worker.min.mjs';
+      return lib;
+    }).catch(function (err) {
+      attachmentPdfjsPromise = null; // let a later attempt retry
+      throw err;
+    });
+    return attachmentPdfjsPromise;
+  }
+
+  function renderAttachmentPdfThumb(tile, url) {
+    var iconImg = tile.querySelector('.tma-dash__email-attachment-tile-icon-img');
+    if (!iconImg) return;
+    loadAttachmentPdfjs()
+      .then(function (pdfjs) { return pdfjs.getDocument({ url: url, withCredentials: true }).promise; })
+      .then(function (pdf) { return pdf.getPage(1); })
+      .then(function (page) {
+        var targetWidth = tile.clientWidth || 210;
+        var scale = targetWidth / page.getViewport({ scale: 1 }).width;
+        var viewport = page.getViewport({ scale: scale });
+        var dpr = window.devicePixelRatio || 1;
+        var canvas = document.createElement('canvas');
+        canvas.className = 'tma-dash__email-attachment-tile-pdf-canvas';
+        canvas.width = Math.ceil(viewport.width * dpr);
+        canvas.height = Math.ceil(viewport.height * dpr);
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+        var ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+          if (!iconImg.parentNode) return; // tile re-rendered while we were loading
+          tile.classList.remove('tma-dash__email-attachment-tile--icon');
+          iconImg.replaceWith(canvas);
+        });
+      })
+      // A corrupt/unreadable PDF, or the worker failing to load, just leaves
+      // the icon in place — never worth surfacing as an error to the user.
+      .catch(function () {});
+  }
+
+  function wireAttachmentPdfPreviews(root) {
+    root.querySelectorAll('[data-email-attachment-pdf]').forEach(function (tile) {
+      if (tile._pdfPreviewWired) return;
+      tile._pdfPreviewWired = true;
+      renderAttachmentPdfThumb(tile, tile.getAttribute('data-email-attachment-pdf'));
+    });
+  }
+
+  /* Compact chips under a list row — Gmail's own inbox does exactly this: a
+   * small icon-and-name pill per file, not a full thumbnail, so a page of 50
+   * rows never has to render dozens of image previews at once. */
+  function renderRowAttachmentChips(row) {
+    if (!row.hasAttachments) return '';
+
+    var items = row.attachmentsPreview || [];
+    var known = row.attachmentCount;
+
+    // We only know real filenames/types for messages already opened once
+    // (see toRow() — nothing here ever asks the provider for this). Anything
+    // else still gets a line, just without per-file detail yet.
+    if (!items.length) {
+      return (
+        '<div class="tma-dash__email-row-attachments">' +
+        '<span class="tma-dash__email-attachment-chip tma-dash__email-attachment-chip--generic">' +
+        '<img src="' + ICONS.PaperclipHorizontal + '" alt="" aria-hidden="true">' +
+        '<span>' + (known ? known + ' attachment' + (known === 1 ? '' : 's') : 'Attachment') + '</span>' +
+        '</span></div>'
+      );
+    }
+
+    var LIMIT = 3;
+    var shown = items.slice(0, LIMIT);
+    var more = (known || items.length) - shown.length;
+
+    var chips = shown.map(function (a) {
+      return (
+        '<span class="tma-dash__email-attachment-chip" title="' + esc(a.name) + '">' +
+        '<img src="' + esc(attachmentIconSrc(a)) + '" alt="" aria-hidden="true">' +
+        '<span>' + esc(a.name) + '</span>' +
+        '</span>'
+      );
+    }).join('');
+
+    if (more > 0) {
+      chips += '<span class="tma-dash__email-attachment-chip tma-dash__email-attachment-chip--more">+' + more + ' more</span>';
+    }
+
+    return '<div class="tma-dash__email-row-attachments">' + chips + '</div>';
   }
 
   /* Grow the message frame to its content so nothing is cut off.
@@ -3197,13 +3532,15 @@ function renderComposeToolbar() {
       return '<span class="tma-dash__email-row-icon"><img src="' + esc(brandSrc(row.brand)) + '" alt=""></span>';
     }
     // The sender's real photo, when we have one. Falls back to initials on a
-    // load error so a dead URL never leaves an empty circle.
+    // load error so a dead URL never leaves an empty circle. Wired as a real
+    // listener (see wireListRows), not an inline onerror string — embedding a
+    // JSON.stringify()'d value there put literal double quotes inside this
+    // double-quoted attribute, which silently truncated the handler.
     if (row.avatarUrl) {
+      var initial = (row.sender || '?').charAt(0).toUpperCase();
       return (
         '<span class="tma-dash__email-row-avatar">' +
-        '<img src="' + esc(row.avatarUrl) + '" alt=""' +
-        ' onerror="this.parentNode.classList.add(\'tma-dash__email-row-avatar--initial\');' +
-        'this.parentNode.textContent=' + JSON.stringify((row.sender || '?').charAt(0).toUpperCase()) + ';">' +
+        '<img src="' + esc(row.avatarUrl) + '" alt="" data-email-row-avatar-fallback="' + esc(initial) + '">' +
         '</span>'
       );
     }
@@ -3376,16 +3713,16 @@ function renderComposeToolbar() {
     }
   }
 
+  // Subject stands on its own line now (see .tma-dash__email-row-content in
+  // CSS) — the preview text runs in the separate .snippet line below it, not
+  // concatenated here with a " - " separator the way it used to be.
   function renderRowSubjectBody(lines) {
     var subject = lines.subject || '';
-    var body = lines.body || '';
-    var html =
+    return (
       '<span class="tma-dash__email-row-subject">' +
-      '<span class="tma-dash__email-row-subject-text">' + esc(subject) + '</span>';
-    if (body && body !== subject) {
-      html += '<span class="tma-dash__email-row-body"> - ' + esc(body) + '</span>';
-    }
-    return html + '</span>';
+      '<span class="tma-dash__email-row-subject-text">' + esc(subject) + '</span>' +
+      '</span>'
+    );
   }
 
   function ensureEmailToast(dash) {
@@ -3847,6 +4184,7 @@ function renderComposeToolbar() {
       '</div>' +
       renderRowSubjectBody(lines) +
       '<div class="tma-dash__email-row-snippet">' + esc(lines.body) + '</div>' +
+      renderRowAttachmentChips(row) +
       '</div>' +
       '<div class="tma-dash__email-row-side">' +
       '<div class="tma-dash__email-row-actions-bar">' +
@@ -3894,6 +4232,20 @@ function renderComposeToolbar() {
   }
 
   function wireListRows(root, state, render) {
+    // A broken sender photo falls back to initials. Bound once on root (rows
+    // are re-created every render) via capture, since `error` does not bubble.
+    if (!root._avatarFallbackWired) {
+      root._avatarFallbackWired = true;
+      root.addEventListener('error', function (e) {
+        var img = e.target;
+        if (!img || !img.matches || !img.matches('[data-email-row-avatar-fallback]')) return;
+        var wrap = img.parentNode;
+        if (!wrap) return;
+        wrap.classList.add('tma-dash__email-row-avatar--initial');
+        wrap.textContent = img.getAttribute('data-email-row-avatar-fallback') || '?';
+      }, true);
+    }
+
     root.querySelectorAll('[data-email-row]').forEach(function (rowEl) {
       rowEl.addEventListener('click', function (event) {
         if (isEmailRowSelectTarget(event.target)) return;
@@ -4169,6 +4521,8 @@ function renderComposeToolbar() {
   function wireEvents(root, state, render) {
     // Grow any open message to its full height (see sizeMessageFrames).
     sizeMessageFrames(root);
+    wireAttachmentPreviews(root);
+    wireAttachmentPdfPreviews(root);
 
     // Pager: step pages, or change how many messages a page holds. Both refetch
     // from the server — the mailbox is far too large to page in memory.

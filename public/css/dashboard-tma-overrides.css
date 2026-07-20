@@ -41,27 +41,16 @@
 
 .tma-dash__nav-item[hidden] { display: none !important; }
 
-.tma-dash__nav-count {
-  flex-shrink: 0;
-  margin-left: auto;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--radius-pill);
-  background: #ff4747;
-  font-size: 10px;
-  line-height: 16px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-  text-align: center;
-  box-sizing: border-box;
-}
+/* Corner-badge sizing/position for .tma-dash__nav-count now lives solely in
+   dashboard.css — this used to be a separate pre-redesign copy (inline
+   flex layout, not a positioned corner badge) that silently won the
+   cascade on this page since this file loads after dashboard.css. */
 
 .tma-dash__nav-count[hidden] { display: none; }
 
-/* The label span — a <span> icon (masked and tinted) keeps its own fixed box. */
-.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count):not(.tma-dash__nav-icon) {
+/* The label span — a <span> icon (masked and tinted), or its badge-anchor
+   wrapper, keeps its own fixed box. */
+.tma-dash__nav-item > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap) {
   flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
@@ -463,6 +452,15 @@ a.tma-dash__tab-btn:visited {
   .tma-dash.is-rb-open .tma-dash__scrim { display: block; }
 }
 
+/* dashboard.css's collapsed-rail rule (.tma-dash.is-sidebar-collapsed) is
+   more specific than the plain .tma-dash rule above and would otherwise
+   still win here, reserving a rightbar column even though the rightbar is a
+   hidden/drawer element at this width. Scoped to the tablet range only —
+   the mobile block further down already forces a single column. */
+@media (min-width: 1025px) and (max-width: 1280px) {
+  .tma-dash.is-sidebar-collapsed { grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr); }
+}
+
 @media (min-width: 1025px) {
   .tma-dash__sidebar-mobile-head {
     display: contents;
@@ -635,10 +633,6 @@ a.tma-dash__tab-btn:visited {
     font-size: var(--text-size-16);
     line-height: var(--text-lh-16);
     border-radius: var(--radius-16);
-  }
-
-  .tma-dash__sidebar .tma-dash__nav-item--active::before {
-    display: none;
   }
 
   .tma-dash__sidebar .tma-dash__nav-item--nested {
@@ -1068,24 +1062,15 @@ a.tma-dash__tab-btn:visited {
 
 .tma-dash__icon-btn-badge[hidden] { display: none; }
 
-/* Collapsed sidebar - keep count badges visible on icons */
+/* Collapsed sidebar - keep count badges visible on icons. The badge's own
+   position/size now live solely in dashboard.css's .tma-dash__nav-count —
+   this used to also re-declare them (right-anchored, pre-dating the
+   nav-icon-wrap mechanism dashboard.js now uses to keep a badge out of a
+   masked icon's clipped subtree), which fought the base rule on this page
+   since a compound selector always outranks it regardless of file order. */
 @media (min-width: 1025px) {
   .tma-dash.is-sidebar-collapsed .tma-dash__nav-item {
     overflow: visible;
-  }
-
-  .tma-dash.is-sidebar-collapsed .tma-dash__nav-count {
-    position: absolute;
-    top: 2px;
-    right: 0;
-    margin-left: 0;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 3px;
-    font-size: 9px;
-    line-height: 14px;
-    z-index: 1;
-    pointer-events: none;
   }
 }
 

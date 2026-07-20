@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ResolveSenderPhoto;
 use App\Jobs\SyncMailbox;
 use App\Models\MailAttachment;
 use App\Models\MailDraft;
@@ -16,7 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * The email page's API.
@@ -100,7 +101,7 @@ class MailController extends Controller
         }
 
         $query = MailMessage::query()
-            ->with('labels')
+            ->with(['labels', 'attachments'])
             ->where('user_id', $user->id)
             ->where('folder', $data['folder'] ?? 'inbox');
 
@@ -179,11 +180,19 @@ class MailController extends Controller
     }
 
     /**
-     * A sender's profile photo, fetched from the provider's directory on first
-     * request and cached after that.
+     * A sender's cached profile photo.
+     *
+     * Read-only: this never calls the provider. A page can reference dozens of
+     * distinct senders at once, and the first version of this endpoint fetched
+     * from Microsoft Graph inline here — a burst of <img> loads meant a burst
+     * of blocking ~1s Graph calls, which was enough to take the whole mailbox
+     * page down. Fetching now happens only in the background
+     * ({@see ResolveSenderPhoto}); this just serves whatever has
+     * already been cached and queues that job if nobody has asked yet.
      *
      * Addressed by hash so no email address ends up in page markup. A sender
-     * with no photo gets a 404, which the UI already treats as "draw initials".
+     * with no photo (yet, or ever) gets a 404, which the UI treats as "draw
+     * initials" — never blocking on it.
      */
     public function senderPhoto(Request $request, string $hash): mixed
     {
@@ -204,8 +213,14 @@ class MailController extends Controller
 
         abort_unless($email, 404);
 
-        $photo = MailSenderPhoto::resolve($account, $email);
-        abort_unless($photo, 404);
+        $photo = MailSenderPhoto::cachedOnly($email);
+
+        if (! $photo) {
+            if (MailSenderPhoto::needsBackgroundResolve($email)) {
+                ResolveSenderPhoto::dispatch($account, $email);
+            }
+            abort(404);
+        }
 
         return response($photo['body'], 200, [
             'Content-Type' => $photo['mime'],
@@ -238,20 +253,43 @@ class MailController extends Controller
             ->mapWithKeys(fn (User $u) => [mb_strtolower($u->email) => $u->avatar_url])
             ->all();
 
-        // Colleagues' photos come from the provider's directory. The URL is
-        // handed out unconditionally for same-organisation senders: the
-        // endpoint resolves and caches on first hit, and answers 404 when there
-        // is no photo, which the UI turns into initials.
+        // Colleagues' photos come from the provider's directory, but nothing
+        // here calls it: a URL is only handed out for a sender whose photo is
+        // already cached. Anyone not yet resolved gets a background job queued
+        // (once per address, not per row) and initials now — never a page that
+        // waits on Microsoft, which is what happened when this fetched inline.
         $account = Mailbox::accountFor(request()->user());
+        $sameOrgEmails = $account
+            ? collect($emails)->filter(fn ($e) => MailSenderPhoto::sameOrgAs($account, $e))->values()
+            : collect();
 
-        return $messages->map(function (MailMessage $m) use ($avatars, $account) {
+        $cached = $sameOrgEmails->isEmpty() ? [] : MailSenderPhoto::query()
+            ->whereIn('hash', $sameOrgEmails->map(fn ($e) => MailSenderPhoto::hashFor($e)))
+            ->get()
+            ->keyBy('email')
+            ->all();
+
+        foreach ($sameOrgEmails as $email) {
+            $row = $cached[$email] ?? null;
+            $fresh = $row && $row->isFresh();
+
+            if ($fresh && $row->has_photo) {
+                continue; // Already have the photo; nothing to queue.
+            }
+            if (! $fresh) {
+                ResolveSenderPhoto::dispatch($account, $email);
+            }
+        }
+
+        return $messages->map(function (MailMessage $m) use ($avatars, $cached) {
             $row = $m->toRow();
             $email = mb_strtolower((string) $m->from_email);
 
             $row['avatarUrl'] = $avatars[$email] ?? null;
 
-            if (! $row['avatarUrl'] && $account && $email !== '' && MailSenderPhoto::sameOrgAs($account, $email)) {
-                $row['avatarUrl'] = route('mail.sender-photo', ['hash' => MailSenderPhoto::hashFor($email)]);
+            $photo = $cached[$email] ?? null;
+            if (! $row['avatarUrl'] && $photo && $photo->isFresh() && $photo->has_photo) {
+                $row['avatarUrl'] = route('mail.sender-photo', ['hash' => $photo->hash]);
             }
 
             return $row;
@@ -266,54 +304,96 @@ class MailController extends Controller
     {
         $message = $this->findMessage($request, $uuid);
 
-        if ($message->body_html === null && $message->body_text === null) {
-            $account = $message->account;
-            $full = Mailbox::provider($account)->getMessage($message->remote_id);
+        $noBody = $message->body_html === null && $message->body_text === null;
+        // A message flagged as having attachments but with zero attachment
+        // rows was opened before attachments were fetched at all - the body
+        // came back cached with nothing to show underneath it. This affects
+        // every message read before that support existed, not just the
+        // `cid:` case below, so it is checked unconditionally.
+        $missingAttachments = $message->has_attachments && $message->attachments()->doesntExist();
+        $justFetched = false;
 
-            $message->forceFill([
-                'body_html' => $full['body_html'] ?? null,
-                'body_text' => $full['body_text'] ?? null,
-                'cc' => $full['cc'] ?? $message->cc,
-                'reply_to' => $full['reply_to'] ?? $message->reply_to,
-                'has_attachments' => ! empty($full['attachments']),
-            ])->save();
+        if ($noBody || $missingAttachments) {
+            $full = rescue(
+                fn () => Mailbox::provider($message->account)->getMessage($message->remote_id),
+                null,
+                report: false
+            );
 
-            if (! empty($full['attachments'])) {
-                $message->attachments()->delete();
+            if ($full) {
+                $message->forceFill([
+                    'body_html' => $full['body_html'] ?? $message->body_html,
+                    'body_text' => $full['body_text'] ?? $message->body_text,
+                    'cc' => $full['cc'] ?? $message->cc,
+                    'reply_to' => $full['reply_to'] ?? $message->reply_to,
+                    'has_attachments' => ! empty($full['attachments']),
+                ])->save();
 
-                foreach ($full['attachments'] as $attachment) {
-                    $message->attachments()->create([
-                        'uuid' => (string) Str::uuid(),
-                        'remote_id' => $attachment['remote_id'] ?? null,
-                        'filename' => $attachment['filename'] ?? 'attachment',
-                        'mime_type' => $attachment['mime_type'] ?? null,
-                        'size' => $attachment['size'] ?? 0,
-                        'is_inline' => $attachment['is_inline'] ?? false,
-                        'content_id' => $attachment['content_id'] ?? null,
-                    ]);
+                if (! empty($full['attachments'])) {
+                    $this->saveAttachments($message, $full['attachments']);
                 }
-            }
 
-            $this->embedInlineImages($message->fresh('attachments'));
+                // load() refreshes the relation on this same instance, rather
+                // than fresh()'s whole new (and disconnected) copy — three
+                // separate remote round trips used to go into what should be
+                // one open: this reload, then another to re-read what
+                // embedInlineImages had to persist on that disconnected copy
+                // to get it back, then a third at the very end for labels.
+                $message->load('attachments');
+                $this->embedInlineImages($message);
+                $justFetched = true;
+            }
         }
 
         // A body cached before embedded pictures were supported still carries
-        // raw `cid:` references, which render as broken images. Pull the
-        // attachments it needs and repair it on this open rather than leaving
-        // it broken for good.
-        $message = $message->fresh('attachments');
-        if ($message->body_html && str_contains($message->body_html, 'cid:')) {
+        // raw `cid:` references, which render as broken images. Repair it on
+        // this open rather than leaving it broken for good. Only reachable
+        // for a message that did NOT just go through the fetch above - that
+        // path already called embedInlineImages with current data.
+        if (! $justFetched && $message->body_html && str_contains($message->body_html, 'cid:')) {
             if ($message->attachments->whereNotNull('content_id')->isEmpty()) {
                 $this->refreshAttachments($message);
-                $message = $message->fresh('attachments');
+                $message->load('attachments');
             }
 
             $this->embedInlineImages($message);
         }
 
-        return response()->json([
-            'message' => $message->fresh(['labels', 'attachments'])->toRecord(),
-        ]);
+        $message->load('labels');
+
+        return response()->json(['message' => $message->toRecord()]);
+    }
+
+    /**
+     * Write a message's attachment rows in one statement, not one per file.
+     *
+     * The database is remote (Cloud Postgres), so each individual `->create()`
+     * costs a real network round trip - a message with Outlook's habit of
+     * stamping 5-10 tiny signature images as attachments turned "open an email
+     * for the first time" into several extra seconds of nothing but sequential
+     * inserts, on top of the provider call itself.
+     *
+     * @param  array<int, array<string, mixed>>  $attachments
+     */
+    private function saveAttachments(MailMessage $message, array $attachments): void
+    {
+        $message->attachments()->delete();
+
+        $now = now();
+        $rows = array_map(fn (array $a) => [
+            'uuid' => (string) Str::uuid(),
+            'mail_message_id' => $message->id,
+            'remote_id' => $a['remote_id'] ?? null,
+            'filename' => $a['filename'] ?? 'attachment',
+            'mime_type' => $a['mime_type'] ?? null,
+            'size' => $a['size'] ?? 0,
+            'is_inline' => $a['is_inline'] ?? false,
+            'content_id' => $a['content_id'] ?? null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $attachments);
+
+        MailAttachment::insert($rows);
     }
 
     /** Re-read the message's attachment list from the provider. */
@@ -329,19 +409,7 @@ class MailController extends Controller
             return;
         }
 
-        $message->attachments()->delete();
-
-        foreach ($full['attachments'] as $attachment) {
-            $message->attachments()->create([
-                'uuid' => (string) Str::uuid(),
-                'remote_id' => $attachment['remote_id'] ?? null,
-                'filename' => $attachment['filename'] ?? 'attachment',
-                'mime_type' => $attachment['mime_type'] ?? null,
-                'size' => $attachment['size'] ?? 0,
-                'is_inline' => $attachment['is_inline'] ?? false,
-                'content_id' => $attachment['content_id'] ?? null,
-            ]);
-        }
+        $this->saveAttachments($message, $full['attachments']);
     }
 
     /**
@@ -355,6 +423,7 @@ class MailController extends Controller
      */
     private function embedInlineImages(MailMessage $message): void
     {
+        $__t = microtime(true);
         $html = $message->body_html;
         if (! $html || ! str_contains($html, 'cid:')) {
             return;
@@ -363,6 +432,7 @@ class MailController extends Controller
         $inline = $message->attachments->filter(
             fn (MailAttachment $a) => $a->content_id && $a->remote_id
         );
+        logger()->info('  embed: after filter', ['t' => microtime(true) - $__t, 'count' => $inline->count()]);
 
         if ($inline->isEmpty()) {
             return;
@@ -385,10 +455,12 @@ class MailController extends Controller
                 }
             }
         }
+        logger()->info('  embed: after loop', ['t' => microtime(true) - $__t]);
 
         if ($replaced) {
             $message->forceFill(['body_html' => $html])->save();
         }
+        logger()->info('  embed: after save', ['t' => microtime(true) - $__t]);
     }
 
     /** Read / starred / important flags. */
@@ -675,7 +747,7 @@ class MailController extends Controller
     }
 
     /** Streams attachment bytes straight from the provider. */
-    public function attachment(Request $request, string $uuid): StreamedResponse
+    public function attachment(Request $request, string $uuid): SymfonyResponse
     {
         $attachment = MailAttachment::where('uuid', $uuid)->firstOrFail();
         $message = $attachment->message;

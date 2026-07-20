@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="css/theme.css?v=2">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/pagination.css">
-  <link rel="stylesheet" href="css/dashboard.css?v=10">
+  <link rel="stylesheet" href="css/dashboard.css?v=23">
   <link rel="stylesheet" href="css/global-search.css">
   <link rel="stylesheet" href="css/filter-and-sort.css">
   <link rel="stylesheet" href="css/table-filter-sort.css">
@@ -38,7 +38,7 @@
   </style>
 </head>
 <body>
-  <div class="tma-dash" data-node-id="32546:96098">
+  <div class="tma-dash is-sidebar-collapsed" data-node-id="32546:96098">
 
     <!-- ── Sidebar ─────────────────────────────────────── -->
     <aside class="tma-dash__sidebar" aria-label="Primary">
@@ -85,28 +85,14 @@
           <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--chatscircle" aria-hidden="true"></span>
           <span>Messages</span>
         </a>
-        <a class="tma-dash__nav-item" href="/social/feed" data-nav="so-feed" data-title="Feed" data-crumb="Social / Feed" data-view="feed">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--chatsteardrop" aria-hidden="true"></span>
-          <span>Feed</span>
-        </a>
         <a class="tma-dash__nav-item" href="/calendar" data-nav="calendar" data-title="Calendar" data-crumb="Calendar" data-view="calendar">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--calendarblank" aria-hidden="true"></span>
           <span>Calendar</span>
         </a>
-        <a class="tma-dash__nav-item" href="/users" data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--userlist" aria-hidden="true"></span>
-          <span>Users</span>
-        </a>
-      </div>
-
-      <div class="tma-dash__nav-section" data-list="main">
-        <div class="tma-dash__group-label">Pages</div>
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="folders" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--foldernotch" aria-hidden="true"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--foldernotch" aria-hidden="true"></span>
           <span>Folders</span>
         </button>
         <div class="tma-dash__subnav" data-subnav="folders" hidden>
@@ -120,6 +106,25 @@
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recycle" data-nav="folders-recycle" data-title="Recycle Bin" data-crumb="Folders / Recycle Bin" data-view="folders">Recycle Bin</a>
         </div>
 
+        <a class="tma-dash__nav-item" href="/signatures" data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--signature" aria-hidden="true"></span>
+          <span>Signatures</span>
+        </a>
+      </div>
+
+      <div class="tma-dash__nav-section" data-list="main">
+        <div class="tma-dash__group-label">Pages</div>
+        <a class="tma-dash__nav-item" href="/social/feed" data-nav="so-feed" data-title="Feed" data-crumb="Social / Feed" data-view="feed">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--chatsteardrop" aria-hidden="true"></span>
+          <span>Feed</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/users" data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--userlist" aria-hidden="true"></span>
+          <span>Users</span>
+        </a>
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="projects" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--kanban" aria-hidden="true"></span>
@@ -145,11 +150,6 @@
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--table" aria-hidden="true"></span>
           <span>Templates</span>
-        </a>
-        <a class="tma-dash__nav-item" href="/signatures" data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--signature" aria-hidden="true"></span>
-          <span>Signatures</span>
         </a>
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="people" aria-expanded="false">
@@ -554,7 +554,7 @@
   <script src="js/badge.js"></script>
   <script src="js/email-templates.js"></script>
   <script src="js/email-api.js"></script>
-  <script src="js/email.js"></script>
+  <script src="js/email.js?v=4"></script>
   <script src="js/messages.js"></script>
   <script src="js/feed.js"></script>
   <script src="js/schedule.js"></script>

@@ -78,6 +78,17 @@ class MailMessage extends Model
             'labels' => $this->relationLoaded('labels')
                 ? $this->labels->pluck('uuid')->all()
                 : [],
+            // Only ever populated from what is already stored locally — a
+            // message nobody has opened yet has no attachment rows, and the
+            // list must never fetch the provider just to describe them (that
+            // is exactly the mistake that took the mailbox page down once
+            // already). Capped well above any realistic "show 3 + N more" UI.
+            'attachmentsPreview' => $this->relationLoaded('attachments')
+                ? $this->attachments->where('is_inline', false)->take(8)->map->toRecord()->values()->all()
+                : [],
+            'attachmentCount' => $this->relationLoaded('attachments')
+                ? $this->attachments->where('is_inline', false)->count()
+                : null,
         ];
     }
 

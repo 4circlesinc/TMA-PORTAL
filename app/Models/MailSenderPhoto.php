@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\ResolveSenderPhoto;
 use App\Support\Mail\Mailbox;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -49,9 +50,43 @@ class MailSenderPhoto extends Model
     }
 
     /**
-     * Return the cached photo, fetching it from the provider when we have not
-     * looked recently. Null means "this person has no photo" — the caller
-     * should fall back to initials rather than retrying.
+     * The cached photo, read-only — never touches the provider. Used by
+     * request-time code (page render, the serving endpoint) so nothing in the
+     * HTTP path can block on a live call to Microsoft or Google.
+     *
+     * @return array{body:string, mime:string}|null
+     */
+    public static function cachedOnly(string $email): ?array
+    {
+        $row = self::where('hash', self::hashFor($email))->first();
+
+        if (! $row || ! $row->isFresh()) {
+            return null;
+        }
+
+        return $row->has_photo ? $row->read() : null;
+    }
+
+    /**
+     * True when nobody has asked the provider about this address recently -
+     * i.e. a background resolve is worth queuing. Cheap: one indexed lookup,
+     * no network.
+     */
+    public static function needsBackgroundResolve(string $email): bool
+    {
+        $row = self::where('hash', self::hashFor($email))->first();
+
+        return ! $row || ! $row->isFresh();
+    }
+
+    /**
+     * Fetch and cache a sender's photo from the provider.
+     *
+     * This is the one place that calls the provider for a photo, and it must
+     * only ever run on the queue ({@see ResolveSenderPhoto}) - a
+     * mailbox can reference dozens of distinct senders on one page, and
+     * blocking a web request (or worse, an <img> load) on that many live Graph
+     * round trips is what took the mailbox down the first time this shipped.
      *
      * @return array{body:string, mime:string}|null
      */

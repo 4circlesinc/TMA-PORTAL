@@ -7952,7 +7952,7 @@
 @media (min-width: 1025px) {
   .tma-dash--email .tma-dash__main {
     padding-block: var(--email-pad);
-    padding-inline: 0;
+    padding-inline: 0; 
     overflow: hidden;
     min-height: 0;
   }

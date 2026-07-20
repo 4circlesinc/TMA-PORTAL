@@ -516,8 +516,13 @@
       var meNow = window.TMACurrentUser.get();
       if (meNow) {
         var hello = el.querySelector('.tma-portal-hello__title');
-        if (hello) hello.textContent = 'Hello ' + meNow.firstName;
         var heroAvatar = el.querySelector('.tma-portal-hello__avatar');
+        // The markup mounts these as skeletons (see the template above); this
+        // sync fast-path — taken when TMACurrentUser already has data by the
+        // time this view mounts — has to clear that state itself, same as
+        // current-user.js's own async listener does for the general case.
+        if (window.TMASkeleton) { window.TMASkeleton.clear(hello); window.TMASkeleton.clear(heroAvatar); }
+        if (hello) hello.textContent = 'Hello ' + meNow.firstName;
         if (heroAvatar) heroAvatar.src = window.TMACurrentUser.avatarSrc(meNow.avatar, meNow.name);
         var picLink = el.querySelector('[data-home-add-picture]');
         if (picLink) picLink.textContent = meNow.hasAvatar ? 'Change profile picture' : 'Add profile picture';
