@@ -35,7 +35,12 @@ return [
         // Email/calendar sync. Off until the Gmail + Calendar APIs are enabled
         // in Google Cloud and the app is verified for these restricted scopes.
         'sync' => (bool) env('GOOGLE_SYNC_ENABLED', false),
-        'scope_email' => 'https://www.googleapis.com/auth/gmail.readonly',
+        // gmail.modify covers reading, sending, and moving/labelling. It is a
+        // RESTRICTED scope: production use by anyone outside the test-user
+        // list requires Google's CASA security assessment. gmail.readonly was
+        // equally restricted, so this widens what we can do without changing
+        // the tier of review the app needs.
+        'scope_email' => 'https://www.googleapis.com/auth/gmail.modify',
         'scope_calendar' => 'https://www.googleapis.com/auth/calendar.readonly',
     ],
 
@@ -49,10 +54,12 @@ return [
         // personal accounts — the driver's sized /photos/{size} endpoint 404s on
         // many accounts. So the driver's own avatar fetch stays off.
         'include_avatar' => false,
-        // Email/calendar sync via Microsoft Graph. Off until Mail.Read +
-        // Calendars.Read delegated permissions are added to the Entra app.
+        // Email/calendar sync via Microsoft Graph. Off until the delegated
+        // permissions below are added to the Entra app.
         'sync' => (bool) env('MICROSOFT_SYNC_ENABLED', false),
-        'scope_email' => 'Mail.Read',
+        // ReadWrite covers listing, moving, flagging and drafting; Send is a
+        // separate permission in Graph, so sending needs both.
+        'scope_email' => 'Mail.ReadWrite Mail.Send',
         'scope_calendar' => 'Calendars.Read',
         'scope_onedrive' => 'Files.Read',
         'scope_sharepoint' => 'Sites.Read.All',

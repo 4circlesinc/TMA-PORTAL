@@ -11962,6 +11962,38 @@
   color: var(--color-text-primary);
 }
 
+/* The To/Cc/Bcc/Subject fields. Borderless so the header block still reads as
+   one surface — the row it sits in already provides the rule beneath it. */
+.tma-dash__email-compose-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.tma-dash__email-compose-input::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.tma-dash__email-compose-input:focus {
+  outline: none;
+}
+
+/* The header rows carry the focus ring, so focus stays visible without a box
+   appearing around each individual field. */
+.tma-dash__email-compose-to:focus-within,
+.tma-dash__email-compose-subject:focus-within {
+  box-shadow: inset 0 -1px 0 0 var(--color-brand-primary, currentColor);
+}
+
+.tma-dash__email-compose-body:focus {
+  outline: none;
+}
+
 .tma-dash__email-compose-editor {
   flex: 1;
   min-height: 0;
@@ -23206,3 +23238,236 @@ button.tma-dash__header-popup-item:focus-visible {
   font-size: 14px;
 }
 .tma-dash__clients-loading-spinner { animation: tma-dash-spin 0.8s linear infinite; opacity: 0.5; }
+
+/* ── Email settings panel ──────────────────────────────────────────
+   Opens over the mailbox rather than navigating to /settings, so a
+   change to how mail behaves happens where mail is being read.
+
+   Layered at 125: above the compose windows (120/121) it must cover,
+   below the toast (130) so confirmations stay visible over it. */
+.tma-dash__email-settings {
+  position: fixed;
+  inset: 0;
+  z-index: 125;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+}
+
+.tma-dash__email-settings-scrim {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.4);
+  cursor: default;
+}
+
+.tma-dash__email-settings-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-elevated, var(--color-white));
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  overflow: hidden;
+}
+
+.tma-dash__email-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-20);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tma-dash__email-settings-title {
+  margin: 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__email-settings-close:hover {
+  background: var(--color-overlay-4);
+}
+
+.tma-dash__email-settings-close img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
+
+/* The card is a fixed height; only the settings themselves scroll. */
+.tma-dash__email-settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-8) var(--space-20) var(--space-20);
+}
+
+.tma-dash__email-settings-section {
+  margin: var(--space-16) 0 var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-settings-account {
+  padding-bottom: var(--space-8);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tma-dash__email-settings-account-actions,
+.tma-dash__email-settings-empty {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+}
+
+.tma-dash__email-settings-empty {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.tma-dash__email-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tma-dash__email-settings-btn:hover {
+  background: var(--color-overlay-4);
+}
+
+.tma-dash__email-settings-btn[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tma-dash__email-settings-btn--primary {
+  background: var(--color-text-primary);
+  color: var(--color-white);
+  border-color: transparent;
+}
+
+/* A read-only grant or a failed sync — the two states that stop mail
+   working and that the user can actually fix. */
+.tma-dash__email-settings-warning {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-danger, #b42318);
+}
+
+.tma-dash__email-settings-field {
+  padding: var(--space-12) 0;
+}
+
+.tma-dash__email-settings-textarea,
+.tma-dash__email-settings-number {
+  width: 100%;
+  margin-top: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.tma-dash__email-settings-number {
+  width: 80px;
+  margin-top: 0;
+}
+
+/* Loading / empty / disconnected states for the message list. */
+.tma-dash__email-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-40) var(--space-24);
+  text-align: center;
+}
+
+.tma-dash__email-list-empty-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-list-empty-body {
+  margin: 0;
+  max-width: 32ch;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+/* Sandboxed HTML message body. Fixed height because a cross-origin sandbox
+   cannot report its content height back to us — the frame scrolls its own
+   overflow, the way every mail client handles remote markup. */
+.tma-dash__email-body--html {
+  padding: 0;
+}
+
+.tma-dash__email-body-frame {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  height: 60vh;
+  border: none;
+  background: var(--color-white);
+}
+
+/* Sits above a list that still has mail in it: the connection is broken, so
+   what is shown is real but frozen until the account is reconnected. */
+.tma-dash__email-reconnect {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
+  background: var(--color-overlay-4);
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-primary);
+}

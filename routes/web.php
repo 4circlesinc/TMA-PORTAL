@@ -16,6 +16,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\LegacyPageController;
+use App\Http\Controllers\MailController;
 use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\Files\BrowserController;
 use App\Http\Controllers\Files\BulkController;
@@ -198,6 +199,35 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::patch('/{uid}', [ClientsController::class, 'update'])->name('update');
         Route::delete('/{uid}', [ClientsController::class, 'destroy'])->name('destroy');
         Route::post('/{uid}/duplicate', [ClientsController::class, 'duplicate'])->name('duplicate');
+    });
+
+    /*
+     * Mailbox API. Backed by the user's connected Google or Microsoft account
+     * (see App\Support\Mail). Messages are addressed by uuid; every write hits
+     * the provider first and is mirrored locally only once it succeeds.
+     */
+    Route::prefix('portal/mail')->name('mail.')->group(function () {
+        Route::get('/', [MailController::class, 'index'])->name('index');
+        Route::post('/sync', [MailController::class, 'sync'])->name('sync');
+
+        Route::get('/settings', [MailController::class, 'settings'])->name('settings');
+        Route::put('/settings', [MailController::class, 'updateSettings'])->name('settings.update');
+
+        // Literal paths before /{uuid} so the wildcard doesn't swallow them.
+        Route::get('/drafts', [MailController::class, 'drafts'])->name('drafts');
+        Route::post('/drafts', [MailController::class, 'saveDraft'])->name('drafts.save');
+        Route::delete('/drafts/{uuid}', [MailController::class, 'deleteDraft'])->name('drafts.delete');
+
+        Route::post('/send', [MailController::class, 'send'])->name('send');
+        Route::post('/bulk', [MailController::class, 'bulk'])->name('bulk');
+        Route::get('/attachments/{uuid}', [MailController::class, 'attachment'])->name('attachment');
+
+        Route::get('/messages', [MailController::class, 'messages'])->name('messages');
+        Route::get('/messages/{uuid}', [MailController::class, 'show'])->name('messages.show');
+        Route::patch('/messages/{uuid}', [MailController::class, 'update'])->name('messages.update');
+        Route::post('/messages/{uuid}/move', [MailController::class, 'move'])->name('messages.move');
+        Route::post('/messages/{uuid}/labels', [MailController::class, 'setLabel'])->name('messages.labels');
+        Route::delete('/messages/{uuid}', [MailController::class, 'destroy'])->name('messages.destroy');
     });
 
     /*

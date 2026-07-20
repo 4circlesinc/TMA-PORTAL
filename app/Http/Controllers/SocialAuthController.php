@@ -73,11 +73,13 @@ class SocialAuthController extends Controller
         if (config("services.{$provider}.sync") && array_filter($wanted)) {
             $scopes = [];
             foreach ($extras as $extra) {
-                if ($wanted[$extra] && config("services.{$provider}.scope_{$extra}")) {
-                    $scopes[] = config("services.{$provider}.scope_{$extra}");
+                if ($wanted[$extra] && $configured = config("services.{$provider}.scope_{$extra}")) {
+                    // A capability can need more than one scope (Graph splits
+                    // reading and sending), so each entry may list several.
+                    $scopes = array_merge($scopes, preg_split('/\s+/', trim($configured)) ?: []);
                 }
             }
-            $driver->scopes(array_filter($scopes));
+            $driver->scopes(array_values(array_unique(array_filter($scopes))));
 
             if ($provider === 'google') {
                 // needed to receive a refresh token for offline access

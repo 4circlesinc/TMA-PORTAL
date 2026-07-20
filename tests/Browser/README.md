@@ -30,6 +30,13 @@ field placement and drawing, and computed CSS only exist in a browser.
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
   the client profile's "Open folder" action lands in the File Library. Needs an
   administrator account.
+- **`mailbox.mjs`** — the email page is server-backed, not the old hard-coded
+  `INBOX` array: the list loads from `/portal/mail`, opening a message marks it
+  read, starring round-trips, folder badges come from the server, and Email
+  settings opens *over* the page instead of navigating to `/settings`. It also
+  pins the failure case that matters — a dead OAuth grant degrades to a
+  reconnect banner over an intact list rather than blanking the mailbox. Needs
+  a user with a connected account row (see the mailbox fixture below).
 - **`client-folder-tab.mjs`** — the client profile's Folders tab as a live file
   area: it lists the client folder's real subfolders, the "New folder" button
   creates one, and "Upload" adds a file that appears in the list. Needs an
@@ -133,3 +140,37 @@ never gets served and pdf.js fails to import.
 
 The script prints each step, writes `editor-fields.png` / `editor.png` beside
 itself, and exits non-zero on failure.
+
+`mailbox.mjs` needs a connected mailbox to read. The OAuth token is deliberately
+fake — the script stubs the mutating routes and *expects* the body fetch to fail,
+which is how it verifies the reconnect banner:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+  \$a = App\Models\ConnectedAccount::create(['user_id' => \$u->id, 'provider' => 'google',
+    'provider_id' => 'g1', 'email' => 'e2e@example.com', 'name' => 'Test User',
+    'token' => 'refresh', 'scopes' => ['https://www.googleapis.com/auth/gmail.modify'],
+    'sync_email' => true]);
+  // A cursor stops the page seeding a full sync against a token that cannot work.
+  \$a->forceFill(['mail_cursor' => '100', 'mail_synced_at' => now()])->save();
+  \$l = App\Models\MailLabel::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+    'connected_account_id' => \$a->id, 'remote_id' => 'Label_1', 'name' => 'Clients', 'tone' => 'blue']);
+  foreach ([['m1','Quarterly review','Dana Reed','dana@example.com',false],
+            ['m2','Invoice #1042','Ana Ruiz','ana@example.com',false],
+            ['m3','Re: onboarding','Sam Lee','sam@example.com',true]] as \$i => \$m) {
+    \$msg = App\Models\MailMessage::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+      'connected_account_id' => \$a->id, 'remote_id' => \$m[0], 'thread_id' => 't'.\$i,
+      'folder' => 'inbox', 'subject' => \$m[1], 'snippet' => 'Preview for '.\$m[1],
+      'from_name' => \$m[2], 'from_email' => \$m[3], 'is_read' => \$m[4],
+      'sent_at' => now()->subMinutes(\$i * 30)]);
+    if (\$i === 0) \$msg->labels()->attach(\$l->id);
+  }
+  App\Models\MailMessage::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+    'connected_account_id' => \$a->id, 'remote_id' => 's1', 'folder' => 'sent',
+    'subject' => 'Sent thing', 'snippet' => 'x', 'from_name' => 'Test User',
+    'from_email' => 'e2e@example.com', 'is_read' => true, 'sent_at' => now()]);
+"
+
+node tests/Browser/mailbox.mjs
+```

@@ -128,7 +128,7 @@
 
   function getFolderLabel(state) {
     if (state.activeLabelId) {
-      var label = getEmailLabel(state.activeLabelId);
+      var label = getEmailLabel(state.activeLabelId, state);
       return label ? label.name : 'Inbox';
     }
     for (var i = 0; i < FOLDERS.length; i++) {
@@ -561,14 +561,9 @@
     );
   }
 
-  var EMAIL_LABELS = [
-    { id: 'work', name: 'Work', tone: 'blue' },
-    { id: 'personal', name: 'Personal', tone: 'green' },
-    { id: 'important', name: 'Important', tone: 'red' },
-    { id: 'finance', name: 'Finance', tone: 'orange' },
-    { id: 'updates', name: 'Updates', tone: 'gray' },
-    { id: 'travel', name: 'Travel', tone: 'indigo' },
-  ];
+  function emailLabels(state) {
+    return (state && state.labels) || [];
+  }
 
   function renderLabelTag(tone, sizeCls) {
     var cls = 'tma-dash__email-label-tag tma-dash__email-label-tag--' + esc(tone);
@@ -576,20 +571,21 @@
     return '<span class="' + cls + '" aria-hidden="true"></span>';
   }
 
-  function getEmailLabel(labelId) {
-    for (var i = 0; i < EMAIL_LABELS.length; i++) {
-      if (EMAIL_LABELS[i].id === labelId) return EMAIL_LABELS[i];
+  function getEmailLabel(labelId, state) {
+    var labels = emailLabels(state);
+    for (var i = 0; i < labels.length; i++) {
+      if (labels[i].id === labelId) return labels[i];
     }
     return null;
   }
 
   function getRowLabelIds(rowId, state) {
-    if (!state.rowLabels[rowId]) return [];
-    return Object.keys(state.rowLabels[rowId]);
+    var row = findRow(state, rowId);
+    return (row && row.labels) || [];
   }
 
   function labelMessageCount(labelId, state) {
-    return INBOX.filter(function (row) {
+    return rowsOf(state).filter(function (row) {
       return rowHasLabel(row.id, labelId, state);
     }).length;
   }
@@ -628,7 +624,7 @@
       '<span class="tma-dash__email-row-labels">' +
       ids
         .map(function (labelId) {
-          var label = getEmailLabel(labelId);
+          var label = getEmailLabel(labelId, state);
           return label ? renderDetailLabelChip(label.name, label.tone) : '';
         })
         .join('') +
@@ -655,7 +651,7 @@
     }
 
     getRowLabelIds(row.id, state).forEach(function (labelId) {
-      var label = getEmailLabel(labelId);
+      var label = getEmailLabel(labelId, state);
       if (label) {
         chips.push(
           renderDetailLabelChip(label.name, label.tone, {
@@ -717,7 +713,7 @@
       '</button>' +
       '</div>' +
       '<nav class="tma-dash__email-labels" aria-label="Labels">' +
-      EMAIL_LABELS.map(function (label) {
+      emailLabels(state).map(function (label) {
         var active = state.activeLabelId === label.id;
         var count = labelMessageCount(label.id, state);
         var cls = 'tma-dash__email-label-item';
@@ -775,155 +771,184 @@
     },
   ];
 
-  var RECIPIENTS = [
-    { type: 'avatar', label: 'ByeWind', avatar: 'AvatarByewind' },
-    { type: 'brand', label: 'Slack', brand: 'Slack24' },
-    { type: 'email', label: 'byewind@twitter.com' },
-  ];
-
   var COMPOSE_SUBJECT = 'Invoice #VL25000355 - TM ANTOINE Advisory';
 
+  /* Folder ids match the server's; counts arrive with the bootstrap payload
+   * rather than being baked in here. */
   var FOLDERS = [
     { id: 'compose', label: 'Compose', icon: 'PencilSimpleLine', compose: true },
-    { id: 'inbox', label: 'Inbox', icon: 'Tray', countKey: 'inbox' },
-    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight', count: 48 },
-    { id: 'draft', label: 'Draft', icon: 'FileText', count: 3 },
-    { id: 'spam', label: 'Spam', icon: 'WarningOctagon', count: 2 },
-    { id: 'trash', label: 'Trash', icon: 'Trash', count: 6 },
-    { id: 'archive', label: 'Archive', icon: 'Archive', count: 19 },
+    { id: 'inbox', label: 'Inbox', icon: 'Tray' },
+    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight' },
+    { id: 'draft', label: 'Draft', icon: 'FileText' },
+    { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
+    { id: 'trash', label: 'Trash', icon: 'Trash' },
+    { id: 'archive', label: 'Archive', icon: 'Archive' },
     { id: 'templates', label: 'Templates', icon: 'SquaresFour', countKey: 'templates' },
   ];
 
-  var INBOX = [
-    { id: 'byewind', sender: 'ByeWind', subject: 'Tonight', body: 'Are you free tonight?', time: '19:28', avatar: 'AvatarByewind' },
-    {
-      id: 'slack',
-      sender: 'Slack',
-      subject: 'Invite your team to Slack',
-      body: "We're glad to see that you've started using Slack. Join TM ANTOINE Advisory Community on Slack.",
-      time: '18:30',
-      brand: 'Slack24',
-      email: 'no-reply@email.slackhq.com',
-      dateLabel: 'Today, 18:30',
-      slack: true,
-    },
-    { id: 'natali', sender: 'Natali Craig', subject: 'Hi', body: 'Hi', time: '17:52', avatar: 'AvatarFemale06' },
-    {
-      id: 'drew',
-      sender: 'Drew Cano',
-      subject: "Let's go fishing!",
-      body: "Hey, You wanna join me and Fred at the lake tomorrow? It'll be awesome.",
-      time: '10:12',
-      dateLabel: 'Today, 10:12',
-      email: 'drewcano@example.com',
-      avatar: 'AvatarMale01',
-      to: { name: 'Fred Miller', email: 'fred@example.com' },
-      repliedTo: {
-        sender: 'Fred Miller',
-        email: 'fred@example.com',
-        date: 'Yesterday, 4:30 PM',
-        subject: 'Lake trip this weekend?',
-        body: 'Weather looks perfect for fishing Saturday. Let me know if you are in.',
-        avatar: 'AvatarMale02',
-        to: { name: 'Drew Cano', email: 'drewcano@example.com' },
-      },
-    },
-    {
-      id: 'behance',
-      sender: 'Behance',
-      subject: 'You have a new follower',
-      body: 'Someone started following your work on Behance.',
-      time: '06:30',
-      brand: 'Behance40',
-    },
-    {
-      id: 'orlando',
-      sender: 'Orlando Diggs',
-      subject: 'Hey man',
-      body: "Nah man sorry i don't. Should i get it?",
-      time: 'Mar 12',
-      avatar: 'AvatarMale03',
-    },
-    {
-      id: 'chatgpt',
-      sender: 'ChatGPT',
-      subject: 'Welcome to ChatGPT',
-      body: 'Welcome to ChatGPT - your AI assistant is ready when you are.',
-      time: 'Mar 12',
-      brand: 'ChatGPT24',
-    },
-    {
-      id: 'andi',
-      sender: 'Andi Lane',
-      subject: 'Re: New mail settings',
-      body: 'Will you answer him asap?',
-      time: 'Mar 11',
-      dateLabel: 'Mar 11',
-      email: 'andilane@example.com',
-      avatar: 'AvatarFemale01',
-      to: { name: 'TM ANTOINE Advisory', email: 'notifications@tmantoine.com' },
-      repliedTo: {
-        sender: 'TM ANTOINE Advisory',
-        email: 'notifications@tmantoine.com',
-        date: 'Mar 10',
-        subject: 'New mail settings',
-        body: 'We updated your mail settings. Please review the changes and confirm they look correct.',
-        brand: 'Slack24',
-        to: { name: 'Andi Lane', email: 'andilane@example.com' },
-      },
-    },
-    {
-      id: 'facebook',
-      sender: 'Facebook',
-      subject: 'You have a new follower',
-      body: 'Someone new is following your profile.',
-      time: 'Mar 10',
-      brand: 'FacebookLogo',
-    },
-    {
-      id: 'youtube',
-      sender: 'YouTube',
-      subject: 'The most popular videos of 2026',
-      body: 'See what everyone watched this year on YouTube.',
-      time: 'Mar 9',
-      brand: 'Youtube24',
-    },
-    {
-      id: 'kate',
-      sender: 'Kate Morrison',
-      subject: 'First version',
-      body: 'I think we should use the first version.',
-      time: 'Mar 9',
-      avatar: 'AvatarFemale04',
-    },
-    {
-      id: 'threads',
-      sender: 'Threads',
-      subject: 'You have a new follower',
-      body: 'Someone started following you on Threads.',
-      time: 'Mar 8',
-      brand: 'ThreadsLogo',
-    },
-    {
-      id: 'koray',
-      sender: 'Koray Okumus',
-      subject: 'Search box interaction',
-      body: "Let's talk about the search box interaction again",
-      time: 'Mar 7',
-      avatar: 'AvatarMale04',
-    },
-  ];
+  /* ── message store ───────────────────────────────────────────────
+   * Rows come from /portal/mail/messages and live on state.rows. The old
+   * hard-coded INBOX array is gone, along with the parallel readIds /
+   * starredIds / rowLabels maps that shadowed it — a row now carries its own
+   * flags, exactly as the server sent them, so there is one source of truth
+   * per message instead of four.
+   */
 
-  function isRowUnread(row, state) {
-    return !state.readIds[row.id];
+  function rowsOf(state) {
+    return (state && state.rows) || [];
   }
 
+  function findRow(state, id) {
+    return rowsOf(state).filter(function (row) { return row.id === id; })[0] || null;
+  }
+
+  function api() {
+    return window.TMAEmailAPI;
+  }
+
+  /* Surfaces a failed write. A 409 means the OAuth grant is gone or too
+   * narrow, which the sidebar turns into a Reconnect prompt; anything else is
+   * a transient failure worth one toast. */
+  function reportMailError(state, err) {
+    if (err && err.reconnect) {
+      // The grant is dead, but the mail already on screen is still real and
+      // still readable. Flag it as a banner instead of replacing the list —
+      // one failed body fetch should not throw away a loaded inbox.
+      state.reconnectNeeded = true;
+      state.mailError = err.message;
+      if (!rowsOf(state).length) state.connected = false;
+      if (state.render) state.render();
+      return;
+    }
+
+    if (state.root) showEmailToast(state.root, (err && err.message) || 'Something went wrong');
+  }
+
+  /* Loads the current folder. Search and label filtering are parameters
+   * rather than post-filters, so results cover the whole mailbox instead of
+   * only the page already in memory. */
+  function reloadMessages(root, state, render) {
+    // Templates are portal-local and have no server listing.
+    if (state.folder === 'templates') return;
+
+    var token = ++state.loadToken;
+    state.loading = true;
+    render();
+
+    api().listMessages({
+      folder: state.folder,
+      search: state.search,
+      label: state.activeLabelId,
+    }).then(function (data) {
+      // A slower earlier request must not overwrite a newer folder's rows.
+      if (token !== state.loadToken) return;
+
+      state.rows = (data && data.messages) || [];
+      state.hasMore = !!(data && data.hasMore);
+      state.loading = false;
+      state.loadError = null;
+
+      // Keep the reading pane pointed at something that still exists.
+      if (state.selectedId && !findRow(state, state.selectedId)) {
+        state.selectedId = state.rows.length ? state.rows[0].id : null;
+      }
+
+      render();
+    }).catch(function (err) {
+      if (token !== state.loadToken) return;
+      state.loading = false;
+      state.loadError = (err && err.message) || 'Could not load messages';
+      state.rows = [];
+      reportMailError(state, err);
+      render();
+    });
+  }
+
+  /* First load: connection state, folder counts, labels, then the inbox. */
+  function bootstrapMailbox(root, state, render) {
+    state.loading = true;
+
+    api().bootstrap().then(function (data) {
+      state.connected = !!(data && data.connected);
+      state.account = (data && data.account) || null;
+      state.folderCounts = (data && data.folders) || {};
+      state.labels = (data && data.labels) || [];
+
+      if (!state.connected) {
+        state.loading = false;
+        state.rows = [];
+        render();
+        return;
+      }
+
+      reloadMessages(root, state, render);
+    }).catch(function (err) {
+      state.loading = false;
+      state.connected = false;
+      state.loadError = (err && err.message) || 'Could not reach the mailbox';
+      reportMailError(state, err);
+      render();
+    });
+  }
+
+  /* Opens a message: fetches the body on first read and marks it read. */
+  function openMailMessage(root, state, render, id) {
+    var row = findRow(state, id);
+    if (!row) return;
+
+    state.selectedId = id;
+    if (row.unread) markRowRead(state, id);
+
+    if (row.bodyHtml !== undefined || row.bodyText !== undefined) {
+      render();
+      return;
+    }
+
+    state.bodyLoading = true;
+    render();
+
+    api().getMessage(id).then(function (data) {
+      var full = data && data.message;
+      if (!full) return;
+
+      // Merge rather than replace: the row may have been starred or
+      // labelled while the body was in flight.
+      Object.keys(full).forEach(function (key) {
+        row[key] = full[key];
+      });
+
+      state.bodyLoading = false;
+      render();
+    }).catch(function (err) {
+      state.bodyLoading = false;
+      reportMailError(state, err);
+      render();
+    });
+  }
+
+  function isRowUnread(row, state) {
+    return !!(row && row.unread);
+  }
+
+  /* Read state is optimistic: the row flips immediately and the provider
+   * catches up. A failed write is not worth interrupting reading for, so it
+   * is logged rather than surfaced — the next sync corrects it. */
   function markRowRead(state, id) {
-    if (id) state.readIds[id] = true;
+    setRowRead(state, id, true);
   }
 
   function markRowUnread(state, id) {
-    if (id) delete state.readIds[id];
+    setRowRead(state, id, false);
+  }
+
+  function setRowRead(state, id, read) {
+    var row = findRow(state, id);
+    if (!row || !!row.unread === !read) return;
+    row.unread = !read;
+    api().setFlags(id, { read: read }).catch(function (err) {
+      row.unread = read;
+      reportMailError(state, err);
+    });
   }
 
   function syncEmailRowReadClasses(rowEl, unread) {
@@ -937,19 +962,21 @@
   }
 
   function isRowStarred(row, state) {
-    return !!state.starredIds[row.id];
+    return !!(row && row.starred);
   }
 
   function isRowImportant(row, state) {
-    return !!state.importantIds[row.id];
+    return !!(row && row.important);
   }
 
   function rowHasLabel(rowId, labelId, state) {
-    return !!(state.rowLabels[rowId] && state.rowLabels[rowId][labelId]);
+    var row = findRow(state, rowId);
+    return !!(row && row.labels && row.labels.indexOf(labelId) !== -1);
   }
 
   function rowHasAnyLabel(rowId, state) {
-    return !!(state.rowLabels[rowId] && Object.keys(state.rowLabels[rowId]).length);
+    var row = findRow(state, rowId);
+    return !!(row && row.labels && row.labels.length);
   }
 
   function labelPopupTargetIds(state) {
@@ -977,12 +1004,26 @@
 
   function toggleLabelForTargets(labelId, state) {
     var ids = labelPopupTargetIds(state);
-    var allChecked = isLabelCheckedForTargets(labelId, state);
+    // Mixed selections resolve to "apply to all", matching the checkbox's
+    // indeterminate-to-checked step.
+    var applied = !isLabelCheckedForTargets(labelId, state);
+
     ids.forEach(function (id) {
-      if (!state.rowLabels[id]) state.rowLabels[id] = {};
-      if (allChecked) delete state.rowLabels[id][labelId];
-      else state.rowLabels[id][labelId] = true;
-      if (!Object.keys(state.rowLabels[id]).length) delete state.rowLabels[id];
+      var row = findRow(state, id);
+      if (!row) return;
+      if (!row.labels) row.labels = [];
+
+      var at = row.labels.indexOf(labelId);
+      if (applied && at === -1) row.labels.push(labelId);
+      else if (!applied && at !== -1) row.labels.splice(at, 1);
+
+      api().setLabel(id, labelId, applied).catch(function (err) {
+        // Put the label back the way it was; the popup re-reads from the row.
+        var undo = row.labels.indexOf(labelId);
+        if (applied && undo !== -1) row.labels.splice(undo, 1);
+        else if (!applied && undo === -1) row.labels.push(labelId);
+        reportMailError(state, err);
+      });
     });
   }
 
@@ -1008,7 +1049,7 @@
   }
 
   function renderEmailLabelMenu(state) {
-    var items = EMAIL_LABELS.map(function (label) {
+    var items = emailLabels(state).map(function (label) {
       var checked = isLabelCheckedForTargets(label.id, state);
       var indeterminate = isLabelIndeterminateForTargets(label.id, state);
       return (
@@ -1531,48 +1572,39 @@
     );
   }
 
+  /* The server already applied folder, label, and search when it built
+   * state.rows, so there is nothing left to filter here. Kept as a function
+   * because every render site calls it. */
   function filteredInbox(state) {
-    var rows = INBOX.filter(function (row) {
-      return !(state.removedIds && state.removedIds[row.id]);
-    });
-    if (state.activeLabelId) {
-      rows = rows.filter(function (row) {
-        return rowHasLabel(row.id, state.activeLabelId, state);
-      });
-    }
-    var q = (state.search || '').trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(function (row) {
-      var lines = rowListLines(row);
-      return (
-        row.sender.toLowerCase().indexOf(q) !== -1 ||
-        lines.subject.toLowerCase().indexOf(q) !== -1 ||
-        lines.body.toLowerCase().indexOf(q) !== -1
-      );
-    });
+    return rowsOf(state);
   }
 
+  /* Counts come from the server, which sees the whole mailbox — counting
+   * loaded rows would only ever report the current page. */
   function getInboxUnreadCount(state) {
-    var readIds = (state && state.readIds) || { slack: true };
-    return INBOX.filter(function (row) {
-      if (state && state.removedIds && state.removedIds[row.id]) return false;
-      return !readIds[row.id];
-    }).length;
+    var counts = state && state.folderCounts && state.folderCounts.inbox;
+    return counts ? counts.unread : 0;
   }
 
   function folderCount(folder, state) {
     if (folder.compose) return null;
-    if (folder.countKey === 'inbox') {
-      return INBOX.filter(function (row) {
-        if (state.removedIds && state.removedIds[row.id]) return false;
-        return isRowUnread(row, state);
-      }).length;
-    }
+
+    // Templates are a portal-local feature with no provider equivalent, so
+    // they still count themselves.
     if (folder.countKey === 'templates') {
       return window.TMAEmailTemplates ? window.TMAEmailTemplates.list().length : 0;
     }
-    if (typeof folder.count === 'number') return folder.count;
-    return null;
+
+    var counts = state.folderCounts && state.folderCounts[folder.id];
+    if (!counts) return null;
+
+    // Inbox and Spam badge what is unread; the rest badge what is there,
+    // which is how both Gmail and Outlook read.
+    if (folder.id === 'inbox' || folder.id === 'spam') {
+      return counts.unread || null;
+    }
+
+    return counts.total || null;
   }
 
   function renderEmailSidebar(state) {
@@ -1703,45 +1735,68 @@
       renderEmailLabelMenu(state) +
       renderListHeadActions(state, { showFilter: !isEmailMobile() }) +
       '</div>' +
+      renderReconnectBanner(state) +
       '<div class="tma-dash__email-list-body">' +
-      rows.map(function (row) { return buildInboxRowHtml(row, state); }).join('') +
+      renderListState(state, rows) +
       '</div>' +
       '</div>'
     );
   }
 
-  function renderSlackBody() {
+  /* Shown above a list that still has mail in it when the mailbox connection
+   * has failed: what is on screen is real but may be stale, and nothing new
+   * will arrive until the account is reconnected. */
+  function renderReconnectBanner(state) {
+    if (!state.reconnectNeeded || !rowsOf(state).length) return '';
+
     return (
-      '<div class="tma-dash__email-body">' +
-      '<p>We\'re glad to see that you\'ve started using Slack. Join <strong>TM ANTOINE Advisory Community</strong> on Slack.</p>' +
-      '<p>Your team name is <strong>TM ANTOINE Advisory Community</strong></p>' +
-      '<p>Slack is a place where your team comes together to collaborate, stay connected, and get things done. ' +
-      'From project kickoffs to quick questions, Slack keeps everyone in sync - no matter where they\'re working from.</p>' +
-      '<button type="button" class="tma-dash__email-cta">Invite People</button>' +
-      '<div class="tma-dash__email-avatar-grid" aria-hidden="true">' +
-      ['AvatarFemale06', 'AvatarMale01', 'AvatarFemale04', 'AvatarMale03']
-        .map(function (a) {
-          return '<img src="' + AVATAR + a + '.png" alt="">';
-        })
-        .join('') +
-      '</div>' +
-      '<div class="tma-dash__email-signin-card">' +
-      '<div class="tma-dash__email-signin-info">' +
-      '<img src="' + BRAND + 'Slack24.svg" alt="">' +
-      '<div>' +
-      '<div class="tma-dash__email-signin-title">TM ANTOINE Advisory Community</div>' +
-      '<div>Workspace URL: TM-ANTOINE-community</div>' +
-      '<div>Email: byewind@live.com</div>' +
-      '</div>' +
-      '</div>' +
-      '<button type="button" class="tma-dash__email-signin-btn">Sign In</button>' +
-      '</div>' +
-      '<p class="tma-dash__email-copyright">©2026 Slack Technologies, LLC, a Salesforce company.</p>' +
+      '<div class="tma-dash__email-reconnect" role="status">' +
+      '<span>' + esc(state.mailError || 'This mailbox needs to be reconnected.') + '</span>' +
+      '<button type="button" class="tma-dash__email-settings-btn" data-email-open-settings>Fix it</button>' +
       '</div>'
     );
   }
 
-  function threadRowFromPrior(prior, fallbackTo) {
+  /* Loading, disconnected, error and empty all get an honest state — never a
+   * placeholder message that could be mistaken for real mail. */
+  function renderListState(state, rows) {
+    function notice(title, body, actionHtml) {
+      return (
+        '<div class="tma-dash__email-list-empty">' +
+        '<p class="tma-dash__email-list-empty-title">' + esc(title) + '</p>' +
+        (body ? '<p class="tma-dash__email-list-empty-body">' + esc(body) + '</p>' : '') +
+        (actionHtml || '') +
+        '</div>'
+      );
+    }
+
+    if (state.connected === false) {
+      return notice(
+        'No mailbox connected',
+        'Connect Google or Microsoft to read and send mail here.',
+        '<button type="button" class="tma-dash__email-settings-btn tma-dash__email-settings-btn--primary"' +
+        ' data-email-open-settings>Open email settings</button>'
+      );
+    }
+
+    if (state.loading) {
+      return notice('Loading messages…');
+    }
+
+    if (state.loadError) {
+      return notice('Could not load messages', state.loadError);
+    }
+
+    if (!rows.length) {
+      return state.search
+        ? notice('No results', 'Nothing in this mailbox matches “' + state.search + '”.')
+        : notice('Nothing here', 'This folder is empty.');
+    }
+
+    return rows.map(function (row) { return buildInboxRowHtml(row, state); }).join('');
+  }
+
+function threadRowFromPrior(prior, fallbackTo) {
     return {
       sender: prior.sender || '',
       email: prior.email,
@@ -1753,6 +1808,43 @@
 
   function renderMessageBodyText(bodyText) {
     return '<div class="tma-dash__email-body"><p>' + esc(bodyText || '') + '</p></div>';
+  }
+
+  /* The real message body.
+   *
+   * HTML mail is attacker-controlled: anyone can send this account a message,
+   * so its markup can never touch the portal's DOM. It renders inside a fully
+   * sandboxed iframe — no scripts, no same-origin, no form submission — which
+   * is what mail clients do and what makes it safe to show at all. Plain-text
+   * mail skips the iframe and is simply escaped.
+   */
+  function renderMessageBody(row, fallbackText) {
+    if (row && row.bodyHtml) {
+      return (
+        '<div class="tma-dash__email-body tma-dash__email-body--html">' +
+        '<iframe class="tma-dash__email-body-frame" sandbox=""' +
+        ' referrerpolicy="no-referrer" loading="lazy" title="Message content"' +
+        ' srcdoc="' + esc(wrapEmailBodyHtml(row.bodyHtml)) + '"></iframe>' +
+        '</div>'
+      );
+    }
+
+    return renderMessageBodyText((row && row.bodyText) || fallbackText);
+  }
+
+  /* Gives the sandboxed document a readable default and stops remote images
+   * from silently reporting that the message was opened. */
+  function wrapEmailBodyHtml(html) {
+    return (
+      '<!doctype html><html><head><meta charset="utf-8">' +
+      '<meta name="referrer" content="no-referrer">' +
+      '<style>' +
+      'html,body{margin:0;padding:0;font-family:Inter,system-ui,sans-serif;' +
+      'font-size:14px;line-height:1.5;color:#1c1c1c;word-break:break-word;}' +
+      'img{max-width:100%;height:auto;}' +
+      'table{max-width:100%;}' +
+      '</style></head><body>' + html + '</body></html>'
+    );
   }
 
   function renderEmailThread(row, messageHead, metaEmail, metaDate, subject, bodyText, threadActions, innerBodyHtml, state) {
@@ -1817,7 +1909,7 @@
   function renderDetail(state) {
     if (state.folder === 'templates') return renderTemplateDetail(state);
     syncInlineCompose(state);
-    var row = INBOX.filter(function (r) { return r.id === state.selectedId; })[0];
+    var row = findRow(state, state.selectedId);
     if (!row) {
       return '<div class="tma-dash__email-detail tma-dash__email-detail--empty"><p>Select a message</p></div>';
     }
@@ -1831,9 +1923,12 @@
     var threadActions = renderDetailThreadActions(state, row, metaEmail, metaDate, subject, lines.body);
     var inlineActive = !!(state.inlineCompose && state.inlineCompose.messageId === row.id);
     var scrollThreadActions = !mobile || inlineActive ? threadActions : null;
-    var body = row.slack
-      ? renderEmailThread(row, messageHead, metaEmail, metaDate, subject, lines.body, scrollThreadActions, renderSlackBody(), state)
-      : renderEmailThread(row, messageHead, metaEmail, metaDate, subject, lines.body, scrollThreadActions, null, state);
+    var body = renderEmailThread(
+      row, messageHead, metaEmail, metaDate, subject, lines.body, scrollThreadActions,
+      // Still fetching the body: show the snippet rather than an empty pane.
+      state.bodyLoading && state.selectedId === row.id ? null : renderMessageBody(row, lines.body),
+      state
+    );
 
     return (
       '<div class="tma-dash__email-detail' + (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
@@ -1863,10 +1958,42 @@
     return {
       id: 'compose-' + state.nextComposeId++,
       templateId: opts.templateId || null,
+      // Addresses are held as the raw comma-separated text the user typed and
+      // only parsed on send, so a half-typed address is never destroyed by a
+      // re-render.
+      to: opts.to || '',
+      cc: '',
+      bcc: '',
       subject: opts.subject || '',
+      bodyHtml: opts.bodyHtml || '',
+      showCc: false,
       minimized: false,
       expanded: false,
+      sending: false,
+      // Set once the draft has been saved server-side, so autosave updates
+      // the same record instead of creating a new one each keystroke.
+      serverId: null,
+      mode: opts.mode || 'new',
+      inReplyTo: opts.inReplyTo || null,
     };
+  }
+
+  /* "a@b.com, Name <c@d.com>" → the array the send endpoint expects. */
+  function parseAddresses(text) {
+    return String(text || '')
+      .split(',')
+      .map(function (part) { return part.trim(); })
+      .filter(Boolean)
+      .map(function (part) {
+        var match = part.match(/^(.*?)\s*<([^>]+)>$/);
+        if (match) return { name: match[1].replace(/^"|"$/g, '').trim() || null, email: match[2].trim() };
+        return { email: part };
+      })
+      .filter(function (address) { return address.email.indexOf('@') !== -1; });
+  }
+
+  function findComposeDraft(state, id) {
+    return state.composeDrafts.filter(function (draft) { return draft.id === id; })[0] || null;
   }
 
   function openCompose(state, opts) {
@@ -2012,38 +2139,134 @@
 
     root.querySelectorAll('[data-email-compose-discard]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        closeCompose(state, btn.getAttribute('data-email-compose-discard'));
+        var id = btn.getAttribute('data-email-compose-discard');
+        var draft = findComposeDraft(state, id);
+
+        // Drop the server-side copy too, or the message reappears in Drafts.
+        if (draft && draft.serverId) {
+          api().deleteDraft(draft.serverId).catch(function () {});
+        }
+
+        closeCompose(state, id);
         render();
       });
     });
-  }
 
-  function renderRecipientChip(recipient) {
-    if (!window.TMATag) return '';
-
-    if (recipient.type === 'avatar') {
-      return window.TMATag.renderTag({
-        label: recipient.label,
-        iconClass: 'tma-tag__icon--avatar',
-        leftIcon: '<img src="' + AVATAR + esc(recipient.avatar) + '.png" alt="">',
+    /* Field edits write straight to the draft. No re-render on input —
+     * repainting the window would move the caret out from under the user. */
+    root.querySelectorAll('[data-email-compose-field]').forEach(function (input) {
+      input.addEventListener('input', function () {
+        var draft = findComposeDraft(state, input.getAttribute('data-email-compose-id'));
+        if (!draft) return;
+        draft[input.getAttribute('data-email-compose-field')] = input.value;
+        scheduleDraftSave(state, draft);
       });
-    }
+    });
 
-    if (recipient.type === 'brand') {
-      return window.TMATag.renderTag({
-        label: recipient.label,
-        leftIcon: '<img src="' + esc(BRAND + recipient.brand + '.svg') + '" alt="">',
+    root.querySelectorAll('[data-email-compose-body]').forEach(function (body) {
+      body.addEventListener('input', function () {
+        var draft = findComposeDraft(state, body.getAttribute('data-email-compose-body'));
+        if (!draft) return;
+        draft.bodyHtml = body.innerHTML;
+        scheduleDraftSave(state, draft);
       });
-    }
+    });
 
-    return window.TMATag.renderTag({
-      label: recipient.label,
-      removable: false,
-      rightIcon: '<img class="tma-tag__caret" src="' + ICONS.CaretDown + '" alt="">',
+    root.querySelectorAll('[data-email-compose-cc]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var draft = findComposeDraft(state, btn.getAttribute('data-email-compose-cc'));
+        if (!draft) return;
+        draft.showCc = !draft.showCc;
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-email-compose-save]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var draft = findComposeDraft(state, btn.getAttribute('data-email-compose-save'));
+        if (!draft) return;
+        saveComposeDraft(state, draft).then(function () {
+          showEmailToast(root, 'Draft saved');
+        }).catch(function (err) {
+          reportMailError(state, err);
+        });
+      });
+    });
+
+    root.querySelectorAll('[data-email-compose-send]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        sendCompose(root, state, render, btn.getAttribute('data-email-compose-send'));
+      });
     });
   }
 
-  function renderComposeToolbar() {
+  /* Autosave, debounced so a burst of typing is one write. */
+  function scheduleDraftSave(state, draft) {
+    window.clearTimeout(draft._saveTimer);
+    draft._saveTimer = window.setTimeout(function () {
+      saveComposeDraft(state, draft).catch(function () {
+        // Autosave is best-effort; Send is what the user is judged on, and
+        // it sends the live field values rather than the saved copy.
+      });
+    }, 1200);
+  }
+
+  function saveComposeDraft(state, draft) {
+    return api().saveDraft({
+      id: draft.serverId,
+      to: parseAddresses(draft.to),
+      cc: parseAddresses(draft.cc),
+      bcc: parseAddresses(draft.bcc),
+      subject: draft.subject,
+      bodyHtml: draft.bodyHtml,
+      mode: draft.mode,
+      inReplyTo: draft.inReplyTo,
+    }).then(function (data) {
+      if (data && data.draft) draft.serverId = data.draft.id;
+      return data;
+    });
+  }
+
+  function sendCompose(root, state, render, id) {
+    var draft = findComposeDraft(state, id);
+    if (!draft || draft.sending) return;
+
+    var to = parseAddresses(draft.to);
+    if (!to.length) {
+      showEmailToast(root, 'Add at least one recipient');
+      return;
+    }
+
+    window.clearTimeout(draft._saveTimer);
+    draft.sending = true;
+    render();
+
+    api().send({
+      to: to,
+      cc: parseAddresses(draft.cc),
+      bcc: parseAddresses(draft.bcc),
+      subject: draft.subject || '',
+      bodyHtml: draft.bodyHtml || '',
+      draftId: draft.serverId,
+      inReplyTo: draft.inReplyTo,
+    }).then(function () {
+      closeCompose(state, id);
+      showEmailToast(root, 'Message sent');
+
+      // Sent mail only shows up locally after a sync, so refresh the folder
+      // the user is looking at.
+      reloadMessages(root, state, render);
+    }).catch(function (err) {
+      draft.sending = false;
+      reportMailError(state, err);
+      render();
+    });
+  }
+
+function renderComposeToolbar() {
     var groups = [
       [
         { icon: 'ArrowUUpLeft', label: 'Undo' },
@@ -2116,30 +2339,52 @@
     return '';
   }
 
+  /* A real form: the recipient chips, static subject span and read-only body
+   * the mock used are now inputs bound to the draft. */
   function renderComposeContent(draft) {
-    var subject = getComposeSubject(draft);
-    var bodyHtml = defaultComposeBody(draft);
+    var bodyHtml = draft.bodyHtml || defaultComposeBody(draft);
+
+    function addressRow(field, label) {
+      return (
+        '<div class="tma-dash__email-compose-to">' +
+        '<span class="tma-dash__email-compose-label">' + esc(label) + '</span>' +
+        '<div class="tma-dash__email-compose-recipients">' +
+        '<input type="text" class="tma-dash__email-compose-input"' +
+        ' data-email-compose-field="' + esc(field) + '" data-email-compose-id="' + esc(draft.id) + '"' +
+        ' value="' + esc(draft[field] || '') + '"' +
+        ' autocomplete="off" spellcheck="false"' +
+        ' aria-label="' + esc(label) + '" placeholder="name@example.com">' +
+        '</div>' +
+        (field === 'to'
+          ? '<button type="button" class="tma-dash__email-compose-expand"' +
+            ' data-email-compose-cc="' + esc(draft.id) + '"' +
+            ' aria-expanded="' + (draft.showCc ? 'true' : 'false') + '"' +
+            ' aria-label="Show Cc and Bcc">' +
+            '<img src="' + ICONS.ArrowLineUpDown + '" alt="">' +
+            '</button>'
+          : '') +
+        '</div>'
+      );
+    }
 
     return (
       '<div class="tma-dash__email-compose">' +
       '<div class="tma-dash__email-compose-headers">' +
-      '<div class="tma-dash__email-compose-to">' +
-      '<span class="tma-dash__email-compose-label">To</span>' +
-      '<div class="tma-dash__email-compose-recipients">' +
-      RECIPIENTS.map(renderRecipientChip).join('') +
-      '</div>' +
-      '<button type="button" class="tma-dash__email-compose-expand" aria-label="Show Cc and Bcc">' +
-      '<img src="' + ICONS.ArrowLineUpDown + '" alt="">' +
-      '</button>' +
-      '</div>' +
+      addressRow('to', 'To') +
+      (draft.showCc ? addressRow('cc', 'Cc') + addressRow('bcc', 'Bcc') : '') +
       '<div class="tma-dash__email-compose-subject">' +
       '<span class="tma-dash__email-compose-label">Subject</span>' +
-      '<span class="tma-dash__email-compose-subject-value">' + esc(subject) + '</span>' +
+      '<input type="text" class="tma-dash__email-compose-input"' +
+      ' data-email-compose-field="subject" data-email-compose-id="' + esc(draft.id) + '"' +
+      ' value="' + esc(getComposeSubject(draft)) + '"' +
+      ' aria-label="Subject" placeholder="Subject">' +
       '</div>' +
       '</div>' +
       '<div class="tma-dash__email-compose-editor">' +
       renderComposeToolbar() +
-      '<div class="tma-dash__email-compose-body">' + bodyHtml + '</div>' +
+      '<div class="tma-dash__email-compose-body" contenteditable="true" role="textbox"' +
+      ' aria-multiline="true" aria-label="Message body"' +
+      ' data-email-compose-body="' + esc(draft.id) + '">' + bodyHtml + '</div>' +
       '<div class="tma-dash__email-compose-footer">' +
       '<div class="tma-dash__email-compose-attach">' +
       [
@@ -2160,13 +2405,266 @@
         .join('') +
       '</div>' +
       '<div class="tma-dash__email-compose-send">' +
-      '<button type="button" class="tma-dash__email-compose-send-btn tma-dash__email-compose-send-btn--late">Send late</button>' +
-      '<button type="button" class="tma-dash__email-compose-send-btn tma-dash__email-compose-send-btn--primary">Send</button>' +
+      '<button type="button" class="tma-dash__email-compose-send-btn tma-dash__email-compose-send-btn--late"' +
+      ' data-email-compose-save="' + esc(draft.id) + '">Save draft</button>' +
+      '<button type="button" class="tma-dash__email-compose-send-btn tma-dash__email-compose-send-btn--primary"' +
+      ' data-email-compose-send="' + esc(draft.id) + '"' + (draft.sending ? ' disabled' : '') + '>' +
+      (draft.sending ? 'Sending…' : 'Send') + '</button>' +
       '</div>' +
       '</div>' +
       '</div>' +
       '</div>'
     );
+  }
+
+  /* ── settings ────────────────────────────────────────────────────
+   * The profile menu used to send the user to /settings, which meant leaving
+   * the mailbox to change anything about it. It now opens here, over the
+   * page, built from the same tma-dash__settings-* rows and switch the
+   * Account settings rail uses.
+   */
+
+  function settingsSwitch(checked, label, attrs) {
+    return '<label class="tma-dash__settings-switch">' +
+      '<input class="tma-dash__settings-switch-input" type="checkbox"' + (checked ? ' checked' : '') +
+      (attrs ? ' ' + attrs : '') +
+      ' role="switch" aria-label="' + esc(label) + '">' +
+      '<span class="tma-dash__settings-switch-ui" aria-hidden="true">' +
+      '<span class="tma-dash__settings-switch-track"></span>' +
+      '<span class="tma-dash__settings-switch-thumb"></span></span></label>';
+  }
+
+  function settingsRow(label, desc, control) {
+    return (
+      '<div class="tma-dash__settings-row">' +
+      '<span class="tma-dash__settings-row-copy">' +
+      '<span class="tma-dash__settings-row-label">' + esc(label) + '</span>' +
+      (desc ? '<span class="tma-dash__settings-row-desc">' + esc(desc) + '</span>' : '') +
+      '</span>' + (control || '') + '</div>'
+    );
+  }
+
+  function renderMailboxSection(state) {
+    var accounts = (state.settings && state.settings.accounts) || [];
+
+    if (!accounts.length) {
+      return (
+        '<div class="tma-dash__email-settings-empty">' +
+        '<p>No mailbox is connected.</p>' +
+        '<a class="tma-dash__email-settings-btn tma-dash__email-settings-btn--primary"' +
+        ' href="' + esc(api().connectUrl('google')) + '">Connect Google</a>' +
+        '<a class="tma-dash__email-settings-btn"' +
+        ' href="' + esc(api().connectUrl('microsoft')) + '">Connect Microsoft</a>' +
+        '</div>'
+      );
+    }
+
+    return accounts.map(function (account) {
+      var name = account.provider === 'google' ? 'Google' : 'Microsoft';
+
+      // The two states worth calling out: a grant too narrow to act on, and
+      // a sync that actually failed.
+      var warning = '';
+      if (account.syncEnabled && !account.canWrite) {
+        warning =
+          '<p class="tma-dash__email-settings-warning">Connected for reading only. ' +
+          'Reconnect to send and organise mail.</p>';
+      } else if (account.status === 'error' && account.error) {
+        warning = '<p class="tma-dash__email-settings-warning">' + esc(account.error) + '</p>';
+      }
+
+      var synced = account.syncedAt
+        ? 'Last synced ' + new Date(account.syncedAt).toLocaleString()
+        : 'Not synced yet';
+
+      return (
+        '<div class="tma-dash__email-settings-account">' +
+        settingsRow(
+          name + ' — ' + (account.email || 'unknown'),
+          account.syncEnabled ? synced : 'Mail sync is off',
+          settingsSwitch(account.syncEnabled, 'Sync mail from ' + name,
+            'data-email-settings-sync="' + esc(account.provider) + '"')
+        ) +
+        warning +
+        '<div class="tma-dash__email-settings-account-actions">' +
+        '<button type="button" class="tma-dash__email-settings-btn" data-email-settings-syncnow>Sync now</button>' +
+        '<a class="tma-dash__email-settings-btn" href="' + esc(api().connectUrl(account.provider)) + '">Reconnect</a>' +
+        '</div></div>'
+      );
+    }).join('');
+  }
+
+  function renderEmailSettings(state) {
+    if (!state.settingsOpen) return '';
+
+    var prefs = (state.settings && state.settings.preferences) || {};
+    var loading = !state.settings;
+
+    return (
+      '<div class="tma-dash__email-settings" data-email-settings role="dialog" aria-modal="true"' +
+      ' aria-label="Email settings">' +
+      '<button type="button" class="tma-dash__email-settings-scrim" data-email-settings-close aria-label="Close settings"></button>' +
+      '<div class="tma-dash__email-settings-card">' +
+      '<div class="tma-dash__email-settings-head">' +
+      '<h2 class="tma-dash__email-settings-title">Email settings</h2>' +
+      '<button type="button" class="tma-dash__email-settings-close" data-email-settings-close aria-label="Close">' +
+      '<img src="' + ICONS.X + '" alt=""></button>' +
+      '</div>' +
+
+      (loading
+        ? '<div class="tma-dash__email-settings-body"><p>Loading…</p></div>'
+        : '<div class="tma-dash__email-settings-body">' +
+          '<h3 class="tma-dash__email-settings-section">Mailbox</h3>' +
+          renderMailboxSection(state) +
+
+          '<h3 class="tma-dash__email-settings-section">Reading</h3>' +
+          settingsRow('Conversation view', 'Group replies into a single thread.',
+            settingsSwitch(prefs.conversationView, 'Conversation view',
+              'data-email-pref="conversationView"')) +
+          settingsRow('Preview pane', 'Show the message beside the list.',
+            settingsSwitch(prefs.previewPane, 'Preview pane', 'data-email-pref="previewPane"')) +
+          settingsRow('Read receipts', 'Ask senders to confirm you opened their mail.',
+            settingsSwitch(prefs.readReceipts, 'Read receipts', 'data-email-pref="readReceipts"')) +
+
+          '<h3 class="tma-dash__email-settings-section">Sending</h3>' +
+          settingsRow('Undo send window', 'Seconds to cancel a message after sending.',
+            '<input type="number" class="tma-dash__email-settings-number" min="0" max="30"' +
+            ' value="' + esc(prefs.undoSendSeconds == null ? 5 : prefs.undoSendSeconds) + '"' +
+            ' data-email-pref-number="undoSendSeconds" aria-label="Undo send window in seconds">') +
+
+          '<div class="tma-dash__email-settings-field">' +
+          '<label class="tma-dash__settings-row-label" for="tma-mail-signature">Signature</label>' +
+          '<textarea id="tma-mail-signature" class="tma-dash__email-settings-textarea" rows="4"' +
+          ' data-email-pref-text="signature"' +
+          ' placeholder="Appended to messages you send">' + esc(prefs.signature || '') + '</textarea>' +
+          '</div>' +
+          '</div>') +
+
+      '</div></div>'
+    );
+  }
+
+  function openEmailSettings(root, state, render) {
+    state.settingsOpen = true;
+    render();
+
+    // The panel is modal, so Escape has to work wherever focus happens to be.
+    // The page's other Escape handling is bound to the email mount, which a
+    // click on the scrim or a blurred field leaves behind.
+    if (!state._settingsEscBound) {
+      state._settingsEscBound = true;
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || !state.settingsOpen) return;
+        event.preventDefault();
+        state.settingsOpen = false;
+        if (state.render) state.render();
+      });
+    }
+
+    // Move focus into the dialog so screen readers land there and the first
+    // Escape is heard even if the trigger button is gone.
+    window.requestAnimationFrame(function () {
+      var card = root.querySelector('[data-email-settings] .tma-dash__email-settings-close');
+      if (card) card.focus();
+    });
+
+    api().getSettings().then(function (data) {
+      state.settings = data;
+      render();
+    }).catch(function (err) {
+      state.settingsOpen = false;
+      reportMailError(state, err);
+      render();
+    });
+  }
+
+  /* Preferences save on change — there is no Save button to forget. */
+  function saveEmailPreference(root, state, key, value) {
+    if (!state.settings) return;
+    state.settings.preferences[key] = value;
+
+    var payload = {};
+    payload[key] = value;
+
+    api().saveSettings({ preferences: payload }).then(function (data) {
+      state.settings = data;
+    }).catch(function (err) {
+      reportMailError(state, err);
+    });
+  }
+
+  function wireEmailSettings(root, state, render) {
+    root.querySelectorAll('[data-email-open-settings]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openEmailSettings(root, state, render);
+      });
+    });
+
+    root.querySelectorAll('[data-email-settings-close]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.settingsOpen = false;
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-email-settings-sync]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var provider = input.getAttribute('data-email-settings-sync');
+        api().saveSettings({ provider: provider, syncEnabled: input.checked })
+          .then(function (data) {
+            state.settings = data;
+            render();
+            // Turning sync on backfills the mailbox, so reload what it found.
+            if (input.checked) bootstrapMailbox(root, state, render);
+          })
+          .catch(function (err) {
+            input.checked = !input.checked;
+            reportMailError(state, err);
+          });
+      });
+    });
+
+    root.querySelectorAll('[data-email-settings-syncnow]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        btn.textContent = 'Syncing…';
+
+        api().sync().then(function (data) {
+          if (data && data.folders) state.folderCounts = data.folders;
+          showEmailToast(root, 'Synced ' + (data && data.synced ? data.synced : 0) + ' messages');
+          reloadMessages(root, state, render);
+          return api().getSettings();
+        }).then(function (data) {
+          state.settings = data;
+          render();
+        }).catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = 'Sync now';
+          reportMailError(state, err);
+        });
+      });
+    });
+
+    root.querySelectorAll('[data-email-pref]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        saveEmailPreference(root, state, input.getAttribute('data-email-pref'), input.checked);
+      });
+    });
+
+    root.querySelectorAll('[data-email-pref-number]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var value = Math.max(0, Math.min(30, parseInt(input.value, 10) || 0));
+        input.value = value;
+        saveEmailPreference(root, state, input.getAttribute('data-email-pref-number'), value);
+      });
+    });
+
+    root.querySelectorAll('[data-email-pref-text]').forEach(function (input) {
+      // Signatures are long; save on blur rather than per keystroke.
+      input.addEventListener('blur', function () {
+        saveEmailPreference(root, state, input.getAttribute('data-email-pref-text'), input.value);
+      });
+    });
   }
 
   function syncEmailUrl(folder) {
@@ -2617,15 +3115,93 @@
     commitEmailRowAction(root, state, render, id, destination);
   }
 
+  /* Moving a message out of the current folder drops it from the list and
+   * tells the provider. On failure the row is put back, because a message
+   * that silently stayed where it was would otherwise look archived. */
   function dismissEmailRow(state, id, destination) {
     if (!id) return;
-    if (!state.removedIds) state.removedIds = {};
-    state.removedIds[id] = destination;
+
+    var rows = rowsOf(state);
+    var at = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].id === id) { at = i; break; }
+    }
+    if (at === -1) return;
+
+    var row = rows[at];
+    rows.splice(at, 1);
     delete state.checkedIds[id];
     if (state.selectedId === id) {
       state.selectedId = null;
       state.reading = false;
     }
+
+    adjustFolderCount(state, state.folder, -1, row.unread);
+    adjustFolderCount(state, destination, 1, row.unread);
+
+    api().move(id, destination).then(function (data) {
+      if (data && data.folders) state.folderCounts = data.folders;
+    }).catch(function (err) {
+      rows.splice(at, 0, row);
+      adjustFolderCount(state, state.folder, 1, row.unread);
+      adjustFolderCount(state, destination, -1, row.unread);
+      reportMailError(state, err);
+      if (state.render) state.render();
+    });
+  }
+
+  /* One toolbar action across a selection.
+   *
+   * The mock only ever wired read/unread here; archive, spam and delete drew
+   * a button that did nothing. All of them now go through /portal/mail/bulk,
+   * which applies them message by message and reports how many failed. */
+  function applyBulkAction(root, state, render, ids, action) {
+    if (!ids.length) return;
+
+    var removes = ['archive', 'spam', 'trash', 'delete'].indexOf(action) !== -1;
+
+    // Snapshot enough to restore the list if the call fails.
+    var before = rowsOf(state).slice();
+
+    if (removes) {
+      state.rows = rowsOf(state).filter(function (row) {
+        return ids.indexOf(row.id) === -1;
+      });
+      clearEmailSelection(state);
+    } else {
+      ids.forEach(function (id) {
+        var row = findRow(state, id);
+        if (!row) return;
+        if (action === 'read' || action === 'unread') row.unread = action === 'unread';
+        if (action === 'star' || action === 'unstar') row.starred = action === 'star';
+      });
+    }
+
+    render();
+
+    api().bulk(ids, action).then(function (data) {
+      if (data && data.folders) state.folderCounts = data.folders;
+
+      if (data && data.failed) {
+        showEmailToast(root, data.failed + ' of ' + ids.length + " couldn't be updated");
+        reloadMessages(root, state, render);
+        return;
+      }
+
+      render();
+    }).catch(function (err) {
+      state.rows = before;
+      reportMailError(state, err);
+      render();
+    });
+  }
+
+  /* Keeps the sidebar badges honest between server round trips. */
+  function adjustFolderCount(state, folder, delta, wasUnread) {
+    if (!state.folderCounts || !state.folderCounts[folder]) return;
+    var counts = state.folderCounts[folder];
+    counts.total = Math.max(0, (counts.total || 0) + delta);
+    if (wasUnread) counts.unread = Math.max(0, (counts.unread || 0) + delta);
   }
 
   function buildEmailRowSwipeWrap(row, state, rowHtml) {
@@ -2796,10 +3372,8 @@
 
       function openEmailRowFromSwipe(wrap, id) {
         if (!id) return;
-        state.selectedId = id;
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
-        markRowRead(state, id);
-        render();
+        openMailMessage(root, state, render, id);
       }
 
       function endDrag(e) {
@@ -2961,10 +3535,8 @@
           return;
         }
         var id = rowEl.getAttribute('data-email-row');
-        state.selectedId = id;
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
-        markRowRead(state, id);
-        render();
+        openMailMessage(root, state, render, id);
       });
 
       rowEl.addEventListener('keydown', function (event) {
@@ -2973,10 +3545,8 @@
         if (event.target.closest('.tma-dash__email-row-action')) return;
         event.preventDefault();
         var id = rowEl.getAttribute('data-email-row');
-        state.selectedId = id;
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
-        markRowRead(state, id);
-        render();
+        openMailMessage(root, state, render, id);
       });
     });
 
@@ -3066,9 +3636,15 @@
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var id = btn.getAttribute('data-email-star');
-        if (state.starredIds[id]) delete state.starredIds[id];
-        else state.starredIds[id] = true;
-        var starred = !!state.starredIds[id];
+        var starRow = findRow(state, id);
+        if (!starRow) return;
+        starRow.starred = !starRow.starred;
+        var starred = !!starRow.starred;
+        api().setFlags(id, { starred: starred }).catch(function (err) {
+          starRow.starred = !starred;
+          reportMailError(state, err);
+          render();
+        });
         root.querySelectorAll('[data-email-star="' + id + '"]').forEach(function (el) {
           el.classList.toggle('tma-dash__email-row-action--active', starred);
           el.classList.toggle('tma-dash__email-detail-star--active', starred);
@@ -3083,9 +3659,15 @@
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var id = btn.getAttribute('data-email-important');
-        if (state.importantIds[id]) delete state.importantIds[id];
-        else state.importantIds[id] = true;
-        var important = !!state.importantIds[id];
+        var impRow = findRow(state, id);
+        if (!impRow) return;
+        impRow.important = !impRow.important;
+        var important = !!impRow.important;
+        api().setFlags(id, { important: important }).catch(function (err) {
+          impRow.important = !important;
+          reportMailError(state, err);
+          render();
+        });
         root.querySelectorAll('[data-email-important="' + id + '"]').forEach(function (el) {
           el.classList.toggle('tma-dash__email-detail-important--active', important);
           el.classList.toggle('tma-dash__email-row-action--active', important);
@@ -3105,9 +3687,17 @@
         if (labelId === 'address') {
           if (!state.hiddenDetailChips[rowId]) state.hiddenDetailChips[rowId] = {};
           state.hiddenDetailChips[rowId].address = true;
-        } else if (state.rowLabels[rowId]) {
-          delete state.rowLabels[rowId][labelId];
-          if (!Object.keys(state.rowLabels[rowId]).length) delete state.rowLabels[rowId];
+        } else {
+          var labelRow = findRow(state, rowId);
+          var at = labelRow && labelRow.labels ? labelRow.labels.indexOf(labelId) : -1;
+          if (at !== -1) {
+            labelRow.labels.splice(at, 1);
+            api().setLabel(rowId, labelId, false).catch(function (err) {
+              labelRow.labels.push(labelId);
+              reportMailError(state, err);
+              render();
+            });
+          }
         }
         render();
       });
@@ -3145,7 +3735,7 @@
         state.reading = false;
         state.mobileNavOpen = false;
         syncEmailUrl('inbox');
-        render();
+        reloadMessages(root, state, render);
       });
     });
 
@@ -3158,7 +3748,7 @@
         if (!id || !rowEl) return;
 
         if (action === 'read') {
-          if (isRowUnread({ id: id }, state)) {
+          if (isRowUnread(findRow(state, id), state)) {
             markRowRead(state, id);
             syncEmailRowReadClasses(rowEl, false);
           } else {
@@ -3167,7 +3757,7 @@
           }
           var readBtn = rowEl.querySelector('[data-email-row-hover="read"]');
           if (readBtn) {
-            var nowUnread = isRowUnread({ id: id }, state);
+            var nowUnread = isRowUnread(findRow(state, id), state);
             readBtn.setAttribute('aria-label', nowUnread ? 'Mark as read' : 'Mark as unread');
             var readIcon = readBtn.querySelector('img');
             if (readIcon) readIcon.src = nowUnread ? ICONS.EnvelopeSimpleOpen : ICONS.EnvelopeSimple;
@@ -3254,7 +3844,11 @@
           closeEmailProfileMenu(root, state);
           closeEmailProfileSidebar(state);
           var action = actionBtn.getAttribute('data-email-profile-action');
-          if (action === 'settings') window.location.href = '/settings';
+          // Opens over the mailbox instead of navigating to /settings.
+          if (action === 'settings') {
+            openEmailSettings(root, state, render);
+            return;
+          }
           if (action === 'sign-out') window.location.href = '/sign-in';
           render();
           return;
@@ -3295,6 +3889,12 @@
 
       root.addEventListener('keydown', function (event) {
         if (event.key !== 'Escape') return;
+        // Settings sits above everything else, so it closes first.
+        if (state.settingsOpen) {
+          state.settingsOpen = false;
+          render();
+          return;
+        }
         if (root.querySelector('[data-email-header-details-toggle][aria-expanded="true"]')) {
           closeEmailHeaderDetails(root);
           return;
@@ -3383,7 +3983,7 @@
             state.searchLoading = false;
             var slotEl = dash.querySelector('.tma-dash__header-center');
             if (slotEl) updateEmailSearchWrap(slotEl, state);
-            updateInboxList(root, state, render);
+            reloadMessages(root, state, render);
           }, 180);
         });
         dash.addEventListener('click', function (event) {
@@ -3399,7 +3999,7 @@
               if (searchInput) searchInput.value = '';
               updateEmailSearchWrap(slot, state);
             }
-            updateInboxList(root, state, render);
+            reloadMessages(root, state, render);
             var focusInput = dash.querySelector('[data-email-search]');
             if (focusInput) focusInput.focus();
             return;
@@ -3435,8 +4035,10 @@
         state.activeLabelId = null;
         state.reading = false;
         state.mobileNavOpen = false;
+        state.selectedId = null;
+        clearEmailSelection(state);
         if (folder === 'templates' || folder === 'inbox') syncEmailUrl(folder);
-        render();
+        reloadMessages(root, state, render);
       });
     });
 
@@ -3453,11 +4055,14 @@
           return;
         }
 
-        if (item === 'unread') {
-          ids.forEach(function (id) {
-            markRowUnread(state, id);
-            syncEmailRowReadClasses(root.querySelector('[data-email-row="' + id + '"]'), true);
-          });
+        var MORE_ACTIONS = {
+          'unread': 'unread',
+          'add-star': 'star',
+          'remove-star': 'unstar',
+        };
+
+        if (MORE_ACTIONS[item]) {
+          applyBulkAction(root, state, render, ids, MORE_ACTIONS[item]);
         }
 
         closeEmailBulkMoreMenu(root, state);
@@ -3496,12 +4101,14 @@
 
         closeEmailBulkMoreMenu(root, state);
 
-        if (action === 'read') {
-          ids.forEach(function (id) {
-            markRowRead(state, id);
-            syncEmailRowReadClasses(root.querySelector('[data-email-row="' + id + '"]'), false);
-          });
+        // 'move' opens a picker rather than acting directly; everything else
+        // maps straight onto a bulk action.
+        if (action === 'move') {
+          openEmailLabelPopup(root, state, bulkBtn, { bulk: true });
+          return;
         }
+
+        applyBulkAction(root, state, render, ids, action);
       });
     }
 
@@ -3610,10 +4217,8 @@
         var dir = btn.getAttribute('data-email-nav');
         var id = dir === 'prev' ? nav.prevId : nav.nextId;
         if (!id) return;
-        state.selectedId = id;
-        markRowRead(state, id);
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
-        render();
+        openMailMessage(root, state, render, id);
       });
     });
 
@@ -3784,7 +4389,8 @@
 
     var state = {
       folder: initialFolder,
-      selectedId: 'slack',
+      // Nothing is selected until the first page of real mail arrives.
+      selectedId: null,
       selectedTemplateId: 'auth-sign-in',
       composeDrafts: [],
       nextComposeId: 1,
@@ -3794,22 +4400,26 @@
       search: '',
       searchFocused: false,
       searchLoading: false,
-      readIds: { slack: true },
-      removedIds: {},
+
+      /* Server-backed mailbox state. Rows carry their own read/star/label
+       * flags, so the old shadow maps (readIds, starredIds, rowLabels,
+       * removedIds) are gone — checkedIds stays because selection is a
+       * property of this view, not of the message. */
+      rows: [],
       checkedIds: {},
-      starredIds: {},
-      importantIds: { slack: true, andi: true },
+      folderCounts: {},
+      labels: [],
+      account: null,
+      connected: null,
+      loading: true,
+      loadError: null,
+      loadToken: 0,
+      hasMore: false,
+      bodyLoading: false,
+      settingsOpen: false,
+      settings: null,
+
       hiddenDetailChips: {},
-      rowLabels: {
-        slack: { work: true },
-        drew: { personal: true },
-        andi: { work: true, important: true },
-        behance: { updates: true },
-        kate: { work: true },
-        koray: { work: true, travel: true },
-        facebook: { updates: true },
-        youtube: { travel: true },
-      },
       activeLabelId: null,
       bulkMoreMenuOpen: false,
       labelPopupOpen: false,
@@ -3841,9 +4451,11 @@
         '</div>' +
         renderComposeWindows(state) +
         renderComposeDock(state) +
+        renderEmailSettings(state) +
         '</div>';
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
+      wireEmailSettings(root, state, render);
       if (state.inlineCompose) {
         window.requestAnimationFrame(function () {
           focusInlineComposeEditor(root);
@@ -3880,6 +4492,13 @@
 
     root._emailState = state;
     root._emailRender = render;
+
+    // Handlers that only hold `state` still need to repaint and to reach the
+    // toast host, so both travel with it.
+    state.root = root;
+    state.render = render;
+    state.reload = function () { reloadMessages(root, state, render); };
+
     root._emailToggleMobileNav = function () {
       closeEmailProfileSidebar(state);
       state.mobileNavOpen = !state.mobileNavOpen;
@@ -3891,7 +4510,11 @@
       closeEmailProfileSidebar(state);
       render();
     };
+
+    // Paint the shell first (sidebar, chrome, loading state), then fill it
+    // from the server — the page should never look blank while it waits.
     render();
+    bootstrapMailbox(root, state, render);
   }
 
   window.TMAEmail = {

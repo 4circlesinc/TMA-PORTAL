@@ -8,6 +8,7 @@ use App\Http\Middleware\IssueTrustedDeviceCookie;
 use App\Http\Middleware\EnsureProfileComplete;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\UploadConflictException;
+use App\Support\Mail\MailAuthException;
 use Illuminate\Foundation\Application;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -55,6 +56,20 @@ return Application::configure(basePath: dirname(__DIR__))
                     'conflict' => true,
                     'existingName' => $e->existingName,
                     'suggestion' => $e->suggestion,
+                ], 409);
+            }
+
+            return null;
+        });
+
+        // A mailbox that needs reconnecting is an expected state, not a
+        // failure: the email page turns this into a "Reconnect" prompt, so it
+        // needs the reason and a status it can branch on rather than a 500.
+        $exceptions->render(function (MailAuthException $e, Request $request) {
+            if ($request->is('portal/mail*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'reconnect' => true,
                 ], 409);
             }
 
