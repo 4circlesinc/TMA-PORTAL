@@ -328,9 +328,35 @@ class GmailProvider implements MailProvider
             'body_text' => $parts['text'],
             'cc' => self::parseAddressList($headers['cc'] ?? ''),
             'reply_to' => $headers['reply-to'] ?? null,
-            'attachments' => $parts['attachments'],
+            'attachments' => self::resolveInlineAttachments($parts['attachments'], $parts['html']),
             'has_attachments' => $parts['attachments'] !== [],
         ];
+    }
+
+    /**
+     * Gmail stamps a Content-ID on essentially every attachment, embedded or
+     * not - it is not a signal of inlineness by itself (mirrors the same fix
+     * already in GraphProvider). A Content-ID only means "embedded" when the
+     * body's HTML actually points at it with `cid:`; otherwise it is a normal
+     * file attachment (a contract, a scanned ID, a utility bill) that must
+     * still show up as one. Treating "has a Content-ID" as "is inline" hid
+     * exactly that kind of attachment.
+     *
+     * @param  array<int, array<string, mixed>>  $attachments
+     */
+    private static function resolveInlineAttachments(array $attachments, ?string $html): array
+    {
+        return array_map(function (array $a) use ($html) {
+            $cid = $a['content_id'];
+            $referenced = $cid && $html && (
+                str_contains($html, 'cid:'.$cid)
+                || str_contains($html, 'cid:'.rawurlencode($cid))
+            );
+
+            $a['is_inline'] = $a['is_inline'] || $referenced;
+
+            return $a;
+        }, $attachments);
     }
 
     /**
@@ -359,8 +385,10 @@ class GmailProvider implements MailProvider
                 'mime_type' => $mime,
                 'size' => (int) ($body['size'] ?? 0),
                 // Inline images belong to the body, not the attachment strip.
-                'is_inline' => str_contains(strtolower((string) $headers->get('content-disposition', '')), 'inline')
-                    || $contentId !== '',
+                // A bare Content-ID is not enough on its own - see
+                // resolveInlineAttachments(), which checks whether the body
+                // actually embeds it.
+                'is_inline' => str_contains(strtolower((string) $headers->get('content-disposition', '')), 'inline'),
                 'content_id' => $contentId ?: null,
             ];
         } elseif (! empty($body['data'])) {

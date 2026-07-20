@@ -470,6 +470,84 @@
     }
   }
 
+  /* Field edits and the editor body write straight to state.inlineCompose —
+   * no re-render here, same reasoning as wireComposeEvents: repainting the
+   * panel while the user is typing would move the caret out from under them. */
+  function wireInlineComposeEvents(root, state, render) {
+    var panel = root.querySelector('[data-email-inline-compose-panel]');
+    if (!panel) return;
+
+    panel.querySelectorAll('[data-email-inline-compose-field]').forEach(function (input) {
+      input.addEventListener('input', function () {
+        if (!state.inlineCompose) return;
+        state.inlineCompose[input.getAttribute('data-email-inline-compose-field')] = input.value;
+      });
+    });
+
+    var editor = panel.querySelector('[data-email-inline-compose-editor]');
+    if (editor) {
+      editor.addEventListener('input', function () {
+        if (!state.inlineCompose) return;
+        state.inlineCompose.bodyHtml = editor.innerHTML;
+      });
+    }
+
+    var sendBtn = panel.querySelector('[data-email-inline-compose-send]');
+    if (sendBtn) {
+      sendBtn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        sendInlineCompose(root, state, render);
+      });
+    }
+  }
+
+  function sendInlineCompose(root, state, render) {
+    var ic = state.inlineCompose;
+    if (!ic || ic.sending) return;
+
+    var row = findRow(state, ic.messageId);
+    if (!row) {
+      closeInlineCompose(state);
+      render();
+      return;
+    }
+
+    var to = ic.mode === 'reply' ? [{ name: row.sender, email: rowSenderEmail(row) }] : parseAddresses(ic.to);
+    if (!to.length) {
+      showEmailToast(root, 'Add at least one recipient');
+      return;
+    }
+
+    var panel = root.querySelector('[data-email-inline-compose-panel]');
+    var editor = panel && panel.querySelector('[data-email-inline-compose-editor]');
+    var quote = panel && panel.querySelector('.tma-dash__email-inline-quote');
+    var bodyHtml = (editor ? editor.innerHTML : ic.bodyHtml || '') + (quote ? quote.outerHTML : '');
+    var subject = ic.mode === 'forward' ? getForwardSubject(row.subject) : getReplySubject(row.subject);
+
+    window.clearTimeout(ic._saveTimer);
+    ic.sending = true;
+    render();
+
+    api().send({
+      to: to,
+      cc: ic.mode === 'reply-all' ? parseAddresses(ic.cc) : [],
+      subject: subject,
+      bodyHtml: bodyHtml,
+      inReplyTo: ic.messageId,
+    }).then(function () {
+      closeInlineCompose(state);
+      showEmailToast(root, 'Message sent');
+
+      // Sent mail only shows up locally after a sync, so refresh the folder
+      // the user is looking at.
+      reloadMessages(root, state, render);
+    }).catch(function (err) {
+      ic.sending = false;
+      reportMailError(state, err);
+      render();
+    });
+  }
+
   function renderEmailHeaderReadingBack(state) {
     if (!(state.layoutStyle === 'single' || isEmailMobile()) || !state.reading) return '';
     var label = state.folder === 'templates' ? 'Templates' : 'Inbox';
@@ -956,6 +1034,98 @@
       state.rows = [];
       reportMailError(state, err);
       render();
+    });
+  }
+
+  var MAIL_POLL_INTERVAL = 5000;
+
+  /* True while a re-render would do more harm than good: it would yank
+   * focus/caret out of whatever the user is mid-typing, or repaint a tab
+   * nobody is looking at for nothing. */
+  function mailPollShouldWait(state) {
+    return (
+      document.hidden ||
+      !state.connected ||
+      state.folder === 'templates' ||
+      state.composeDrafts.length > 0 ||
+      !!state.inlineCompose
+    );
+  }
+
+  /* Cheap enough to run every tick: same ids in the same order, with the
+   * same read/starred/label state, is "nothing changed" even if the server
+   * handed back fresh objects. */
+  function sameMessageList(a, b) {
+    a = a || [];
+    b = b || [];
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (
+        a[i].id !== b[i].id ||
+        a[i].unread !== b[i].unread ||
+        a[i].starred !== b[i].starred ||
+        (a[i].labels || []).join(',') !== (b[i].labels || []).join(',')
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function scheduleMailPoll(root, state, render) {
+    window.clearTimeout(state._mailPollTimer);
+    state._mailPollTimer = window.setTimeout(function () {
+      pollNewMail(root, state, render);
+    }, MAIL_POLL_INTERVAL);
+  }
+
+  /* Quiet background refresh: pulls the provider's change feed since the
+   * last cursor (cheap — see MailSynchronizer::incremental) and repaints
+   * only if the list actually changed, so an inbox with nothing new never
+   * flickers or steals the user's scroll position. No loading spinner, no
+   * error toast — the manual Sync button already covers that. */
+  function pollNewMail(root, state, render) {
+    if (mailPollShouldWait(state)) {
+      scheduleMailPoll(root, state, render);
+      return;
+    }
+
+    var token = ++state.loadToken;
+
+    api().sync().catch(function () {
+      // Best-effort: fall through to listMessages with whatever is local.
+    }).then(function () {
+      return api().listMessages({
+        folder: state.folder,
+        search: state.search,
+        label: state.activeLabelId,
+        page: state.page,
+        perPage: state.perPage,
+      });
+    }).then(function (data) {
+      // A folder switch, search, or manual reload started after this poll
+      // began owns the screen now — don't stomp on it.
+      if (token !== state.loadToken) return;
+
+      var incoming = (data && data.messages) || [];
+      if (sameMessageList(state.rows, incoming)) return;
+
+      state.rows = incoming;
+      state.hasMore = !!(data && data.hasMore);
+      state.total = (data && data.total) || 0;
+      state.lastPage = (data && data.lastPage) || 1;
+      if (data && data.perPageOptions) state.perPageOptions = data.perPageOptions;
+
+      // Keep the reading pane pointed at something that still exists.
+      if (state.selectedId && !findRow(state, state.selectedId)) {
+        state.selectedId = state.rows.length ? state.rows[0].id : null;
+      }
+
+      render();
+    }).catch(function () {
+      // Silent — this is a background refresh, not a user action.
+    }).then(function () {
+      scheduleMailPoll(root, state, render);
     });
   }
 
@@ -3017,22 +3187,22 @@ function threadRowFromPrior(prior, fallbackTo) {
 function renderComposeToolbar() {
     var groups = [
       [
-        { icon: 'ArrowUUpLeft', label: 'Undo' },
-        { icon: 'ArrowUUpRight', label: 'Redo' },
+        { icon: 'ArrowUUpLeft', label: 'Undo', cmd: 'undo' },
+        { icon: 'ArrowUUpRight', label: 'Redo', cmd: 'redo' },
       ],
       [
         { icon: 'TextT', label: 'Text style', caret: true },
         { icon: 'TextAa', label: 'Text color', caret: true },
       ],
       [
-        { icon: 'TextB', label: 'Bold' },
-        { icon: 'TextItalic', label: 'Italic' },
-        { icon: 'TextUnderline', label: 'Underline' },
-        { icon: 'TextStrikethrough', label: 'Strikethrough' },
-        { icon: 'ListBullets', label: 'Bulleted list' },
+        { icon: 'TextB', label: 'Bold', cmd: 'bold' },
+        { icon: 'TextItalic', label: 'Italic', cmd: 'italic' },
+        { icon: 'TextUnderline', label: 'Underline', cmd: 'underline' },
+        { icon: 'TextStrikethrough', label: 'Strikethrough', cmd: 'strikeThrough' },
+        { icon: 'ListBullets', label: 'Bulleted list', cmd: 'insertUnorderedList' },
       ],
       [
-        { icon: 'Link', label: 'Insert link' },
+        { icon: 'Link', label: 'Insert link', cmd: 'createLink' },
         { icon: 'DotsThree', label: 'More' },
       ],
     ];
@@ -3047,7 +3217,9 @@ function renderComposeToolbar() {
             group
               .map(function (item) {
                 return (
-                  '<button type="button" class="tma-dash__email-compose-tool' + (item.caret ? ' tma-dash__email-compose-tool--caret' : '') + '" aria-label="' + esc(item.label) + '">' +
+                  '<button type="button" class="tma-dash__email-compose-tool' + (item.caret ? ' tma-dash__email-compose-tool--caret' : '') + '"' +
+                  (item.cmd ? ' data-email-compose-tool-cmd="' + esc(item.cmd) + '"' : '') +
+                  ' aria-label="' + esc(item.label) + '">' +
                   '<img src="' + esc(ICONS[item.icon]) + '" alt="">' +
                   (item.caret ? '<img class="tma-dash__email-compose-tool-caret" src="' + ICONS.CaretDown + '" alt="">' : '') +
                   '</button>'
@@ -4624,6 +4796,26 @@ function renderComposeToolbar() {
       });
     }
 
+    if (!root._emailToolbarBound) {
+      root._emailToolbarBound = true;
+
+      // mousedown, not click: execCommand needs the selection that's still
+      // live in the editor the instant before the button would steal focus.
+      root.addEventListener('mousedown', function (event) {
+        var toolBtn = event.target.closest('[data-email-compose-tool-cmd]');
+        if (!toolBtn) return;
+        event.preventDefault();
+        var cmd = toolBtn.getAttribute('data-email-compose-tool-cmd');
+        if (cmd === 'createLink') {
+          var url = window.prompt('Link URL');
+          if (!url) return;
+          document.execCommand('createLink', false, url);
+          return;
+        }
+        document.execCommand(cmd, false, null);
+      });
+    }
+
     if (!root._emailProfileBound) {
       root._emailProfileBound = true;
 
@@ -5294,6 +5486,7 @@ function renderComposeToolbar() {
         '</div>';
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
+      wireInlineComposeEvents(root, state, render);
       wireEmailSettings(root, state, render);
       if (state.inlineCompose) {
         window.requestAnimationFrame(function () {
@@ -5358,6 +5551,18 @@ function renderComposeToolbar() {
     // Show how far the mailbox history has downloaded, bottom-right.
     stopSyncPolling();
     pollSyncStatus();
+
+    // New mail shows up on its own, like a real inbox — quiet background
+    // poll, no spinner, no toast.
+    scheduleMailPoll(root, state, render);
+    if (!root._mailPollVisibilityBound) {
+      root._mailPollVisibilityBound = true;
+      document.addEventListener('visibilitychange', function () {
+        // Catch up immediately instead of waiting out whatever's left of
+        // the interval from before the tab was hidden.
+        if (!document.hidden) pollNewMail(root, state, render);
+      });
+    }
   }
 
   window.TMAEmail = {
