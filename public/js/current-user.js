@@ -376,6 +376,10 @@
     // Shared resolver so re-rendered views (e.g. the dashboard greeting) draw
     // the same photo/initials this file does — never a broken images/avatars/…
     avatarSrc: avatarSrc,
+    // Initials for someone who is *not* the signed-in user (an email sender,
+    // say): same palette and shape, seeded per person so a given address keeps
+    // its colour everywhere it appears.
+    initialsFor: function (displayName, seed) { return initialsAvatar(displayName, seed || displayName); },
     // Re-apply the signed-in user to all shell chrome after a view re-renders.
     repaint: paint,
   };

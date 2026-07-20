@@ -361,7 +361,25 @@
 
 /* Mailbox history download — same chrome as the upload panel, but it sits
    above it so a running upload and a running mail sync do not overlap. */
-.tma-mail-sync { bottom: calc(var(--space-20) + 96px); }
+.tma-mail-sync {
+  /* Sits in the corner like the uploader. It only moves up when an upload
+     panel is actually on screen (rule below), rather than floating clear of
+     one that usually isn't there. */
+  bottom: var(--space-20);
+  /* A status card, not a file list: narrower and quieter than the uploader. */
+  width: 300px;
+  font-size: var(--text-size-12);
+}
+
+/* Both panels visible at once: stack the sync card above the uploader. */
+body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
+  bottom: calc(var(--space-20) + 108px);
+}
+.tma-mail-sync .tma-portal-upload__title { font-size: var(--text-size-14); }
+.tma-mail-sync .tma-portal-upload__list { padding: var(--space-8) var(--space-12) var(--space-10); }
+.tma-mail-sync .tma-portal-upload__item { padding: 0; }
+.tma-mail-sync .tma-portal-upload__name { font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-mail-sync__icon img { width: 12px; height: 12px; opacity: 0.55; display: block; margin: auto; }
 .tma-mail-sync__bar--indeterminate .tma-portal-upload__fill {
   width: 40% !important;
   animation: tma-mail-sync-slide 1.4s ease-in-out infinite;

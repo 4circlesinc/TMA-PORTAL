@@ -43,6 +43,7 @@
     Paperclip: ICON + 'Paperclip.svg',
     Image: ICON + 'Image.svg',
     CaretDown: ICON + 'CaretDown.svg',
+    CaretUp: ICON + 'CaretUp.svg',
     ArrowLineUpDown: 'images/icons/tma/ArrowLineUpDown.svg',
     EnvelopeSimpleOpen: ICON + 'EnvelopeSimpleOpen.svg',
     FolderSimple: ICON + 'FolderSimple.svg',
@@ -1401,8 +1402,9 @@
         '</span>'
       );
     }
-    var initial = (row.sender || '?').charAt(0).toUpperCase();
-    return '<span class="tma-dash__email-message-avatar tma-dash__email-message-avatar--initial" aria-hidden="true">' + esc(initial) + '</span>';
+    return '<span class="tma-dash__email-message-avatar">' +
+      '<img src="' + esc(senderInitials(row)) + '" alt="" aria-hidden="true">' +
+      '</span>';
   }
 
   function getMessageRecipient(row) {
@@ -1581,9 +1583,11 @@
       '<header class="tma-portal-upload__head">' +
       '<span class="tma-portal-upload__title">' + esc(title) + '</span>' +
       '<span class="tma-portal-upload__head-actions">' +
-      '<button type="button" class="tma-portal-upload__icon" data-mail-sync-action="collapse" aria-label="' +
-      (syncCollapsed ? 'Expand' : 'Collapse') + '">' + (syncCollapsed ? '▲' : '▼') + '</button>' +
-      '<button type="button" class="tma-portal-upload__icon" data-mail-sync-action="close" aria-label="Close">✕</button>' +
+      '<button type="button" class="tma-portal-upload__icon tma-mail-sync__icon" data-mail-sync-action="collapse" aria-label="' +
+      (syncCollapsed ? 'Expand' : 'Collapse') + '">' +
+      '<img src="' + (syncCollapsed ? ICONS.CaretUp : ICONS.CaretDown) + '" alt="" aria-hidden="true"></button>' +
+      '<button type="button" class="tma-portal-upload__icon tma-mail-sync__icon" data-mail-sync-action="close" aria-label="Close">' +
+      '<img src="' + ICONS.X + '" alt="" aria-hidden="true"></button>' +
       '</span></header>' +
       (syncCollapsed ? '' :
         '<ul class="tma-portal-upload__list">' +
@@ -1591,10 +1595,11 @@
         '<div class="tma-portal-upload__row">' +
         '<span class="tma-portal-upload__name">' + esc(meta) + '</span>' +
         '</div>' +
+        // A div, not a span: the bar needs a block box or its height collapses.
         // With no provider total we still show motion, via an indeterminate bar.
-        '<span class="tma-portal-upload__bar' + (pct === null && !finished ? ' tma-mail-sync__bar--indeterminate' : '') + '">' +
+        '<div class="tma-portal-upload__bar' + (pct === null && !finished ? ' tma-mail-sync__bar--indeterminate' : '') + '">' +
         '<span class="tma-portal-upload__fill" style="width:' + (finished ? 100 : (pct === null ? 100 : pct)) + '%"></span>' +
-        '</span>' +
+        '</div>' +
         '<div class="tma-portal-upload__meta">' +
         '<span>' + (pct === null ? (finished ? 'Complete' : 'Working…') : pct + '%') + '</span>' +
         '<span>' + esc(finished ? 'All folders' : 'Keeps going in the background') + '</span>' +
@@ -3065,6 +3070,17 @@ function renderComposeToolbar() {
     if (row.brand) {
       return '<span class="tma-dash__email-row-icon"><img src="' + esc(brandSrc(row.brand)) + '" alt=""></span>';
     }
+    // The sender's real photo, when we have one. Falls back to initials on a
+    // load error so a dead URL never leaves an empty circle.
+    if (row.avatarUrl) {
+      return (
+        '<span class="tma-dash__email-row-avatar">' +
+        '<img src="' + esc(row.avatarUrl) + '" alt=""' +
+        ' onerror="this.parentNode.classList.add(\'tma-dash__email-row-avatar--initial\');' +
+        'this.parentNode.textContent=' + JSON.stringify((row.sender || '?').charAt(0).toUpperCase()) + ';">' +
+        '</span>'
+      );
+    }
     if (row.avatar) {
       return (
         '<span class="tma-dash__email-row-avatar">' +
@@ -3072,8 +3088,21 @@ function renderComposeToolbar() {
         '</span>'
       );
     }
-    var initial = (row.sender || '?').charAt(0).toUpperCase();
-    return '<span class="tma-dash__email-row-avatar tma-dash__email-row-avatar--initial" aria-hidden="true">' + esc(initial) + '</span>';
+    // No photo for this sender — draw the portal's initials avatar, coloured
+    // per address so each correspondent is recognisable at a glance.
+    return '<span class="tma-dash__email-row-avatar">' +
+      '<img src="' + esc(senderInitials(row)) + '" alt="" aria-hidden="true">' +
+      '</span>';
+  }
+
+  /* Initials avatar for a message's sender, via the shared generator. */
+  function senderInitials(row) {
+    var name = row.sender || row.email || '?';
+    var seed = row.email || name;
+    if (window.TMACurrentUser && window.TMACurrentUser.initialsFor) {
+      return window.TMACurrentUser.initialsFor(name, seed);
+    }
+    return '';
   }
 
   function rowListAvatar(row, state) {
