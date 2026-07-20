@@ -102,13 +102,31 @@ class GraphProvider implements MailProvider
 
     public function changesSince(?string $cursor): array
     {
-        // The cursor is a complete deltaLink; without one, start a new delta
-        // stream on the inbox.
-        $response = $cursor
-            ? $this->request()->get($cursor)
-            : $this->request()->get(self::BASE.'/mailFolders/inbox/messages/delta', [
-                '$select' => self::LIST_SELECT,
-            ]);
+        // No cursor yet: we only need a starting point to watch from. Graph has
+        // no "just give me a token" option for message delta, so walk to the
+        // deltaLink — but ask for ids only in big pages and throw the payload
+        // away. That is a handful of requests with flat memory, instead of
+        // streaming every message in the mailbox (which never finished on a
+        // large account). The history itself comes from the backfill.
+        if (! $cursor) {
+            $response = $this->request()
+                ->withHeaders(['Prefer' => 'odata.maxpagesize=1000'])
+                ->get(self::BASE.'/mailFolders/inbox/messages/delta', ['$select' => 'id']);
+
+            $data = $this->json($response);
+            $next = $data['@odata.nextLink'] ?? null;
+            $delta = $data['@odata.deltaLink'] ?? null;
+
+            while ($next && ! $delta) {
+                $page = $this->json($this->request()->get($next));
+                $next = $page['@odata.nextLink'] ?? null;
+                $delta = $page['@odata.deltaLink'] ?? null;
+            }
+
+            return ['messages' => [], 'deleted' => [], 'cursor' => $delta];
+        }
+
+        $response = $this->request()->get($cursor);
 
         // 410 Gone: the delta token aged out and cannot be resumed.
         if ($response->status() === 410) {

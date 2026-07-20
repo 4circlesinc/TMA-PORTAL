@@ -23471,3 +23471,54 @@ button.tma-dash__header-popup-item:focus-visible {
   line-height: var(--text-lh-12);
   color: var(--color-text-primary);
 }
+
+/* Email list pager: page controls + how many messages a page holds. */
+.tma-dash__email-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  padding: var(--space-8) var(--space-12);
+  border-top: 1px solid var(--color-border-soft);
+  background: var(--color-white);
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.tma-dash__email-pagination-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.tma-dash__email-perpage {
+  font: inherit;
+  color: var(--color-text-primary);
+  background: transparent;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  padding: 2px var(--space-4);
+  cursor: pointer;
+}
+.tma-dash__email-pagination-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.tma-dash__email-pagination-page { white-space: nowrap; padding: 0 var(--space-4); }
+.tma-dash__email-pagination-range { white-space: nowrap; }
+.tma-dash__email-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+}
+.tma-dash__email-page-btn:hover:not(:disabled) { background: var(--color-hover); }
+.tma-dash__email-page-btn:disabled { opacity: 0.35; cursor: default; }
+.tma-dash__email-page-btn img { width: 14px; height: 14px; opacity: 0.7; }

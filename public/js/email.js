@@ -51,6 +51,7 @@
     Tag: ICON + 'Tag.svg',
     Important: ICON + 'TagChevron.svg',
     ArrowLineRight: ICON + 'ArrowLineRight.svg',
+    ArrowLineLeft: ICON + 'ArrowLineLeft.svg',
     PaperclipHorizontal: ICON + 'PaperclipHorizontal.svg',
     SpeakerSlash: ICON + 'SpeakerSlash.svg',
     ChatCircleDots: ICON + 'ChatCircleDots.svg',
@@ -89,6 +90,20 @@
     try {
       localStorage.setItem(SPLIT_RATIO_STORE_KEY, String(ratio));
     } catch (e) { /* ignore */ }
+  }
+
+  var MAIL_PER_PAGE_KEY = 'tma.mail.perPage.v1';
+
+  function loadMailPerPage() {
+    try {
+      var saved = parseInt(localStorage.getItem(MAIL_PER_PAGE_KEY), 10);
+      if ([25, 50, 100, 200].indexOf(saved) !== -1) return saved;
+    } catch (e) { /* ignore */ }
+    return 50;
+  }
+
+  function saveMailPerPage(n) {
+    try { localStorage.setItem(MAIL_PER_PAGE_KEY, String(n)); } catch (e) { /* ignore */ }
   }
 
   function loadLayoutStyle() {
@@ -831,6 +846,14 @@
     // Templates are portal-local and have no server listing.
     if (state.folder === 'templates') return;
 
+    // Changing folder, label or search starts a new listing — page 5 of the
+    // inbox says nothing about page 5 of Sent.
+    var context = [state.folder, state.activeLabelId || '', state.search || ''].join(' ');
+    if (state._listContext !== context) {
+      state._listContext = context;
+      state.page = 1;
+    }
+
     var token = ++state.loadToken;
     state.loading = true;
     render();
@@ -839,12 +862,19 @@
       folder: state.folder,
       search: state.search,
       label: state.activeLabelId,
+      page: state.page,
+      perPage: state.perPage,
     }).then(function (data) {
       // A slower earlier request must not overwrite a newer folder's rows.
       if (token !== state.loadToken) return;
 
       state.rows = (data && data.messages) || [];
       state.hasMore = !!(data && data.hasMore);
+      state.total = (data && data.total) || 0;
+      state.page = (data && data.page) || 1;
+      state.perPage = (data && data.perPage) || state.perPage;
+      state.lastPage = (data && data.lastPage) || 1;
+      if (data && data.perPageOptions) state.perPageOptions = data.perPageOptions;
       state.loading = false;
       state.loadError = null;
 
@@ -1354,6 +1384,16 @@
     if (row.brand) {
       return '<span class="tma-dash__email-message-avatar tma-dash__email-message-avatar--brand">' + rowIcon(row) + '</span>';
     }
+    // A real photo from the sender's portal account; falls back to initials
+    // on error so a dead URL never leaves an empty circle.
+    if (row.avatarUrl) {
+      return (
+        '<span class="tma-dash__email-message-avatar">' +
+        '<img src="' + esc(row.avatarUrl) + '" alt=""' +
+        ' onerror="this.closest(\'.tma-dash__email-message-avatar\').classList.add(\'tma-dash__email-message-avatar--initial\');this.remove();">' +
+        '</span>'
+      );
+    }
     if (row.avatar) {
       return (
         '<span class="tma-dash__email-message-avatar">' +
@@ -1738,6 +1778,51 @@
       renderReconnectBanner(state) +
       '<div class="tma-dash__email-list-body">' +
       renderListState(state, rows) +
+      '</div>' +
+      renderMailPagination(state) +
+      '</div>'
+    );
+  }
+
+  /* Pager for the folder listing. The mailbox mirror can hold tens of
+   * thousands of messages, so the list is a real server-side page — this shows
+   * where you are, lets you step through, and sets how many land per page. */
+  function renderMailPagination(state) {
+    if (state.folder === 'templates' || state.search) return '';
+    var total = state.total || 0;
+    if (!total) return '';
+
+    var perPage = state.perPage || 50;
+    var page = state.page || 1;
+    var last = state.lastPage || 1;
+    var first = ((page - 1) * perPage) + 1;
+    var upto = Math.min(page * perPage, total);
+
+    var options = (state.perPageOptions || [25, 50, 100, 200]).map(function (n) {
+      return '<option value="' + n + '"' + (n === perPage ? ' selected' : '') + '>' + n + '</option>';
+    }).join('');
+
+    function navBtn(target, label, disabled, icon) {
+      return '<button type="button" class="tma-dash__email-page-btn" data-email-page="' + target + '"' +
+        (disabled ? ' disabled' : '') + ' aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+        '<img src="' + icon + '" alt="" aria-hidden="true"></button>';
+    }
+
+    return (
+      '<div class="tma-dash__email-pagination" data-email-pagination>' +
+      '<div class="tma-dash__email-pagination-size">' +
+      '<label for="tma-email-perpage">Per page</label>' +
+      '<select id="tma-email-perpage" class="tma-dash__email-perpage" data-email-perpage>' + options + '</select>' +
+      '</div>' +
+      '<span class="tma-dash__email-pagination-range">' +
+      first.toLocaleString() + '–' + upto.toLocaleString() + ' of ' + total.toLocaleString() +
+      '</span>' +
+      '<div class="tma-dash__email-pagination-nav">' +
+      navBtn(1, 'First page', page <= 1, ICONS.ArrowLineLeft) +
+      navBtn(page - 1, 'Previous page', page <= 1, ICONS.CaretLeft) +
+      '<span class="tma-dash__email-pagination-page">Page ' + page.toLocaleString() + ' of ' + last.toLocaleString() + '</span>' +
+      navBtn(page + 1, 'Next page', page >= last, ICONS.CaretRight) +
+      navBtn(last, 'Last page', page >= last, ICONS.ArrowLineRight) +
       '</div>' +
       '</div>'
     );
@@ -3796,6 +3881,32 @@ function renderComposeToolbar() {
   }
 
   function wireEvents(root, state, render) {
+    // Pager: step pages, or change how many messages a page holds. Both refetch
+    // from the server — the mailbox is far too large to page in memory.
+    root.querySelectorAll('[data-email-page]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        var target = parseInt(btn.getAttribute('data-email-page'), 10);
+        if (!target || target === state.page) return;
+        state.page = Math.max(1, Math.min(target, state.lastPage || 1));
+        state.checkedIds = {};
+        reloadMessages(root, state, render);
+      });
+    });
+
+    var perPageSelect = root.querySelector('[data-email-perpage]');
+    if (perPageSelect) {
+      perPageSelect.addEventListener('change', function () {
+        var n = parseInt(perPageSelect.value, 10);
+        if (!n) return;
+        state.perPage = n;
+        state.page = 1;
+        state.checkedIds = {};
+        saveMailPerPage(n);
+        reloadMessages(root, state, render);
+      });
+    }
+
     if (!root._emailProfileBound) {
       root._emailProfileBound = true;
 
@@ -4415,6 +4526,12 @@ function renderComposeToolbar() {
       loadError: null,
       loadToken: 0,
       hasMore: false,
+      // Server-side paging: the mailbox can hold far more mail than one page.
+      page: 1,
+      perPage: loadMailPerPage(),
+      lastPage: 1,
+      total: 0,
+      perPageOptions: [25, 50, 100, 200],
       bodyLoading: false,
       settingsOpen: false,
       settings: null,

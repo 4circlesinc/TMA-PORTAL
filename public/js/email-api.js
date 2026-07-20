@@ -76,6 +76,7 @@
         q: opts.search,
         label: opts.label,
         page: opts.page,
+        perPage: opts.perPage,
       }));
     },
 

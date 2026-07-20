@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'provider', 'provider_id', 'email', 'name', 'token', 'scopes', 'sync_email', 'sync_calendar', 'sync_onedrive', 'sync_sharepoint', 'mail_cursor', 'mail_synced_at', 'mail_status', 'mail_error'])]
+#[Fillable(['user_id', 'provider', 'provider_id', 'email', 'name', 'token', 'scopes', 'sync_email', 'sync_calendar', 'sync_onedrive', 'sync_sharepoint', 'mail_cursor', 'mail_synced_at', 'mail_status', 'mail_error', 'mail_backfill', 'mail_backfilled_at'])]
 class ConnectedAccount extends Model
 {
     protected function casts(): array
@@ -20,6 +20,8 @@ class ConnectedAccount extends Model
             'sync_onedrive' => 'boolean',
             'sync_sharepoint' => 'boolean',
             'mail_synced_at' => 'datetime',
+            'mail_backfill' => 'array',
+            'mail_backfilled_at' => 'datetime',
         ];
     }
 

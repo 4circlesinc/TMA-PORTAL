@@ -7,11 +7,14 @@ use App\Models\MailAttachment;
 use App\Models\MailDraft;
 use App\Models\MailLabel;
 use App\Models\MailMessage;
+use App\Models\User;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -28,6 +31,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class MailController extends Controller
 {
     private const PER_PAGE = 50;
+
+    /** Page sizes the inbox's "per page" control offers. */
+    public const PER_PAGE_OPTIONS = [25, 50, 100, 200];
 
     /** Bootstrap: connection state, folder counts, labels. */
     public function index(Request $request): JsonResponse
@@ -83,6 +89,7 @@ class MailController extends Controller
             'q' => ['sometimes', 'nullable', 'string', 'max:200'],
             'label' => ['sometimes', 'nullable', 'string', 'uuid'],
             'page' => ['sometimes', 'integer', 'min:1'],
+            'perPage' => ['sometimes', 'integer', 'in:'.implode(',', self::PER_PAGE_OPTIONS)],
         ]);
 
         $user = $request->user();
@@ -101,15 +108,54 @@ class MailController extends Controller
             $query->whereHas('labels', fn ($q) => $q->where('uuid', $labelUuid));
         }
 
+        $perPage = (int) ($data['perPage'] ?? self::PER_PAGE);
+
         $page = $query
             ->orderByDesc('sent_at')
-            ->paginate(self::PER_PAGE, ['*'], 'page', $data['page'] ?? 1);
+            ->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
 
         return response()->json([
-            'messages' => collect($page->items())->map->toRow()->values(),
+            'messages' => $this->withAvatars(collect($page->items())),
             'total' => $page->total(),
             'hasMore' => $page->hasMorePages(),
+            'page' => $page->currentPage(),
+            'perPage' => $page->perPage(),
+            'lastPage' => $page->lastPage(),
+            'perPageOptions' => self::PER_PAGE_OPTIONS,
         ]);
+    }
+
+    /**
+     * Attach a sender picture to each row. Senders who have a portal account
+     * with a real photo get it; everyone else falls back to initials in the UI,
+     * so nobody is given an invented avatar.
+     *
+     * @param  \Illuminate\Support\Collection<int, MailMessage>  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    private function withAvatars(Collection $messages): array
+    {
+        $emails = $messages
+            ->pluck('from_email')
+            ->filter()
+            ->map(fn ($e) => mb_strtolower((string) $e))
+            ->unique()
+            ->values()
+            ->all();
+
+        $avatars = $emails === [] ? [] : User::query()
+            ->whereIn(DB::raw('lower(email)'), $emails)
+            ->whereNotNull('avatar_url')
+            ->get(['email', 'avatar_url'])
+            ->mapWithKeys(fn (User $u) => [mb_strtolower($u->email) => $u->avatar_url])
+            ->all();
+
+        return $messages->map(function (MailMessage $m) use ($avatars) {
+            $row = $m->toRow();
+            $row['avatarUrl'] = $avatars[mb_strtolower((string) $m->from_email)] ?? null;
+
+            return $row;
+        })->values()->all();
     }
 
     /**

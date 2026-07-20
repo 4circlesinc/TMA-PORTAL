@@ -22,6 +22,9 @@ class MailSynchronizer
     /** How many messages the first pass pulls per folder. */
     private const SEED_PER_FOLDER = 100;
 
+    /** Page size for the history backfill; providers cap this around 100. */
+    private const BACKFILL_PER_PAGE = 100;
+
     public function __construct(
         private readonly ConnectedAccount $account,
     ) {}
@@ -90,6 +93,58 @@ class MailSynchronizer
         ])->save();
 
         return $written;
+    }
+
+    /**
+     * Pull older history, a slice at a time. The seed only takes the newest
+     * SEED_PER_FOLDER per folder so the page is usable immediately; this walks
+     * back through the rest using the provider's page token.
+     *
+     * Returns ['written' => int, 'done' => bool]. Call again while done is
+     * false — progress is saved after every page, so it resumes safely.
+     *
+     * @return array{written:int, done:bool}
+     */
+    public function backfillStep(int $maxPages = 5, int $perPage = self::BACKFILL_PER_PAGE): array
+    {
+        $provider = Mailbox::provider($this->account);
+        $progress = $this->account->mail_backfill ?? [];
+        $written = 0;
+        $pages = 0;
+
+        foreach (Mailbox::FOLDERS as $folder) {
+            $state = $progress[$folder] ?? ['token' => null, 'done' => false];
+
+            // A folder with no token that has already run is finished.
+            while (! ($state['done'] ?? false) && $pages < $maxPages) {
+                $page = $provider->listMessages($folder, $perPage, $state['token'] ?? null);
+
+                foreach ($page['messages'] as $message) {
+                    $this->upsert($message);
+                    $written++;
+                }
+
+                $pages++;
+                $state = ['token' => $page['cursor'], 'done' => $page['cursor'] === null];
+
+                // Persist after each page so a crash resumes here, not at zero.
+                $progress[$folder] = $state;
+                $this->account->forceFill(['mail_backfill' => $progress])->save();
+            }
+
+            if ($pages >= $maxPages) {
+                break;
+            }
+        }
+
+        $done = collect(Mailbox::FOLDERS)
+            ->every(fn (string $f) => ($progress[$f]['done'] ?? false) === true);
+
+        if ($done) {
+            $this->account->forceFill(['mail_backfilled_at' => now()])->save();
+        }
+
+        return ['written' => $written, 'done' => $done];
     }
 
     /** Steady state: replay only what changed. */
