@@ -552,25 +552,25 @@
 .tma-dash__nav-item[hidden] { display: none !important; }
 
 .tma-dash__nav-count {
-  /* Sits on the icon's top edge — .tma-dash__nav-icon-wrap gives it a
-     tightly-fit, unmasked positioning parent (see dashboard.js). Anchored
-     by left (not right) so a wider count (99+) grows further right — away
-     from the icon — instead of eating into it. */
+  /* Same visual treatment as the header's .tma-dash__icon-btn-badge
+     (notification count): 14px pill, 9px/500 text, no border. Sits on the
+     icon's top edge — .tma-dash__nav-icon-wrap gives it a tightly-fit,
+     unmasked positioning parent (see dashboard.js). Anchored by left (not
+     right), unlike the header badge, so a wider count (99+) grows further
+     right — away from the icon — instead of eating into it; the header
+     badge never has to handle more than ~2 digits so it can get away with
+     a right anchor. */
   position: absolute;
-  top: -3px;
+  top: -5px;
   left: 55%;
-  min-width: 11px;
-  height: 11px;
-  padding: 0 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
   border-radius: var(--radius-pill);
-  border: 1.2px solid #fff;
   background: #ff4747;
-  font-size: 7.5px;
-  /* border-box eats 1.2px off each side into the content box, so the line
-     box has to shrink to match (11 - 1.2*2) or the text sinks off-center
-     toward the bottom edge. */
-  line-height: 8.6px;
-  font-weight: 600;
+  font-size: 9px;
+  line-height: 14px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: #fff;
   text-align: center;
@@ -3353,19 +3353,18 @@
   white-space: nowrap;
 }
 .tma-dash__tab-badge {
-  /* Top edge of the icon, anchored by left (not right) so a wider count
-     (99+) grows further right — away from the icon — instead of eating
-     into it. See .tma-dash__nav-count for the same fix. */
+  /* Same visual treatment as .tma-dash__icon-btn-badge (notification count)
+     — see .tma-dash__nav-count for the full rationale, including why this
+     stays left-anchored instead of the header badge's right anchor. */
   position: absolute;
-  top: -2px;
+  top: 2px;
   left: 55%;
-  min-width: 12px;
-  height: 12px;
-  padding: 0 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
   border-radius: var(--radius-pill);
-  border: 1.2px solid #fff;
-  font-size: 8px;
-  line-height: 9.6px;
+  font-size: 9px;
+  line-height: 14px;
   font-weight: 500;
   color: #fff;
   text-align: center;
@@ -23787,13 +23786,10 @@ button.tma-dash__header-popup-item:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-6);
-  background: #8a8f98;
+  width: 15px;
+  height: auto;
   text-decoration: none;
 }
-.tma-dash__email-attachment-tile-btn:hover { background: #6f7480; }
 .tma-dash__email-attachment-tile-btn img { width: 8px; height: 8px; filter: brightness(0) invert(1); }
 
 .tma-dash__email-attachment-tile-bar {
