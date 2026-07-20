@@ -7,6 +7,7 @@ use App\Models\MailAttachment;
 use App\Models\MailDraft;
 use App\Models\MailLabel;
 use App\Models\MailMessage;
+use App\Models\MailSenderPhoto;
 use App\Models\User;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
@@ -178,6 +179,41 @@ class MailController extends Controller
     }
 
     /**
+     * A sender's profile photo, fetched from the provider's directory on first
+     * request and cached after that.
+     *
+     * Addressed by hash so no email address ends up in page markup. A sender
+     * with no photo gets a 404, which the UI already treats as "draw initials".
+     */
+    public function senderPhoto(Request $request, string $hash): mixed
+    {
+        $account = Mailbox::accountFor($request->user());
+        abort_unless($account, 404);
+
+        $row = MailSenderPhoto::where('hash', $hash)->first();
+
+        // Only serve addresses this mailbox has actually corresponded with, so
+        // the endpoint can't be used to probe the directory for arbitrary people.
+        // Distinct addresses only — there are a few hundred of those against
+        // tens of thousands of messages.
+        $email = $row?->email ?? MailMessage::where('user_id', $request->user()->id)
+            ->whereNotNull('from_email')
+            ->distinct()
+            ->pluck('from_email')
+            ->first(fn ($address) => MailSenderPhoto::hashFor((string) $address) === $hash);
+
+        abort_unless($email, 404);
+
+        $photo = MailSenderPhoto::resolve($account, $email);
+        abort_unless($photo, 404);
+
+        return response($photo['body'], 200, [
+            'Content-Type' => $photo['mime'],
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
+    }
+
+    /**
      * Attach a sender picture to each row. Senders who have a portal account
      * with a real photo get it; everyone else falls back to initials in the UI,
      * so nobody is given an invented avatar.
@@ -202,9 +238,21 @@ class MailController extends Controller
             ->mapWithKeys(fn (User $u) => [mb_strtolower($u->email) => $u->avatar_url])
             ->all();
 
-        return $messages->map(function (MailMessage $m) use ($avatars) {
+        // Colleagues' photos come from the provider's directory. The URL is
+        // handed out unconditionally for same-organisation senders: the
+        // endpoint resolves and caches on first hit, and answers 404 when there
+        // is no photo, which the UI turns into initials.
+        $account = Mailbox::accountFor(request()->user());
+
+        return $messages->map(function (MailMessage $m) use ($avatars, $account) {
             $row = $m->toRow();
-            $row['avatarUrl'] = $avatars[mb_strtolower((string) $m->from_email)] ?? null;
+            $email = mb_strtolower((string) $m->from_email);
+
+            $row['avatarUrl'] = $avatars[$email] ?? null;
+
+            if (! $row['avatarUrl'] && $account && $email !== '' && MailSenderPhoto::sameOrgAs($account, $email)) {
+                $row['avatarUrl'] = route('mail.sender-photo', ['hash' => MailSenderPhoto::hashFor($email)]);
+            }
 
             return $row;
         })->values()->all();
@@ -245,11 +293,102 @@ class MailController extends Controller
                     ]);
                 }
             }
+
+            $this->embedInlineImages($message->fresh('attachments'));
+        }
+
+        // A body cached before embedded pictures were supported still carries
+        // raw `cid:` references, which render as broken images. Pull the
+        // attachments it needs and repair it on this open rather than leaving
+        // it broken for good.
+        $message = $message->fresh('attachments');
+        if ($message->body_html && str_contains($message->body_html, 'cid:')) {
+            if ($message->attachments->whereNotNull('content_id')->isEmpty()) {
+                $this->refreshAttachments($message);
+                $message = $message->fresh('attachments');
+            }
+
+            $this->embedInlineImages($message);
         }
 
         return response()->json([
             'message' => $message->fresh(['labels', 'attachments'])->toRecord(),
         ]);
+    }
+
+    /** Re-read the message's attachment list from the provider. */
+    private function refreshAttachments(MailMessage $message): void
+    {
+        $full = rescue(
+            fn () => Mailbox::provider($message->account)->getMessage($message->remote_id),
+            null,
+            report: false
+        );
+
+        if (empty($full['attachments'])) {
+            return;
+        }
+
+        $message->attachments()->delete();
+
+        foreach ($full['attachments'] as $attachment) {
+            $message->attachments()->create([
+                'uuid' => (string) Str::uuid(),
+                'remote_id' => $attachment['remote_id'] ?? null,
+                'filename' => $attachment['filename'] ?? 'attachment',
+                'mime_type' => $attachment['mime_type'] ?? null,
+                'size' => $attachment['size'] ?? 0,
+                'is_inline' => $attachment['is_inline'] ?? false,
+                'content_id' => $attachment['content_id'] ?? null,
+            ]);
+        }
+    }
+
+    /**
+     * Point the body's `cid:` references at the attachment endpoint.
+     *
+     * Embedded pictures arrive as separate attachments the HTML refers to by
+     * content id. They are rewritten to URLs rather than embedded as data URIs:
+     * inlining the bytes grew one real message from 0.16 MB to 1.63 MB, which
+     * is then stored and re-sent on every open. The body frame runs same-origin
+     * (scripts still blocked), so these load over the authenticated session.
+     */
+    private function embedInlineImages(MailMessage $message): void
+    {
+        $html = $message->body_html;
+        if (! $html || ! str_contains($html, 'cid:')) {
+            return;
+        }
+
+        $inline = $message->attachments->filter(
+            fn (MailAttachment $a) => $a->content_id && $a->remote_id
+        );
+
+        if ($inline->isEmpty()) {
+            return;
+        }
+
+        $replaced = false;
+
+        foreach ($inline as $attachment) {
+            $cid = trim((string) $attachment->content_id, '<>');
+            if ($cid === '') {
+                continue;
+            }
+
+            $url = route('mail.attachment', ['uuid' => $attachment->uuid]).'?inline=1';
+
+            foreach (['cid:'.$cid, 'cid:'.rawurlencode($cid)] as $needle) {
+                if (str_contains($html, $needle)) {
+                    $html = str_replace($needle, $url, $html);
+                    $replaced = true;
+                }
+            }
+        }
+
+        if ($replaced) {
+            $message->forceFill(['body_html' => $html])->save();
+        }
     }
 
     /** Read / starred / important flags. */
@@ -546,10 +685,28 @@ class MailController extends Controller
         $bytes = Mailbox::provider($message->account)
             ->getAttachment($message->remote_id, $attachment->remote_id);
 
+        $mime = $attachment->mime_type ?: 'application/octet-stream';
+
+        // Viewing is opt-in and limited to types a browser renders safely, so
+        // an attachment can be previewed instead of only downloaded. Anything
+        // else always downloads rather than being handed to the browser to
+        // interpret in our origin.
+        $viewable = str_starts_with($mime, 'image/') || $mime === 'application/pdf';
+
+        if ($request->boolean('inline') && $viewable) {
+            return response($bytes, 200, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => 'inline; filename="'.addslashes($attachment->filename).'"',
+                'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; object-src 'none'",
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, max-age=3600',
+            ]);
+        }
+
         return response()->streamDownload(
             fn () => print ($bytes),
             $attachment->filename,
-            ['Content-Type' => $attachment->mime_type ?: 'application/octet-stream'],
+            ['Content-Type' => $mime],
         );
     }
 

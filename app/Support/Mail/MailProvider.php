@@ -94,4 +94,11 @@ interface MailProvider
      * @return array<string, int> keyed by our folder names
      */
     public function folderTotals(): array;
+
+    /**
+     * That person's profile photo as raw image bytes, or null when the
+     * provider has none for them (or will not share it). Providers only hold
+     * photos for people inside the account's own organisation.
+     */
+    public function photoFor(string $email): ?string;
 }

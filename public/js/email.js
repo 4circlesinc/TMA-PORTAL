@@ -2063,16 +2063,112 @@ function threadRowFromPrior(prior, fallbackTo) {
    */
   function renderMessageBody(row, fallbackText) {
     if (row && row.bodyHtml) {
+      // allow-same-origin (and deliberately NOT allow-scripts) lets the page
+      // measure the rendered height so the whole message is shown instead of
+      // being cut off at a fixed frame height. Scripts stay blocked, so the
+      // sender's markup still cannot run anything.
       return (
         '<div class="tma-dash__email-body tma-dash__email-body--html">' +
-        '<iframe class="tma-dash__email-body-frame" sandbox=""' +
-        ' referrerpolicy="no-referrer" loading="lazy" title="Message content"' +
+        '<iframe class="tma-dash__email-body-frame" sandbox="allow-same-origin"' +
+        ' referrerpolicy="no-referrer" title="Message content" data-email-body-frame' +
         ' srcdoc="' + esc(wrapEmailBodyHtml(row.bodyHtml)) + '"></iframe>' +
         '</div>'
       );
     }
 
     return renderMessageBodyText((row && row.bodyText) || fallbackText);
+  }
+
+  /* The message's attachments, under the body.
+   *
+   * Images get a thumbnail you can click to open full size; everything else is
+   * a labelled row. Both go through the authenticated attachment endpoint —
+   * the file is streamed from the provider, never guessed at locally. */
+  function renderAttachments(row) {
+    var items = (row && row.attachments) || [];
+    if (!items.length) return '';
+
+    var base = (window.__TMA_SITE_ROOT || '') + '/portal/mail/attachments/';
+
+    var cards = items.map(function (a) {
+      var url = base + encodeURIComponent(a.id);
+      var mime = a.mime || '';
+      // Images and PDFs open in a tab; anything else downloads.
+      var viewable = /^image\//.test(mime) || mime === 'application/pdf';
+      var viewUrl = url + '?inline=1';
+      return (
+        '<a class="tma-dash__email-attachment" href="' + esc(viewable ? viewUrl : url) + '"' +
+        (viewable ? ' target="_blank" rel="noopener"' : ' download') +
+        ' title="' + esc(a.name) + '">' +
+        (/^image\//.test(mime)
+          ? '<span class="tma-dash__email-attachment-thumb"><img src="' + esc(viewUrl) + '" alt="" loading="lazy"></span>'
+          : '<span class="tma-dash__email-attachment-icon" aria-hidden="true">' +
+            '<img src="' + ICONS.PaperclipHorizontal + '" alt=""></span>') +
+        '<span class="tma-dash__email-attachment-meta">' +
+        '<span class="tma-dash__email-attachment-name">' + esc(a.name) + '</span>' +
+        '<span class="tma-dash__email-attachment-size">' + esc(formatBytes(a.size)) + '</span>' +
+        '</span></a>'
+      );
+    }).join('');
+
+    return (
+      '<div class="tma-dash__email-attachments">' +
+      '<div class="tma-dash__email-attachments-head">' +
+      items.length + ' attachment' + (items.length === 1 ? '' : 's') +
+      '</div>' +
+      '<div class="tma-dash__email-attachments-list">' + cards + '</div>' +
+      '</div>'
+    );
+  }
+
+  function formatBytes(bytes) {
+    var n = Number(bytes) || 0;
+    if (n < 1024) return n + ' B';
+    var units = ['KB', 'MB', 'GB'];
+    var i = -1;
+    do { n /= 1024; i++; } while (n >= 1024 && i < units.length - 1);
+    return (n < 10 ? n.toFixed(1) : Math.round(n)) + ' ' + units[i];
+  }
+
+  /* Grow the message frame to its content so nothing is cut off.
+   *
+   * Re-measures after images finish loading, since a picture that arrives late
+   * changes the height. Falls back to leaving the CSS height alone if the
+   * document cannot be read for any reason. */
+  function sizeMessageFrames(root) {
+    root.querySelectorAll('[data-email-body-frame]').forEach(function (frame) {
+      var fit = function () {
+        try {
+          var doc = frame.contentDocument;
+          if (!doc || !doc.body) return;
+          var h = Math.max(
+            doc.body.scrollHeight,
+            doc.documentElement ? doc.documentElement.scrollHeight : 0
+          );
+          if (h > 0) frame.style.height = (h + 16) + 'px';
+        } catch (e) { /* cross-origin or torn down; keep the CSS height */ }
+      };
+
+      fit();
+      frame.addEventListener('load', fit);
+
+      try {
+        var d = frame.contentDocument;
+        if (d) {
+          d.querySelectorAll('img').forEach(function (img) {
+            if (!img.complete) {
+              img.addEventListener('load', fit);
+              img.addEventListener('error', fit);
+            }
+          });
+        }
+      } catch (e) { /* ignore */ }
+
+      // A couple of late passes catch fonts and slow images without needing a
+      // resize observer inside a document we deliberately cannot script.
+      setTimeout(fit, 250);
+      setTimeout(fit, 1200);
+    });
   }
 
   /* Gives the sandboxed document a readable default and stops remote images
@@ -2082,10 +2178,16 @@ function threadRowFromPrior(prior, fallbackTo) {
       '<!doctype html><html><head><meta charset="utf-8">' +
       '<meta name="referrer" content="no-referrer">' +
       '<style>' +
-      'html,body{margin:0;padding:0;font-family:Inter,system-ui,sans-serif;' +
-      'font-size:14px;line-height:1.5;color:#1c1c1c;word-break:break-word;}' +
-      'img{max-width:100%;height:auto;}' +
-      'table{max-width:100%;}' +
+      // :where() keeps these at zero specificity, so anything the sender
+      // specified wins. Previously these overrode the message's own styling
+      // and every email came out looking the same.
+      ':where(html,body){margin:0;padding:0;}' +
+      ':where(body){font-family:Inter,system-ui,sans-serif;font-size:14px;' +
+      'line-height:1.5;color:#1c1c1c;}' +
+      // Pictures are held to the pane width so they cannot force the message
+      // sideways; wide tables keep their real layout and scroll instead of
+      // being squashed into something the sender never designed.
+      ':where(img){max-width:100%;height:auto;}' +
       '</style></head><body>' + html + '</body></html>'
     );
   }
@@ -2169,7 +2271,9 @@ function threadRowFromPrior(prior, fallbackTo) {
     var body = renderEmailThread(
       row, messageHead, metaEmail, metaDate, subject, lines.body, scrollThreadActions,
       // Still fetching the body: show the snippet rather than an empty pane.
-      state.bodyLoading && state.selectedId === row.id ? null : renderMessageBody(row, lines.body),
+      state.bodyLoading && state.selectedId === row.id
+        ? null
+        : renderMessageBody(row, lines.body) + renderAttachments(row),
       state
     );
 
@@ -4063,6 +4167,9 @@ function renderComposeToolbar() {
   }
 
   function wireEvents(root, state, render) {
+    // Grow any open message to its full height (see sizeMessageFrames).
+    sizeMessageFrames(root);
+
     // Pager: step pages, or change how many messages a page holds. Both refetch
     // from the server — the mailbox is far too large to page in memory.
     root.querySelectorAll('[data-email-page]').forEach(function (btn) {

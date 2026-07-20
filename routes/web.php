@@ -210,6 +210,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/', [MailController::class, 'index'])->name('index');
         Route::post('/sync', [MailController::class, 'sync'])->name('sync');
         Route::get('/sync-status', [MailController::class, 'syncStatus'])->name('sync-status');
+        Route::get('/sender-photo/{hash}', [MailController::class, 'senderPhoto'])
+            ->where('hash', '[a-f0-9]{64}')->name('sender-photo');
 
         Route::get('/settings', [MailController::class, 'settings'])->name('settings');
         Route::put('/settings', [MailController::class, 'updateSettings'])->name('settings.update');

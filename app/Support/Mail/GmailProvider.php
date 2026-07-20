@@ -542,4 +542,13 @@ class GmailProvider implements MailProvider
 
         return $totals;
     }
+
+    /**
+     * Gmail exposes no directory photo lookup for arbitrary senders, so there
+     * is nothing honest to return here — the UI draws initials instead.
+     */
+    public function photoFor(string $email): ?string
+    {
+        return null;
+    }
 }

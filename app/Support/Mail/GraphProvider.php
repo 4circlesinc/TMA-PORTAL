@@ -24,6 +24,9 @@ class GraphProvider implements MailProvider
 {
     private const BASE = 'https://graph.microsoft.com/v1.0/me';
 
+    /** Directory lookups (other people), as opposed to the signed-in mailbox. */
+    private const BASE_USERS = 'https://graph.microsoft.com/v1.0/users';
+
     /** Fields the list rows need — Graph returns the full body otherwise. */
     private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
 
@@ -67,13 +70,22 @@ class GraphProvider implements MailProvider
 
         $normalized = $this->normalize($message, null, withBody: true);
 
-        if (! ($message['hasAttachments'] ?? false)) {
+        // Outlook reports hasAttachments=false when a message's only
+        // attachments are its embedded pictures, so a body that references
+        // `cid:` still has to be asked about or those images never resolve.
+        $body = ($normalized['body_html'] ?? '').($normalized['body_text'] ?? '');
+
+        if (! ($message['hasAttachments'] ?? false) && ! str_contains($body, 'cid:')) {
             return $normalized + ['attachments' => []];
         }
 
+        // contentId is what an inline image's `cid:` reference points at, so
+        // without it embedded pictures can never be matched to their bytes.
+        // contentId only exists on the fileAttachment subtype, so it has to be
+        // selected through the type cast — asking for it plainly is a 400.
         $attachments = $this->json($this->request()->get(
             self::BASE."/messages/{$remoteId}/attachments",
-            ['$select' => 'id,name,contentType,size,isInline']
+            ['$select' => 'id,name,contentType,size,isInline,microsoft.graph.fileAttachment/contentId']
         ));
 
         $normalized['attachments'] = collect($attachments['value'] ?? [])
@@ -82,8 +94,10 @@ class GraphProvider implements MailProvider
                 'filename' => (string) ($a['name'] ?? 'attachment'),
                 'mime_type' => $a['contentType'] ?? null,
                 'size' => (int) ($a['size'] ?? 0),
-                'is_inline' => (bool) ($a['isInline'] ?? false),
-                'content_id' => null,
+                // Graph marks an attachment inline only when the body actually
+                // references it; a contentId alone is enough to treat it so.
+                'is_inline' => (bool) ($a['isInline'] ?? false) || ! empty($a['contentId']),
+                'content_id' => $a['contentId'] ?? null,
             ])
             ->all();
 
@@ -514,5 +528,24 @@ class GraphProvider implements MailProvider
         }
 
         return $totals;
+    }
+
+    /**
+     * A colleague's profile photo from the directory. Only works for people in
+     * the same tenant and only with User.ReadBasic.All granted; anything else
+     * (404 no photo, 403 scope not consented) is reported as "no photo" so the
+     * caller quietly falls back to initials.
+     */
+    public function photoFor(string $email): ?string
+    {
+        $response = $this->request()
+            ->withHeaders(['Accept' => 'image/jpeg'])
+            ->get(self::BASE_USERS.'/'.rawurlencode($email).'/photo/$value');
+
+        if (! $response->successful() || $response->body() === '') {
+            return null;
+        }
+
+        return $response->body();
     }
 }

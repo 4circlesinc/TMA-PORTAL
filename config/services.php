@@ -59,7 +59,11 @@ return [
         'sync' => (bool) env('MICROSOFT_SYNC_ENABLED', false),
         // ReadWrite covers listing, moving, flagging and drafting; Send is a
         // separate permission in Graph, so sending needs both.
-        'scope_email' => 'Mail.ReadWrite Mail.Send',
+        // User.ReadBasic.All lets the mailbox show colleagues' real profile
+        // photos: Graph only returns /users/{id}/photo for people in the same
+        // tenant, and only with a directory read permission. Without it every
+        // sender simply falls back to initials.
+        'scope_email' => 'Mail.ReadWrite Mail.Send User.ReadBasic.All',
         'scope_calendar' => 'Calendars.Read',
         'scope_onedrive' => 'Files.Read',
         'scope_sharepoint' => 'Sites.Read.All',
