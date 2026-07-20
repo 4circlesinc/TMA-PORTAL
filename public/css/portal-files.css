@@ -358,3 +358,15 @@
   .tma-portal-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .tma-portal-lightbox__frame { width: 96vw; height: 78vh; }
 }
+
+/* Mailbox history download — same chrome as the upload panel, but it sits
+   above it so a running upload and a running mail sync do not overlap. */
+.tma-mail-sync { bottom: calc(var(--space-20) + 96px); }
+.tma-mail-sync__bar--indeterminate .tma-portal-upload__fill {
+  width: 40% !important;
+  animation: tma-mail-sync-slide 1.4s ease-in-out infinite;
+}
+@keyframes tma-mail-sync-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}

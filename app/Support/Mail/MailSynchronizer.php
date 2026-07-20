@@ -80,10 +80,8 @@ class MailSynchronizer
         foreach (Mailbox::FOLDERS as $folder) {
             $page = $provider->listMessages($folder, self::SEED_PER_FOLDER);
 
-            foreach ($page['messages'] as $message) {
-                $this->upsert($message);
-                $written++;
-            }
+            // Listing rows, so the same page-at-a-time write the backfill uses.
+            $written += $this->bulkUpsert($page['messages']);
         }
 
         // Open the change feed only after the listing, so nothing that
@@ -112,6 +110,13 @@ class MailSynchronizer
         $written = 0;
         $pages = 0;
 
+        // Ask the provider once how big the mailbox is, so progress can be
+        // shown as a real fraction instead of a spinner with no end in sight.
+        if (! isset($progress['_totals'])) {
+            $progress['_totals'] = rescue(fn () => $provider->folderTotals(), [], report: false);
+            $this->account->forceFill(['mail_backfill' => $progress])->save();
+        }
+
         foreach (Mailbox::FOLDERS as $folder) {
             $state = $progress[$folder] ?? ['token' => null, 'done' => false];
 
@@ -119,10 +124,10 @@ class MailSynchronizer
             while (! ($state['done'] ?? false) && $pages < $maxPages) {
                 $page = $provider->listMessages($folder, $perPage, $state['token'] ?? null);
 
-                foreach ($page['messages'] as $message) {
-                    $this->upsert($message);
-                    $written++;
-                }
+                // One statement per page, not per message. The database is
+                // remote, so a per-message upsert costs ~1s in round trips —
+                // roughly ten hours for a 30,000-message mailbox.
+                $written += $this->bulkUpsert($page['messages']);
 
                 $pages++;
                 $state = ['token' => $page['cursor'], 'done' => $page['cursor'] === null];
@@ -204,12 +209,85 @@ class MailSynchronizer
     }
 
     /**
-     * Writes one provider message, preserving anything the provider did not
-     * send. A metadata-only listing has no body, and must not blank the body
-     * a previous full fetch already cached.
+     * Write a whole page of list rows in one statement.
      *
-     * @param  array<string, mixed>  $message
+     * Used by the backfill, where volume matters more than the extras: these
+     * rows come from a listing, so they carry no body and no attachments, and
+     * categories are left to the regular sync. Existing rows are refreshed
+     * without disturbing their uuid or the body already cached against them.
+     *
+     * @param  array<int, array<string, mixed>>  $messages
      */
+    /**
+     * Fit a provider value into its column. Real mail carries display names,
+     * subjects and thread ids far longer than the schema allows, and one
+     * oversized row would otherwise abort the whole page's insert.
+     */
+    private static function clamp(mixed $value, int $limit): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = (string) $value;
+
+        return mb_strlen($value) > $limit ? mb_substr($value, 0, $limit) : $value;
+    }
+
+    private function bulkUpsert(array $messages): int
+    {
+        $now = now();
+        $rows = [];
+
+        foreach ($messages as $m) {
+            if (empty($m['remote_id'])) {
+                continue;
+            }
+
+            $rows[] = [
+                'uuid' => (string) Str::uuid(),
+                'user_id' => $this->account->user_id,
+                'connected_account_id' => $this->account->id,
+                'remote_id' => self::clamp($m['remote_id'], 255),
+                'thread_id' => self::clamp($m['thread_id'] ?? null, 255),
+                'folder' => self::clamp($m['folder'] ?? 'inbox', 20),
+                'subject' => self::clamp($m['subject'] ?? null, 998),
+                'snippet' => $m['snippet'] ?? null,
+                'from_name' => self::clamp($m['from_name'] ?? null, 255),
+                'from_email' => self::clamp($m['from_email'] ?? null, 255),
+                // Written through the query builder, so JSON columns are
+                // encoded here rather than by a model cast.
+                'to' => json_encode($m['to'] ?? []),
+                'cc' => json_encode($m['cc'] ?? []),
+                'bcc' => json_encode($m['bcc'] ?? []),
+                'reply_to' => self::clamp($m['reply_to'] ?? null, 255),
+                'is_read' => (bool) ($m['is_read'] ?? false),
+                'is_starred' => (bool) ($m['is_starred'] ?? false),
+                'is_important' => (bool) ($m['is_important'] ?? false),
+                'has_attachments' => (bool) ($m['has_attachments'] ?? false),
+                'sent_at' => empty($m['sent_at']) ? null : Carbon::createFromTimestamp($m['sent_at']),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if ($rows === []) {
+            return 0;
+        }
+
+        MailMessage::upsert(
+            $rows,
+            ['connected_account_id', 'remote_id'],
+            [
+                'thread_id', 'folder', 'subject', 'snippet', 'from_name', 'from_email',
+                'to', 'cc', 'bcc', 'reply_to', 'is_read', 'is_starred', 'is_important',
+                'has_attachments', 'sent_at', 'updated_at',
+            ]
+        );
+
+        return count($rows);
+    }
+
     private function upsert(array $message): void
     {
         if (empty($message['remote_id'])) {
@@ -222,35 +300,43 @@ class MailSynchronizer
                 'remote_id' => $message['remote_id'],
             ]);
 
-            if (! $row->exists) {
-                $row->uuid = (string) Str::uuid();
-                $row->user_id = $this->account->user_id;
-            }
-
-            foreach ([
-                'thread_id', 'folder', 'subject', 'snippet', 'from_name', 'from_email',
-                'to', 'cc', 'bcc', 'reply_to', 'is_read', 'is_starred', 'is_important',
-                'has_attachments', 'body_html', 'body_text',
-            ] as $field) {
-                if (array_key_exists($field, $message)) {
-                    $row->{$field} = $message[$field];
-                }
-            }
-
-            if (! empty($message['sent_at'])) {
-                $row->sent_at = Carbon::createFromTimestamp($message['sent_at']);
-            }
-
-            $row->save();
-
-            if (array_key_exists('label_ids', $message)) {
-                $this->syncMessageLabels($row, $message['label_ids']);
-            }
-
-            if (! empty($message['attachments'])) {
-                $this->syncAttachments($row, $message['attachments']);
-            }
+            $this->writeMessage($row, $message);
         });
+    }
+
+    /** Copy a normalized provider message onto a row and persist it. */
+    private function writeMessage(MailMessage $row, array $message): void
+    {
+        if (! $row->exists) {
+            $row->connected_account_id = $this->account->id;
+            $row->remote_id = $message['remote_id'];
+            $row->uuid = (string) Str::uuid();
+            $row->user_id = $this->account->user_id;
+        }
+
+        foreach ([
+            'thread_id', 'folder', 'subject', 'snippet', 'from_name', 'from_email',
+            'to', 'cc', 'bcc', 'reply_to', 'is_read', 'is_starred', 'is_important',
+            'has_attachments', 'body_html', 'body_text',
+        ] as $field) {
+            if (array_key_exists($field, $message)) {
+                $row->{$field} = $message[$field];
+            }
+        }
+
+        if (! empty($message['sent_at'])) {
+            $row->sent_at = Carbon::createFromTimestamp($message['sent_at']);
+        }
+
+        $row->save();
+
+        if (array_key_exists('label_ids', $message)) {
+            $this->syncMessageLabels($row, $message['label_ids']);
+        }
+
+        if (! empty($message['attachments'])) {
+            $this->syncAttachments($row, $message['attachments']);
+        }
     }
 
     /** @param array<int, string> $remoteLabelIds */

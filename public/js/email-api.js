@@ -69,6 +69,11 @@
       return mailFetch(BASE);
     },
 
+    /* Progress of the mailbox history download, for the corner panel. */
+    syncStatus: function () {
+      return mailFetch(BASE + '/sync-status');
+    },
+
     listMessages: function (opts) {
       opts = opts || {};
       return mailFetch(BASE + '/messages' + query({

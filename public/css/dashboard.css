@@ -8454,13 +8454,25 @@
   margin-top: 0;
   padding: 0;
   border-top: none;
+  /* Hold the chip's natural width: as a flex child it was being squeezed until
+     the name and address both ellipsised, even with room in the bar. */
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .tma-dash__email-profile--topbar {
   width: auto;
-  max-width: 200px;
+  /* Wide enough for a full name and a work address; the ellipsis below is a
+     safety net for unusually long ones, not the normal case. */
+  max-width: 320px;
+  /* …and it must actually be allowed to reach that width. */
+  flex: 0 0 auto;
   gap: var(--space-4);
   padding: 0;
+}
+
+.tma-dash__email-profile--topbar .tma-dash__email-profile-meta {
+  min-width: max-content;
 }
 
 .tma-dash__email-profile--topbar .tma-dash__email-profile-avatar {

@@ -9,6 +9,4 @@ use RuntimeException;
  * after roughly a week, and Graph expires delta tokens. Recoverable, but only
  * by discarding the cursor and doing a full listing.
  */
-class MailCursorExpiredException extends RuntimeException
-{
-}
+class MailCursorExpiredException extends RuntimeException {}

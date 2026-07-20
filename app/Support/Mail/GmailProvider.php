@@ -4,6 +4,7 @@ namespace App\Support\Mail;
 
 use App\Models\ConnectedAccount;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -490,7 +491,7 @@ class GmailProvider implements MailProvider
     /**
      * @return array<string, mixed>
      */
-    private function json(\Illuminate\Http\Client\Response $response): array
+    private function json(Response $response): array
     {
         if ($response->status() === 401) {
             // The cached access token went stale early; drop it so the next
@@ -517,5 +518,28 @@ class GmailProvider implements MailProvider
         }
 
         return $response->json() ?? [];
+    }
+
+    /**
+     * Message counts per folder from Gmail's label metadata — one small request
+     * per label. Gmail has no Archive label, so that folder is simply absent.
+     *
+     * @return array<string, int>
+     */
+    public function folderTotals(): array
+    {
+        $totals = [];
+
+        foreach (['inbox', 'sent', 'draft', 'spam', 'trash'] as $folder) {
+            $response = $this->request()->get(self::BASE.'/labels/'.self::labelForFolder($folder));
+
+            if (! $response->successful()) {
+                continue;
+            }
+
+            $totals[$folder] = (int) ($this->json($response)['messagesTotal'] ?? 0);
+        }
+
+        return $totals;
     }
 }

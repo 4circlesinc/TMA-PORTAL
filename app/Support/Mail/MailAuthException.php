@@ -9,6 +9,4 @@ use RuntimeException;
  * password, or scopes that were never granted. Distinct from a transient
  * failure because retrying it is pointless; the UI prompts a reconnect.
  */
-class MailAuthException extends RuntimeException
-{
-}
+class MailAuthException extends RuntimeException {}

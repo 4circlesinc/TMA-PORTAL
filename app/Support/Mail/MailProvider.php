@@ -45,7 +45,7 @@ interface MailProvider
 
     /**
      * @param  array<string, mixed>  $message
-     * @return string  the provider id of the sent message
+     * @return string the provider id of the sent message
      */
     public function send(array $message): string;
 
@@ -85,4 +85,13 @@ interface MailProvider
      * @return array<int, array<string, mixed>>
      */
     public function search(string $query, int $limit = 50): array;
+
+    /**
+     * How many messages each folder holds at the provider. Used as the
+     * denominator for backfill progress, so folders the provider does not
+     * report are simply absent rather than guessed at.
+     *
+     * @return array<string, int> keyed by our folder names
+     */
+    public function folderTotals(): array;
 }

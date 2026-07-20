@@ -27,6 +27,9 @@ class GraphProvider implements MailProvider
     /** Fields the list rows need — Graph returns the full body otherwise. */
     private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
 
+    /** Marks a cursor as "everything after this time" rather than a delta link. */
+    private const TIME_CURSOR = 'ts:';
+
     private function __construct(
         private readonly ConnectedAccount $account,
     ) {}
@@ -100,30 +103,63 @@ class GraphProvider implements MailProvider
         return $response->body();
     }
 
-    public function changesSince(?string $cursor): array
+    /**
+     * New mail that arrived since a timestamp, across the folders we mirror.
+     *
+     * This is the steady-state path. It is a plain filtered listing, so it
+     * costs one small request per folder no matter how large the mailbox is.
+     * The trade-off against a delta stream is that changes made in another
+     * client — a deletion, or a read/flag toggle — are not reported here; the
+     * next full resync reconciles those.
+     *
+     * @return array{messages:array<int,array<string,mixed>>, deleted:array<int,string>, cursor:string}
+     */
+    private function changesSinceTime(string $since): array
     {
-        // No cursor yet: we only need a starting point to watch from. Graph has
-        // no "just give me a token" option for message delta, so walk to the
-        // deltaLink — but ask for ids only in big pages and throw the payload
-        // away. That is a handful of requests with flat memory, instead of
-        // streaming every message in the mailbox (which never finished on a
-        // large account). The history itself comes from the backfill.
-        if (! $cursor) {
-            $response = $this->request()
-                ->withHeaders(['Prefer' => 'odata.maxpagesize=1000'])
-                ->get(self::BASE.'/mailFolders/inbox/messages/delta', ['$select' => 'id']);
+        $messages = [];
 
-            $data = $this->json($response);
-            $next = $data['@odata.nextLink'] ?? null;
-            $delta = $data['@odata.deltaLink'] ?? null;
+        foreach (Mailbox::FOLDERS as $folder) {
+            $response = $this->request()->get(
+                self::BASE.'/mailFolders/'.self::folderId($folder).'/messages',
+                [
+                    '$filter' => 'receivedDateTime gt '.$since,
+                    '$orderby' => 'receivedDateTime desc',
+                    '$top' => 100,
+                    '$select' => self::LIST_SELECT,
+                ]
+            );
 
-            while ($next && ! $delta) {
-                $page = $this->json($this->request()->get($next));
-                $next = $page['@odata.nextLink'] ?? null;
-                $delta = $page['@odata.deltaLink'] ?? null;
+            // A folder that rejects the filter (drafts have no receivedDateTime
+            // ordering) simply contributes nothing this pass.
+            if (! $response->successful()) {
+                continue;
             }
 
-            return ['messages' => [], 'deleted' => [], 'cursor' => $delta];
+            foreach ($this->json($response)['value'] ?? [] as $raw) {
+                $messages[] = $this->normalize($raw, $folder, withBody: false);
+            }
+        }
+
+        return [
+            'messages' => $messages,
+            'deleted' => [],
+            'cursor' => self::TIME_CURSOR.now()->toIso8601ZuluString(),
+        ];
+    }
+
+    public function changesSince(?string $cursor): array
+    {
+        // Starting fresh: watch from now on. Graph offers no cheap "give me a
+        // delta token" for messages — a new delta streams the whole mailbox to
+        // reach its token, which on a large account is thousands of requests —
+        // so the cursor is a timestamp instead. History comes from the backfill.
+        if (! $cursor) {
+            return ['messages' => [], 'deleted' => [], 'cursor' => self::TIME_CURSOR.now()->toIso8601ZuluString()];
+        }
+
+        // Timestamp cursor: anything that arrived since we last looked.
+        if (str_starts_with($cursor, self::TIME_CURSOR)) {
+            return $this->changesSinceTime(substr($cursor, strlen(self::TIME_CURSOR)));
         }
 
         $response = $this->request()->get($cursor);
@@ -438,5 +474,45 @@ class GraphProvider implements MailProvider
         }
 
         return $response->json() ?? [];
+    }
+
+    /**
+     * Message counts per folder, straight from Graph's folder metadata — one
+     * request, no message enumeration. Folders Graph does not return (an
+     * account with no Archive, say) are left out rather than guessed at.
+     *
+     * @return array<string, int>
+     */
+    public function folderTotals(): array
+    {
+        $data = $this->json($this->request()->get(
+            self::BASE.'/mailFolders',
+            ['$select' => 'displayName,totalItemCount', '$top' => 100]
+        ));
+
+        // Graph keys folders by well-known name in the URL but returns display
+        // names, so match on the well-known id it echoes back.
+        $byId = [];
+        foreach ($data['value'] ?? [] as $folder) {
+            $byId[mb_strtolower((string) ($folder['displayName'] ?? ''))] = (int) ($folder['totalItemCount'] ?? 0);
+        }
+
+        $display = [
+            'inbox' => 'inbox',
+            'sent' => 'sent items',
+            'draft' => 'drafts',
+            'spam' => 'junk email',
+            'trash' => 'deleted items',
+            'archive' => 'archive',
+        ];
+
+        $totals = [];
+        foreach ($display as $folder => $name) {
+            if (isset($byId[$name])) {
+                $totals[$folder] = $byId[$name];
+            }
+        }
+
+        return $totals;
     }
 }

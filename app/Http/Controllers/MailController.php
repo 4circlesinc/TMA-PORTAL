@@ -8,7 +8,6 @@ use App\Models\MailDraft;
 use App\Models\MailLabel;
 use App\Models\MailMessage;
 use App\Models\User;
-use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
 use Illuminate\Http\JsonResponse;
@@ -126,11 +125,64 @@ class MailController extends Controller
     }
 
     /**
+     * Progress of the history backfill, for the corner panel on the email page.
+     *
+     * `total` is what the provider says the mailbox holds; it is absent for a
+     * folder the provider does not report, so the UI shows a count rather than
+     * a false percentage.
+     */
+    public function syncStatus(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $account = Mailbox::accountFor($user);
+
+        if (! $account) {
+            return response()->json(['connected' => false, 'running' => false]);
+        }
+
+        $synced = MailMessage::where('user_id', $user->id)
+            ->selectRaw('folder, count(*) as c')
+            ->groupBy('folder')
+            ->pluck('c', 'folder')
+            ->map(fn ($c) => (int) $c)
+            ->all();
+
+        $progress = $account->mail_backfill ?? [];
+        $totals = array_map('intval', $progress['_totals'] ?? []);
+
+        $folders = [];
+        foreach (Mailbox::FOLDERS as $folder) {
+            $folders[] = [
+                'folder' => $folder,
+                'synced' => $synced[$folder] ?? 0,
+                'total' => $totals[$folder] ?? null,
+                'done' => (bool) ($progress[$folder]['done'] ?? false),
+            ];
+        }
+
+        $done = $account->mail_backfilled_at !== null;
+
+        return response()->json([
+            'connected' => true,
+            // Running while there is history still to pull. The panel hides
+            // itself once this goes false.
+            'running' => ! $done,
+            'done' => $done,
+            'status' => $account->mail_status,
+            'error' => $account->mail_error,
+            'synced' => array_sum($synced),
+            'total' => $totals === [] ? null : array_sum($totals),
+            'folders' => $folders,
+            'syncedAt' => $account->mail_synced_at?->toIso8601String(),
+        ]);
+    }
+
+    /**
      * Attach a sender picture to each row. Senders who have a portal account
      * with a real photo get it; everyone else falls back to initials in the UI,
      * so nobody is given an invented avatar.
      *
-     * @param  \Illuminate\Support\Collection<int, MailMessage>  $messages
+     * @param  Collection<int, MailMessage>  $messages
      * @return array<int, array<string, mixed>>
      */
     private function withAvatars(Collection $messages): array
@@ -495,7 +547,7 @@ class MailController extends Controller
             ->getAttachment($message->remote_id, $attachment->remote_id);
 
         return response()->streamDownload(
-            fn () => print($bytes),
+            fn () => print ($bytes),
             $attachment->filename,
             ['Content-Type' => $attachment->mime_type ?: 'application/octet-stream'],
         );

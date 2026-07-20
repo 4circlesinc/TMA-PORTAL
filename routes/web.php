@@ -209,6 +209,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::prefix('portal/mail')->name('mail.')->group(function () {
         Route::get('/', [MailController::class, 'index'])->name('index');
         Route::post('/sync', [MailController::class, 'sync'])->name('sync');
+        Route::get('/sync-status', [MailController::class, 'syncStatus'])->name('sync-status');
 
         Route::get('/settings', [MailController::class, 'settings'])->name('settings');
         Route::put('/settings', [MailController::class, 'updateSettings'])->name('settings.update');

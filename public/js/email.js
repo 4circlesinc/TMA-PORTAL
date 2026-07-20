@@ -281,7 +281,7 @@
   function renderInlineComposeAvatar() {
     return (
       '<span class="tma-dash__email-message-avatar">' +
-      '<img src="' + AVATAR + esc(PROFILE.avatar) + '.png" alt="">' +
+      '<img src="' + esc(profileAvatarSrc()) + '" alt="">' +
       '</span>'
     );
   }
@@ -848,7 +848,7 @@
 
     // Changing folder, label or search starts a new listing — page 5 of the
     // inbox says nothing about page 5 of Sent.
-    var context = [state.folder, state.activeLabelId || '', state.search || ''].join(' ');
+    var context = [state.folder, state.activeLabelId || '', state.search || ''].join('|');
     if (state._listContext !== context) {
       state._listContext = context;
       state.page = 1;
@@ -1509,11 +1509,142 @@
     );
   }
 
+  /* The signed-in user, filled in from current-user.js. Starts blank rather
+   * than with a stand-in, so a hardcoded name/photo is never briefly shown as
+   * if it were real. */
   var PROFILE = {
-    name: 'Vernon Francis',
-    email: 'vfrancis@tmantoinelaw.com',
-    avatar: 'AvatarByewind',
+    name: '',
+    email: '',
+    avatar: null,
   };
+
+  /* current-user.js owns photo-or-initials resolution, so the mailbox chrome
+   * draws exactly what the rest of the shell draws. */
+  function profileAvatarSrc() {
+    if (window.TMACurrentUser && window.TMACurrentUser.avatarSrc) {
+      return window.TMACurrentUser.avatarSrc(PROFILE.avatar, PROFILE.name);
+    }
+    return PROFILE.avatar || '';
+  }
+
+  /* ── mailbox backfill progress ──────────────────────────────────
+   * A corner panel while the mailbox history downloads, using the same
+   * chrome as the File Library's upload panel so the two read as one thing.
+   * Polls the server, hides itself when there is nothing left to pull, and
+   * can be dismissed — the download continues on the queue either way.
+   */
+  var syncPanel = null;
+  var syncTimer = null;
+  var syncDismissed = false;
+  var syncCollapsed = false;
+
+  function stopSyncPolling() {
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+  }
+
+  function hideSyncPanel() {
+    if (syncPanel) { syncPanel.remove(); syncPanel = null; }
+  }
+
+  function ensureSyncPanel() {
+    if (syncPanel) return syncPanel;
+    syncPanel = document.createElement('section');
+    syncPanel.className = 'tma-portal-upload tma-mail-sync';
+    syncPanel.setAttribute('aria-label', 'Mailbox sync');
+    syncPanel.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-mail-sync-action]');
+      if (!btn) return;
+      var action = btn.getAttribute('data-mail-sync-action');
+      if (action === 'collapse') { syncCollapsed = !syncCollapsed; }
+      if (action === 'close') { syncDismissed = true; stopSyncPolling(); hideSyncPanel(); }
+    });
+    document.body.appendChild(syncPanel);
+    return syncPanel;
+  }
+
+  function renderSyncPanel(data) {
+    var synced = (data && data.synced) || 0;
+    var total = data && data.total ? data.total : null;
+    var pct = total ? Math.max(0, Math.min(100, Math.round((synced / total) * 100))) : null;
+    var finished = !!(data && data.done);
+
+    var title = finished
+      ? 'Mailbox up to date'
+      : 'Downloading mailbox…';
+
+    var meta = total
+      ? synced.toLocaleString() + ' of ' + total.toLocaleString() + ' messages'
+      : synced.toLocaleString() + ' messages synced';
+
+    var panel = ensureSyncPanel();
+    panel.innerHTML =
+      '<header class="tma-portal-upload__head">' +
+      '<span class="tma-portal-upload__title">' + esc(title) + '</span>' +
+      '<span class="tma-portal-upload__head-actions">' +
+      '<button type="button" class="tma-portal-upload__icon" data-mail-sync-action="collapse" aria-label="' +
+      (syncCollapsed ? 'Expand' : 'Collapse') + '">' + (syncCollapsed ? '▲' : '▼') + '</button>' +
+      '<button type="button" class="tma-portal-upload__icon" data-mail-sync-action="close" aria-label="Close">✕</button>' +
+      '</span></header>' +
+      (syncCollapsed ? '' :
+        '<ul class="tma-portal-upload__list">' +
+        '<li class="tma-portal-upload__item' + (finished ? ' tma-portal-upload__item--completed' : '') + '">' +
+        '<div class="tma-portal-upload__row">' +
+        '<span class="tma-portal-upload__name">' + esc(meta) + '</span>' +
+        '</div>' +
+        // With no provider total we still show motion, via an indeterminate bar.
+        '<span class="tma-portal-upload__bar' + (pct === null && !finished ? ' tma-mail-sync__bar--indeterminate' : '') + '">' +
+        '<span class="tma-portal-upload__fill" style="width:' + (finished ? 100 : (pct === null ? 100 : pct)) + '%"></span>' +
+        '</span>' +
+        '<div class="tma-portal-upload__meta">' +
+        '<span>' + (pct === null ? (finished ? 'Complete' : 'Working…') : pct + '%') + '</span>' +
+        '<span>' + esc(finished ? 'All folders' : 'Keeps going in the background') + '</span>' +
+        '</div>' +
+        '</li></ul>');
+  }
+
+  function pollSyncStatus() {
+    if (syncDismissed) return;
+
+    api().syncStatus().then(function (data) {
+      if (syncDismissed) return;
+
+      if (!data || !data.connected) { hideSyncPanel(); return; }
+
+      // Nothing left to download and nothing on screen: stay out of the way.
+      if (data.done && !syncPanel) return;
+
+      renderSyncPanel(data);
+
+      if (data.done) {
+        // Leave the finished state up briefly, then clear it.
+        stopSyncPolling();
+        setTimeout(function () { if (!syncDismissed) hideSyncPanel(); }, 6000);
+        return;
+      }
+
+      syncTimer = setTimeout(pollSyncStatus, 5000);
+    }).catch(function () {
+      // A failed poll is not worth surfacing; try again later.
+      syncTimer = setTimeout(pollSyncStatus, 15000);
+    });
+  }
+
+  var profileBound = false;
+
+  /* Keep PROFILE in step with the signed-in user, and repaint once the real
+   * details land (the first render happens before /me resolves). */
+  function bindCurrentUser(rerender) {
+    if (profileBound || !window.TMACurrentUser || !window.TMACurrentUser.onChange) return;
+    profileBound = true;
+
+    window.TMACurrentUser.onChange(function (me) {
+      if (!me) return;
+      PROFILE.name = me.name || '';
+      PROFILE.email = me.email || '';
+      PROFILE.avatar = me.avatar || null;
+      if (typeof rerender === 'function') rerender();
+    });
+  }
 
   function renderEmailProfileCard(variant) {
     var wrapCls = 'tma-dash__email-profile-wrap tma-dash__email-profile-wrap--' + variant;
@@ -1522,10 +1653,10 @@
       '<div class="' + wrapCls + '">' +
       '<div class="' + profileCls + '">' +
       '<img class="tma-dash__email-profile-avatar" src="' +
-      AVATAR + esc(PROFILE.avatar) + '.png" alt="' + esc(PROFILE.name) + ' avatar" width="40" height="40">' +
+      esc(profileAvatarSrc()) + '" alt="' + esc(PROFILE.name) + ' avatar" width="40" height="40">' +
       '<span class="tma-dash__email-profile-meta">' +
-      '<span class="tma-dash__email-profile-name">' + esc(PROFILE.name) + '</span>' +
-      '<span class="tma-dash__email-profile-email">' + esc(PROFILE.email) + '</span>' +
+      '<span class="tma-dash__email-profile-name" title="' + esc(PROFILE.name) + '">' + esc(PROFILE.name) + '</span>' +
+      '<span class="tma-dash__email-profile-email" title="' + esc(PROFILE.email) + '">' + esc(PROFILE.email) + '</span>' +
       '</span>' +
       '</div>' +
       '</div>'
@@ -1537,7 +1668,7 @@
       '<button type="button" class="tma-dash__email-header-profile-btn" data-email-profile-sidebar-toggle' +
       ' aria-label="Open account menu" aria-expanded="' + (state.profileSidebarOpen ? 'true' : 'false') + '">' +
       '<img class="tma-dash__email-profile-avatar" src="' +
-      AVATAR + esc(PROFILE.avatar) + '.png" alt="' + esc(PROFILE.name) + '" width="32" height="32">' +
+      esc(profileAvatarSrc()) + '" alt="' + esc(PROFILE.name) + '" width="32" height="32">' +
       '</button>'
     );
   }
@@ -1587,7 +1718,7 @@
       ' data-email-profile-toggle aria-haspopup="menu"' +
       ' aria-expanded="' + (isOpen ? 'true' : 'false') + '">' +
       '<img class="tma-dash__email-profile-avatar" src="' +
-      AVATAR + esc(PROFILE.avatar) + '.png" alt="' + esc(PROFILE.name) + ' avatar" width="24" height="24">' +
+      esc(profileAvatarSrc()) + '" alt="' + esc(PROFILE.name) + ' avatar" width="24" height="24">' +
       '<span class="tma-dash__email-profile-meta">' +
       '<span class="tma-dash__email-profile-name">' + esc(PROFILE.name) + '</span>' +
       '<span class="tma-dash__email-profile-email">' + esc(PROFILE.email) + '</span>' +
@@ -1598,7 +1729,7 @@
       ' data-email-profile-menu role="menu"' + (isOpen ? '' : ' hidden') + '>' +
       '<div class="tma-dash__email-profile-menu-head">' +
       '<img class="tma-dash__email-profile-menu-avatar" src="' +
-      AVATAR + esc(PROFILE.avatar) + '.png" alt="" width="40" height="40">' +
+      esc(profileAvatarSrc()) + '" alt="" width="40" height="40">' +
       '<div class="tma-dash__email-profile-menu-meta">' +
       '<span class="tma-dash__email-profile-menu-name">' + esc(PROFILE.name) + '</span>' +
       '<span class="tma-dash__email-profile-menu-email">' + esc(PROFILE.email) + '</span>' +
@@ -4630,8 +4761,12 @@ function renderComposeToolbar() {
 
     // Paint the shell first (sidebar, chrome, loading state), then fill it
     // from the server — the page should never look blank while it waits.
+    bindCurrentUser(render);
     render();
     bootstrapMailbox(root, state, render);
+    // Show how far the mailbox history has downloaded, bottom-right.
+    stopSyncPolling();
+    pollSyncStatus();
   }
 
   window.TMAEmail = {
