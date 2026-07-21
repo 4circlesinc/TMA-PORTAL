@@ -63,6 +63,31 @@ class GmailProvider implements MailProvider
         ];
     }
 
+    public function newMessages(string $folder, string $since, int $limit = 25): array
+    {
+        $timestamp = strtotime($since);
+
+        // Gmail's `after:` has whole-second granularity at best, and in
+        // practice rounds to the day on some accounts — so it is used only to
+        // bound the search cheaply, and the caller re-upserts whatever comes
+        // back (idempotent) rather than trusting it to be exact.
+        $query = [
+            'maxResults' => $limit,
+            'q' => 'after:'.($timestamp ?: time() - 3600),
+            'labelIds' => self::labelForFolder($folder),
+        ];
+
+        $response = $this->request()->get(self::BASE.'/messages', $query);
+
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $ids = collect($this->json($response)['messages'] ?? [])->pluck('id')->all();
+
+        return $this->hydrateList($ids, null);
+    }
+
     public function getMessage(string $remoteId): array
     {
         $response = $this->request()->get(self::BASE.'/messages/'.$remoteId, [

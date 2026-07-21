@@ -19,9 +19,27 @@ class MailTokens
 {
     private const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
+    /**
+     * Where this account's access token is cached.
+     *
+     * Keyed on who the account *is* — provider plus provider id — not on its
+     * row id. A row id is only unique inside one database, and the cache is
+     * not: a filesystem or Redis store shared between environments hands
+     * `mail.access.1` to whatever happens to be account 1 in each of them.
+     * That is not hypothetical — a throwaway test database whose first
+     * account got id 1 picked up the real mailbox's cached token and synced a
+     * live account into itself.
+     */
+    private static function cacheKey(ConnectedAccount $account): string
+    {
+        return 'mail.access.'.sha1(
+            $account->provider.'|'.$account->provider_id.'|'.$account->email
+        );
+    }
+
     public static function accessToken(ConnectedAccount $account): string
     {
-        $key = 'mail.access.'.$account->id;
+        $key = self::cacheKey($account);
 
         $cached = Cache::get($key);
         if (is_string($cached) && $cached !== '') {
@@ -48,7 +66,7 @@ class MailTokens
     /** Drop the cached access token, e.g. after the provider returns 401. */
     public static function forget(ConnectedAccount $account): void
     {
-        Cache::forget('mail.access.'.$account->id);
+        Cache::forget(self::cacheKey($account));
     }
 
     /** @return array{0: string, 1: int} */

@@ -69,6 +69,57 @@ class MailSynchronizer
         }
     }
 
+    /**
+     * "Has anything arrived?" — one small request, safe to run every few seconds.
+     *
+     * A mailbox has to feel live, and a full incremental pass cannot: it walks
+     * six folders and pages through each, so running it on a five-second timer
+     * means each poll is still working when the next one starts, and the
+     * provider begins throttling. That is what "auto sync isn't working" looks
+     * like from the outside — not a sync that never runs, but one that never
+     * finishes.
+     *
+     * This asks only the inbox, only for what is newer than the newest message
+     * already stored, and never advances the cursor. The full pass stays the
+     * authority on reads, moves and deletions; this only gets arrivals on
+     * screen quickly. Overlap between the two is harmless — the upsert is
+     * idempotent.
+     *
+     * @return int the number of messages written
+     */
+    public function quickCheck(int $limit = 25): int
+    {
+        $newest = MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->where('folder', 'inbox')
+            ->max('sent_at');
+
+        // Nothing stored yet means the seed has not run; there is no useful
+        // watermark, and a full pass is what is actually needed.
+        if (! $newest) {
+            return 0;
+        }
+
+        // A second of overlap, because `ge` against the newest stored message
+        // would otherwise turn into "strictly after" the moment two messages
+        // share a timestamp. Re-reading one costs nothing.
+        $since = Carbon::parse($newest)->subSecond()->toIso8601ZuluString();
+
+        $messages = Mailbox::provider($this->account)->newMessages('inbox', $since, $limit);
+
+        if ($messages === []) {
+            return 0;
+        }
+
+        $written = $this->bulkUpsert($messages);
+
+        // Only the timestamp moves — not the cursor. The full pass still has
+        // to cover this window for everything a listing cannot report.
+        $this->account->forceFill(['mail_synced_at' => now()])->save();
+
+        return $written;
+    }
+
     /** First pass: list every folder, then start a change feed from here. */
     private function seed(): int
     {

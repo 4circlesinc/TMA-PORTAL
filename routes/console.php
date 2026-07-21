@@ -43,8 +43,13 @@ Artisan::command('mail:sync-all', function () {
     $this->info("Queued sync for {$accounts->count()} mailbox(es).");
 })->purpose('Queue an incremental sync for every connected mailbox');
 
+// Every minute is the floor cron can offer. It covers the mailbox nobody is
+// looking at; the email page itself polls every five seconds while open (see
+// MAIL_POLL_INTERVAL / MailSynchronizer::quickCheck), which is what makes it
+// feel live. Sub-minute delivery with no page open needs provider push —
+// Graph change notifications or Gmail Pub/Sub — not a tighter timer.
 Schedule::command('mail:sync-all')
-    ->everyFiveMinutes()
+    ->everyMinute()
     // The job already drops overlapping runs per mailbox; this stops a slow
     // provider from stacking scheduler ticks on top of each other as well.
     ->withoutOverlapping();

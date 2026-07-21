@@ -53,8 +53,11 @@ await page.waitForSelector('[data-email-row]', { timeout: 15000 });
 check(true, 'inbox rendered');
 
 step(2, 'Open the conversation');
-await page.locator('[data-email-row]').first().click();
+// Targeted by subject rather than position: the inbox holds other fixtures,
+// and "the first row" is whichever one happens to be newest.
+await page.locator('[data-email-row]', { hasText: 'Quarterly review' }).first().click();
 await page.waitForSelector('[data-email-thread]', { timeout: 15000 });
+await page.waitForTimeout(800);
 
 const cards = await page.locator('[data-email-thread-message]').count();
 check(cards === 3, `all three messages render as cards (got ${cards})`);
@@ -110,7 +113,32 @@ if (hasQuoteToggle) {
   );
 }
 
-step(6, 'A new compose window starts empty');
+step(6, 'Attachments are listed under the message they belong to');
+// A separate fixture message, because attachments hang off one message in the
+// thread rather than the thread as a whole — the section has to be able to say
+// which message's files it is showing.
+await page.locator('[data-email-row]', { hasText: 'With attachments' }).first().click();
+await page.waitForSelector('[data-email-thread]', { timeout: 15000 });
+await page.waitForTimeout(1200);
+
+const tiles = await page.locator('[data-email-attachment-open]').count();
+check(tiles === 3, `every attachment gets a tile (got ${tiles})`);
+
+const fileNames = await page.locator('.tma-dash__email-attachment-tile-name').allTextContents();
+check(
+  fileNames.includes('contract.pdf') && fileNames.includes('photo.png'),
+  `attachments are named (got ${JSON.stringify(fileNames)})`
+);
+
+// An embedded signature image stays listed — a pasted document carries a
+// Content-ID exactly as a logo does — but is counted apart from real files.
+const heading = (await page.locator('.tma-dash__email-attachments-head').first().innerText()).trim();
+check(
+  /embedded image/i.test(heading),
+  `embedded images are distinguished from attachments (got "${heading}")`
+);
+
+step(7, 'A new compose window starts empty');
 await page.locator('[data-email-folder="compose"]').first().click();
 await page.waitForSelector('[data-email-compose-body]', { timeout: 8000 });
 
@@ -125,7 +153,7 @@ check(
   `body carries no stand-in invoice (got "${bodyText.slice(0, 60)}")`
 );
 
-step(7, 'Compose formatting tools act on the selection');
+step(8, 'Compose formatting tools act on the selection');
 const editor = page.locator('[data-email-compose-body]').first();
 await editor.click();
 await page.keyboard.type('hello world');
@@ -139,7 +167,7 @@ await page.waitForTimeout(300);
 const html = await editor.innerHTML();
 check(/<b>|<strong>|font-weight/i.test(html), `bold applied to the selection (got ${html.slice(0, 80)})`);
 
-step(8, 'The More menu exposes the rest of the formatting');
+step(9, 'The More menu exposes the rest of the formatting');
 await page.locator('[data-email-compose-tool-menu="more"]').first().click();
 await page.waitForTimeout(300);
 const menuItems = await page.locator('[data-email-compose-menu-cmd]').count();

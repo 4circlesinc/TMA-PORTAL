@@ -214,6 +214,122 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 node tests/Browser/mail-thread.mjs
 ```
 
+It also wants one message carrying attachments, including an inline one, since
+attachments hang off a single message rather than the thread:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+  \$a = App\Models\ConnectedAccount::where('user_id', \$u->id)->first();
+  \$m = App\Models\MailMessage::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+    'connected_account_id' => \$a->id, 'remote_id' => 'att-msg', 'thread_id' => 'conv-att',
+    'folder' => 'inbox', 'subject' => 'With attachments', 'snippet' => 'see attached',
+    'body_html' => '<p>See attached.</p>', 'from_name' => 'Dana Reed',
+    'from_email' => 'dana@example.com', 'is_read' => true, 'has_attachments' => true,
+    'sent_at' => now()->subHour()]);
+  foreach ([['contract.pdf','application/pdf',204800,false],
+            ['photo.png','image/png',51200,false],
+            ['logo.png','image/png',2048,true]] as [\$fn,\$mime,\$sz,\$inl]) {
+    App\Models\MailAttachment::create(['uuid' => (string) Str::uuid(),
+      'mail_message_id' => \$m->id, 'remote_id' => 'att-'.\$fn, 'filename' => \$fn,
+      'mime_type' => \$mime, 'size' => \$sz, 'is_inline' => \$inl,
+      'content_id' => \$inl ? 'logo001' : null]);
+  }
+"
+```
+
 Seeding a body on every message matters: the thread endpoint only fetches the
 message being opened, and a fake token cannot fetch the rest — without cached
-bodies the expand checks would be measuring a failed provider call.
+bodies the expand checks would be measuring a failed provider call. Expect 502s
+in the console for the attachment thumbnails for the same reason; the checks
+are about the tiles being *listed*, which does not need the bytes.
+
+**Give the connected account a `provider_id` unlike the real one.** The access
+token is cached under a hash of provider + provider id, and `CACHE_STORE=file`
+is shared across databases on the same machine — an earlier version keyed it on
+the account's row id, so a throwaway database whose first account got id 1
+picked up the live mailbox's token and synced a real account into itself.
+
+## Messaging
+
+The Messages page was a pure mock — a hard-coded `THREADS` array with a
+scripted ByeWind conversation and no network calls at all. It is now backed by
+`/portal/messaging`, so these two scripts exist to keep it that way.
+
+- **`messaging.mjs`** — the page against a real server: the list comes from the
+  API (and contains none of the old mock names), messages load and send and
+  survive a reload, replies carry a quoted original, drafts stay with their own
+  conversation and come back after a reload, and older history pages in.
+
+  Its most important check is the **chat-list scroll**. Every action used to
+  re-render the whole subtree, which reset the list to the top — so scrolling
+  down and opening a conversation near the bottom threw you back to the start.
+  The script deliberately seeds more conversations than fit on screen, asserts
+  the list actually overflows, then pins the scroll offset across opening a
+  conversation *and* sending a message. A run where the list doesn't overflow
+  proves nothing, which is why that precondition is asserted rather than assumed.
+
+- **`messaging-realtime.mjs`** — two users in two browser contexts. One sends,
+  the other must see it with no reload; read receipts turn the sender's tick
+  over; edits and deletes propagate. It also checks `/broadcasting/auth`
+  refuses a channel for a conversation the caller is not in, which is the
+  websocket half of the membership rule the HTTP routes enforce.
+
+Seed both with several conversations, one of them deep enough to page:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$mk = function (\$name, \$email, \$type = 'Employee') {
+    \$u = App\Models\User::firstOrCreate(['email' => \$email],
+      ['name' => \$name, 'password' => Hash::make('password12345')]);
+    \$u->forceFill(['name' => \$name, 'email_verified_at' => now(),
+      'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+      'status' => 'approved', 'account_type' => \$type])->save();
+    return \$u;
+  };
+  \$me = \$mk('Test User', 'e2e@example.com', 'Administrator');
+  \$names = ['Ana Ruiz','Ben Carter','Chloe Diaz','Dan Meyer','Ella Novak','Femi Adeyemi',
+             'Grace Lin','Hugo Marsh','Iris Vance','Jonas Peel','Kira Osei','Liam Duarte',
+             'Mona Farid','Nils Bergman','Opal Reyes'];
+  foreach (\$names as \$i => \$n) {
+    \$o = \$mk(\$n, 'user'.\$i.'@example.com');
+    \$c = App\Models\Conversation::create(['type' => 'direct', 'created_by' => \$me->id,
+      'last_message_at' => now()->subMinutes(\$i * 7)]);
+    foreach ([\$me, \$o] as \$m) {
+      \$c->participants()->create(['user_id' => \$m->id, 'role' => 'member', 'joined_at' => now()]);
+    }
+    // The last thread gets deep history so 'load earlier' has something to do.
+    \$count = \$i === count(\$names) - 1 ? 45 : 3;
+    for (\$n2 = 0; \$n2 < \$count; \$n2++) {
+      \$msg = \$c->messages()->create(['user_id' => \$n2 % 2 ? \$me->id : \$o->id,
+        'type' => 'text', 'body' => \$n2 % 2 ? 'Reply '.(\$n2+1).' from me' : 'Message '.(\$n2+1).' from '.\$o->name]);
+      // created_at isn't mass-assignable — backdate it explicitly.
+      \$msg->forceFill(['created_at' => now()->subMinutes((\$count - \$n2) * 3 + \$i * 7)])->save();
+    }
+  }
+"
+
+node tests/Browser/messaging.mjs
+```
+
+`messaging-realtime.mjs` additionally needs Reverb up, and the app server has to
+point at it:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan reverb:start --host=127.0.0.1 --port=8080 &
+
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log \
+  REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http PHP_CLI_SERVER_WORKERS=12 \
+  php artisan serve --host=127.0.0.1 --port=8899 &
+
+node tests/Browser/messaging-realtime.mjs
+```
+
+Without Reverb running the realtime script fails at the "socket is connected"
+check — which is the point, it's testing the socket, not a fallback. The app
+itself degrades quietly in that case: sends still succeed and are stored, they
+just don't arrive until the next load (see `App\Support\Messaging\Broadcaster`).
+
+Address conversations **by name, not by list position**. Sending reorders the
+list, so `.first()` is not a stable handle on a conversation — an earlier
+version of the draft checks failed for exactly that reason.

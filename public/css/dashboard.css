@@ -24190,3 +24190,287 @@ button.tma-dash__header-popup-item:focus-visible {
   align-items: flex-start;
   justify-content: flex-start;
 }
+
+/* ---------------------------------------------------------------------------
+ * Messages — states and message affordances added when the page was wired to
+ * the real messaging API. Uses the existing tokens and bubble geometry; no
+ * layout, colour or spacing decisions from the original design are changed.
+ * ------------------------------------------------------------------------- */
+
+/* Loading / empty / error stand-ins for the chat list and the thread. */
+.tma-dash__messages-list-state,
+.tma-dash__messages-chat-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-24);
+  text-align: center;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-chat-state {
+  flex: 1;
+  margin: auto;
+}
+
+.tma-dash__messages-list-state p,
+.tma-dash__messages-chat-state p {
+  margin: 0;
+}
+
+.tma-dash__messages-list-retry {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* "Draft:" marker in a chat-list row preview. */
+.tma-dash__messages-row-draft {
+  color: var(--color-text-primary);
+}
+
+/* Load-earlier control at the top of a thread. */
+.tma-dash__messages-load-more {
+  align-self: center;
+  border: 0;
+  background: none;
+  padding: var(--space-8) var(--space-16);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-dash__messages-load-more:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Sender name above the first bubble of a run, in group conversations. */
+.tma-dash__messages-bubble-sender {
+  display: block;
+  margin-bottom: var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* Quoted original inside a reply bubble. */
+.tma-dash__messages-bubble-quote {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-8);
+  width: 100%;
+  margin-bottom: var(--space-8);
+  padding: var(--space-4) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: rgb(0 0 0 / 0.05);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__messages-bubble-quote-bar {
+  flex: 0 0 2px;
+  border-radius: var(--radius-4);
+  background: var(--color-text-secondary);
+}
+
+.tma-dash__messages-bubble-quote-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__messages-bubble-quote-name {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-bubble-quote-text {
+  overflow: hidden;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Links inside a message. */
+.tma-dash__messages-link {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Delivery ticks. */
+.tma-dash__messages-bubble-status {
+  margin-left: var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+}
+
+.tma-dash__messages-bubble-status--read {
+  color: var(--color-primary-brand, #1c6ef2);
+}
+
+.tma-dash__messages-bubble-status--failed {
+  color: var(--color-danger, #d92d20);
+  font-weight: 700;
+}
+
+.tma-dash__messages-bubble-edited {
+  font-style: italic;
+}
+
+.tma-dash__messages-bubble--pending {
+  opacity: 0.65;
+}
+
+.tma-dash__messages-bubble--failed {
+  outline: 1px solid var(--color-danger, #d92d20);
+}
+
+.tma-dash__messages-bubble-text--deleted {
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+/* Reaction pills under a bubble. */
+.tma-dash__messages-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: calc(var(--space-4) * -1);
+}
+
+.tma-dash__messages-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 2px var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-16);
+  background: var(--color-1);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.tma-dash__messages-reaction--mine {
+  border-color: var(--color-text-secondary);
+}
+
+/* Hover actions beside a bubble. */
+.tma-dash__messages-bubble-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.tma-dash__messages-bubble-row:hover .tma-dash__messages-bubble-actions,
+.tma-dash__messages-bubble-row:focus-within .tma-dash__messages-bubble-actions {
+  opacity: 1;
+}
+
+/* Overflow menu for one message. */
+.tma-dash__messages-message-menu {
+  z-index: 260;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: var(--space-4);
+  border-radius: var(--radius-8);
+  background: var(--color-bg-elevated, #fff);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+}
+
+.tma-dash__messages-message-menu-item {
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-4);
+  background: none;
+  font: inherit;
+  font-size: var(--text-size-14);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__messages-message-menu-item:hover {
+  background: var(--color-1);
+}
+
+.tma-dash__messages-message-menu-item--danger {
+  color: var(--color-danger, #d92d20);
+}
+
+/* Target of a "jump to replied message" click. */
+.tma-dash__messages-bubble-row.is-jump-target .tma-dash__messages-bubble {
+  animation: tma-messages-jump-flash 1.6s ease;
+}
+
+@keyframes tma-messages-jump-flash {
+  0%, 100% { filter: none; }
+  20%, 60% { filter: brightness(0.92); }
+}
+
+/* Editing banner above the composer. */
+.tma-dash__messages-composer-editing {
+  padding: var(--space-4) var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+/* Disabled composer / header controls (calling, attachments, voice notes). */
+.tma-dash__messages-composer-btn:disabled,
+.tma-dash__messages-icon-btn--disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Typing / recording line in the conversation header. */
+.tma-dash__messages-chat-presence--typing {
+  font-style: italic;
+}
+
+/* Initials fallback tiles, used wherever there is no real photo. */
+.tma-dash__messages-row-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-size-12);
+  font-weight: 600;
+  color: #fff;
+}
+
+.tma-dash__messages-row-avatar--blue { background: #2f6fed; }
+.tma-dash__messages-row-avatar--green { background: #17976a; }
+.tma-dash__messages-row-avatar--purple { background: #7a4fe0; }
+.tma-dash__messages-row-avatar--amber { background: #b7791f; }
+.tma-dash__messages-row-avatar--rose { background: #c2405c; }
+
+.tma-dash__messages-row-avatar-part--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #2f6fed;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+}

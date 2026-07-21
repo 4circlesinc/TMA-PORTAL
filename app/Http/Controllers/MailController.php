@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ResolveSenderPhoto;
 use App\Jobs\SyncMailbox;
+use App\Models\ConnectedAccount;
 use App\Models\MailAttachment;
 use App\Models\MailDraft;
 use App\Models\MailLabel;
@@ -958,6 +959,39 @@ class MailController extends Controller
     }
 
     /**
+     * The live-mail check behind the page's five-second timer.
+     *
+     * Kept separate from the full sync so it can never inherit its cost: one
+     * inbox request, no cursor movement, and a failure that reports itself
+     * without turning into a 500 on a timer.
+     */
+    private function quickSync(Request $request, ConnectedAccount $account): JsonResponse
+    {
+        try {
+            $written = new MailSynchronizer($account)->quickCheck();
+        } catch (MailAuthException $e) {
+            // A dead grant still has to surface as the reconnect prompt, even
+            // on the background timer — otherwise the mailbox silently stops
+            // receiving and nothing on screen says why.
+            throw $e;
+        } catch (\Throwable $e) {
+            logger()->warning('mail: live check failed', [
+                'account' => $account->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['synced' => 0, 'fast' => true, 'error' => 'unavailable']);
+        }
+
+        return response()->json([
+            'synced' => $written,
+            'fast' => true,
+            // Only worth the extra query when something actually landed.
+            'folders' => $written > 0 ? $this->folderCounts($request->user()->id) : null,
+        ]);
+    }
+
+    /**
      * Strip the executable parts out of an SVG so it can be previewed.
      *
      * An SVG is a document, not a picture: it can carry <script>, event
@@ -1005,6 +1039,14 @@ class MailController extends Controller
     public function sync(Request $request): JsonResponse
     {
         $account = Mailbox::requireAccountFor($request->user());
+
+        // The page's live-mail timer asks for the fast path: one request
+        // against the inbox rather than a walk of every folder. A full pass
+        // cannot run every five seconds — it is still going when the next one
+        // starts — so asking for one here would defeat the point.
+        if ($request->boolean('fast')) {
+            return $this->quickSync($request, $account);
+        }
 
         // The email page polls this on a timer, so a transient provider problem
         // (throttling, a slow token refresh, a network blip) must not turn into

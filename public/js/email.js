@@ -1053,19 +1053,29 @@
     });
   }
 
+  /* How often the page asks the provider whether anything has arrived. A
+   * mailbox has to feel live, so this is the fast inbox-only check — see
+   * MailSynchronizer::quickCheck — not the full folder walk. */
   var MAIL_POLL_INTERVAL = 5000;
 
-  /* True while a re-render would do more harm than good: it would yank
-   * focus/caret out of whatever the user is mid-typing, or repaint a tab
-   * nobody is looking at for nothing. */
+  /* How often the *full* pass runs instead: every folder, plus the reads,
+   * moves and deletions a plain inbox listing cannot report. Expensive, so it
+   * is measured in polls rather than run on every tick. */
+  var MAIL_FULL_SYNC_EVERY = 12; // ≈ 60s
+
+  /* True while the tab has nothing to gain from being polled at all. Note this
+   * no longer includes composing: mail must keep *arriving* while the user
+   * writes — only the repaint is held back (see mailRepaintShouldWait), which
+   * is what would actually disturb them. */
   function mailPollShouldWait(state) {
-    return (
-      document.hidden ||
-      !state.connected ||
-      state.folder === 'templates' ||
-      state.composeDrafts.length > 0 ||
-      !!state.inlineCompose
-    );
+    return document.hidden || !state.connected || state.folder === 'templates';
+  }
+
+  /* True while a re-render would do more harm than good: it would yank the
+   * caret out of whatever the user is mid-typing. The sync still runs; the
+   * list just paints once they are done. */
+  function mailRepaintShouldWait(state) {
+    return state.composeDrafts.length > 0 || !!state.inlineCompose;
   }
 
   /* Cheap enough to run every tick: same ids in the same order, with the
@@ -1106,11 +1116,31 @@
       return;
     }
 
+    // One poll at a time. Without this a slow provider means each tick starts
+    // another sync on top of the last, and the pile-up is what gets the
+    // account throttled — at which point new mail stops arriving entirely.
+    if (state._mailPollBusy) {
+      scheduleMailPoll(root, state, render);
+      return;
+    }
+    state._mailPollBusy = true;
+
     var token = ++state.loadToken;
 
-    api().sync().catch(function () {
+    // The cheap inbox check on most ticks; the full folder walk occasionally,
+    // since reads, moves and deletions made in Outlook never show up in a
+    // plain inbox listing.
+    state._mailPollTick = (state._mailPollTick || 0) + 1;
+    var full = state._mailPollTick % MAIL_FULL_SYNC_EVERY === 0;
+
+    api().sync({ fast: !full }).catch(function () {
       // Best-effort: fall through to listMessages with whatever is local.
     }).then(function () {
+      // Repainting mid-compose would move the caret, so the list is left alone
+      // until the compose window closes. The sync above still ran, so the mail
+      // is already stored — it just paints a moment later.
+      if (mailRepaintShouldWait(state)) return null;
+
       return api().listMessages({
         folder: state.folder,
         search: state.search,
@@ -1119,6 +1149,8 @@
         perPage: state.perPage,
       });
     }).then(function (data) {
+      if (!data) return;
+
       // A folder switch, search, or manual reload started after this poll
       // began owns the screen now — don't stomp on it.
       if (token !== state.loadToken) return;
@@ -1141,6 +1173,7 @@
     }).catch(function () {
       // Silent — this is a background refresh, not a user action.
     }).then(function () {
+      state._mailPollBusy = false;
       scheduleMailPoll(root, state, render);
     });
   }

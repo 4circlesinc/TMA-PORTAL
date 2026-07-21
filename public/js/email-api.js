@@ -146,8 +146,11 @@
       return BASE + '/attachments/' + encodeURIComponent(id);
     },
 
-    sync: function () {
-      return mailFetch(BASE + '/sync', { method: 'POST' });
+    /* opts.fast asks for the inbox-only live check rather than the full folder
+     * walk — the difference between something that can run every five seconds
+     * and something that cannot. */
+    sync: function (opts) {
+      return mailFetch(BASE + '/sync' + ((opts && opts.fast) ? '?fast=1' : ''), { method: 'POST' });
     },
 
     getSettings: function () {

@@ -5,7 +5,6 @@
 (function () {
   'use strict';
 
-  var AVATAR = 'images/avatars/';
   var ICON = 'images/icons/phosphor/';
   var EMOJI = 'images/emoji/';
 
@@ -42,131 +41,117 @@
     return isMessagesMobile() && !!state.reading && !!state.selectedId;
   }
 
-  var BYEWIND_MESSAGES = [
-    {
-      type: 'in',
-      time: '11:42 AM',
-      html:
-        '<p>hi ByeWind, I saw your work on Dribbble and it\'s awesome.</p>' +
-        '<p>I would like to know more about it. Could you send me your website?</p>',
-    },
-    { type: 'divider', label: 'Today, 11:59 AM' },
-    { type: 'out', text: 'Thank you. Of course. Just a moment, please.', time: '11:58 AM' },
-    {
-      type: 'link',
-      url: 'portal.tmantoine.com',
-      title: 'TM ANTOINE Advisory',
-      time: '11:59 AM',
-    },
-    { type: 'in', text: 'Got it, thank you.', heart: true, time: '12:01 PM' },
-    { type: 'out', emoji: 'WinkingFace.svg', time: '12:02 PM' },
-  ];
+  /*
+   * Live state. Conversations and messages come from /portal/messaging; there
+   * is no local seed data. Until the first load resolves the page shows its
+   * loading state rather than stand-in content.
+   */
+  var STORE = {
+    threads: [],
+    // conversation id -> { messages: [], hasMore: bool, loading: bool, loaded: bool }
+    threadMessages: {},
+    me: null,
+    settings: {},
+    realtime: null,
+    loaded: false,
+    loadError: null,
+  };
 
-  var THREADS = [
-    { id: 'william', name: 'William Johnson', preview: 'What about the second plan', time: '18:30', avatar: 'AvatarAbstract04', presence: { lastSeen: 'Last seen 2 hr ago' } },
-    {
-      id: 'byewind',
-      name: 'ByeWind',
-      preview: 'Are you free tonight?',
-      time: '19:28',
-      avatar: 'AvatarByewind',
-      unread: 12,
-      presence: { online: true },
-      messages: BYEWIND_MESSAGES,
-    },
-    { id: 'natali', name: 'Natali Craig', preview: 'Hi', time: '17:52', avatar: 'AvatarFemale06', unread: 5, presence: { online: true } },
-    { id: 'drew', name: 'Drew Cano', preview: "Let's go fishing! – Hey, You wanna join...", time: '10:12', avatar: 'AvatarMale01', presence: { lastSeen: 'Last seen 12 min ago' } },
-    {
-      id: 'bruce',
-      name: 'Bruce Wayne, James Davis',
-      preview: 'You have a new follower',
-      time: '06:30',
-      group: ['AvatarAbstract02', 'AvatarMale01'],
-    },
-    { id: 'orlando', name: 'Orlando Diggs', preview: "Hey man – Nah man sorry i don't. Should i get it?", time: 'Mar 12', avatar: 'AvatarMale03', presence: { lastSeen: 'Last seen yesterday' } },
-    {
-      id: 'sarah',
-      name: 'Sarah Jackson, Michael Brown, Christopher Lee',
-      preview: "Yes, I think it's a great idea",
-      time: 'Mar 12',
-      group: ['AvatarFemale02', 'AvatarMale01', 'AvatarMale05'],
-    },
-    { id: 'andi', name: 'Andi Lane', preview: 'Re: New mail settings – Will you answer him asap?', time: 'Mar 11', avatar: 'AvatarFemale01', presence: { online: true } },
-    {
-      id: 'group',
-      name: 'Group',
-      preview: 'You have a new follower',
-      time: 'Mar 10',
-      group: ['AvatarFemale05', 'AvatarAbstract03', 'Avatar3D03'],
-    },
-    { id: 'john', name: 'John Smith', preview: "There's a bug you need to deal with.", time: 'Mar 9', avatar: 'AvatarMale02' },
-    { id: 'kate', name: 'Kate Morrison', preview: 'I think we should use the first version.', time: 'Mar 9', avatar: 'AvatarFemale04', presence: { lastSeen: 'Last seen 3 hr ago' } },
-    { id: 'threads', name: 'Threads', preview: 'You have a new follower', time: 'Mar 8', brand: 'ThreadsLogo' },
-    {
-      id: 'koray',
-      name: 'Koray Okumus',
-      preview: "Let's talk about the search box interaction again",
-      time: 'Mar 7',
-      avatar: 'AvatarMale04',
-      presence: { lastSeen: 'Last seen Mar 7' },
-    },
-  ];
+  function getThreads() {
+    return STORE.threads;
+  }
 
-  function clientContact(id) {
-    if (!id || !window.TMAClients || !window.TMAClients.contactFor) return null;
-    if (window.TMAClients.hasContact && !window.TMAClients.hasContact(id)) return null;
-    try {
-      return window.TMAClients.contactFor(id);
-    } catch (err) {
-      return null;
+  function findThread(id) {
+    for (var i = 0; i < STORE.threads.length; i++) {
+      if (STORE.threads[i].id === id) return STORE.threads[i];
     }
+    return null;
   }
 
-  function clientProfileSubtitle(contact) {
-    if (!contact) return '';
-    return [
-      contact.nickname ? '"' + contact.nickname + '"' : '',
-      contact.work && contact.work.jobTitle,
-      contact.work && contact.work.company,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+  /* The message cache for one conversation, created empty on first ask. */
+  function threadBucket(id) {
+    if (!id) return { messages: [], hasMore: false, loading: false, loaded: false };
+    if (!STORE.threadMessages[id]) {
+      STORE.threadMessages[id] = { messages: [], hasMore: false, loading: false, loaded: false };
+    }
+    return STORE.threadMessages[id];
   }
 
+  function getMessages(id) {
+    return threadBucket(id).messages;
+  }
+
+  /*
+   * Merge server messages into a conversation's cache, keyed on `seq` so a
+   * message that arrives twice - once optimistically, once over the socket -
+   * collapses into one bubble instead of duplicating.
+   */
+  function mergeMessages(id, incoming, atFront) {
+    var bucket = threadBucket(id);
+    var bySeq = {};
+    var byNonce = {};
+
+    bucket.messages.forEach(function (msg, index) {
+      if (msg.seq) bySeq[msg.seq] = index;
+      if (msg.nonce) byNonce[msg.nonce] = index;
+    });
+
+    var fresh = [];
+    incoming.forEach(function (msg) {
+      // A confirmed send replaces its own optimistic placeholder in place, so
+      // the bubble never jumps position when the server answers.
+      var existing = bySeq[msg.seq];
+      if (existing === undefined && msg.nonce !== undefined) existing = byNonce[msg.nonce];
+      if (existing !== undefined) {
+        bucket.messages[existing] = msg;
+        return;
+      }
+      fresh.push(msg);
+    });
+
+    if (!fresh.length) return bucket;
+
+    bucket.messages = atFront ? fresh.concat(bucket.messages) : bucket.messages.concat(fresh);
+    bucket.messages.sort(function (a, b) {
+      // Pending sends have no seq yet and belong last, in arrival order.
+      var aSeq = a.seq || Number.MAX_SAFE_INTEGER;
+      var bSeq = b.seq || Number.MAX_SAFE_INTEGER;
+      return aSeq - bSeq;
+    });
+
+    return bucket;
+  }
+
+  /*
+   * The server resolves display names, photos and presence for the viewer, so
+   * there is nothing left to overlay client-side. Kept as a seam because the
+   * render functions all call it.
+   */
   function resolveThread(row) {
-    if (!row || !row.id || row.group || row.brand) return row;
-    var contact = clientContact(row.id);
-    if (!contact) return row;
-    var resolved = Object.assign({}, row);
-    resolved.name = contact.name;
-    resolved.subtitle = clientProfileSubtitle(contact);
-    if (contact.photo) {
-      resolved.photo = contact.photo;
-      resolved.user = false;
-    } else if (contact.avatar) {
-      resolved.avatar = contact.avatar;
-      resolved.user = false;
-    } else if (contact.initial) {
-      resolved.initial = contact.initial;
-      resolved.initialColor = contact.initialColor;
-      resolved.user = false;
-    }
-    return resolved;
+    return row || {};
   }
 
   function isDirectThread(row) {
-    return !row.group && !row.brand;
+    return row.type !== 'group';
   }
 
   function threadPresence(row) {
     if (row.presence) return row.presence;
-    if (row.group) return { label: 'Group chat' };
-    if (row.brand) return { label: 'Official account' };
-    return { lastSeen: 'Last seen recently' };
+    return isDirectThread(row) ? { lastSeen: 'Last seen recently' } : { label: 'Group chat' };
   }
 
   function renderPresence(row) {
     var presence = threadPresence(row);
+
+    // A live typing / recording indicator outranks online-or-last-seen.
+    if (presence.typing) {
+      return (
+        '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--typing">' +
+        esc(presence.typing === 'recording' ? 'Recording voice note…' : 'Typing…') +
+        '</span>'
+      );
+    }
+
     if (presence.online) {
       return (
         '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--online">' +
@@ -178,22 +163,13 @@
     return '<span class="tma-dash__messages-chat-presence">' + esc(label) + '</span>';
   }
 
+  function threadDisplayName(row) {
+    return String(row.name || '').split(',')[0];
+  }
+
   function renderContactName(row) {
-    row = resolveThread(row);
-    var displayName = row.name.split(',')[0];
-    if (!isDirectThread(row)) {
-      return '<span class="tma-dash__messages-chat-name">' + esc(displayName) + '</span>';
-    }
     return (
-      '<a class="tma-dash__messages-chat-name tma-dash__messages-chat-name-link" href="/clients/' +
-      encodeURIComponent(row.id) +
-      '" data-messages-contact="' +
-      esc(row.id) +
-      '" aria-label="View ' +
-      esc(displayName) +
-      ' profile">' +
-      esc(displayName) +
-      '</a>'
+      '<span class="tma-dash__messages-chat-name">' + esc(threadDisplayName(row)) + '</span>'
     );
   }
 
@@ -208,36 +184,7 @@
   }
 
   function renderChatThreadIcon(row) {
-    row = resolveThread(row);
-    var icon = threadIcon(row);
-    if (!isDirectThread(row)) return icon;
-    var displayName = row.name.split(',')[0];
-    return (
-      '<a class="tma-dash__messages-chat-avatar-link" href="/clients/' +
-      encodeURIComponent(row.id) +
-      '" data-messages-contact="' +
-      esc(row.id) +
-      '" aria-label="View ' +
-      esc(displayName) +
-      ' profile">' +
-      icon +
-      '</a>'
-    );
-  }
-
-  function openClientProfile(id) {
-    if (!id || !window.TMADashboard || !window.TMADashboard.navigate) return;
-    var contact = clientContact(id);
-    var thread = THREADS.filter(function (r) { return r.id === id; })[0];
-    var name = contact ? contact.name : thread ? thread.name.split(',')[0] : 'Client';
-    window.TMADashboard.navigate({
-      navId: 'clients',
-      view: 'clients',
-      title: name,
-      crumb: 'Clients / ' + name,
-      clientsScreen: 'detail',
-      contactId: id,
-    });
+    return threadIcon(resolveThread(row));
   }
 
   function esc(s) {
@@ -246,58 +193,68 @@
     });
   }
 
+  /* Up to two letters from a display name, for the no-photo fallback. */
+  function initialsFor(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  }
+
+  /* Stable colour per name, so someone's initials tile doesn't change colour
+   * between renders or between the list and the header. */
+  var INITIAL_COLOURS = ['blue', 'green', 'purple', 'amber', 'rose'];
+
+  function initialColourFor(name) {
+    var sum = 0;
+    var text = String(name || '');
+    for (var i = 0; i < text.length; i++) sum = (sum + text.charCodeAt(i)) % 9973;
+    return INITIAL_COLOURS[sum % INITIAL_COLOURS.length];
+  }
+
+  function renderInitialAvatar(name, extraClass) {
+    return (
+      '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--initial ' +
+      'tma-dash__messages-row-avatar--' + initialColourFor(name) +
+      (extraClass ? ' ' + extraClass : '') + '">' +
+      esc(initialsFor(name)) +
+      '</span>'
+    );
+  }
+
+  /*
+   * Conversation avatar. Real photos only; where there is none the initials
+   * tile stands in - the portal never shows a stock avatar for a real person.
+   */
   function threadIcon(row) {
-    if (row.brand) {
-      return (
-        '<span class="tma-dash__messages-row-icon">' +
-        '<img src="' + esc(ICONS[row.brand] || ICON + row.brand + '.svg') + '" alt="">' +
-        '</span>'
-      );
-    }
     if (row.photo) {
       return (
         '<span class="tma-dash__messages-row-avatar">' +
-        '<img src="' + esc(row.photo) + '" alt="">' +
+        '<img src="' + esc(row.photo) + '" alt="" loading="lazy">' +
         '</span>'
       );
     }
-    if (row.initial) {
-      var initialColor =
-        row.initialColor === 'green'
-          ? ' tma-dash__messages-row-avatar--green'
-          : ' tma-dash__messages-row-avatar--blue';
-      return (
-        '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--initial' +
-        initialColor +
-        '">' +
-        esc(row.initial) +
-        '</span>'
-      );
-    }
-    if (row.user) {
-      return (
-        '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--user">' +
-        '<img src="' + esc(ICONS.User) + '" alt="">' +
-        '</span>'
-      );
-    }
-    if (row.group) {
+
+    if (row.type === 'group') {
+      var members = (row.members || []).slice(0, 2);
+      if (!members.length) return renderInitialAvatar(row.name, 'tma-dash__messages-row-avatar--group');
+
       return (
         '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group">' +
-        row.group
-          .slice(0, 2)
-          .map(function (a, i) {
-            return '<img class="tma-dash__messages-row-avatar-part tma-dash__messages-row-avatar-part--' + (i + 1) + '" src="' + AVATAR + esc(a) + '.png" alt="">';
+        members
+          .map(function (member, i) {
+            var cls = 'tma-dash__messages-row-avatar-part tma-dash__messages-row-avatar-part--' + (i + 1);
+            return member.photo
+              ? '<img class="' + cls + '" src="' + esc(member.photo) + '" alt="" loading="lazy">'
+              : '<span class="' + cls + ' tma-dash__messages-row-avatar-part--initial">' +
+                esc(initialsFor(member.name).charAt(0)) + '</span>';
           })
           .join('') +
         '</span>'
       );
     }
-    return (
-      '<span class="tma-dash__messages-row-avatar">' +
-      '<img src="' + AVATAR + esc(row.avatar) + '.png" alt="">' +
-      '</span>'
-    );
+
+    return renderInitialAvatar(row.name);
   }
 
   function isThreadOnline(row) {
@@ -374,28 +331,41 @@
     );
   }
 
+  /*
+   * The rows the chat list should show, after the active tab, the search box,
+   * and pin ordering are applied.
+   *
+   * The server already returns the list pinned-first then newest-first, so the
+   * order here only has to be *stable*: re-sorting on every render is what used
+   * to make rows shuffle under the pointer.
+   */
   function getVisibleThreads(state) {
-    return THREADS.map(function (row, index) {
-      return { row: row, index: index };
-    })
-      .filter(function (entry) {
-        return !(state.removedIds && state.removedIds[entry.row.id]);
-      })
-      .sort(function (a, b) {
-        var aPin = state.pinnedIds && state.pinnedIds[a.row.id] ? 1 : 0;
-        var bPin = state.pinnedIds && state.pinnedIds[b.row.id] ? 1 : 0;
-        if (aPin !== bPin) return bPin - aPin;
-        return a.index - b.index;
-      })
-      .map(function (entry) {
-        return entry.row;
-      });
+    var term = (state.search || '').trim().toLowerCase();
+    var tab = state.tab || 'all';
+
+    return getThreads().filter(function (row) {
+      // Archived conversations live in their own tab, never the main list.
+      if (tab === 'archived') {
+        if (!row.archived) return false;
+      } else if (row.archived) {
+        return false;
+      }
+
+      if (tab === 'unread' && !row.unread) return false;
+
+      if (!term) return true;
+
+      return (
+        (row.name || '').toLowerCase().indexOf(term) !== -1 ||
+        (row.preview || '').toLowerCase().indexOf(term) !== -1
+      );
+    });
   }
 
   function buildMessagesRowInner(row, state) {
     var item = resolveThread(row);
-    var pinned = state.pinnedIds && state.pinnedIds[row.id];
-    var muted = state.mutedIds && state.mutedIds[row.id];
+    var pinned = row.pinned;
+    var muted = row.muted;
     return (
       renderInboxThreadIcon(row) +
       '<span class="tma-dash__messages-row-text">' +
@@ -409,7 +379,11 @@
         : '') +
       '</span>' +
       '<span class="tma-dash__messages-row-preview">' +
-      esc(row.preview) +
+      // An unsent draft outranks the last message in the preview slot, the
+      // same way every messenger surfaces "you were part way through this".
+      (row.draft
+        ? '<span class="tma-dash__messages-row-draft">Draft: </span>' + esc(row.draft)
+        : esc(row.preview || '')) +
       '</span>' +
       '</span>' +
       '<span class="tma-dash__messages-row-meta">' +
@@ -423,8 +397,8 @@
 
   function buildMessagesRowHtml(row, state) {
     var active = state.selectedId === row.id;
-    var pinned = state.pinnedIds && state.pinnedIds[row.id];
-    var muted = state.mutedIds && state.mutedIds[row.id];
+    var pinned = row.pinned;
+    var muted = row.muted;
     var rowCls =
       'tma-dash__messages-row' +
       (active ? ' tma-dash__messages-row--active' : '') +
@@ -443,8 +417,8 @@
 
   function buildMessagesRowSwipeWrap(row, state, rowHtml) {
     var rowId = row.id;
-    var pinned = state.pinnedIds && state.pinnedIds[row.id];
-    var muted = state.mutedIds && state.mutedIds[row.id];
+    var pinned = row.pinned;
+    var muted = row.muted;
     return (
       '<div class="tma-dash__messages-row-swipe" data-messages-row-swipe="' +
       esc(rowId) +
@@ -493,31 +467,61 @@
     );
   }
 
+  /* Loading / empty / error stand-ins. Never sample content. */
+  function renderListPlaceholder(state) {
+    if (STORE.loadError) {
+      return (
+        '<div class="tma-dash__messages-list-state tma-dash__messages-list-state--error">' +
+        '<p>Conversations could not be loaded.</p>' +
+        '<button type="button" class="tma-dash__messages-list-retry" data-messages-retry>Try again</button>' +
+        '</div>'
+      );
+    }
+
+    if (!STORE.loaded) {
+      return '<div class="tma-dash__messages-list-state" role="status">Loading conversations…</div>';
+    }
+
+    if ((state.search || '').trim()) {
+      return '<div class="tma-dash__messages-list-state">No conversations match that search.</div>';
+    }
+
+    if (state.tab === 'archived') {
+      return '<div class="tma-dash__messages-list-state">No archived conversations.</div>';
+    }
+
+    return '<div class="tma-dash__messages-list-state">No conversations yet.</div>';
+  }
+
   function renderList(state) {
     var mobile = isMessagesMobile();
+    var rows = getVisibleThreads(state);
+
+    var body = rows.length
+      ? rows
+          .map(function (row) {
+            if (mobile) return buildMessagesRowSwipeWrap(row, state, buildMessagesRowHtml(row, state));
+            var active = state.selectedId === row.id;
+            return (
+              '<button type="button" class="tma-dash__messages-row' +
+              (active ? ' tma-dash__messages-row--active' : '') +
+              (row.pinned ? ' tma-dash__messages-row--pinned' : '') +
+              (row.muted ? ' tma-dash__messages-row--muted' : '') +
+              '" data-messages-row="' +
+              esc(row.id) +
+              '">' +
+              buildMessagesRowInner(row, state) +
+              '</button>'
+            );
+          })
+          .join('')
+      : renderListPlaceholder(state);
+
     return (
       '<div class="tma-dash__messages-list">' +
       (mobile ? renderListMobileHead() : renderListHead()) +
-      '<div class="tma-dash__messages-list-body">' +
-      getVisibleThreads(state)
-        .map(function (row) {
-          if (mobile) return buildMessagesRowSwipeWrap(row, state, buildMessagesRowHtml(row, state));
-          var active = state.selectedId === row.id;
-          var pinned = state.pinnedIds && state.pinnedIds[row.id];
-          var muted = state.mutedIds && state.mutedIds[row.id];
-          return (
-            '<button type="button" class="tma-dash__messages-row' +
-            (active ? ' tma-dash__messages-row--active' : '') +
-            (pinned ? ' tma-dash__messages-row--pinned' : '') +
-            (muted ? ' tma-dash__messages-row--muted' : '') +
-            '" data-messages-row="' +
-            esc(row.id) +
-            '">' +
-            buildMessagesRowInner(row, state) +
-            '</button>'
-          );
-        })
-        .join('') +
+      '<div class="tma-dash__messages-list-body" data-messages-list-body>' +
+      body +
       '</div>' +
       '</div>'
     );
@@ -597,35 +601,76 @@
   }
 
   function messagePreview(msg) {
-    if (msg.type === 'divider') return '';
-    if (msg.emoji) return 'Emoji';
-    if (msg.type === 'link') return msg.title || msg.url || 'Link';
-    if (msg.text) return msg.text;
-    if (msg.html) {
-      var plain = msg.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return plain.length > 96 ? plain.slice(0, 96) + '…' : plain;
+    if (!msg) return '';
+    if (msg.deleted) return 'Message deleted';
+    if (msg.body) return msg.body.length > 96 ? msg.body.slice(0, 96) + '…' : msg.body;
+    var attachment = msg.attachments && msg.attachments[0];
+    if (msg.type === 'voice') return 'Voice note';
+    if (attachment) {
+      if (attachment.kind === 'image') return 'Photo';
+      if (attachment.kind === 'video') return 'Video';
+      return attachment.name;
     }
     return 'Message';
   }
 
-  function messageReplyLabel(msg, row) {
-    row = resolveThread(row);
-    if (msg.type === 'in') return 'Replying to ' + row.name.split(',')[0];
-    return 'Replying to yourself';
+  function messageReplyLabel(msg) {
+    if (msg.direction === 'out') return 'Replying to yourself';
+    return 'Replying to ' + ((msg.sender && msg.sender.name) || 'them');
   }
 
   function clearReplyTo(state) {
     state.replyTo = null;
   }
 
-  function setReplyTo(state, index) {
-    state.replyTo = { threadId: state.selectedId, index: index };
+  /*
+   * Replies are held by message id, not by list position: paging in older
+   * history shifts every index, and a reply pinned to an index would silently
+   * retarget to a different message.
+   */
+  function setReplyTo(state, messageId) {
+    if (!messageId) return;
+    state.replyTo = { threadId: state.selectedId, messageId: messageId };
   }
 
-  function getReplyMessage(state, row) {
-    if (!state.replyTo || state.replyTo.threadId !== state.selectedId || !row || !row.messages) return null;
-    return row.messages[state.replyTo.index] || null;
+  function findMessageById(conversationId, messageId) {
+    var list = getMessages(conversationId);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === messageId) return list[i];
+    }
+    return null;
   }
+
+  function getReplyMessage(state) {
+    if (!state.replyTo || state.replyTo.threadId !== state.selectedId) return null;
+    return findMessageById(state.selectedId, state.replyTo.messageId);
+  }
+
+  /*
+   * Turn bare URLs in a message into links.
+   *
+   * The text is escaped first and the URL is re-escaped into the href, so a
+   * message can never inject markup. Only http(s) is linked - a javascript:
+   * or data: string stays inert text - and every link opens in a new tab with
+   * noopener so the target can't reach back into the portal.
+   */
+  var URL_PATTERN = /\b(https?:\/\/[^\s<]+[^\s<.,:;"')\]}]|www\.[^\s<]+[^\s<.,:;"')\]}])/gi;
+
+  function linkify(text) {
+    return esc(text).replace(URL_PATTERN, function (match) {
+      var href = match.indexOf('www.') === 0 ? 'https://' + match : match;
+      return (
+        '<a class="tma-dash__messages-link" href="' + esc(href) +
+        '" target="_blank" rel="noopener noreferrer nofollow">' + match + '</a>'
+      );
+    });
+  }
+
+  /* Controls inside a message bubble that must receive their own clicks
+   * rather than being absorbed by the swipe-to-reply gesture. */
+  var INTERACTIVE_IN_BUBBLE =
+    '.tma-dash__messages-link-action-btn, .tma-dash__messages-bubble-action, ' +
+    '.tma-dash__messages-bubble-quote, .tma-dash__messages-reaction, a';
 
   function renderSwipeReplyIcon(side) {
     var icon = side === 'in' ? 'ArrowBendUpRight' : 'ArrowBendUpLeft';
@@ -646,15 +691,15 @@
     );
   }
 
-  function renderReplyPreview(state, row) {
-    var msg = getReplyMessage(state, row);
-    if (!msg || msg.type === 'divider') return '';
+  function renderReplyPreview(state) {
+    var msg = getReplyMessage(state);
+    if (!msg) return '';
     return (
       '<div class="tma-dash__messages-reply-preview">' +
       '<span class="tma-dash__messages-reply-preview-bar" aria-hidden="true"></span>' +
       '<span class="tma-dash__messages-reply-preview-body">' +
       '<span class="tma-dash__messages-reply-preview-label">' +
-      esc(messageReplyLabel(msg, row)) +
+      esc(messageReplyLabel(msg)) +
       '</span>' +
       '<span class="tma-dash__messages-reply-preview-text">' +
       esc(messagePreview(msg)) +
@@ -664,146 +709,174 @@
     );
   }
 
-  function renderLinkActionBtn(action, index) {
-    var replyAttr = action.icon === 'ArrowBendUpLeft' ? ' data-messages-reply="' + index + '"' : '';
-    return (
-      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-link-action-btn" aria-label="' +
-      esc(action.label) +
-      '"' +
-      replyAttr +
-      '>' +
-      renderMessagesIcon(action.icon) +
-      '</button>'
-    );
-  }
-
-  function renderHeartReaction() {
-    return (
-      '<span class="tma-dash__messages-heart" aria-hidden="true">' +
-      '<svg class="tma-dash__messages-heart-icon" viewBox="0 0 256 256" aria-hidden="true">' +
-      '<path d="M240,102a62.07,62.07,0,0,0-82-46C159.73,48.88,141.65,40,121,40a62.07,62.07,0,0,0-62,62c0,70,103.79,126.66,108.21,129a8,8,0,0,0,7.58,0C136.21,228.66,240,172,240,102Z"></path>' +
-      '</svg></span>'
-    );
-  }
-
   function resolveMessageTime(msg, row) {
     if (msg && msg.time) return msg.time;
     if (row && row.time) return row.time;
     return '';
   }
 
+  /*
+   * Delivery ticks, sender side only. 'pending' covers an optimistic bubble
+   * that the server has not confirmed yet; 'failed' is a send that errored and
+   * can be retried from the bubble.
+   */
+  function renderBubbleStatus(msg) {
+    if (msg.direction !== 'out') return '';
+
+    var state = msg.failed ? 'failed' : msg.pending ? 'pending' : msg.status || 'sent';
+    var label = {
+      pending: 'Sending',
+      failed: 'Not sent — tap to retry',
+      sent: 'Sent',
+      read: 'Read',
+    }[state] || 'Sent';
+
+    return (
+      '<span class="tma-dash__messages-bubble-status tma-dash__messages-bubble-status--' + state +
+      '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+      (state === 'failed' ? '!' : state === 'pending' ? '·' : state === 'read' ? '✓✓' : '✓') +
+      '</span>'
+    );
+  }
+
   function renderBubbleTime(msg, row) {
     var time = resolveMessageTime(msg, row);
-    if (!time) return '';
-    return '<time class="tma-dash__messages-bubble-time">' + esc(time) + '</time>';
+    if (!time && !msg.edited) return '';
+    return (
+      '<time class="tma-dash__messages-bubble-time"' +
+      (msg.sentAt ? ' datetime="' + esc(msg.sentAt) + '"' : '') +
+      '>' +
+      (msg.edited ? '<span class="tma-dash__messages-bubble-edited">edited</span> ' : '') +
+      esc(time) +
+      renderBubbleStatus(msg) +
+      '</time>'
+    );
   }
 
-  function renderHtmlWithTime(html, timeHtml) {
-    if (!timeHtml) return html;
-    if (html.indexOf('</p>') === -1) {
-      return (
-        '<p class="tma-dash__messages-bubble-line">' +
-        html +
-        ' ' +
-        timeHtml +
-        '</p>'
-      );
-    }
-    var lastClose = html.lastIndexOf('</p>');
-    var before = html.slice(0, lastClose);
-    var lastOpen = before.lastIndexOf('<p');
-    if (lastOpen !== -1) {
-      var tagEnd = before.indexOf('>', lastOpen);
-      var openTag = before.slice(lastOpen, tagEnd + 1);
-      var withClass = openTag;
-      if (openTag.indexOf('tma-dash__messages-bubble-line') === -1) {
-        if (openTag.indexOf('class="') !== -1) {
-          withClass = openTag.replace('class="', 'class="tma-dash__messages-bubble-line ');
-        } else {
-          withClass = openTag.replace('<p>', '<p class="tma-dash__messages-bubble-line">').replace('<p ', '<p class="tma-dash__messages-bubble-line" ');
-        }
-      }
-      before = before.slice(0, lastOpen) + withClass + before.slice(tagEnd + 1);
-    }
-    return before + ' ' + timeHtml + html.slice(lastClose);
+  /* The quoted original shown inside a reply bubble. Click scrolls to it. */
+  function renderQuotedReply(msg) {
+    if (!msg.replyTo) return '';
+    return (
+      '<button type="button" class="tma-dash__messages-bubble-quote" data-messages-jump="' +
+      esc(msg.replyTo.id) +
+      '">' +
+      '<span class="tma-dash__messages-bubble-quote-bar" aria-hidden="true"></span>' +
+      '<span class="tma-dash__messages-bubble-quote-body">' +
+      '<span class="tma-dash__messages-bubble-quote-name">' +
+      esc(msg.replyTo.senderName) +
+      '</span>' +
+      '<span class="tma-dash__messages-bubble-quote-text">' +
+      esc(msg.replyTo.preview) +
+      '</span></span></button>'
+    );
   }
 
-  function renderBubble(msg, index, isReplyTarget, row) {
-    if (msg.type === 'divider') {
-      return '<div class="tma-dash__messages-divider">' + esc(msg.label) + '</div>';
+  /* Grouped reaction pills. The viewer's own reaction is marked so a second
+   * tap removes it rather than adding a duplicate. */
+  function renderReactions(msg) {
+    if (!msg.reactions || !msg.reactions.length) return '';
+    return (
+      '<div class="tma-dash__messages-reactions">' +
+      msg.reactions
+        .map(function (reaction) {
+          var who = (reaction.users || [])
+            .map(function (u) { return u.name; })
+            .join(', ');
+          return (
+            '<button type="button" class="tma-dash__messages-reaction' +
+            (reaction.mine ? ' tma-dash__messages-reaction--mine' : '') +
+            '" data-messages-react="' + esc(msg.id) +
+            '" data-messages-react-emoji="' + esc(reaction.emoji) +
+            '" title="' + esc(who) + '">' +
+            '<span class="tma-dash__messages-reaction-emoji">' + esc(reaction.emoji) + '</span>' +
+            (reaction.count > 1
+              ? '<span class="tma-dash__messages-reaction-count">' + reaction.count + '</span>'
+              : '') +
+            '</button>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+
+  /* A day separator, inserted between messages sent on different dates. */
+  function renderDayDivider(label) {
+    return '<div class="tma-dash__messages-divider">' + esc(label) + '</div>';
+  }
+
+  /* "Ana added Ben to the group", rendered as a centred system line. */
+  function renderSystemMessage(msg) {
+    return (
+      '<div class="tma-dash__messages-divider tma-dash__messages-divider--system" data-messages-id="' +
+      esc(msg.id) + '">' +
+      esc(systemMessageText(msg)) +
+      '</div>'
+    );
+  }
+
+  function systemMessageText(msg) {
+    var event = msg.systemEvent || {};
+    var actor = event.actorName || 'Someone';
+    var subject = event.subjectName || 'someone';
+
+    switch (event.event) {
+      case 'group_created': return actor + ' created the group';
+      case 'member_added': return actor + ' added ' + subject;
+      case 'member_removed': return actor + ' removed ' + subject;
+      case 'member_left': return actor + ' left';
+      case 'admin_granted': return actor + ' made ' + subject + ' an administrator';
+      case 'admin_revoked': return actor + ' removed ' + subject + ' as administrator';
+      case 'name_changed': return actor + ' changed the group name to "' + (event.name || '') + '"';
+      case 'photo_changed': return actor + ' changed the group photo';
+      default: return msg.body || 'Conversation updated';
     }
+  }
+
+  function renderBubble(msg, index, isReplyTarget, row, showSender) {
+    if (msg.type === 'system') return renderSystemMessage(msg);
 
     var timeHtml = renderBubbleTime(msg, row);
+    var side = msg.direction === 'out' ? 'out' : 'in';
+    var inner;
 
-    if (msg.type === 'link') {
-      var linkCard =
-        '<div class="tma-dash__messages-link-card">' +
-        '<div class="tma-dash__messages-link-visual" aria-hidden="true">' +
-        '<img src="images/brand/tma/tma-logo-mark.png" alt="TM ANTOINE">' +
-        '</div>' +
-        '<div class="tma-dash__messages-link-body">' +
-        '<div class="tma-dash__messages-link-url">' +
-        esc(msg.url) +
-        '</div>' +
-        '<div class="tma-dash__messages-link-title tma-dash__messages-bubble-line">' +
-        '<span class="tma-dash__messages-bubble-copy">' +
-        esc(msg.title) +
-        '</span>' +
-        timeHtml +
-        '</div>' +
-        '</div></div>';
-      return (
-        '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--out' +
-        '" data-messages-swipe="out" data-messages-index="' +
-        index +
-        '">' +
-        '<div class="tma-dash__messages-link-wrap">' +
-        renderSwipeTrack(linkCard, 'out') +
-        '<div class="tma-dash__messages-link-actions">' +
-        [
-          { icon: 'Smiley', label: 'React' },
-          { icon: 'ArrowBendUpLeft', label: 'Reply' },
-          { icon: 'DotsThree', label: 'More' },
-        ]
-          .map(function (action) {
-            return renderLinkActionBtn(action, index);
-          })
-          .join('') +
-        '</div></div></div>'
-      );
-    }
-
-    var side = msg.type === 'in' ? 'in' : 'out';
-    var inner = '';
-
-    if (msg.emoji) {
+    if (msg.deleted) {
       inner =
-        '<div class="tma-dash__messages-bubble-line tma-dash__messages-bubble-line--emoji">' +
-        '<img class="tma-dash__messages-emoji" src="' +
-        EMOJI +
-        esc(msg.emoji) +
-        '" alt="">' +
+        '<div class="tma-dash__messages-bubble-text tma-dash__messages-bubble-text--deleted">' +
+        '<p class="tma-dash__messages-bubble-line">' +
+        '<span class="tma-dash__messages-bubble-copy">This message was deleted</span>' +
         timeHtml +
-        '</div>';
-    } else if (msg.html) {
-      inner =
-        '<div class="tma-dash__messages-bubble-text">' +
-        renderHtmlWithTime(msg.html, timeHtml) +
-        '</div>';
+        '</p></div>';
     } else {
       inner =
         '<div class="tma-dash__messages-bubble-text">' +
         '<p class="tma-dash__messages-bubble-line">' +
         '<span class="tma-dash__messages-bubble-copy">' +
-        esc(msg.text) +
+        linkify(msg.body || '') +
         '</span>' +
         timeHtml +
         '</p></div>';
     }
 
-    var heart = msg.heart ? renderHeartReaction() : '';
+    // In a group the sender's name sits above their first bubble in a run.
+    var senderHtml =
+      showSender && side === 'in' && msg.sender
+        ? '<span class="tma-dash__messages-bubble-sender">' + esc(msg.sender.name) + '</span>'
+        : '';
+
     var bubble =
-      '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side + '">' + inner + '</div>' + heart;
+      '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
+      (isReplyTarget ? ' tma-dash__messages-bubble--reply-target' : '') +
+      (msg.failed ? ' tma-dash__messages-bubble--failed' : '') +
+      (msg.pending ? ' tma-dash__messages-bubble--pending' : '') +
+      '">' +
+      senderHtml +
+      renderQuotedReply(msg) +
+      inner +
+      '</div>' +
+      renderReactions(msg) +
+      renderBubbleActions(msg, index);
 
     return (
       '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' +
@@ -812,8 +885,31 @@
       side +
       '" data-messages-index="' +
       index +
+      '" data-messages-id="' +
+      esc(msg.id) +
       '">' +
       renderSwipeTrack(bubble, side) +
+      '</div>'
+    );
+  }
+
+  /* Hover actions on a bubble: react, reply, and the overflow menu. */
+  function renderBubbleActions(msg, index) {
+    if (msg.deleted || msg.pending) return '';
+    return (
+      '<div class="tma-dash__messages-bubble-actions">' +
+      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" ' +
+      'data-messages-react-open="' + esc(msg.id) + '" aria-label="React to message">' +
+      renderMessagesIcon('Smiley') +
+      '</button>' +
+      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" ' +
+      'data-messages-reply="' + index + '" aria-label="Reply to message">' +
+      renderMessagesIcon('ArrowBendUpLeft') +
+      '</button>' +
+      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" ' +
+      'data-messages-menu="' + esc(msg.id) + '" aria-label="More actions" aria-haspopup="menu">' +
+      renderMessagesIcon('DotsThree') +
+      '</button>' +
       '</div>'
     );
   }
@@ -832,11 +928,6 @@
   function setComposerDraft(state, text) {
     if (!state.composerDrafts) state.composerDrafts = {};
     state.composerDrafts[state.selectedId] = text;
-  }
-
-  function getComposerAttachments(state) {
-    if (!state.composerAttachments) state.composerAttachments = {};
-    return state.composerAttachments[state.selectedId] || [];
   }
 
   function renderComposerActionBtn(id, icon, label, extraAttrs) {
@@ -878,29 +969,18 @@
     );
   }
 
-  function renderComposerAttachments(state) {
-    var files = getComposerAttachments(state);
-    if (!files.length) return '';
-    return (
-      '<div class="tma-dash__messages-composer-attachments">' +
-      files
-        .map(function (name) {
-          return '<span class="tma-dash__messages-composer-attachment">' + esc(name) + '</span>';
-        })
-        .join('') +
-      '</div>'
-    );
-  }
-
   function renderComposer(state) {
     var draft = getComposerDraft(state);
-    var attachCount = getComposerAttachments(state).length;
-    var attachLabel = attachCount ? 'Attach file, ' + attachCount + ' attached' : 'Attach file';
-    var voiceActive = !!state.voiceRecording;
+    var editing = !!state.editing;
+
     return (
-      '<div class="tma-dash__messages-composer-wrap">' +
+      '<div class="tma-dash__messages-composer-wrap' +
+      (editing ? ' tma-dash__messages-composer-wrap--editing' : '') +
+      '">' +
       renderEmojiPicker(state) +
-      renderComposerAttachments(state) +
+      (editing
+        ? '<div class="tma-dash__messages-composer-editing">Editing message — press Escape to cancel</div>'
+        : '') +
       '<div class="tma-dash__messages-composer-main">' +
       '<div class="tma-dash__messages-composer-input' +
       (draft ? ' tma-dash__messages-composer-input--filled' : '') +
@@ -914,15 +994,21 @@
         'Add emoji',
         ' aria-expanded="' + (state.emojiPickerOpen ? 'true' : 'false') + '" aria-haspopup="dialog"'
       ) +
-      renderComposerActionBtn('attach', 'Paperclip', attachLabel) +
-      '<input type="file" class="tma-dash__messages-composer-file" data-messages-composer-file hidden multiple>' +
+      renderComposerActionBtn(
+        'attach',
+        'Paperclip',
+        'Attach file (not available yet)',
+        ' disabled aria-disabled="true" title="Attachments are coming in the next phase"'
+      ) +
       renderComposerActionBtn(
         'voice',
         'Microphone',
-        voiceActive ? 'Recording voice note' : 'Record voice note',
-        voiceActive ? ' aria-pressed="true"' : ' aria-pressed="false"'
+        'Record voice note (not available yet)',
+        ' disabled aria-disabled="true" title="Voice notes are coming in the next phase"'
       ) +
-      '<button type="button" class="tma-dash__messages-composer-btn tma-dash__messages-composer-send" data-messages-composer-send aria-label="Send message">' +
+      '<button type="button" class="tma-dash__messages-composer-btn tma-dash__messages-composer-send" data-messages-composer-send aria-label="' +
+      (editing ? 'Save edit' : 'Send message') +
+      '">' +
       renderMessagesIcon('PaperPlaneRight') +
       '</button></div></div></div>'
     );
@@ -963,23 +1049,54 @@
 
     var input = composer.querySelector('[data-messages-composer-input]');
     var emojiBtn = composer.querySelector('[data-messages-composer-emoji]');
-    var attachBtn = composer.querySelector('[data-messages-composer-attach]');
-    var fileInput = composer.querySelector('[data-messages-composer-file]');
-    var voiceBtn = composer.querySelector('[data-messages-composer-voice]');
     var sendBtn = composer.querySelector('[data-messages-composer-send]');
     var picker = composer.querySelector('[data-messages-emoji-picker]');
 
     if (input) {
       syncComposerInputState(input);
+
       input.addEventListener('input', function () {
-        setComposerDraft(state, input.textContent || '');
+        var text = input.textContent || '';
+        setComposerDraft(state, text);
         syncComposerInputState(input);
+
+        // Keep the list row's "Draft:" preview in step without a re-render,
+        // which would move the caret out from under the user.
+        var row = findThread(state.selectedId);
+        if (row && !state.editing) row.draft = text.trim() ? text : null;
+
+        if (state.selectedId && !state.editing) scheduleDraftSave(state.selectedId, text);
       });
+
       input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Escape' && state.editing) {
+          e.preventDefault();
+          state.editing = null;
+          setComposerDraft(state, '');
+          render();
+          return;
+        }
+
+        if (e.key !== 'Enter') return;
+
+        // Enter's behaviour follows the user's own setting: either Enter sends
+        // and Shift+Enter breaks the line, or Enter always breaks the line and
+        // only the send button sends.
+        var enterSends = STORE.settings.enterToSend !== false;
+
+        if (enterSends && !e.shiftKey) {
           e.preventDefault();
           if (sendBtn) sendBtn.click();
         }
+      });
+
+      // Paste as plain text: the composer is contenteditable, so pasted markup
+      // would otherwise land as live HTML inside the message.
+      input.addEventListener('paste', function (e) {
+        if (!e.clipboardData) return;
+        e.preventDefault();
+        var text = e.clipboardData.getData('text/plain');
+        insertComposerText(input, text);
       });
     }
 
@@ -1018,57 +1135,30 @@
       });
     }
 
-    if (attachBtn && fileInput) {
-      attachBtn.addEventListener('click', function () {
-        fileInput.click();
-      });
-      fileInput.addEventListener('change', function () {
-        if (!fileInput.files || !fileInput.files.length) return;
-        if (!state.composerAttachments) state.composerAttachments = {};
-        var existing = state.composerAttachments[state.selectedId] || [];
-        for (var i = 0; i < fileInput.files.length; i++) {
-          existing.push(fileInput.files[i].name);
-        }
-        state.composerAttachments[state.selectedId] = existing;
-        fileInput.value = '';
-        render();
-      });
-    }
-
-    if (voiceBtn) {
-      function stopVoice() {
-        if (!state.voiceRecording) return;
-        state.voiceRecording = false;
-        voiceBtn.classList.remove('tma-dash__messages-composer-btn--active');
-        voiceBtn.setAttribute('aria-pressed', 'false');
-        voiceBtn.setAttribute('aria-label', 'Record voice note');
-      }
-
-      voiceBtn.addEventListener('pointerdown', function (e) {
-        if (e.button !== 0) return;
-        state.voiceRecording = true;
-        voiceBtn.classList.add('tma-dash__messages-composer-btn--active');
-        voiceBtn.setAttribute('aria-pressed', 'true');
-        voiceBtn.setAttribute('aria-label', 'Recording voice note');
-        voiceBtn.setPointerCapture(e.pointerId);
-      });
-
-      voiceBtn.addEventListener('pointerup', stopVoice);
-      voiceBtn.addEventListener('pointercancel', stopVoice);
-      voiceBtn.addEventListener('pointerleave', function (e) {
-        if (voiceBtn.hasPointerCapture(e.pointerId)) stopVoice();
-      });
-    }
+    // Attachments and voice notes are the next phase of this work. Their
+    // buttons stay in the design but are disabled rather than pretending to
+    // work — the previous versions only pushed filenames into local state and
+    // never uploaded anything.
 
     if (sendBtn) {
       sendBtn.addEventListener('click', function () {
         var text = input ? (input.textContent || '').trim() : getComposerDraft(state).trim();
-        if (!text && !getComposerAttachments(state).length) return;
-        setComposerDraft(state, '');
-        if (state.composerAttachments) delete state.composerAttachments[state.selectedId];
+        if (!text) return;
+
         state.emojiPickerOpen = false;
-        state.voiceRecording = false;
-        render();
+
+        // The composer doubles as the edit field while a message is being
+        // edited, so the same button commits the edit.
+        if (state.editing) {
+          commitEdit(root, state, render, text);
+          return;
+        }
+
+        var row = findThread(state.selectedId);
+        if (row) row.draft = null;
+        flushDraft(state.selectedId, '');
+
+        sendMessage(root, state, render, text);
       });
     }
 
@@ -1110,16 +1200,109 @@
     );
   }
 
-  function renderChat(state) {
-    var row = THREADS.filter(function (r) {
-      return r.id === state.selectedId;
-    })[0];
+  /* "Today" / "Yesterday" / "12 March 2026", for the day separators. */
+  function dayLabel(iso) {
+    var date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
 
-    if (!row) {
-      return '<div class="tma-dash__messages-chat tma-dash__messages-chat--empty"><p>Select a conversation</p></div>';
+    var today = new Date();
+    var startOfDay = function (d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+    var diffDays = Math.round((startOfDay(today) - startOfDay(date)) / 86400000);
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return date.toLocaleDateString(undefined, { weekday: 'long' });
+
+    return date.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long',
+      year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+    });
+  }
+
+  function sameDay(a, b) {
+    if (!a || !b) return false;
+    var x = new Date(a);
+    var y = new Date(b);
+    return (
+      x.getFullYear() === y.getFullYear() &&
+      x.getMonth() === y.getMonth() &&
+      x.getDate() === y.getDate()
+    );
+  }
+
+  function renderChatBody(state, row) {
+    var bucket = threadBucket(state.selectedId);
+    var messages = bucket.messages;
+
+    if (!bucket.loaded && !messages.length) {
+      return '<div class="tma-dash__messages-chat-state" role="status">Loading messages…</div>';
     }
 
-    var messages = row.messages || [{ type: 'in', text: row.preview }];
+    if (bucket.error) {
+      return (
+        '<div class="tma-dash__messages-chat-state tma-dash__messages-chat-state--error">' +
+        '<p>Messages could not be loaded.</p>' +
+        '<button type="button" class="tma-dash__messages-list-retry" data-messages-thread-retry>Try again</button>' +
+        '</div>'
+      );
+    }
+
+    if (!messages.length) {
+      return '<div class="tma-dash__messages-chat-state">No messages yet. Say hello.</div>';
+    }
+
+    // The "load older" affordance sits at the top; scrolling into it triggers
+    // the fetch, and it keeps working when there is no pointer to scroll with.
+    var head = bucket.hasMore
+      ? '<button type="button" class="tma-dash__messages-load-more" data-messages-load-more' +
+        (bucket.loadingOlder ? ' disabled' : '') + '>' +
+        (bucket.loadingOlder ? 'Loading…' : 'Load earlier messages') +
+        '</button>'
+      : '';
+
+    var isGroup = row && row.type === 'group';
+    var replyId = state.replyTo && state.replyTo.threadId === state.selectedId
+      ? state.replyTo.messageId
+      : null;
+
+    var html = '';
+    messages.forEach(function (msg, index) {
+      var previous = messages[index - 1];
+
+      if (!previous || !sameDay(previous.sentAt, msg.sentAt)) {
+        html += renderDayDivider(dayLabel(msg.sentAt));
+      }
+
+      // Only label the first bubble of a run by the same sender.
+      var showSender =
+        isGroup &&
+        msg.direction === 'in' &&
+        (!previous ||
+          previous.type === 'system' ||
+          !previous.sender ||
+          !msg.sender ||
+          previous.sender.id !== msg.sender.id);
+
+      html += renderBubble(msg, index, replyId === msg.id, row, showSender);
+    });
+
+    return head + html;
+  }
+
+  function renderChat(state) {
+    var row = findThread(state.selectedId);
+
+    if (!row) {
+      return (
+        '<div class="tma-dash__messages-chat tma-dash__messages-chat--empty"><p>' +
+        (STORE.loaded && !getThreads().length
+          ? 'Start a conversation to begin messaging.'
+          : 'Select a conversation') +
+        '</p></div>'
+      );
+    }
+
     var mobile = isMessagesMobile();
 
     return (
@@ -1133,36 +1316,35 @@
       '</span>' +
       '</div>' +
       '<div class="tma-dash__messages-chat-actions">' +
+      // Calling is out of scope for this phase: the buttons stay in the design
+      // but are disabled and announced as unavailable rather than doing nothing.
       [
-        { icon: 'Phone', label: 'Call' },
-        { icon: 'VideoCamera', label: 'Video call' },
-        { icon: 'DotsThree', label: 'More' },
+        { icon: 'Phone', label: 'Voice call (unavailable)', disabled: true },
+        { icon: 'VideoCamera', label: 'Video call (unavailable)', disabled: true },
+        { icon: 'DotsThree', label: 'Conversation menu', attr: ' data-messages-conversation-menu' },
       ]
         .map(function (action) {
           return (
-            '<button type="button" class="tma-dash__messages-icon-btn" aria-label="' +
-            esc(action.label) +
-            '">' +
-            '<img src="' +
-            esc(ICONS[action.icon]) +
-            '" alt="">' +
+            '<button type="button" class="tma-dash__messages-icon-btn' +
+            (action.disabled ? ' tma-dash__messages-icon-btn--disabled' : '') +
+            '" aria-label="' + esc(action.label) + '"' +
+            (action.disabled ? ' disabled aria-disabled="true" title="Calling is not available yet"' : '') +
+            (action.attr || '') +
+            '>' +
+            '<img src="' + esc(ICONS[action.icon]) + '" alt="">' +
             '</button>'
           );
         })
         .join('') +
       '</div>' +
       '</div>' +
-      '<div class="tma-dash__messages-chat-body">' +
-      messages
-        .map(function (msg, index) {
-          return renderBubble(msg, index, state.replyTo && state.replyTo.index === index, row);
-        })
-        .join('') +
+      '<div class="tma-dash__messages-chat-body" data-messages-chat-body>' +
+      renderChatBody(state, row) +
       '</div>' +
       '<div class="tma-dash__messages-composer' +
       (state.replyTo && state.replyTo.threadId === state.selectedId ? ' tma-dash__messages-composer--reply' : '') +
       '">' +
-      renderReplyPreview(state, row) +
+      renderReplyPreview(state) +
       renderComposer(state) +
       '</div>' +
       '</div>'
@@ -1344,7 +1526,10 @@
 
       track.addEventListener('pointerdown', function (e) {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        if (e.target.closest('.tma-dash__messages-link-action-btn')) return;
+        // Interactive controls inside a bubble (react / reply / menu, and a
+        // quoted reply) must keep their click. Starting a swipe here would
+        // capture the pointer and the click would never arrive.
+        if (e.target.closest(INTERACTIVE_IN_BUBBLE)) return;
         beginDrag(e.clientX, e.clientY);
         track.setPointerCapture(e.pointerId);
       });
@@ -1374,7 +1559,10 @@
         'wheel',
         function (e) {
           if (dragging) return;
-          if (e.target.closest('.tma-dash__messages-link-action-btn')) return;
+          // Interactive controls inside a bubble (react / reply / menu, and a
+        // quoted reply) must keep their click. Starting a swipe here would
+        // capture the pointer and the click would never arrive.
+        if (e.target.closest(INTERACTIVE_IN_BUBBLE)) return;
 
           var dx = wheelDeltaX(e);
           var dy = e.deltaY;
@@ -1490,36 +1678,58 @@
     window.setTimeout(finish, 720);
   }
 
-  function dismissMessagesRow(state, id, destination) {
-    if (!id) return;
-    if (!state.removedIds) state.removedIds = {};
-    state.removedIds[id] = destination;
-    if (state.selectedId === id) {
-      state.selectedId = null;
-      state.reading = false;
+  /*
+   * Pin / mute / archive, applied optimistically then persisted.
+   *
+   * The row is updated in place rather than by reloading the list, so acting
+   * on a conversation never re-orders or re-scrolls what the user is looking
+   * at. A failed write puts the previous value back and says so.
+   */
+  function commitMessagesRowAction(root, state, render, id, action) {
+    var row = findThread(id);
+    if (!row) return;
+
+    var previous = { pinned: row.pinned, muted: row.muted, archived: row.archived };
+    var changes = null;
+    var message = '';
+
+    if (action === 'pin') {
+      row.pinned = !row.pinned;
+      changes = { pinned: row.pinned };
+      message = row.pinned ? 'Conversation pinned' : 'Conversation unpinned';
+    } else if (action === 'mute') {
+      row.muted = !row.muted;
+      // null = mute indefinitely, 0 = unmute.
+      changes = { muteMinutes: row.muted ? null : 0 };
+      message = row.muted ? 'Conversation muted' : 'Conversation unmuted';
+    } else if (action === 'archive') {
+      row.archived = !row.archived;
+      changes = { archived: row.archived };
+      message = row.archived ? 'Conversation archived' : 'Conversation unarchived';
+    } else if (action === 'trash') {
+      // "Delete" on a conversation row archives it. Nothing here destroys the
+      // other participant's copy of the history.
+      row.archived = true;
+      changes = { archived: true };
+      message = 'Conversation archived';
     }
+
+    if (!changes) return;
+
+    render();
+    showMessagesToast(root, message);
+    syncTabBarBadges();
+
+    window.TMAMessagingAPI.updateConversation(id, changes).catch(function () {
+      row.pinned = previous.pinned;
+      row.muted = previous.muted;
+      row.archived = previous.archived;
+      render();
+      showMessagesToast(root, 'That change could not be saved');
+    });
   }
 
-  function commitMessagesRowAction(root, state, render, id, action) {
-    if (!id) return;
-    if (action === 'pin') {
-      if (!state.pinnedIds) state.pinnedIds = {};
-      if (state.pinnedIds[id]) delete state.pinnedIds[id];
-      else state.pinnedIds[id] = true;
-      showMessagesToast(root, state.pinnedIds[id] ? 'Conversation pinned' : 'Conversation unpinned');
-    } else if (action === 'mute') {
-      if (!state.mutedIds) state.mutedIds = {};
-      if (state.mutedIds[id]) delete state.mutedIds[id];
-      else state.mutedIds[id] = true;
-      showMessagesToast(root, state.mutedIds[id] ? 'Conversation muted' : 'Conversation unmuted');
-    } else if (action === 'archive') {
-      dismissMessagesRow(state, id, 'archive');
-      showMessagesToast(root, 'Conversation archived');
-    } else if (action === 'trash') {
-      dismissMessagesRow(state, id, 'trash');
-      showMessagesToast(root, 'Conversation deleted');
-    }
-    render();
+  function syncTabBarBadges() {
     var dash = document.querySelector('.tma-dash');
     if (dash && typeof dash._syncTabBarBadges === 'function') dash._syncTabBarBadges();
   }
@@ -1731,11 +1941,7 @@
       );
 
       function openThreadFromSwipe(id) {
-        if (!id) return;
-        state.selectedId = id;
-        state.reading = true;
-        clearReplyTo(state);
-        render();
+        openConversation(root, state, render, id);
       }
 
       function endDrag(e) {
@@ -1820,23 +2026,639 @@
     }
   }
 
+  /* ------------------------------------------------------------------
+   * Scroll preservation
+   *
+   * render() replaces the whole subtree, which resets every scroll container
+   * to the top. That was why picking a conversation near the bottom of the
+   * list threw the list back to the start. Snapshots are taken before each
+   * render and reapplied after, so scroll position survives sending,
+   * receiving, marking read, presence ticks and profile loads alike.
+   * ---------------------------------------------------------------- */
+
+  /* Within this many px of the bottom counts as "pinned to the bottom", so a
+   * new message keeps following the conversation. */
+  var STICK_TO_BOTTOM_PX = 48;
+
+  function captureScroll(root) {
+    var list = root.querySelector('[data-messages-list-body]');
+    var chat = root.querySelector('[data-messages-chat-body]');
+
+    return {
+      listTop: list ? list.scrollTop : null,
+      chat: chat
+        ? {
+            top: chat.scrollTop,
+            height: chat.scrollHeight,
+            atBottom:
+              chat.scrollHeight - chat.scrollTop - chat.clientHeight <= STICK_TO_BOTTOM_PX,
+          }
+        : null,
+    };
+  }
+
+  function restoreScroll(root, snapshot, intent) {
+    intent = intent || {};
+
+    var list = root.querySelector('[data-messages-list-body]');
+    if (list && snapshot.listTop !== null && snapshot.listTop !== undefined) {
+      list.scrollTop = snapshot.listTop;
+    }
+
+    var chat = root.querySelector('[data-messages-chat-body]');
+    if (!chat) return;
+
+    // Opening a conversation starts at the newest message.
+    if (intent.chatToBottom) {
+      chat.scrollTop = chat.scrollHeight;
+      return;
+    }
+
+    if (!snapshot.chat) {
+      chat.scrollTop = chat.scrollHeight;
+      return;
+    }
+
+    if (snapshot.chat.atBottom) {
+      chat.scrollTop = chat.scrollHeight;
+      return;
+    }
+
+    // Older messages were prepended: shift by exactly how much taller the
+    // content became, so the message the user was reading stays put.
+    chat.scrollTop = snapshot.chat.top + (chat.scrollHeight - snapshot.chat.height);
+  }
+
+  /* ------------------------------------------------------------------
+   * Data loading
+   * ---------------------------------------------------------------- */
+
+  /*
+   * Load a conversation's stored draft into the composer, unless the user has
+   * already typed something here in this session — local keystrokes are always
+   * newer than the copy the server last heard about.
+   */
+  function seedComposerDraft(state, conversationId) {
+    if (!conversationId) return;
+    if (state.composerDrafts && state.composerDrafts[conversationId]) return;
+
+    var row = findThread(conversationId);
+    if (!state.composerDrafts) state.composerDrafts = {};
+    state.composerDrafts[conversationId] = (row && row.draft) || '';
+  }
+
+  function loadConversations(root, state, render, options) {
+    options = options || {};
+
+    return window.TMAMessagingAPI.conversations()
+      .then(function (data) {
+        STORE.threads = data.conversations || [];
+        STORE.me = data.me || null;
+        STORE.settings = data.settings || {};
+        STORE.realtime = data.realtime || null;
+        STORE.loaded = true;
+        STORE.loadError = null;
+
+        // Keep the open conversation if it still exists; otherwise fall back
+        // to the first row on desktop, where an empty pane looks broken.
+        if (state.selectedId && !findThread(state.selectedId)) {
+          state.selectedId = null;
+        }
+        if (!state.selectedId && !isMessagesMobile() && STORE.threads.length) {
+          state.selectedId = STORE.threads[0].id;
+        }
+
+        // Seed the composer from the stored draft for whichever conversation
+        // ends up open. Without this a draft only reappeared when the user
+        // switched *into* a conversation, so the one already open on load —
+        // usually the one they were last typing in — came back empty.
+        seedComposerDraft(state, state.selectedId);
+
+        render();
+        startRealtime(root, state, render);
+
+        if (state.selectedId) {
+          loadThread(root, state, render, state.selectedId, { toBottom: true });
+        }
+      })
+      .catch(function (err) {
+        STORE.loaded = true;
+        STORE.loadError = err;
+        render();
+        if (!options.silent) showMessagesToast(root, 'Conversations could not be loaded');
+      });
+  }
+
+  /* The newest page of a conversation, or an older page when `before` is set. */
+  function loadThread(root, state, render, conversationId, options) {
+    options = options || {};
+    var bucket = threadBucket(conversationId);
+
+    if (bucket.loading) return Promise.resolve();
+    bucket.loading = true;
+    if (options.before) bucket.loadingOlder = true;
+    bucket.error = null;
+
+    if (options.before) render();
+
+    return window.TMAMessagingAPI.messages(conversationId, options.before)
+      .then(function (data) {
+        bucket.loading = false;
+        bucket.loadingOlder = false;
+        bucket.loaded = true;
+        bucket.hasMore = !!data.hasMore;
+
+        mergeMessages(conversationId, data.messages || [], !!options.before);
+
+        // The conversation row can have moved on while history was in flight.
+        if (data.conversation) replaceThread(data.conversation);
+
+        // A conversation the user is looking at is a conversation they have
+        // read — subject to their own read-receipt setting, enforced server side.
+        if (state.selectedId === conversationId && !document.hidden) {
+          markConversationRead(root, state, render, conversationId);
+        }
+
+        render({ chatToBottom: !options.before && options.toBottom });
+      })
+      .catch(function (err) {
+        bucket.loading = false;
+        bucket.loadingOlder = false;
+        bucket.loaded = true;
+
+        // A 404 means membership is gone; drop the row rather than error.
+        if (err.gone) {
+          STORE.threads = STORE.threads.filter(function (row) {
+            return row.id !== conversationId;
+          });
+          if (state.selectedId === conversationId) state.selectedId = null;
+        } else {
+          bucket.error = err;
+        }
+
+        render();
+      });
+  }
+
+  /* Swap one row in place, preserving its position in the list. */
+  function replaceThread(row) {
+    for (var i = 0; i < STORE.threads.length; i++) {
+      if (STORE.threads[i].id === row.id) {
+        // Preserve the local draft: the server copy lags what is being typed.
+        var draft = STORE.threads[i].draft;
+        STORE.threads[i] = row;
+        if (draft !== undefined && draft !== null) STORE.threads[i].draft = draft;
+        return;
+      }
+    }
+    STORE.threads.unshift(row);
+  }
+
+  function markConversationRead(root, state, render, conversationId) {
+    var row = findThread(conversationId);
+    if (!row || (!row.unread && !row.markedUnread)) return;
+
+    row.unread = 0;
+    row.markedUnread = false;
+    syncTabBarBadges();
+
+    window.TMAMessagingAPI.markRead(conversationId).catch(function () {
+      // Left unread server-side; the next load will show it again.
+    });
+  }
+
+  /* ------------------------------------------------------------------
+   * Sending
+   * ---------------------------------------------------------------- */
+
+  function sendMessage(root, state, render, text) {
+    var conversationId = state.selectedId;
+    if (!conversationId || !text.trim()) return;
+
+    var replyTo = state.replyTo && state.replyTo.threadId === conversationId
+      ? state.replyTo.messageId
+      : null;
+    var replySource = replyTo ? findMessageById(conversationId, replyTo) : null;
+    var nonce = window.TMAMessagingAPI.newNonce();
+
+    // Optimistic bubble, shown immediately and reconciled on the response.
+    var pending = {
+      id: 'pending-' + nonce,
+      nonce: nonce,
+      seq: null,
+      type: 'text',
+      direction: 'out',
+      body: text,
+      deleted: false,
+      edited: false,
+      sender: STORE.me ? { id: STORE.me.id, name: STORE.me.name, photo: STORE.me.photo } : null,
+      sentAt: new Date().toISOString(),
+      time: new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+      replyTo: replySource
+        ? {
+            id: replySource.id,
+            senderName: (replySource.sender && replySource.sender.name) || 'You',
+            preview: messagePreview(replySource),
+          }
+        : null,
+      attachments: [],
+      reactions: [],
+      starred: false,
+      status: null,
+      pending: true,
+      can: { edit: false, delete: false },
+    };
+
+    mergeMessages(conversationId, [pending], false);
+    clearReplyTo(state);
+    setComposerDraft(state, '');
+    render({ chatToBottom: true });
+
+    window.TMAMessagingAPI.send(conversationId, {
+      body: text,
+      replyTo: replyTo,
+      nonce: nonce,
+    })
+      .then(function (data) {
+        var bucket = threadBucket(conversationId);
+        var confirmed = data.message;
+        confirmed.nonce = nonce;
+
+        // Replace the placeholder in place so the bubble does not jump.
+        for (var i = 0; i < bucket.messages.length; i++) {
+          if (bucket.messages[i].nonce === nonce) {
+            bucket.messages[i] = confirmed;
+            break;
+          }
+        }
+
+        var row = findThread(conversationId);
+        if (row) {
+          row.preview = 'You: ' + messagePreview(confirmed);
+          row.timestamp = confirmed.sentAt;
+          row.draft = null;
+        }
+
+        render({ chatToBottom: true });
+      })
+      .catch(function (err) {
+        // Mark the bubble failed and put the text back in the composer so a
+        // failed send never silently loses what was written.
+        var bucket = threadBucket(conversationId);
+        for (var i = 0; i < bucket.messages.length; i++) {
+          if (bucket.messages[i].nonce === nonce) {
+            bucket.messages[i].pending = false;
+            bucket.messages[i].failed = true;
+            break;
+          }
+        }
+        render();
+        showMessagesToast(
+          root,
+          err.status === 403 ? 'You cannot send to this conversation' : 'Message not sent'
+        );
+      });
+  }
+
+  /* ------------------------------------------------------------------
+   * Drafts — per conversation, saved server-side so they survive a reload.
+   * ---------------------------------------------------------------- */
+
+  var draftTimer = null;
+
+  function scheduleDraftSave(conversationId, text) {
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(function () {
+      draftTimer = null;
+      window.TMAMessagingAPI.saveDraft(conversationId, text).catch(function () {});
+    }, 600);
+  }
+
+  /* Flush immediately when leaving a conversation, so switching away can't
+   * race the debounce and drop what was typed. */
+  function flushDraft(conversationId, text) {
+    if (draftTimer) {
+      clearTimeout(draftTimer);
+      draftTimer = null;
+    }
+    if (conversationId) {
+      window.TMAMessagingAPI.saveDraft(conversationId, text).catch(function () {});
+    }
+  }
+
+  function openConversation(root, state, render, conversationId) {
+    if (!conversationId || conversationId === state.selectedId) return;
+
+    // Persist the outgoing conversation's draft before switching, so it stays
+    // with the conversation it was written in.
+    if (state.selectedId) flushDraft(state.selectedId, getComposerDraft(state));
+
+    state.selectedId = conversationId;
+    state.reading = true;
+    clearReplyTo(state);
+    state.emojiPickerOpen = false;
+
+    // Seed the composer from whatever draft is stored for this row.
+    var row = findThread(conversationId);
+    setComposerDraft(state, (row && row.draft) || '');
+    seedComposerDraft(state, conversationId);
+
+    var bucket = threadBucket(conversationId);
+    render({ chatToBottom: true });
+
+    if (!bucket.loaded) {
+      loadThread(root, state, render, conversationId, { toBottom: true });
+    } else {
+      markConversationRead(root, state, render, conversationId);
+      subscribeToConversation(root, state, render, conversationId);
+    }
+  }
+
+  /* ------------------------------------------------------------------
+   * Realtime
+   * ---------------------------------------------------------------- */
+
+  var subscribed = {};
+
+  function startRealtime(root, state, render) {
+    if (!STORE.realtime || !window.TMAMessagingRealtime) return;
+    if (!window.TMAMessagingRealtime.start(STORE.realtime)) return;
+
+    getThreads().forEach(function (row) {
+      subscribeToConversation(root, state, render, row.id);
+    });
+  }
+
+  function subscribeToConversation(root, state, render, conversationId) {
+    if (!conversationId || subscribed[conversationId]) return;
+    if (!window.TMAMessagingRealtime || !STORE.realtime || !STORE.realtime.enabled) return;
+
+    subscribed[conversationId] = true;
+    var channel = 'private-conversation.' + conversationId;
+
+    window.TMAMessagingRealtime.listen(channel, 'message.sent', function (payload) {
+      onRemoteMessage(root, state, render, payload);
+    });
+
+    window.TMAMessagingRealtime.listen(channel, 'message.updated', function (payload) {
+      var msg = findMessageById(payload.conversationId, payload.messageId);
+      if (!msg) return;
+      msg.body = payload.body;
+      msg.edited = true;
+      render();
+    });
+
+    window.TMAMessagingRealtime.listen(channel, 'message.deleted', function (payload) {
+      var msg = findMessageById(payload.conversationId, payload.messageId);
+      if (!msg) return;
+      msg.deleted = true;
+      msg.body = null;
+      msg.attachments = [];
+      render();
+    });
+
+    window.TMAMessagingRealtime.listen(channel, 'conversation.read', function (payload) {
+      // Someone else read up to `lastReadSeq`; turn our ticks over.
+      var list = getMessages(payload.conversationId);
+      var changed = false;
+      list.forEach(function (msg) {
+        if (msg.direction === 'out' && msg.seq && msg.seq <= payload.lastReadSeq && msg.status !== 'read') {
+          msg.status = 'read';
+          changed = true;
+        }
+      });
+      if (changed) render();
+    });
+  }
+
+  /*
+   * A message landed in a conversation we're subscribed to. Fetch the newest
+   * page rather than trusting the broadcast payload: what a message looks like
+   * differs per viewer, and the server is the only authority on that.
+   */
+  function onRemoteMessage(root, state, render, payload) {
+    var conversationId = payload.conversationId;
+    var isOpen = state.selectedId === conversationId;
+
+    if (isOpen) {
+      var bucket = threadBucket(conversationId);
+      var newest = 0;
+      bucket.messages.forEach(function (msg) {
+        if (msg.seq && msg.seq > newest) newest = msg.seq;
+      });
+
+      if (payload.seq && payload.seq <= newest) return; // already have it
+
+      window.TMAMessagingAPI.messages(conversationId).then(function (data) {
+        mergeMessages(conversationId, data.messages || [], false);
+        if (data.conversation) replaceThread(data.conversation);
+        render();
+        if (!document.hidden) markConversationRead(root, state, render, conversationId);
+        notifyNewMessage(root, conversationId, payload);
+      });
+      return;
+    }
+
+    // Not the open conversation: refresh just this row's summary and badge.
+    refreshConversationRow(root, state, render, conversationId, payload);
+  }
+
+  function refreshConversationRow(root, state, render, conversationId, payload) {
+    window.TMAMessagingAPI.messages(conversationId)
+      .then(function (data) {
+        if (data.conversation) {
+          replaceThread(data.conversation);
+          render();
+          syncTabBarBadges();
+        }
+        notifyNewMessage(root, conversationId, payload);
+      })
+      .catch(function () {});
+  }
+
+  /* ------------------------------------------------------------------
+   * Notifications
+   * ---------------------------------------------------------------- */
+
+  var lastNotifiedMessage = null;
+
+  function notifyNewMessage(root, conversationId, payload) {
+    // The sender's own message is not news to them.
+    if (STORE.me && payload && payload.senderId === STORE.me.id) return;
+
+    // Guard against the same message notifying twice when several code paths
+    // observe the same arrival.
+    if (payload && payload.messageId) {
+      if (lastNotifiedMessage === payload.messageId) return;
+      lastNotifiedMessage = payload.messageId;
+    }
+
+    var row = findThread(conversationId);
+    if (!row || row.muted) return;
+
+    if (STORE.settings.notificationSounds) playNotificationSound();
+
+    if (
+      STORE.settings.desktopNotifications &&
+      window.Notification &&
+      Notification.permission === 'granted' &&
+      document.hidden
+    ) {
+      try {
+        new Notification(row.name, {
+          body: STORE.settings.notificationPreview ? row.preview : 'New message',
+          tag: conversationId,
+        });
+      } catch (err) {
+        /* notification failed; the in-app badge already updated */
+      }
+    }
+  }
+
+  var audioContext = null;
+
+  /* A short tone, synthesised rather than shipped as an asset. */
+  function playNotificationSound() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioContext) audioContext = new Ctx();
+
+      var osc = audioContext.createOscillator();
+      var gain = audioContext.createGain();
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.25);
+
+      osc.start();
+      osc.stop(audioContext.currentTime + 0.26);
+    } catch (err) {
+      /* sound is optional */
+    }
+  }
+
+  /* ------------------------------------------------------------------
+   * Message actions
+   * ---------------------------------------------------------------- */
+
+  /* Briefly highlight a message and bring it into view. */
+  function jumpToMessage(root, messageId) {
+    var target = root.querySelector('[data-messages-id="' + cssEscape(messageId) + '"]');
+    if (!target) return;
+
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.classList.add('is-jump-target');
+    setTimeout(function () {
+      target.classList.remove('is-jump-target');
+    }, 1600);
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && window.CSS.escape) return window.CSS.escape(value);
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  function copyMessageText(root, msg) {
+    var text = msg.body || '';
+    if (!text) return;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(text)
+        .then(function () {
+          showMessagesToast(root, 'Message copied');
+        })
+        .catch(function () {
+          showMessagesToast(root, 'Could not copy message');
+        });
+      return;
+    }
+
+    // Fallback for contexts without the async clipboard API.
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try {
+      document.execCommand('copy');
+      showMessagesToast(root, 'Message copied');
+    } catch (err) {
+      showMessagesToast(root, 'Could not copy message');
+    }
+    document.body.removeChild(area);
+  }
+
+  function deleteMessage(root, state, render, msg) {
+    var bucket = threadBucket(state.selectedId);
+    var snapshot = { deleted: msg.deleted, body: msg.body };
+
+    msg.deleted = true;
+    msg.body = null;
+    render();
+
+    window.TMAMessagingAPI.deleteMessage(msg.id).catch(function () {
+      msg.deleted = snapshot.deleted;
+      msg.body = snapshot.body;
+      render();
+      showMessagesToast(root, 'Message could not be deleted');
+    });
+  }
+
+  function startEditingMessage(root, state, render, msg) {
+    state.editing = { id: msg.id, original: msg.body || '' };
+    setComposerDraft(state, msg.body || '');
+    clearReplyTo(state);
+    render();
+    focusComposerInput(root);
+  }
+
+  function commitEdit(root, state, render, text) {
+    var editing = state.editing;
+    if (!editing) return;
+
+    var msg = findMessageById(state.selectedId, editing.id);
+    state.editing = null;
+    setComposerDraft(state, '');
+
+    if (!msg || text === editing.original) {
+      render();
+      return;
+    }
+
+    var previous = msg.body;
+    msg.body = text;
+    msg.edited = true;
+    render();
+
+    window.TMAMessagingAPI.editMessage(msg.id, text).catch(function (err) {
+      msg.body = previous;
+      render();
+      showMessagesToast(
+        root,
+        err.status === 403 ? 'This message can no longer be edited' : 'Edit not saved'
+      );
+    });
+  }
+
+  /* ------------------------------------------------------------------
+   * Event wiring
+   * ---------------------------------------------------------------- */
+
   function wireEvents(root, state, render) {
     if (!isMessagesMobile()) {
       root.querySelectorAll('[data-messages-row]').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          state.selectedId = btn.getAttribute('data-messages-row');
-          clearReplyTo(state);
-          render();
+          openConversation(root, state, render, btn.getAttribute('data-messages-row'));
         });
       });
     }
-
-    root.querySelectorAll('[data-messages-contact]').forEach(function (link) {
-      link.addEventListener('click', function (e) {
-        e.preventDefault();
-        openClientProfile(link.getAttribute('data-messages-contact'));
-      });
-    });
 
     root.querySelectorAll('[data-messages-reply]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
@@ -1844,9 +2666,42 @@
         e.preventDefault();
         var index = parseInt(btn.getAttribute('data-messages-reply'), 10);
         if (isNaN(index)) return;
-        setReplyTo(state, index);
+        var msg = getMessages(state.selectedId)[index];
+        if (!msg) return;
+        setReplyTo(state, msg.id);
         render();
         focusComposerInput(root);
+      });
+    });
+
+    // Clicking a reply quote scrolls to, and flashes, the original.
+    root.querySelectorAll('[data-messages-jump]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        jumpToMessage(root, btn.getAttribute('data-messages-jump'));
+      });
+    });
+
+    root.querySelectorAll('[data-messages-load-more]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var messages = getMessages(state.selectedId);
+        var oldest = null;
+        for (var i = 0; i < messages.length; i++) {
+          if (messages[i].seq) {
+            oldest = messages[i].seq;
+            break;
+          }
+        }
+        if (oldest) loadThread(root, state, render, state.selectedId, { before: oldest });
+      });
+    });
+
+    root.querySelectorAll('[data-messages-menu]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openMessageMenu(root, state, render, btn, btn.getAttribute('data-messages-menu'));
       });
     });
 
@@ -1855,6 +2710,41 @@
       clearReplyBtn.addEventListener('click', function () {
         clearReplyTo(state);
         render();
+      });
+    }
+
+    var retry = root.querySelector('[data-messages-retry]');
+    if (retry) {
+      retry.addEventListener('click', function () {
+        STORE.loaded = false;
+        STORE.loadError = null;
+        render();
+        loadConversations(root, state, render);
+      });
+    }
+
+    var threadRetry = root.querySelector('[data-messages-thread-retry]');
+    if (threadRetry) {
+      threadRetry.addEventListener('click', function () {
+        loadThread(root, state, render, state.selectedId, { toBottom: true });
+      });
+    }
+
+    // Paging upward: reaching the top of the thread pulls in older history.
+    var chatBody = root.querySelector('[data-messages-chat-body]');
+    if (chatBody) {
+      chatBody.addEventListener('scroll', function () {
+        if (chatBody.scrollTop > 80) return;
+        var bucket = threadBucket(state.selectedId);
+        if (!bucket.hasMore || bucket.loading) return;
+
+        var messages = bucket.messages;
+        for (var i = 0; i < messages.length; i++) {
+          if (messages[i].seq) {
+            loadThread(root, state, render, state.selectedId, { before: messages[i].seq });
+            return;
+          }
+        }
       });
     }
 
@@ -1868,27 +2758,113 @@
     }
   }
 
+  /* Per-message overflow menu: copy, edit, delete. */
+  function openMessageMenu(root, state, render, anchor, messageId) {
+    closeMessageMenu();
+
+    var msg = findMessageById(state.selectedId, messageId);
+    if (!msg) return;
+
+    var items = [{ action: 'copy', label: 'Copy text', enabled: !!msg.body }];
+    if (msg.can && msg.can.edit) items.push({ action: 'edit', label: 'Edit', enabled: true });
+    if (msg.can && msg.can.delete) items.push({ action: 'delete', label: 'Delete', enabled: true });
+
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__messages-message-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = items
+      .filter(function (item) {
+        return item.enabled;
+      })
+      .map(function (item) {
+        return (
+          '<button type="button" role="menuitem" class="tma-dash__messages-message-menu-item' +
+          (item.action === 'delete' ? ' tma-dash__messages-message-menu-item--danger' : '') +
+          '" data-menu-action="' + item.action + '">' + esc(item.label) + '</button>'
+        );
+      })
+      .join('');
+
+    document.body.appendChild(menu);
+
+    var rect = anchor.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8) + 'px';
+    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+
+    menu.querySelectorAll('[data-menu-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var action = btn.getAttribute('data-menu-action');
+        closeMessageMenu();
+        if (action === 'copy') copyMessageText(root, msg);
+        else if (action === 'edit') startEditingMessage(root, state, render, msg);
+        else if (action === 'delete') deleteMessage(root, state, render, msg);
+      });
+    });
+
+    openMenuEl = menu;
+    setTimeout(function () {
+      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+    }, 0);
+  }
+
+  var openMenuEl = null;
+
+  function closeMessageMenu() {
+    if (openMenuEl && openMenuEl.parentNode) openMenuEl.parentNode.removeChild(openMenuEl);
+    openMenuEl = null;
+  }
+
+  function closeMessageMenuOnce() {
+    closeMessageMenu();
+  }
+
+  /* ------------------------------------------------------------------
+   * Mount
+   * ---------------------------------------------------------------- */
+
   function mount(root) {
+    // messages.js is loaded from every portal shell; the API client has to be
+    // loaded alongside it. Fail loudly here rather than part-way through a
+    // render, which is how a missing shell script used to surface.
+    if (!window.TMAMessagingAPI) {
+      if (window.console) {
+        console.error('[messages] js/messaging-api.js must be loaded before js/messages.js');
+      }
+      root.innerHTML =
+        '<div class="tma-dash__messages-list-state tma-dash__messages-list-state--error">' +
+        '<p>Messaging could not start.</p></div>';
+      return;
+    }
+
     var state = root._messagesState || {
-      selectedId: 'byewind',
+      selectedId: null,
       reading: false,
       replyTo: null,
+      editing: null,
       composerDrafts: {},
       composerAttachments: {},
       emojiPickerOpen: false,
       voiceRecording: false,
-      pinnedIds: {},
-      mutedIds: {},
-      removedIds: {},
+      search: '',
+      tab: 'all',
     };
     root._messagesState = state;
 
-    function render() {
+    /*
+     * One render pass. Scroll positions are captured before the subtree is
+     * replaced and restored after, which is what keeps the chat list still
+     * while conversations are opened, read, and updated underneath it.
+     */
+    function render(intent) {
+      var snapshot = captureScroll(root);
+
       root.innerHTML = renderLayout(state);
       ensureMessagesMobileHeader(root, state);
       wireEvents(root, state, render);
-      var dash = document.querySelector('.tma-dash');
-      if (dash && typeof dash._syncTabBarBadges === 'function') dash._syncTabBarBadges();
+
+      restoreScroll(root, snapshot, intent);
+      syncTabBarBadges();
     }
 
     root._messagesOnBack = function () {
@@ -1913,7 +2889,24 @@
       mobileMq.addListener(onMobileBreakpoint);
     }
 
+    // Presence heartbeat. Pauses on a hidden tab so a background tab does not
+    // keep someone looking online after they have walked away.
+    if (!root._messagesHeartbeat) {
+      root._messagesHeartbeat = setInterval(function () {
+        if (!document.hidden) window.TMAMessagingAPI.heartbeat();
+      }, 30000);
+      window.TMAMessagingAPI.heartbeat();
+    }
+
+    // Returning to the tab reconciles anything the socket missed while away.
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden || !root.isConnected) return;
+      window.TMAMessagingAPI.heartbeat();
+      loadConversations(root, state, render, { silent: true });
+    });
+
     render();
+    loadConversations(root, state, render);
   }
 
   window.TMAMessages = {

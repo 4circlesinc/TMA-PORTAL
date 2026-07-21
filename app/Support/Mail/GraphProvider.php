@@ -64,6 +64,30 @@ class GraphProvider implements MailProvider
         ];
     }
 
+    public function newMessages(string $folder, string $since, int $limit = 25): array
+    {
+        // Deliberately tight: this runs on the page's five-second timer, so a
+        // slow Graph must cost a fraction of that budget rather than stacking
+        // one poll's requests on top of the next.
+        $response = $this->request(timeout: 5, tries: 1)->get(
+            self::BASE.'/mailFolders/'.self::folderId($folder).'/messages',
+            [
+                '$filter' => 'receivedDateTime ge '.$since,
+                '$orderby' => 'receivedDateTime desc',
+                '$top' => $limit,
+                '$select' => self::LIST_SELECT,
+            ]
+        );
+
+        if (! $response->successful()) {
+            return [];
+        }
+
+        return collect($this->json($response)['value'] ?? [])
+            ->map(fn (array $raw): array => $this->normalize($raw, $folder, withBody: false))
+            ->all();
+    }
+
     public function getMessage(string $remoteId): array
     {
         // $expand pulls the attachment list in with the message itself — one

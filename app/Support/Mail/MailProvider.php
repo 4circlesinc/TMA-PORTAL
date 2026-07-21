@@ -25,6 +25,24 @@ interface MailProvider
     public function listMessages(string $folder, int $limit = 50, ?string $pageToken = null): array;
 
     /**
+     * Just what has landed in one folder since a moment in time.
+     *
+     * The "is there new mail?" question, and nothing else. A full incremental
+     * sync walks every folder and pages through each — far too much to run on
+     * a five-second timer, which is what a mailbox has to feel like. This is
+     * one small request against one folder, so it can.
+     *
+     * It deliberately does not touch the sync cursor: the full pass stays the
+     * authority on reads, moves and deletions, and this only ever *adds*
+     * arrivals ahead of it. Re-reading the same message costs an idempotent
+     * upsert; the cursor being wrong costs mail.
+     *
+     * @param  string  $since  ISO-8601 instant
+     * @return array<int, array<string, mixed>>
+     */
+    public function newMessages(string $folder, string $since, int $limit = 25): array;
+
+    /**
      * Everything the reading pane needs: bodies, recipients, attachment
      * metadata. Split from listMessages because bodies dominate the payload
      * and the list never shows them.

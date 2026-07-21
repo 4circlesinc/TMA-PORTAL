@@ -17,6 +17,8 @@ use App\Http\Controllers\ProfileSetupController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\LegacyPageController;
 use App\Http\Controllers\MailController;
+use App\Http\Controllers\MessagingAttachmentController;
+use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\Files\BrowserController;
 use App\Http\Controllers\Files\BulkController;
@@ -247,6 +249,36 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/organization-folders', [FileLibraryController::class, 'storeOrganizationFolder'])->name('org.store');
         Route::patch('/organization-folders/{uuid}', [FileLibraryController::class, 'updateOrganizationFolder'])->name('org.update');
         Route::post('/adopt-folder', [FileLibraryController::class, 'adoptFolder'])->name('adopt-folder');
+    });
+
+    /*
+     * Portal messaging API (the /social/messages page). Conversations are
+     * addressed by uuid and every route resolves through the caller's
+     * participation, so a non-member gets a 404 rather than a 403.
+     */
+    Route::prefix('portal/messaging')->name('messaging.')->group(function () {
+        Route::get('/conversations', [MessagingController::class, 'index'])->name('conversations.index');
+        Route::post('/conversations', [MessagingController::class, 'store'])->name('conversations.store');
+
+        // Literal paths before the {uuid} wildcard so it can't swallow them.
+        Route::get('/contacts', [MessagingController::class, 'contacts'])->name('contacts');
+        Route::post('/heartbeat', [MessagingController::class, 'heartbeat'])->name('heartbeat');
+        Route::get('/settings', [MessagingController::class, 'settings'])->name('settings');
+        Route::put('/settings', [MessagingController::class, 'updateSettings'])->name('settings.update');
+
+        Route::get('/conversations/{uuid}/messages', [MessagingController::class, 'messages'])->name('conversations.messages');
+        Route::post('/conversations/{uuid}/messages', [MessagingController::class, 'send'])->name('conversations.send');
+        Route::post('/conversations/{uuid}/read', [MessagingController::class, 'markRead'])->name('conversations.read');
+        Route::post('/conversations/{uuid}/unread', [MessagingController::class, 'markUnread'])->name('conversations.unread');
+        Route::put('/conversations/{uuid}/draft', [MessagingController::class, 'saveDraft'])->name('conversations.draft');
+        Route::patch('/conversations/{uuid}', [MessagingController::class, 'updateConversation'])->name('conversations.update');
+        Route::get('/conversations/{uuid}/photo', [MessagingAttachmentController::class, 'conversationPhoto'])->name('conversations.photo');
+
+        Route::patch('/messages/{uuid}', [MessagingController::class, 'updateMessage'])->name('messages.update');
+        Route::delete('/messages/{uuid}', [MessagingController::class, 'destroyMessage'])->name('messages.destroy');
+
+        Route::get('/attachments/{uuid}', [MessagingAttachmentController::class, 'show'])->name('attachments.show');
+        Route::get('/attachments/{uuid}/thumb', [MessagingAttachmentController::class, 'thumb'])->name('attachments.thumb');
     });
 
     Route::get('/{page}', LegacyPageController::class)

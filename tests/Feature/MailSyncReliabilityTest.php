@@ -11,6 +11,7 @@ use App\Support\Mail\MailSynchronizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -175,5 +176,91 @@ class MailSyncReliabilityTest extends TestCase
         // Case-insensitive: the inbox reports whatever casing the sender used,
         // and two spellings of one address are still one lookup.
         $this->assertSame($first->uniqueId(), $second->uniqueId());
+    }
+
+    /**
+     * The live check is one request against one folder. A full pass walks six
+     * folders and pages through each, which cannot finish inside a
+     * five-second timer — polls then overlap until the provider throttles,
+     * which is what "auto sync isn't working" actually looks like.
+     */
+    public function test_the_live_check_costs_a_single_inbox_request(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'seed-1',
+            'thread_id' => 'c1',
+            'folder' => 'inbox',
+            'subject' => 'Existing',
+            'from_email' => 'a@example.com',
+            'sent_at' => now()->subMinutes(10),
+        ]);
+
+        $graphCalls = 0;
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token', 'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*' => function () use (&$graphCalls) {
+                $graphCalls++;
+
+                return Http::response(['value' => [
+                    $this->graphMessage('new-1', now()->toIso8601ZuluString()),
+                ]]);
+            },
+        ]);
+
+        $written = new MailSynchronizer($account)->quickCheck();
+
+        $this->assertSame(1, $written);
+        $this->assertSame(1, $graphCalls, 'The live check must not walk every folder.');
+        $this->assertDatabaseHas('mail_messages', ['remote_id' => 'new-1']);
+    }
+
+    /** The live check must never move the cursor the full pass depends on. */
+    public function test_the_live_check_leaves_the_sync_cursor_alone(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $before = $account->mail_cursor;
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'seed-2',
+            'folder' => 'inbox',
+            'subject' => 'Existing',
+            'from_email' => 'a@example.com',
+            'sent_at' => now()->subMinutes(10),
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/*' => Http::response([
+                'access_token' => 'access-token', 'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/*' => Http::response(['value' => []]),
+        ]);
+
+        new MailSynchronizer($account)->quickCheck();
+
+        $this->assertSame($before, $account->fresh()->mail_cursor);
+    }
+
+    /** With nothing stored yet there is no watermark, so it defers to a full pass. */
+    public function test_the_live_check_does_nothing_on_an_empty_mailbox(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        Http::fake(['*' => Http::response([], 500)]);
+
+        $this->assertSame(0, new MailSynchronizer($account)->quickCheck());
     }
 }
