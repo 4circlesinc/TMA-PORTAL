@@ -11,8 +11,10 @@ use App\Events\MessageUpdated;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Models\UserBlock;
+use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSettings;
@@ -21,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -82,6 +85,15 @@ class MessagingController extends Controller
             ],
             'settings' => MessagingSettings::for($user),
             'realtime' => $this->realtimeConfig(),
+            // The real upload ceiling, which PHP's own ini caps can lower well
+            // below what messaging would otherwise allow. Sent so the composer
+            // can refuse an oversized file instantly instead of uploading it
+            // only to be rejected.
+            'limits' => [
+                'maxAttachmentBytes' => AttachmentIntake::effectiveMaxBytes(),
+                'maxAttachmentLabel' => AttachmentIntake::maxBytesLabel(),
+                'maxAttachmentsPerMessage' => AttachmentIntake::MAX_PER_MESSAGE,
+            ],
         ]);
     }
 
@@ -153,7 +165,7 @@ class MessagingController extends Controller
 
         $query = $conversation->messages()
             ->withTrashed()
-            ->with(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender'])
+            ->with(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments'])
             // Respect this participant's own "clear chat" marker. It is
             // personal: the other side still sees everything.
             ->where('id', '>', $participant->cleared_before_message_id ?? 0)
@@ -200,11 +212,33 @@ class MessagingController extends Controller
             'replyTo' => ['nullable', 'string'],
             // Lets a retried send be recognised instead of duplicated.
             'nonce' => ['nullable', 'uuid'],
+            // uuids of files already staged by uploadAttachment().
+            'attachments' => ['nullable', 'array', 'max:'.AttachmentIntake::MAX_PER_MESSAGE],
+            'attachments.*' => ['string'],
         ]);
 
         $body = trim((string) ($data['body'] ?? ''));
 
-        if ($body === '') {
+        // Claim the staged files. Scoped to this conversation and this
+        // uploader, so a uuid from elsewhere cannot be attached here.
+        $staged = collect();
+        if (! empty($data['attachments'])) {
+            $staged = MessageAttachment::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('uploaded_by', $user->id)
+                ->whereNull('message_id')
+                ->whereIn('uuid', $data['attachments'])
+                ->get();
+
+            if ($staged->count() !== count($data['attachments'])) {
+                throw ValidationException::withMessages([
+                    'attachments' => 'Some attachments are no longer available. Try adding them again.',
+                ]);
+            }
+        }
+
+        // A message needs *something* — text or a file, not necessarily both.
+        if ($body === '' && $staged->isEmpty()) {
             throw ValidationException::withMessages(['body' => 'A message needs some text.']);
         }
 
@@ -231,14 +265,23 @@ class MessagingController extends Controller
             $replyTo = $conversation->messages()->where('uuid', $data['replyTo'])->first();
         }
 
-        $message = DB::transaction(function () use ($conversation, $user, $body, $replyTo, $data) {
+        $message = DB::transaction(function () use ($conversation, $user, $body, $replyTo, $data, $staged) {
             $message = $conversation->messages()->create([
                 'user_id' => $user->id,
-                'type' => Message::TYPE_TEXT,
-                'body' => $body,
+                // The type describes what the message *is*, which the bubble
+                // uses to choose a renderer.
+                'type' => $staged->isNotEmpty() ? Message::TYPE_ATTACHMENT : Message::TYPE_TEXT,
+                'body' => $body === '' ? null : $body,
                 'reply_to_id' => $replyTo?->id,
                 'client_nonce' => $data['nonce'] ?? null,
             ]);
+
+            if ($staged->isNotEmpty()) {
+                MessageAttachment::whereIn('id', $staged->pluck('id'))->update([
+                    'message_id' => $message->id,
+                    'status' => MessageAttachment::STATUS_READY,
+                ]);
+            }
 
             $conversation->forceFill(['last_message_at' => $message->created_at])->save();
 
@@ -256,13 +299,66 @@ class MessagingController extends Controller
             return $message;
         });
 
-        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender']);
+        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageSent($message));
 
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $conversation),
         ]);
+    }
+
+    // --------------------------------------------------------- attachments
+
+    /**
+     * Upload one file and stage it against the conversation.
+     *
+     * Staged, not sent: the composer needs a preview, a size and a remove
+     * button before anything goes out, and a failed upload must never take the
+     * typed message with it. The file is claimed by a message on send.
+     */
+    public function uploadAttachment(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+
+        $this->assertNotBlocked($conversation, $user);
+
+        $request->validate(['file' => ['required', 'file']]);
+
+        $attachment = AttachmentIntake::stage($request->file('file'), $conversation, $user);
+
+        return response()->json([
+            'attachment' => MessagingPresenter::attachment($attachment),
+        ], 201);
+    }
+
+    /**
+     * Discard a staged attachment before it is sent.
+     *
+     * Only the uploader may do this, and only while it is still staged — once
+     * a message owns it, removing it means deleting the message.
+     */
+    public function destroyStagedAttachment(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+
+        $attachment = MessageAttachment::query()
+            ->whereHas('conversation', fn ($q) => $q->forUser($user))
+            ->where('uuid', $uuid)
+            ->where('uploaded_by', $user->id)
+            ->whereNull('message_id')
+            ->firstOrFail();
+
+        // Remove the bytes too — a discarded upload should not linger.
+        Storage::disk($attachment->disk)->delete($attachment->path);
+        if ($attachment->thumb_path) {
+            Storage::disk($attachment->disk)->delete($attachment->thumb_path);
+        }
+
+        $attachment->delete();
+
+        return response()->json(['removed' => true]);
     }
 
     // ----------------------------------------------------------- reactions
@@ -307,7 +403,7 @@ class MessagingController extends Controller
             $message->reactions()->create(['user_id' => $user->id, 'emoji' => $emoji]);
         }
 
-        $message->load(['reactions.user', 'sender', 'attachments', 'stars', 'replyTo.sender']);
+        $message->load(['reactions.user', 'sender', 'attachments', 'stars', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageReacted($message));
 
@@ -357,7 +453,7 @@ class MessagingController extends Controller
         }
 
         $message->update(['body' => $body, 'edited_at' => now()]);
-        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender']);
+        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageUpdated($message));
 

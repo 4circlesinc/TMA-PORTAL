@@ -290,6 +290,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Toggling: reacting again with the same emoji removes it.
         Route::post('/messages/{uuid}/reactions', [MessagingController::class, 'react'])->name('messages.react');
 
+        // Files are staged by upload first, then claimed by a message on send,
+        // so the composer can preview and remove them before anything is sent.
+        Route::post('/conversations/{uuid}/attachments', [MessagingController::class, 'uploadAttachment'])->name('conversations.attachments.store');
+        Route::delete('/attachments/{uuid}', [MessagingController::class, 'destroyStagedAttachment'])->name('attachments.destroy');
+
         Route::get('/attachments/{uuid}', [MessagingAttachmentController::class, 'show'])->name('attachments.show');
         Route::get('/attachments/{uuid}/thumb', [MessagingAttachmentController::class, 'thumb'])->name('attachments.thumb');
     });

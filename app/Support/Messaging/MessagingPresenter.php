@@ -144,9 +144,17 @@ class MessagingPresenter
         return self::$blockCache[$viewer->id];
     }
 
-    /** The compact quote shown above a reply. */
+    /**
+     * The compact quote shown above a reply.
+     *
+     * Carries enough about an attachment for the quote to show a thumbnail or
+     * a file-type icon — replying to a photo should look like replying to a
+     * photo, not read as a line of text.
+     */
     public static function replyStub(Message $message): array
     {
+        $attachment = $message->trashed() ? null : $message->attachments->first();
+
         return [
             'id' => $message->uuid,
             'seq' => $message->id,
@@ -155,6 +163,10 @@ class MessagingPresenter
                 ? 'Message deleted'
                 : self::snippet($message),
             'type' => $message->type,
+            'attachmentName' => $attachment?->name,
+            'thumbUrl' => $attachment && $attachment->isImage()
+                ? route('messaging.attachments.show', $attachment->uuid)
+                : null,
         ];
     }
 

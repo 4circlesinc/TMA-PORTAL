@@ -8,11 +8,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 #[Fillable([
-    'uuid', 'message_id', 'disk', 'path', 'name', 'mime', 'size',
+    'uuid', 'message_id', 'conversation_id', 'uploaded_by', 'disk', 'path',
+    'name', 'mime', 'extension', 'status', 'size',
     'width', 'height', 'duration_ms', 'thumb_path', 'waveform',
 ])]
 class MessageAttachment extends Model
 {
+    /** Uploaded and previewable, but not yet attached to a sent message. */
+    public const STATUS_STAGED = 'staged';
+
+    /** Attached to a message that was sent. */
+    public const STATUS_READY = 'ready';
+
     protected function casts(): array
     {
         return [
@@ -22,6 +29,16 @@ class MessageAttachment extends Model
             'duration_ms' => 'integer',
             'waveform' => 'array',
         ];
+    }
+
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(Conversation::class);
+    }
+
+    public function uploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploaded_by');
     }
 
     protected static function booted(): void

@@ -115,11 +115,38 @@ try {
   await a.waitForTimeout(1500);
   check(await a.locator('.tma-dash__messages-bubble').count() > 0, "A opened Ana Ruiz's thread");
 
-  step(5, 'Ticks appear only on outgoing messages');
+  step(5, 'Ticks appear only on the sender\'s own messages, which sit on the right');
   const incomingTicks = await a.locator(
     '.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-status',
   ).count();
   check(incomingTicks === 0, `no ticks on incoming messages (${incomingTicks} found)`);
+
+  // Side matters as much as the tick: your own messages carry the ticks *and*
+  // belong on the right. These were inverted once — own messages rendered on
+  // the left, which made the ticks look like they were on the recipient's.
+  const placement = await a.evaluate(() => {
+    const body = document.querySelector('[data-messages-chat-body]').getBoundingClientRect();
+    const mid = body.left + body.width / 2;
+    const rows = [...document.querySelectorAll('.tma-dash__messages-bubble-row')];
+    let mineLeft = 0;
+    let theirsRight = 0;
+    let mine = 0;
+    let theirs = 0;
+    rows.forEach((r) => {
+      const box = r.getBoundingClientRect();
+      const onRight = box.left + box.width / 2 >= mid;
+      if (r.classList.contains('tma-dash__messages-bubble-row--out')) {
+        mine += 1;
+        if (!onRight) mineLeft += 1;
+      } else {
+        theirs += 1;
+        if (onRight) theirsRight += 1;
+      }
+    });
+    return { mine, theirs, mineLeft, theirsRight };
+  });
+  check(placement.mine > 0 && placement.mineLeft === 0, `all ${placement.mine} of my messages are on the right`);
+  check(placement.theirs === 0 || placement.theirsRight === 0, `all ${placement.theirs} incoming messages are on the left`);
 
   step(6, 'A sends while B is offline → one grey tick');
   // "Elsewhere" has to mean *disconnected*, not merely on another screen: with
@@ -193,9 +220,13 @@ try {
     if (!bubble || !actions) return null;
     const b = bubble.getBoundingClientRect();
     const x = actions.getBoundingClientRect();
+    // The tools sit on the bubble's inward edge, which is the *left* for a
+    // right-aligned outgoing message — so measure the gap from whichever side
+    // they are on rather than assuming they follow the bubble.
+    const gap = x.left >= b.right ? x.left - b.right : b.left - x.right;
     return {
       verticalOverlap: Math.min(b.bottom, x.bottom) - Math.max(b.top, x.top),
-      horizontalGap: Math.round(x.left - b.right),
+      horizontalGap: Math.round(gap),
       buttons: actions.querySelectorAll('button').length,
     };
   });

@@ -52,6 +52,7 @@
     me: null,
     settings: {},
     realtime: null,
+    limits: {},
     loaded: false,
     loadError: null,
   };
@@ -892,7 +893,10 @@
    * rather than being absorbed by the swipe-to-reply gesture. */
   var INTERACTIVE_IN_BUBBLE =
     '.tma-dash__messages-link-action-btn, .tma-dash__messages-bubble-action, ' +
-    '.tma-dash__messages-bubble-quote, .tma-dash__messages-reaction, a';
+    '.tma-dash__messages-bubble-quote, .tma-dash__messages-reaction, ' +
+    // Attachments too: an image opens the lightbox, and video/audio have their
+    // own transport controls that must receive pointer events.
+    '.tma-dash__messages-attachment, video, audio, a';
 
   function renderSwipeReplyIcon(side) {
     var icon = side === 'in' ? 'ArrowBendUpRight' : 'ArrowBendUpLeft';
@@ -1006,21 +1010,41 @@
     );
   }
 
-  /* The quoted original shown inside a reply bubble. Click scrolls to it. */
+  /*
+   * The quoted original shown inside a reply bubble. Click scrolls to it.
+   *
+   * When the original was a file the quote carries its thumbnail (for an
+   * image) or its file-type icon, so "Replying to a photo" is visible at a
+   * glance rather than only readable.
+   */
   function renderQuotedReply(msg) {
     if (!msg.replyTo) return '';
+
+    var quoted = msg.replyTo;
+    var media = '';
+
+    if (quoted.thumbUrl) {
+      media = '<span class="tma-dash__messages-bubble-quote-thumb">' +
+        '<img src="' + esc(quoted.thumbUrl) + '" alt=""></span>';
+    } else if (quoted.attachmentName) {
+      media = '<span class="tma-dash__messages-bubble-quote-thumb">' +
+        '<img src="' + esc(attachmentIconSrc(quoted.attachmentName)) + '" alt=""></span>';
+    }
+
     return (
       '<button type="button" class="tma-dash__messages-bubble-quote" data-messages-jump="' +
-      esc(msg.replyTo.id) +
+      esc(quoted.id) +
       '">' +
       '<span class="tma-dash__messages-bubble-quote-bar" aria-hidden="true"></span>' +
       '<span class="tma-dash__messages-bubble-quote-body">' +
       '<span class="tma-dash__messages-bubble-quote-name">' +
-      esc(msg.replyTo.senderName) +
+      esc(quoted.senderName) +
       '</span>' +
       '<span class="tma-dash__messages-bubble-quote-text">' +
-      esc(msg.replyTo.preview) +
-      '</span></span></button>'
+      esc(quoted.preview) +
+      '</span></span>' +
+      media +
+      '</button>'
     );
   }
 
@@ -1053,6 +1077,100 @@
     );
   }
 
+
+  /* ------------------------------------------------------------------
+   * Attachment rendering
+   *
+   * Each kind gets the affordance it actually needs: images and video are
+   * shown, audio gets transport controls, and anything else gets its file-type
+   * icon plus name and size — the File Library's icons, not a second set.
+   * ---------------------------------------------------------------- */
+
+  function renderAttachment(msg, attachment) {
+    var open = ' data-messages-attachment="' + esc(attachment.id) + '"';
+
+    if (attachment.kind === 'image') {
+      // Reserve the right box from the stored dimensions so the thread doesn't
+      // jump as images load while someone is scrolling.
+      var ratio =
+        attachment.width && attachment.height
+          ? ' style="aspect-ratio:' + attachment.width + '/' + attachment.height + '"'
+          : '';
+      return (
+        '<button type="button" class="tma-dash__messages-attachment tma-dash__messages-attachment--image"' +
+        open + ' aria-label="Open ' + esc(attachment.name) + '">' +
+        '<img src="' + esc(attachment.thumbUrl || attachment.url) + '" alt="' + esc(attachment.name) +
+        '" loading="lazy"' + ratio + '>' +
+        '</button>'
+      );
+    }
+
+    if (attachment.kind === 'video') {
+      return (
+        '<div class="tma-dash__messages-attachment tma-dash__messages-attachment--video">' +
+        '<video src="' + esc(attachment.url) + '" controls preload="metadata" playsinline></video>' +
+        '</div>'
+      );
+    }
+
+    if (attachment.kind === 'audio') {
+      return (
+        '<div class="tma-dash__messages-attachment tma-dash__messages-attachment--audio">' +
+        '<audio src="' + esc(attachment.url) + '" controls preload="metadata"></audio>' +
+        '<span class="tma-dash__messages-attachment-name">' + esc(attachment.name) + '</span>' +
+        '</div>'
+      );
+    }
+
+    return (
+      '<button type="button" class="tma-dash__messages-attachment tma-dash__messages-attachment--file"' +
+      open + ' aria-label="Open ' + esc(attachment.name) + '">' +
+      '<img class="tma-dash__messages-attachment-icon" src="' +
+      esc(attachmentIconSrc(attachment.name)) + '" alt="" width="28" height="28">' +
+      '<span class="tma-dash__messages-attachment-text">' +
+      '<span class="tma-dash__messages-attachment-name">' + esc(attachment.name) + '</span>' +
+      '<span class="tma-dash__messages-attachment-meta">' + esc(formatBytes(attachment.size)) + '</span>' +
+      '</span></button>'
+    );
+  }
+
+  function renderAttachments(msg) {
+    if (!msg.attachments || !msg.attachments.length) return '';
+    return (
+      '<div class="tma-dash__messages-attachments' +
+      (msg.attachments.length > 1 ? ' tma-dash__messages-attachments--multi' : '') +
+      '">' +
+      msg.attachments
+        .map(function (a) {
+          return renderAttachment(msg, a);
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  /* Open one attachment in the shared portal lightbox, with the rest of the
+   * message's files available as prev/next. */
+  function openAttachment(state, attachmentId) {
+    if (!window.TMAPortalLightbox) return;
+
+    var all = [];
+    var index = 0;
+
+    getMessages(state.selectedId).forEach(function (msg) {
+      (msg.attachments || []).forEach(function (a) {
+        if (a.id === attachmentId) index = all.length;
+        all.push({
+          name: a.name,
+          mime: a.mime,
+          size: a.size,
+          url: a.url,
+        });
+      });
+    });
+
+    if (all.length) window.TMAPortalLightbox.open(all, index);
+  }
 
   /* A day separator, inserted between messages sent on different dates. */
   function renderDayDivider(label) {
@@ -1102,14 +1220,23 @@
         timeHtml +
         '</p></div>';
     } else {
+      // A message may be files only, text only, or both. When there is no
+      // text the timestamp rides under the attachments instead of an empty
+      // paragraph.
+      var hasText = !!(msg.body && msg.body.trim());
+
       inner =
-        '<div class="tma-dash__messages-bubble-text">' +
-        '<p class="tma-dash__messages-bubble-line">' +
-        '<span class="tma-dash__messages-bubble-copy">' +
-        linkify(msg.body || '') +
-        '</span>' +
-        timeHtml +
-        '</p></div>';
+        renderAttachments(msg) +
+        (hasText
+          ? '<div class="tma-dash__messages-bubble-text">' +
+            '<p class="tma-dash__messages-bubble-line">' +
+            '<span class="tma-dash__messages-bubble-copy">' +
+            linkify(msg.body) +
+            '</span>' +
+            timeHtml +
+            '</p></div>'
+          : '<div class="tma-dash__messages-bubble-text tma-dash__messages-bubble-text--meta">' +
+            '<p class="tma-dash__messages-bubble-line">' + timeHtml + '</p></div>');
     }
 
     // In a group the sender's name sits above their first bubble in a run.
@@ -1188,6 +1315,86 @@
   function setComposerDraft(state, text) {
     if (!state.composerDrafts) state.composerDrafts = {};
     state.composerDrafts[state.selectedId] = text;
+  }
+
+  /* ------------------------------------------------------------------
+   * Composer attachments
+   *
+   * Files are uploaded as soon as they are chosen and held as *staged* rows
+   * server-side; the message claims them on send. That is what makes a preview,
+   * a progress bar, a remove button and a retry possible — and it means a
+   * failed upload can never take the typed text with it.
+   * ---------------------------------------------------------------- */
+
+  var MAX_ATTACHMENTS = 10;
+
+  function pendingAttachments(state) {
+    if (!state.attachments) state.attachments = {};
+    if (!state.attachments[state.selectedId]) state.attachments[state.selectedId] = [];
+    return state.attachments[state.selectedId];
+  }
+
+  function formatBytes(bytes) {
+    if (window.TMAPortalLightbox) return window.TMAPortalLightbox.formatBytes(bytes);
+    return (Number(bytes) || 0) + ' B';
+  }
+
+  function attachmentIconSrc(name) {
+    if (window.TMAFileIcons) return window.TMAFileIcons.fileIconSrc(null, name);
+    return ICONS.Paperclip;
+  }
+
+  function renderComposerAttachments(state) {
+    var items = pendingAttachments(state);
+    if (!items.length) return '';
+
+    return (
+      '<div class="tma-dash__messages-tray">' +
+      items
+        .map(function (item) {
+          var failed = item.status === 'failed';
+          var uploading = item.status === 'uploading';
+
+          // A local object URL while uploading, the server thumbnail once it
+          // lands — so an image previews immediately rather than after the round trip.
+          var thumb = item.previewUrl || (item.attachment && item.attachment.thumbUrl);
+
+          return (
+            '<div class="tma-dash__messages-tray-item' +
+            (failed ? ' is-failed' : '') +
+            '" data-messages-tray-item="' + esc(item.localId) + '">' +
+            '<span class="tma-dash__messages-tray-thumb">' +
+            (thumb
+              ? '<img src="' + esc(thumb) + '" alt="">'
+              : '<img class="tma-dash__messages-tray-icon" src="' +
+                esc(attachmentIconSrc(item.name)) + '" alt="">') +
+            '</span>' +
+            '<span class="tma-dash__messages-tray-text">' +
+            '<span class="tma-dash__messages-tray-name" title="' + esc(item.name) + '">' +
+            esc(item.name) + '</span>' +
+            '<span class="tma-dash__messages-tray-meta">' +
+            (failed
+              ? esc(item.error || 'Upload failed')
+              : esc(formatBytes(item.size))) +
+            '</span>' +
+            (uploading
+              ? '<span class="tma-dash__messages-tray-bar"><span class="tma-dash__messages-tray-bar-fill" ' +
+                'style="width:' + (item.progress || 0) + '%"></span></span>'
+              : '') +
+            '</span>' +
+            (failed
+              ? '<button type="button" class="tma-dash__messages-tray-btn" ' +
+                'data-messages-tray-retry="' + esc(item.localId) + '" aria-label="Retry upload">↻</button>'
+              : '') +
+            '<button type="button" class="tma-dash__messages-tray-btn" ' +
+            'data-messages-tray-remove="' + esc(item.localId) + '" aria-label="Remove ' +
+            esc(item.name) + '"><span aria-hidden="true">×</span></button>' +
+            '</div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
   }
 
   function renderComposerActionBtn(id, icon, label, extraAttrs) {
@@ -1340,6 +1547,7 @@
       (editing
         ? '<div class="tma-dash__messages-composer-editing">Editing message — press Escape to cancel</div>'
         : '') +
+      renderComposerAttachments(state) +
       '<div class="tma-dash__messages-composer-main">' +
       '<div class="tma-dash__messages-composer-input' +
       (draft ? ' tma-dash__messages-composer-input--filled' : '') +
@@ -1353,12 +1561,8 @@
         'Add emoji',
         ' aria-expanded="' + (state.emojiPickerOpen ? 'true' : 'false') + '" aria-haspopup="dialog"'
       ) +
-      renderComposerActionBtn(
-        'attach',
-        'Paperclip',
-        'Attach file (not available yet)',
-        ' disabled aria-disabled="true" title="Attachments are coming in the next phase"'
-      ) +
+      renderComposerActionBtn('attach', 'Paperclip', 'Attach files', ' title="Attach files"') +
+      '<input type="file" class="tma-dash__messages-composer-file" data-messages-composer-file hidden multiple>' +
       renderComposerActionBtn(
         'voice',
         'Microphone',
@@ -1450,12 +1654,20 @@
       });
 
       // Paste as plain text: the composer is contenteditable, so pasted markup
-      // would otherwise land as live HTML inside the message.
+      // would otherwise land as live HTML inside the message. A pasted *file*
+      // (a screenshot, typically) is attached instead.
       input.addEventListener('paste', function (e) {
         if (!e.clipboardData) return;
+
+        var files = e.clipboardData.files;
+        if (files && files.length) {
+          e.preventDefault();
+          queueFiles(root, state, render, files);
+          return;
+        }
+
         e.preventDefault();
-        var text = e.clipboardData.getData('text/plain');
-        insertComposerText(input, text);
+        insertComposerText(input, e.clipboardData.getData('text/plain'));
       });
     }
 
@@ -1534,15 +1746,46 @@
       });
     }
 
-    // Attachments and voice notes are the next phase of this work. Their
-    // buttons stay in the design but are disabled rather than pretending to
-    // work — the previous versions only pushed filenames into local state and
-    // never uploaded anything.
+    var attachBtn = composer.querySelector('[data-messages-composer-attach]');
+    var fileInput = composer.querySelector('[data-messages-composer-file]');
+
+    if (attachBtn && fileInput) {
+      attachBtn.addEventListener('click', function () {
+        fileInput.click();
+      });
+      fileInput.addEventListener('change', function () {
+        queueFiles(root, state, render, fileInput.files);
+        // Reset so choosing the same file twice still fires a change event.
+        fileInput.value = '';
+      });
+    }
+
+    composer.querySelectorAll('[data-messages-tray-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        removeAttachment(root, state, render, btn.getAttribute('data-messages-tray-remove'));
+      });
+    });
+
+    composer.querySelectorAll('[data-messages-tray-retry]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-messages-tray-retry');
+        pendingAttachments(state).forEach(function (item) {
+          if (item.localId === id) startUpload(root, state, render, item);
+        });
+        render();
+      });
+    });
+
+    // Voice notes are the next phase; the microphone stays disabled rather
+    // than pretending to record.
 
     if (sendBtn) {
       sendBtn.addEventListener('click', function () {
         var text = input ? (input.textContent || '').trim() : getComposerDraft(state).trim();
-        if (!text) return;
+
+        // A message may be files only. Bailing on empty text here is what
+        // previously made an attachment-only send do nothing at all.
+        if (!text && !pendingAttachments(state).length) return;
 
         state.emojiPickerOpen = false;
 
@@ -2616,6 +2859,7 @@
         STORE.me = data.me || null;
         STORE.settings = data.settings || {};
         STORE.realtime = data.realtime || null;
+        STORE.limits = data.limits || {};
         STORE.loaded = true;
         STORE.loadError = null;
 
@@ -2740,7 +2984,28 @@
 
   function sendMessage(root, state, render, text) {
     var conversationId = state.selectedId;
-    if (!conversationId || !text.trim()) return;
+    if (!conversationId) return;
+
+    var queued = pendingAttachments(state);
+    var ready = queued.filter(function (item) {
+      return item.status === 'done' && item.attachment;
+    });
+
+    // Nothing to send at all.
+    if (!text.trim() && !ready.length) return;
+
+    // Hold the send while uploads are still running, rather than silently
+    // dropping the files that haven't finished.
+    if (queued.some(function (item) { return item.status === 'uploading'; })) {
+      showMessagesToast(root, 'Waiting for uploads to finish…');
+      return;
+    }
+
+    var failed = queued.filter(function (item) { return item.status === 'failed'; });
+    if (failed.length && !text.trim() && !ready.length) {
+      showMessagesToast(root, 'Those files could not be uploaded');
+      return;
+    }
 
     var replyTo = state.replyTo && state.replyTo.threadId === conversationId
       ? state.replyTo.messageId
@@ -2768,7 +3033,10 @@
             preview: messagePreview(replySource),
           }
         : null,
-      attachments: [],
+      // Show the real attachments straight away — they are already uploaded.
+      attachments: ready.map(function (item) {
+        return item.attachment;
+      }),
       reactions: [],
       starred: false,
       status: null,
@@ -2779,12 +3047,21 @@
     mergeMessages(conversationId, [pending], false);
     clearReplyTo(state);
     setComposerDraft(state, '');
+
+    // The tray empties as the message goes; anything that failed to upload
+    // stays behind so it can be retried rather than vanishing silently.
+    var attachmentIds = ready.map(function (item) {
+      return item.attachment.id;
+    });
+    state.attachments[conversationId] = failed;
+
     render({ chatToBottom: true });
 
     window.TMAMessagingAPI.send(conversationId, {
       body: text,
       replyTo: replyTo,
       nonce: nonce,
+      attachments: attachmentIds,
     })
       .then(function (data) {
         var bucket = threadBucket(conversationId);
@@ -3450,6 +3727,139 @@
   }
 
   /* ------------------------------------------------------------------
+   * Attachment uploads
+   * ---------------------------------------------------------------- */
+
+  var localAttachmentSeq = 0;
+
+  function queueFiles(root, state, render, files) {
+    if (!state.selectedId || !files || !files.length) return;
+
+    var items = pendingAttachments(state);
+    var room = MAX_ATTACHMENTS - items.length;
+
+    if (room <= 0) {
+      showMessagesToast(root, 'Up to ' + MAX_ATTACHMENTS + ' files per message');
+      return;
+    }
+
+    var accepted = Array.prototype.slice.call(files, 0, room);
+    if (files.length > room) {
+      showMessagesToast(root, 'Only the first ' + room + ' files were added');
+    }
+
+    // Refuse an oversized file here rather than spending an upload on it. The
+    // ceiling comes from the server because PHP's own upload_max_filesize can
+    // be far lower than what messaging nominally allows.
+    var maxBytes = STORE.limits.maxAttachmentBytes || 0;
+    if (maxBytes) {
+      var tooBig = accepted.filter(function (file) {
+        return file.size > maxBytes;
+      });
+      if (tooBig.length) {
+        showMessagesToast(
+          root,
+          (tooBig.length === 1 ? tooBig[0].name : tooBig.length + ' files') +
+            ' exceed the ' + (STORE.limits.maxAttachmentLabel || 'size') + ' limit'
+        );
+        accepted = accepted.filter(function (file) {
+          return file.size <= maxBytes;
+        });
+      }
+    }
+
+    accepted.forEach(function (file) {
+      localAttachmentSeq += 1;
+      var item = {
+        localId: 'a' + localAttachmentSeq,
+        conversationId: state.selectedId,
+        file: file,
+        name: file.name,
+        size: file.size,
+        status: 'uploading',
+        progress: 0,
+        attachment: null,
+        // Shows an image immediately, before the server has it.
+        previewUrl: /^image\//.test(file.type) ? URL.createObjectURL(file) : null,
+      };
+      items.push(item);
+      startUpload(root, state, render, item);
+    });
+
+    render();
+  }
+
+  function startUpload(root, state, render, item) {
+    item.status = 'uploading';
+    item.progress = 0;
+    item.error = null;
+
+    var upload = window.TMAMessagingAPI.uploadAttachment(
+      item.conversationId,
+      item.file,
+      function (percent) {
+        item.progress = percent;
+        // Repaint only the one bar; a full render on every progress tick
+        // would fight the composer for focus.
+        paintUploadProgress(root, item);
+      }
+    );
+
+    item.abort = upload.abort;
+
+    upload.promise
+      .then(function (attachment) {
+        item.status = 'done';
+        item.attachment = attachment;
+        item.progress = 100;
+        render();
+      })
+      .catch(function (err) {
+        if (err.aborted) return; // removed by the user; nothing to report
+        item.status = 'failed';
+        item.error = err.message || 'Upload failed';
+        render();
+      });
+  }
+
+  function paintUploadProgress(root, item) {
+    var el = root.querySelector('[data-messages-tray-item="' + cssEscape(item.localId) + '"]');
+    var bar = el && el.querySelector('.tma-dash__messages-tray-bar-fill');
+    if (bar) bar.style.width = (item.progress || 0) + '%';
+  }
+
+  function removeAttachment(root, state, render, localId) {
+    var items = pendingAttachments(state);
+    var index = -1;
+    items.forEach(function (item, i) {
+      if (item.localId === localId) index = i;
+    });
+    if (index === -1) return;
+
+    var item = items[index];
+
+    if (item.status === 'uploading' && item.abort) item.abort();
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+
+    // Discard the staged row server-side too, so an abandoned upload does not
+    // linger in storage.
+    if (item.attachment) {
+      window.TMAMessagingAPI.removeAttachment(item.attachment.id).catch(function () {});
+    }
+
+    items.splice(index, 1);
+    render();
+  }
+
+  function clearAttachments(state, conversationId) {
+    if (!state.attachments || !state.attachments[conversationId]) return;
+    state.attachments[conversationId].forEach(function (item) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+    state.attachments[conversationId] = [];
+  }
+
+  /* ------------------------------------------------------------------
    * Reactions
    * ---------------------------------------------------------------- */
 
@@ -4058,6 +4468,54 @@
     root.querySelectorAll('[data-messages-panel-close]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         closePanels(state, render);
+      });
+    });
+
+    /*
+     * Drag files anywhere over the open conversation to attach them.
+     *
+     * Bound on the chat column rather than the composer: aiming at a small
+     * strip at the bottom of the window is needless precision when the whole
+     * conversation is an obvious target. dragleave fires when crossing child
+     * elements, so the highlight is tracked with a depth counter.
+     */
+    var dropZone = root.querySelector('.tma-dash__messages-chat');
+    if (dropZone && state.selectedId) {
+      var depth = 0;
+
+      dropZone.addEventListener('dragenter', function (e) {
+        if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
+        e.preventDefault();
+        depth += 1;
+        dropZone.classList.add('is-drop-target');
+      });
+
+      dropZone.addEventListener('dragover', function (e) {
+        if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      });
+
+      dropZone.addEventListener('dragleave', function () {
+        depth = Math.max(0, depth - 1);
+        if (depth === 0) dropZone.classList.remove('is-drop-target');
+      });
+
+      dropZone.addEventListener('drop', function (e) {
+        if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+        e.preventDefault();
+        depth = 0;
+        dropZone.classList.remove('is-drop-target');
+        queueFiles(root, state, render, e.dataTransfer.files);
+      });
+    }
+
+    // Opening an attachment in the shared lightbox.
+    root.querySelectorAll('[data-messages-attachment]').forEach(function (el) {
+      el.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openAttachment(state, el.getAttribute('data-messages-attachment'));
       });
     });
 

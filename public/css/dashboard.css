@@ -13353,12 +13353,16 @@
   position: relative;
 }
 
+/* Your own messages ('out') sit on the right, the other person's on the left —
+ * the universal convention, and what makes the delivery ticks read as yours.
+ * These two were the wrong way round: the swipe-reply icon positions and the
+ * swipe directions in messages.js were already written for this layout. */
 .tma-dash__messages-bubble-row--in {
-  align-self: flex-end;
+  align-self: flex-start;
 }
 
 .tma-dash__messages-bubble-row--out {
-  align-self: flex-start;
+  align-self: flex-end;
 }
 
 .tma-dash__messages-bubble {
@@ -13370,14 +13374,17 @@
   color: var(--color-text-primary);
 }
 
+/* The small corner is the bubble's "tail", so it has to point at the side the
+ * bubble is aligned to: bottom-left for an incoming bubble on the left,
+ * bottom-right for your own on the right. */
 .tma-dash__messages-bubble--in {
   background: var(--color-1);
-  border-radius: var(--radius-16) var(--radius-24) var(--radius-4) var(--radius-16);
+  border-radius: var(--radius-24) var(--radius-16) var(--radius-16) var(--radius-4);
 }
 
 .tma-dash__messages-bubble--out {
   background: var(--color-2);
-  border-radius: var(--radius-24) var(--radius-16) var(--radius-16) var(--radius-4);
+  border-radius: var(--radius-16) var(--radius-24) var(--radius-4) var(--radius-16);
 }
 
 .tma-dash__messages-bubble-text p {
@@ -24405,11 +24412,13 @@ button.tma-dash__header-popup-item:focus-visible {
   gap: var(--space-4);
 }
 
-.tma-dash__messages-bubble-row--out .tma-dash__messages-bubble-track {
+/* Tools sit on the inward edge of the message: to the left of your own
+ * right-aligned bubbles, to the right of incoming ones. */
+.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-track {
   flex-direction: row;
 }
 
-.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-track {
+.tma-dash__messages-bubble-row--out .tma-dash__messages-bubble-track {
   flex-direction: row-reverse;
 }
 
@@ -24421,7 +24430,7 @@ button.tma-dash__header-popup-item:focus-visible {
   gap: var(--space-4);
 }
 
-.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-main {
+.tma-dash__messages-bubble-row--out .tma-dash__messages-bubble-main {
   align-items: flex-end;
 }
 
@@ -25007,4 +25016,237 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-dash__messages-reaction-emoji {
   font-size: 14px;
   line-height: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Messages — attachments.
+ *
+ * The composer tray (pre-send previews with progress) and the in-bubble
+ * renderings. File-type icons come from the File Library's set via
+ * TMAFileIcons; the lightbox reuses .tma-portal-lightbox from portal-files.css.
+ * ------------------------------------------------------------------------- */
+
+.tma-dash__messages-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-8) 0;
+}
+
+.tma-dash__messages-tray-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 200px;
+  max-width: 260px;
+  padding: var(--space-8);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-input);
+}
+
+.tma-dash__messages-tray-item.is-failed {
+  border-color: var(--color-danger, #d92d20);
+}
+
+.tma-dash__messages-tray-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-8);
+  background: var(--color-1);
+}
+
+.tma-dash__messages-tray-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tma-dash__messages-tray-thumb .tma-dash__messages-tray-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.tma-dash__messages-tray-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.tma-dash__messages-tray-name {
+  overflow: hidden;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__messages-tray-meta {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-tray-item.is-failed .tma-dash__messages-tray-meta {
+  color: var(--color-danger, #d92d20);
+}
+
+/* Upload progress. Width is set inline as bytes arrive. */
+.tma-dash__messages-tray-bar {
+  display: block;
+  height: 3px;
+  margin-top: var(--space-4);
+  border-radius: 2px;
+  background: var(--color-overlay-8, rgb(0 0 0 / 0.08));
+  overflow: hidden;
+}
+
+.tma-dash__messages-tray-bar-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--color-primary-brand, #1c6ef2);
+  transition: width 120ms linear;
+}
+
+.tma-dash__messages-tray-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tma-dash__messages-tray-btn:hover {
+  background: var(--color-hover);
+}
+
+/* Drag-and-drop target: the whole conversation, not a narrow strip. */
+.tma-dash__messages-chat.is-drop-target {
+  outline: 2px dashed var(--color-primary-brand, #1c6ef2);
+  outline-offset: -6px;
+}
+
+/* --- attachments inside a bubble --- */
+
+.tma-dash__messages-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.tma-dash__messages-attachments--multi {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tma-dash__messages-attachment {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: transparent;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tma-dash__messages-attachment--image img {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: var(--radius-12);
+  background: var(--color-1);
+}
+
+.tma-dash__messages-attachment--video video,
+.tma-dash__messages-attachment--audio audio {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  border-radius: var(--radius-12);
+}
+
+.tma-dash__messages-attachment--video,
+.tma-dash__messages-attachment--audio {
+  cursor: default;
+}
+
+/* Documents and anything without an inline preview. */
+.tma-dash__messages-attachment--file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border-radius: var(--radius-12);
+  background: rgb(0 0 0 / 0.05);
+  text-align: left;
+}
+
+.tma-dash__messages-attachment--file:hover {
+  background: rgb(0 0 0 / 0.09);
+}
+
+.tma-dash__messages-attachment-icon {
+  flex-shrink: 0;
+}
+
+.tma-dash__messages-attachment-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__messages-attachment-name {
+  overflow: hidden;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__messages-attachment-meta {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-text-secondary);
+}
+
+/* A files-only message still needs its timestamp somewhere. */
+.tma-dash__messages-bubble-text--meta {
+  text-align: right;
+}
+
+/* Thumbnail inside a reply quote. */
+.tma-dash__messages-bubble-quote-thumb {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: var(--radius-4);
+  background: var(--color-1);
+}
+
+.tma-dash__messages-bubble-quote-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }

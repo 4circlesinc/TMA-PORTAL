@@ -128,6 +128,80 @@
       return api(BASE + '/messages/' + encodeURIComponent(messageId), { method: 'DELETE' });
     },
 
+    /*
+     * Upload one file and stage it against a conversation.
+     *
+     * XHR rather than fetch: fetch still has no upload-progress event, and the
+     * composer has to show a progress bar. Returns an object carrying the
+     * promise plus an abort() so a queued file can be cancelled mid-flight.
+     */
+    uploadAttachment: function (conversationId, file, onProgress) {
+      var xhr = new XMLHttpRequest();
+
+      var promise = new Promise(function (resolve, reject) {
+        var form = new FormData();
+        form.append('file', file);
+
+        xhr.open('POST', BASE + '/conversations/' + encodeURIComponent(conversationId) + '/attachments');
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('X-XSRF-TOKEN', csrf());
+        var socket = socketId();
+        if (socket) xhr.setRequestHeader('X-Socket-ID', socket);
+
+        xhr.upload.addEventListener('progress', function (e) {
+          if (!e.lengthComputable || !onProgress) return;
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        });
+
+        xhr.addEventListener('load', function () {
+          var data = null;
+          try {
+            data = JSON.parse(xhr.responseText);
+          } catch (err) {
+            /* non-JSON error page */
+          }
+
+          if (xhr.status >= 200 && xhr.status < 300 && data && data.attachment) {
+            resolve(data.attachment);
+            return;
+          }
+
+          var err = new Error(
+            (data && (data.message || (data.errors && data.errors.file && data.errors.file[0]))) ||
+              'Upload failed'
+          );
+          err.status = xhr.status;
+          reject(err);
+        });
+
+        xhr.addEventListener('error', function () {
+          reject(new Error('Upload failed'));
+        });
+
+        xhr.addEventListener('abort', function () {
+          var err = new Error('Upload cancelled');
+          err.aborted = true;
+          reject(err);
+        });
+
+        xhr.send(form);
+      });
+
+      return {
+        promise: promise,
+        abort: function () {
+          xhr.abort();
+        },
+      };
+    },
+
+    /* Discard a staged file before it is sent. */
+    removeAttachment: function (attachmentId) {
+      return api(BASE + '/attachments/' + encodeURIComponent(attachmentId), { method: 'DELETE' });
+    },
+
     /* Toggle one emoji on a message. Returns the updated message. */
     react: function (messageId, emoji) {
       return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/reactions', {

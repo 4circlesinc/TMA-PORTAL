@@ -23,6 +23,24 @@ Artisan::command('files:cleanup-uploads', function () {
 Schedule::command('files:cleanup-uploads')->hourly();
 
 /*
+ * Message attachments are uploaded and staged the moment they are chosen, so a
+ * composer that is abandoned - tab closed, message never sent - leaves rows
+ * with no message and bytes with no owner. This removes both.
+ *
+ * AttachmentIntake also prunes the *uploader's own* stale rows on every upload,
+ * so storage stays bounded even when the scheduler is not running, which has
+ * been a recurring problem here. This is the thorough pass.
+ */
+Artisan::command('messaging:prune-attachments {--hours=24}', function () {
+    $hours = max(1, (int) $this->option('hours'));
+    $removed = App\Support\Messaging\Thumbnailer::pruneStaged($hours);
+
+    $this->info("Removed {$removed} abandoned attachment(s) older than {$hours}h.");
+})->purpose('Remove staged message attachments that were never sent');
+
+Schedule::command('messaging:prune-attachments')->hourly();
+
+/*
  * Pull every connected mailbox on a timer.
  *
  * Sync used to be dispatched only when someone opened the email page, so a
