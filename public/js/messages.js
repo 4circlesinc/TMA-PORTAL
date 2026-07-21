@@ -899,7 +899,7 @@
     '.tma-dash__messages-bubble-quote, .tma-dash__messages-reaction, ' +
     // Attachments too: an image opens the lightbox, and video/audio have their
     // own transport controls that must receive pointer events.
-    '.tma-dash__messages-attachment, video, audio, a';
+    '.tma-dash__messages-attachment, .tma-dash__messages-voice, video, audio, a';
 
   function renderSwipeReplyIcon(side) {
     var icon = side === 'in' ? 'ArrowBendUpRight' : 'ArrowBendUpLeft';
@@ -1232,6 +1232,10 @@
       );
     }
 
+    if (attachment.kind === 'voice') {
+      return renderVoiceNote(msg, attachment);
+    }
+
     if (attachment.kind === 'audio') {
       return (
         '<div class="tma-dash__messages-attachment tma-dash__messages-attachment--audio">' +
@@ -1548,6 +1552,113 @@
     );
   }
 
+  /* ------------------------------------------------------------------
+   * Voice notes
+   * ---------------------------------------------------------------- */
+
+  function formatDuration(ms) {
+    var total = Math.max(0, Math.round((ms || 0) / 1000));
+    var mins = Math.floor(total / 60);
+    var secs = total % 60;
+    return mins + ':' + (secs < 10 ? '0' : '') + secs;
+  }
+
+  function renderWaveform(peaks, extraClass) {
+    var bars = (peaks && peaks.length ? peaks : null);
+
+    // No peaks (an older note, or a browser without Web Audio) still gets a
+    // bar chart, just a flat one — better than an empty gap.
+    if (!bars) {
+      bars = [];
+      for (var i = 0; i < 40; i++) bars.push(18);
+    }
+
+    return (
+      '<span class="tma-dash__messages-wave' + (extraClass ? ' ' + extraClass : '') + '" aria-hidden="true">' +
+      bars
+        .map(function (peak) {
+          return '<span class="tma-dash__messages-wave-bar" style="height:' +
+            Math.max(8, Math.min(100, peak)) + '%"></span>';
+        })
+        .join('') +
+      '</span>'
+    );
+  }
+
+  /*
+   * The composer while recording, or holding a finished recording for review.
+   *
+   * Replaces the text field entirely: there is nothing else to do with the
+   * composer mid-recording, and a half-visible text box invites typing that
+   * would be lost.
+   */
+  function renderRecorder(state) {
+    var rec = state.recording;
+    if (!rec) return '';
+
+    if (rec.stage === 'recording' || rec.stage === 'paused') {
+      return (
+        '<div class="tma-dash__messages-recorder" role="group" aria-label="Recording a voice note">' +
+        '<button type="button" class="tma-dash__messages-recorder-btn tma-dash__messages-recorder-cancel" ' +
+        'data-messages-record-cancel aria-label="Cancel recording">×</button>' +
+        '<span class="tma-dash__messages-recorder-dot' +
+        (rec.stage === 'paused' ? ' is-paused' : '') + '" aria-hidden="true"></span>' +
+        '<span class="tma-dash__messages-recorder-time">' + esc(formatDuration(rec.elapsedMs)) + '</span>' +
+        renderWaveform(rec.livePeaks, 'tma-dash__messages-wave--live') +
+        '<button type="button" class="tma-dash__messages-recorder-btn" data-messages-record-pause ' +
+        'aria-label="' + (rec.stage === 'paused' ? 'Resume recording' : 'Pause recording') + '">' +
+        (rec.stage === 'paused' ? '▶' : '❚❚') +
+        '</button>' +
+        '<button type="button" class="tma-dash__messages-recorder-btn tma-dash__messages-recorder-send" ' +
+        'data-messages-record-stop aria-label="Finish recording">✓</button>' +
+        '</div>'
+      );
+    }
+
+    // Finished: review it before it goes anywhere.
+    return (
+      '<div class="tma-dash__messages-recorder tma-dash__messages-recorder--review" role="group" ' +
+      'aria-label="Review voice note">' +
+      '<button type="button" class="tma-dash__messages-recorder-btn tma-dash__messages-recorder-cancel" ' +
+      'data-messages-record-discard aria-label="Discard recording">×</button>' +
+      '<button type="button" class="tma-dash__messages-recorder-btn" data-messages-record-play ' +
+      'aria-label="Play recording">' + (rec.playing ? '❚❚' : '▶') + '</button>' +
+      renderWaveform(rec.waveform) +
+      '<span class="tma-dash__messages-recorder-time">' + esc(formatDuration(rec.durationMs)) + '</span>' +
+      '<button type="button" class="tma-dash__messages-recorder-btn tma-dash__messages-recorder-send" ' +
+      'data-messages-record-send aria-label="Send voice note">' +
+      renderMessagesIcon('PaperPlaneRight') +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  /* A received voice note: transport, waveform, length and playback speed. */
+  function renderVoiceNote(msg, attachment) {
+    var speed = STORE.settings.voicePlaybackSpeed || 1;
+
+    return (
+      '<div class="tma-dash__messages-voice" data-messages-voice="' + esc(attachment.id) + '" ' +
+      'data-messages-voice-src="' + esc(attachment.url) + '" ' +
+      // MediaRecorder's WebM carries no duration in the container, so
+      // audio.duration reads Infinity. The recorded length is stored instead
+      // and used whenever the element cannot report one.
+      'data-messages-voice-duration="' + (attachment.durationMs || 0) + '">' +
+      '<button type="button" class="tma-dash__messages-voice-play" data-messages-voice-play ' +
+      'aria-label="Play voice note">▶</button>' +
+      '<span class="tma-dash__messages-voice-track" data-messages-voice-seek>' +
+      renderWaveform(attachment.waveform) +
+      '<span class="tma-dash__messages-voice-progress" data-messages-voice-progress></span>' +
+      '</span>' +
+      '<span class="tma-dash__messages-voice-time" data-messages-voice-time>' +
+      esc(formatDuration(attachment.durationMs)) +
+      '</span>' +
+      '<button type="button" class="tma-dash__messages-voice-speed" data-messages-voice-speed ' +
+      'aria-label="Playback speed">' + esc(speed + '×') + '</button>' +
+      '</div>'
+    );
+  }
+
   function renderComposerActionBtn(id, icon, label, extraAttrs) {
     return (
       '<button type="button" class="tma-dash__messages-composer-btn" data-messages-composer-' +
@@ -1700,7 +1811,11 @@
         : '') +
       renderComposerLinkPreview(state) +
       renderComposerAttachments(state) +
-      '<div class="tma-dash__messages-composer-main">' +
+      // Recording replaces the input row entirely — there is nothing else to
+      // do with the composer mid-recording.
+      (state.recording
+        ? renderRecorder(state)
+        : '<div class="tma-dash__messages-composer-main">' +
       '<div class="tma-dash__messages-composer-input' +
       (draft ? ' tma-dash__messages-composer-input--filled' : '') +
       '" contenteditable="true" data-messages-composer-input data-placeholder="Type message" role="textbox" aria-multiline="true" aria-label="Message">' +
@@ -1715,17 +1830,13 @@
       ) +
       renderComposerActionBtn('attach', 'Paperclip', 'Attach files', ' title="Attach files"') +
       '<input type="file" class="tma-dash__messages-composer-file" data-messages-composer-file hidden multiple>' +
-      renderComposerActionBtn(
-        'voice',
-        'Microphone',
-        'Record voice note (not available yet)',
-        ' disabled aria-disabled="true" title="Voice notes are coming in the next phase"'
-      ) +
+      renderComposerActionBtn('voice', 'Microphone', 'Record voice note', ' title="Record voice note"') +
       '<button type="button" class="tma-dash__messages-composer-btn tma-dash__messages-composer-send" data-messages-composer-send aria-label="' +
       (editing ? 'Save edit' : 'Send message') +
       '">' +
       renderMessagesIcon('PaperPlaneRight') +
-      '</button></div></div></div>'
+      '</button></div></div>') +
+      '</div>'
     );
   }
 
@@ -1940,8 +2051,26 @@
       });
     });
 
-    // Voice notes are the next phase; the microphone stays disabled rather
-    // than pretending to record.
+    var voiceBtn = composer.querySelector('[data-messages-composer-voice]');
+    if (voiceBtn) {
+      voiceBtn.addEventListener('click', function () {
+        startRecording(root, state, render);
+      });
+    }
+
+    var recControls = [
+      ['[data-messages-record-cancel]', function () { cancelRecording(root, state, render); }],
+      ['[data-messages-record-discard]', function () { cancelRecording(root, state, render); }],
+      ['[data-messages-record-pause]', function () { togglePauseRecording(root, state, render); }],
+      ['[data-messages-record-stop]', function () { stopRecording(root, state, render); }],
+      ['[data-messages-record-play]', function () { togglePreviewPlayback(root, state, render); }],
+      ['[data-messages-record-send]', function () { sendRecording(root, state, render); }],
+    ];
+
+    recControls.forEach(function (pair) {
+      var el = composer.querySelector(pair[0]);
+      if (el) el.addEventListener('click', pair[1]);
+    });
 
     if (sendBtn) {
       sendBtn.addEventListener('click', function () {
@@ -2475,12 +2604,14 @@
       toast.classList.add('tma-dash__messages-toast--visible');
     });
     window.clearTimeout(dash._messagesToastTimer);
+    // Long messages need longer to read than "Message copied" does.
+    var linger = message.length > 60 ? 5200 : 2800;
     dash._messagesToastTimer = window.setTimeout(function () {
       toast.classList.remove('tma-dash__messages-toast--visible');
       window.setTimeout(function () {
         toast.hidden = true;
       }, 240);
-    }, 2800);
+    }, linger);
   }
 
   function closeMessagesRowSwipes(root, except) {
@@ -4103,6 +4234,321 @@
   }
 
   /* ------------------------------------------------------------------
+   * Voice note recording
+   * ---------------------------------------------------------------- */
+
+  var voiceRecorder = null;
+
+  function startRecording(root, state, render) {
+    if (!window.TMAVoiceRecorder || !window.TMAVoiceRecorder.isSupported()) {
+      showMessagesToast(root, 'Recording is not supported by this browser');
+      return;
+    }
+
+    voiceRecorder = window.TMAVoiceRecorder.create();
+
+    state.recording = { stage: 'starting', elapsedMs: 0, livePeaks: [] };
+    render();
+
+    voiceRecorder
+      .start(function (elapsed) {
+        if (!state.recording) return;
+        state.recording.elapsedMs = elapsed;
+        // Repaint just the counter and bars — a full render on every tick
+        // would fight the composer and the rest of the page.
+        paintRecorder(root, state);
+      })
+      .then(function () {
+        if (!state.recording) return;
+        state.recording.stage = 'recording';
+        render();
+      })
+      .catch(function (err) {
+        state.recording = null;
+        voiceRecorder = null;
+        render();
+        // getUserMedia failures are the common case here — the message is
+        // already phrased for a person by the recorder.
+        showMessagesToast(root, err.message || 'Recording could not start');
+      });
+  }
+
+  /* Cheap in-place update of the live counter and waveform. */
+  function paintRecorder(root, state) {
+    var rec = state.recording;
+    if (!rec) return;
+
+    var time = root.querySelector('.tma-dash__messages-recorder-time');
+    if (time) time.textContent = formatDuration(rec.elapsedMs);
+
+    var wave = root.querySelector('.tma-dash__messages-wave--live');
+    if (wave && voiceRecorder) {
+      var peaks = voiceRecorder.peaks.slice(-40);
+      wave.innerHTML = peaks
+        .map(function (p) {
+          return '<span class="tma-dash__messages-wave-bar" style="height:' +
+            Math.max(8, Math.min(100, p)) + '%"></span>';
+        })
+        .join('');
+    }
+  }
+
+  function togglePauseRecording(root, state, render) {
+    if (!voiceRecorder || !state.recording) return;
+
+    if (state.recording.stage === 'paused') {
+      voiceRecorder.resume();
+      state.recording.stage = 'recording';
+    } else {
+      voiceRecorder.pause();
+      state.recording.stage = 'paused';
+    }
+    render();
+  }
+
+  function cancelRecording(root, state, render) {
+    if (voiceRecorder) voiceRecorder.cancel();
+    voiceRecorder = null;
+    stopPreviewPlayback(state);
+    state.recording = null;
+    render();
+  }
+
+  /* Finish recording and hold the result for review before sending. */
+  function stopRecording(root, state, render) {
+    if (!voiceRecorder || !state.recording) return;
+
+    voiceRecorder.stop().then(function (result) {
+      voiceRecorder = null;
+
+      if (!result || !result.blob || !result.blob.size) {
+        state.recording = null;
+        render();
+        showMessagesToast(root, 'Nothing was recorded');
+        return;
+      }
+
+      state.recording = {
+        stage: 'review',
+        blob: result.blob,
+        durationMs: result.durationMs,
+        waveform: result.waveform,
+        mimeType: result.mimeType,
+        previewUrl: URL.createObjectURL(result.blob),
+        playing: false,
+      };
+      render();
+    });
+  }
+
+  var previewAudio = null;
+
+  function togglePreviewPlayback(root, state, render) {
+    var rec = state.recording;
+    if (!rec || rec.stage !== 'review') return;
+
+    if (previewAudio && !previewAudio.paused) {
+      previewAudio.pause();
+      rec.playing = false;
+      render();
+      return;
+    }
+
+    if (!previewAudio) {
+      previewAudio = new Audio(rec.previewUrl);
+      previewAudio.addEventListener('ended', function () {
+        if (state.recording) state.recording.playing = false;
+        render();
+      });
+    }
+
+    previewAudio.play().catch(function () {
+      showMessagesToast(root, 'Could not play the recording');
+    });
+    rec.playing = true;
+    render();
+  }
+
+  function stopPreviewPlayback(state) {
+    if (previewAudio) {
+      previewAudio.pause();
+      previewAudio = null;
+    }
+    if (state.recording && state.recording.previewUrl) {
+      URL.revokeObjectURL(state.recording.previewUrl);
+    }
+  }
+
+  /*
+   * Send the reviewed recording.
+   *
+   * Goes through the same staging path as any attachment, so it gets the same
+   * upload progress, failure handling and retry.
+   */
+  function sendRecording(root, state, render) {
+    var rec = state.recording;
+    if (!rec || rec.stage !== 'review' || !rec.blob) return;
+
+    var extension = /mp4/.test(rec.mimeType) ? 'm4a' : /ogg/.test(rec.mimeType) ? 'ogg' : 'webm';
+    var file = new File([rec.blob], 'voice-note.' + extension, { type: rec.mimeType });
+
+    var conversationId = state.selectedId;
+    var durationMs = rec.durationMs;
+    var waveform = rec.waveform;
+
+    stopPreviewPlayback(state);
+    state.recording = null;
+    render();
+
+    var upload = window.TMAMessagingAPI.uploadAttachment(
+      conversationId,
+      file,
+      null,
+      { voice: true, durationMs: durationMs, waveform: waveform }
+    );
+
+    upload.promise
+      .then(function (attachment) {
+        return window.TMAMessagingAPI.send(conversationId, {
+          body: '',
+          nonce: window.TMAMessagingAPI.newNonce(),
+          attachments: [attachment.id],
+        });
+      })
+      .then(function (data) {
+        mergeMessages(conversationId, [data.message], false);
+        var row = findThread(conversationId);
+        if (row) {
+          row.preview = 'You: Voice note';
+          row.timestamp = data.message.sentAt;
+        }
+        render({ chatToBottom: true });
+      })
+      .catch(function () {
+        showMessagesToast(root, 'Voice note could not be sent');
+      });
+  }
+
+  /* ------------------------------------------------------------------
+   * Voice note playback
+   * ---------------------------------------------------------------- */
+
+  var playingVoice = null;   // { id, audio }
+
+  var SPEEDS = [1, 1.5, 2];
+
+  function toggleVoicePlayback(root, state, render, el) {
+    var id = el.getAttribute('data-messages-voice');
+    var src = el.getAttribute('data-messages-voice-src');
+
+    // Only one voice note plays at a time — overlapping playback is noise.
+    if (playingVoice && playingVoice.id !== id) {
+      playingVoice.audio.pause();
+      playingVoice = null;
+    }
+
+    if (playingVoice && playingVoice.id === id) {
+      if (playingVoice.audio.paused) playingVoice.audio.play();
+      else playingVoice.audio.pause();
+      paintVoice(root, el, playingVoice.audio);
+      return;
+    }
+
+    var audio = new Audio(src);
+    audio.playbackRate = STORE.settings.voicePlaybackSpeed || 1;
+
+    audio.addEventListener('timeupdate', function () {
+      paintVoice(root, el, audio);
+    });
+    audio.addEventListener('ended', function () {
+      paintVoice(root, el, audio);
+      playingVoice = null;
+    });
+    audio.addEventListener('play', function () {
+      paintVoice(root, el, audio);
+    });
+    audio.addEventListener('pause', function () {
+      paintVoice(root, el, audio);
+    });
+
+    playingVoice = { id: id, audio: audio };
+    audio.play().catch(function () {
+      showMessagesToast(root, 'Could not play this voice note');
+      playingVoice = null;
+    });
+  }
+
+  /* Progress, elapsed time and the play/pause glyph, without a full render. */
+  /*
+   * Seconds of audio, from the container when it knows and from the stored
+   * recording length when it does not.
+   *
+   * A MediaRecorder WebM has no Duration element, so `audio.duration` is
+   * Infinity until the file is seeked to its end — which is why progress sat
+   * at zero for every recorded note.
+   */
+  function voiceDuration(el, audio) {
+    if (audio && isFinite(audio.duration) && audio.duration > 0) {
+      return audio.duration;
+    }
+
+    var stored = parseInt(el.getAttribute('data-messages-voice-duration'), 10);
+    return stored > 0 ? stored / 1000 : 0;
+  }
+
+  function paintVoice(root, el, audio) {
+    var progress = el.querySelector('[data-messages-voice-progress]');
+    var time = el.querySelector('[data-messages-voice-time]');
+    var button = el.querySelector('[data-messages-voice-play]');
+
+    var duration = voiceDuration(el, audio);
+    var ratio = duration ? audio.currentTime / duration : 0;
+
+    if (progress) progress.style.width = Math.max(0, Math.min(100, ratio * 100)) + '%';
+    if (button) button.textContent = audio.paused ? '▶' : '❚❚';
+
+    if (time) {
+      // Count up while playing; settle back to the total when idle at the start.
+      time.textContent =
+        audio.paused && !audio.currentTime
+          ? formatDuration(duration * 1000)
+          : formatDuration(audio.currentTime * 1000);
+    }
+  }
+
+  function seekVoice(root, el, e) {
+    if (!playingVoice || playingVoice.id !== el.getAttribute('data-messages-voice')) return;
+
+    var track = el.querySelector('[data-messages-voice-seek]');
+    if (!track) return;
+
+    var box = track.getBoundingClientRect();
+    var ratio = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
+    var audio = playingVoice.audio;
+    var duration = voiceDuration(el, audio);
+
+    if (duration > 0) {
+      audio.currentTime = ratio * duration;
+      paintVoice(root, el, audio);
+    }
+  }
+
+  function cycleVoiceSpeed(root, el) {
+    var current = STORE.settings.voicePlaybackSpeed || 1;
+    var next = SPEEDS[(SPEEDS.indexOf(current) + 1) % SPEEDS.length];
+
+    STORE.settings.voicePlaybackSpeed = next;
+    if (playingVoice) playingVoice.audio.playbackRate = next;
+
+    // Speed is a stored preference, so it holds for the next note too.
+    window.TMAMessagingAPI.updateSettings({ voicePlaybackSpeed: next }).catch(function () {});
+
+    root.querySelectorAll('[data-messages-voice-speed]').forEach(function (btn) {
+      btn.textContent = next + '×';
+    });
+  }
+
+  /* ------------------------------------------------------------------
    * Reactions
    * ---------------------------------------------------------------- */
 
@@ -4819,6 +5265,35 @@
       });
     }
 
+    root.querySelectorAll('[data-messages-voice]').forEach(function (el) {
+      var play = el.querySelector('[data-messages-voice-play]');
+      if (play) {
+        play.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleVoicePlayback(root, state, render, el);
+        });
+      }
+
+      var track = el.querySelector('[data-messages-voice-seek]');
+      if (track) {
+        track.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          seekVoice(root, el, e);
+        });
+      }
+
+      var speed = el.querySelector('[data-messages-voice-speed]');
+      if (speed) {
+        speed.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          cycleVoiceSpeed(root, el);
+        });
+      }
+    });
+
     // Opening an attachment in the shared lightbox.
     root.querySelectorAll('[data-messages-attachment]').forEach(function (el) {
       el.addEventListener('click', function (e) {
@@ -4994,6 +5469,7 @@
       emojiCategory: null,
       composerLinkUrl: null,
       composerLinkDismissed: null,
+      recording: null,
       voiceRecording: false,
       search: '',
       peopleResults: [],

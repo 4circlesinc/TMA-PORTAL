@@ -271,7 +271,11 @@ class MessagingController extends Controller
                 'user_id' => $user->id,
                 // The type describes what the message *is*, which the bubble
                 // uses to choose a renderer.
-                'type' => $staged->isNotEmpty() ? Message::TYPE_ATTACHMENT : Message::TYPE_TEXT,
+                'type' => match (true) {
+                    $staged->contains(fn ($a) => $a->isVoice()) => Message::TYPE_VOICE,
+                    $staged->isNotEmpty() => Message::TYPE_ATTACHMENT,
+                    default => Message::TYPE_TEXT,
+                },
                 'body' => $body === '' ? null : $body,
                 'reply_to_id' => $replyTo?->id,
                 'client_nonce' => $data['nonce'] ?? null,
@@ -348,9 +352,26 @@ class MessagingController extends Controller
 
         $this->assertNotBlocked($conversation, $user);
 
-        $request->validate(['file' => ['required', 'file']]);
+        $data = $request->validate([
+            'file' => ['required', 'file'],
+            // A recorded voice note, with the length and waveform the recorder
+            // measured — the server has no media probe to derive them.
+            'voice' => ['sometimes', 'boolean'],
+            'durationMs' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'waveform' => ['sometimes', 'nullable', 'array', 'max:200'],
+            'waveform.*' => ['numeric'],
+        ]);
 
-        $attachment = AttachmentIntake::stage($request->file('file'), $conversation, $user);
+        $attachment = AttachmentIntake::stage(
+            $request->file('file'),
+            $conversation,
+            $user,
+            [
+                'voice' => (bool) ($data['voice'] ?? false),
+                'durationMs' => $data['durationMs'] ?? null,
+                'waveform' => $data['waveform'] ?? null,
+            ],
+        );
 
         return response()->json([
             'attachment' => MessagingPresenter::attachment($attachment),

@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 #[Fillable([
     'uuid', 'message_id', 'conversation_id', 'uploaded_by', 'disk', 'path',
-    'name', 'mime', 'extension', 'status', 'size',
+    'name', 'mime', 'extension', 'status', 'is_voice', 'size',
     'width', 'height', 'duration_ms', 'thumb_path', 'waveform',
 ])]
 class MessageAttachment extends Model
@@ -23,6 +23,7 @@ class MessageAttachment extends Model
     protected function casts(): array
     {
         return [
+            'is_voice' => 'boolean',
             'size' => 'integer',
             'width' => 'integer',
             'height' => 'integer',
@@ -60,6 +61,12 @@ class MessageAttachment extends Model
 
     public function isVideo(): bool
     {
+        // MediaRecorder emits an audio-only WebM, which sniffs as video/webm.
+        // A voice note is never a video however it is packaged.
+        if ($this->isVoice()) {
+            return false;
+        }
+
         return str_starts_with((string) $this->mime, 'video/');
     }
 
@@ -68,12 +75,24 @@ class MessageAttachment extends Model
         return str_starts_with((string) $this->mime, 'audio/');
     }
 
+    /** A recorded voice note, as opposed to an attached audio file. */
+    public function isVoice(): bool
+    {
+        return (bool) $this->is_voice;
+    }
+
     /**
      * Which of the three shared-content tabs in the conversation info panel
      * this attachment belongs under.
      */
     public function shelf(): string
     {
+        // Voice notes are neither media to browse nor documents to file; they
+        // belong to their conversation, not to a gallery shelf.
+        if ($this->isVoice()) {
+            return 'voice';
+        }
+
         return $this->isImage() || $this->isVideo() ? 'media' : 'documents';
     }
 }

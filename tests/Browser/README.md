@@ -254,7 +254,7 @@ picked up the live mailbox's token and synced a real account into itself.
 
 The Messages page was a pure mock — a hard-coded `THREADS` array with a
 scripted ByeWind conversation and no network calls at all. It is now backed by
-`/portal/messaging`, so these six scripts exist to keep it that way.
+`/portal/messaging`, so these seven scripts exist to keep it that way.
 
 - **`messaging.mjs`** — the page against a real server: the list comes from the
   API (and contains none of the old mock names), messages load and send and
@@ -412,7 +412,38 @@ underneath the next step; and `Vault::store()` **unlinks the file it is given**,
 so anything needing to read the original (dimensions, checksums) must do it
 before storing, and any fixture must be copied per upload.
 
-Seed all six with several conversations, one of them deep enough to page:
+- **`messaging-phase4.mjs`** — voice notes, recorded **for real**. Chromium is
+  launched with a fake audio device, so MediaRecorder, the Web Audio analyser,
+  the blob and the upload all actually run rather than being stubbed:
+
+```
+--use-fake-device-for-media-capture   synthesises a microphone
+--use-fake-ui-for-media-stream        auto-grants permission
+--autoplay-policy=no-user-gesture-required
+```
+
+  It checks the timer runs and *holds while paused*, that stopping produces a
+  reviewable recording rather than sending, that discarding leaves nothing
+  behind, and that a sent note stores real audio with a duration and waveform.
+  The blocked-microphone path is the one thing the fake device cannot produce,
+  so it is exercised by overriding `getUserMedia` to reject.
+
+  Two traps live here. **Playback speed is a persisted preference**, so a run
+  that leaves it at 2× makes the next run's short note finish before any
+  assertion can see the progress bar — the script pins it back to 1× and polls
+  rather than sampling once. And **a message with `type = voice` must be purged
+  between runs** alongside attachments:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  App\Models\MessageAttachment::query()->delete();
+  App\Models\Message::whereIn('type', ['attachment', 'voice'])->forceDelete();
+"
+
+node tests/Browser/messaging-phase4.mjs
+```
+
+Seed all seven with several conversations, one of them deep enough to page:
 
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="

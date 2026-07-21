@@ -25436,3 +25436,218 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-dash__messages-row-reaction {
   color: var(--color-text-secondary);
 }
+
+/* ---------------------------------------------------------------------------
+ * Messages — voice notes: the recorder in the composer, and the player on a
+ * received note.
+ * ------------------------------------------------------------------------- */
+
+.tma-dash__messages-recorder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+}
+
+.tma-dash__messages-recorder-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tma-dash__messages-recorder-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-recorder-send {
+  background: var(--color-primary-brand, #1c6ef2);
+  color: #fff;
+}
+
+.tma-dash__messages-recorder-send .tma-dash__messages-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.tma-dash__messages-recorder-cancel {
+  font-size: 18px;
+}
+
+/* The pulsing dot is the clearest signal that a microphone is live. */
+.tma-dash__messages-recorder-dot {
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-danger, #d92d20);
+  animation: tma-recording-pulse 1.4s ease-in-out infinite;
+}
+
+.tma-dash__messages-recorder-dot.is-paused {
+  animation: none;
+  opacity: 0.4;
+}
+
+@keyframes tma-recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.tma-dash__messages-recorder-time {
+  min-width: 40px;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+/* --- waveform, shared by the recorder and the player --- */
+
+.tma-dash__messages-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  overflow: hidden;
+}
+
+.tma-dash__messages-wave-bar {
+  flex: 1;
+  min-width: 2px;
+  max-width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.35;
+}
+
+.tma-dash__messages-wave--live .tma-dash__messages-wave-bar {
+  opacity: 0.7;
+}
+
+/* --- the player on a sent or received note --- */
+
+.tma-dash__messages-voice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 220px;
+  max-width: 320px;
+  padding: var(--space-4) 0;
+}
+
+.tma-dash__messages-voice-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-primary-brand, #1c6ef2);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* The progress fill sits over the bars rather than replacing them, so the
+ * shape of the recording stays visible as it plays. */
+.tma-dash__messages-voice-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.tma-dash__messages-voice-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.tma-dash__messages-voice-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-voice-speed {
+  flex-shrink: 0;
+  padding: 1px var(--space-4);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: rgb(0 0 0 / 0.06);
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+ * Messages — toast.
+ *
+ * The original rules live inside a `max-width: 1024px` block, so on desktop the
+ * toast had no styling at all: it rendered as unstyled text in the page flow,
+ * one word per line in the bottom-left corner. Every error the page reports
+ * (a failed upload, a blocked microphone, a rejected reaction) arrives this
+ * way, so it needs to work at every width.
+ * ------------------------------------------------------------------------- */
+
+.tma-dash__messages-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-24) + env(safe-area-inset-bottom, 0px));
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  /* Long messages — "allow the microphone in your browser settings" — need
+   * room to read as a sentence rather than a column of words. */
+  max-width: min(420px, calc(100vw - var(--space-32)));
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-16);
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: #fff;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  text-align: left;
+  transform: translateX(-50%) translateY(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease, transform 0.24s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tma-dash__messages-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tma-dash__messages-toast img {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  filter: brightness(0) invert(1);
+}

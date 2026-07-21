@@ -94,10 +94,20 @@ class AttachmentIntake
     /**
      * Validate and store one upload, returning a staged attachment row.
      *
+     * `$options` carries metadata the server cannot derive for itself: there is
+     * no media probe here, so a voice note's length and waveform peaks are
+     * measured by the recorder that produced them and passed in.
+     *
+     * @param  array{voice?: bool, durationMs?: int|null, waveform?: array|null}  $options
+     *
      * @throws FileValidationException with a message meant for the user
      */
-    public static function stage(UploadedFile $file, Conversation $conversation, User $user): MessageAttachment
-    {
+    public static function stage(
+        UploadedFile $file,
+        Conversation $conversation,
+        User $user,
+        array $options = [],
+    ): MessageAttachment {
         if (! $file->isValid()) {
             throw new FileValidationException('That file did not finish uploading. Try again.');
         }
@@ -126,6 +136,8 @@ class AttachmentIntake
 
         $stored = Vault::store($absolute, $inspected['extension'] ?? '');
 
+        $isVoice = ! empty($options['voice']);
+
         $attachment = MessageAttachment::create([
             'uuid' => (string) Str::uuid(),
             'message_id' => null,
@@ -137,9 +149,14 @@ class AttachmentIntake
             'mime' => $inspected['mime'] ?? $file->getMimeType(),
             'extension' => $inspected['extension'] ?? '',
             'status' => MessageAttachment::STATUS_STAGED,
+            'is_voice' => $isVoice,
             'size' => $stored['size'] ?? $file->getSize(),
             'width' => $dimensions['width'] ?? null,
             'height' => $dimensions['height'] ?? null,
+            // Only meaningful for a recording; sanitised rather than trusted,
+            // since these come from the browser.
+            'duration_ms' => $isVoice ? self::sanitiseDuration($options['durationMs'] ?? null) : null,
+            'waveform' => $isVoice ? self::sanitiseWaveform($options['waveform'] ?? null) : null,
         ]);
 
         Thumbnailer::attach($attachment, $thumbBytes);
@@ -151,6 +168,53 @@ class AttachmentIntake
         Thumbnailer::pruneStaged(24, $user->id);
 
         return $attachment;
+    }
+
+    /** Longest voice note we will accept, in milliseconds. */
+    public const MAX_VOICE_MS = 10 * 60 * 1000;
+
+    /** How many waveform peaks a recording may carry. */
+    public const WAVEFORM_POINTS = 60;
+
+    /**
+     * Clamp a client-reported duration into something sane.
+     *
+     * This is display metadata from the browser, so it is bounded rather than
+     * believed: a bogus value would otherwise render as a nonsense length on
+     * every recipient's player.
+     */
+    private static function sanitiseDuration(mixed $value): ?int
+    {
+        $ms = (int) $value;
+
+        if ($ms <= 0) {
+            return null;
+        }
+
+        return min($ms, self::MAX_VOICE_MS);
+    }
+
+    /**
+     * Normalise waveform peaks to a fixed-length array of 0-100 integers.
+     *
+     * Bounded in both length and value so a hostile client cannot store an
+     * enormous array, and so every player can assume the same shape.
+     */
+    private static function sanitiseWaveform(mixed $value): ?array
+    {
+        if (! is_array($value) || $value === []) {
+            return null;
+        }
+
+        $peaks = [];
+        foreach (array_slice($value, 0, self::WAVEFORM_POINTS) as $peak) {
+            if (! is_numeric($peak)) {
+                continue;
+            }
+            $peaks[] = max(0, min(100, (int) round((float) $peak)));
+        }
+
+        return $peaks === [] ? null : $peaks;
     }
 
     /**

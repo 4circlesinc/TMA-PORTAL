@@ -187,6 +187,9 @@ class MessagingPresenter
             'waveform' => $attachment->waveform,
             'shelf' => $attachment->shelf(),
             'kind' => match (true) {
+                // Checked first: a recording is packaged as WebM, which would
+                // otherwise classify as video.
+                $attachment->isVoice() => 'voice',
                 $attachment->isImage() => 'image',
                 $attachment->isVideo() => 'video',
                 $attachment->isAudio() => 'audio',

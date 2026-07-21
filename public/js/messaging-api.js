@@ -135,12 +135,22 @@
      * composer has to show a progress bar. Returns an object carrying the
      * promise plus an abort() so a queued file can be cancelled mid-flight.
      */
-    uploadAttachment: function (conversationId, file, onProgress) {
+    uploadAttachment: function (conversationId, file, onProgress, meta) {
       var xhr = new XMLHttpRequest();
 
       var promise = new Promise(function (resolve, reject) {
         var form = new FormData();
         form.append('file', file);
+
+        // Voice notes carry length and waveform peaks the server cannot
+        // measure for itself.
+        if (meta && meta.voice) {
+          form.append('voice', '1');
+          if (meta.durationMs) form.append('durationMs', String(Math.round(meta.durationMs)));
+          (meta.waveform || []).forEach(function (peak) {
+            form.append('waveform[]', String(peak));
+          });
+        }
 
         xhr.open('POST', BASE + '/conversations/' + encodeURIComponent(conversationId) + '/attachments');
         xhr.withCredentials = true;
