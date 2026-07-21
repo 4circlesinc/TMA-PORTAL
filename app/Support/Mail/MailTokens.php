@@ -3,6 +3,7 @@
 namespace App\Support\Mail;
 
 use App\Models\ConnectedAccount;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -46,7 +47,26 @@ class MailTokens
             return $cached;
         }
 
-        $refresh = $account->token;
+        // A token that will not decrypt is as dead as one that was revoked, and
+        // it has to say so. Left as a raw DecryptException it surfaced as
+        // "The MAC is invalid." parked on the account — every mailbox call
+        // failing (new mail, attachment downloads, sending) with nothing on
+        // screen explaining why or suggesting what to do about it.
+        //
+        // It means this environment's APP_KEY is not the one the token was
+        // encrypted with: a key rotation, or two environments sharing a
+        // database while the provider rotates the refresh token between them.
+        // Reconnecting mints a token under the current key, which is the only
+        // thing that fixes it.
+        try {
+            $refresh = $account->token;
+        } catch (DecryptException $e) {
+            throw new MailAuthException(
+                'This mailbox’s saved credentials cannot be read by this environment '
+                .'(the encryption key does not match). Reconnect the account to continue.'
+            );
+        }
+
         if (! $refresh) {
             throw new MailAuthException(
                 'This mailbox is not connected. Reconnect the account to continue.'
