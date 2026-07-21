@@ -202,6 +202,12 @@
       return api(BASE + '/attachments/' + encodeURIComponent(attachmentId), { method: 'DELETE' });
     },
 
+    /* Open Graph metadata for a URL. Cached server-side, so asking while the
+     * user types is cheap after the first hit. */
+    linkPreview: function (url) {
+      return api(BASE + '/link-preview' + query({ url: url }));
+    },
+
     /* Toggle one emoji on a message. Returns the updated message. */
     react: function (messageId, emoji) {
       return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/reactions', {

@@ -1082,6 +1082,122 @@
 
 
   /* ------------------------------------------------------------------
+   * Link previews
+   *
+   * Cards are fetched lazily per URL and cached in memory here (the server
+   * caches them too). A message never waits on one: it sends immediately and
+   * the card fills in when the metadata arrives.
+   * ---------------------------------------------------------------- */
+
+  var linkPreviews = {};   // url -> card | null (null = no metadata)
+  var linkPreviewsInFlight = {};
+
+  function firstUrlIn(text) {
+    if (!text) return null;
+    var match = String(text).match(/\bhttps?:\/\/[^\s<>"']+/i);
+    return match ? match[0] : null;
+  }
+
+  /* Fetch once per URL, then repaint. Misses are remembered so a link with no
+   * metadata is not asked about again on every render. */
+  function ensureLinkPreview(url, onReady) {
+    if (!url || url in linkPreviews) return linkPreviews[url] || null;
+    if (linkPreviewsInFlight[url]) return null;
+
+    linkPreviewsInFlight[url] = true;
+
+    window.TMAMessagingAPI.linkPreview(url)
+      .then(function (data) {
+        linkPreviews[url] = (data && data.preview) || null;
+      })
+      .catch(function () {
+        linkPreviews[url] = null;
+      })
+      .then(function () {
+        delete linkPreviewsInFlight[url];
+        if (onReady) onReady();
+      });
+
+    return null;
+  }
+
+  function renderLinkCard(card, opts) {
+    opts = opts || {};
+
+    return (
+      '<a class="tma-dash__messages-link-card' +
+      (opts.compact ? ' tma-dash__messages-link-card--compact' : '') +
+      '" href="' + esc(card.url) + '" target="_blank" rel="noopener noreferrer nofollow">' +
+      (card.imageUrl
+        ? '<span class="tma-dash__messages-link-image">' +
+          '<img src="' + esc(card.imageUrl) + '" alt="" loading="lazy"></span>'
+        : '') +
+      '<span class="tma-dash__messages-link-body">' +
+      '<span class="tma-dash__messages-link-site">' +
+      (card.faviconUrl
+        ? '<img class="tma-dash__messages-link-favicon" src="' + esc(card.faviconUrl) + '" alt="">'
+        : '') +
+      esc(card.siteName || card.domain || '') +
+      '</span>' +
+      (card.title
+        ? '<span class="tma-dash__messages-link-title">' + esc(card.title) + '</span>'
+        : '') +
+      (card.description
+        ? '<span class="tma-dash__messages-link-desc">' + esc(card.description) + '</span>'
+        : '') +
+      '</span></a>'
+    );
+  }
+
+  /* The card attached to a sent message, if its first link has metadata. */
+  var linkPreviewTimer = null;
+
+  /*
+   * Watch the composer for a link and fetch its card.
+   *
+   * Waits for the URL to look finished — a trailing space, or a short pause —
+   * so a half-typed address isn't requested character by character.
+   */
+  function scheduleLinkPreview(state, text, render) {
+    var url = firstUrlIn(text);
+
+    if (state.composerLinkUrl !== url) {
+      state.composerLinkUrl = url;
+      state.composerLinkDismissed = null;
+      // Repaint straight away so a removed link drops its card.
+      if (!url) render();
+    }
+
+    if (!url) return;
+
+    if (linkPreviewTimer) clearTimeout(linkPreviewTimer);
+    linkPreviewTimer = setTimeout(function () {
+      linkPreviewTimer = null;
+      if (state.composerLinkUrl !== url) return;
+
+      if (url in linkPreviews) {
+        render();
+        return;
+      }
+
+      ensureLinkPreview(url, function () {
+        // Only paint if the composer still holds this link.
+        if (state.composerLinkUrl === url) render();
+      });
+    }, 600);
+  }
+
+  function renderMessageLinkCard(msg, render) {
+    if (msg.deleted || !msg.body) return '';
+
+    var url = firstUrlIn(msg.body);
+    if (!url) return '';
+
+    var card = ensureLinkPreview(url, render);
+    return card ? renderLinkCard(card) : '';
+  }
+
+  /* ------------------------------------------------------------------
    * Attachment rendering
    *
    * Each kind gets the affordance it actually needs: images and video are
@@ -1208,7 +1324,7 @@
     }
   }
 
-  function renderBubble(msg, index, isReplyTarget, row, showSender) {
+  function renderBubble(msg, index, isReplyTarget, row, showSender, render) {
     if (msg.type === 'system') return renderSystemMessage(msg);
 
     var timeHtml = renderBubbleTime(msg, row);
@@ -1239,6 +1355,7 @@
        */
       inner =
         renderAttachments(msg) +
+        renderMessageLinkCard(msg, render) +
         '<div class="tma-dash__messages-bubble-text' +
         (hasText ? '' : ' tma-dash__messages-bubble-text--meta') +
         '">' +
@@ -1408,6 +1525,29 @@
     );
   }
 
+  /*
+   * The preview shown above the composer as a link is typed.
+   *
+   * Dismissible: pasting a link and not wanting a card is common. The message
+   * still sends immediately either way — nothing here blocks sending.
+   */
+  function renderComposerLinkPreview(state) {
+    var url = state.composerLinkUrl;
+    if (!url || state.composerLinkDismissed === url) return '';
+
+    var card = linkPreviews[url];
+    if (!card) return '';
+
+    return (
+      '<div class="tma-dash__messages-composer-link">' +
+      renderLinkCard(card, { compact: true }) +
+      '<button type="button" class="tma-dash__messages-composer-link-clear" ' +
+      'data-messages-link-dismiss aria-label="Remove link preview">' +
+      '<span aria-hidden="true">×</span></button>' +
+      '</div>'
+    );
+  }
+
   function renderComposerActionBtn(id, icon, label, extraAttrs) {
     return (
       '<button type="button" class="tma-dash__messages-composer-btn" data-messages-composer-' +
@@ -1558,6 +1698,7 @@
       (editing
         ? '<div class="tma-dash__messages-composer-editing">Editing message — press Escape to cancel</div>'
         : '') +
+      renderComposerLinkPreview(state) +
       renderComposerAttachments(state) +
       '<div class="tma-dash__messages-composer-main">' +
       '<div class="tma-dash__messages-composer-input' +
@@ -1640,6 +1781,10 @@
         if (row && !state.editing) row.draft = text.trim() ? text : null;
 
         if (state.selectedId && !state.editing) scheduleDraftSave(state.selectedId, text);
+
+        // Look up a preview for the first link as it is typed. Debounced with
+        // the draft save so a half-typed URL isn't fetched on every keystroke.
+        scheduleLinkPreview(state, text, render);
       });
 
       input.addEventListener('keydown', function (e) {
@@ -1771,6 +1916,14 @@
       });
     }
 
+    var linkDismiss = composer.querySelector('[data-messages-link-dismiss]');
+    if (linkDismiss) {
+      linkDismiss.addEventListener('click', function () {
+        state.composerLinkDismissed = state.composerLinkUrl;
+        render();
+      });
+    }
+
     composer.querySelectorAll('[data-messages-tray-remove]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         removeAttachment(root, state, render, btn.getAttribute('data-messages-tray-remove'));
@@ -1884,7 +2037,7 @@
     );
   }
 
-  function renderChatBody(state, row) {
+  function renderChatBody(state, row, render) {
     var bucket = threadBucket(state.selectedId);
     var messages = bucket.messages;
 
@@ -1937,13 +2090,13 @@
           !msg.sender ||
           previous.sender.id !== msg.sender.id);
 
-      html += renderBubble(msg, index, replyId === msg.id, row, showSender);
+      html += renderBubble(msg, index, replyId === msg.id, row, showSender, render);
     });
 
     return head + html;
   }
 
-  function renderChat(state) {
+  function renderChat(state, render) {
     var row = findThread(state.selectedId);
 
     if (!row) {
@@ -2000,7 +2153,7 @@
       '</div>' +
       '</div>' +
       '<div class="tma-dash__messages-chat-body" data-messages-chat-body>' +
-      renderChatBody(state, row) +
+      renderChatBody(state, row, render) +
       '</div>' +
       '<div class="tma-dash__messages-composer' +
       (state.replyTo && state.replyTo.threadId === state.selectedId ? ' tma-dash__messages-composer--reply' : '') +
@@ -2012,13 +2165,13 @@
     );
   }
 
-  function renderLayout(state) {
+  function renderLayout(state, render) {
     var layoutCls = 'tma-dash__messages-layout';
     if (isMessagesMobile()) {
       layoutCls += ' tma-dash__messages-layout--mobile';
       if (isMessagesReading(state)) layoutCls += ' tma-dash__messages-layout--mobile-reading';
     }
-    var html = '<div class="' + layoutCls + '">' + renderList(state) + renderChat(state) + '</div>';
+    var html = '<div class="' + layoutCls + '">' + renderList(state) + renderChat(state, render) + '</div>';
     return html;
   }
 
@@ -2768,22 +2921,82 @@
    * replaces the element the user is typing into — without this the field
    * loses focus after one character and the caret jumps to the start.
    */
-  var FOCUSABLE_KEYS = ['data-messages-search', 'data-messages-compose-search'];
+  var FOCUSABLE_KEYS = [
+    'data-messages-search',
+    'data-messages-compose-search',
+    'data-messages-emoji-search',
+    // The composer matters most: it is contenteditable, so losing focus
+    // mid-sentence sends the next keystrokes to the document. That is how a
+    // typed "/" reached the search shortcut and ate the slashes out of a URL.
+    'data-messages-composer-input',
+  ];
 
   function captureFocus(root) {
     var active = document.activeElement;
     if (!active || !root.contains(active)) return null;
 
     for (var i = 0; i < FOCUSABLE_KEYS.length; i++) {
-      if (active.hasAttribute(FOCUSABLE_KEYS[i])) {
-        return {
-          key: FOCUSABLE_KEYS[i],
-          start: active.selectionStart,
-          end: active.selectionEnd,
-        };
+      if (!active.hasAttribute(FOCUSABLE_KEYS[i])) continue;
+
+      // A contenteditable has no selectionStart; measure the caret as a
+      // character offset into its text so it can be put back.
+      if (active.isContentEditable) {
+        return { key: FOCUSABLE_KEYS[i], caret: caretOffset(active) };
       }
+
+      return {
+        key: FOCUSABLE_KEYS[i],
+        start: active.selectionStart,
+        end: active.selectionEnd,
+      };
     }
+
     return null;
+  }
+
+  /* Characters between the start of `el` and the caret. */
+  function caretOffset(el) {
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return null;
+
+    var range = selection.getRangeAt(0);
+    if (!el.contains(range.startContainer)) return null;
+
+    var measure = range.cloneRange();
+    measure.selectNodeContents(el);
+    measure.setEnd(range.startContainer, range.startOffset);
+
+    return measure.toString().length;
+  }
+
+  function placeCaret(el, offset) {
+    if (offset === null || offset === undefined) return;
+
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var remaining = offset;
+    var node = walker.nextNode();
+
+    while (node) {
+      if (remaining <= node.length) {
+        var range = document.createRange();
+        range.setStart(node, remaining);
+        range.collapse(true);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return;
+      }
+      remaining -= node.length;
+      node = walker.nextNode();
+    }
+
+    // Past the end (or no text at all): land at the end of the field.
+    var end = document.createRange();
+    end.selectNodeContents(el);
+    end.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(end);
   }
 
   function restoreFocus(root, focus) {
@@ -2793,6 +3006,12 @@
     if (!el) return;
 
     el.focus();
+
+    if (el.isContentEditable) {
+      placeCaret(el, focus.caret);
+      return;
+    }
+
     try {
       if (focus.start !== null && focus.start !== undefined) {
         el.setSelectionRange(focus.start, focus.end);
@@ -3069,6 +3288,8 @@
     mergeMessages(conversationId, [pending], false);
     clearReplyTo(state);
     setComposerDraft(state, '');
+    state.composerLinkUrl = null;
+    state.composerLinkDismissed = null;
 
     // The tray empties as the message goes; anything that failed to upload
     // stays behind so it can be retried rather than vanishing silently.
@@ -4771,6 +4992,8 @@
       emojiPickerOpen: false,
       emojiSearch: '',
       emojiCategory: null,
+      composerLinkUrl: null,
+      composerLinkDismissed: null,
       voiceRecording: false,
       search: '',
       peopleResults: [],
@@ -4790,7 +5013,7 @@
     function render(intent) {
       var snapshot = captureScroll(root);
 
-      root.innerHTML = renderLayout(state);
+      root.innerHTML = renderLayout(state, render);
       ensureMessagesMobileHeader(root, state);
       wireEvents(root, state, render);
 
@@ -4834,7 +5057,11 @@
           (target.tagName === 'INPUT' ||
             target.tagName === 'TEXTAREA' ||
             target.tagName === 'SELECT' ||
-            target.isContentEditable);
+            target.isContentEditable ||
+            // A keystroke that lands on the document while the composer holds
+            // text is still typing as far as the user is concerned — treating
+            // it as a shortcut is how "/" got eaten out of a pasted URL.
+            !!(target.closest && target.closest('.tma-dash__messages-composer')));
 
         if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) {
           var field = root.querySelector('[data-messages-search]');

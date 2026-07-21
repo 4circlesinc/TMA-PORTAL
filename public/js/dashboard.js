@@ -1870,8 +1870,12 @@
     if (scrim) scrim.addEventListener('click', closeDrawers);
     document.addEventListener('keydown', function (e) {
       if (e.key === '/' && (!searchPalette || !searchPalette.isOpen())) {
-        var tag = (document.activeElement && document.activeElement.tagName) || '';
-        if (!/input|textarea|select/i.test(tag)) {
+        var active = document.activeElement;
+        var tag = (active && active.tagName) || '';
+        // contenteditable counts as typing too: the Messages composer is one,
+        // and without this a "/" in a URL opened search instead of being typed.
+        var editing = /input|textarea|select/i.test(tag) || !!(active && active.isContentEditable);
+        if (!editing) {
           e.preventDefault();
           openSearch();
         }

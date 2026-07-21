@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Models\MessageReaction;
 use App\Models\User;
 use App\Models\UserBlock;
 use Illuminate\Support\Carbon;
@@ -305,7 +306,7 @@ class MessagingPresenter
      */
     private static function reactionNote(Conversation $conversation, User $viewer, ?Message $last): ?string
     {
-        $reaction = \App\Models\MessageReaction::query()
+        $reaction = MessageReaction::query()
             ->whereHas('message', fn ($q) => $q->where('conversation_id', $conversation->id))
             ->with(['user', 'message'])
             ->latest('id')

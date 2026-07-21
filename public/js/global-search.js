@@ -766,7 +766,14 @@
     }
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === '/' && !state.open && !/input|textarea/i.test(document.activeElement?.tagName || '')) {
+      // A tag-name test misses contenteditable fields — the Messages composer
+      // is one, so typing a URL there opened this instead of inserting the
+      // slash, and every following keystroke went to the search box.
+      const active = document.activeElement;
+      const editing =
+        /input|textarea|select/i.test(active?.tagName || '') || !!active?.isContentEditable;
+
+      if (e.key === '/' && !state.open && !editing) {
         e.preventDefault();
         openPopup();
       }
