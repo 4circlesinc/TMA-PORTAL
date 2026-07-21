@@ -56,6 +56,9 @@ class MessagingPresenter
                 : [],
             'memberCount' => $conversation->activeParticipants->count(),
             'preview' => self::preview($last, $viewer, $conversation),
+            // Surfaced in the list the way an unsent draft is, without letting
+            // a reaction masquerade as a message.
+            'reactionNote' => self::reactionNote($conversation, $viewer, $last),
             'time' => self::listTime($conversation->last_message_at),
             'timestamp' => $conversation->last_message_at?->toIso8601String(),
             'unread' => $participant ? self::unreadFor($participant, $conversation, $unread) : 0,
@@ -290,6 +293,42 @@ class MessagingPresenter
         }
 
         return $count;
+    }
+
+    /**
+     * The most recent reaction in a conversation, phrased for the chat list.
+     *
+     * Reactions are not messages, so they never move a conversation or change
+     * its preview on their own — but a reaction arriving is the kind of thing
+     * you want to see from the list, the same way an unsent draft is surfaced
+     * there. Only shown when it is newer than the last message.
+     */
+    private static function reactionNote(Conversation $conversation, User $viewer, ?Message $last): ?string
+    {
+        $reaction = \App\Models\MessageReaction::query()
+            ->whereHas('message', fn ($q) => $q->where('conversation_id', $conversation->id))
+            ->with(['user', 'message'])
+            ->latest('id')
+            ->first();
+
+        if (! $reaction) {
+            return null;
+        }
+
+        // Stale next to a newer message: the message is the more useful line.
+        if ($last && $reaction->created_at < $last->created_at) {
+            return null;
+        }
+
+        $who = $reaction->user_id === $viewer->id
+            ? 'You'
+            : ($reaction->user?->name ?? 'Someone');
+
+        $target = $reaction->message?->user_id === $viewer->id
+            ? 'your message'
+            : 'a message';
+
+        return $who.' reacted '.$reaction->emoji.' to '.$target;
     }
 
     /** The one-line summary under a conversation name in the list. */

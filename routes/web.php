@@ -263,6 +263,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Literal paths before the {uuid} wildcard so it can't swallow them.
         Route::get('/contacts', [MessagingController::class, 'contacts'])->name('contacts');
         Route::post('/heartbeat', [MessagingController::class, 'heartbeat'])->name('heartbeat');
+        Route::get('/link-preview', [MessagingController::class, 'linkPreview'])->name('link-preview');
         // Bulk receipt acknowledgement — one call covers every conversation.
         Route::post('/delivered', [MessagingController::class, 'markAllDelivered'])->name('delivered');
         Route::get('/settings', [MessagingController::class, 'settings'])->name('settings');

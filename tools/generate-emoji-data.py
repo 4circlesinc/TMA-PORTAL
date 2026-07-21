@@ -68,8 +68,9 @@ CATEGORIES = [
     ]),
 ]
 
-# Emoji people reach for first; pinned as the reaction quick-row.
-QUICK = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🎉", "👏"]
+# The reaction pill's fixed row: approve, love, laugh, celebrate, sad, angry.
+# Six is the cap — anything else lives behind the pill's "+" button.
+QUICK = ["👍", "❤️", "😂", "🎉", "😢", "😠"]
 
 
 def keywords(name: str) -> str:

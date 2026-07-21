@@ -405,11 +405,14 @@
         : '') +
       '</span>' +
       '<span class="tma-dash__messages-row-preview">' +
-      // An unsent draft outranks the last message in the preview slot, the
-      // same way every messenger surfaces "you were part way through this".
+      // Precedence in the preview slot: an unsent draft first (you were part
+      // way through something), then a reaction newer than the last message,
+      // then the message itself.
       (row.draft
         ? '<span class="tma-dash__messages-row-draft">Draft: </span>' + esc(row.draft)
-        : esc(row.preview || '')) +
+        : row.reactionNote
+          ? '<span class="tma-dash__messages-row-reaction">' + esc(row.reactionNote) + '</span>'
+          : esc(row.preview || '')) +
       '</span>' +
       '</span>' +
       '<span class="tma-dash__messages-row-meta">' +
@@ -1225,18 +1228,26 @@
       // paragraph.
       var hasText = !!(msg.body && msg.body.trim());
 
+      /*
+       * The timestamp and ticks always sit at the bottom-right of the bubble.
+       *
+       * They used to be inline right after the text, so a long or wrapping
+       * message left them stranded mid-line. A float keeps them on the last
+       * line when there is room and drops them onto their own line when there
+       * isn't — which is how every messenger behaves — and the zero-width
+       * spacer stops the text running underneath them.
+       */
       inner =
         renderAttachments(msg) +
+        '<div class="tma-dash__messages-bubble-text' +
+        (hasText ? '' : ' tma-dash__messages-bubble-text--meta') +
+        '">' +
+        '<p class="tma-dash__messages-bubble-line">' +
         (hasText
-          ? '<div class="tma-dash__messages-bubble-text">' +
-            '<p class="tma-dash__messages-bubble-line">' +
-            '<span class="tma-dash__messages-bubble-copy">' +
-            linkify(msg.body) +
-            '</span>' +
-            timeHtml +
-            '</p></div>'
-          : '<div class="tma-dash__messages-bubble-text tma-dash__messages-bubble-text--meta">' +
-            '<p class="tma-dash__messages-bubble-line">' + timeHtml + '</p></div>');
+          ? '<span class="tma-dash__messages-bubble-copy">' + linkify(msg.body) + '</span>'
+          : '') +
+        timeHtml +
+        '</p></div>';
     }
 
     // In a group the sender's name sits above their first bubble in a run.
@@ -2123,7 +2134,18 @@
 
       function triggerReply() {
         clearWheelEndTimer();
-        setReplyTo(state, index);
+
+        // setReplyTo takes a message *id*. This passed the bubble's numeric
+        // index — a leftover from when replies were tracked by position — so
+        // the swipe stored a reply target no message could ever match and the
+        // preview never appeared.
+        var msg = getMessages(state.selectedId)[index];
+        if (!msg) {
+          resetSwipe(true);
+          return;
+        }
+
+        setReplyTo(state, msg.id);
         resetSwipe(true);
         render();
         focusComposerInput(root);
@@ -3877,34 +3899,50 @@
 
     var before = JSON.parse(JSON.stringify(msg.reactions || []));
     var me = STORE.me || {};
-    var group = null;
+    msg.reactions = msg.reactions || [];
 
-    (msg.reactions = msg.reactions || []).forEach(function (r) {
-      if (r.emoji === emoji) group = r;
+    var hadSame = msg.reactions.some(function (r) {
+      return r.emoji === emoji && r.mine;
     });
 
-    if (group && group.mine) {
-      group.count -= 1;
-      group.mine = false;
-      group.users = (group.users || []).filter(function (u) {
-        return u.id !== me.id;
+    /*
+     * One reaction per person: drop whatever this viewer had before adding the
+     * new one, and treat re-picking the same emoji as clearing it. Mirrors what
+     * the server does, so the optimistic state matches the response.
+     */
+    msg.reactions = msg.reactions
+      .map(function (r) {
+        if (!r.mine) return r;
+        return Object.assign({}, r, {
+          count: r.count - 1,
+          mine: false,
+          users: (r.users || []).filter(function (u) {
+            return u.id !== me.id;
+          }),
+        });
+      })
+      .filter(function (r) {
+        return r.count > 0;
       });
-      if (group.count <= 0) {
-        msg.reactions = msg.reactions.filter(function (r) {
-          return r !== group;
+
+    if (!hadSame) {
+      var group = null;
+      msg.reactions.forEach(function (r) {
+        if (r.emoji === emoji) group = r;
+      });
+
+      if (group) {
+        group.count += 1;
+        group.mine = true;
+        group.users = (group.users || []).concat([{ id: me.id, name: me.name }]);
+      } else {
+        msg.reactions.push({
+          emoji: emoji,
+          count: 1,
+          mine: true,
+          users: [{ id: me.id, name: me.name }],
         });
       }
-    } else if (group) {
-      group.count += 1;
-      group.mine = true;
-      group.users = (group.users || []).concat([{ id: me.id, name: me.name }]);
-    } else {
-      msg.reactions.push({
-        emoji: emoji,
-        count: 1,
-        mine: true,
-        users: [{ id: me.id, name: me.name }],
-      });
     }
 
     rememberEmoji(emoji);
@@ -3924,6 +3962,56 @@
           err.status === 422 ? 'That reaction is not allowed' : 'Reaction not saved'
         );
       });
+  }
+
+  /*
+   * The reaction pill: one row of the six emoji people actually use, plus a
+   * "+" that opens the full picker.
+   *
+   * Deliberately not the whole grid up front — reacting is a one-tap action,
+   * and 700 emoji in the way of a thumbs-up is not a picker, it's an obstacle.
+   */
+  function openReactionPill(root, state, render, messageId, position, anchor) {
+    closeMessageMenu();
+
+    var msg = findMessageById(state.selectedId, messageId);
+    if (!msg || msg.deleted) return;
+
+    var mine = (msg.reactions || [])
+      .filter(function (r) { return r.mine; })
+      .map(function (r) { return r.emoji; });
+
+    var pill = document.createElement('div');
+    pill.className = 'tma-dash__messages-reaction-pill';
+    pill.setAttribute('role', 'dialog');
+    pill.setAttribute('aria-label', 'React to message');
+    pill.innerHTML = renderQuickReactions(messageId, mine);
+
+    document.body.appendChild(pill);
+    positionFloating(pill, anchor, position);
+
+    pill.querySelectorAll('[data-messages-quick-emoji]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        closeMessageMenu();
+        toggleReaction(root, state, render, messageId, btn.getAttribute('data-messages-quick-emoji'));
+      });
+    });
+
+    var more = pill.querySelector('[data-messages-react-open]');
+    if (more) {
+      more.addEventListener('click', function (e) {
+        e.stopPropagation();
+        // Keep the pill's own position so the grid opens where it was.
+        var box = pill.getBoundingClientRect();
+        closeMessageMenu();
+        openReactionPicker(root, state, render, messageId, { x: box.left, y: box.top }, anchor);
+      });
+    }
+
+    openMenuEl = pill;
+    setTimeout(function () {
+      document.addEventListener('click', closeMessageMenuOnce, true);
+    }, 0);
   }
 
   /*
@@ -3982,7 +4070,7 @@
 
     openMenuEl = panel;
     setTimeout(function () {
-      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+      document.addEventListener('click', closeMessageMenuOnce, true);
     }, 0);
   }
 
@@ -4032,7 +4120,7 @@
 
     openMenuEl = panel;
     setTimeout(function () {
-      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+      document.addEventListener('click', closeMessageMenuOnce, true);
     }, 0);
   }
 
@@ -4103,7 +4191,7 @@
 
     openMenuEl = menu;
     setTimeout(function () {
-      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+      document.addEventListener('click', closeMessageMenuOnce, true);
     }, 0);
   }
 
@@ -4234,7 +4322,7 @@
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        openReactionPicker(
+        openReactionPill(
           root, state, render,
           btn.getAttribute('data-messages-react-open'),
           null,
@@ -4605,7 +4693,7 @@
 
     openMenuEl = menu;
     setTimeout(function () {
-      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+      document.addEventListener('click', closeMessageMenuOnce, true);
     }, 0);
   }
 
@@ -4638,9 +4726,20 @@
   function closeMessageMenu() {
     if (openMenuEl && openMenuEl.parentNode) openMenuEl.parentNode.removeChild(openMenuEl);
     openMenuEl = null;
+    document.removeEventListener('click', closeMessageMenuOnce, true);
   }
 
-  function closeMessageMenuOnce() {
+  /*
+   * Dismiss on a click *outside* the open panel.
+   *
+   * This used to be a `{ once: true }` listener that closed unconditionally, so
+   * interacting with the panel's own contents shut it — switching emoji
+   * category closed the picker instead of changing category. Containment is
+   * checked instead, and the listener persists until the panel actually closes.
+   */
+  function closeMessageMenuOnce(e) {
+    if (!openMenuEl) return;
+    if (e && openMenuEl.contains(e.target)) return;
     closeMessageMenu();
   }
 

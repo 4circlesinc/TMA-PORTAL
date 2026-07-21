@@ -14,7 +14,7 @@
 
   window.TMAEmojiData = {
     /* Pinned quick reactions, in the order they are offered. */
-    quick: ["👍", "❤️", "😂", "😮", "😢", "🙏", "🎉", "👏"],
+    quick: ["👍", "❤️", "😂", "🎉", "😢", "😠"],
 
     groups: [
       {

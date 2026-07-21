@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\UserBlock;
 use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
+use App\Support\Messaging\LinkPreviewService;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\PresenceService;
@@ -308,6 +309,29 @@ class MessagingController extends Controller
         ]);
     }
 
+    // -------------------------------------------------------- link preview
+
+    /**
+     * Open Graph metadata for a URL the user is typing or has sent.
+     *
+     * Rate-shaped by caching rather than by throttling: the composer asks as
+     * the user types, and repeated asks for the same link are answered from
+     * the cache. Requires a session, so this is not an open proxy — and the
+     * fetcher refuses anything that resolves to private address space.
+     */
+    public function linkPreview(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'url' => ['required', 'string', 'max:2048'],
+        ]);
+
+        $preview = LinkPreviewService::for($data['url']);
+
+        return response()->json([
+            'preview' => $preview?->toCard(),
+        ]);
+    }
+
     // --------------------------------------------------------- attachments
 
     /**
@@ -392,14 +416,22 @@ class MessagingController extends Controller
             throw ValidationException::withMessages(['emoji' => 'That is not an emoji.']);
         }
 
-        $existing = $message->reactions()
-            ->where('user_id', $user->id)
-            ->where('emoji', $emoji)
-            ->first();
+        /*
+         * One reaction per person per message.
+         *
+         * Picking a different emoji *replaces* the previous one rather than
+         * stacking a second; picking the same one again clears it. The unique
+         * index still allows several rows per user, so this is enforced here
+         * by removing whatever they had first.
+         */
+        $mine = $message->reactions()->where('user_id', $user->id)->get();
+        $hadSame = $mine->contains('emoji', $emoji);
 
-        if ($existing) {
-            $existing->delete();
-        } else {
+        if ($mine->isNotEmpty()) {
+            $message->reactions()->where('user_id', $user->id)->delete();
+        }
+
+        if (! $hadSame) {
             $message->reactions()->create(['user_id' => $user->id, 'emoji' => $emoji]);
         }
 
