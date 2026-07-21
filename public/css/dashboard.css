@@ -25651,3 +25651,90 @@ button.tma-dash__header-popup-item:focus-visible {
   flex-shrink: 0;
   filter: brightness(0) invert(1);
 }
+
+/* ---------------------------------------------------------------------------
+ * Messages — link card, image-led layout.
+ *
+ * When a message is nothing but a link, the card *is* the message: the image
+ * runs nearly to the bubble's edge, the text sits beneath it in the bubble's
+ * own colour rather than a second panel, and the raw URL is dropped entirely
+ * (the card already shows the destination).
+ * ------------------------------------------------------------------------- */
+
+/* Only a thin surround remains, so the picture reads as the message. */
+.tma-dash__messages-bubble--card {
+  padding: var(--space-4);
+  overflow: hidden;
+}
+
+.tma-dash__messages-bubble--card .tma-dash__messages-link-card {
+  margin-bottom: 0;
+  max-width: none;
+  border: 0;
+  background: transparent;
+}
+
+.tma-dash__messages-bubble--card .tma-dash__messages-link-card:hover {
+  background: transparent;
+}
+
+/* The image gets the room: full width of the bubble and a generous height. */
+.tma-dash__messages-bubble--card .tma-dash__messages-link-image,
+.tma-dash__messages-bubble--card .tma-dash__messages-link-image img {
+  max-height: 260px;
+  border-radius: var(--radius-12) var(--radius-12) 0 0;
+}
+
+.tma-dash__messages-bubble--card .tma-dash__messages-link-body {
+  padding: var(--space-8) var(--space-8) var(--space-4);
+  gap: var(--space-4);
+}
+
+/* Title first and largest — it is what identifies the page. */
+.tma-dash__messages-bubble--card .tma-dash__messages-link-title {
+  font-size: var(--text-size-14);
+  line-height: 19px;
+}
+
+.tma-dash__messages-bubble--card .tma-dash__messages-link-desc {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  -webkit-line-clamp: 3;
+}
+
+/* Domain last, quiet, with its favicon — the only place the address appears. */
+.tma-dash__messages-link-site {
+  order: 3;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--text-size-12);
+}
+
+.tma-dash__messages-link-body {
+  /* Title, description, then domain — regardless of source order. */
+  display: flex;
+  flex-direction: column;
+  /* The mock's original link-card CSS (still in this file, around the
+   * .tma-dash__messages-link-url / -link-visual rules it no longer renders)
+   * paints this panel with --color-bg-card. The card body is meant to blend
+   * into the bubble, so that inherited fill is cleared here. */
+  background: transparent;
+}
+
+.tma-dash__messages-link-title { order: 1; }
+.tma-dash__messages-link-desc { order: 2; }
+
+/* The card's own bubble sizes to the image rather than the text column. */
+.tma-dash__messages-bubble--card {
+  width: min(340px, 100%);
+}
+
+/* The timestamp needs a little breathing room under the card. */
+.tma-dash__messages-bubble--card .tma-dash__messages-bubble-text--meta {
+  padding: 0 var(--space-8) var(--space-4);
+}
+
+/* A card with no image stays compact — nothing to give room to. */
+.tma-dash__messages-link-card--textonly {
+  max-width: 320px;
+}

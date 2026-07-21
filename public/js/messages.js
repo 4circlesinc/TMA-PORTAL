@@ -1121,30 +1121,39 @@
     return null;
   }
 
+  /*
+   * A link card.
+   *
+   * When the image is the point of the card it gets the room: the picture runs
+   * edge to edge and the text sits beneath it, blended into the bubble rather
+   * than boxed inside a second panel. The domain appears once, at the bottom —
+   * the raw URL is dropped, since the card already says where it goes.
+   */
   function renderLinkCard(card, opts) {
     opts = opts || {};
 
     return (
       '<a class="tma-dash__messages-link-card' +
       (opts.compact ? ' tma-dash__messages-link-card--compact' : '') +
+      (card.imageUrl ? '' : ' tma-dash__messages-link-card--textonly') +
       '" href="' + esc(card.url) + '" target="_blank" rel="noopener noreferrer nofollow">' +
       (card.imageUrl
         ? '<span class="tma-dash__messages-link-image">' +
           '<img src="' + esc(card.imageUrl) + '" alt="" loading="lazy"></span>'
         : '') +
       '<span class="tma-dash__messages-link-body">' +
-      '<span class="tma-dash__messages-link-site">' +
-      (card.faviconUrl
-        ? '<img class="tma-dash__messages-link-favicon" src="' + esc(card.faviconUrl) + '" alt="">'
-        : '') +
-      esc(card.siteName || card.domain || '') +
-      '</span>' +
       (card.title
         ? '<span class="tma-dash__messages-link-title">' + esc(card.title) + '</span>'
         : '') +
       (card.description
         ? '<span class="tma-dash__messages-link-desc">' + esc(card.description) + '</span>'
         : '') +
+      '<span class="tma-dash__messages-link-site">' +
+      (card.faviconUrl
+        ? '<img class="tma-dash__messages-link-favicon" src="' + esc(card.faviconUrl) + '" alt="">'
+        : '') +
+      esc(card.domain || card.siteName || '') +
+      '</span>' +
       '</span></a>'
     );
   }
@@ -1334,6 +1343,7 @@
     var timeHtml = renderBubbleTime(msg, row);
     var side = msg.direction === 'out' ? 'out' : 'in';
     var inner;
+    var bubbleExtraClass = '';
 
     if (msg.deleted) {
       inner =
@@ -1346,7 +1356,22 @@
       // A message may be files only, text only, or both. When there is no
       // text the timestamp rides under the attachments instead of an empty
       // paragraph.
-      var hasText = !!(msg.body && msg.body.trim());
+      var linkCardHtml = renderMessageLinkCard(msg, render);
+
+      /*
+       * When the whole message *is* the link and a card was built, the raw URL
+       * is dropped: the card already carries the image, the title and the
+       * domain, so repeating the address underneath is noise. A link sent
+       * alongside a sentence keeps its text.
+       */
+      var bodyIsOnlyLink =
+        !!linkCardHtml && !!msg.body && msg.body.trim() === (firstUrlIn(msg.body) || '');
+
+      var hasText = !!(msg.body && msg.body.trim()) && !bodyIsOnlyLink;
+
+      // A card-only bubble tightens its padding so the image nearly reaches
+      // the bubble's edge, leaving only a thin surround.
+      if (bodyIsOnlyLink) bubbleExtraClass += ' tma-dash__messages-bubble--card';
 
       /*
        * The timestamp and ticks always sit at the bottom-right of the bubble.
@@ -1359,7 +1384,7 @@
        */
       inner =
         renderAttachments(msg) +
-        renderMessageLinkCard(msg, render) +
+        linkCardHtml +
         '<div class="tma-dash__messages-bubble-text' +
         (hasText ? '' : ' tma-dash__messages-bubble-text--meta') +
         '">' +
@@ -1385,6 +1410,7 @@
     var bubble =
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
+      bubbleExtraClass +
       (isReplyTarget ? ' tma-dash__messages-bubble--reply-target' : '') +
       (msg.failed ? ' tma-dash__messages-bubble--failed' : '') +
       (msg.pending ? ' tma-dash__messages-bubble--pending' : '') +
