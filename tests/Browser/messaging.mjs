@@ -249,6 +249,46 @@ try {
     check(false, 'deep-history conversation present in the seed');
   }
 
+  step(9.5, 'Unread counts are real message counts, not one-per-conversation');
+  // The chat list eager-loads only the newest message per conversation for the
+  // preview. Counting unread over that collection silently capped every row at
+  // 1, so the sidebar badge read "conversations with something new". Any row
+  // with 2+ unread is what that bug made impossible.
+  const unreadFromApi = await page.evaluate(async (base) => {
+    const r = await fetch(base + '/portal/messaging/conversations', {
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    }).then((res) => res.json());
+    const rows = (r.conversations || []).filter((c) => !c.archived);
+    return { total: rows.reduce((n, c) => n + (c.unread || 0), 0), max: Math.max(0, ...rows.map((c) => c.unread || 0)) };
+  }, BASE);
+
+  check(unreadFromApi.max > 1, `at least one conversation reports multiple unread (max ${unreadFromApi.max})`);
+
+  const navBadge = await page.evaluate(() => {
+    const el = document.querySelector('.tma-dash__nav-item[data-nav="so-messages"] .tma-dash__nav-count');
+    return el && !el.hidden ? el.textContent.trim() : '';
+  });
+  const expected = unreadFromApi.total > 99 ? '99+' : String(unreadFromApi.total);
+  check(
+    navBadge === expected || unreadFromApi.total === 0,
+    `sidebar badge (${navBadge || 'hidden'}) matches the summed unread (${expected})`,
+  );
+
+  step(9.6, 'Unread badges use the blue token, not indigo');
+  const badgeColour = await page.evaluate(() => {
+    const el = document.querySelector('.tma-dash__messages-row .tma-badge--number');
+    return el ? { cls: el.className, bg: getComputedStyle(el).backgroundColor } : null;
+  });
+  check(!!badgeColour, 'an unread badge is rendered');
+  if (badgeColour) {
+    check(/tma-badge--blue/.test(badgeColour.cls), 'badge carries the blue modifier');
+    check(
+      badgeColour.bg === 'rgb(125, 187, 255)',
+      `badge background is --color-blue #7dbbff (got ${badgeColour.bg})`,
+    );
+  }
+
   step(10, 'Calling is cleanly unavailable, not silently dead');
   const disabledCalls = await page.locator('.tma-dash__messages-chat-actions button[disabled]').count();
   check(disabledCalls === 2, `voice and video call buttons are disabled (${disabledCalls} found)`);

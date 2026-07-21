@@ -275,7 +275,7 @@
   function renderBadge(count) {
     if (!count) return '';
     if (window.TMABadge) {
-      return window.TMABadge.renderBadge({ type: 'number', value: String(count), color: 'indigo' });
+      return window.TMABadge.renderBadge({ type: 'number', value: String(count), color: 'blue' });
     }
     return '<span class="tma-dash__messages-unread">' + esc(count) + '</span>';
   }

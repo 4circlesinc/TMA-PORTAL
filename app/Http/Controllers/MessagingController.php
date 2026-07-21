@@ -54,9 +54,11 @@ class MessagingController extends Controller
             ->get()
             ->keyBy('conversation_id');
 
+        $unread = $this->unreadCounts($user);
+
         $rows = $conversations
             ->map(fn (Conversation $c) => MessagingPresenter::conversation(
-                $c, $user, $participants->get($c->id)
+                $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0)
             ))
             // Pinned conversations sort above the rest but keep recency within
             // each band, which is the order the list expects to render.
@@ -76,6 +78,34 @@ class MessagingController extends Controller
             'settings' => MessagingSettings::for($user),
             'realtime' => $this->realtimeConfig(),
         ]);
+    }
+
+    /**
+     * Unread message counts for every one of this user's conversations, keyed
+     * by conversation id.
+     *
+     * One grouped query rather than a count per row: the chat list asks for
+     * this on every load, and the sidebar badge sums it.
+     */
+    private function unreadCounts(User $user): \Illuminate\Support\Collection
+    {
+        return DB::table('messages')
+            ->join('conversation_participants as cp', function ($join) use ($user) {
+                $join->on('cp.conversation_id', '=', 'messages.conversation_id')
+                    ->where('cp.user_id', '=', $user->id)
+                    ->whereNull('cp.left_at');
+            })
+            ->whereNull('messages.deleted_at')
+            // Anything past this participant's read high-water mark…
+            ->whereRaw('messages.id > coalesce(cp.last_read_message_id, 0)')
+            // …that they did not send themselves.
+            ->where(function ($q) use ($user) {
+                $q->whereNull('messages.user_id')
+                    ->orWhere('messages.user_id', '!=', $user->id);
+            })
+            ->groupBy('messages.conversation_id')
+            ->selectRaw('messages.conversation_id, count(*) as aggregate')
+            ->pluck('aggregate', 'messages.conversation_id');
     }
 
     /**
@@ -127,12 +157,22 @@ class MessagingController extends Controller
         $hasMore = $page->count() > self::MESSAGE_PAGE;
         $messages = $page->take(self::MESSAGE_PAGE)->reverse()->values();
 
+        // The row summary only needs the newest message. Without this the
+        // presenter's preview would lazily pull the conversation's entire
+        // history just to look at its last entry.
+        $conversation->load(['messages' => fn ($q) => $q->latest('id')->limit(1)]);
+
         return response()->json([
             'messages' => $messages->map(
                 fn (Message $m) => MessagingPresenter::message($m, $user, $conversation)
             ),
             'hasMore' => $hasMore,
-            'conversation' => MessagingPresenter::conversation($conversation, $user),
+            'conversation' => MessagingPresenter::conversation(
+                $conversation,
+                $user,
+                null,
+                (int) ($this->unreadCounts($user)[$conversation->id] ?? 0),
+            ),
         ]);
     }
 

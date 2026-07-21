@@ -40,6 +40,12 @@
   background: #ff4747;
 }
 
+/* Secondary blue, documented in tokens.css as the badge background. Used for
+ * the Messages unread counts, which read as purple in indigo. */
+.tma-badge--blue.tma-badge--number {
+  background: var(--color-blue);
+}
+
 .tma-badge__label {
   font-size: inherit;
   line-height: inherit;
@@ -69,6 +75,10 @@
 
 .tma-badge--dot.tma-badge--indigo {
   color: #adadfb;
+}
+
+.tma-badge--dot.tma-badge--blue {
+  color: var(--color-blue);
 }
 
 .tma-badge--dot.tma-badge--black {

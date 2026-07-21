@@ -24,6 +24,7 @@ class MessagingPresenter
         Conversation $conversation,
         User $viewer,
         ?ConversationParticipant $participant = null,
+        ?int $unread = null,
     ): array {
         $participant ??= $conversation->participantFor($viewer);
         $others = $conversation->activeParticipants
@@ -56,7 +57,7 @@ class MessagingPresenter
             'preview' => self::preview($last, $viewer, $conversation),
             'time' => self::listTime($conversation->last_message_at),
             'timestamp' => $conversation->last_message_at?->toIso8601String(),
-            'unread' => $participant ? self::unreadFor($participant, $conversation) : 0,
+            'unread' => $participant ? self::unreadFor($participant, $conversation, $unread) : 0,
             'pinned' => $participant?->pinned_at !== null,
             'archived' => $participant?->archived_at !== null,
             'muted' => (bool) $participant?->isMuted(),
@@ -204,13 +205,24 @@ class MessagingPresenter
      * A participant's unread badge. An explicit "mark as unread" wins over the
      * computed count so the row still reads as unread with nothing new in it.
      */
-    private static function unreadFor(ConversationParticipant $participant, Conversation $conversation): int
-    {
-        $count = $conversation->messages
-            ->where('id', '>', $participant->last_read_message_id ?? 0)
-            ->where('user_id', '!=', $participant->user_id)
-            ->count();
+    /**
+     * A participant's unread badge.
+     *
+     * `$known` is the count already worked out in bulk by the caller. When it
+     * is absent this counts in the database rather than over
+     * `$conversation->messages` — that relation is usually loaded with only the
+     * newest message (for the list preview), so counting across it silently
+     * capped every conversation at 1 unread and made the sidebar badge read
+     * "number of conversations with something new" instead of a message count.
+     */
+    private static function unreadFor(
+        ConversationParticipant $participant,
+        Conversation $conversation,
+        ?int $known = null,
+    ): int {
+        $count = $known ?? $participant->unreadCount();
 
+        // An explicit "mark as unread" keeps the row bold with nothing new in it.
         if ($count === 0 && $participant->marked_unread_at !== null) {
             return 1;
         }
