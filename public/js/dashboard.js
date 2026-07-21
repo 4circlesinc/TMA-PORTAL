@@ -48,6 +48,10 @@
     return ACCENT_COLORS[color] ? color : 'indigo';
   }
 
+  function getSidebarStyle() {
+    return store.get('tma.sidebarStyle', '') === 'standard' ? 'standard' : 'hover';
+  }
+
   function mount(root) {
     if (!root) return;
 
@@ -1043,6 +1047,7 @@
       applyThemeVisual(resolveTheme(getThemeMode()));
       applyFontScale(getFontScale());
       applyAccentColor(getAccentColor());
+      applySidebarStyle(getSidebarStyle());
     }
 
     function setThemeMode(mode) {
@@ -1064,6 +1069,7 @@
         themeMode: getThemeMode(),
         fontScale: getFontScale(),
         accentColor: getAccentColor(),
+        sidebarStyle: getSidebarStyle(),
       };
     }
 
@@ -1115,12 +1121,23 @@
           }
         }
         toggleNavDrawer();
+      } else if (sidebar && getSidebarStyle() === 'standard') {
+        // Standard style: a plain click-to-collapse rail, content shifts
+        // beside it — no hover/focus overlay involved.
+        var collapsed = root.classList.toggle('is-sidebar-collapsed');
+        applyRailTitles(collapsed);
+        store.set('tma.sidebarCollapsed', collapsed ? '1' : '0');
+        // The icon-only rail has no room for the tabs, so it always shows the
+        // main menu — leaving the shortcuts tab active would empty the rail.
+        if (collapsed) showList('main');
+        syncSidebarToggleIcon();
       } else if (sidebar) {
-        // Desktop: the rail is always collapsed at rest and expands as a
-        // hover overlay (see CSS). This button pins that same expanded state
-        // open via focus, for mouse-click and keyboard users who aren't
-        // hovering it — it never leaves the sidebar permanently expanded,
-        // it just closes again on the next click, on blur, or on Escape.
+        // Desktop hover style: the rail is always collapsed at rest and
+        // expands as a hover overlay (see CSS). This button pins that same
+        // expanded state open via focus, for mouse-click and keyboard users
+        // who aren't hovering it — it never leaves the sidebar permanently
+        // expanded, it just closes again on the next click, on blur, or on
+        // Escape.
         if (sidebar.contains(document.activeElement)) {
           closeSidebarHoverPin();
         } else {
@@ -1152,6 +1169,34 @@
     }
 
     root._syncSidebarToggleIcon = syncSidebarToggleIcon;
+
+    // Per-user sidebar style (Settings → Appearance → Sidebar Style):
+    // "standard" is a click-to-collapse rail that shifts the page content;
+    // "hover" (default, matches the pre-existing behaviour) rests collapsed
+    // and expands as a hover/focus overlay that never shifts content. Mobile
+    // ignores this entirely and always uses the drawer.
+    function applySidebarStyle(style) {
+      root.classList.toggle('tma-dash--sidebar-standard', style === 'standard');
+      if (isMobileSidebar()) return;
+      if (style === 'standard') {
+        var collapsed = store.get('tma.sidebarCollapsed', '0') === '1';
+        root.classList.toggle('is-sidebar-collapsed', collapsed);
+        applyRailTitles(collapsed);
+        if (collapsed) showList('main');
+      } else {
+        root.classList.add('is-sidebar-collapsed');
+        applyRailTitles(true);
+      }
+      syncSidebarToggleIcon();
+    }
+
+    function setSidebarStyle(style) {
+      var next = style === 'standard' ? 'standard' : 'hover';
+      store.set('tma.sidebarStyle', next);
+      applySidebarStyle(next);
+    }
+
+    root._setSidebarStyle = setSidebarStyle;
 
     /* ── mobile menu rows + bottom tab bar ─────── */
     function upgradeTabButtons() {
@@ -1837,14 +1882,13 @@
     window.addEventListener('resize', function () {
       if (window.innerWidth > RIGHTBAR_BP) closeDrawers();
       if (window.innerWidth > SIDEBAR_BP) closeMobileMenu();
-      // Desktop sidebar is a permanently-collapsed rail (hover/focus expands
-      // it as an overlay); mobile uses the drawer instead. Keep the class in
-      // sync as the viewport crosses the breakpoint.
+      // Mobile uses the drawer instead of the rail; keep the rail's class in
+      // sync (per the user's sidebar style) as the viewport crosses the
+      // breakpoint.
       if (isMobileSidebar()) {
         root.classList.remove('is-sidebar-collapsed');
-      } else if (!root.classList.contains('is-sidebar-collapsed')) {
-        root.classList.add('is-sidebar-collapsed');
-        applyRailTitles(true);
+      } else {
+        applySidebarStyle(getSidebarStyle());
       }
       syncSidebarToggleIcon();
       syncMobileHeaderScroll();
@@ -2072,17 +2116,13 @@
 
     /* ── restore persisted state ───────────────── */
     applyUserPreferences();
-    // Desktop sidebar is a collapsed icon rail by default and expands only as
-    // a hover/focus overlay (see the CSS under .is-sidebar-collapsed and
-    // toggleSidebar()) — it's no longer a persisted user toggle. The HTML
-    // ships with the class already on <div class="tma-dash"> to avoid a
-    // flash of the expanded layout before this runs; this just keeps it
-    // correct if that markup is ever missing, and keeps it off on mobile.
+    // applyUserPreferences() → applySidebarStyle() already set the collapsed
+    // rail correctly for the user's chosen desktop sidebar style. The HTML
+    // ships with the collapsed class already on <div class="tma-dash"> to
+    // avoid a flash of the expanded layout before this runs; this is just a
+    // safety net for mobile, which never uses the collapsed-rail concept.
     if (isMobileSidebar()) {
       root.classList.remove('is-sidebar-collapsed');
-    } else {
-      root.classList.add('is-sidebar-collapsed');
-      applyRailTitles(true);
     }
     if (window.innerWidth > RIGHTBAR_BP && store.get('tma.rightbarCollapsed', '0') === '1') root.classList.add('is-rightbar-collapsed');
     if (store.get('tma.sidebarList', 'main') === 'shortcuts') {
@@ -2172,7 +2212,7 @@
     getPrefs: function () {
       var dash = document.querySelector('.tma-dash');
       if (dash && dash._getUserPreferences) return dash._getUserPreferences();
-      return { themeMode: getThemeMode(), fontScale: getFontScale(), accentColor: getAccentColor() };
+      return { themeMode: getThemeMode(), fontScale: getFontScale(), accentColor: getAccentColor(), sidebarStyle: getSidebarStyle() };
     },
     setThemeMode: function (mode) {
       var dash = document.querySelector('.tma-dash');
@@ -2181,6 +2221,10 @@
     setFontScale: function (scale) {
       var dash = document.querySelector('.tma-dash');
       if (dash && dash._setFontScale) dash._setFontScale(scale);
+    },
+    setSidebarStyle: function (style) {
+      var dash = document.querySelector('.tma-dash');
+      if (dash && dash._setSidebarStyle) dash._setSidebarStyle(style);
     },
     setAccentColor: function (colorId) {
       var dash = document.querySelector('.tma-dash');

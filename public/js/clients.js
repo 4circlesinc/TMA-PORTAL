@@ -1487,9 +1487,12 @@
     var html = '';
     folders.forEach(function (f) {
       var count = (f.fileCount || 0) + (f.folderCount || 0);
-      var folderIcon = f.fileCount === 0 ? ICONS.FolderEmpty : ICONS.FolderFilled;
+      var folderBase = f.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      var folderIcon = window.TMAFolderIcons
+        ? window.TMAFolderIcons.html(folderBase, f.colour, f.iconName, 24)
+        : '<img src="' + (window.TMAFolderColours ? window.TMAFolderColours.iconSrc(folderBase, f.colour) : ICONS[folderBase]) + '" alt="">';
       html += '<button type="button" class="tma-dash__clients-folder" data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '">' +
-        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + folderIcon + '" alt=""></span>' +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
         '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
         '<span class="tma-dash__clients-folder-meta">' + esc(folderMetaLabel(f)) + '</span></span>' +
         '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +

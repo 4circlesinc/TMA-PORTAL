@@ -39,7 +39,12 @@
       (pinned ? ' draggable="true"' : '') + ' role="listitem">' +
       '<a class="tma-dash__nav-item tma-dash__nav-item--shortcut" href="/folders/all" data-shortcut-open="' + esc(it.id) + '" title="' + esc(title) + '">' +
       '<span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>' +
-      '<img class="tma-dash__nav-icon" src="images/icons/phosphor/FolderFilled.svg" alt="">' +
+      // Size 24 matches .tma-dash__sidebar .tma-dash__nav-icon's own fixed
+      // 24x24 override (dashboard.css / dashboard-tma-overrides.css) - the
+      // inline width/height this helper sets would otherwise fight that rule.
+      (window.TMAFolderIcons
+        ? window.TMAFolderIcons.html('FolderFilled', it.colour, it.iconName, 24, 'tma-dash__nav-icon')
+        : '<img class="tma-dash__nav-icon" src="' + esc(window.TMAFolderColours ? window.TMAFolderColours.iconSrc('FolderFilled', it.colour) : 'images/icons/phosphor/FolderFilled.svg') + '" alt="">') +
       '<span>' + esc(it.name) + '</span>' +
       '</a>' +
       (pinned

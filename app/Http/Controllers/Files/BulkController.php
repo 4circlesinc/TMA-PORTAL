@@ -10,6 +10,7 @@ use App\Support\Files\FileAccess;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\FolderTree;
 use App\Support\Files\Naming;
+use App\Support\Files\Presenter;
 use App\Support\Files\Vault;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,10 @@ class BulkController extends BaseFilesController
 
         $done = 0;
         $errors = [];
+        // Only move/copy hand back a changed item (a new uuid for a copy, a
+        // possibly collision-renamed name for either) - the frontend already
+        // knows what to do locally for every other action from the id alone.
+        $resultRefs = [];
 
         foreach ($request->input('items') as $ref) {
             try {
@@ -49,7 +54,10 @@ class BulkController extends BaseFilesController
                     ? $this->findFile($ref['id'], $trashed)
                     : $this->findFolder($ref['id'], $trashed);
 
-                $this->apply($action, $item, $user, $target);
+                $result = $this->apply($action, $item, $user, $target);
+                if ($result !== null) {
+                    $resultRefs[] = ['ref' => $ref, 'item' => $result];
+                }
                 $done++;
             } catch (FileValidationException $e) {
                 $errors[] = ['id' => $ref['id'], 'message' => $e->getMessage()];
@@ -58,14 +66,31 @@ class BulkController extends BaseFilesController
             }
         }
 
-        return response()->json(['ok' => empty($errors), 'processed' => $done, 'errors' => $errors]);
+        $results = [];
+        if ($resultRefs) {
+            $files = array_values(array_filter(array_map(
+                fn ($r) => $r['item'] instanceof FileItem ? $r['item'] : null, $resultRefs
+            )));
+            $folders = array_values(array_filter(array_map(
+                fn ($r) => $r['item'] instanceof Folder ? $r['item'] : null, $resultRefs
+            )));
+            $presenter = new Presenter($user);
+            $presenter->prime($files, $folders);
+            $results = array_map(fn ($r) => [
+                'id' => $r['ref']['id'],
+                'type' => $r['ref']['type'],
+                'item' => $r['item'] instanceof FileItem ? $presenter->file($r['item']) : $presenter->folder($r['item']),
+            ], $resultRefs);
+        }
+
+        return response()->json(['ok' => empty($errors), 'processed' => $done, 'errors' => $errors, 'results' => $results]);
     }
 
-    private function apply(string $action, FileItem|Folder $item, $user, ?Folder $target): void
+    private function apply(string $action, FileItem|Folder $item, $user, ?Folder $target): FileItem|Folder|null
     {
         $isFile = $item instanceof FileItem;
 
-        match ($action) {
+        return match ($action) {
             'delete' => $this->delete($item, $user, $isFile),
             'restore' => $this->restore($item, $user, $isFile),
             'forceDelete' => $this->purge($item, $user, $isFile),
@@ -114,7 +139,7 @@ class BulkController extends BaseFilesController
         }
     }
 
-    private function move(FileItem|Folder $item, $user, ?Folder $target, bool $isFile): void
+    private function move(FileItem|Folder $item, $user, ?Folder $target, bool $isFile): FileItem|Folder
     {
         FileAccess::authorize($user, 'move', $item);
         if ($isFile) {
@@ -123,13 +148,17 @@ class BulkController extends BaseFilesController
                 ->where('id', '!=', $item->id)->exists());
             $item->update(['folder_id' => $target?->id, 'name' => $name]);
             Activity::forFile($user->id, $item, 'move');
-        } else {
-            FolderTree::move($item, $target);
-            Activity::forFolder($user->id, $item, 'move');
+
+            return $item;
         }
+
+        FolderTree::move($item, $target);
+        Activity::forFolder($user->id, $item, 'move');
+
+        return $item;
     }
 
-    private function copy(FileItem|Folder $item, $user, ?Folder $target, bool $isFile): void
+    private function copy(FileItem|Folder $item, $user, ?Folder $target, bool $isFile): FileItem|Folder
     {
         FileAccess::authorize($user, 'copy', $item);
         if ($isFile) {
@@ -143,10 +172,14 @@ class BulkController extends BaseFilesController
                 'owner_id' => $user->id, 'uploaded_by' => $user->id,
             ]);
             Activity::forFile($user->id, $copy, 'copy');
-        } else {
-            $copy = FolderTree::copy($item, $target, $user);
-            Activity::forFolder($user->id, $copy, 'copy');
+
+            return $copy;
         }
+
+        $copy = FolderTree::copy($item, $target, $user);
+        Activity::forFolder($user->id, $copy, 'copy');
+
+        return $copy;
     }
 
     private function favorite(FileItem|Folder $item, $user, bool $isFile, bool $on): void

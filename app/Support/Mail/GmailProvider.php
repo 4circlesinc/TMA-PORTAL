@@ -334,13 +334,16 @@ class GmailProvider implements MailProvider
     }
 
     /**
-     * Gmail stamps a Content-ID on essentially every attachment, embedded or
-     * not - it is not a signal of inlineness by itself (mirrors the same fix
-     * already in GraphProvider). A Content-ID only means "embedded" when the
-     * body's HTML actually points at it with `cid:`; otherwise it is a normal
-     * file attachment (a contract, a scanned ID, a utility bill) that must
-     * still show up as one. Treating "has a Content-ID" as "is inline" hid
-     * exactly that kind of attachment.
+     * Neither a Content-ID nor a Content-Disposition: inline header is a
+     * reliable signal by itself (mirrors the same fix already in
+     * GraphProvider). Outlook in particular stamps Content-Disposition:
+     * inline on ordinary photo attachments that never appear in the body -
+     * a real 2x2 ID photo sent this way was still being hidden even after
+     * the Content-ID-alone check was removed, because that disposition flag
+     * was still OR'd in. The only trustworthy test is whether the body's
+     * HTML actually points at the attachment with `cid:`; everything else is
+     * a normal file attachment (a contract, a scanned ID, a utility bill)
+     * that must show up as one.
      *
      * @param  array<int, array<string, mixed>>  $attachments
      */
@@ -348,12 +351,11 @@ class GmailProvider implements MailProvider
     {
         return array_map(function (array $a) use ($html) {
             $cid = $a['content_id'];
-            $referenced = $cid && $html && (
+
+            $a['is_inline'] = (bool) ($cid && $html && (
                 str_contains($html, 'cid:'.$cid)
                 || str_contains($html, 'cid:'.rawurlencode($cid))
-            );
-
-            $a['is_inline'] = $a['is_inline'] || $referenced;
+            ));
 
             return $a;
         }, $attachments);
@@ -384,11 +386,11 @@ class GmailProvider implements MailProvider
                 'filename' => $filename,
                 'mime_type' => $mime,
                 'size' => (int) ($body['size'] ?? 0),
-                // Inline images belong to the body, not the attachment strip.
-                // A bare Content-ID is not enough on its own - see
-                // resolveInlineAttachments(), which checks whether the body
-                // actually embeds it.
-                'is_inline' => str_contains(strtolower((string) $headers->get('content-disposition', '')), 'inline'),
+                // Real value set once the full body is known - see
+                // resolveInlineAttachments(), which is the only place that
+                // decides inline vs. attached (neither Content-Disposition
+                // nor a bare Content-ID is trustworthy on its own).
+                'is_inline' => false,
                 'content_id' => $contentId ?: null,
             ];
         } elseif (! empty($body['data'])) {

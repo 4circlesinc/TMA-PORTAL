@@ -218,6 +218,19 @@
     { id: 'green', color: 'var(--color-green)' },
   ];
 
+  var SIDEBAR_STYLES = [
+    {
+      id: 'standard',
+      label: 'Standard Sidebar',
+      desc: 'Opens beside the content and can be expanded or collapsed by clicking.',
+    },
+    {
+      id: 'hover',
+      label: 'Hover Overlay Sidebar',
+      desc: 'Opens over the content when hovered and stays collapsed when not in use.',
+    },
+  ];
+
   function renderThemePreview(type) {
     return '<span class="tma-dash__settings-theme-preview tma-dash__settings-theme-preview--' + esc(type) + '" aria-hidden="true">' +
       '<span class="tma-dash__settings-theme-preview-sidebar"></span>' +
@@ -235,6 +248,24 @@
     return '<button type="button" class="tma-dash__settings-theme-option" data-theme-mode="' + esc(mode.id) + '" aria-pressed="false">' +
       renderThemePreview(mode.preview) +
       '<span class="tma-dash__settings-theme-option-label">' + esc(mode.label) + '</span></button>';
+  }
+
+  function renderSidebarStylePreview(type) {
+    return '<span class="tma-dash__settings-theme-preview tma-dash__settings-theme-preview--light tma-dash__settings-sidebar-preview tma-dash__settings-sidebar-preview--' + esc(type) + '" aria-hidden="true">' +
+      '<span class="tma-dash__settings-theme-preview-sidebar"></span>' +
+      '<span class="tma-dash__settings-theme-preview-main">' +
+      '<span class="tma-dash__settings-theme-preview-block tma-dash__settings-theme-preview-block--header"></span>' +
+      '<span class="tma-dash__settings-theme-preview-block"></span>' +
+      '</span></span>';
+  }
+
+  function renderSidebarStyleOption(style) {
+    return '<button type="button" class="tma-dash__settings-theme-option tma-dash__settings-sidebar-style-option" data-sidebar-style="' + esc(style.id) + '" aria-pressed="false">' +
+      renderSidebarStylePreview(style.id) +
+      '<span class="tma-dash__settings-sidebar-style-copy">' +
+      '<span class="tma-dash__settings-theme-option-label">' + esc(style.label) + '</span>' +
+      '<span class="tma-dash__settings-sidebar-style-desc">' + esc(style.desc) + '</span>' +
+      '</span></button>';
   }
 
   function renderFontScaleStep(step) {
@@ -272,6 +303,13 @@
         return '<button type="button" class="tma-dash__settings-color-swatch" data-accent-color="' + esc(swatch.id) + '" style="--settings-swatch:' + swatch.color + '" aria-pressed="false" aria-label="' + esc(swatch.id) + '">' +
           '<img src="' + ICON + 'Check.svg" alt="" width="28" height="28"></button>';
       }).join('') +
+      '</div></div>' +
+      '<hr class="tma-dash__settings-divider tma-dash__settings-theme-divider">' +
+      '<div class="tma-dash__settings-theme-group">' +
+      '<h2 class="tma-dash__settings-section-title tma-dash__settings-theme-section-title">Sidebar style</h2>' +
+      '<p class="tma-dash__settings-theme-group-label">Sidebar style</p>' +
+      '<div class="tma-dash__settings-theme-options tma-dash__settings-sidebar-style-options" role="radiogroup" aria-label="Sidebar style">' +
+      SIDEBAR_STYLES.map(renderSidebarStyleOption).join('') +
       '</div></div></div></section>';
   }
 
@@ -282,7 +320,7 @@
   function readThemePrefs() {
     var api = getPrefsApi();
     if (api && api.getPrefs) return api.getPrefs();
-    return { themeMode: 'system', fontScale: 3, accentColor: 'indigo' };
+    return { themeMode: 'system', fontScale: 3, accentColor: 'indigo', sidebarStyle: 'hover' };
   }
 
   function syncThemePanelUI(root) {
@@ -299,6 +337,11 @@
     });
     root.querySelectorAll('[data-accent-color]').forEach(function (btn) {
       var on = btn.getAttribute('data-accent-color') === prefs.accentColor;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-pressed', String(on));
+    });
+    root.querySelectorAll('[data-sidebar-style]').forEach(function (btn) {
+      var on = btn.getAttribute('data-sidebar-style') === (prefs.sidebarStyle || 'hover');
       btn.classList.toggle('is-active', on);
       btn.setAttribute('aria-pressed', String(on));
     });
@@ -338,17 +381,42 @@
       });
     });
 
+    root.querySelectorAll('[data-sidebar-style]').forEach(function (btn) {
+      if (btn.dataset.sidebarStyleBound) return;
+      btn.dataset.sidebarStyleBound = '1';
+      btn.addEventListener('click', function () {
+        var style = btn.getAttribute('data-sidebar-style');
+        // Unlike theme/font/accent (local-only), sidebar style is a
+        // per-user preference that must persist server-side and sync
+        // across the user's other sessions — store.set write-throughs to
+        // /me/preferences (see PREF_SERVER_KEYS below), and the prefs API
+        // call applies it to the live sidebar immediately.
+        store.set('tma.sidebarStyle', style);
+        // A discrete click, not a continuous input like typing — flush the
+        // write-through right away instead of waiting out the 400ms debounce
+        // (meant for rapid-fire changes). Otherwise a reload moments after
+        // picking a style can race the debounced PUT: hydratePrefs() would
+        // fetch the still-stale server value and revert what was just picked.
+        flushPrefSync();
+        var api = getPrefsApi();
+        if (api && api.setSidebarStyle) api.setSidebarStyle(style);
+        syncThemePanelUI(root);
+      });
+    });
+
     syncThemePanelUI(root);
   }
 
   /* localStorage key ↔ server preference key, for settings we persist to the
-     account (Time and language). Changing one of these write-through saves to
-     /me/preferences; on mount we hydrate localStorage from the server. */
+     account (Time and language, sidebar style). Changing one of these
+     write-through saves to /me/preferences; on mount we hydrate localStorage
+     from the server. */
   var PREF_SERVER_KEYS = {
     'tma.autoTimezone': 'autoTimezone',
     'tma.timezone': 'timezone',
     'tma.language': 'language',
     'tma.voice': 'voice',
+    'tma.sidebarStyle': 'sidebarStyle',
   };
 
   function prefXsrf() {
@@ -422,8 +490,17 @@
         }
       });
       applyLanguage();
+      // Sidebar style needs to actually take effect on load (not just sit in
+      // localStorage until the user visits Settings), so this always applies
+      // it — idempotent when it hasn't changed from what dashboard.js booted
+      // with.
+      if (p.sidebarStyle) {
+        var api = getPrefsApi();
+        if (api && api.setSidebarStyle) api.setSidebarStyle(p.sidebarStyle);
+      }
       if (changed && root && document.body.contains(root)) {
         try { syncTimePanelUI(root); } catch (e) {}
+        try { syncThemePanelUI(root); } catch (e) {}
       }
     }).catch(function () {});
   }

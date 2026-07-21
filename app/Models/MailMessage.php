@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'uuid', 'user_id', 'connected_account_id', 'remote_id', 'thread_id', 'folder',
     'subject', 'snippet', 'body_html', 'body_text', 'from_name', 'from_email',
     'to', 'cc', 'bcc', 'reply_to', 'is_read', 'is_starred', 'is_important',
-    'has_attachments', 'attachments_relinked_at', 'sent_at',
+    'has_attachments', 'sent_at',
 ])]
 #[Hidden(['remote_id', 'connected_account_id'])]
 class MailMessage extends Model
@@ -35,7 +35,6 @@ class MailMessage extends Model
             'is_starred' => 'boolean',
             'is_important' => 'boolean',
             'has_attachments' => 'boolean',
-            'attachments_relinked_at' => 'datetime',
             'sent_at' => 'datetime',
         ];
     }
@@ -84,11 +83,20 @@ class MailMessage extends Model
             // list must never fetch the provider just to describe them (that
             // is exactly the mistake that took the mailbox page down once
             // already). Capped well above any realistic "show 3 + N more" UI.
+            //
+            // Every named attachment is shown here, inline or not: senders
+            // routinely paste real, named documents (a 2x2 photo, a scanned
+            // ID) straight into the body, which gives them a Content-ID the
+            // same as a decorative signature image would have. There is no
+            // reliable way to tell those two apart, and for this business
+            // hiding a genuine application document is the worse failure
+            // mode - so is_inline is left to describe body rendering only,
+            // never attachment visibility.
             'attachmentsPreview' => $this->relationLoaded('attachments')
-                ? $this->attachments->where('is_inline', false)->take(8)->map->toRecord()->values()->all()
+                ? $this->attachments->take(8)->map->toRecord()->values()->all()
                 : [],
             'attachmentCount' => $this->relationLoaded('attachments')
-                ? $this->attachments->where('is_inline', false)->count()
+                ? $this->attachments->count()
                 : null,
         ];
     }
@@ -102,11 +110,7 @@ class MailMessage extends Model
             'cc' => $this->cc ?? [],
             'bcc' => $this->bcc ?? [],
             'replyTo' => $this->reply_to,
-            'attachments' => $this->attachments
-                ->where('is_inline', false)
-                ->map->toRecord()
-                ->values()
-                ->all(),
+            'attachments' => $this->attachments->map->toRecord()->values()->all(),
         ];
     }
 

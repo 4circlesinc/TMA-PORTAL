@@ -305,17 +305,12 @@ class MailController extends Controller
         $message = $this->findMessage($request, $uuid);
 
         $noBody = $message->body_html === null && $message->body_text === null;
-        // A message flagged as having attachments but with zero *non-inline*
-        // rows either was opened before attachments were fetched at all, or
-        // was opened under the old is_inline heuristic that mistook a bare
-        // Content-ID for "embedded" and hid every real file. Both self-heal
-        // on the next open, gated by attachments_relinked_at so a message
-        // whose attachments genuinely are all inline (a signature image, say)
-        // only ever gets this corrective re-fetch once rather than on every
-        // single open forever.
-        $missingAttachments = $message->has_attachments
-            && $message->attachments_relinked_at === null
-            && $message->attachments()->where('is_inline', false)->doesntExist();
+        // A message flagged as having attachments but with zero attachment
+        // rows was opened before attachments were fetched at all - the body
+        // came back cached with nothing to show underneath it. This affects
+        // every message read before that support existed, not just the
+        // `cid:` case below, so it is checked unconditionally.
+        $missingAttachments = $message->has_attachments && $message->attachments()->doesntExist();
         $justFetched = false;
 
         if ($noBody || $missingAttachments) {
@@ -332,7 +327,6 @@ class MailController extends Controller
                     'cc' => $full['cc'] ?? $message->cc,
                     'reply_to' => $full['reply_to'] ?? $message->reply_to,
                     'has_attachments' => ! empty($full['attachments']),
-                    'attachments_relinked_at' => now(),
                 ])->save();
 
                 if (! empty($full['attachments'])) {

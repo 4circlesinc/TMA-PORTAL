@@ -7,6 +7,8 @@ use App\Models\Folder;
 use App\Models\FolderShortcut;
 use App\Models\User;
 use App\Support\Files\FileAccess;
+use App\Support\Files\FolderColours;
+use App\Support\Files\FolderIcons;
 use App\Support\Files\FolderProvisioner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -71,9 +73,13 @@ class ShortcutController extends BaseFilesController
             ->filter(fn (Folder $f) => FileAccess::can($user, 'view', $f))
             ->values();
 
+        // All default/system-type folders here — colour/icon are the one
+        // admin-set values, no per-viewer preference lookup needed.
         $map = fn ($folders) => $folders->map(fn (Folder $f) => [
             'id' => $f->uuid,
             'name' => $f->name,
+            'colour' => FolderColours::effective($f, null),
+            'iconName' => FolderIcons::effective($f, null),
         ])->values()->all();
 
         return [
@@ -161,18 +167,29 @@ class ShortcutController extends BaseFilesController
     {
         $user = $this->user($request);
 
-        return FolderShortcut::where('user_id', $user->id)
+        $shortcuts = FolderShortcut::where('user_id', $user->id)
             ->orderBy('position')
             ->orderBy('id')
             ->with('folder.parent')
             ->get()
             // The folder relation is null once the folder is soft-deleted or purged.
-            ->filter(fn (FolderShortcut $s) => $s->folder && FileAccess::can($user, 'view', $s->folder))
-            ->map(fn (FolderShortcut $s) => [
-                'id' => $s->folder->uuid,
-                'name' => $s->folder->name,
-                'parent' => $s->folder->parent?->name,
-            ])
+            ->filter(fn (FolderShortcut $s) => $s->folder && FileAccess::can($user, 'view', $s->folder));
+
+        $folderIds = $shortcuts->map(fn (FolderShortcut $s) => $s->folder->id)->values()->all();
+        $prefRows = FolderColours::preferenceRows($user, $folderIds);
+
+        return $shortcuts
+            ->map(function (FolderShortcut $s) use ($prefRows) {
+                $pref = $prefRows[$s->folder->id] ?? [];
+
+                return [
+                    'id' => $s->folder->uuid,
+                    'name' => $s->folder->name,
+                    'parent' => $s->folder->parent?->name,
+                    'colour' => FolderColours::effective($s->folder, $pref['colour'] ?? null),
+                    'iconName' => FolderIcons::effective($s->folder, $pref['iconName'] ?? null),
+                ];
+            })
             ->values()
             ->all();
     }

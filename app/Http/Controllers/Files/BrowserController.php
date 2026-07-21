@@ -127,7 +127,20 @@ class BrowserController extends BaseFilesController
                 null,
             ],
             'recent' => [
-                null,
+                // Recency, not tree position, so unlike 'all'/'my' this isn't
+                // scoped to `whereNull('parent_id')` — a nested folder that
+                // was just touched belongs here too. A trashed folder's whole
+                // subtree is soft-deleted with it (FolderTree::softDeleteTree),
+                // so the default non-trashed scope already excludes orphans.
+                // The bare "Client Files"/"Staff Files" root anchors are
+                // structural scaffolding auto-provisioned for every user, not
+                // activity — excluded, or a brand new user's Recent would show
+                // nothing but two empty containers created moments earlier.
+                // Actual client/organization/staff folders (not the root type)
+                // still belong here.
+                $this->visibleFolders($user)
+                    ->where('folder_type', '!=', Folder::TYPE_ROOT)
+                    ->orderByDesc('updated_at'),
                 // File Box files (folder_id null) must be included: `folder_id
                 // NOT IN (...)` is never true for NULL, so they'd silently drop.
                 $this->visibleFiles($user)

@@ -79,11 +79,23 @@
   // show shimmering skeletons rather than empty or placeholder rows.
   var homeFilesLoaded = false;
 
+  // `path` from the API is the full ancestor chain ([{id,name}, ...], root
+  // first) rather than just the immediate parent's name — join it into one
+  // breadcrumb string. A file directly in the File Box (no folder) has an
+  // empty path; a top-level folder does too, but only files get the label.
+  function pathLabel(kind, crumbs) {
+    var names = (crumbs || []).map(function (c) { return c.name; });
+    return names.length ? names.join(' / ') : (kind === 'file' ? 'File Box' : '');
+  }
+
   // Folder icon for folders; the real server thumbnail for images (falling back
   // to the file-type icon if it can't be produced); the type icon otherwise.
   function rowIconHtml(f) {
     if (f.kind === 'folder') {
-      return '<img src="images/icons/phosphor/FolderFilled.svg" alt="">';
+      var base = f.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      if (window.TMAFolderIcons) return window.TMAFolderIcons.html(base, f.colour, f.iconName, 24);
+      var src = window.TMAFolderColours ? window.TMAFolderColours.iconSrc(base, f.colour) : 'images/icons/phosphor/' + base + '.svg';
+      return '<img src="' + ui().esc(src) + '" alt="">';
     }
     if (f.thumbUrl) {
       return '<img class="tma-portal-file-row__thumb" src="' + ui().esc(f.thumbUrl) + '" alt="" loading="lazy"' +
@@ -109,11 +121,12 @@
     }
     var rows = s.recentFiles.map(function (f) {
       return '<button type="button" class="tma-portal-file-row" data-home-file="' + ui().esc(f.id) + '"' +
+        ' data-home-file-kind="' + ui().esc(f.kind) + '"' +
         (f.folderId ? ' data-home-file-folder="' + ui().esc(f.folderId) + '"' : '') + '>' +
         rowIconHtml(f) +
         '<span class="tma-portal-file-row__meta">' +
         '<span class="tma-portal-file-row__name">' + ui().esc(f.name) + '</span>' +
-        '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' +
+        (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
         '</span></button>';
     }).join('');
     return '<section class="tma-portal-panel" aria-label="Recent files">' +
@@ -373,8 +386,12 @@
       if (el.isConnected) mount(el, { fromLoad: true });
     }, 12000);
 
+    // The server orders folders before files within a page (same windowing
+    // every other section uses), so a plain perPage=6 could return e.g. 6
+    // folders and cut off a file modified a minute ago. Ask for a wider
+    // candidate pool and do the true recency merge across both types here.
     Promise.all([
-      net.fetchJSON(net.url('/?section=recent&perPage=6')).catch(function () { return null; }),
+      net.fetchJSON(net.url('/?section=recent&perPage=24')).catch(function () { return null; }),
       net.fetchJSON(net.url('/?section=favorites&perPage=8')).catch(function () { return null; }),
     ]).then(function (res) {
       clearTimeout(giveUp);
@@ -382,20 +399,29 @@
       var s = data().state();
 
       // Always assign — a failed fetch yields an empty list, never stale data.
-      s.recentFiles = (res[0] && res[0].files) ? res[0].files.map(function (f) {
+      var recentFolders = (res[0] && res[0].folders || []).map(function (f) {
+        return {
+          kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour,
+          path: pathLabel('folder', f.path), sortAt: f.modifiedAt,
+        };
+      });
+      var recentFiles = (res[0] && res[0].files || []).map(function (f) {
         return {
           kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
-          folderId: f.folder && f.folder.id, path: (f.folder && f.folder.name) || 'File Box',
+          folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
         };
-      }) : [];
+      });
+      s.recentFiles = recentFolders.concat(recentFiles)
+        .sort(function (a, b) { return new Date(b.sortAt || 0) - new Date(a.sortAt || 0); })
+        .slice(0, 6);
 
       var favFolders = (res[1] && res[1].folders || []).map(function (f) {
-        return { kind: 'folder', id: f.id, name: f.name, path: (f.parent && f.parent.name) || 'Folders' };
+        return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
       });
       var favFiles = (res[1] && res[1].files || []).map(function (f) {
         return {
           kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
-          folderId: f.folder && f.folder.id, path: (f.folder && f.folder.name) || 'File Box',
+          folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
         };
       });
       s.folders = s.folders || {};
@@ -477,6 +503,10 @@
 
     el.querySelectorAll('[data-home-file]').forEach(function (b) {
       b.addEventListener('click', function () {
+        if (b.getAttribute('data-home-file-kind') === 'folder') {
+          navigate({ navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: b.getAttribute('data-home-file') });
+          return;
+        }
         // Open the file's own folder; fall back to the File Box when it has none.
         var folderId = b.getAttribute('data-home-file-folder');
         navigate(folderId

@@ -17,6 +17,7 @@ class PreferencesController extends Controller
         'timezone' => 'utc+0',
         'language' => 'en',
         'voice' => 'en-us',
+        'sidebarStyle' => 'hover',
     ];
 
     private const RULES = [
@@ -24,6 +25,7 @@ class PreferencesController extends Controller
         'timezone' => ['string', 'max:32', 'regex:/^utc[+-]\d{1,2}$/'],
         'language' => ['string', 'max:16', 'regex:/^[a-z]{2}(-[a-z]{2,7})?$/i'],
         'voice' => ['string', 'max:32'],
+        'sidebarStyle' => ['string', 'in:standard,hover'],
     ];
 
     /** The signed-in user's preferences, filled in with defaults. */

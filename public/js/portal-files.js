@@ -72,6 +72,7 @@
     data: { folders: [], files: [] },
     loading: false,
     clipboard: null,     // { mode:'cut'|'copy', items:[{type,id,name}] }
+    busy: {},            // uuid -> true while an action on that item is in flight
   };
 
   var globalsBound = false;
@@ -81,15 +82,27 @@
 
   function fileIconSrc(item) {
     if (item.type === 'folder') {
-      return item.fileCount === 0 ? 'images/icons/phosphor/FolderEmpty.svg' : 'images/icons/phosphor/FolderFilled.svg';
+      var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      return window.TMAFolderColours ? window.TMAFolderColours.iconSrc(base, item.colour) : 'images/icons/phosphor/' + base + '.svg';
     }
     if (window.TMAFileIcons) return window.TMAFileIcons.fileIconSrc(item.icon, item.name);
     return 'images/icons/phosphor/File.svg';
   }
 
+  // Full folder icon markup: the coloured folder image, plus the optional
+  // stamped content icon layered on its front panel. Falls back to a bare
+  // <img> (today's exact markup) when no custom icon is set.
+  function folderIconHtml(item, size) {
+    var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+    return window.TMAFolderIcons
+      ? window.TMAFolderIcons.html(base, item.colour, item.iconName, size)
+      : '<img src="' + esc(fileIconSrc(item)) + '" alt="" width="' + size + '" height="' + size + '">';
+  }
+
   // A real image thumbnail (server-generated) when available, else the type
   // icon. Falls back to the icon if the thumbnail can't be produced.
   function thumbOrIcon(item, size) {
+    if (item.type === 'folder') return folderIconHtml(item, size);
     var icon = fileIconSrc(item);
     if (item.type === 'file' && item.thumbUrl) {
       return '<img class="tma-portal-file-thumb" src="' + esc(item.thumbUrl) + '" alt="" loading="lazy" width="' + size + '" height="' + size + '"' +
@@ -119,6 +132,11 @@
   function selectedIds() { return Object.keys(state.selected); }
   function selectedItems() { return selectedIds().map(findItem).filter(Boolean); }
   function isRecycle() { return state.section === 'recycle'; }
+
+  // One in-flight action per item at a time - a second click on the same
+  // row while it's saving is ignored rather than firing a duplicate request.
+  function isBusy(id) { return !!state.busy[id]; }
+  function setBusy(id, on) { if (on) state.busy[id] = true; else delete state.busy[id]; }
 
   function canCreateHere() {
     if (isRecycle() || state.section === 'recent' || state.section === 'shared') return false;
@@ -221,6 +239,44 @@
     if (node.scrollIntoView) { try { node.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }
   }
 
+  /* ── seamless remove / patch / rerender ─────────────
+     The counterparts to insertItem(): drop an item that no longer belongs
+     (deleted, moved elsewhere) or patch fields on one that's still here
+     (renamed, recoloured, resorted, sharing changed) — always local, never
+     a network refetch of the listing. */
+
+  function removeItem(id) {
+    ['folders', 'files'].forEach(function (key) {
+      var list = state.data[key];
+      for (var i = list.length - 1; i >= 0; i--) {
+        if (list[i].id === id) list.splice(i, 1);
+      }
+    });
+    delete state.selected[id];
+    if (state.clipboard) {
+      state.clipboard.items = state.clipboard.items.filter(function (i) { return i.id !== id; });
+    }
+  }
+
+  function updateItem(id, patch) {
+    var it = findItem(id);
+    if (it) { for (var k in patch) { if (patch.hasOwnProperty(k)) it[k] = patch[k]; } }
+    return it;
+  }
+
+  // The page's own scroll container (.tma-dash__main) is never part of the
+  // innerHTML that render() replaces, so it already keeps its scroll
+  // position across a render() call - this just makes that guarantee
+  // explicit instead of relying on the DOM structure never changing.
+  function scrollContainer() { return state.el ? state.el.closest('.tma-dash__main') : null; }
+
+  function rerender() {
+    var sc = scrollContainer();
+    var top = sc ? sc.scrollTop : null;
+    render();
+    if (sc && top != null) sc.scrollTop = top;
+  }
+
   /* ── instant new folder + inline rename ─────────────── */
 
   // "New folder" creates an auto-named "Untitled folder" immediately, pops it
@@ -234,6 +290,7 @@
   // Turn an item's name into an inline editable field. Enter or clicking away
   // keeps the name; Escape reverts. No modal, no right-click.
   function startRename(id) {
+    if (isBusy(id)) return;
     var it = findItem(id);
     if (!it || !perm(it, 'rename') || !state.el) return;
     var nameEl = state.el.querySelector('[data-files-row][data-id="' + id + '"] [data-files-open="' + id + '"]');
@@ -246,19 +303,22 @@
     input.setAttribute('maxlength', '255');
     input.setAttribute('aria-label', 'Rename ' + it.name);
     nameEl.replaceWith(input);
-    input.focus();
+    // preventScroll: focusing a field that's already on screen must not
+    // nudge the list's scroll position - the browser's default focus
+    // behaviour otherwise scrolls it back into "ideal" view.
+    input.focus({ preventScroll: true });
     input.select();
 
     var settled = false;
     function commit() {
       if (settled) return; settled = true;
       var next = input.value.trim();
-      if (!next || next === it.name) { render(); return; } // keep as-is
+      if (!next || next === it.name) { rerender(); return; } // keep as-is
       doRename(it, next);
     }
     function cancel() {
       if (settled) return; settled = true;
-      render();
+      rerender();
     }
     input.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -271,16 +331,19 @@
   }
 
   function doRename(it, next) {
+    setBusy(it.id, true);
+    rerender();
     var url = (it.type === 'folder' ? '/folders/' : '/files/') + it.id;
     net().fetchJSON(net().url(url), { method: 'PATCH', json: { name: next } })
       .then(function (updated) {
+        setBusy(it.id, false);
         var list = it.type === 'folder' ? state.data.folders : state.data.files;
         for (var i = 0; i < list.length; i++) { if (list[i].id === it.id) { list[i] = updated; break; } }
         sortList(list);
-        render();
+        rerender();
         if (it.type === 'folder') foldersChanged();
       })
-      .catch(function (err) { ui().toast(err.message || 'Could not rename'); render(); });
+      .catch(function (err) { setBusy(it.id, false); ui().toast(err.message || 'Could not rename'); rerender(); });
   }
 
   /* ── render ─────────────────────────────────────────── */
@@ -404,8 +467,15 @@
     // A request signs exactly one document, so this appears only for a single
     // signable file - never for a folder or a multi-selection.
     var signable = sel.length === 1 && sel[0].type === 'file' && canSendForSignature(sel[0]);
+    // Colour/icon are per-folder settings - only offered for a single
+    // folder, never a multi-selection (which could mix regular and
+    // default-type folders).
+    var colourable = sel.length === 1 && sel[0].type === 'folder' && perm(sel[0], 'colour');
+    var iconable = sel.length === 1 && sel[0].type === 'folder' && perm(sel[0], 'icon');
     return toolBtn('ArrowLineDown', 'bulk-download', 'Download') +
       (signable ? toolBtn('Signature', 'bulk-signature', 'Send for signature') : '') +
+      (colourable ? toolBtn('Palette', 'bulk-colour', 'Folder colour') : '') +
+      (iconable ? toolBtn('Image', 'bulk-icon', 'Folder icon') : '') +
       toolBtn('ArrowsOutCardinal', 'bulk-move', 'Move', { disabled: !canMove }) +
       toolBtn('Copy', 'bulk-copy', 'Copy', { disabled: !canCopy }) +
       toolBtn('Star', 'bulk-favorite', 'Add to favourites') +
@@ -460,7 +530,11 @@
     headers.push('Name', 'Type', 'Size', 'Owner', isRecycle() ? 'Deleted' : 'Modified', 'Sharing');
 
     var rows = all.map(function (it) {
-      var sel = state.selected[it.id] ? ' class="tma-portal-table__row--selected"' : '';
+      var busy = isBusy(it.id);
+      var rowClasses = [];
+      if (state.selected[it.id]) rowClasses.push('tma-portal-table__row--selected');
+      if (busy) rowClasses.push('is-busy');
+      var cls = rowClasses.length ? ' class="' + rowClasses.join(' ') + '"' : '';
       var star = showStar ? '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' : '';
       var typeLabel = it.type === 'folder' ? 'Folder' : (it.category ? cap(it.category) : 'File');
       var size = it.type === 'folder' ? (it.sizeLabel || '—') : it.sizeLabel;
@@ -469,12 +543,13 @@
       var sharing = (it.assignedTo && it.assignedTo.length)
         ? '<span class="tma-portal-chip tma-portal-chip--shared">Shared</span>'
         : '<span class="tma-portal-table__muted">Private</span>';
+      var busySpin = busy ? '<img class="tma-portal-row-spinner" src="images/icons/tma/Loading-16.svg" alt="" width="14" height="14">' : '';
 
-      return '<tr' + sel + ' data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '">' +
+      return '<tr' + cls + ' data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '">' +
         '<td class="tma-portal-cell--tight"><input type="checkbox" class="tma-dash__check" data-files-check="' + esc(it.id) + '" ' + (state.selected[it.id] ? 'checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></td>' +
         star +
         '<td><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
-        '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '">' + esc(it.name) + '</button></span></td>' +
+        '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '">' + esc(it.name) + '</button>' + busySpin + '</span></td>' +
         '<td class="tma-portal-table__muted">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(size || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(owner) + '</td>' +
@@ -491,17 +566,25 @@
 
   function renderGrid() {
     var cards = items().map(function (it) {
-      var sel = state.selected[it.id] ? ' is-selected' : '';
-      var thumb = (it.type === 'file' && it.thumbUrl)
-        ? '<img class="tma-portal-file-card__thumb-img" src="' + esc(it.thumbUrl) + '" alt="" loading="lazy"' +
-          ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-card__thumb-img\');this.classList.add(\'tma-portal-file-card__icon\');this.src=\'' + esc(fileIconSrc(it)) + '\'">'
-        : '<img class="tma-portal-file-card__icon" src="' + esc(fileIconSrc(it)) + '" alt="" width="40" height="40">';
+      var busy = isBusy(it.id);
+      var cardClasses = [];
+      if (state.selected[it.id]) cardClasses.push('is-selected');
+      if (busy) cardClasses.push('is-busy');
+      var cls = cardClasses.length ? ' ' + cardClasses.join(' ') : '';
+      var thumb = it.type === 'folder'
+        ? folderIconHtml(it, 40)
+        : (it.thumbUrl
+          ? '<img class="tma-portal-file-card__thumb-img" src="' + esc(it.thumbUrl) + '" alt="" loading="lazy"' +
+            ' onerror="this.onerror=null;this.classList.remove(\'tma-portal-file-card__thumb-img\');this.classList.add(\'tma-portal-file-card__icon\');this.src=\'' + esc(fileIconSrc(it)) + '\'">'
+          : '<img class="tma-portal-file-card__icon" src="' + esc(fileIconSrc(it)) + '" alt="" width="40" height="40">');
       var sub = it.type === 'folder'
         ? ((it.fileCount != null ? it.fileCount : 0) + ' items')
         : (it.sizeLabel || '');
-      return '<div class="tma-portal-file-card' + sel + '" data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '" tabindex="0">' +
+      var busySpin = busy ? '<img class="tma-portal-row-spinner tma-portal-row-spinner--card" src="images/icons/tma/Loading-16.svg" alt="" width="14" height="14">' : '';
+      return '<div class="tma-portal-file-card' + cls + '" data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '" tabindex="0">' +
         '<label class="tma-portal-file-card__check"><input type="checkbox" class="tma-dash__check" data-files-check="' + esc(it.id) + '" ' + (state.selected[it.id] ? 'checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></label>' +
         (isRecycle() ? '' : '<span class="tma-portal-file-card__star">' + starBtn(it) + '</span>') +
+        busySpin +
         '<button type="button" class="tma-portal-file-card__thumb" data-files-open="' + esc(it.id) + '">' + thumb + '</button>' +
         '<button type="button" class="tma-portal-file-card__name" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         '<span class="tma-portal-file-card__meta">' + esc(sub) + '</span>' +
@@ -675,7 +758,7 @@
       e.preventDefault();
       var moving = draggingItems;
       draggingItems = null;
-      if (moving && moving.length) bulkRun('move', moving, t.id, function () { clearSelection(); load(); });
+      if (moving && moving.length) bulkRun('move', moving, t.id, clearSelection);
     });
 
     el.addEventListener('dragend', function () {
@@ -809,7 +892,9 @@
       var parts = dir.split('/'); var name = parts.pop(); var parentDir = parts.join('/');
       return ensurePath(parentDir).then(function (parentUuid) {
         return net().fetchJSON(net().url('/folders'), { method: 'POST', json: { name: name, parent: parentUuid } })
-          .then(function (f) { cache[dir] = f.id; return f.id; })
+          // insertItem() only actually shows it if its parent is the folder
+          // currently open - same rule a full reload would apply.
+          .then(function (f) { cache[dir] = f.id; insertItem(f); return f.id; })
           .catch(function () { cache[dir] = parentUuid; return parentUuid; });
       });
     }
@@ -820,7 +905,6 @@
         return ensurePath(dir).then(function (folderUuid) { window.TMAUpload.add([it.file], { folderId: folderUuid }); });
       });
     });
-    chain.then(function () { load(true); });
   }
 
   /* ── selection ──────────────────────────────────────── */
@@ -1010,6 +1094,8 @@
       case 'clear-selection': return clearSelection();
       case 'bulk-download': return bulkDownload();
       case 'bulk-signature': return sendSelectionForSignature();
+      case 'bulk-colour': return bulkColour();
+      case 'bulk-icon': return bulkIcon();
       case 'bulk-move': return bulkDestination('move');
       case 'bulk-copy': return bulkDestination('copy');
       case 'bulk-delete': return bulkDelete();
@@ -1061,7 +1147,9 @@
       var parentDir = parts.join('/');
       return ensurePath(parentDir).then(function (parentUuid) {
         return net().fetchJSON(net().url('/folders'), { method: 'POST', json: { name: name, parent: parentUuid } })
-          .then(function (f) { cache[dir] = f.id; return f.id; })
+          // insertItem() only actually shows it if its parent is the folder
+          // currently open - same rule a full reload would apply.
+          .then(function (f) { cache[dir] = f.id; insertItem(f); return f.id; })
           .catch(function () {
             // Folder may already exist — fall back to the parent so files still land somewhere.
             cache[dir] = parentUuid; return parentUuid;
@@ -1082,7 +1170,6 @@
         });
       });
     });
-    chain.then(function () { setTimeout(function () { load(true); }, 800); });
   }
 
   function newFolderModal() {
@@ -1124,11 +1211,201 @@
           save.disabled = true;
           var url = item.type === 'folder' ? '/folders/' + item.id : '/files/' + item.id;
           net().fetchJSON(net().url(url), { method: 'PATCH', json: { name: name } })
-            .then(function () { ui().closeModal(); ui().toast('Renamed'); load(); })
+            .then(function (updated) {
+              var list = item.type === 'folder' ? state.data.folders : state.data.files;
+              for (var i = 0; i < list.length; i++) { if (list[i].id === item.id) { list[i] = updated; break; } }
+              sortList(list);
+              ui().closeModal();
+              ui().toast('Renamed');
+              if (item.type === 'folder') foldersChanged();
+              rerender();
+            })
             .catch(function (err) { save.disabled = false; showModalError(host, err.message); });
         }
         save.addEventListener('click', submit);
         inputEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+      },
+    });
+  }
+
+  function openColourModal(item) {
+    var colours = window.TMAFolderColours;
+    if (!colours) return;
+    var isDefaultFolder = item.folderType && item.folderType !== 'user';
+    var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+    var selected = colours.isValid(item.colour) ? item.colour : 'default';
+
+    function swatchHtml(c) {
+      var isSel = c.key === selected;
+      return '<button type="button" class="tma-portal-colour-swatch' + (isSel ? ' is-selected' : '') + '"' +
+        ' data-colour-key="' + esc(c.key) + '" style="background:' + esc(c.hex) + '"' +
+        ' aria-label="' + esc(c.label) + '" aria-pressed="' + isSel + '" title="' + esc(c.label) + '"></button>';
+    }
+
+    ui().openModal({
+      title: 'Folder colour',
+      body: '<div class="tma-portal-colour-head">' +
+        '<img class="tma-portal-colour-preview" data-colour-preview src="' + esc(colours.iconSrc(base, selected)) + '" alt="" width="40" height="40">' +
+        '<strong>' + esc(item.name) + '</strong>' +
+        '</div>' +
+        '<div class="tma-portal-colour-swatches" data-colour-swatches>' +
+        colours.PALETTE.map(swatchHtml).join('') +
+        '</div>' +
+        (isDefaultFolder ? '<p class="tma-portal-modal__text">This colour applies to everyone in the organization.</p>' : '') +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-portal-link" data-colour-reset>Reset to default</button>' +
+        '<span class="tma-portal-modal__foot-spacer"></span>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-colour-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-colour-save>Save</button>' +
+        '</div>',
+      onMount: function (host) {
+        var preview = host.querySelector('[data-colour-preview]');
+        var save = host.querySelector('[data-colour-save]');
+
+        function choose(key) {
+          selected = key;
+          preview.src = colours.iconSrc(base, selected);
+          host.querySelectorAll('[data-colour-key]').forEach(function (btn) {
+            var isSel = btn.getAttribute('data-colour-key') === selected;
+            btn.classList.toggle('is-selected', isSel);
+            btn.setAttribute('aria-pressed', isSel);
+          });
+        }
+
+        host.querySelectorAll('[data-colour-key]').forEach(function (btn) {
+          btn.addEventListener('click', function () { choose(btn.getAttribute('data-colour-key')); });
+        });
+        host.querySelector('[data-colour-reset]').addEventListener('click', function () { choose('default'); });
+        host.querySelector('[data-colour-cancel]').addEventListener('click', ui().closeModal);
+        save.addEventListener('click', function () {
+          save.disabled = true;
+          setBusy(item.id, true);
+          var payload = selected === 'default' ? null : selected;
+          net().fetchJSON(net().url('/folders/' + item.id + '/colour'), { method: 'PATCH', json: { colour: payload } })
+            .then(function (res) {
+              setBusy(item.id, false);
+              updateItem(item.id, res);
+              ui().closeModal();
+              ui().toast('Folder colour updated');
+              foldersChanged();
+              rerender();
+            })
+            .catch(function (err) {
+              setBusy(item.id, false);
+              save.disabled = false;
+              showModalError(host, err.message);
+              rerender();
+            });
+        });
+      },
+    });
+  }
+
+  function openIconModal(item) {
+    var icons = window.TMAFolderIcons;
+    var colours = window.TMAFolderColours;
+    if (!icons) return;
+    var isDefaultFolder = item.folderType && item.folderType !== 'user';
+    var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+    var shade = colours ? colours.shade(item.colour) : '#ef9f2c';
+    var selected = icons.isValid(item.iconName) ? item.iconName : null;
+
+    function glyphHtml(name) {
+      var url = icons.iconPath(name);
+      return '<span class="tma-portal-icon-swatch__glyph" style="background-color:' + shade + ';' +
+        'mask-image:url(\'' + url + '\');-webkit-mask-image:url(\'' + url + '\')"></span>';
+    }
+
+    function categoryHtml(label, names) {
+      var buttons = names.map(function (name) {
+        var isSel = name === selected;
+        return '<button type="button" class="tma-portal-icon-swatch' + (isSel ? ' is-selected' : '') + '"' +
+          ' data-icon-name="' + esc(name) + '" aria-pressed="' + isSel + '" title="' + esc(name) + '">' + glyphHtml(name) + '</button>';
+      }).join('');
+      return '<div class="tma-portal-icon-category" data-icon-category="' + esc(label) + '">' +
+        '<div class="tma-portal-icon-category__label">' + esc(label) + '</div>' +
+        '<div class="tma-portal-icon-grid">' + buttons + '</div></div>';
+    }
+
+    var categoriesHtml = Object.keys(icons.CATEGORIES).map(function (label) {
+      return categoryHtml(label, icons.CATEGORIES[label]);
+    }).join('');
+
+    ui().openModal({
+      title: 'Folder icon',
+      body: '<div class="tma-portal-colour-head">' +
+        '<span data-icon-preview>' + icons.html(base, item.colour, selected, 40) + '</span>' +
+        '<strong>' + esc(item.name) + '</strong>' +
+        '</div>' +
+        '<div class="tma-portal-icon-search">' + ui().input({ placeholder: 'Search icons…', attrs: 'data-icon-search maxlength="60"' }) + '</div>' +
+        '<div class="tma-portal-icon-categories" data-icon-categories>' + categoriesHtml + '</div>' +
+        '<p class="tma-portal-icon-empty" data-icon-empty hidden>No icons match your search.</p>' +
+        (isDefaultFolder ? '<p class="tma-portal-modal__text">This icon applies to everyone in the organization.</p>' : '') +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-portal-link" data-icon-reset>Remove custom icon</button>' +
+        '<span class="tma-portal-modal__foot-spacer"></span>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-icon-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-icon-save>Save</button>' +
+        '</div>',
+      onMount: function (host) {
+        var preview = host.querySelector('[data-icon-preview]');
+        var save = host.querySelector('[data-icon-save]');
+        var search = host.querySelector('[data-icon-search]');
+        var categoriesEl = host.querySelector('[data-icon-categories]');
+        var emptyEl = host.querySelector('[data-icon-empty]');
+
+        function choose(name) {
+          selected = name;
+          preview.innerHTML = icons.html(base, item.colour, selected, 40);
+          host.querySelectorAll('[data-icon-name]').forEach(function (btn) {
+            var isSel = btn.getAttribute('data-icon-name') === selected;
+            btn.classList.toggle('is-selected', isSel);
+            btn.setAttribute('aria-pressed', isSel);
+          });
+        }
+
+        host.querySelectorAll('[data-icon-name]').forEach(function (btn) {
+          btn.addEventListener('click', function () { choose(btn.getAttribute('data-icon-name')); });
+        });
+        host.querySelector('[data-icon-reset]').addEventListener('click', function () { choose(null); });
+        host.querySelector('[data-icon-cancel]').addEventListener('click', ui().closeModal);
+
+        // Client-side only - no network call, just show/hide what's already rendered.
+        search.addEventListener('input', function () {
+          var q = search.value.trim().toLowerCase();
+          var anyVisible = false;
+          categoriesEl.querySelectorAll('[data-icon-category]').forEach(function (cat) {
+            var catVisible = false;
+            cat.querySelectorAll('[data-icon-name]').forEach(function (btn) {
+              var match = !q || btn.getAttribute('data-icon-name').toLowerCase().indexOf(q) !== -1;
+              btn.hidden = !match;
+              if (match) catVisible = true;
+            });
+            cat.hidden = !catVisible;
+            if (catVisible) anyVisible = true;
+          });
+          emptyEl.hidden = anyVisible;
+        });
+
+        save.addEventListener('click', function () {
+          save.disabled = true;
+          setBusy(item.id, true);
+          net().fetchJSON(net().url('/folders/' + item.id + '/icon'), { method: 'PATCH', json: { icon: selected } })
+            .then(function (res) {
+              setBusy(item.id, false);
+              updateItem(item.id, res);
+              ui().closeModal();
+              ui().toast('Folder icon updated');
+              foldersChanged();
+              rerender();
+            })
+            .catch(function (err) {
+              setBusy(item.id, false);
+              save.disabled = false;
+              showModalError(host, err.message);
+              rerender();
+            });
+        });
       },
     });
   }
@@ -1159,52 +1436,89 @@
   }
 
   function toggleStar(id) {
+    if (isBusy(id)) return;
     var it = findItem(id);
     if (!it) return;
     var prev = !!it.favorite;
+    setBusy(id, true);
     // Optimistic: flip to yellow (or off) immediately, reconcile with server.
     it.favorite = !prev;
-    render();
+    rerender();
     net().fetchJSON(net().url('/favorites/toggle'), { method: 'POST', json: { type: it.type, id: it.id } })
       .then(function (res) {
-        it.favorite = res.favorite;
-        if (state.section === 'favorites' && !res.favorite) load();
-        else render();
+        setBusy(id, false);
+        // Already known locally that it must leave a favorites-only view -
+        // no need to hit the network again to find that out.
+        if (state.section === 'favorites' && !res.favorite) removeItem(id);
+        else it.favorite = res.favorite;
+        rerender();
       })
-      .catch(function (err) { it.favorite = prev; render(); ui().toast(err.message || 'Could not update favourite'); });
+      .catch(function (err) {
+        setBusy(id, false);
+        it.favorite = prev;
+        rerender();
+        ui().toast(err.message || 'Could not update favourite');
+      });
   }
 
   function deleteItem(item) {
+    if (isBusy(item.id)) return;
     confirmModal({
       title: 'Move to recycle bin',
       message: 'Move “' + item.name + '” to the recycle bin?' + (item.type === 'folder' ? ' Its contents go with it and can be restored.' : ''),
       confirmLabel: 'Move to bin', danger: true,
       onConfirm: function () {
+        setBusy(item.id, true);
+        rerender();
         var url = item.type === 'folder' ? '/folders/' + item.id : '/files/' + item.id;
         net().fetchJSON(net().url(url), { method: 'DELETE' })
-          .then(function () { ui().toast('Moved to recycle bin'); foldersChanged(); load(); })
-          .catch(function (err) { ui().toast(err.message || 'Could not delete'); });
+          .then(function () {
+            setBusy(item.id, false);
+            removeItem(item.id);
+            ui().toast('Moved to recycle bin');
+            foldersChanged();
+            rerender();
+          })
+          .catch(function (err) { setBusy(item.id, false); ui().toast(err.message || 'Could not delete'); rerender(); });
       },
     });
   }
 
   function restoreItem(item) {
+    if (isBusy(item.id)) return;
+    setBusy(item.id, true);
+    rerender();
     var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/restore';
     net().fetchJSON(net().url(url), { method: 'POST' })
-      .then(function () { ui().toast('Restored'); foldersChanged(); load(); })
-      .catch(function (err) { ui().toast(err.message || 'Could not restore'); });
+      .then(function () {
+        setBusy(item.id, false);
+        removeItem(item.id);
+        ui().toast('Restored');
+        foldersChanged();
+        rerender();
+      })
+      .catch(function (err) { setBusy(item.id, false); ui().toast(err.message || 'Could not restore'); rerender(); });
   }
 
   function forceDeleteItem(item) {
+    if (isBusy(item.id)) return;
     confirmModal({
       title: 'Delete permanently',
       message: 'Permanently delete “' + item.name + '”? This cannot be undone.',
       confirmLabel: 'Delete forever', danger: true,
       onConfirm: function () {
+        setBusy(item.id, true);
+        rerender();
         var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/force';
         net().fetchJSON(net().url(url), { method: 'DELETE' })
-          .then(function () { ui().toast('Permanently deleted'); foldersChanged(); load(); })
-          .catch(function (err) { ui().toast(err.message || 'Could not delete'); });
+          .then(function () {
+            setBusy(item.id, false);
+            removeItem(item.id);
+            ui().toast('Permanently deleted');
+            foldersChanged();
+            rerender();
+          })
+          .catch(function (err) { setBusy(item.id, false); ui().toast(err.message || 'Could not delete'); rerender(); });
       },
     });
   }
@@ -1216,7 +1530,7 @@
       confirmLabel: 'Empty bin', danger: true,
       onConfirm: function () {
         net().fetchJSON(net().url('/recycle-bin/empty'), { method: 'POST' })
-          .then(function (r) { ui().toast('Recycle bin emptied'); load(); })
+          .then(function (r) { state.data = { folders: [], files: [] }; state.selected = {}; ui().toast('Recycle bin emptied'); rerender(); })
           .catch(function (err) { ui().toast(err.message || 'Could not empty bin'); });
       },
     });
@@ -1241,9 +1555,9 @@
   function pasteClipboard() {
     if (!state.clipboard) return;
     var action = state.clipboard.mode === 'cut' ? 'move' : 'copy';
+    var wasCut = state.clipboard.mode === 'cut';
     bulkRun(action, state.clipboard.items, state.folder, function () {
-      if (state.clipboard.mode === 'cut') state.clipboard = null;
-      load();
+      if (wasCut) state.clipboard = null;
     });
   }
 
@@ -1257,6 +1571,22 @@
   function renderDetails(d) {
     function row(label, value) {
       return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">' + esc(label) + '</span><span class="tma-portal-details__value">' + esc(value == null || value === '' ? '—' : value) + '</span></div>';
+    }
+    function colourRow(item) {
+      var colours = window.TMAFolderColours;
+      if (!colours) return '';
+      var key = colours.isValid(item.colour) ? item.colour : 'default';
+      var swatch = colours.PALETTE.filter(function (c) { return c.key === key; })[0];
+      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">Colour</span>' +
+        '<span class="tma-portal-details__value tma-portal-details__value--colour">' +
+        '<span class="tma-portal-colour-dot" style="background:' + esc(swatch ? swatch.hex : '#fec656') + '"></span>' +
+        esc(colours.label(key)) + '</span></div>';
+    }
+    function iconRow(item) {
+      if (!item.iconName) return '';
+      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">Icon</span>' +
+        '<span class="tma-portal-details__value tma-portal-details__value--colour">' +
+        '<span style="margin-right:var(--space-6, 6px)">' + folderIconHtml(item, 18) + '</span>' + esc(item.iconName) + '</span></div>';
     }
     var rows = '';
     rows += row('Name', d.name);
@@ -1272,6 +1602,8 @@
     } else {
       rows += row('Files', d.fileCount);
       rows += row('Subfolders', d.folderCount);
+      rows += colourRow(d);
+      rows += iconRow(d);
       rows += row('Total size', d.sizeLabel);
       rows += row('Location', d.parent ? d.parent.name : 'Top level');
       rows += row('Created', fmtDate(d.createdAt));
@@ -1283,13 +1615,31 @@
     rows += row('Sharing', (d.assignedTo && d.assignedTo.length) ? 'Shared' : 'Private');
     rows += row('Favourite', d.favorite ? 'Yes' : 'No');
 
+    var canRecolour = d.type === 'folder' && perm(d, 'colour');
+    var canReicon = d.type === 'folder' && perm(d, 'icon');
+    var headIcon = d.type === 'folder' ? folderIconHtml(d, 32) : '<img src="' + esc(fileIconSrc(d)) + '" alt="" width="32" height="32" style="border-radius:0">';
     var host = ui().openModal({
       title: 'Details',
       body: '<div class="tma-portal-details">' +
-        '<div class="tma-portal-details__head"><img src="' + esc(fileIconSrc(d)) + '" alt="" width="32" height="32" style="border-radius:0"><strong>' + esc(d.name) + '</strong></div>' +
+        '<div class="tma-portal-details__head">' + headIcon + '<strong>' + esc(d.name) + '</strong></div>' +
         rows +
         (d.type === 'file' && perm(d, 'download') ? '<div class="tma-portal-modal__foot"><a class="tma-no-data__btn" href="' + esc(d.downloadUrl) + '" download>Download</a></div>' : '') +
+        (canRecolour ? '<div class="tma-portal-modal__foot"><button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-details-colour>Change colour</button></div>' : '') +
+        (canReicon ? '<div class="tma-portal-modal__foot"><button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-details-icon>Change icon</button></div>' : '') +
         '</div>',
+      onMount: function (host) {
+        if (canReicon) {
+          host.querySelector('[data-details-icon]').addEventListener('click', function () {
+            ui().closeModal();
+            openIconModal(d);
+          });
+        }
+        if (!canRecolour) return;
+        host.querySelector('[data-details-colour]').addEventListener('click', function () {
+          ui().closeModal();
+          openColourModal(d);
+        });
+      },
     });
     // When opened from the lightbox, the details modal must sit IN FRONT of it
     // (the lightbox is z-index 600; the modal is normally 240).
@@ -1400,7 +1750,18 @@
   }
 
   function wireShare(host, item, data, mode) {
-    function reload(resp) { renderShare(host, item, resp, mode); }
+    // Keep the underlying row's "Shared" indicator in sync the moment a
+    // share/assignment/role changes - the modal never reloads the library,
+    // but the row behind it was going stale until the next full reload.
+    function reload(resp) {
+      renderShare(host, item, resp, mode);
+      var assignedTo = (resp.people || [])
+        .filter(function (p) { return p.kind === 'user'; })
+        .map(function (p) { return p.person && p.person.name; })
+        .filter(Boolean);
+      updateItem(item.id, { assignedTo: assignedTo, shared: assignedTo.length > 0 });
+      rerender();
+    }
     function post(json) { return net().fetchJSON(net().url('/shares'), { method: 'POST', json: json }); }
     var type = item.type, id = item.id;
 
@@ -1509,6 +1870,18 @@
     sendForSignature(sel[0]);
   }
 
+  function bulkColour() {
+    var sel = selectedItems();
+    if (sel.length !== 1 || sel[0].type !== 'folder' || !perm(sel[0], 'colour')) return;
+    openColourModal(sel[0]);
+  }
+
+  function bulkIcon() {
+    var sel = selectedItems();
+    if (sel.length !== 1 || sel[0].type !== 'folder' || !perm(sel[0], 'icon')) return;
+    openIconModal(sel[0]);
+  }
+
   function contextItems(item) {
     var list = [];
     var isFolder = item.type === 'folder';
@@ -1533,6 +1906,8 @@
     if (perm(item, 'copy')) list.push({ label: 'Copy', icon: 'Copy', fn: function () { copyItem(item); } });
     if (perm(item, 'move')) list.push({ label: 'Move to…', icon: 'ArrowsOutCardinal', fn: function () { bulkRun('move', [item], null, load, true); } });
     if (perm(item, 'rename')) list.push({ label: 'Rename', icon: 'PencilSimple', fn: function () { startRename(item.id); } });
+    if (isFolder && perm(item, 'colour')) list.push({ label: 'Folder colour', icon: 'Palette', fn: function () { openColourModal(item); } });
+    if (isFolder && perm(item, 'icon')) list.push({ label: 'Folder icon', icon: 'Image', fn: function () { openIconModal(item); } });
     list.push({ label: item.favorite ? 'Remove from favourites' : 'Add to favourites', icon: 'Star', fn: function () { toggleStar(item.id); } });
     if (isFolder && window.TMASidebarShortcuts) {
       var pinned = window.TMASidebarShortcuts.isPinned(item.id);
@@ -1601,7 +1976,7 @@
   }
 
   function bulk(action) {
-    bulkRun(action, bulkPayload(), null, function () { clearSelection(); load(); });
+    bulkRun(action, bulkPayload(), null, clearSelection);
   }
 
   function bulkDelete() {
@@ -1627,7 +2002,7 @@
   }
 
   function bulkDestination(mode) {
-    bulkRun(mode, bulkPayload(), null, function () { clearSelection(); load(); }, true);
+    bulkRun(mode, bulkPayload(), null, clearSelection, true);
   }
 
   /* Run a bulk action; when pickTarget is true, open the destination picker. */
@@ -1643,14 +2018,61 @@
   }
 
   function postBulk(action, payload, target, onDone) {
+    payload = payload.filter(function (p) { return !isBusy(p.id); });
+    if (!payload.length) return;
+    payload.forEach(function (p) { setBusy(p.id, true); });
+    rerender();
     net().fetchJSON(net().url('/bulk'), { method: 'POST', json: { action: action, items: payload, target: target } })
       .then(function (res) {
+        payload.forEach(function (p) { setBusy(p.id, false); });
         if (res.errors && res.errors.length) ui().toast(res.errors[0].message);
         else ui().toast('Done');
+        reconcileBulk(action, payload, res.results, res.errors);
         if (payload.some(function (p) { return p.type === 'folder'; })) foldersChanged();
         if (onDone) onDone();
+        rerender();
       })
-      .catch(function (err) { ui().toast(err.message || 'Action failed'); });
+      .catch(function (err) {
+        payload.forEach(function (p) { setBusy(p.id, false); });
+        ui().toast(err.message || 'Action failed');
+        rerender();
+      });
+  }
+
+  // Apply a /bulk response locally - never a listing refetch. Skips any ref
+  // that came back in `errors` (it's still exactly as it was).
+  function reconcileBulk(action, payload, results, errors) {
+    var failedIds = {};
+    (errors || []).forEach(function (e) { failedIds[e.id] = true; });
+    var byId = {};
+    (results || []).forEach(function (r) { byId[r.id] = r.item; });
+
+    payload.forEach(function (ref) {
+      if (failedIds[ref.id]) return;
+      switch (action) {
+        case 'delete': case 'forceDelete': case 'restore':
+          removeItem(ref.id);
+          break;
+        case 'favorite':
+          updateItem(ref.id, { favorite: true });
+          break;
+        case 'unfavorite':
+          if (state.section === 'favorites') removeItem(ref.id);
+          else updateItem(ref.id, { favorite: false });
+          break;
+        case 'move':
+          // Same id, possibly a new parent/name - drop the stale entry, then
+          // reinsert only if it now belongs in the view that's open (e.g. a
+          // paste into the current folder); insertItem() no-ops otherwise.
+          removeItem(ref.id);
+          if (byId[ref.id]) insertItem(byId[ref.id]);
+          break;
+        case 'copy':
+          // A new id - only shows up if the destination is the open folder.
+          if (byId[ref.id]) insertItem(byId[ref.id]);
+          break;
+      }
+    });
   }
 
   /* ── destination picker (mini folder browser) ───────── */
@@ -1685,7 +2107,7 @@
             var listHtml = folders.length
               ? folders.map(function (f) {
                   return '<button type="button" class="tma-portal-picker__folder" data-pick-open="' + esc(f.id) + '">' +
-                    '<img src="' + esc(fileIconSrc(f)) + '" alt="" width="20" height="20"><span>' + esc(f.name) + '</span></button>';
+                    folderIconHtml(f, 20) + '<span>' + esc(f.name) + '</span></button>';
                 }).join('')
               : '<p class="tma-portal-picker__empty">No subfolders here.</p>';
             body.innerHTML = '<div class="tma-portal-picker__crumbs">' + crumbHtml + '</div><div class="tma-portal-picker__list">' + listHtml + '</div>';

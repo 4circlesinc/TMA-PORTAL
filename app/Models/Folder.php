@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'uuid', 'name', 'parent_id', 'owner_id', 'created_by', 'deleted_by',
     'folder_type', 'client_id', 'subject_user_id', 'audience', 'audience_role',
-    'org_wide', 'is_archived',
+    'org_wide', 'is_archived', 'colour', 'icon_name',
 ])]
 class Folder extends Model
 {

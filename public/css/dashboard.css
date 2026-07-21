@@ -651,8 +651,12 @@
   justify-content: center;
   /* Left padding matches --dash-nav-icon-inset (nav-item's padding + its
      hidden caret placeholder + the gap after it), so the mark's box lines
-     up with the icon column below, not with the item's bare padding. */
-  padding: 0 var(--space-4) var(--space-16) var(--dash-nav-icon-inset);
+     up with the icon column below, not with the item's bare padding.
+     Top padding centres the collapsed mark on the header row beside it:
+     the sidebar's own 12px top padding plus this 10px lands the mark's
+     centre at the same y as the header's 32px icon buttons (20px header
+     padding + half their height) - without it the mark sits ~10px high. */
+  padding: var(--space-10) var(--space-4) var(--space-16) var(--dash-nav-icon-inset);
   overflow: hidden;
   flex-shrink: 0;
   transition: padding-left 0.36s cubic-bezier(0.16, 1, 0.3, 1);
@@ -666,7 +670,8 @@
   min-width: 0;
 }
 /* The sidebar shows only the mark (never the full wordmark), left-aligned,
-   at all times — collapsed rail or hover-expanded alike. */
+   at all times — collapsed rail or hover-expanded alike. Standard-style
+   sidebars override this once expanded, below. */
 .tma-dash__sidebar-logo .tma-dash__logo-expanded { display: none; }
 .tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: flex; }
 
@@ -3120,12 +3125,19 @@
 .tma-dash__cmd[hidden] { display: none; }
 
 /* Desktop collapse - sidebar rests as an icon-only rail; rightbar hides.
-   The rail is the permanent default (see mount() in dashboard.js — it's no
-   longer a user-toggled state). Hovering or focusing the rail (mouse, or
-   Tab/click via toggleSidebar()'s focus-pin) lifts the `:not(:has(...))`
-   guard below, so every one of these rules stops applying and the sidebar
-   falls back to its normal, non-collapsed appearance while it expands as an
-   overlay — see the "hover/focus expand" block further down.
+   Two user-selectable sidebar styles share this rail appearance (Settings →
+   Appearance → Sidebar Style):
+
+   - Hover style (default, no `.tma-dash--sidebar-standard` on root): the
+     rail is the permanent resting state. Hovering or focusing it (mouse, or
+     Tab/click via toggleSidebar()'s focus-pin) lifts the `:not(:has(...))`
+     guard below, so every one of these rules stops applying and the sidebar
+     falls back to its normal, non-collapsed appearance while it expands as
+     an overlay — see the "hover/focus expand" block further down.
+   - Standard style (`.tma-dash--sidebar-standard`): the rail only reflects
+     `.is-sidebar-collapsed`, which toggleSidebar() now flips directly on
+     click — hover/focus never expand it, so these selectors apply
+     unconditionally instead of checking `:has(:hover, :focus-within)`.
 
    The sidebar's own padding and the logo are deliberately IDENTICAL between
    collapsed and expanded so they never snap. The icon's centering is the
@@ -3133,33 +3145,65 @@
    unlike the justify-content:center this used to use) widens to center the
    icon in the 72px rail, then eases back as the sidebar expands, so the
    label smoothly uncovers to its right rather than popping in. Only content
-   that has nowhere to go in a 72px rail (tabs, subnav trees, the shortcuts
-   list) hard-hides here. The sidebar mark gets the same padding-left
+   that has nowhere to go in a 72px rail (tabs, subnav trees) hard-hides
+   here — Folder Shortcuts stays visible as icons, same as the Main Menu,
+   since a pinned folder is exactly the kind of thing worth one-click reach
+   from the resting rail. The sidebar mark gets the same padding-left
    treatment for the same reason: its expanded padding-left is sized to line
    up with the nav icon column, not to center in a bare 72px rail. */
 @media (min-width: 1025px) {
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item {
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-item {
     padding-left: calc((var(--dash-sidebar-collapsed-w) - var(--space-8) * 2 - var(--dash-icon-md)) / 2);
   }
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__sidebar-logo {
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__sidebar-logo,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__sidebar-logo {
     padding-left: calc((var(--dash-sidebar-collapsed-w) - var(--space-8) * 2 - clamp(24px, 21px + 0.5vw, 28px)) / 2);
   }
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile-meta,
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-section--tabs,
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__group-label,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile-meta,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-section--tabs,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__group-label,
   /* Hides the label, but never a <span> that is itself an icon (or its
      badge-anchor wrapper). */
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap),
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-caret,
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__subnav,
-  /* The resting rail has no room for tabs, so it always shows the main menu
-     and never the shortcuts — both reappear once the rail expands. */
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) [data-list="shortcuts"],
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item--fav { display: none; }
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap),
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-caret,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__subnav,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item--fav,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__profile-meta,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-section--tabs,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tabs,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__group-label,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap),
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-caret,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__subnav,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-item--fav { display: none; }
+
+  /* Folder Shortcuts stays visible as icons in the resting rail even when
+     Main Menu is the last-active tab: showList() (dashboard.js) leaves the
+     inactive list carrying the native `hidden` attribute, and
+     .tma-dash__nav-section[hidden] is `display:none !important` - beaten
+     here the same way, so both lists render stacked (icons only) instead of
+     only whichever tab was open last. The remove button and the padding it
+     reserves only make sense with a visible label, so both are dropped too. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) [data-list="shortcuts"][hidden],
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard [data-list="shortcuts"][hidden] {
+    display: flex !important;
+  }
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-remove,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-remove,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-note,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-note,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-skeleton,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-skeleton { display: none; }
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut .tma-dash__nav-item,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut .tma-dash__nav-item {
+    padding-right: var(--space-8);
+  }
   /* The rail is too narrow for the avatar and sign-out side by side — they
      overflow it. Stack them instead. */
-  .tma-dash.is-sidebar-collapsed:not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile {
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__profile {
     flex-direction: column;
     justify-content: center;
     gap: var(--space-8);
@@ -3168,18 +3212,23 @@
 }
 @media (min-width: 1025px) {
   /* The grid track itself always reserves only the rail width — the content
-     and rightbar columns never move, whether the rail is resting or the
-     sidebar is expanded over them on hover/focus. */
+     and rightbar columns never move for the hover style, whether the rail
+     is resting or expanded over them. The standard style is the exception:
+     once it's expanded (`.is-sidebar-collapsed` removed), it falls through
+     to the un-collapsed `.tma-dash` grid earlier in this file, which gives
+     the sidebar its full track width and shifts the content beside it. */
   .tma-dash.is-sidebar-collapsed { grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) var(--dash-rightbar-w); }
   .tma-dash.is-rightbar-collapsed { grid-template-columns: var(--dash-sidebar-w) minmax(0, 1fr) 0; }
   .tma-dash.is-sidebar-collapsed.is-rightbar-collapsed { grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) 0; }
   .tma-dash.is-rightbar-collapsed .tma-dash__rightbar { display: none; }
 
-  /* Hover/focus expand: the sidebar lifts out of the grid track (which stays
-     reserved at the rail width above) and overlays the content beside it —
-     the content column never resizes or shifts. */
-  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar:hover,
-  .tma-dash.is-sidebar-collapsed .tma-dash__sidebar:focus-within {
+  /* Hover/focus expand (hover style only): the sidebar lifts out of the grid
+     track (which stays reserved at the rail width above) and overlays the
+     content beside it — the content column never resizes or shifts. The
+     standard style never hits this: its toggle removes `.is-sidebar-collapsed`
+     outright instead of relying on hover/focus. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar:hover,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar:focus-within {
     position: fixed;
     top: 0;
     left: 0;
@@ -3189,8 +3238,29 @@
     box-shadow: var(--shadow-popup);
   }
   /* The resize handle only makes sense for a persistently-widened sidebar;
-     the hover overlay always opens at the same width. */
+     the hover overlay always opens at the same width, and the standard
+     style's collapsed rail isn't resizable either. */
   .tma-dash.is-sidebar-collapsed .tma-dash__sidebar .tma-dash__resize-handle--sidebar {
+    display: none;
+  }
+
+  /* Standard style, expanded: show the full regular logo, centered, instead
+     of the mark-only treatment every other state uses. */
+  .tma-dash--sidebar-standard:not(.is-sidebar-collapsed) .tma-dash__sidebar-logo {
+    padding-left: var(--space-4);
+  }
+  .tma-dash--sidebar-standard:not(.is-sidebar-collapsed) .tma-dash__sidebar-logo .tma-dash__logo-expanded {
+    display: flex;
+    justify-content: center;
+  }
+  .tma-dash--sidebar-standard:not(.is-sidebar-collapsed) .tma-dash__sidebar-logo .tma-dash__logo-collapsed {
+    display: none;
+  }
+
+  /* Hover style only: no dedicated open/close control on desktop — hover or
+     focus is the only way in, per the sidebar-style spec. Reuses the same
+     button for the mobile drawer, so this only hides it at desktop widths. */
+  .tma-dash:not(.tma-dash--sidebar-standard) [data-action="toggle-sidebar"] {
     display: none;
   }
 }
@@ -20887,6 +20957,39 @@ button.tma-dash__header-popup-item:focus-visible {
   color: var(--color-text-primary);
 }
 
+/* Sidebar style options reuse the theme-option preview card, but need a
+   description line and more breathing room than the bare mode/color swatches. */
+.tma-dash__settings-sidebar-style-options {
+  gap: var(--space-24);
+}
+
+.tma-dash__settings-sidebar-style-option {
+  width: 168px;
+}
+
+.tma-dash__settings-sidebar-style-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  text-align: left;
+}
+
+.tma-dash__settings-sidebar-style-desc {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-16);
+  color: var(--color-text-secondary);
+}
+
+/* Standard: a wide track suggesting the open, content-shifting sidebar.
+   Hover: a narrow rail suggesting the collapsed, overlay-on-hover sidebar. */
+.tma-dash__settings-sidebar-preview--standard .tma-dash__settings-theme-preview-sidebar {
+  flex: 0 0 28px;
+}
+.tma-dash__settings-sidebar-preview--hover .tma-dash__settings-theme-preview-sidebar {
+  flex: 0 0 9px;
+}
+
 .tma-dash__settings-theme-stack {
   display: flex;
   flex-direction: column;
@@ -21418,6 +21521,27 @@ button.tma-dash__header-popup-item:focus-visible {
   .tma-dash__settings-theme-option-label {
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
+  }
+
+  .tma-dash__settings-sidebar-style-options {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tma-dash__settings-sidebar-style-option {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-12);
+  }
+
+  .tma-dash__settings-sidebar-style-copy {
+    flex: 1 1 auto;
+  }
+
+  .tma-dash__settings-sidebar-style-desc {
+    font-size: var(--text-size-14);
+    line-height: var(--text-lh-16);
   }
 
   .tma-dash__settings-font-scale {

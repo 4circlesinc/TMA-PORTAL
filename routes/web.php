@@ -117,6 +117,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/folders', [FolderController::class, 'store'])->name('folders.store');
         Route::get('/folders/{uuid}', [FolderController::class, 'show'])->name('folders.show');
         Route::patch('/folders/{uuid}', [FolderController::class, 'update'])->name('folders.update');
+        Route::patch('/folders/{uuid}/colour', [FolderController::class, 'colour'])->name('folders.colour');
+        Route::patch('/folders/{uuid}/icon', [FolderController::class, 'icon'])->name('folders.icon');
         Route::post('/folders/{uuid}/move', [FolderController::class, 'move'])->name('folders.move');
         Route::post('/folders/{uuid}/copy', [FolderController::class, 'copy'])->name('folders.copy');
         Route::delete('/folders/{uuid}', [FolderController::class, 'destroy'])->name('folders.destroy');
