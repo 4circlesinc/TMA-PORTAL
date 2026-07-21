@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'conversation_id', 'user_id', 'role', 'last_read_message_id', 'last_read_at',
+    'conversation_id', 'user_id', 'role',
+    'last_delivered_message_id', 'last_delivered_at',
+    'last_read_message_id', 'last_read_at', 'cleared_before_message_id',
     'marked_unread_at', 'pinned_at', 'archived_at', 'muted_until',
     'draft', 'draft_updated_at', 'joined_at', 'left_at',
 ])]
@@ -20,6 +22,7 @@ class ConversationParticipant extends Model
     protected function casts(): array
     {
         return [
+            'last_delivered_at' => 'datetime',
             'last_read_at' => 'datetime',
             'marked_unread_at' => 'datetime',
             'pinned_at' => 'datetime',
@@ -60,6 +63,8 @@ class ConversationParticipant extends Model
         return Message::query()
             ->where('conversation_id', $this->conversation_id)
             ->where('id', '>', $this->last_read_message_id ?? 0)
+            // A cleared conversation must not resurface as unread.
+            ->where('id', '>', $this->cleared_before_message_id ?? 0)
             ->where(function ($query) {
                 $query->whereNull('user_id')->orWhere('user_id', '!=', $this->user_id);
             })

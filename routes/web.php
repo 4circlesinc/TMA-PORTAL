@@ -263,6 +263,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Literal paths before the {uuid} wildcard so it can't swallow them.
         Route::get('/contacts', [MessagingController::class, 'contacts'])->name('contacts');
         Route::post('/heartbeat', [MessagingController::class, 'heartbeat'])->name('heartbeat');
+        // Bulk receipt acknowledgement — one call covers every conversation.
+        Route::post('/delivered', [MessagingController::class, 'markAllDelivered'])->name('delivered');
         Route::get('/settings', [MessagingController::class, 'settings'])->name('settings');
         Route::put('/settings', [MessagingController::class, 'updateSettings'])->name('settings.update');
 
@@ -270,6 +272,15 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/conversations/{uuid}/messages', [MessagingController::class, 'send'])->name('conversations.send');
         Route::post('/conversations/{uuid}/read', [MessagingController::class, 'markRead'])->name('conversations.read');
         Route::post('/conversations/{uuid}/unread', [MessagingController::class, 'markUnread'])->name('conversations.unread');
+        Route::post('/conversations/{uuid}/delivered', [MessagingController::class, 'markDelivered'])->name('conversations.delivered');
+
+        // Conversation-level actions behind the chat menu. Clearing and
+        // leaving are one-sided: neither touches the other participant's copy.
+        Route::post('/conversations/{uuid}/clear', [MessagingController::class, 'clearChat'])->name('conversations.clear');
+        Route::post('/conversations/{uuid}/block', [MessagingController::class, 'block'])->name('conversations.block');
+        Route::post('/conversations/{uuid}/unblock', [MessagingController::class, 'unblock'])->name('conversations.unblock');
+        Route::get('/conversations/{uuid}/export', [MessagingController::class, 'export'])->name('conversations.export');
+        Route::delete('/conversations/{uuid}', [MessagingController::class, 'destroyConversation'])->name('conversations.destroy');
         Route::put('/conversations/{uuid}/draft', [MessagingController::class, 'saveDraft'])->name('conversations.draft');
         Route::patch('/conversations/{uuid}', [MessagingController::class, 'updateConversation'])->name('conversations.update');
         Route::get('/conversations/{uuid}/photo', [MessagingAttachmentController::class, 'conversationPhoto'])->name('conversations.photo');

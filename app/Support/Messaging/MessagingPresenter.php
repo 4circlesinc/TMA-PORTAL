@@ -7,6 +7,7 @@ use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Models\UserBlock;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -68,6 +69,9 @@ class MessagingPresenter
                 ? PresenceService::forViewer($counterpart, $viewer)
                 : ['label' => 'Group chat'],
             'counterpartId' => $counterpart?->id,
+            // Drives Block vs Unblock in the conversation menu.
+            'blocked' => $counterpart !== null
+                && in_array($counterpart->id, self::blockedIds($viewer), true),
         ];
     }
 
@@ -112,6 +116,32 @@ class MessagingPresenter
                 'delete' => ! $deleted && $message->isDeletableBy($viewer, $conversation->participantFor($viewer)),
             ],
         ];
+    }
+
+    /**
+     * Everyone this viewer has blocked, or been blocked by, memoised for the
+     * life of the request. The chat list presents many conversations at once,
+     * so checking each pair individually would be one query per row.
+     */
+    private static array $blockCache = [];
+
+    private static function blockedIds(User $viewer): array
+    {
+        if (! isset(self::$blockCache[$viewer->id])) {
+            self::$blockCache[$viewer->id] = UserBlock::query()
+                ->where('user_id', $viewer->id)
+                ->pluck('blocked_user_id')
+                ->merge(
+                    UserBlock::query()
+                        ->where('blocked_user_id', $viewer->id)
+                        ->pluck('user_id')
+                )
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        return self::$blockCache[$viewer->id];
     }
 
     /** The compact quote shown above a reply. */
@@ -177,10 +207,15 @@ class MessagingPresenter
     }
 
     /**
-     * 'sent' until everyone else has read it, then 'read'.
+     * The sender's tick state: 'sent' → 'delivered' → 'read'.
      *
-     * A participant who has turned read receipts off never advances this, so
-     * their reading stays invisible to the sender.
+     * Each step requires *every* other participant to have reached it, so in a
+     * group the tick only turns blue once the whole room has read it — which is
+     * the behaviour people already expect from other messengers.
+     *
+     * Read receipts are a privacy setting, delivery is not. Someone with
+     * receipts off still advances the message to 'delivered' (their device did
+     * receive it) but never to 'read'; that is the whole point of the setting.
      */
     private static function deliveryStatus(Message $message, Conversation $conversation): string
     {
@@ -198,7 +233,22 @@ class MessagingPresenter
             return ($p->last_read_message_id ?? 0) >= $message->id;
         });
 
-        return $allRead ? 'read' : 'sent';
+        if ($allRead) {
+            return 'read';
+        }
+
+        // Reading implies receiving, so a participant whose read mark is past
+        // this message counts as delivered even if the delivery mark lagged.
+        $allDelivered = $others->every(function (ConversationParticipant $p) use ($message) {
+            $reached = max(
+                $p->last_delivered_message_id ?? 0,
+                $p->last_read_message_id ?? 0,
+            );
+
+            return $reached >= $message->id;
+        });
+
+        return $allDelivered ? 'delivered' : 'sent';
     }
 
     /**

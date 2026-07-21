@@ -254,7 +254,7 @@ picked up the live mailbox's token and synced a real account into itself.
 
 The Messages page was a pure mock — a hard-coded `THREADS` array with a
 scripted ByeWind conversation and no network calls at all. It is now backed by
-`/portal/messaging`, so these three scripts exist to keep it that way.
+`/portal/messaging`, so these four scripts exist to keep it that way.
 
 - **`messaging.mjs`** — the page against a real server: the list comes from the
   API (and contains none of the old mock names), messages load and send and
@@ -302,7 +302,41 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 node tests/Browser/messaging-toolbar.mjs
 ```
 
-Seed all three with several conversations, one of them deep enough to page:
+- **`messaging-phase1.mjs`** — the Phase 1 rework: three-state delivery ticks,
+  message tool placement, the right-click menu, closing a chat, the
+  repositioned inbox toolbar, and the conversation menu. Runs **two contexts**,
+  because the tick states are only meaningful between two people — a message is
+  *delivered* when the other client acknowledges it and *seen* when they open
+  it.
+
+  It asserts the tick **state machine** (`sent` → `delivered` → `read`) and
+  re-reads deliberately rather than waiting on a transport; live propagation of
+  the same change belongs to `messaging-realtime.mjs`, which runs against real
+  Reverb. It also pins that ticks never appear on incoming messages, that the
+  pair renders ≤20px wide (they used to be two text glyphs a full advance-width
+  apart), and that closing a chat holds the inbox scroll position.
+
+  Reset delivery state between runs, or every message is already `read` and the
+  first two tick states can't be observed:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  App\Models\ConversationParticipant::query()->update([
+    'last_read_message_id' => null, 'last_delivered_message_id' => null,
+    'cleared_before_message_id' => null, 'marked_unread_at' => null,
+    'pinned_at' => null, 'archived_at' => null,
+  ]);
+"
+
+node tests/Browser/messaging-phase1.mjs
+```
+
+**The page no longer auto-opens a conversation on load.** It used to select the
+newest one on desktop, which marked it read on the user's behalf — a false read
+receipt for a message nobody had looked at, and a wiped unread badge. Scripts
+must open a conversation by name before touching `[data-messages-chat-body]`.
+
+Seed all four with several conversations, one of them deep enough to page:
 
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="

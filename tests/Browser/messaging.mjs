@@ -141,16 +141,26 @@ try {
   );
 
   step(6, 'The message persisted (survives a reload)');
+  // Capture the open conversation's name before reloading. The page no longer
+  // auto-opens anything on load — that used to mark the newest conversation
+  // read without the user looking at it — so it has to be re-opened by name.
+  const openedName = (
+    await page.textContent('.tma-dash__messages-row--active .tma-dash__messages-row-name')
+  ).trim();
+
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('.tma-dash__messages-row', { timeout: 15000 });
   await page.waitForTimeout(1200);
 
-  // Re-open the same conversation and look for the message.
-  const reopened = page.locator('.tma-dash__messages-row', { hasText: lastRowName.split('\n')[0] }).first();
-  if (await reopened.count()) {
-    await reopened.click();
-    await page.waitForTimeout(1200);
-  }
+  check(
+    await page.locator('.tma-dash__messages-chat--empty').count() === 1,
+    'the chat column starts empty rather than auto-opening a conversation',
+  );
+
+  await page.locator('.tma-dash__messages-row', { hasText: openedName }).first().click();
+  await page.waitForSelector('[data-messages-chat-body]', { timeout: 10000 });
+  await page.waitForTimeout(1200);
+
   const afterReload = await page.textContent('[data-messages-chat-body]');
   check(afterReload.includes(unique), 'message is still there after a full reload — it was written to the server');
 

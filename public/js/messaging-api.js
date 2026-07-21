@@ -114,6 +114,41 @@
       return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/read', { method: 'POST' });
     },
 
+    /* Acknowledge receipt — the sender's second grey tick. Distinct from
+     * markRead, and not gated on any privacy setting. */
+    markDelivered: function (conversationId) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/delivered', {
+        method: 'POST',
+      });
+    },
+
+    /* Acknowledge receipt across every conversation in one call. */
+    markAllDelivered: function () {
+      return api(BASE + '/delivered', { method: 'POST' }).catch(function () {});
+    },
+
+    clearChat: function (conversationId) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/clear', {
+        method: 'POST',
+      });
+    },
+
+    setBlocked: function (conversationId, blocked) {
+      return api(
+        BASE + '/conversations/' + encodeURIComponent(conversationId) + (blocked ? '/block' : '/unblock'),
+        { method: 'POST' }
+      );
+    },
+
+    /* Leaves the conversation for this user; the other side keeps theirs. */
+    leaveConversation: function (conversationId) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId), { method: 'DELETE' });
+    },
+
+    exportUrl: function (conversationId) {
+      return BASE + '/conversations/' + encodeURIComponent(conversationId) + '/export';
+    },
+
     markUnread: function (conversationId) {
       return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/unread', { method: 'POST' });
     },

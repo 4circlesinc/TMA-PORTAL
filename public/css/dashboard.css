@@ -24315,15 +24315,37 @@ button.tma-dash__header-popup-item:focus-visible {
   text-decoration: underline;
 }
 
-/* Delivery ticks. */
+/* Delivery ticks. Drawn as SVG so the two ticks nest tightly instead of
+ * sitting a text advance-width apart. */
 .tma-dash__messages-bubble-status {
+  display: inline-flex;
+  align-items: center;
   margin-left: var(--space-4);
   font-size: var(--text-size-12);
   line-height: 16px;
+  vertical-align: middle;
+  color: var(--color-text-secondary);
 }
 
+.tma-dash__messages-tick {
+  display: block;
+  width: 16px;
+  height: 10px;
+}
+
+/* Sent and delivered are both grey; only "seen" changes colour. */
 .tma-dash__messages-bubble-status--read {
   color: var(--color-primary-brand, #1c6ef2);
+}
+
+/* An unconfirmed optimistic send: a small hollow ring, not a tick. */
+.tma-dash__messages-tick-pending {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.6;
 }
 
 .tma-dash__messages-bubble-status--failed {
@@ -24374,18 +24396,69 @@ button.tma-dash__header-popup-item:focus-visible {
   border-color: var(--color-text-secondary);
 }
 
-/* Hover actions beside a bubble. */
-.tma-dash__messages-bubble-actions {
+/* The bubble and its reactions stack; the action tools sit alongside that
+ * stack. Direction flips per side so the tools are always on the *outside*
+ * edge of the message, never overlapping the conversation's centre. */
+.tma-dash__messages-bubble-track {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+}
+
+.tma-dash__messages-bubble-row--out .tma-dash__messages-bubble-track {
+  flex-direction: row;
+}
+
+.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-track {
+  flex-direction: row-reverse;
+}
+
+.tma-dash__messages-bubble-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: var(--space-4);
+}
+
+.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-main {
+  align-items: flex-end;
+}
+
+/* Hover actions beside a bubble — tight to each other and to the message. */
+.tma-dash__messages-bubble-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
   opacity: 0;
   transition: opacity 120ms ease;
 }
 
 .tma-dash__messages-bubble-row:hover .tma-dash__messages-bubble-actions,
-.tma-dash__messages-bubble-row:focus-within .tma-dash__messages-bubble-actions {
+.tma-dash__messages-bubble-row:focus-within .tma-dash__messages-bubble-actions,
+/* Mobile long-press pins them open; there is no hover to rely on. */
+.tma-dash__messages-bubble-row.is-actions-open .tma-dash__messages-bubble-actions {
   opacity: 1;
+}
+
+.tma-dash__messages-bubble-action {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 3px;
+}
+
+.tma-dash__messages-bubble-action .tma-dash__messages-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Touch devices have no hover, so keep the tools visible rather than
+ * unreachable — long-press still opens the fuller context menu. */
+@media (hover: none) {
+  .tma-dash__messages-bubble-actions {
+    opacity: 0.55;
+  }
 }
 
 /* Overflow menu for one message. */
@@ -24690,4 +24763,61 @@ button.tma-dash__header-popup-item:focus-visible {
   font-size: var(--text-size-12);
   color: var(--color-text-primary);
   cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+ * Messages — inbox column footer. Search stays at the top of the column; the
+ * New message and Messages settings controls are pinned to the bottom, outside
+ * the scrolling list so they stay reachable however long the list runs.
+ * ------------------------------------------------------------------------- */
+
+.tma-dash__messages-list-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+  padding: var(--space-8);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-16);
+}
+
+.tma-dash__messages-list-foot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: var(--space-6);
+  border: none;
+  border-radius: var(--radius-12);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__messages-list-foot-btn:hover,
+.tma-dash__messages-list-foot-btn.is-active {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-list-foot-btn img {
+  width: 20px;
+  height: 20px;
+  opacity: 0.75;
+}
+
+/* The panels open above the footer rather than covering it. */
+.tma-dash__messages-panel {
+  bottom: 60px;
+}
+
+/* Close-conversation control in the chat header. */
+.tma-dash__messages-chat-close {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+}
+
+/* Read/unread swipe action, alongside pin and mute. */
+.tma-dash__messages-row-swipe-action--read {
+  background: var(--color-bg-input);
 }

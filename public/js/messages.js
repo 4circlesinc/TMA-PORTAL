@@ -292,27 +292,7 @@
     );
   }
 
-  function renderListTools(forMobileHead, state) {
-    return (
-      '<div class="tma-dash__messages-list-tools">' +
-      (forMobileHead
-        ? ''
-        : renderComposeBtn('tma-dash__messages-icon-btn', ' data-messages-compose')) +
-      // The spec's "Messages Settings" control. This gear is that button —
-      // there is deliberately no second settings entry point.
-      '<button type="button" class="tma-dash__messages-icon-btn' +
-      (state && state.settingsOpen ? ' is-active' : '') +
-      '" aria-label="Messages settings" data-messages-settings' +
-      ' aria-expanded="' + (state && state.settingsOpen ? 'true' : 'false') + '">' +
-      '<img src="' + ICONS.GearSix + '" alt="">' +
-      '</button>' +
-      '</div>'
-    );
-  }
 
-  function renderMessagesMobileFab() {
-    return renderComposeBtn('tma-dash__messages-compose-fab', ' data-messages-compose');
-  }
 
   /*
    * The search field. Was a plain <span> with no input behind it; it is now a
@@ -337,11 +317,33 @@
     );
   }
 
+  /* Top of the inbox column: search only. */
   function renderListHead(state) {
     return (
       '<div class="tma-dash__messages-list-head">' +
-      renderListTools(false, state) +
       renderSearchField(state) +
+      '</div>'
+    );
+  }
+
+  /*
+   * Bottom of the inbox column: New message and Messages settings. Pinned
+   * outside the scrolling list so both stay reachable however far the
+   * conversation list runs.
+   */
+  function renderListFoot(state) {
+    return (
+      '<div class="tma-dash__messages-list-foot">' +
+      renderComposeBtn(
+        'tma-dash__messages-list-foot-btn',
+        ' data-messages-compose'
+      ).replace('aria-label="New message"', 'aria-label="New message" title="New message"') +
+      '<button type="button" class="tma-dash__messages-list-foot-btn' +
+      (state && state.settingsOpen ? ' is-active' : '') +
+      '" aria-label="Messages settings" title="Messages settings" data-messages-settings' +
+      ' aria-expanded="' + (state && state.settingsOpen ? 'true' : 'false') + '">' +
+      '<img src="' + ICONS.GearSix + '" alt="">' +
+      '</button>' +
       '</div>'
     );
   }
@@ -350,9 +352,6 @@
     return (
       '<div class="tma-dash__messages-list-mobile-head">' +
       '<span class="tma-dash__messages-list-mobile-title">Messages</span>' +
-      '<div class="tma-dash__messages-list-mobile-actions">' +
-      renderListTools(true, state) +
-      '</div>' +
       renderSearchField(state) +
       '</div>'
     );
@@ -472,6 +471,19 @@
       ICONS.BellSlash +
       '" alt="" width="18" height="18">' +
       (muted ? 'Unmute' : 'Mute') +
+      '</button>' +
+      // Read / unread toggle. The label follows the row's current state so the
+      // button always names what it is about to do.
+      '<button type="button" class="tma-dash__messages-row-swipe-action tma-dash__messages-row-swipe-action--read"' +
+      ' data-messages-row-swipe-action="' + (row.unread ? 'read' : 'unread') + '" data-messages-row-id="' +
+      esc(rowId) +
+      '" aria-label="' +
+      (row.unread ? 'Mark as read' : 'Mark as unread') +
+      '">' +
+      '<img class="tma-dash__messages-row-swipe-action-icon" src="' +
+      ICONS.CheckCircle +
+      '" alt="" width="18" height="18">' +
+      (row.unread ? 'Read' : 'Unread') +
       '</button>' +
       '</div>' +
       '<div class="tma-dash__messages-row-swipe-actions tma-dash__messages-row-swipe-actions--right" aria-hidden="true">' +
@@ -697,6 +709,7 @@
       (rows.length ? body : (people ? '' : body)) +
       people +
       '</div>' +
+      renderListFoot(state) +
       '</div>'
     );
   }
@@ -890,9 +903,34 @@
   }
 
   /*
-   * Delivery ticks, sender side only. 'pending' covers an optimistic bubble
-   * that the server has not confirmed yet; 'failed' is a send that errored and
-   * can be retried from the bubble.
+   * Delivery ticks. Drawn as one SVG rather than two "✓" glyphs so the second
+   * tick can overlap the first the way every messenger renders it — text
+   * characters sit a full advance-width apart and read as two separate marks.
+   *
+   * The viewBox is deliberately narrow (16x10) and the second tick starts at
+   * x=5, giving the tight nested look.
+   */
+  function renderTicks(doubled) {
+    var stroke =
+      'fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round"';
+
+    return (
+      '<svg class="tma-dash__messages-tick" viewBox="0 0 16 10" width="16" height="10" aria-hidden="true">' +
+      '<path d="M1 5.5 L4 8.5 L10 1.5" ' + stroke + '></path>' +
+      (doubled ? '<path d="M6 5.5 L9 8.5 L15 1.5" ' + stroke + '></path>' : '') +
+      '</svg>'
+    );
+  }
+
+  /*
+   * Sender-side only — an incoming message never carries a tick.
+   *
+   *   pending    the optimistic bubble, not yet confirmed by the server
+   *   sent       stored, but nobody's client has acknowledged it
+   *   delivered  every other participant's client has it  (two grey)
+   *   read       every other participant has opened it    (two blue)
+   *   failed     the send errored and can be retried
    */
   function renderBubbleStatus(msg) {
     if (msg.direction !== 'out') return '';
@@ -902,13 +940,19 @@
       pending: 'Sending',
       failed: 'Not sent — tap to retry',
       sent: 'Sent',
-      read: 'Read',
+      delivered: 'Delivered',
+      read: 'Seen',
     }[state] || 'Sent';
+
+    var glyph;
+    if (state === 'failed') glyph = '<span aria-hidden="true">!</span>';
+    else if (state === 'pending') glyph = '<span class="tma-dash__messages-tick-pending" aria-hidden="true"></span>';
+    else glyph = renderTicks(state === 'delivered' || state === 'read');
 
     return (
       '<span class="tma-dash__messages-bubble-status tma-dash__messages-bubble-status--' + state +
       '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
-      (state === 'failed' ? '!' : state === 'pending' ? '·' : state === 'read' ? '✓✓' : '✓') +
+      glyph +
       '</span>'
     );
   }
@@ -1039,7 +1083,13 @@
         ? '<span class="tma-dash__messages-bubble-sender">' + esc(msg.sender.name) + '</span>'
         : '';
 
+    /*
+     * The bubble and its reactions stack; the action tools sit *beside* that
+     * stack rather than under it. They used to be a third block in the column,
+     * which pushed them well below the message and far from each other.
+     */
     var bubble =
+      '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       (isReplyTarget ? ' tma-dash__messages-bubble--reply-target' : '') +
       (msg.failed ? ' tma-dash__messages-bubble--failed' : '') +
@@ -1050,6 +1100,7 @@
       inner +
       '</div>' +
       renderReactions(msg) +
+      '</div>' +
       renderBubbleActions(msg, index);
 
     return (
@@ -1495,7 +1546,11 @@
       [
         { icon: 'Phone', label: 'Voice call (unavailable)', disabled: true },
         { icon: 'VideoCamera', label: 'Video call (unavailable)', disabled: true },
-        { icon: 'DotsThree', label: 'Conversation menu', attr: ' data-messages-conversation-menu' },
+        {
+          icon: 'DotsThree',
+          label: 'Conversation menu',
+          attr: ' data-messages-conversation-menu aria-haspopup="menu"',
+        },
       ]
         .map(function (action) {
           return (
@@ -1510,6 +1565,10 @@
           );
         })
         .join('') +
+      // Close the conversation and go back to the list. Escape does the same.
+      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-chat-close" ' +
+      'data-messages-close aria-label="Close conversation" title="Close conversation (Esc)">' +
+      '<span aria-hidden="true">×</span></button>' +
       '</div>' +
       '</div>' +
       '<div class="tma-dash__messages-chat-body" data-messages-chat-body>' +
@@ -1532,9 +1591,6 @@
       if (isMessagesReading(state)) layoutCls += ' tma-dash__messages-layout--mobile-reading';
     }
     var html = '<div class="' + layoutCls + '">' + renderList(state) + renderChat(state) + '</div>';
-    if (isMessagesMobile() && !isMessagesReading(state)) {
-      html += renderMessagesMobileFab();
-    }
     return html;
   }
 
@@ -1670,22 +1726,54 @@
         track.classList.add('is-dragging');
       }
 
-      function moveDrag(clientX, clientY, prevent) {
+      /*
+       * Decide once, early, whether a gesture is a horizontal swipe-to-reply
+       * or a vertical scroll, then commit to that decision.
+       *
+       * DEAD_ZONE keeps a tap or a slightly shaky finger from moving anything
+       * at all. AXIS_RATIO is what stops the swipe firing during a scroll: the
+       * horizontal component has to clearly dominate, not merely win by a
+       * pixel, which is how a fast thumb-scroll used to trigger a reply.
+       */
+      var DEAD_ZONE = 8;
+      var AXIS_RATIO = 1.3;
+
+      function moveDrag(clientX, clientY, prevent, pointerId) {
         if (!dragging) return;
         var dx = clientX - startX;
         var dy = clientY - startY;
+
         if (!moved) {
-          if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-          if (Math.abs(dy) > Math.abs(dx)) {
+          if (Math.abs(dx) < DEAD_ZONE && Math.abs(dy) < DEAD_ZONE) return;
+
+          if (Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) {
+            // A scroll, not a swipe. Give the pointer back so the list
+            // actually scrolls — holding capture here left the gesture dead.
             dragging = false;
             track.classList.remove('is-dragging');
+            if (pointerId !== undefined && track.hasPointerCapture(pointerId)) {
+              track.releasePointerCapture(pointerId);
+            }
+            setOffset(0);
             return;
           }
+
           moved = true;
           if (chatBody) chatBody.classList.add('is-swipe-dragging');
         }
+
         if (prevent) prevent();
-        setOffset(startOffset + dx);
+
+        // Past the trigger the bubble resists further travel, so the gesture
+        // has a felt end point rather than sliding on to the clamp.
+        var raw = startOffset + dx;
+        var trigger = getReplySwipeTrigger();
+        if (Math.abs(raw) > trigger) {
+          var overshoot = Math.abs(raw) - trigger;
+          raw = (raw < 0 ? -1 : 1) * (trigger + overshoot * 0.35);
+        }
+
+        setOffset(raw);
       }
 
       function endDrag() {
@@ -1712,9 +1800,14 @@
         'pointermove',
         function (e) {
           if (!dragging) return;
-          moveDrag(e.clientX, e.clientY, function () {
-            e.preventDefault();
-          });
+          moveDrag(
+            e.clientX,
+            e.clientY,
+            function () {
+              e.preventDefault();
+            },
+            e.pointerId
+          );
         },
         { passive: false }
       );
@@ -1880,12 +1973,20 @@
       row.archived = !row.archived;
       changes = { archived: row.archived };
       message = row.archived ? 'Conversation archived' : 'Conversation unarchived';
-    } else if (action === 'trash') {
-      // "Delete" on a conversation row archives it. Nothing here destroys the
-      // other participant's copy of the history.
-      row.archived = true;
-      changes = { archived: true };
-      message = 'Conversation archived';
+    } else if (action === 'read') {
+      row.unread = 0;
+      row.markedUnread = false;
+      render();
+      syncTabBarBadges();
+      window.TMAMessagingAPI.markRead(id).catch(function () {});
+      return;
+    } else if (action === 'unread') {
+      row.unread = row.unread || 1;
+      row.markedUnread = true;
+      render();
+      syncTabBarBadges();
+      window.TMAMessagingAPI.markUnread(id).catch(function () {});
+      return;
     }
 
     if (!changes) return;
@@ -2070,7 +2171,8 @@
           return true;
         }
         if (current <= -max * 0.75) {
-          applyMessagesRowAction(root, state, render, id, 'trash', wrap);
+          closeMessagesRowSwipes(root);
+          runConversationAction(root, state, render, id, 'leave');
           return true;
         }
 
@@ -2187,7 +2289,13 @@
         var action = btn.getAttribute('data-messages-row-swipe-action');
         var id = btn.getAttribute('data-messages-row-id');
         var wrap = btn.closest('[data-messages-row-swipe]');
-        if (action === 'delete') action = 'trash';
+        // 'delete' is a real delete now — it leaves the conversation for
+        // this user — so route it through the confirming action.
+        if (action === 'delete') {
+          closeMessagesRowSwipes(root);
+          runConversationAction(root, state, render, id, 'leave');
+          return;
+        }
         applyMessagesRowAction(root, state, render, id, action, wrap);
       });
     });
@@ -2342,9 +2450,11 @@
         if (state.selectedId && !findThread(state.selectedId)) {
           state.selectedId = null;
         }
-        if (!state.selectedId && !isMessagesMobile() && STORE.threads.length) {
-          state.selectedId = STORE.threads[0].id;
-        }
+        // Deliberately no auto-select. Opening the newest conversation on load
+        // marked it read on the user's behalf — they never looked at it — which
+        // sent a false read receipt and wiped the unread badge. The chat column
+        // starts in its empty state instead, the same one the close button
+        // returns to.
 
         // Seed the composer from the stored draft for whichever conversation
         // ends up open. Without this a draft only reappeared when the user
@@ -2354,6 +2464,11 @@
 
         render();
         startRealtime(root, state, render);
+
+        // Having the list *is* delivery: this account demonstrably holds these
+        // messages now, whether or not any conversation is open. One call
+        // covers every conversation.
+        window.TMAMessagingAPI.markAllDelivered();
 
         if (state.selectedId) {
           loadThread(root, state, render, state.selectedId, { toBottom: true });
@@ -2592,6 +2707,27 @@
     }
   }
 
+  /*
+   * Leave the open conversation without picking another one.
+   *
+   * Everything about the inbox is deliberately left alone — scroll position,
+   * search text, filters — so closing a chat returns you to exactly the list
+   * you were looking at rather than a reset one.
+   */
+  function closeConversation(root, state, render) {
+    if (!state.selectedId) return;
+
+    flushDraft(state.selectedId, getComposerDraft(state));
+
+    state.selectedId = null;
+    state.reading = false;
+    state.editing = null;
+    clearReplyTo(state);
+    closeMessageMenu();
+
+    render();
+  }
+
   /* ------------------------------------------------------------------
    * Realtime
    * ---------------------------------------------------------------- */
@@ -2698,6 +2834,25 @@
       render();
     });
 
+    window.TMAMessagingRealtime.listen(channel, 'conversation.delivered', function (payload) {
+      // Somebody's client acknowledged receipt: our single tick becomes two.
+      // 'read' must never be downgraded back to 'delivered'.
+      var list = getMessages(payload.conversationId);
+      var changed = false;
+      list.forEach(function (msg) {
+        if (
+          msg.direction === 'out' &&
+          msg.seq &&
+          msg.seq <= payload.lastDeliveredSeq &&
+          msg.status === 'sent'
+        ) {
+          msg.status = 'delivered';
+          changed = true;
+        }
+      });
+      if (changed) render();
+    });
+
     window.TMAMessagingRealtime.listen(channel, 'conversation.read', function (payload) {
       // Someone else read up to `lastReadSeq`; turn our ticks over.
       var list = getMessages(payload.conversationId);
@@ -2734,13 +2889,20 @@
         mergeMessages(conversationId, data.messages || [], false);
         if (data.conversation) replaceThread(data.conversation);
         render();
+
+        // Acknowledge receipt first — that is true the moment it arrives.
+        // Marking it read is a separate, weaker claim and only holds if the
+        // tab is actually visible.
+        window.TMAMessagingAPI.markDelivered(conversationId).catch(function () {});
         if (!document.hidden) markConversationRead(root, state, render, conversationId);
+
         notifyNewMessage(root, conversationId, payload);
       });
       return;
     }
 
-    // Not the open conversation: refresh just this row's summary and badge.
+    // Not the open conversation, but it still arrived at this client.
+    window.TMAMessagingAPI.markDelivered(conversationId).catch(function () {});
     refreshConversationRow(root, state, render, conversationId, payload);
   }
 
@@ -3085,6 +3247,162 @@
   }
 
   /* ------------------------------------------------------------------
+   * Conversation menu
+   *
+   * One definition, shared by the chat header's three-dot button and a
+   * right-click on a row in the list, so the two can never drift apart.
+   * ---------------------------------------------------------------- */
+
+  function conversationMenuItems(row) {
+    var items = [
+      { action: 'pin', label: row.pinned ? 'Unpin conversation' : 'Pin conversation' },
+      { action: 'mute', label: row.muted ? 'Unmute notifications' : 'Mute notifications' },
+      { action: 'archive', label: row.archived ? 'Unarchive conversation' : 'Archive conversation' },
+      { action: 'unread', label: 'Mark as unread' },
+      { action: 'export', label: 'Export chat' },
+      { action: 'clear', label: 'Clear messages', danger: true },
+    ];
+
+    // Blocking only means anything between two people.
+    if (row.type !== 'group') {
+      items.push({
+        action: 'block',
+        label: row.blocked ? 'Unblock contact' : 'Block contact',
+        danger: !row.blocked,
+      });
+    }
+
+    items.push({
+      action: 'leave',
+      label: row.type === 'group' ? 'Leave group' : 'Delete conversation',
+      danger: true,
+    });
+
+    return items;
+  }
+
+  function openConversationMenu(root, state, render, anchor, conversationId, position) {
+    closeMessageMenu();
+
+    var row = findThread(conversationId);
+    if (!row) return;
+
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__messages-message-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = conversationMenuItems(row)
+      .map(function (item) {
+        return (
+          '<button type="button" role="menuitem" class="tma-dash__messages-message-menu-item' +
+          (item.danger ? ' tma-dash__messages-message-menu-item--danger' : '') +
+          '" data-conv-action="' + item.action + '">' + esc(item.label) + '</button>'
+        );
+      })
+      .join('');
+
+    document.body.appendChild(menu);
+    positionFloating(menu, anchor, position);
+
+    menu.querySelectorAll('[data-conv-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var action = btn.getAttribute('data-conv-action');
+        closeMessageMenu();
+        runConversationAction(root, state, render, conversationId, action);
+      });
+    });
+
+    openMenuEl = menu;
+    setTimeout(function () {
+      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+    }, 0);
+  }
+
+  function runConversationAction(root, state, render, conversationId, action) {
+    var row = findThread(conversationId);
+    if (!row) return;
+    var api = window.TMAMessagingAPI;
+
+    // Pin / mute / archive already have optimistic handling.
+    if (action === 'pin' || action === 'mute' || action === 'archive') {
+      commitMessagesRowAction(root, state, render, conversationId, action);
+      return;
+    }
+
+    if (action === 'unread') {
+      row.unread = row.unread || 1;
+      row.markedUnread = true;
+      render();
+      syncTabBarBadges();
+      api.markUnread(conversationId).catch(function () {
+        showMessagesToast(root, 'Could not mark as unread');
+      });
+      return;
+    }
+
+    if (action === 'export') {
+      // A normal download; the transcript is generated server-side.
+      window.location.href = api.exportUrl(conversationId);
+      return;
+    }
+
+    if (action === 'clear') {
+      if (!window.confirm('Clear all messages in this conversation? This only clears your own copy.')) return;
+      api
+        .clearChat(conversationId)
+        .then(function () {
+          STORE.threadMessages[conversationId] = {
+            messages: [], hasMore: false, loading: false, loaded: true,
+          };
+          row.preview = 'No messages yet';
+          row.unread = 0;
+          render();
+          showMessagesToast(root, 'Messages cleared');
+        })
+        .catch(function () {
+          showMessagesToast(root, 'Chat could not be cleared');
+        });
+      return;
+    }
+
+    if (action === 'block') {
+      var blocking = !row.blocked;
+      if (blocking && !window.confirm('Block this person? They will not be able to message you.')) return;
+      row.blocked = blocking;
+      render();
+      api.setBlocked(conversationId, blocking).catch(function () {
+        row.blocked = !blocking;
+        render();
+        showMessagesToast(root, 'That could not be saved');
+      });
+      return;
+    }
+
+    if (action === 'leave') {
+      var isGroup = row.type === 'group';
+      var prompt = isGroup
+        ? 'Leave this group? You will stop receiving its messages.'
+        : 'Delete this conversation? It is removed for you; the other person keeps their copy.';
+      if (!window.confirm(prompt)) return;
+
+      api
+        .leaveConversation(conversationId)
+        .then(function () {
+          STORE.threads = STORE.threads.filter(function (r) {
+            return r.id !== conversationId;
+          });
+          delete STORE.threadMessages[conversationId];
+          if (state.selectedId === conversationId) closeConversation(root, state, render);
+          else render();
+          syncTabBarBadges();
+          showMessagesToast(root, isGroup ? 'You left the group' : 'Conversation deleted');
+        })
+        .catch(function () {
+          showMessagesToast(root, 'That could not be completed');
+        });
+    }
+  }
+
+  /* ------------------------------------------------------------------
    * Event wiring
    * ---------------------------------------------------------------- */
 
@@ -3139,6 +3457,85 @@
         e.preventDefault();
         e.stopPropagation();
         openMessageMenu(root, state, render, btn, btn.getAttribute('data-messages-menu'));
+      });
+    });
+
+    /*
+     * Right-click and long-press open the same menu at the pointer. Long press
+     * is the mobile equivalent — there is no hover there — and it must not fire
+     * when the finger is actually scrolling or swiping to reply.
+     */
+    root.querySelectorAll('[data-messages-id]').forEach(function (row) {
+      var messageId = row.getAttribute('data-messages-id');
+      if (!messageId || row.dataset.contextBound) return;
+      row.dataset.contextBound = '1';
+
+      row.addEventListener('contextmenu', function (e) {
+        // Let the browser's own menu handle links and selected text.
+        if (e.target.closest('a') || String(window.getSelection() || '')) return;
+        e.preventDefault();
+        openMessageMenu(root, state, render, row, messageId, { x: e.clientX, y: e.clientY });
+      });
+
+      var pressTimer = null;
+      var pressOrigin = null;
+
+      function cancelPress() {
+        if (pressTimer) clearTimeout(pressTimer);
+        pressTimer = null;
+        pressOrigin = null;
+        row.classList.remove('is-actions-open');
+      }
+
+      row.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse') return; // right-click covers desktop
+        pressOrigin = { x: e.clientX, y: e.clientY };
+        pressTimer = setTimeout(function () {
+          pressTimer = null;
+          row.classList.add('is-actions-open');
+          openMessageMenu(root, state, render, row, messageId, pressOrigin);
+        }, 450);
+      });
+
+      row.addEventListener('pointermove', function (e) {
+        if (!pressOrigin) return;
+        // Any real movement means a scroll or a swipe, not a press.
+        if (Math.abs(e.clientX - pressOrigin.x) > 8 || Math.abs(e.clientY - pressOrigin.y) > 8) {
+          cancelPress();
+        }
+      });
+
+      row.addEventListener('pointerup', cancelPress);
+      row.addEventListener('pointercancel', cancelPress);
+    });
+
+    // The chat header's three-dot menu.
+    var convMenuBtn = root.querySelector('[data-messages-conversation-menu]');
+    if (convMenuBtn) {
+      convMenuBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openConversationMenu(root, state, render, convMenuBtn, state.selectedId);
+      });
+    }
+
+    var closeBtn = root.querySelector('[data-messages-close]');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function () {
+        closeConversation(root, state, render);
+      });
+    }
+
+    // Desktop right-click on a conversation row gets the same actions the
+    // mobile swipe reveals.
+    root.querySelectorAll('[data-messages-row]').forEach(function (rowEl) {
+      rowEl.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        openConversationMenu(
+          root, state, render, rowEl,
+          rowEl.getAttribute('data-messages-row'),
+          { x: e.clientX, y: e.clientY }
+        );
       });
     });
 
@@ -3270,45 +3667,53 @@
     }
   }
 
-  /* Per-message overflow menu: copy, edit, delete. */
-  function openMessageMenu(root, state, render, anchor, messageId) {
+  /*
+   * Per-message menu, opened by the "more" button, a right-click, or a mobile
+   * long press. Only actions that will actually work are listed — permissions
+   * come from the server on each message (`msg.can`), never from hiding
+   * buttons client-side alone.
+   *
+   * Attachment actions (open / download / save to library) and forward, star
+   * and message info arrive with their phases; listing them now would put back
+   * exactly the dead controls this work is removing.
+   */
+  function openMessageMenu(root, state, render, anchor, messageId, position) {
     closeMessageMenu();
 
     var msg = findMessageById(state.selectedId, messageId);
-    if (!msg) return;
+    if (!msg || msg.deleted) return;
 
-    var items = [{ action: 'copy', label: 'Copy text', enabled: !!msg.body }];
-    if (msg.can && msg.can.edit) items.push({ action: 'edit', label: 'Edit', enabled: true });
-    if (msg.can && msg.can.delete) items.push({ action: 'delete', label: 'Delete', enabled: true });
+    var items = [{ action: 'reply', label: 'Reply' }];
+    if (msg.body) items.push({ action: 'copy', label: 'Copy text' });
+    if (msg.can && msg.can.edit) items.push({ action: 'edit', label: 'Edit' });
+    if (msg.can && msg.can.delete) items.push({ action: 'delete', label: 'Delete', danger: true });
 
     var menu = document.createElement('div');
     menu.className = 'tma-dash__messages-message-menu';
     menu.setAttribute('role', 'menu');
-    menu.innerHTML = items
-      .filter(function (item) {
-        return item.enabled;
-      })
-      .map(function (item) {
-        return (
-          '<button type="button" role="menuitem" class="tma-dash__messages-message-menu-item' +
-          (item.action === 'delete' ? ' tma-dash__messages-message-menu-item--danger' : '') +
-          '" data-menu-action="' + item.action + '">' + esc(item.label) + '</button>'
-        );
-      })
-      .join('');
+    menu.innerHTML =
+      items
+        .map(function (item) {
+          return (
+            '<button type="button" role="menuitem" class="tma-dash__messages-message-menu-item' +
+            (item.danger ? ' tma-dash__messages-message-menu-item--danger' : '') +
+            '" data-menu-action="' + item.action + '">' + esc(item.label) + '</button>'
+          );
+        })
+        .join('');
 
     document.body.appendChild(menu);
-
-    var rect = anchor.getBoundingClientRect();
-    menu.style.position = 'fixed';
-    menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8) + 'px';
-    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+    positionFloating(menu, anchor, position);
 
     menu.querySelectorAll('[data-menu-action]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var action = btn.getAttribute('data-menu-action');
         closeMessageMenu();
-        if (action === 'copy') copyMessageText(root, msg);
+        if (action === 'reply') {
+          setReplyTo(state, msg.id);
+          render();
+          focusComposerInput(root);
+        } else if (action === 'copy') copyMessageText(root, msg);
         else if (action === 'edit') startEditingMessage(root, state, render, msg);
         else if (action === 'delete') deleteMessage(root, state, render, msg);
       });
@@ -3318,6 +3723,30 @@
     setTimeout(function () {
       document.addEventListener('click', closeMessageMenuOnce, { once: true });
     }, 0);
+  }
+
+  /*
+   * Place a floating menu, clamped inside the viewport. `position` is an
+   * explicit {x, y} for pointer-driven opens (right-click, long press);
+   * otherwise it hangs off the anchor element.
+   */
+  function positionFloating(el, anchor, position) {
+    el.style.position = 'fixed';
+
+    var top;
+    var left;
+
+    if (position) {
+      top = position.y;
+      left = position.x;
+    } else {
+      var rect = anchor.getBoundingClientRect();
+      top = rect.bottom + 4;
+      left = rect.left;
+    }
+
+    el.style.top = Math.max(8, Math.min(top, window.innerHeight - el.offsetHeight - 8)) + 'px';
+    el.style.left = Math.max(8, Math.min(left, window.innerWidth - el.offsetWidth - 8)) + 'px';
   }
 
   var openMenuEl = null;
@@ -3432,8 +3861,36 @@
           return;
         }
 
-        if (e.key === 'Escape' && (state.composeOpen || state.settingsOpen)) {
+        if (e.key !== 'Escape') return;
+
+        // Escape unwinds one layer at a time, outermost last: an open menu,
+        // then a panel, then a reply draft, then the conversation itself.
+        if (openMenuEl) {
+          closeMessageMenu();
+          return;
+        }
+
+        if (state.composeOpen || state.settingsOpen) {
           closePanels(state, render);
+          return;
+        }
+
+        if (state.editing) {
+          state.editing = null;
+          setComposerDraft(state, '');
+          render();
+          return;
+        }
+
+        if (state.replyTo) {
+          clearReplyTo(state);
+          render();
+          return;
+        }
+
+        // Never yank the conversation out from under someone mid-sentence.
+        if (state.selectedId && !typing && !getComposerDraft(state).trim()) {
+          closeConversation(root, state, render);
         }
       });
 

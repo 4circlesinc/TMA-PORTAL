@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
 use App\Events\MessageDeleted;
 use App\Events\MessageSent;
@@ -17,8 +18,11 @@ use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\PresenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Portal messaging (the /social/messages page).
@@ -87,7 +91,7 @@ class MessagingController extends Controller
      * One grouped query rather than a count per row: the chat list asks for
      * this on every load, and the sidebar badge sums it.
      */
-    private function unreadCounts(User $user): \Illuminate\Support\Collection
+    private function unreadCounts(User $user): Collection
     {
         return DB::table('messages')
             ->join('conversation_participants as cp', function ($join) use ($user) {
@@ -98,6 +102,9 @@ class MessagingController extends Controller
             ->whereNull('messages.deleted_at')
             // Anything past this participant's read high-water mark…
             ->whereRaw('messages.id > coalesce(cp.last_read_message_id, 0)')
+            // …and past anything they cleared, so a cleared chat cannot come
+            // back as unread.
+            ->whereRaw('messages.id > coalesce(cp.cleared_before_message_id, 0)')
             // …that they did not send themselves.
             ->where(function ($q) use ($user) {
                 $q->whereNull('messages.user_id')
@@ -141,10 +148,14 @@ class MessagingController extends Controller
         $conversation = $this->conversationFor($request, $uuid);
 
         $before = $request->integer('before');
+        $participant = $conversation->participantFor($user);
 
         $query = $conversation->messages()
             ->withTrashed()
             ->with(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender'])
+            // Respect this participant's own "clear chat" marker. It is
+            // personal: the other side still sees everything.
+            ->where('id', '>', $participant->cleared_before_message_id ?? 0)
             ->orderByDesc('id');
 
         // Cursor on the id, not an offset: new arrivals while the user reads
@@ -327,6 +338,94 @@ class MessagingController extends Controller
         return response()->json(['unread' => 0]);
     }
 
+    /**
+     * Acknowledge receipt of everything currently in a conversation.
+     *
+     * Called by the client whenever messages land — on load, and on each
+     * socket arrival — including for conversations that are not open. That is
+     * what "delivered" means: this account has the message, not that anyone has
+     * looked at it.
+     */
+    public function markDelivered(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $participant = $conversation->participantFor($user);
+
+        $newest = $conversation->messages()->max('id') ?? 0;
+        $current = $participant->last_delivered_message_id ?? 0;
+
+        // Nothing new to acknowledge; don't write or broadcast on every poll.
+        if ($newest <= $current) {
+            return response()->json(['delivered' => $current]);
+        }
+
+        $participant->forceFill([
+            'last_delivered_message_id' => $newest,
+            'last_delivered_at' => now(),
+        ])->save();
+
+        Broadcaster::toOthers(new ConversationDelivered($conversation, $user, $newest));
+
+        return response()->json(['delivered' => $newest]);
+    }
+
+    /**
+     * Acknowledge receipt across every conversation at once.
+     *
+     * The client calls this when the chat list loads, which is the moment this
+     * account demonstrably has all of those messages. Doing it per conversation
+     * would be one request per row on every single load.
+     *
+     * Only rows that actually move are written and broadcast, so a quiet reload
+     * costs one query and no events.
+     */
+    public function markAllDelivered(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Newest message id per conversation this user is still a member of.
+        $newest = DB::table('messages')
+            ->join('conversation_participants as cp', function ($join) use ($user) {
+                $join->on('cp.conversation_id', '=', 'messages.conversation_id')
+                    ->where('cp.user_id', '=', $user->id)
+                    ->whereNull('cp.left_at');
+            })
+            ->whereNull('messages.deleted_at')
+            ->whereRaw('messages.id > coalesce(cp.last_delivered_message_id, 0)')
+            ->groupBy('messages.conversation_id')
+            ->selectRaw('messages.conversation_id, max(messages.id) as newest')
+            ->pluck('newest', 'messages.conversation_id');
+
+        if ($newest->isEmpty()) {
+            return response()->json(['delivered' => 0]);
+        }
+
+        $conversations = Conversation::query()
+            ->whereIn('id', $newest->keys())
+            ->get()
+            ->keyBy('id');
+
+        foreach ($newest as $conversationId => $messageId) {
+            ConversationParticipant::query()
+                ->where('conversation_id', $conversationId)
+                ->where('user_id', $user->id)
+                ->update([
+                    'last_delivered_message_id' => $messageId,
+                    'last_delivered_at' => now(),
+                ]);
+
+            $conversation = $conversations->get($conversationId);
+            if ($conversation) {
+                Broadcaster::toOthers(
+                    new ConversationDelivered($conversation, $user, (int) $messageId)
+                );
+            }
+        }
+
+        return response()->json(['delivered' => $newest->count()]);
+    }
+
     public function markUnread(Request $request, string $uuid): JsonResponse
     {
         $conversation = $this->conversationFor($request, $uuid);
@@ -392,6 +491,130 @@ class MessagingController extends Controller
 
         return response()->json([
             'conversation' => MessagingPresenter::conversation($conversation, $user, $participant->fresh()),
+        ]);
+    }
+
+    // -------------------------------------------- destructive / moderation
+
+    /**
+     * Clear a conversation for the caller only.
+     *
+     * Deliberately one-sided: it advances a personal marker rather than
+     * deleting rows, so the other participant keeps their copy of the history.
+     * A messenger that let one person erase another's record would be a very
+     * different product, and a dangerous default.
+     */
+    public function clearChat(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $participant = $conversation->participantFor($user);
+
+        $newest = $conversation->messages()->max('id') ?? 0;
+
+        $participant->forceFill([
+            'cleared_before_message_id' => $newest,
+            'last_read_message_id' => $newest,
+            'last_read_at' => now(),
+            'marked_unread_at' => null,
+        ])->save();
+
+        return response()->json(['cleared' => true, 'before' => $newest]);
+    }
+
+    /**
+     * Leave a conversation. The participant row stays with `left_at` set so
+     * past messages still resolve to a sender; the thread simply stops being
+     * theirs. A direct thread can be rejoined by opening it again.
+     */
+    public function destroyConversation(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $participant = $conversation->participantFor($user);
+
+        if ($conversation->isGroup()) {
+            // Announce a departure so the remaining members see why.
+            $conversation->messages()->create([
+                'user_id' => null,
+                'type' => Message::TYPE_SYSTEM,
+                'system_event' => ['event' => 'member_left', 'actorName' => $user->name],
+            ]);
+        }
+
+        $participant->forceFill(['left_at' => now()])->save();
+
+        return response()->json(['left' => true]);
+    }
+
+    public function block(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $other = $conversation->counterpartFor($user);
+
+        abort_if($other === null, 422, 'Only a direct conversation can be blocked.');
+
+        UserBlock::firstOrCreate(['user_id' => $user->id, 'blocked_user_id' => $other->id]);
+
+        return response()->json(['blocked' => true]);
+    }
+
+    public function unblock(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $other = $conversation->counterpartFor($user);
+
+        abort_if($other === null, 422, 'Only a direct conversation can be unblocked.');
+
+        UserBlock::where('user_id', $user->id)->where('blocked_user_id', $other->id)->delete();
+
+        return response()->json(['blocked' => false]);
+    }
+
+    /**
+     * Plain-text transcript of everything the caller can still see, honouring
+     * their own "clear chat" marker.
+     */
+    public function export(Request $request, string $uuid): Response
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $participant = $conversation->participantFor($user);
+
+        $messages = $conversation->messages()
+            ->with('sender')
+            ->where('id', '>', $participant->cleared_before_message_id ?? 0)
+            ->orderBy('id')
+            ->get();
+
+        $title = $conversation->isGroup()
+            ? ($conversation->name ?: 'Group')
+            : ($conversation->counterpartFor($user)?->name ?? 'Conversation');
+
+        $lines = ['Conversation: '.$title, 'Exported: '.now()->toDayDateTimeString(), ''];
+
+        foreach ($messages as $message) {
+            if ($message->isSystem()) {
+                $lines[] = '['.$message->created_at->format('Y-m-d H:i').'] * system event';
+
+                continue;
+            }
+
+            $lines[] = sprintf(
+                '[%s] %s: %s',
+                $message->created_at->format('Y-m-d H:i'),
+                $message->sender?->name ?? 'Unknown',
+                $message->trashed() ? '(message deleted)' : (string) $message->body,
+            );
+        }
+
+        $filename = Str::slug($title ?: 'conversation').'-'.now()->format('Y-m-d').'.txt';
+
+        return response(implode("\n", $lines), 200, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
