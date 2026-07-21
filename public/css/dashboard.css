@@ -24474,3 +24474,220 @@ button.tma-dash__header-popup-item:focus-visible {
   font-weight: 600;
   color: #fff;
 }
+
+/* ---------------------------------------------------------------------------
+ * Messages — chat-list search, new-message panel, and the settings panel.
+ * The search field reuses the shared pill chrome (.tma-dash__messages-search);
+ * the input below only has to sit transparently inside it, exactly as
+ * .tma-dash__email-search-input does.
+ * ------------------------------------------------------------------------- */
+
+.tma-dash__messages-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.tma-dash__messages-search-input::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+/* Strip the browser's own clear affordance; the design has its own. */
+.tma-dash__messages-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.tma-dash__messages-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-overlay-8, rgb(0 0 0 / 0.08));
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-12);
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tma-dash__messages-icon-btn.is-active {
+  background: var(--color-hover);
+}
+
+/* Group heading inside the chat list ("Start a new conversation"). */
+.tma-dash__messages-list-group {
+  padding: var(--space-12) var(--space-12) var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* A person row, in search results and the new-message panel. */
+.tma-dash__messages-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-12);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__messages-person:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-person-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__messages-person-name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-person-meta {
+  overflow: hidden;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* New-message and settings panels: they cover the chat list rather than
+ * opening a separate window, so the conversation stays where it is. */
+.tma-dash__messages-panel {
+  position: absolute;
+  inset: 52px var(--space-8) var(--space-8);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+}
+
+.tma-dash__messages-list {
+  position: relative;
+}
+
+.tma-dash__messages-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  flex-shrink: 0;
+}
+
+.tma-dash__messages-panel-title {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* The shared search chrome carries `flex: 1`, which is right in the horizontal
+ * list header but makes the field grow to fill the panel's column. Reset the
+ * whole shorthand — overriding flex-shrink alone leaves flex-grow at 1. */
+.tma-dash__messages-search--panel {
+  flex: 0 0 auto;
+  margin: 0 var(--space-12) var(--space-8);
+}
+
+.tma-dash__messages-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--space-8) var(--space-8);
+}
+
+.tma-dash__messages-panel-note {
+  margin: 0;
+  padding: var(--space-8) var(--space-12) var(--space-12);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+/* One setting row. */
+.tma-dash__messages-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-12);
+  cursor: pointer;
+}
+
+.tma-dash__messages-setting:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-setting-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__messages-setting-label {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-setting-hint {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-setting-group {
+  padding: var(--space-16) var(--space-12) var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-setting-input {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary-brand, #1c6ef2);
+  cursor: pointer;
+}
+
+.tma-dash__messages-setting-select {
+  flex-shrink: 0;
+  max-width: 45%;
+  padding: var(--space-4) var(--space-8);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-8);
+  background: var(--color-bg-input);
+  font: inherit;
+  font-size: var(--text-size-12);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}

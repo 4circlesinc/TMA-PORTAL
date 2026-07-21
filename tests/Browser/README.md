@@ -254,7 +254,7 @@ picked up the live mailbox's token and synced a real account into itself.
 
 The Messages page was a pure mock — a hard-coded `THREADS` array with a
 scripted ByeWind conversation and no network calls at all. It is now backed by
-`/portal/messaging`, so these two scripts exist to keep it that way.
+`/portal/messaging`, so these three scripts exist to keep it that way.
 
 - **`messaging.mjs`** — the page against a real server: the list comes from the
   API (and contains none of the old mock names), messages load and send and
@@ -275,7 +275,34 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   refuses a channel for a conversation the caller is not in, which is the
   websocket half of the membership rule the HTTP routes enforce.
 
-Seed both with several conversations, one of them deep enough to page:
+- **`messaging-toolbar.mjs`** — the three controls in the chat-list header,
+  which were all dead chrome: the "search" was a `<span>` with no input behind
+  it, the compose button had no handler, and the gear did nothing. It checks
+  search filters conversations *and* reaches people you have no conversation
+  with, that typing doesn't lose focus or reset the caret (a full re-render
+  replaces the field on every keystroke — see `captureFocus`), the `/`
+  shortcut, that compose opens a real conversation you can send in, and that
+  the gear's Messages Settings round-trip to the server. It also pins that
+  there is exactly **one** settings control in the header, since the spec asks
+  for a single entry point rather than a second one.
+
+  Its seed needs one user with **no** conversation — "Zoe Winters" above —
+  otherwise the people half of search has nothing to find and the check passes
+  vacuously:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::firstOrCreate(['email' => 'zoe@example.com'],
+    ['name' => 'Zoe Winters', 'password' => Hash::make('password12345')]);
+  \$u->forceFill(['name' => 'Zoe Winters', 'email_verified_at' => now(),
+    'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+    'status' => 'approved', 'account_type' => 'Employee'])->save();
+"
+
+node tests/Browser/messaging-toolbar.mjs
+```
+
+Seed all three with several conversations, one of them deep enough to page:
 
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="

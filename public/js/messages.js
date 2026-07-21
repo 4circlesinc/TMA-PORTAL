@@ -292,11 +292,18 @@
     );
   }
 
-  function renderListTools(forMobileHead) {
+  function renderListTools(forMobileHead, state) {
     return (
       '<div class="tma-dash__messages-list-tools">' +
-      (forMobileHead ? '' : renderComposeBtn('tma-dash__messages-icon-btn')) +
-      '<button type="button" class="tma-dash__messages-icon-btn" aria-label="Settings">' +
+      (forMobileHead
+        ? ''
+        : renderComposeBtn('tma-dash__messages-icon-btn', ' data-messages-compose')) +
+      // The spec's "Messages Settings" control. This gear is that button —
+      // there is deliberately no second settings entry point.
+      '<button type="button" class="tma-dash__messages-icon-btn' +
+      (state && state.settingsOpen ? ' is-active' : '') +
+      '" aria-label="Messages settings" data-messages-settings' +
+      ' aria-expanded="' + (state && state.settingsOpen ? 'true' : 'false') + '">' +
       '<img src="' + ICONS.GearSix + '" alt="">' +
       '</button>' +
       '</div>'
@@ -307,26 +314,46 @@
     return renderComposeBtn('tma-dash__messages-compose-fab', ' data-messages-compose');
   }
 
-  function renderListHead() {
+  /*
+   * The search field. Was a plain <span> with no input behind it; it is now a
+   * real field driving `state.search`, which filters conversations and also
+   * turns up people you have no conversation with yet.
+   */
+  function renderSearchField(state) {
+    var value = state.search || '';
     return (
-      '<div class="tma-dash__messages-list-head">' +
-      renderListTools() +
       '<div class="tma-dash__messages-search" role="search">' +
       '<img src="' + ICONS.MagnifyingGlass + '" alt="">' +
-      '<span class="tma-dash__messages-search-text">Search</span>' +
-      '<kbd class="tma-dash__kbd">/</kbd>' +
-      '</div>' +
+      '<input type="search" class="tma-dash__messages-search-input" data-messages-search ' +
+      // Placeholder stays as short as the original design's; the aria-label
+      // carries the detail so the field doesn't clip at this width.
+      'placeholder="Search" aria-label="Search conversations and people" ' +
+      'value="' + esc(value) + '" autocomplete="off">' +
+      (value
+        ? '<button type="button" class="tma-dash__messages-search-clear" data-messages-search-clear ' +
+          'aria-label="Clear search"><span aria-hidden="true">×</span></button>'
+        : '<kbd class="tma-dash__kbd">/</kbd>') +
       '</div>'
     );
   }
 
-  function renderListMobileHead() {
+  function renderListHead(state) {
+    return (
+      '<div class="tma-dash__messages-list-head">' +
+      renderListTools(false, state) +
+      renderSearchField(state) +
+      '</div>'
+    );
+  }
+
+  function renderListMobileHead(state) {
     return (
       '<div class="tma-dash__messages-list-mobile-head">' +
       '<span class="tma-dash__messages-list-mobile-title">Messages</span>' +
       '<div class="tma-dash__messages-list-mobile-actions">' +
-      renderListTools(true) +
+      renderListTools(true, state) +
       '</div>' +
+      renderSearchField(state) +
       '</div>'
     );
   }
@@ -467,6 +494,137 @@
     );
   }
 
+  /* ------------------------------------------------------------------
+   * New-message panel
+   * ---------------------------------------------------------------- */
+
+  function renderPersonRow(person, action) {
+    return (
+      '<button type="button" class="tma-dash__messages-person" ' + action + '="' + esc(String(person.id)) + '">' +
+      (person.photo
+        ? '<span class="tma-dash__messages-row-avatar"><img src="' + esc(person.photo) + '" alt="" loading="lazy"></span>'
+        : renderInitialAvatar(person.name)) +
+      '<span class="tma-dash__messages-person-text">' +
+      '<span class="tma-dash__messages-person-name">' + esc(person.name) + '</span>' +
+      '<span class="tma-dash__messages-person-meta">' +
+      esc([person.accountType, person.email].filter(Boolean).join(' · ')) +
+      '</span></span></button>'
+    );
+  }
+
+  function renderComposePanel(state) {
+    if (!state.composeOpen) return '';
+
+    var body;
+    if (state.composeLoading) {
+      body = '<div class="tma-dash__messages-list-state" role="status">Searching…</div>';
+    } else if (state.composeError) {
+      body = '<div class="tma-dash__messages-list-state tma-dash__messages-list-state--error">' +
+        '<p>People could not be loaded.</p></div>';
+    } else if (!state.composeResults || !state.composeResults.length) {
+      body = '<div class="tma-dash__messages-list-state">' +
+        ((state.composeQuery || '').trim() ? 'Nobody matches that name.' : 'No one else to message yet.') +
+        '</div>';
+    } else {
+      body = state.composeResults
+        .map(function (person) {
+          return renderPersonRow(person, 'data-messages-start');
+        })
+        .join('');
+    }
+
+    return (
+      '<div class="tma-dash__messages-panel" data-messages-panel role="dialog" aria-label="New message">' +
+      '<div class="tma-dash__messages-panel-head">' +
+      '<span class="tma-dash__messages-panel-title">New message</span>' +
+      '<button type="button" class="tma-dash__messages-icon-btn" data-messages-panel-close aria-label="Close">' +
+      '<span aria-hidden="true">×</span></button>' +
+      '</div>' +
+      '<div class="tma-dash__messages-search tma-dash__messages-search--panel" role="search">' +
+      '<img src="' + ICONS.MagnifyingGlass + '" alt="">' +
+      '<input type="search" class="tma-dash__messages-search-input" data-messages-compose-search ' +
+      'placeholder="Search people" aria-label="Search people" value="' + esc(state.composeQuery || '') + '" autocomplete="off">' +
+      '</div>' +
+      '<div class="tma-dash__messages-panel-body">' + body + '</div>' +
+      '</div>'
+    );
+  }
+
+  /* ------------------------------------------------------------------
+   * Messages settings panel
+   * ---------------------------------------------------------------- */
+
+  function renderSettingsToggle(key, label, hint) {
+    var on = STORE.settings[key] !== false;
+    return (
+      '<label class="tma-dash__messages-setting">' +
+      '<span class="tma-dash__messages-setting-text">' +
+      '<span class="tma-dash__messages-setting-label">' + esc(label) + '</span>' +
+      (hint ? '<span class="tma-dash__messages-setting-hint">' + esc(hint) + '</span>' : '') +
+      '</span>' +
+      '<input type="checkbox" class="tma-dash__messages-setting-input" data-messages-setting="' + key + '"' +
+      (on ? ' checked' : '') + '>' +
+      '</label>'
+    );
+  }
+
+  function renderSettingsChoice(key, label, hint) {
+    var value = STORE.settings[key] || 'everyone';
+    var options = [
+      { value: 'everyone', label: 'Everyone' },
+      { value: 'contacts', label: 'People I chat with' },
+      { value: 'nobody', label: 'Nobody' },
+    ];
+    return (
+      '<label class="tma-dash__messages-setting">' +
+      '<span class="tma-dash__messages-setting-text">' +
+      '<span class="tma-dash__messages-setting-label">' + esc(label) + '</span>' +
+      (hint ? '<span class="tma-dash__messages-setting-hint">' + esc(hint) + '</span>' : '') +
+      '</span>' +
+      '<select class="tma-dash__messages-setting-select" data-messages-setting="' + key + '">' +
+      options
+        .map(function (o) {
+          return '<option value="' + o.value + '"' + (value === o.value ? ' selected' : '') + '>' +
+            esc(o.label) + '</option>';
+        })
+        .join('') +
+      '</select></label>'
+    );
+  }
+
+  function renderSettingsPanel(state) {
+    if (!state.settingsOpen) return '';
+
+    return (
+      '<div class="tma-dash__messages-panel" data-messages-panel role="dialog" aria-label="Messages settings">' +
+      '<div class="tma-dash__messages-panel-head">' +
+      '<span class="tma-dash__messages-panel-title">Messages settings</span>' +
+      '<button type="button" class="tma-dash__messages-icon-btn" data-messages-panel-close aria-label="Close">' +
+      '<span aria-hidden="true">×</span></button>' +
+      '</div>' +
+      '<div class="tma-dash__messages-panel-body">' +
+      '<div class="tma-dash__messages-setting-group">Privacy</div>' +
+      renderSettingsChoice('onlineStatus', 'Who can see when I am online') +
+      renderSettingsChoice('lastSeen', 'Who can see my last seen') +
+      renderSettingsToggle('readReceipts', 'Read receipts', 'Turn off and you will not see others’ either') +
+      renderSettingsToggle('typingIndicator', 'Typing indicator') +
+
+      '<div class="tma-dash__messages-setting-group">Notifications</div>' +
+      renderSettingsToggle('notificationSounds', 'Notification sounds') +
+      renderSettingsToggle('desktopNotifications', 'Desktop notifications', 'Needs browser permission') +
+      renderSettingsToggle('notificationPreview', 'Show message text in notifications') +
+
+      '<div class="tma-dash__messages-setting-group">Composing</div>' +
+      renderSettingsToggle('enterToSend', 'Enter sends the message', 'Off: Enter adds a line, the send button sends') +
+
+      '<div class="tma-dash__messages-setting-group">Media</div>' +
+      renderSettingsToggle('mediaAutoDownload', 'Download media automatically') +
+      '</div>' +
+      '<p class="tma-dash__messages-panel-note">These settings apply to your account only.</p>' +
+      '</div>'
+    );
+  }
+
   /* Loading / empty / error stand-ins. Never sample content. */
   function renderListPlaceholder(state) {
     if (STORE.loadError) {
@@ -517,11 +675,27 @@
           .join('')
       : renderListPlaceholder(state);
 
+    // A search can also turn up people with no conversation yet, so the field
+    // finds someone whether or not you have spoken before.
+    var people = '';
+    if ((state.search || '').trim() && state.peopleResults && state.peopleResults.length) {
+      people =
+        '<div class="tma-dash__messages-list-group">Start a new conversation</div>' +
+        state.peopleResults
+          .map(function (person) {
+            return renderPersonRow(person, 'data-messages-start');
+          })
+          .join('');
+    }
+
     return (
       '<div class="tma-dash__messages-list">' +
-      (mobile ? renderListMobileHead() : renderListHead()) +
+      (mobile ? renderListMobileHead(state) : renderListHead(state)) +
+      renderComposePanel(state) +
+      renderSettingsPanel(state) +
       '<div class="tma-dash__messages-list-body" data-messages-list-body>' +
-      body +
+      (rows.length ? body : (people ? '' : body)) +
+      people +
       '</div>' +
       '</div>'
     );
@@ -2040,12 +2214,54 @@
    * new message keeps following the conversation. */
   var STICK_TO_BOTTOM_PX = 48;
 
+  /*
+   * Which field had focus, and where the caret was.
+   *
+   * The search fields re-render on every keystroke, and a full re-render
+   * replaces the element the user is typing into — without this the field
+   * loses focus after one character and the caret jumps to the start.
+   */
+  var FOCUSABLE_KEYS = ['data-messages-search', 'data-messages-compose-search'];
+
+  function captureFocus(root) {
+    var active = document.activeElement;
+    if (!active || !root.contains(active)) return null;
+
+    for (var i = 0; i < FOCUSABLE_KEYS.length; i++) {
+      if (active.hasAttribute(FOCUSABLE_KEYS[i])) {
+        return {
+          key: FOCUSABLE_KEYS[i],
+          start: active.selectionStart,
+          end: active.selectionEnd,
+        };
+      }
+    }
+    return null;
+  }
+
+  function restoreFocus(root, focus) {
+    if (!focus) return;
+
+    var el = root.querySelector('[' + focus.key + ']');
+    if (!el) return;
+
+    el.focus();
+    try {
+      if (focus.start !== null && focus.start !== undefined) {
+        el.setSelectionRange(focus.start, focus.end);
+      }
+    } catch (err) {
+      // Some input types refuse setSelectionRange; focus alone is enough.
+    }
+  }
+
   function captureScroll(root) {
     var list = root.querySelector('[data-messages-list-body]');
     var chat = root.querySelector('[data-messages-chat-body]');
 
     return {
       listTop: list ? list.scrollTop : null,
+      focus: captureFocus(root),
       chat: chat
         ? {
             top: chat.scrollTop,
@@ -2059,6 +2275,8 @@
 
   function restoreScroll(root, snapshot, intent) {
     intent = intent || {};
+
+    restoreFocus(root, snapshot.focus);
 
     var list = root.querySelector('[data-messages-list-body]');
     if (list && snapshot.listTop !== null && snapshot.listTop !== undefined) {
@@ -2381,12 +2599,75 @@
   var subscribed = {};
 
   function startRealtime(root, state, render) {
-    if (!STORE.realtime || !window.TMAMessagingRealtime) return;
-    if (!window.TMAMessagingRealtime.start(STORE.realtime)) return;
+    var realtime = window.TMAMessagingRealtime;
+
+    // No websocket configured at all — poll instead of going dead.
+    if (!STORE.realtime || !realtime || !realtime.start(STORE.realtime)) {
+      startPollingFallback(root, state, render);
+      return;
+    }
+
+    // The socket can also be refused after connecting (a cluster that does not
+    // allow this origin, for instance). That is not recoverable by retrying,
+    // so fall back to polling rather than leaving the page frozen.
+    if (!realtime._tmaStateBound) {
+      realtime._tmaStateBound = true;
+      realtime.onState(function (status) {
+        if (status === 'refused') startPollingFallback(root, state, render);
+      });
+    }
 
     getThreads().forEach(function (row) {
       subscribeToConversation(root, state, render, row.id);
     });
+  }
+
+  /*
+   * Fallback for when live updates are unavailable. Deliberately slower than
+   * the socket - it exists so the page keeps working, not so it feels instant.
+   * Skipped entirely while the tab is hidden.
+   */
+  var POLL_INTERVAL = 10000;
+  var pollTimer = null;
+
+  function startPollingFallback(root, state, render) {
+    if (pollTimer) return;
+
+    if (window.console) {
+      console.warn('[messaging] live updates unavailable — falling back to polling.');
+    }
+
+    pollTimer = setInterval(function () {
+      if (document.hidden || !root.isConnected) return;
+
+      window.TMAMessagingAPI.conversations()
+        .then(function (data) {
+          var previous = {};
+          getThreads().forEach(function (row) {
+            previous[row.id] = row.timestamp;
+          });
+
+          STORE.threads = data.conversations || [];
+
+          // Pull the open thread's newest page if it actually moved on.
+          var open = state.selectedId;
+          if (open) {
+            var row = findThread(open);
+            if (row && previous[open] !== row.timestamp) {
+              return window.TMAMessagingAPI.messages(open).then(function (thread) {
+                mergeMessages(open, thread.messages || [], false);
+                render();
+                if (!document.hidden) markConversationRead(root, state, render, open);
+              });
+            }
+          }
+
+          render();
+        })
+        .catch(function () {
+          // A missed poll is not worth surfacing; the next one retries.
+        });
+    }, POLL_INTERVAL);
   }
 
   function subscribeToConversation(root, state, render, conversationId) {
@@ -2648,6 +2929,162 @@
   }
 
   /* ------------------------------------------------------------------
+   * Search, compose, settings
+   * ---------------------------------------------------------------- */
+
+  var peopleTimer = null;
+
+  /*
+   * Look up people for the search field and the new-message panel.
+   *
+   * Debounced, and the result is discarded if the query moved on while the
+   * request was in flight — otherwise a slow response for "an" can land after
+   * and overwrite the results for "andrew".
+   */
+  function searchPeople(state, render, term, target) {
+    if (peopleTimer) clearTimeout(peopleTimer);
+
+    var query = (term || '').trim();
+
+    if (target === 'list' && !query) {
+      state.peopleResults = [];
+      render();
+      return;
+    }
+
+    peopleTimer = setTimeout(function () {
+      peopleTimer = null;
+
+      if (target === 'compose') {
+        state.composeLoading = true;
+        state.composeError = null;
+        render();
+      }
+
+      window.TMAMessagingAPI.contacts(query)
+        .then(function (data) {
+          var current = target === 'compose' ? state.composeQuery : state.search;
+          if ((current || '').trim() !== query) return; // superseded
+
+          var people = data.contacts || [];
+
+          if (target === 'compose') {
+            state.composeLoading = false;
+            state.composeResults = people;
+          } else {
+            // In the main list, hide people who already have a conversation —
+            // their existing thread is already shown above.
+            var known = {};
+            getThreads().forEach(function (row) {
+              if (row.counterpartId) known[row.counterpartId] = true;
+            });
+            state.peopleResults = people.filter(function (p) {
+              return !known[p.id];
+            });
+          }
+          render();
+        })
+        .catch(function () {
+          if (target === 'compose') {
+            state.composeLoading = false;
+            state.composeError = true;
+          } else {
+            state.peopleResults = [];
+          }
+          render();
+        });
+    }, 250);
+  }
+
+  function openComposePanel(root, state, render) {
+    state.composeOpen = true;
+    state.settingsOpen = false;
+    state.composeQuery = '';
+    state.composeResults = [];
+    render();
+
+    // Show the full list straight away rather than an empty panel.
+    searchPeople(state, render, '', 'compose');
+
+    var input = root.querySelector('[data-messages-compose-search]');
+    if (input) input.focus();
+  }
+
+  function closePanels(state, render) {
+    if (!state.composeOpen && !state.settingsOpen) return;
+    state.composeOpen = false;
+    state.settingsOpen = false;
+    render();
+  }
+
+  /* Open (or reuse) a direct conversation with someone and select it. */
+  function startConversationWith(root, state, render, userId) {
+    state.composeOpen = false;
+    state.search = '';
+    state.peopleResults = [];
+    render();
+
+    window.TMAMessagingAPI.openDirect(userId)
+      .then(function (data) {
+        var conversation = data.conversation;
+        replaceThread(conversation);
+
+        // openConversation() bails when the id is already selected, so clear
+        // it first to make sure the thread actually loads.
+        state.selectedId = null;
+        render();
+        openConversation(root, state, render, conversation.id);
+        subscribeToConversation(root, state, render, conversation.id);
+      })
+      .catch(function (err) {
+        showMessagesToast(
+          root,
+          err.status === 403 ? 'You cannot message this person' : 'Conversation could not be opened'
+        );
+      });
+  }
+
+  /* Persist one messaging setting. Optimistic; reverted if the write fails. */
+  function updateSetting(root, state, render, key, value) {
+    var previous = STORE.settings[key];
+    STORE.settings[key] = value;
+    render();
+
+    // Desktop notifications are useless without browser permission, so ask
+    // at the moment the user turns them on.
+    if (key === 'desktopNotifications' && value && window.Notification) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(function (result) {
+          if (result !== 'granted') {
+            STORE.settings[key] = false;
+            window.TMAMessagingAPI.updateSettings({ desktopNotifications: false });
+            render();
+            showMessagesToast(root, 'Desktop notifications were blocked by the browser');
+          }
+        });
+      } else if (Notification.permission === 'denied') {
+        STORE.settings[key] = false;
+        render();
+        showMessagesToast(root, 'Desktop notifications are blocked in your browser settings');
+        return;
+      }
+    }
+
+    var payload = {};
+    payload[key] = STORE.settings[key];
+
+    window.TMAMessagingAPI.updateSettings(payload)
+      .then(function (data) {
+        STORE.settings = data.settings || STORE.settings;
+      })
+      .catch(function () {
+        STORE.settings[key] = previous;
+        render();
+        showMessagesToast(root, 'That setting could not be saved');
+      });
+  }
+
+  /* ------------------------------------------------------------------
    * Event wiring
    * ---------------------------------------------------------------- */
 
@@ -2748,6 +3185,81 @@
       });
     }
 
+    // --- chat-list search -------------------------------------------------
+    var search = root.querySelector('[data-messages-search]');
+    if (search) {
+      search.addEventListener('input', function () {
+        state.search = search.value;
+        render();
+        searchPeople(state, render, search.value, 'list');
+      });
+      search.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          state.search = '';
+          state.peopleResults = [];
+          render();
+        }
+      });
+    }
+
+    var searchClear = root.querySelector('[data-messages-search-clear]');
+    if (searchClear) {
+      searchClear.addEventListener('click', function () {
+        state.search = '';
+        state.peopleResults = [];
+        render();
+        var field = root.querySelector('[data-messages-search]');
+        if (field) field.focus();
+      });
+    }
+
+    // --- new message ------------------------------------------------------
+    root.querySelectorAll('[data-messages-compose]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openComposePanel(root, state, render);
+      });
+    });
+
+    var composeSearch = root.querySelector('[data-messages-compose-search]');
+    if (composeSearch) {
+      composeSearch.addEventListener('input', function () {
+        state.composeQuery = composeSearch.value;
+        render();
+        searchPeople(state, render, composeSearch.value, 'compose');
+      });
+    }
+
+    root.querySelectorAll('[data-messages-start]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = parseInt(btn.getAttribute('data-messages-start'), 10);
+        if (!isNaN(id)) startConversationWith(root, state, render, id);
+      });
+    });
+
+    // --- messages settings ------------------------------------------------
+    root.querySelectorAll('[data-messages-settings]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var opening = !state.settingsOpen;
+        state.settingsOpen = opening;
+        state.composeOpen = false;
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-messages-setting]').forEach(function (field) {
+      field.addEventListener('change', function () {
+        var key = field.getAttribute('data-messages-setting');
+        var value = field.type === 'checkbox' ? field.checked : field.value;
+        updateSetting(root, state, render, key, value);
+      });
+    });
+
+    root.querySelectorAll('[data-messages-panel-close]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        closePanels(state, render);
+      });
+    });
+
     bindMessageSwipes(root, state, render);
     bindMessagesInboxSwipes(root, state, render);
     bindComposer(root, state, render);
@@ -2847,6 +3359,11 @@
       emojiPickerOpen: false,
       voiceRecording: false,
       search: '',
+      peopleResults: [],
+      composeOpen: false,
+      composeQuery: '',
+      composeResults: [],
+      settingsOpen: false,
       tab: 'all',
     };
     root._messagesState = state;
@@ -2887,6 +3404,49 @@
       mobileMq.addEventListener('change', onMobileBreakpoint);
     } else if (typeof mobileMq.addListener === 'function') {
       mobileMq.addListener(onMobileBreakpoint);
+    }
+
+    // "/" focuses search, Escape closes an open panel. Bound once, on the
+    // document, because the elements themselves are replaced on every render.
+    if (!root._messagesKeysBound) {
+      root._messagesKeysBound = true;
+
+      document.addEventListener('keydown', function (e) {
+        if (!root.isConnected) return;
+
+        var target = e.target;
+        var typing =
+          target &&
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.isContentEditable);
+
+        if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) {
+          var field = root.querySelector('[data-messages-search]');
+          if (field) {
+            e.preventDefault();
+            field.focus();
+            field.select();
+          }
+          return;
+        }
+
+        if (e.key === 'Escape' && (state.composeOpen || state.settingsOpen)) {
+          closePanels(state, render);
+        }
+      });
+
+      // Clicking away from an open panel closes it, but a click inside it (or
+      // on the button that opened it) must not.
+      document.addEventListener('click', function (e) {
+        if (!root.isConnected) return;
+        if (!state.composeOpen && !state.settingsOpen) return;
+        if (e.target.closest('[data-messages-panel]')) return;
+        if (e.target.closest('[data-messages-compose]')) return;
+        if (e.target.closest('[data-messages-settings]')) return;
+        closePanels(state, render);
+      });
     }
 
     // Presence heartbeat. Pauses on a hidden tab so a background tab does not

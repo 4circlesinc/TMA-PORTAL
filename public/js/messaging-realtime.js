@@ -130,9 +130,7 @@
     }
 
     if (event === 'pusher:error') {
-      // A rejected subscription is not retryable by reconnecting; surface it
-      // and let the page fall back to its refresh-on-focus path.
-      this.emitState('error', data);
+      this.handleProtocolError(data);
       return;
     }
 
@@ -142,6 +140,42 @@
     }
 
     this.dispatch(payload.channel, event, data);
+  };
+
+  /*
+   * A pusher:error from the server. The protocol splits these by code:
+   *
+   *   4000-4099  don't reconnect — the connection is misconfigured and an
+   *              identical retry will be refused identically
+   *   4100-4199  reconnect after a backoff
+   *   4200-4299  reconnect immediately
+   *
+   * Honouring the first band matters. The common case is 4009 "Origin not
+   * allowed", which means this host isn't on the WebSocket cluster's allowed
+   * origins list — retrying that forever just hammers the cluster and buries
+   * the one message that explains the problem.
+   */
+  Realtime.prototype.handleProtocolError = function (data) {
+    var code = (data && Number(data.code)) || 0;
+    var message = (data && data.message) || 'unknown error';
+    var fatal = code >= 4000 && code <= 4099;
+
+    if (fatal) {
+      // Stop the reconnect loop; this cannot succeed as configured.
+      this.closedByUs = true;
+      if (window.console) {
+        console.error(
+          '[messaging] realtime disabled — the server refused the connection (' +
+            code + ': ' + message + ').' +
+            (code === 4009
+              ? ' Add this origin (' + window.location.origin +
+                ") to the WebSocket cluster's allowed origins."
+              : '')
+        );
+      }
+    }
+
+    this.emitState(fatal ? 'refused' : 'error', { code: code, message: message });
   };
 
   Realtime.prototype.dispatch = function (channel, event, data) {
