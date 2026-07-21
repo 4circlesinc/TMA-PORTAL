@@ -36,7 +36,10 @@ class SyncMailbox implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('mailbox:'.$this->account->id))->dontRelease()];
+        // expireAfter releases the lock even if the worker is killed mid-sync
+        // (e.g. hits --max-time), so a dead run can't deadlock this mailbox's
+        // future syncs. Comfortably longer than $timeout.
+        return [(new WithoutOverlapping('mailbox:'.$this->account->id))->dontRelease()->expireAfter(180)];
     }
 
     public function handle(): void

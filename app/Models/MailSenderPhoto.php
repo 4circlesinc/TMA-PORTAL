@@ -6,6 +6,7 @@ use App\Jobs\ResolveSenderPhoto;
 use App\Support\Mail\Mailbox;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
@@ -13,9 +14,11 @@ use Throwable;
 /**
  * A cached profile photo for someone who sends you mail.
  *
- * Photos come from the mail provider's directory, so in practice this covers
- * colleagues in your own organisation. Everyone else is cached as a miss and
- * drawn as initials — no invented pictures.
+ * Two sources, tried in order: the mail provider's directory (a real photo for
+ * a colleague in your own organisation) and, failing that, the sender domain's
+ * brand logo (so PayPal, your bank, a newsletter show their mark instead of
+ * initials). A sender with neither is cached as a miss and drawn as initials —
+ * no invented pictures.
  */
 #[Fillable(['hash', 'email', 'connected_account_id', 'disk', 'path', 'mime', 'has_photo', 'checked_at'])]
 class MailSenderPhoto extends Model
@@ -24,6 +27,18 @@ class MailSenderPhoto extends Model
     private const HIT_TTL_DAYS = 30;
 
     private const MISS_TTL_DAYS = 7;
+
+    /**
+     * Personal mailbox domains. A sender here is an individual, not a brand, so
+     * we never hang the domain's logo on them — that would put the Gmail mark
+     * on every gmail.com contact. They fall through to initials (or their
+     * portal photo, if they have an account).
+     */
+    private const CONSUMER_DOMAINS = [
+        'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com',
+        'msn.com', 'yahoo.com', 'ymail.com', 'icloud.com', 'me.com', 'mac.com',
+        'aol.com', 'proton.me', 'protonmail.com', 'gmx.com', 'zoho.com',
+    ];
 
     protected function casts(): array
     {
@@ -99,36 +114,87 @@ class MailSenderPhoto extends Model
             return $row->has_photo ? $row->read() : null;
         }
 
-        $bytes = null;
+        // Directory first — a real face for a colleague — then the sender
+        // domain's brand logo for everyone else.
+        $photo = null;
         try {
             $bytes = Mailbox::provider($account)->photoFor($email);
+            if ($bytes !== null && $bytes !== '') {
+                $photo = ['body' => $bytes, 'mime' => 'image/jpeg'];
+            }
         } catch (Throwable) {
             // A provider error is a miss for now; the TTL brings us back.
         }
+
+        $photo ??= self::brandLogoFor($email);
 
         $row ??= new self(['hash' => $hash, 'email' => mb_strtolower(trim($email))]);
         $row->connected_account_id = $account->id;
         $row->checked_at = now();
 
-        if ($bytes === null || $bytes === '') {
+        if ($photo === null) {
             $row->has_photo = false;
             $row->save();
 
             return null;
         }
 
+        $ext = match ($photo['mime']) {
+            'image/png' => 'png',
+            'image/x-icon', 'image/vnd.microsoft.icon' => 'ico',
+            'image/gif' => 'gif',
+            default => 'jpg',
+        };
         $disk = config('filesystems.avatar_disk', config('filesystems.default'));
-        $path = 'mail-sender-photos/'.$hash.'.jpg';
-        Storage::disk($disk)->put($path, $bytes);
+        $path = 'mail-sender-photos/'.$hash.'.'.$ext;
+        Storage::disk($disk)->put($path, $photo['body']);
 
         $row->forceFill([
             'disk' => $disk,
             'path' => $path,
-            'mime' => 'image/jpeg',
+            'mime' => $photo['mime'],
             'has_photo' => true,
         ])->save();
 
-        return ['body' => $bytes, 'mime' => 'image/jpeg'];
+        return $photo;
+    }
+
+    /**
+     * A brand logo for an external sender, keyed on the email domain.
+     *
+     * Runs only on the queue (via {@see resolve}): one outbound call to a logo
+     * service, returning the raw image or null when there is no logo — a null
+     * is cached as a miss like any other. Personal mailbox domains are skipped;
+     * see {@see CONSUMER_DOMAINS}. The host is fixed, so the sender-controlled
+     * domain only ever fills a query parameter — never the URL's host.
+     *
+     * @return array{body:string, mime:string}|null
+     */
+    private static function brandLogoFor(string $email): ?array
+    {
+        $domain = Str::after(mb_strtolower(trim($email)), '@');
+
+        if ($domain === '' || ! str_contains($domain, '.') || in_array($domain, self::CONSUMER_DOMAINS, true)) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(8)->get('https://www.google.com/s2/favicons', [
+                'domain' => $domain,
+                'sz' => 128,
+            ]);
+        } catch (Throwable) {
+            return null;
+        }
+
+        // 404 is the service's "no logo for this domain" — a clean miss.
+        $mime = trim(explode(';', strtolower((string) $response->header('Content-Type')))[0]);
+
+        if (! $response->successful() || $response->body() === '' || ! str_starts_with($mime, 'image/')) {
+            return null;
+        }
+
+        return ['body' => $response->body(), 'mime' => $mime];
     }
 
     /** @return array{body:string, mime:string}|null */

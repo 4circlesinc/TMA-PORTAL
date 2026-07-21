@@ -155,8 +155,21 @@ class GraphProvider implements MailProvider
     {
         $messages = [];
 
+        // This runs inline in the /sync web request, so it must finish well
+        // under PHP's execution limit. Each folder gets a short, single-attempt
+        // request, and the whole loop stops at a wall-clock deadline — a slow or
+        // throttling Graph then costs a bounded amount instead of stacking
+        // 30s × retries per folder into a fatal timeout.
+        $deadline = microtime(true) + 20.0;
+        $completed = true;
+
         foreach (Mailbox::FOLDERS as $folder) {
-            $response = $this->request()->get(
+            if (microtime(true) >= $deadline) {
+                $completed = false;
+                break;
+            }
+
+            $response = $this->request(timeout: 6, tries: 1)->get(
                 self::BASE.'/mailFolders/'.self::folderId($folder).'/messages',
                 [
                     '$filter' => 'receivedDateTime gt '.$since,
@@ -167,7 +180,7 @@ class GraphProvider implements MailProvider
             );
 
             // A folder that rejects the filter (drafts have no receivedDateTime
-            // ordering) simply contributes nothing this pass.
+            // ordering) or times out simply contributes nothing this pass.
             if (! $response->successful()) {
                 continue;
             }
@@ -180,7 +193,11 @@ class GraphProvider implements MailProvider
         return [
             'messages' => $messages,
             'deleted' => [],
-            'cursor' => self::TIME_CURSOR.now()->toIso8601ZuluString(),
+            // Only advance the cursor once every folder was checked. If the
+            // deadline cut the loop short, keep the old timestamp so the folders
+            // we skipped are picked up next pass — nothing is lost, at worst a
+            // few rows are re-upserted (idempotent).
+            'cursor' => self::TIME_CURSOR.($completed ? now()->toIso8601ZuluString() : $since),
         ];
     }
 
@@ -497,11 +514,18 @@ class GraphProvider implements MailProvider
         };
     }
 
-    private function request(): PendingRequest
+    /**
+     * A Graph client. The defaults suit the bulk paths (backfill, send), which
+     * run on the queue and can afford a generous per-request budget. The
+     * interactive incremental sync passes a tight $timeout and $tries so a slow
+     * or throttling Graph can never run a web request past PHP's execution
+     * limit — that is what turned into "Maximum execution time exceeded" 500s.
+     */
+    private function request(int $timeout = 30, int $tries = 2): PendingRequest
     {
         return Http::withToken(MailTokens::accessToken($this->account))
-            ->timeout(30)
-            ->retry(2, 200, throw: false);
+            ->timeout($timeout)
+            ->retry($tries, 200, throw: false);
     }
 
     /**

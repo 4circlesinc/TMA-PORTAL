@@ -54,7 +54,7 @@ class MailTokens
     /** @return array{0: string, 1: int} */
     private static function refreshGoogle(string $refresh): array
     {
-        $response = Http::asForm()->post(self::GOOGLE_TOKEN_URL, [
+        $response = Http::asForm()->timeout(12)->post(self::GOOGLE_TOKEN_URL, [
             'client_id' => config('services.google.client_id'),
             'client_secret' => config('services.google.client_secret'),
             'refresh_token' => $refresh,
@@ -69,7 +69,7 @@ class MailTokens
     {
         $tenant = config('services.microsoft.tenant', 'common');
 
-        $response = Http::asForm()->post(
+        $response = Http::asForm()->timeout(12)->post(
             "https://login.microsoftonline.com/{$tenant}/oauth2/v2.0/token",
             [
                 'client_id' => config('services.microsoft.client_id'),

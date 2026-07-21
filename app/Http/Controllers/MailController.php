@@ -253,23 +253,29 @@ class MailController extends Controller
             ->mapWithKeys(fn (User $u) => [mb_strtolower($u->email) => $u->avatar_url])
             ->all();
 
-        // Colleagues' photos come from the provider's directory, but nothing
-        // here calls it: a URL is only handed out for a sender whose photo is
-        // already cached. Anyone not yet resolved gets a background job queued
-        // (once per address, not per row) and initials now — never a page that
-        // waits on Microsoft, which is what happened when this fetched inline.
+        // Sender photos come from two places: the provider directory (a real
+        // photo for a colleague) and the sender domain's brand logo (PayPal, a
+        // bank, a newsletter). Nothing here calls either — a URL is only handed
+        // out for a sender whose photo is already cached. Anyone not yet
+        // resolved gets a background job queued (once per address, not per row)
+        // and initials now, so the page never waits on a live lookup.
         $account = Mailbox::accountFor(request()->user());
-        $sameOrgEmails = $account
-            ? collect($emails)->filter(fn ($e) => MailSenderPhoto::sameOrgAs($account, $e))->values()
+        $own = $account ? mb_strtolower((string) $account->email) : null;
+
+        // Skip the mailbox's own address and any sender who already resolves to
+        // a portal photo; everyone else is a candidate for a directory or brand
+        // logo.
+        $resolvable = $account
+            ? collect($emails)->reject(fn ($e) => $e === $own || isset($avatars[$e]))->values()
             : collect();
 
-        $cached = $sameOrgEmails->isEmpty() ? [] : MailSenderPhoto::query()
-            ->whereIn('hash', $sameOrgEmails->map(fn ($e) => MailSenderPhoto::hashFor($e)))
+        $cached = $resolvable->isEmpty() ? [] : MailSenderPhoto::query()
+            ->whereIn('hash', $resolvable->map(fn ($e) => MailSenderPhoto::hashFor($e)))
             ->get()
             ->keyBy('email')
             ->all();
 
-        foreach ($sameOrgEmails as $email) {
+        foreach ($resolvable as $email) {
             $row = $cached[$email] ?? null;
             $fresh = $row && $row->isFresh();
 
@@ -787,7 +793,24 @@ class MailController extends Controller
     {
         $account = Mailbox::requireAccountFor($request->user());
 
-        $written = new MailSynchronizer($account)->sync();
+        // The email page polls this on a timer, so a transient provider problem
+        // (throttling, a slow token refresh, a network blip) must not turn into
+        // a 500 the browser logs on every poll. On failure the mirror still
+        // serves, the reason is recorded on the account for the settings panel,
+        // and the next poll retries. MailSynchronizer already bounds its own
+        // provider calls so this returns quickly rather than hanging.
+        try {
+            $written = new MailSynchronizer($account)->sync();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'synced' => 0,
+                'error' => $account->fresh()->mail_error ?? 'Mailbox sync is temporarily unavailable.',
+                'folders' => $this->folderCounts($request->user()->id),
+                'syncedAt' => $account->fresh()->mail_synced_at?->toIso8601String(),
+            ]);
+        }
 
         return response()->json([
             'synced' => $written,

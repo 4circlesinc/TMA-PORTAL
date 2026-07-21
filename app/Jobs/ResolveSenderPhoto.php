@@ -36,7 +36,7 @@ class ResolveSenderPhoto implements ShouldQueue
     {
         // One in-flight lookup per address at a time; a burst of page views
         // for the same sender should not queue the same Graph call repeatedly.
-        return [(new WithoutOverlapping('sender-photo:'.mb_strtolower($this->email)))->dontRelease()];
+        return [(new WithoutOverlapping('sender-photo:'.mb_strtolower($this->email)))->dontRelease()->expireAfter(60)];
     }
 
     public function handle(): void
