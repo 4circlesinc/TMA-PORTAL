@@ -35,6 +35,12 @@ class MailAttachment extends Model
             'name' => $this->filename,
             'mime' => $this->mime_type,
             'size' => $this->size,
+            // Whether the body actually renders this file via `cid:`. It never
+            // decides visibility — every named file stays listed, because a
+            // sender pasting a real document inline gives it a Content-ID the
+            // same as a decorative signature logo would. It only lets the UI
+            // group embedded pictures apart from genuine attachments.
+            'inline' => (bool) $this->is_inline,
         ];
     }
 }

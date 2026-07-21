@@ -10586,6 +10586,208 @@
   border-bottom: 1px solid var(--color-overlay-4);
 }
 
+/* ── conversation thread ──────────────────────────────────────────
+ * Each message in the thread is its own card with a divider between, so a
+ * reply is visibly a separate message rather than more text under the last
+ * one. Older messages collapse to a single summary line.
+ */
+
+/* Compose toolbar popup (text style, colour, more). Rendered to <body> so it
+ * escapes the compose window's overflow, and above it in the stack. */
+.tma-dash__email-compose-menu {
+  z-index: 300;
+  min-width: 160px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-overlay-8, var(--color-overlay-4));
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  box-shadow: 0 8px 24px rgb(16 24 40 / 12%);
+}
+
+.tma-dash__email-compose-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-4, 4px);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-13);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__email-compose-menu-item:hover {
+  background: var(--color-overlay-4);
+}
+
+.tma-dash__email-compose-menu-swatch {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 1px solid var(--color-overlay-8, var(--color-overlay-4));
+  border-radius: 3px;
+}
+
+.tma-dash__email-compose-menu-sep {
+  padding: var(--space-6) var(--space-8) var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-11, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* A formatting button whose command is active at the cursor. */
+.tma-dash__email-compose-tool--active {
+  background: var(--color-overlay-8, var(--color-overlay-4));
+}
+
+.tma-dash__email-thread-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--email-pad);
+  border-bottom: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__email-thread-count {
+  font-size: var(--font-size-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-thread-expand-all {
+  padding: var(--space-4) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--color-text-link, var(--color-text-secondary));
+  font-size: var(--font-size-12);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tma-dash__email-thread-expand-all:hover {
+  background: var(--color-overlay-4);
+}
+
+/* A divider between messages, never above the first one. */
+.tma-dash__email-message + .tma-dash__email-message {
+  border-top: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__email-message--collapsed {
+  display: block;
+}
+
+.tma-dash__email-message-collapsed-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-10) var(--email-pad);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.tma-dash__email-message-collapsed-btn:hover {
+  background: var(--color-overlay-2, var(--color-overlay-4));
+}
+
+.tma-dash__email-message-collapsed-name {
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* The snippet takes whatever room is left and truncates — a collapsed message
+ * is one line, however long the message under it is. */
+.tma-dash__email-message-collapsed-snippet {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-13);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-message-collapsed-clip {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  opacity: 0.6;
+}
+
+.tma-dash__email-message-collapsed-date {
+  flex: none;
+  font-size: var(--font-size-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* The head of an expanded card doubles as its collapse control. */
+.tma-dash__email-message-head-wrap {
+  cursor: pointer;
+}
+
+.tma-dash__email-quote-toggle {
+  align-self: flex-start;
+  margin: var(--space-4) 0 var(--space-8);
+  padding: 0 var(--space-8);
+  border: 1px solid var(--color-overlay-8, var(--color-overlay-4));
+  border-radius: var(--radius-16);
+  background: var(--color-overlay-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  line-height: 20px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.tma-dash__email-quote-toggle:hover {
+  background: var(--color-overlay-8, var(--color-overlay-4));
+}
+
+.tma-dash__email-thread-loading,
+.tma-dash__email-thread-error {
+  padding: var(--email-pad);
+  font-size: var(--font-size-13);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-thread-error {
+  color: var(--color-danger, #b42318);
+}
+
+.tma-dash__email-body-loading,
+.tma-dash__email-body-error {
+  font-size: var(--font-size-13);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-body-error {
+  color: var(--color-danger, #b42318);
+}
+
+/* Plain-text bodies keep their own line breaks but must still wrap to the
+ * pane — a <pre> that does not wrap would scroll the whole reading pane
+ * sideways on any message with long lines. */
+.tma-dash__email-body-plain {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .tma-dash__email-replied {
   display: flex;
   flex-direction: column;

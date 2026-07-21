@@ -228,6 +228,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/attachments/{uuid}', [MailController::class, 'attachment'])->name('attachment');
 
         Route::get('/messages', [MailController::class, 'messages'])->name('messages');
+        // Every message in the conversation the given message belongs to.
+        Route::get('/messages/{uuid}/thread', [MailController::class, 'thread'])->name('messages.thread');
         Route::get('/messages/{uuid}', [MailController::class, 'show'])->name('messages.show');
         Route::patch('/messages/{uuid}', [MailController::class, 'update'])->name('messages.update');
         Route::post('/messages/{uuid}/move', [MailController::class, 'move'])->name('messages.move');

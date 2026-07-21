@@ -155,50 +155,133 @@ class GraphProvider implements MailProvider
     {
         $messages = [];
 
+        // The window this pass is allowed to claim. Taken *before* any request
+        // goes out, because a message that lands while the loop is running has
+        // to be caught next time: advancing the cursor to the time the loop
+        // *finished* silently skipped everything that arrived during it.
+        $startedAt = now()->toIso8601ZuluString();
+
         // This runs inline in the /sync web request, so it must finish well
         // under PHP's execution limit. Each folder gets a short, single-attempt
         // request, and the whole loop stops at a wall-clock deadline — a slow or
         // throttling Graph then costs a bounded amount instead of stacking
         // 30s × retries per folder into a fatal timeout.
         $deadline = microtime(true) + 20.0;
-        $completed = true;
+
+        // How far the cursor may move. It can only reach $startedAt if every
+        // folder was drained; any folder that stopped early pulls this back to
+        // where it stopped, so the remainder is picked up next pass instead of
+        // being stepped over. Re-reading a few messages is free (the upsert is
+        // idempotent); stepping over one loses it permanently.
+        $watermark = $startedAt;
 
         foreach (Mailbox::FOLDERS as $folder) {
             if (microtime(true) >= $deadline) {
-                $completed = false;
+                $watermark = min($watermark, $since);
                 break;
             }
 
-            $response = $this->request(timeout: 6, tries: 1)->get(
-                self::BASE.'/mailFolders/'.self::folderId($folder).'/messages',
-                [
-                    '$filter' => 'receivedDateTime gt '.$since,
-                    '$orderby' => 'receivedDateTime desc',
-                    '$top' => 100,
-                    '$select' => self::LIST_SELECT,
-                ]
-            );
+            // Ascending, so paging walks *forward* from the cursor and the
+            // oldest unseen mail is read first. Descending with a $top cap —
+            // which is what this did — returns the newest 100 and leaves the
+            // older ones stranded behind a cursor that has already moved past
+            // them, which is how a message can arrive at the provider and never
+            // reach the portal at all.
+            $url = self::BASE.'/mailFolders/'.self::folderId($folder).'/messages';
+            $query = [
+                '$filter' => 'receivedDateTime gt '.$since,
+                '$orderby' => 'receivedDateTime asc',
+                '$top' => 100,
+                '$select' => self::LIST_SELECT,
+            ];
 
-            // A folder that rejects the filter (drafts have no receivedDateTime
-            // ordering) or times out simply contributes nothing this pass.
-            if (! $response->successful()) {
-                continue;
+            $newest = null;
+            $drained = false;
+
+            // Bounded so one very busy folder cannot eat the whole deadline.
+            for ($page = 0; $page < 10; $page++) {
+                if (microtime(true) >= $deadline) {
+                    break;
+                }
+
+                // A nextLink already carries its own query string. Passing even
+                // an empty query array here would hand Guzzle a replacement
+                // set and wipe the skiptoken off it — the request would come
+                // back as page one again, forever.
+                $response = $query === []
+                    ? $this->request(timeout: 6, tries: 1)->get($url)
+                    : $this->request(timeout: 6, tries: 1)->get($url, $query);
+
+                // A folder that rejects the filter (drafts have no
+                // receivedDateTime to order by) or times out contributes
+                // nothing this pass. It deliberately does not hold the cursor
+                // back: a folder that fails every time would stall the whole
+                // mailbox. It is logged instead, so a folder that has quietly
+                // stopped syncing is something someone can actually find.
+                if (! $response->successful()) {
+                    logger()->warning('mail: folder skipped during incremental sync', [
+                        'folder' => $folder,
+                        'status' => $response->status(),
+                        'since' => $since,
+                    ]);
+
+                    $drained = true;
+                    break;
+                }
+
+                $data = $this->json($response);
+                $batch = $data['value'] ?? [];
+
+                foreach ($batch as $raw) {
+                    $messages[] = $this->normalize($raw, $folder, withBody: false);
+
+                    if ($stamp = $raw['receivedDateTime'] ?? null) {
+                        $newest = max($newest ?? $stamp, $stamp);
+                    }
+                }
+
+                $next = $data['@odata.nextLink'] ?? null;
+
+                if (! $next) {
+                    $drained = true;
+                    break;
+                }
+
+                // A nextLink is a complete URL with the filter already baked in.
+                $url = $next;
+                $query = [];
             }
 
-            foreach ($this->json($response)['value'] ?? [] as $raw) {
-                $messages[] = $this->normalize($raw, $folder, withBody: false);
+            if (! $drained && $newest !== null) {
+                // Stopped mid-folder. Resume from the last message actually
+                // read rather than from the top of the window, and step back a
+                // second so messages sharing that exact timestamp are not
+                // skipped by the strict `gt`.
+                $watermark = min($watermark, self::secondBefore($newest));
+            } elseif (! $drained) {
+                $watermark = min($watermark, $since);
             }
         }
 
         return [
             'messages' => $messages,
             'deleted' => [],
-            // Only advance the cursor once every folder was checked. If the
-            // deadline cut the loop short, keep the old timestamp so the folders
-            // we skipped are picked up next pass — nothing is lost, at worst a
-            // few rows are re-upserted (idempotent).
-            'cursor' => self::TIME_CURSOR.($completed ? now()->toIso8601ZuluString() : $since),
+            'cursor' => self::TIME_CURSOR.$watermark,
         ];
+    }
+
+    /**
+     * One second before an ISO timestamp, normalised to the Zulu form the
+     * cursor uses. The overlap it creates is deliberate — re-reading a message
+     * costs an idempotent upsert, missing one costs the message.
+     */
+    private static function secondBefore(string $iso): string
+    {
+        $ts = strtotime($iso);
+
+        return $ts === false
+            ? $iso
+            : gmdate('Y-m-d\TH:i:s\Z', $ts - 1);
     }
 
     public function changesSince(?string $cursor): array

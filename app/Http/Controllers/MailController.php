@@ -10,6 +10,7 @@ use App\Models\MailLabel;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\User;
+use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
 use Illuminate\Http\JsonResponse;
@@ -289,17 +290,54 @@ class MailController extends Controller
 
         return $messages->map(function (MailMessage $m) use ($avatars, $cached) {
             $row = $m->toRow();
-            $email = mb_strtolower((string) $m->from_email);
-
-            $row['avatarUrl'] = $avatars[$email] ?? null;
-
-            $photo = $cached[$email] ?? null;
-            if (! $row['avatarUrl'] && $photo && $photo->isFresh() && $photo->has_photo) {
-                $row['avatarUrl'] = route('mail.sender-photo', ['hash' => $photo->hash]);
-            }
+            $row['avatarUrl'] = self::avatarFor($m, $avatars, $cached);
 
             return $row;
         })->values()->all();
+    }
+
+    /**
+     * The same sender-picture resolution as {@see withAvatars}, but over the
+     * full record each thread card needs rather than the list row.
+     *
+     * @param  Collection<int, MailMessage>  $messages
+     * @return array<int, array<string, mixed>>
+     */
+    private function withThreadAvatars(Collection $messages): array
+    {
+        // Reuse the list path for the lookups and the background queuing, then
+        // key what it found by message so the record shape can borrow it.
+        $rows = collect($this->withAvatars($messages))->keyBy('id');
+
+        return $messages->map(function (MailMessage $m) use ($rows) {
+            $record = $m->toRecord();
+            $record['avatarUrl'] = $rows[$m->uuid]['avatarUrl'] ?? null;
+
+            return $record;
+        })->values()->all();
+    }
+
+    /**
+     * A portal account's own photo first, then whatever the directory or brand
+     * lookup has already cached. Never a live call, and never an invented
+     * picture — the UI draws initials when this returns null.
+     *
+     * @param  array<string, string>  $avatars
+     * @param  array<string, MailSenderPhoto>  $cached
+     */
+    private static function avatarFor(MailMessage $m, array $avatars, array $cached): ?string
+    {
+        $email = mb_strtolower((string) $m->from_email);
+
+        if ($url = $avatars[$email] ?? null) {
+            return $url;
+        }
+
+        $photo = $cached[$email] ?? null;
+
+        return $photo && $photo->isFresh() && $photo->has_photo
+            ? route('mail.sender-photo', ['hash' => $photo->hash])
+            : null;
     }
 
     /**
@@ -310,6 +348,78 @@ class MailController extends Controller
     {
         $message = $this->findMessage($request, $uuid);
 
+        $this->hydrate($message);
+
+        $message->load('labels');
+
+        return response()->json(['message' => $message->toRecord()]);
+    }
+
+    /**
+     * Every message in one conversation, oldest first.
+     *
+     * The reading pane used to show only the message that was clicked, with
+     * the rest of the conversation nowhere — replies, forwards and quoted
+     * history simply were not rendered. This returns the whole thread so each
+     * message can be its own card.
+     *
+     * Only the message being opened is hydrated from the provider here. A long
+     * thread would otherwise cost one round trip per message before anything
+     * painted; the others carry whatever body is already cached and report
+     * `bodyLoaded: false` so the client can pull them from {@see show} when
+     * the reader expands them.
+     */
+    public function thread(Request $request, string $uuid): JsonResponse
+    {
+        $message = $this->findMessage($request, $uuid);
+
+        $this->hydrate($message);
+
+        // A message with no thread id (some providers leave it empty on
+        // single-message conversations) is a thread of one rather than an
+        // error — grouping on an empty string would pull in every other
+        // message that also lacks one.
+        $messages = $message->thread_id
+            ? MailMessage::query()
+                ->with(['attachments', 'labels'])
+                ->where('user_id', $request->user()->id)
+                ->where('thread_id', $message->thread_id)
+                // Drafts belong to the compose window, not the transcript.
+                ->where('folder', '!=', 'draft')
+                ->orderBy('sent_at')
+                ->orderBy('id')
+                ->get()
+            : collect([$message->load(['attachments', 'labels'])]);
+
+        // The opened message carries freshly hydrated body/attachments on this
+        // instance; the query above re-read it from the database, so swap the
+        // hydrated copy back in rather than serving the stale row. Its labels
+        // are loaded to match what the query gave every other message —
+        // without it the opened card would be the one showing no label chips.
+        $message->load('labels');
+
+        $messages = $messages->map(
+            fn (MailMessage $m) => $m->id === $message->id ? $message : $m
+        );
+
+        return response()->json([
+            'threadId' => $message->thread_id,
+            // The conversation is titled by what it is about, which is the
+            // subject the *first* message set — not the "Re: Re: Fwd:" the
+            // newest reply happens to be carrying.
+            'subject' => $messages->first()?->subject ?? $message->subject,
+            'messages' => $this->withThreadAvatars($messages),
+        ]);
+    }
+
+    /**
+     * Fetch and cache a message's body, recipients and attachment list.
+     *
+     * Safe to call on an already-hydrated message: it only reaches the provider
+     * when something is genuinely missing.
+     */
+    private function hydrate(MailMessage $message): void
+    {
         $noBody = $message->body_html === null && $message->body_text === null;
         // A message flagged as having attachments but with zero attachment
         // rows was opened before attachments were fetched at all - the body
@@ -320,11 +430,7 @@ class MailController extends Controller
         $justFetched = false;
 
         if ($noBody || $missingAttachments) {
-            $full = rescue(
-                fn () => Mailbox::provider($message->account)->getMessage($message->remote_id),
-                null,
-                report: false
-            );
+            $full = $this->fetchFromProvider($message);
 
             if ($full) {
                 $message->forceFill([
@@ -336,7 +442,17 @@ class MailController extends Controller
                 ])->save();
 
                 if (! empty($full['attachments'])) {
-                    $this->saveAttachments($message, $full['attachments']);
+                    // The body is already saved above, so a malformed
+                    // attachment list costs the attachments and nothing more —
+                    // the message itself still reads.
+                    try {
+                        $this->saveAttachments($message, $full['attachments']);
+                    } catch (\Throwable $e) {
+                        logger()->error('mail: attachment metadata failed to save', [
+                            'message_uuid' => $message->uuid,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
                 }
 
                 // load() refreshes the relation on this same instance, rather
@@ -349,6 +465,10 @@ class MailController extends Controller
                 $this->embedInlineImages($message);
                 $justFetched = true;
             }
+        }
+
+        if (! $message->relationLoaded('attachments')) {
+            $message->load('attachments');
         }
 
         // A body cached before embedded pictures were supported still carries
@@ -364,10 +484,31 @@ class MailController extends Controller
 
             $this->embedInlineImages($message);
         }
+    }
 
-        $message->load('labels');
+    /**
+     * One provider read for a message, with the failure recorded rather than
+     * swallowed. A null return means the caller serves whatever is cached.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function fetchFromProvider(MailMessage $message): ?array
+    {
+        try {
+            return Mailbox::provider($message->account)->getMessage($message->remote_id);
+        } catch (\Throwable $e) {
+            // Deliberately not rethrown: a message whose body will not load is
+            // still worth opening for its headers and whatever is cached. But
+            // it must not vanish silently the way `report: false` left it —
+            // "the body is blank" was unreportable before this.
+            logger()->error('mail: message body fetch failed', [
+                'message_uuid' => $message->uuid,
+                'provider' => $message->account?->provider,
+                'error' => $e->getMessage(),
+            ]);
 
-        return response()->json(['message' => $message->toRecord()]);
+            return null;
+        }
     }
 
     /**
@@ -429,7 +570,6 @@ class MailController extends Controller
      */
     private function embedInlineImages(MailMessage $message): void
     {
-        $__t = microtime(true);
         $html = $message->body_html;
         if (! $html || ! str_contains($html, 'cid:')) {
             return;
@@ -438,9 +578,15 @@ class MailController extends Controller
         $inline = $message->attachments->filter(
             fn (MailAttachment $a) => $a->content_id && $a->remote_id
         );
-        logger()->info('  embed: after filter', ['t' => microtime(true) - $__t, 'count' => $inline->count()]);
 
         if ($inline->isEmpty()) {
+            // The body points at embedded pictures the attachment list does not
+            // describe, so those `cid:` references stay unresolved and render
+            // as broken images. Worth knowing about; not worth failing the open.
+            logger()->warning('mail: body references cid: with no matching attachment', [
+                'message_uuid' => $message->uuid,
+            ]);
+
             return;
         }
 
@@ -461,12 +607,10 @@ class MailController extends Controller
                 }
             }
         }
-        logger()->info('  embed: after loop', ['t' => microtime(true) - $__t]);
 
         if ($replaced) {
             $message->forceFill(['body_html' => $html])->save();
         }
-        logger()->info('  embed: after save', ['t' => microtime(true) - $__t]);
     }
 
     /** Read / starred / important flags. */
@@ -760,8 +904,18 @@ class MailController extends Controller
 
         abort_unless($message && $message->user_id === $request->user()->id, 404);
 
-        $bytes = Mailbox::provider($message->account)
-            ->getAttachment($message->remote_id, $attachment->remote_id);
+        try {
+            $bytes = Mailbox::provider($message->account)
+                ->getAttachment($message->remote_id, $attachment->remote_id);
+        } catch (\Throwable $e) {
+            logger()->error('mail: attachment download failed', [
+                'attachment_uuid' => $attachment->uuid,
+                'message_uuid' => $message->uuid,
+                'error' => $e->getMessage(),
+            ]);
+
+            abort(502, 'This attachment could not be downloaded from the mail provider.');
+        }
 
         $mime = $attachment->mime_type ?: 'application/octet-stream';
 
@@ -769,13 +923,28 @@ class MailController extends Controller
         // an attachment can be previewed instead of only downloaded. Anything
         // else always downloads rather than being handed to the browser to
         // interpret in our origin.
-        $viewable = str_starts_with($mime, 'image/') || $mime === 'application/pdf';
+        //
+        // SVG is the exception that has to be earned: it is a document that can
+        // carry script and external references, not an inert picture, so it is
+        // only served inline after being stripped down — see sanitizeSvg().
+        $isSvg = $mime === 'image/svg+xml';
+
+        $viewable = str_starts_with($mime, 'image/')
+            || str_starts_with($mime, 'audio/')
+            || str_starts_with($mime, 'video/')
+            || $mime === 'application/pdf'
+            || $mime === 'text/plain'
+            || $mime === 'text/csv';
 
         if ($request->boolean('inline') && $viewable) {
+            if ($isSvg) {
+                $bytes = self::sanitizeSvg($bytes);
+            }
+
             return response($bytes, 200, [
                 'Content-Type' => $mime,
                 'Content-Disposition' => 'inline; filename="'.addslashes($attachment->filename).'"',
-                'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; object-src 'none'",
+                'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; object-src 'none'; script-src 'none'",
                 'X-Content-Type-Options' => 'nosniff',
                 'Cache-Control' => 'private, max-age=3600',
             ]);
@@ -786,6 +955,50 @@ class MailController extends Controller
             $attachment->filename,
             ['Content-Type' => $mime],
         );
+    }
+
+    /**
+     * Strip the executable parts out of an SVG so it can be previewed.
+     *
+     * An SVG is a document, not a picture: it can carry <script>, event
+     * handlers, <foreignObject> with arbitrary HTML, and external references
+     * that phone home. Served from our own origin those would run as us, so a
+     * sender could get script execution just by attaching a logo. The response
+     * also carries `script-src 'none'` — this is the belt to that CSP's braces,
+     * because a Content-Security-Policy is only as good as the browser reading it.
+     *
+     * Deliberately a whitelist-shaped strip rather than a full parse: anything
+     * that survives is inert markup, and a malformed SVG simply renders as
+     * nothing rather than being handed through intact.
+     */
+    private static function sanitizeSvg(string $svg): string
+    {
+        // Elements that can execute, embed, or fetch.
+        $svg = preg_replace(
+            '#<\s*(script|foreignObject|iframe|embed|object|use|image|audio|video|animate|set|handler)\b[^>]*>.*?<\s*/\s*\1\s*>#is',
+            '',
+            $svg
+        ) ?? '';
+
+        // …and their self-closing forms, which the pair above cannot match.
+        $svg = preg_replace(
+            '#<\s*(script|foreignObject|iframe|embed|object|use|image|animate|set|handler)\b[^>]*/?>#is',
+            '',
+            $svg
+        ) ?? '';
+
+        // Inline event handlers: on* on any element.
+        $svg = preg_replace('#\son[a-z]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)#is', '', $svg) ?? '';
+
+        // javascript:/data: URLs in href, xlink:href and style.
+        $svg = preg_replace(
+            '#(href|xlink:href|src)\s*=\s*(?:"\s*(?:javascript|data|vbscript):[^"]*"|\'\s*(?:javascript|data|vbscript):[^\']*\')#is',
+            '',
+            $svg
+        ) ?? '';
+
+        // CSS can fetch too — url() in a style attribute or <style> block.
+        return preg_replace('#(?:@import|expression\s*\(|url\s*\(\s*["\']?\s*(?:https?:|//|javascript:))#is', '', $svg) ?? '';
     }
 
     /** Manual "sync now" from the settings panel. Runs inline so the UI can report the result. */
@@ -801,6 +1014,13 @@ class MailController extends Controller
         // provider calls so this returns quickly rather than hanging.
         try {
             $written = new MailSynchronizer($account)->sync();
+        } catch (MailAuthException $e) {
+            // A dead grant is not transient and retrying cannot fix it. It has
+            // to reach the handler, which turns it into the 409 the email page
+            // shows its Reconnect prompt for — the catch-all below used to
+            // swallow this too, so a mailbox that needed reconnecting just
+            // reported "temporarily unavailable" on every poll, forever.
+            throw $e;
         } catch (\Throwable $e) {
             report($e);
 

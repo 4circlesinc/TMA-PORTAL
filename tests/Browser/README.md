@@ -37,6 +37,15 @@ field placement and drawing, and computed CSS only exist in a browser.
   pins the failure case that matters — a dead OAuth grant degrades to a
   reconnect banner over an intact list rather than blanking the mailbox. Needs
   a user with a connected account row (see the mailbox fixture below).
+- **`mail-thread.mjs`** — the reading pane as a *conversation*. It used to
+  render only the message that was clicked, so a reply arrived with none of the
+  thread it belonged to and the quoted history it carried was dumped inline
+  underneath it. This opens a seeded three-message thread and checks each
+  message is its own card, older ones start collapsed, expanding one loads its
+  body, and the quoted history is hidden behind a toggle that still reveals it
+  in full. It also pins the compose window opening *blank* — it used to arrive
+  pre-filled with a stand-in invoice — and the formatting toolbar acting on the
+  selection. Needs the mailbox fixture plus a thread; see below.
 - **`client-folder-tab.mjs`** — the client profile's Folders tab as a live file
   area: it lists the client folder's real subfolders, the "New folder" button
   creates one, and "Upload" adds a file that appears in the list. Needs an
@@ -174,3 +183,37 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 
 node tests/Browser/mailbox.mjs
 ```
+
+`mail-thread.mjs` needs a *conversation* rather than the loose messages above —
+three messages sharing one `thread_id`, the middle one carrying quoted history
+in the shape Outlook appends it (a `#divRplyFwdMsg` header followed by a
+blockquote). That middle message is what the quoted-text toggle is checked
+against, so its markup matters more than its wording:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+  \$a = App\Models\ConnectedAccount::where('user_id', \$u->id)->first();
+  \$quoted = '<div>Thanks, that works for me.</div>'
+    . '<div id=\"divRplyFwdMsg\"><hr><b>From:</b> Dana Reed<br><b>Sent:</b> Monday<br></div>'
+    . '<blockquote>Original message text here</blockquote>';
+  foreach ([
+    ['m1','Dana Reed','dana@example.com','Quarterly review','<p>Here is the quarterly review.</p>', now()->subDays(3)],
+    ['m2','Test User','e2e@example.com','Re: Quarterly review', \$quoted, now()->subDays(2)],
+    ['m3','Dana Reed','dana@example.com','Re: Quarterly review','<p>Perfect, see you then.</p>', now()->subDay()],
+  ] as [\$rid,\$fn,\$fe,\$sub,\$html,\$when]) {
+    App\Models\MailMessage::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+      'connected_account_id' => \$a->id, 'remote_id' => \$rid, 'thread_id' => 'conv-1',
+      'folder' => 'inbox', 'subject' => \$sub, 'snippet' => strip_tags(\$html),
+      'body_html' => \$html, 'from_name' => \$fn, 'from_email' => \$fe,
+      'to' => [['name' => 'Test User', 'email' => 'e2e@example.com']],
+      'is_read' => true, 'sent_at' => \$when]);
+  }
+"
+
+node tests/Browser/mail-thread.mjs
+```
+
+Seeding a body on every message matters: the thread endpoint only fetches the
+message being opened, and a fake token cannot fetch the rest — without cached
+bodies the expand checks would be measuring a failed provider call.

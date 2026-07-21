@@ -941,7 +941,6 @@
     },
   ];
 
-  var COMPOSE_SUBJECT = 'Invoice #VL25000355 - TM ANTOINE Advisory';
 
   /* Folder ids match the server's; counts arrive with the bootstrap payload
    * rather than being baked in here. */
@@ -979,6 +978,11 @@
   /* Surfaces a failed write. A 409 means the OAuth grant is gone or too
    * narrow, which the sidebar turns into a Reconnect prompt; anything else is
    * a transient failure worth one toast. */
+  /* The message worth showing a reader, without leaking a stack or a status. */
+  function errorText(err) {
+    return (err && err.message) || '';
+  }
+
   function reportMailError(state, err) {
     if (err && err.reconnect) {
       // The grant is dead, but the mail already on screen is still real and
@@ -1168,7 +1172,13 @@
     });
   }
 
-  /* Opens a message: fetches the body on first read and marks it read. */
+  /* Opens a message: loads its whole conversation and marks it read.
+   *
+   * The reading pane used to fetch just the one message, so a reply arrived
+   * with none of the conversation it belonged to — every earlier message was
+   * simply absent. This pulls the thread instead; the opened message comes
+   * back with its body, the rest carry `bodyLoaded: false` and are fetched by
+   * expandThreadMessage() as the reader opens them. */
   function openMailMessage(root, state, render, id) {
     var row = findRow(state, id);
     if (!row) return;
@@ -1176,29 +1186,162 @@
     state.selectedId = id;
     if (row.unread) markRowRead(state, id);
 
-    if (row.bodyHtml !== undefined || row.bodyText !== undefined) {
+    // A thread already covering this message stays as it is, so re-opening
+    // does not throw away which messages the reader had expanded.
+    if (threadCoversSelection(state)) {
       render();
       return;
     }
 
+    state.thread = null;
+    state.threadError = null;
+    state.threadErrorId = null;
     state.bodyLoading = true;
+    var token = ++state.threadToken;
     render();
 
-    api().getMessage(id).then(function (data) {
-      var full = data && data.message;
-      if (!full) return;
+    api().getThread(id).then(function (data) {
+      // A slower earlier request must not overwrite a thread the reader has
+      // since opened.
+      if (token !== state.threadToken) return;
 
-      // Merge rather than replace: the row may have been starred or
-      // labelled while the body was in flight.
-      Object.keys(full).forEach(function (key) {
-        row[key] = full[key];
-      });
+      var messages = (data && data.messages) || [];
+
+      state.thread = {
+        rootId: id,
+        threadId: data && data.threadId,
+        subject: (data && data.subject) || row.subject,
+        messages: messages,
+        // Newest expanded, everything before it collapsed — the shape both
+        // Gmail and Outlook use, so a long thread opens on the message that
+        // prompted it rather than on its own history.
+        expanded: defaultThreadExpansion(messages, id),
+        showQuoted: {},
+      };
+
+      // Keep the list row in step with what the thread reported.
+      var opened = messages.filter(function (m) { return m.id === id; })[0];
+      if (opened) {
+        Object.keys(opened).forEach(function (key) { row[key] = opened[key]; });
+      }
 
       state.bodyLoading = false;
       render();
     }).catch(function (err) {
+      if (token !== state.threadToken) return;
       state.bodyLoading = false;
+      state.threadError = errorText(err) || 'This conversation could not be loaded.';
+      state.threadErrorId = id;
       reportMailError(state, err);
+      render();
+    });
+  }
+
+  /* True when the loaded thread actually covers the selected message.
+   *
+   * Selection moves without going through openMailMessage in several places —
+   * a reload whose selected row has vanished, an archive, a folder change — and
+   * a thread left over from the previous message would otherwise be rendered
+   * against the new one. */
+  function threadCoversSelection(state) {
+    if (!state.thread || !state.selectedId) return false;
+
+    return state.thread.messages.some(function (m) { return m.id === state.selectedId; });
+  }
+
+  /* Loads the conversation for whatever is selected, if it is not already
+   * loaded. Called after each render rather than at every place that moves the
+   * selection, so no future caller can forget to. */
+  function ensureThreadLoaded(root, state, render) {
+    if (state.folder === 'templates') return;
+    if (!state.selectedId || state.bodyLoading) return;
+    // A failure is remembered against the message it happened on, so the
+    // error is not retried in a loop — but selecting a different message
+    // still gets a fresh attempt.
+    if (state.threadError && state.threadErrorId === state.selectedId) return;
+    if (threadCoversSelection(state)) return;
+
+    openMailMessage(root, state, render, state.selectedId);
+  }
+
+  /* Which messages start open: the one that was clicked, plus the newest, plus
+   * anything still unread — a reader should never have to hunt for the message
+   * they came in for. */
+  function defaultThreadExpansion(messages, openedId) {
+    var expanded = {};
+    if (!messages.length) return expanded;
+
+    expanded[openedId] = true;
+    expanded[messages[messages.length - 1].id] = true;
+
+    messages.forEach(function (m) {
+      if (m.unread) expanded[m.id] = true;
+    });
+
+    return expanded;
+  }
+
+  /* Expand or collapse every message in the conversation at once. Expanding
+   * pulls any body that has not been fetched yet, so "Expand all" really does
+   * show the whole conversation rather than a column of empty cards. */
+  function setThreadExpansion(root, state, render, open) {
+    var thread = state.thread;
+    if (!thread) return;
+
+    thread.messages.forEach(function (message) {
+      thread.expanded[message.id] = open;
+
+      if (!open || message.bodyLoaded || message._loading) return;
+
+      message._loading = true;
+
+      api().getMessage(message.id).then(function (data) {
+        var full = data && data.message;
+        message._loading = false;
+        if (full) {
+          Object.keys(full).forEach(function (key) { message[key] = full[key]; });
+        }
+        render();
+      }).catch(function (err) {
+        message._loading = false;
+        message._error = errorText(err) || 'This message could not be loaded.';
+        render();
+      });
+    });
+
+    render();
+  }
+
+  /* Pulls one thread message's body the first time it is expanded. */
+  function expandThreadMessage(root, state, render, id) {
+    var thread = state.thread;
+    if (!thread) return;
+
+    var open = !thread.expanded[id];
+    thread.expanded[id] = open;
+
+    var message = thread.messages.filter(function (m) { return m.id === id; })[0];
+
+    if (!open || !message || message.bodyLoaded || message._loading) {
+      render();
+      return;
+    }
+
+    message._loading = true;
+    render();
+
+    api().getMessage(id).then(function (data) {
+      var full = data && data.message;
+      message._loading = false;
+
+      if (full) {
+        Object.keys(full).forEach(function (key) { message[key] = full[key]; });
+      }
+
+      render();
+    }).catch(function (err) {
+      message._loading = false;
+      message._error = errorText(err) || 'This message could not be loaded.';
       render();
     });
   }
@@ -2286,44 +2429,17 @@
     return rows.map(function (row) { return buildInboxRowHtml(row, state); }).join('');
   }
 
-function threadRowFromPrior(prior, fallbackTo) {
-    return {
-      sender: prior.sender || '',
-      email: prior.email,
-      avatar: prior.avatar,
-      brand: prior.brand,
-      to: prior.to || fallbackTo,
-    };
-  }
-
-  function renderMessageBodyText(bodyText) {
-    return '<div class="tma-dash__email-body"><p>' + esc(bodyText || '') + '</p></div>';
-  }
-
-  /* The real message body.
+  /* Plain-text mail, and the fallback whenever no HTML part was sent.
    *
-   * HTML mail is attacker-controlled: anyone can send this account a message,
-   * so its markup can never touch the portal's DOM. It renders inside a fully
-   * sandboxed iframe — no scripts, no same-origin, no form submission — which
-   * is what mail clients do and what makes it safe to show at all. Plain-text
-   * mail skips the iframe and is simply escaped.
-   */
-  function renderMessageBody(row, fallbackText) {
-    if (row && row.bodyHtml) {
-      // allow-same-origin (and deliberately NOT allow-scripts) lets the page
-      // measure the rendered height so the whole message is shown instead of
-      // being cut off at a fixed frame height. Scripts stay blocked, so the
-      // sender's markup still cannot run anything.
-      return (
-        '<div class="tma-dash__email-body tma-dash__email-body--html">' +
-        '<iframe class="tma-dash__email-body-frame" sandbox="allow-same-origin"' +
-        ' referrerpolicy="no-referrer" title="Message content" data-email-body-frame' +
-        ' srcdoc="' + esc(wrapEmailBodyHtml(row.bodyHtml)) + '"></iframe>' +
-        '</div>'
-      );
-    }
-
-    return renderMessageBodyText((row && row.bodyText) || fallbackText);
+   * Newlines are the only structure a text body has, so they have to survive:
+   * collapsing them into one paragraph turned every plain-text message —
+   * including most automated notifications — into an unreadable wall. */
+  function renderMessageBodyText(bodyText) {
+    return (
+      '<div class="tma-dash__email-body tma-dash__email-body--text">' +
+      '<pre class="tma-dash__email-body-plain">' + esc(bodyText || '') + '</pre>' +
+      '</div>'
+    );
   }
 
   /* The message's attachments, under the body.
@@ -2338,9 +2454,11 @@ function threadRowFromPrior(prior, fallbackTo) {
    * download (see openAttachmentLightbox). */
   function renderAttachments(row) {
     var items = (row && row.attachments) || [];
-    // Tracked here (not threaded through every intermediate render function)
-    // so the lightbox click handler knows which message's files are on screen.
-    state_lastRowAttachments = items;
+    // Keyed by message, not stored as "the attachments currently on screen":
+    // a thread renders several messages at once, each with its own files, so a
+    // single shared array would hand every card the last one's attachments.
+    var ownerId = (row && row.id) || '';
+    state_attachmentsByMessage[ownerId] = items;
     if (!items.length) return '';
 
     // Gmail-style tiles: a big preview area (the real image, or — since this
@@ -2386,11 +2504,29 @@ function threadRowFromPrior(prior, fallbackTo) {
       );
     }).join('');
 
+    // Embedded pictures are counted separately in the heading. They stay
+    // listed — a sender pasting a real document into the body gives it a
+    // Content-ID exactly as a signature logo has one, and hiding the first to
+    // tidy away the second loses genuine paperwork — but saying how many of
+    // the files are pictures already shown above stops a signature's four
+    // logos reading as four documents nobody sent.
+    var inlineCount = items.filter(function (a) { return a.inline; }).length;
+    var fileCount = items.length - inlineCount;
+
+    var heading = items.length + ' attachment' + (items.length === 1 ? '' : 's');
+    if (inlineCount && fileCount) {
+      heading = fileCount + ' attachment' + (fileCount === 1 ? '' : 's') +
+        ' · ' + inlineCount + ' embedded image' + (inlineCount === 1 ? '' : 's');
+    } else if (inlineCount) {
+      heading = inlineCount + ' embedded image' + (inlineCount === 1 ? '' : 's');
+    }
+
     return (
-      '<div class="tma-dash__email-attachments" data-email-attachments>' +
+      '<div class="tma-dash__email-attachments" data-email-attachments' +
+      ' data-email-attachments-owner="' + esc(ownerId) + '">' +
       '<div class="tma-dash__email-attachments-head">' +
       '<img src="' + ICONS.PaperclipHorizontal + '" alt="" aria-hidden="true">' +
-      items.length + ' attachment' + (items.length === 1 ? '' : 's') +
+      heading +
       '</div>' +
       '<div class="tma-dash__email-attachments-list">' + cards + '</div>' +
       '</div>'
@@ -2513,7 +2649,10 @@ function threadRowFromPrior(prior, fallbackTo) {
         var btn = target.closest('[data-email-attachment-open]');
         if (!btn) return;
         var index = parseInt(btn.getAttribute('data-email-attachment-open'), 10);
-        var items = state_lastRowAttachments || [];
+        // Which message's files these are — a thread has several sections on
+        // screen at once, so the owner has to come from the section itself.
+        var owner = section.getAttribute('data-email-attachments-owner') || '';
+        var items = state_attachmentsByMessage[owner] || [];
         if (!items.length || isNaN(index)) return;
         openAttachmentLightbox(items, index);
       }
@@ -2550,7 +2689,27 @@ function threadRowFromPrior(prior, fallbackTo) {
   // caller) so the lightbox and the click handler always agree on which
   // message's attachments are on screen, without threading the array through
   // every intermediate render function.
-  var state_lastRowAttachments = [];
+  /* Attachments currently on screen, keyed by the message they belong to.
+   *
+   * Not threaded through every intermediate render function, and not a single
+   * "last row" array either: a thread paints several messages at once, so the
+   * lightbox has to be able to ask which card was clicked. */
+  var state_attachmentsByMessage = {};
+
+  /* The state currently being rendered.
+   *
+   * Same reasoning as state_attachmentsByMessage above: a handful of leaf render
+   * helpers need one field off the state (the user's signature, their timezone
+   * preferences) and threading an extra argument through every caller in
+   * between costs more than it explains. Set once at the top of render().
+   */
+  var state_active = null;
+
+  /* One of the user's mail preferences, or a fallback before settings load. */
+  function mailPreference(key, fallback) {
+    var prefs = (state_active && state_active.settings && state_active.settings.preferences) || {};
+    return prefs[key] === undefined || prefs[key] === null ? fallback : prefs[key];
+  }
 
   function formatBytes(bytes) {
     var n = Number(bytes) || 0;
@@ -2776,29 +2935,280 @@ function threadRowFromPrior(prior, fallbackTo) {
     );
   }
 
-  function renderEmailThread(row, messageHead, metaEmail, metaDate, subject, bodyText, threadActions, innerBodyHtml, state) {
-    innerBodyHtml = innerBodyHtml || renderMessageBodyText(bodyText);
-    var html = '<div class="tma-dash__email-thread">';
-    if (row.repliedTo) {
-      var prior = row.repliedTo;
-      var priorRow = threadRowFromPrior(prior, { name: row.sender, email: metaEmail });
-      var priorEmail = prior.email || '';
-      var priorDate = prior.date || '';
-      var priorSubject = prior.subject || subject;
-      html +=
-        '<article class="tma-dash__email-message tma-dash__email-message--prior">' +
-        renderMessageHead(priorRow, priorEmail, priorDate, priorSubject, 'prior', state) +
-        renderMessageBodyText(prior.body) +
-        '</article>';
+  /* ── quoted history ──────────────────────────────────────────────
+   * A reply carries the message it answers, and usually everything before
+   * that, appended to its own text. Showing all of it inline is what made
+   * replies so hard to follow: the two lines someone actually wrote sit on top
+   * of screens of history they did not.
+   *
+   * The split happens here rather than inside the body frame, because that
+   * frame deliberately cannot run scripts — so a toggle inside it could never
+   * work. Both halves are kept; nothing is discarded.
+   */
+
+  /* Where mail clients mark the start of quoted history. */
+  var QUOTE_SELECTORS = [
+    '.gmail_quote',
+    '.gmail_extra',
+    'blockquote[type="cite"]',
+    '#divRplyFwdMsg',          // Outlook's "From: … Sent: …" reply header
+    '#appendonsend',           // Outlook's marker for everything it appended
+    '.OutlookMessageHeader',
+    'div[name="quote"]',       // Zimbra, Roundcube
+    '.yahoo_quoted',
+    '.protonmail_quote',
+    '.moz-cite-prefix',        // Thunderbird
+  ];
+
+  /* Splits a body into what the sender wrote and the history they quoted.
+   *
+   * Parsed with DOMParser into a detached document: nothing is ever inserted
+   * into the live page, no scripts run, and the sandboxed frame still does the
+   * actual rendering. Returns the original untouched when there is no quote to
+   * separate, so an ordinary message costs nothing. */
+  function splitQuotedHtml(html) {
+    var none = { main: html, quoted: '', hasQuote: false };
+    if (!html || typeof DOMParser === 'undefined') return none;
+
+    var doc;
+    try {
+      doc = new DOMParser().parseFromString(html, 'text/html');
+    } catch (e) {
+      return none;
     }
-    html +=
-      '<article class="tma-dash__email-message tma-dash__email-message--current">' +
-      messageHead +
-      innerBodyHtml +
-      '</article>' +
+    if (!doc || !doc.body) return none;
+
+    var marker = null;
+    for (var i = 0; i < QUOTE_SELECTORS.length && !marker; i++) {
+      try {
+        marker = doc.body.querySelector(QUOTE_SELECTORS[i]);
+      } catch (e) { /* a selector this browser dislikes is simply skipped */ }
+    }
+
+    // Outlook separates the reply from its history with a horizontal rule
+    // rather than a class, so that is worth catching too — but only when it is
+    // in the back half of the message, so a rule used as decoration in a
+    // newsletter is not mistaken for a quote boundary.
+    if (!marker) {
+      var rules = doc.body.querySelectorAll('hr');
+      if (rules.length) {
+        var last = rules[rules.length - 1];
+        if (last.parentNode === doc.body && indexOfNode(last) > childCount(doc.body) / 2) {
+          marker = last;
+        }
+      }
+    }
+
+    if (!marker) return none;
+
+    // Everything from the marker onward is history. Walk up to the marker's
+    // top-level ancestor first, so a quote nested inside a wrapper takes the
+    // whole wrapper with it rather than leaving its container behind.
+    var top = marker;
+    while (top.parentNode && top.parentNode !== doc.body) top = top.parentNode;
+
+    var quoted = doc.createElement('div');
+    while (top.nextSibling) quoted.appendChild(top.nextSibling);
+    quoted.insertBefore(top, quoted.firstChild);
+
+    var main = doc.body.innerHTML;
+
+    // A reply that is *only* quoted history (a bare forward, say) has nothing
+    // to collapse — hiding all of it would leave an empty message.
+    if (!main.replace(/<[^>]*>/g, '').trim()) return none;
+
+    return { main: main, quoted: quoted.innerHTML, hasQuote: true };
+  }
+
+  function indexOfNode(node) {
+    var i = 0;
+    while ((node = node.previousSibling) !== null) i++;
+    return i;
+  }
+
+  function childCount(node) {
+    return node.childNodes ? node.childNodes.length : 0;
+  }
+
+  /* ── thread rendering ────────────────────────────────────────────
+   * Every message in the conversation as its own card, oldest at the top.
+   * Collapsed messages show a single summary line; the newest, the one that
+   * was opened, and anything unread start expanded.
+   */
+  function renderEmailThread(state, threadActions) {
+    // Only ever the conversation the selected message is actually in — a
+    // thread left over from the previously open message must not be painted
+    // against this one. ensureThreadLoaded replaces it on the next tick.
+    var thread = threadCoversSelection(state) ? state.thread : null;
+
+    if (state.threadError && state.threadErrorId === state.selectedId) {
+      return (
+        '<div class="tma-dash__email-thread">' +
+        '<div class="tma-dash__email-thread-error" role="alert">' +
+        esc(state.threadError) +
+        '</div></div>'
+      );
+    }
+
+    if (!thread || !thread.messages.length) {
+      return (
+        '<div class="tma-dash__email-thread">' +
+        '<div class="tma-dash__email-thread-loading">Loading conversation…</div>' +
+        '</div>'
+      );
+    }
+
+    var messages = thread.messages;
+    var lastIndex = messages.length - 1;
+
+    var cards = messages.map(function (message, index) {
+      return renderThreadMessage(message, state, {
+        expanded: !!thread.expanded[message.id],
+        isLast: index === lastIndex,
+        showQuoted: !!thread.showQuoted[message.id],
+      });
+    }).join('');
+
+    return (
+      '<div class="tma-dash__email-thread" data-email-thread>' +
+      (messages.length > 1 ? renderThreadSummary(thread, state) : '') +
+      cards +
       (threadActions || '') +
-      '</div>';
-    return html;
+      '</div>'
+    );
+  }
+
+  /* A count and an expand/collapse-all control, so a long conversation can be
+   * opened out in one action instead of card by card. */
+  function renderThreadSummary(thread, state) {
+    var total = thread.messages.length;
+    var openCount = thread.messages.filter(function (m) {
+      return thread.expanded[m.id];
+    }).length;
+    var allOpen = openCount === total;
+
+    return (
+      '<div class="tma-dash__email-thread-summary">' +
+      '<span class="tma-dash__email-thread-count">' + total + ' messages in this conversation</span>' +
+      '<button type="button" class="tma-dash__email-thread-expand-all" data-email-thread-toggle-all="' +
+      (allOpen ? 'collapse' : 'expand') + '">' +
+      (allOpen ? 'Collapse all' : 'Expand all') +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  /* One message in the thread. */
+  function renderThreadMessage(message, state, opts) {
+    var metaEmail = message.email || '';
+    var metaDate = formatMessageDate(message);
+    var subject = message.subject || '';
+
+    if (!opts.expanded) {
+      return (
+        '<article class="tma-dash__email-message tma-dash__email-message--collapsed"' +
+        ' data-email-thread-message="' + esc(message.id) + '">' +
+        '<button type="button" class="tma-dash__email-message-collapsed-btn"' +
+        ' data-email-thread-expand="' + esc(message.id) + '"' +
+        ' aria-expanded="false">' +
+        messageHeadIcon(message) +
+        '<span class="tma-dash__email-message-collapsed-name">' + esc(message.sender || metaEmail) + '</span>' +
+        '<span class="tma-dash__email-message-collapsed-snippet">' + esc(message.body || '') + '</span>' +
+        (message.hasAttachments
+          ? '<img class="tma-dash__email-message-collapsed-clip" src="' + ICONS.PaperclipHorizontal + '" alt="Has attachments">'
+          : '') +
+        '<time class="tma-dash__email-message-collapsed-date">' + esc(metaDate) + '</time>' +
+        '</button>' +
+        '</article>'
+      );
+    }
+
+    return (
+      '<article class="tma-dash__email-message tma-dash__email-message--expanded' +
+      (opts.isLast ? ' tma-dash__email-message--current' : '') + '"' +
+      ' data-email-thread-message="' + esc(message.id) + '">' +
+      renderThreadMessageHead(message, metaEmail, metaDate, subject, state) +
+      renderThreadMessageBody(message, opts) +
+      renderAttachments(message) +
+      '</article>'
+    );
+  }
+
+  /* The head of an expanded card. Reuses the existing message head so a thread
+   * card and the old single-message view stay visually identical; the whole
+   * head doubles as the collapse control. */
+  function renderThreadMessageHead(message, metaEmail, metaDate, subject, state) {
+    return (
+      '<div class="tma-dash__email-message-head-wrap" data-email-thread-collapse="' + esc(message.id) + '"' +
+      ' role="button" tabindex="0" aria-expanded="true">' +
+      renderMessageHead(message, metaEmail, metaDate, subject, 'thread-' + message.id, state) +
+      '</div>'
+    );
+  }
+
+  function renderThreadMessageBody(message, opts) {
+    if (message._loading) {
+      return '<div class="tma-dash__email-body"><p class="tma-dash__email-body-loading">Loading message…</p></div>';
+    }
+
+    if (message._error) {
+      return (
+        '<div class="tma-dash__email-body">' +
+        '<p class="tma-dash__email-body-error" role="alert">' + esc(message._error) + '</p>' +
+        '</div>'
+      );
+    }
+
+    // Nothing fetched yet — the card was rendered before its body arrived.
+    if (!message.bodyLoaded && !message.bodyHtml && !message.bodyText) {
+      return renderMessageBodyText(message.body || '');
+    }
+
+    if (!message.bodyHtml) {
+      return renderMessageBodyText(message.bodyText || message.body || '');
+    }
+
+    var split = splitQuotedHtml(message.bodyHtml);
+    var shown = split.hasQuote && !opts.showQuoted ? split.main : message.bodyHtml;
+
+    var quoteToggle = split.hasQuote
+      ? '<button type="button" class="tma-dash__email-quote-toggle"' +
+        ' data-email-thread-quote="' + esc(message.id) + '"' +
+        ' aria-expanded="' + (opts.showQuoted ? 'true' : 'false') + '">' +
+        (opts.showQuoted ? 'Hide quoted text' : 'Show quoted text') +
+        '</button>'
+      : '';
+
+    return (
+      '<div class="tma-dash__email-body tma-dash__email-body--html">' +
+      '<iframe class="tma-dash__email-body-frame" sandbox="allow-same-origin"' +
+      ' referrerpolicy="no-referrer" title="Message content" data-email-body-frame' +
+      ' srcdoc="' + esc(wrapEmailBodyHtml(shown)) + '"></iframe>' +
+      quoteToggle +
+      '</div>'
+    );
+  }
+
+  /* The send time in the reader's own timezone.
+   *
+   * `sentAt` is an ISO instant; the two preformatted labels the server also
+   * sends are built from a UTC Carbon, so on their own they show a 9pm message
+   * as 1am the following day for anyone west of UTC — which is how a message
+   * ends up looking like it never arrived. */
+  function formatMessageDate(message) {
+    if (!message.sentAt) return message.dateLabel || message.time || '';
+
+    var when = new Date(message.sentAt);
+    if (isNaN(when.getTime())) return message.dateLabel || message.time || '';
+
+    try {
+      return when.toLocaleString(undefined, {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      });
+    } catch (e) {
+      return message.dateLabel || message.time || '';
+    }
   }
 
   function renderTemplateDetail(state) {
@@ -2844,22 +3254,17 @@ function threadRowFromPrior(prior, fallbackTo) {
     }
 
     var lines = rowListLines(row);
-    var subject = lines.subject;
-    var metaEmail = row.email || (row.sender.toLowerCase().replace(/\s+/g, '') + '@example.com');
-    var metaDate = row.dateLabel || row.time;
+    // The conversation's subject once it has loaded — a thread is titled by
+    // what it is about, not by the "Re: Re: Fwd:" the newest reply happens to
+    // carry.
+    var subject = (state.thread && state.thread.subject) || lines.subject;
+    var metaEmail = row.email || '';
+    var metaDate = formatMessageDate(row);
     var mobile = isEmailMobile();
-    var messageHead = renderMessageHead(row, metaEmail, metaDate, subject, 'current', state);
     var threadActions = renderDetailThreadActions(state, row, metaEmail, metaDate, subject, lines.body);
     var inlineActive = !!(state.inlineCompose && state.inlineCompose.messageId === row.id);
     var scrollThreadActions = !mobile || inlineActive ? threadActions : null;
-    var body = renderEmailThread(
-      row, messageHead, metaEmail, metaDate, subject, lines.body, scrollThreadActions,
-      // Still fetching the body: show the snippet rather than an empty pane.
-      state.bodyLoading && state.selectedId === row.id
-        ? null
-        : renderMessageBody(row, lines.body) + renderAttachments(row),
-      state
-    );
+    var body = renderEmailThread(state, scrollThreadActions);
 
     return (
       '<div class="tma-dash__email-detail' + (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
@@ -2875,13 +3280,16 @@ function threadRowFromPrior(prior, fallbackTo) {
     );
   }
 
+  /* A new compose window starts blank. Only an explicitly chosen template, or
+   * a reply/forward that set one, may put a subject here — the mock's stand-in
+   * invoice subject used to be the fallback, so every blank message the user
+   * started was pre-addressed about an invoice they had not mentioned. */
   function getComposeSubject(draft) {
     if (draft.templateId && window.TMAEmailTemplates) {
       var template = window.TMAEmailTemplates.get(draft.templateId);
       if (template) return template.subject;
     }
-    if (draft.subject) return draft.subject;
-    return COMPOSE_SUBJECT;
+    return draft.subject || '';
   }
 
   function createComposeDraft(state, opts) {
@@ -3023,6 +3431,119 @@ function threadRowFromPrior(prior, fallbackTo) {
         .join('') +
       '</div>'
     );
+  }
+
+  /* ── compose toolbar menus ───────────────────────────────────────
+   * The caret buttons (Text style, Text colour) and More open a small popup
+   * built here rather than in the main render, so opening one does not
+   * re-render the compose window and throw away the selection the command is
+   * about to be applied to.
+   */
+
+  var composeMenuEl = null;
+
+  function closeComposeMenu() {
+    if (!composeMenuEl) return;
+    composeMenuEl.remove();
+    composeMenuEl = null;
+  }
+
+  function composeMenuItems(kind) {
+    if (kind === 'style') {
+      return COMPOSE_FONT_SIZES.map(function (size) {
+        return { label: size.label, cmd: 'fontSize', value: size.value };
+      });
+    }
+
+    if (kind === 'color') {
+      return COMPOSE_COLORS.map(function (color) {
+        return { label: color.label, cmd: 'foreColor', value: color.value, swatch: color.value };
+      }).concat(
+        [{ separator: true, label: 'Highlight' }],
+        COMPOSE_HIGHLIGHTS.map(function (color) {
+          // hiliteColor is the standards name; backColor is what older engines
+          // answer to. Both are attempted when the command runs.
+          return { label: color.label, cmd: 'hiliteColor', value: color.value, swatch: color.value };
+        })
+      );
+    }
+
+    return COMPOSE_MORE_TOOLS;
+  }
+
+  function openComposeMenu(button, kind) {
+    closeComposeMenu();
+
+    var items = composeMenuItems(kind);
+
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__email-compose-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = items.map(function (item) {
+      if (item.separator) {
+        return '<div class="tma-dash__email-compose-menu-sep">' + esc(item.label) + '</div>';
+      }
+
+      return (
+        '<button type="button" class="tma-dash__email-compose-menu-item" role="menuitem"' +
+        ' data-email-compose-menu-cmd="' + esc(item.cmd) + '"' +
+        (item.value ? ' data-email-compose-menu-value="' + esc(item.value) + '"' : '') + '>' +
+        (item.swatch
+          ? '<span class="tma-dash__email-compose-menu-swatch" style="background:' + esc(item.swatch) + '"></span>'
+          : '') +
+        esc(item.label) +
+        '</button>'
+      );
+    }).join('');
+
+    document.body.appendChild(menu);
+    composeMenuEl = menu;
+
+    var rect = button.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    // Kept on screen when the button sits near the right edge.
+    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  }
+
+  /* Runs a formatting command against the editor that owns the selection.
+   *
+   * execCommand is deprecated but remains the only thing every browser
+   * implements for contenteditable rich text, and it is what the rest of this
+   * toolbar already uses. */
+  function applyComposeCommand(cmd, value) {
+    if (cmd === 'createLink') {
+      var url = window.prompt('Link URL');
+      if (!url) return;
+      document.execCommand('createLink', false, url);
+      return;
+    }
+
+    if (cmd === 'hiliteColor') {
+      // Not universally supported under that name; fall back to backColor.
+      if (!document.execCommand('hiliteColor', false, value)) {
+        document.execCommand('backColor', false, value);
+      }
+      return;
+    }
+
+    document.execCommand(cmd, false, value === undefined ? null : value);
+  }
+
+  /* Reflects the formatting at the cursor back onto the toolbar, so Bold looks
+   * pressed while the caret sits in bold text. */
+  function syncComposeToolbarState(root) {
+    root.querySelectorAll('[data-email-compose-tool-state]').forEach(function (btn) {
+      var cmd = btn.getAttribute('data-email-compose-tool-state');
+      var on = false;
+
+      try {
+        on = document.queryCommandState(cmd);
+      } catch (e) { /* an engine that will not answer simply shows unpressed */ }
+
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.classList.toggle('tma-dash__email-compose-tool--active', on);
+    });
   }
 
   function wireComposeEvents(root, state, render) {
@@ -3197,26 +3718,67 @@ function threadRowFromPrior(prior, fallbackTo) {
     });
   }
 
-function renderComposeToolbar() {
+  /* Font sizes the "Text style" menu offers, as execCommand's 1–7 scale. */
+  var COMPOSE_FONT_SIZES = [
+    { label: 'Small', value: '2' },
+    { label: 'Normal', value: '3' },
+    { label: 'Large', value: '5' },
+    { label: 'Huge', value: '6' },
+  ];
+
+  /* Text and highlight colours. Deliberately a short, legible set rather than
+   * a full picker — this is a mail composer, not a design tool. */
+  var COMPOSE_COLORS = [
+    { label: 'Default', value: '#1c1c1c' },
+    { label: 'Grey', value: '#667085' },
+    { label: 'Red', value: '#b42318' },
+    { label: 'Orange', value: '#b54708' },
+    { label: 'Green', value: '#027a48' },
+    { label: 'Blue', value: '#175cd3' },
+    { label: 'Purple', value: '#6941c6' },
+  ];
+
+  var COMPOSE_HIGHLIGHTS = [
+    { label: 'None', value: 'transparent' },
+    { label: 'Yellow', value: '#fef7c3' },
+    { label: 'Green', value: '#d3f8df' },
+    { label: 'Blue', value: '#d1e9ff' },
+    { label: 'Pink', value: '#fce7f6' },
+  ];
+
+  /* The tools behind the "More" button: the formatting that does not earn a
+   * permanent slot on a narrow toolbar but still has to work. */
+  var COMPOSE_MORE_TOOLS = [
+    { label: 'Numbered list', cmd: 'insertOrderedList' },
+    { label: 'Indent', cmd: 'indent' },
+    { label: 'Outdent', cmd: 'outdent' },
+    { label: 'Align left', cmd: 'justifyLeft' },
+    { label: 'Align centre', cmd: 'justifyCenter' },
+    { label: 'Align right', cmd: 'justifyRight' },
+    { label: 'Remove link', cmd: 'unlink' },
+    { label: 'Clear formatting', cmd: 'removeFormat' },
+  ];
+
+  function renderComposeToolbar() {
     var groups = [
       [
         { icon: 'ArrowUUpLeft', label: 'Undo', cmd: 'undo' },
         { icon: 'ArrowUUpRight', label: 'Redo', cmd: 'redo' },
       ],
       [
-        { icon: 'TextT', label: 'Text style', caret: true },
-        { icon: 'TextAa', label: 'Text color', caret: true },
+        { icon: 'TextT', label: 'Text style', caret: true, menu: 'style' },
+        { icon: 'TextAa', label: 'Text colour', caret: true, menu: 'color' },
       ],
       [
-        { icon: 'TextB', label: 'Bold', cmd: 'bold' },
-        { icon: 'TextItalic', label: 'Italic', cmd: 'italic' },
-        { icon: 'TextUnderline', label: 'Underline', cmd: 'underline' },
-        { icon: 'TextStrikethrough', label: 'Strikethrough', cmd: 'strikeThrough' },
-        { icon: 'ListBullets', label: 'Bulleted list', cmd: 'insertUnorderedList' },
+        { icon: 'TextB', label: 'Bold', cmd: 'bold', state: 'bold' },
+        { icon: 'TextItalic', label: 'Italic', cmd: 'italic', state: 'italic' },
+        { icon: 'TextUnderline', label: 'Underline', cmd: 'underline', state: 'underline' },
+        { icon: 'TextStrikethrough', label: 'Strikethrough', cmd: 'strikeThrough', state: 'strikeThrough' },
+        { icon: 'ListBullets', label: 'Bulleted list', cmd: 'insertUnorderedList', state: 'insertUnorderedList' },
       ],
       [
         { icon: 'Link', label: 'Insert link', cmd: 'createLink' },
-        { icon: 'DotsThree', label: 'More' },
+        { icon: 'DotsThree', label: 'More', menu: 'more' },
       ],
     ];
 
@@ -3232,6 +3794,10 @@ function renderComposeToolbar() {
                 return (
                   '<button type="button" class="tma-dash__email-compose-tool' + (item.caret ? ' tma-dash__email-compose-tool--caret' : '') + '"' +
                   (item.cmd ? ' data-email-compose-tool-cmd="' + esc(item.cmd) + '"' : '') +
+                  (item.menu ? ' data-email-compose-tool-menu="' + esc(item.menu) + '"' : '') +
+                  // Marks the buttons whose pressed state tracks the cursor,
+                  // so the toolbar shows what the text under it actually is.
+                  (item.state ? ' data-email-compose-tool-state="' + esc(item.state) + '" aria-pressed="false"' : '') +
                   ' aria-label="' + esc(item.label) + '">' +
                   '<img src="' + esc(ICONS[item.icon]) + '" alt="">' +
                   (item.caret ? '<img class="tma-dash__email-compose-tool-caret" src="' + ICONS.CaretDown + '" alt="">' : '') +
@@ -3254,6 +3820,12 @@ function renderComposeToolbar() {
     );
   }
 
+  /* The body a compose window opens with.
+   *
+   * Only a template the user actually picked, plus their configured signature.
+   * This used to fall through to rendering the 'invoice' template into *every*
+   * new message — a blank compose window arrived carrying a full invoice for a
+   * client nobody had selected, which the user then had to delete by hand. */
   function defaultComposeBody(draft) {
     if (draft.templateId && window.TMAEmailTemplates) {
       return (
@@ -3262,14 +3834,20 @@ function renderComposeToolbar() {
         '</div>'
       );
     }
-    if (window.TMAEmailTemplates) {
-      return (
-        '<div class="tma-dash__email-compose-template-body">' +
-        window.TMAEmailTemplates.renderBody('invoice') +
-        '</div>'
-      );
-    }
-    return '';
+    return composeSignatureHtml();
+  }
+
+  /* The user's configured signature, kept in its own block so it stays
+   * identifiable rather than merging into whatever they type above it. */
+  function composeSignatureHtml() {
+    var signature = mailPreference('signature', '');
+    if (!signature) return '';
+
+    return (
+      '<div class="tma-dash__email-compose-signature" data-email-signature>' +
+      '<br>' + signature +
+      '</div>'
+    );
   }
 
   /* A real form: the recipient chips, static subject span and read-only body
@@ -4796,6 +5374,9 @@ function renderComposeToolbar() {
   }
 
   function wireEvents(root, state, render) {
+    // Selection can move without going through openMailMessage; this catches
+    // those cases rather than leaving the pane on a stale conversation.
+    ensureThreadLoaded(root, state, render);
     // Grow any open message to its full height (see sizeMessageFrames).
     sizeMessageFrames(root);
     wireAttachmentPreviews(root);
@@ -4832,18 +5413,64 @@ function renderComposeToolbar() {
 
       // mousedown, not click: execCommand needs the selection that's still
       // live in the editor the instant before the button would steal focus.
+      // preventDefault on every branch is what keeps the caret in the editor —
+      // without it the button takes focus, the selection collapses, and the
+      // command applies to nothing.
       root.addEventListener('mousedown', function (event) {
+        var menuBtn = event.target.closest('[data-email-compose-tool-menu]');
+        if (menuBtn) {
+          event.preventDefault();
+          var kind = menuBtn.getAttribute('data-email-compose-tool-menu');
+          // Clicking the open menu's own button closes it.
+          if (composeMenuEl && composeMenuEl._kind === kind) {
+            closeComposeMenu();
+            return;
+          }
+          openComposeMenu(menuBtn, kind);
+          if (composeMenuEl) composeMenuEl._kind = kind;
+          return;
+        }
+
         var toolBtn = event.target.closest('[data-email-compose-tool-cmd]');
         if (!toolBtn) return;
         event.preventDefault();
-        var cmd = toolBtn.getAttribute('data-email-compose-tool-cmd');
-        if (cmd === 'createLink') {
-          var url = window.prompt('Link URL');
-          if (!url) return;
-          document.execCommand('createLink', false, url);
+        closeComposeMenu();
+        applyComposeCommand(toolBtn.getAttribute('data-email-compose-tool-cmd'));
+        syncComposeToolbarState(root);
+      });
+
+      // Menu items live on document.body, outside root, so they need their own
+      // listener — and the same mousedown timing for the same reason.
+      document.addEventListener('mousedown', function (event) {
+        var item = event.target.closest('[data-email-compose-menu-cmd]');
+        if (item) {
+          event.preventDefault();
+          applyComposeCommand(
+            item.getAttribute('data-email-compose-menu-cmd'),
+            item.getAttribute('data-email-compose-menu-value') || undefined
+          );
+          closeComposeMenu();
+          syncComposeToolbarState(root);
           return;
         }
-        document.execCommand(cmd, false, null);
+
+        // A click anywhere else dismisses an open menu.
+        if (composeMenuEl && !event.target.closest('.tma-dash__email-compose-menu') &&
+            !event.target.closest('[data-email-compose-tool-menu]')) {
+          closeComposeMenu();
+        }
+      });
+
+      // Keep the pressed states honest as the caret moves or the user types.
+      document.addEventListener('selectionchange', function () {
+        if (!root.querySelector('[data-email-compose-body]')) return;
+        syncComposeToolbarState(root);
+      });
+
+      // Keyboard shortcuts fire the browser's own commands, which the toolbar
+      // then has to catch up with.
+      root.addEventListener('keyup', function (event) {
+        if (event.target.closest('[data-email-compose-body]')) syncComposeToolbarState(root);
       });
     }
 
@@ -4858,6 +5485,43 @@ function renderComposeToolbar() {
           var headerOpen = headerToggle.getAttribute('aria-expanded') === 'true';
           closeEmailHeaderDetails(root);
           if (!headerOpen) openEmailHeaderDetails(root, headerToggle);
+          return;
+        }
+
+        // ── thread controls ──
+        var quoteBtn = event.target.closest('[data-email-thread-quote]');
+        if (quoteBtn) {
+          event.preventDefault();
+          var quoteId = quoteBtn.getAttribute('data-email-thread-quote');
+          if (state.thread) {
+            state.thread.showQuoted[quoteId] = !state.thread.showQuoted[quoteId];
+            render();
+          }
+          return;
+        }
+
+        var toggleAll = event.target.closest('[data-email-thread-toggle-all]');
+        if (toggleAll) {
+          event.preventDefault();
+          setThreadExpansion(root, state, render, toggleAll.getAttribute('data-email-thread-toggle-all') === 'expand');
+          return;
+        }
+
+        var expandBtn = event.target.closest('[data-email-thread-expand]');
+        if (expandBtn) {
+          event.preventDefault();
+          expandThreadMessage(root, state, render, expandBtn.getAttribute('data-email-thread-expand'));
+          return;
+        }
+
+        // Collapsing an open card: the whole head is the control, so clicks on
+        // the actions inside it (star, reply, the recipient disclosure) must
+        // not also fold the message away underneath the reader.
+        var collapseEl = event.target.closest('[data-email-thread-collapse]');
+        if (collapseEl && !event.target.closest('.tma-dash__email-detail-actions') &&
+            !event.target.closest('[data-email-header-details-panel]')) {
+          event.preventDefault();
+          expandThreadMessage(root, state, render, collapseEl.getAttribute('data-email-thread-collapse'));
           return;
         }
 
@@ -5478,6 +6142,15 @@ function renderComposeToolbar() {
       total: 0,
       perPageOptions: [25, 50, 100, 200],
       bodyLoading: false,
+      /* The open conversation: every message in it, which are expanded, and
+       * which have had their quoted history revealed. Null until a message is
+       * opened. */
+      thread: null,
+      threadError: null,
+      /* Which message the error belongs to, so selecting another one retries
+       * instead of inheriting the failure. */
+      threadErrorId: null,
+      threadToken: 0,
       refreshing: false,
       settingsOpen: false,
       settings: null,
@@ -5497,6 +6170,7 @@ function renderComposeToolbar() {
     };
 
     function render() {
+      state_active = state;
       if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
       closeEmailBulkMoreMenu(root, state);
       closeEmailLabelPopup(root, state);

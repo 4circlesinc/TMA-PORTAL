@@ -70,6 +70,12 @@ class MailMessage extends Model
             'body' => $this->snippet,
             'time' => $this->listTime(),
             'dateLabel' => $this->sent_at?->format('M j, Y, g:i A'),
+            // The authoritative instant, for the browser to render in the
+            // reader's own zone. The two labels above are formatted from a UTC
+            // Carbon, so on their own they show a 9pm message as 1am the next
+            // day for anyone west of UTC — which is exactly how a message goes
+            // looking for the wrong date.
+            'sentAt' => $this->sent_at?->toIso8601String(),
             'unread' => ! $this->is_read,
             'starred' => $this->is_starred,
             'important' => $this->is_important,
@@ -110,7 +116,19 @@ class MailMessage extends Model
             'cc' => $this->cc ?? [],
             'bcc' => $this->bcc ?? [],
             'replyTo' => $this->reply_to,
-            'attachments' => $this->attachments->map->toRecord()->values()->all(),
+            // The display name on its own, so a thread card can show "Jane Doe"
+            // above "jane@example.com" rather than collapsing both into the one
+            // `sender` string the list rows use.
+            'fromName' => $this->from_name,
+            'attachments' => $this->relationLoaded('attachments')
+                ? $this->attachments->map->toRecord()->values()->all()
+                : [],
+            // Whether a body has actually been fetched yet. A thread only
+            // hydrates the message it opens on, so the client needs to know
+            // which of the others still have to be pulled when expanded —
+            // an empty body and a genuinely blank message look identical
+            // otherwise, and the blank one would never load.
+            'bodyLoaded' => $this->body_html !== null || $this->body_text !== null,
         ];
     }
 

@@ -89,6 +89,13 @@
       return mailFetch(BASE + '/messages/' + encodeURIComponent(id));
     },
 
+    /* Every message in the conversation the given message belongs to. Only the
+     * opened message arrives with its body; the rest report bodyLoaded:false
+     * and are pulled through getMessage as the reader expands them. */
+    getThread: function (id) {
+      return mailFetch(BASE + '/messages/' + encodeURIComponent(id) + '/thread');
+    },
+
     /* Read / starred flags. */
     setFlags: function (id, flags) {
       return mailFetch(BASE + '/messages/' + encodeURIComponent(id), {
