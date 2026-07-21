@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
 use App\Events\MessageDeleted;
+use App\Events\MessageReacted;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
 use App\Models\Conversation;
@@ -262,6 +263,77 @@ class MessagingController extends Controller
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $conversation),
         ]);
+    }
+
+    // ----------------------------------------------------------- reactions
+
+    /**
+     * Toggle one emoji reaction on a message.
+     *
+     * Reacting again with the same emoji removes it, which is what tapping a
+     * reaction pill means everywhere else. A user may hold several *different*
+     * reactions on one message; the unique index enforces one row per pair.
+     *
+     * Anyone who can see the conversation may react — there is no separate
+     * permission, but membership is still checked by messageFor().
+     */
+    public function react(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $message = $this->messageFor($request, $uuid);
+
+        abort_if($message->trashed(), 422, 'This message is no longer available.');
+
+        $data = $request->validate([
+            // Emoji only: a short grapheme cluster, never arbitrary text. The
+            // column is 32 chars, enough for a character plus its modifiers.
+            'emoji' => ['required', 'string', 'max:32'],
+        ]);
+
+        $emoji = trim($data['emoji']);
+
+        if ($emoji === '' || ! $this->looksLikeEmoji($emoji)) {
+            throw ValidationException::withMessages(['emoji' => 'That is not an emoji.']);
+        }
+
+        $existing = $message->reactions()
+            ->where('user_id', $user->id)
+            ->where('emoji', $emoji)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+        } else {
+            $message->reactions()->create(['user_id' => $user->id, 'emoji' => $emoji]);
+        }
+
+        $message->load(['reactions.user', 'sender', 'attachments', 'stars', 'replyTo.sender']);
+
+        Broadcaster::toOthers(new MessageReacted($message));
+
+        return response()->json([
+            'message' => MessagingPresenter::message($message, $user, $message->conversation),
+        ]);
+    }
+
+    /**
+     * Guard the reaction column against being used as free text.
+     *
+     * Reactions are rendered verbatim into every participant's list of who
+     * reacted, so "a short string" is not a tight enough contract: this
+     * requires at least one character from an emoji block and rejects anything
+     * containing plain letters, digits or whitespace.
+     */
+    private function looksLikeEmoji(string $value): bool
+    {
+        if (preg_match('/[\p{L}\p{N}\s]/u', $value)) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{1F1E6}-\x{1F1FF}]/u',
+            $value
+        );
     }
 
     // --------------------------------------------------------- edit/delete

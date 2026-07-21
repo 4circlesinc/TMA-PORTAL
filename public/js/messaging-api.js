@@ -17,10 +17,28 @@
     return m ? decodeURIComponent(m[1]) : '';
   }
 
+  /*
+   * The websocket id of this tab, when one is connected.
+   *
+   * Laravel's `broadcast(...)->toOthers()` can only exclude the sender if the
+   * request tells it which socket made it. Without this header every client
+   * receives its own echoes — which silently made a sender mark its *own*
+   * message delivered off its own acknowledgement, showing two ticks when
+   * nobody had received it.
+   */
+  function socketId() {
+    var rt = window.TMAMessagingRealtime;
+    return (rt && rt.socketId) || '';
+  }
+
   function api(url, opts) {
     opts = opts || {};
     var headers = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
-    if (opts.method && opts.method !== 'GET') headers['X-XSRF-TOKEN'] = csrf();
+    if (opts.method && opts.method !== 'GET') {
+      headers['X-XSRF-TOKEN'] = csrf();
+      var socket = socketId();
+      if (socket) headers['X-Socket-ID'] = socket;
+    }
     if (opts.json !== undefined) {
       headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(opts.json);
@@ -108,6 +126,14 @@
 
     deleteMessage: function (messageId) {
       return api(BASE + '/messages/' + encodeURIComponent(messageId), { method: 'DELETE' });
+    },
+
+    /* Toggle one emoji on a message. Returns the updated message. */
+    react: function (messageId, emoji) {
+      return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/reactions', {
+        method: 'POST',
+        json: { emoji: emoji },
+      });
     },
 
     markRead: function (conversationId) {

@@ -287,6 +287,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
 
         Route::patch('/messages/{uuid}', [MessagingController::class, 'updateMessage'])->name('messages.update');
         Route::delete('/messages/{uuid}', [MessagingController::class, 'destroyMessage'])->name('messages.destroy');
+        // Toggling: reacting again with the same emoji removes it.
+        Route::post('/messages/{uuid}/reactions', [MessagingController::class, 'react'])->name('messages.react');
 
         Route::get('/attachments/{uuid}', [MessagingAttachmentController::class, 'show'])->name('attachments.show');
         Route::get('/attachments/{uuid}/thumb', [MessagingAttachmentController::class, 'thumb'])->name('attachments.thumb');

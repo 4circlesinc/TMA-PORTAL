@@ -6,7 +6,6 @@
   'use strict';
 
   var ICON = 'images/icons/phosphor/';
-  var EMOJI = 'images/emoji/';
 
   var ICONS = {
     NotePencil: ICON + 'NotePencil.svg',
@@ -714,29 +713,65 @@
     );
   }
 
-  var COMPOSER_EMOJIS = [
-    { file: 'WinkingFace.svg', char: '😉' },
-    { file: 'FaceTearsJoy.svg', char: '😂' },
-    { file: 'SmilingFaceSunglasses.svg', char: '😎' },
-    { file: 'FaceBlowingKiss.svg', char: '😘' },
-    { file: 'RedHeart.svg', char: '❤️' },
-    { file: 'SmilingFaceHearts.svg', char: '🥰' },
-    { file: 'GrinningCat.svg', char: '😺' },
-    { file: 'LoudlyCryingFace.svg', char: '😭' },
-    { file: 'FaceSteamFromNose.svg', char: '😤' },
-    { file: 'GrinningFaceSweat.svg', char: '😅' },
-    { file: 'SmilingFaceHorns.svg', char: '😈' },
-    { file: 'SkullCrossbones.svg', char: '☠️' },
-    { file: 'HundredPoints.svg', char: '💯' },
-    { file: 'BombEmoji.svg', char: '💣' },
-    { file: 'SnowflakeEmoji.svg', char: '❄️' },
-    { file: 'Snowman.svg', char: '⛄' },
-    { file: 'UmbrellaEmoji.svg', char: '☂️' },
-    { file: 'RobotEmoji.svg', char: '🤖' },
-    { file: 'SeeMonkey.svg', char: '🙈' },
-    { file: 'WinkingFaceTongue.svg', char: '😜' },
-    { file: 'HeartArrow.svg', char: '💘' },
-  ];
+  /* ------------------------------------------------------------------
+   * Emoji
+   *
+   * Native Unicode characters, from the generated emoji-data.js. The previous
+   * picker drew 21 SVG assets, 18 of which were malformed XML and rendered as
+   * broken images — and 21 images could never satisfy categories or search.
+   * ---------------------------------------------------------------- */
+
+  var RECENT_EMOJI_KEY = 'tma.messages.recentEmoji';
+  var RECENT_EMOJI_MAX = 24;
+
+  function emojiData() {
+    return window.TMAEmojiData || { quick: [], groups: [] };
+  }
+
+  function recentEmoji() {
+    try {
+      var raw = window.localStorage.getItem(RECENT_EMOJI_KEY);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.filter(function (c) { return typeof c === 'string'; }) : [];
+    } catch (err) {
+      // Private browsing, or a corrupted value — recents are a nicety.
+      return [];
+    }
+  }
+
+  function rememberEmoji(char) {
+    if (!char) return;
+    try {
+      var list = recentEmoji().filter(function (c) {
+        return c !== char;
+      });
+      list.unshift(char);
+      window.localStorage.setItem(
+        RECENT_EMOJI_KEY,
+        JSON.stringify(list.slice(0, RECENT_EMOJI_MAX))
+      );
+    } catch (err) {
+      /* not worth surfacing */
+    }
+  }
+
+  /* Match on the Unicode name and its keywords, so "cry" finds 😢 and 😭. */
+  function searchEmoji(term) {
+    var needle = term.trim().toLowerCase();
+    if (!needle) return [];
+
+    var hits = [];
+    emojiData().groups.forEach(function (group) {
+      group.items.forEach(function (item) {
+        if (hits.length >= 90) return;
+        if (item.k.indexOf(needle) !== -1 || item.n.toLowerCase().indexOf(needle) !== -1) {
+          hits.push(item);
+        }
+      });
+    });
+    return hits;
+  }
+
 
   var MESSAGE_ICON_PATHS = {
     Smiley:
@@ -1169,28 +1204,127 @@
     );
   }
 
+  /* One tappable emoji. `label` is the Unicode name, for screen readers. */
+  function renderEmojiButton(char, label) {
+    return (
+      '<button type="button" class="tma-dash__messages-emoji-picker-item" ' +
+      'data-messages-emoji-char="' + esc(char) + '" ' +
+      'title="' + esc(label || '') + '" aria-label="' + esc(label || 'Emoji') + '">' +
+      esc(char) +
+      '</button>'
+    );
+  }
+
+  function renderEmojiGrid(items) {
+    return (
+      '<div class="tma-dash__messages-emoji-picker-grid">' +
+      items
+        .map(function (item) {
+          return renderEmojiButton(item.c, item.n);
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
   function renderEmojiPicker(state) {
     var open = !!state.emojiPickerOpen;
+    var data = emojiData();
+    var term = state.emojiSearch || '';
+    var body;
+
+    if (term.trim()) {
+      var hits = searchEmoji(term);
+      body = hits.length
+        ? renderEmojiGrid(hits)
+        : '<div class="tma-dash__messages-emoji-empty">No emoji match “' + esc(term) + '”</div>';
+    } else {
+      var recents = recentEmoji();
+      var activeKey = state.emojiCategory || (data.groups[0] && data.groups[0].key);
+
+      // Recents are their own pseudo-category, shown first when present.
+      if (activeKey === 'recent') {
+        body = recents.length
+          ? renderEmojiGrid(recents.map(function (c) { return { c: c, n: '' }; }))
+          : '<div class="tma-dash__messages-emoji-empty">No recent emoji yet</div>';
+      } else {
+        var group = null;
+        data.groups.forEach(function (g) {
+          if (g.key === activeKey) group = g;
+        });
+        body = group ? renderEmojiGrid(group.items) : '';
+      }
+    }
+
+    var tabs = [];
+    if (recentEmoji().length) tabs.push({ key: 'recent', label: 'Recent', glyph: '🕘' });
+    data.groups.forEach(function (g) {
+      tabs.push({ key: g.key, label: g.label, glyph: g.items[0] ? g.items[0].c : '·' });
+    });
+
+    var activeTab = state.emojiCategory || (data.groups[0] && data.groups[0].key);
+
     return (
       '<div class="tma-dash__messages-emoji-picker' +
       (open ? ' tma-dash__messages-emoji-picker--open' : '') +
       '" data-messages-emoji-picker' +
       (open ? '' : ' hidden') +
       ' role="dialog" aria-label="Choose emoji">' +
-      '<div class="tma-dash__messages-emoji-picker-grid">' +
-      COMPOSER_EMOJIS.map(function (item) {
-        return (
-          '<button type="button" class="tma-dash__messages-emoji-picker-item" data-messages-emoji-char="' +
-          esc(item.char) +
-          '" aria-label="Insert emoji">' +
-          '<img src="' +
-          EMOJI +
-          esc(item.file) +
-          '" alt="">' +
-          '</button>'
-        );
-      }).join('') +
-      '</div></div>'
+      '<div class="tma-dash__messages-emoji-search">' +
+      '<input type="search" class="tma-dash__messages-emoji-search-input" data-messages-emoji-search ' +
+      'placeholder="Search emoji" aria-label="Search emoji" value="' + esc(term) + '" autocomplete="off">' +
+      '</div>' +
+      '<div class="tma-dash__messages-emoji-body">' + body + '</div>' +
+      // Category strip is hidden while searching — the results span categories.
+      (term.trim()
+        ? ''
+        : '<div class="tma-dash__messages-emoji-tabs" role="tablist">' +
+          tabs
+            .map(function (tab) {
+              return (
+                '<button type="button" role="tab" class="tma-dash__messages-emoji-tab' +
+                (tab.key === activeTab ? ' is-active' : '') +
+                '" data-messages-emoji-category="' + esc(tab.key) + '" ' +
+                'title="' + esc(tab.label) + '" aria-label="' + esc(tab.label) + '" ' +
+                'aria-selected="' + (tab.key === activeTab ? 'true' : 'false') + '">' +
+                esc(tab.glyph) +
+                '</button>'
+              );
+            })
+            .join('') +
+          '</div>') +
+      '</div>'
+    );
+  }
+
+  /*
+   * The compact reaction row shown above the message context menu, plus a
+   * button that opens the full picker for anything else.
+   */
+  function renderQuickReactions(messageId, mine) {
+    var quick = emojiData().quick || [];
+
+    return (
+      '<div class="tma-dash__messages-quick-reactions">' +
+      quick
+        .map(function (char) {
+          return (
+            // Distinct attribute from the reaction pills under a bubble: the
+            // two look similar but mean different things (offer vs. existing),
+            // and sharing one hook made every selector ambiguous.
+            '<button type="button" class="tma-dash__messages-quick-reaction' +
+            (mine.indexOf(char) !== -1 ? ' is-mine' : '') +
+            '" data-messages-quick-react="' + esc(messageId) + '" ' +
+            'data-messages-quick-emoji="' + esc(char) + '" aria-label="React with ' + esc(char) + '">' +
+            esc(char) +
+            '</button>'
+          );
+        })
+        .join('') +
+      '<button type="button" class="tma-dash__messages-quick-reaction ' +
+      'tma-dash__messages-quick-reaction--more" data-messages-react-open="' + esc(messageId) + '" ' +
+      'aria-label="More emoji">+</button>' +
+      '</div>'
     );
   }
 
@@ -1334,13 +1468,30 @@
       if (emojiBtn) emojiBtn.setAttribute('aria-expanded', 'false');
     }
 
+    /*
+     * Opening re-renders rather than just unhiding.
+     *
+     * The picker's contents depend on state that changes while it is closed —
+     * recently used emoji above all — and simply flipping `hidden` showed
+     * whatever markup was produced the last time the composer rendered. A
+     * freshly used emoji never appeared under Recent because of it.
+     */
     function toggleEmojiPicker() {
-      state.emojiPickerOpen = !state.emojiPickerOpen;
-      if (picker) {
-        picker.hidden = !state.emojiPickerOpen;
-        picker.classList.toggle('tma-dash__messages-emoji-picker--open', state.emojiPickerOpen);
+      var opening = !state.emojiPickerOpen;
+      state.emojiPickerOpen = opening;
+
+      if (opening) {
+        state.emojiSearch = '';
+        render();
+        focusComposerInput(root);
+        return;
       }
-      if (emojiBtn) emojiBtn.setAttribute('aria-expanded', state.emojiPickerOpen ? 'true' : 'false');
+
+      if (picker) {
+        picker.hidden = true;
+        picker.classList.remove('tma-dash__messages-emoji-picker--open');
+      }
+      if (emojiBtn) emojiBtn.setAttribute('aria-expanded', 'false');
     }
 
     if (emojiBtn) {
@@ -1351,11 +1502,34 @@
     }
 
     if (picker) {
+      // Inserting keeps the picker open — people usually add more than one —
+      // and remembers the choice for the Recent tab.
       picker.querySelectorAll('[data-messages-emoji-char]').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
           e.stopPropagation();
-          insertComposerText(input, btn.getAttribute('data-messages-emoji-char'));
-          closeEmojiPicker();
+          var char = btn.getAttribute('data-messages-emoji-char');
+          rememberEmoji(char);
+          insertComposerText(input, char);
+        });
+      });
+
+      var emojiSearch = picker.querySelector('[data-messages-emoji-search]');
+      if (emojiSearch) {
+        emojiSearch.addEventListener('click', function (e) {
+          e.stopPropagation();
+        });
+        emojiSearch.addEventListener('input', function () {
+          state.emojiSearch = emojiSearch.value;
+          render();
+        });
+      }
+
+      picker.querySelectorAll('[data-messages-emoji-category]').forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+          e.stopPropagation();
+          state.emojiCategory = tab.getAttribute('data-messages-emoji-category');
+          state.emojiSearch = '';
+          render();
         });
       });
     }
@@ -2834,7 +3008,32 @@
       render();
     });
 
+    window.TMAMessagingRealtime.listen(channel, 'message.reacted', function (payload) {
+      var msg = findMessageById(payload.conversationId, payload.messageId);
+      if (!msg) return;
+
+      // The event carries counts and names but not "mine" — that is per
+      // viewer, so each client derives it from its own id.
+      var me = (STORE.me || {}).id;
+      msg.reactions = (payload.reactions || []).map(function (r) {
+        return {
+          emoji: r.emoji,
+          count: r.count,
+          users: r.users || [],
+          mine: (r.users || []).some(function (u) {
+            return u.id === me;
+          }),
+        };
+      });
+      render();
+    });
+
     window.TMAMessagingRealtime.listen(channel, 'conversation.delivered', function (payload) {
+      // My own acknowledgement says nothing about whether anyone else has the
+      // message. Belt-and-braces alongside the X-Socket-ID header that lets
+      // toOthers() filter these out server-side.
+      if (STORE.me && payload.recipientId === STORE.me.id) return;
+
       // Somebody's client acknowledged receipt: our single tick becomes two.
       // 'read' must never be downgraded back to 'delivered'.
       var list = getMessages(payload.conversationId);
@@ -2854,6 +3053,10 @@
     });
 
     window.TMAMessagingRealtime.listen(channel, 'conversation.read', function (payload) {
+      // Same guard as delivery: my own read marker must not turn my own ticks
+      // blue.
+      if (STORE.me && payload.readerId === STORE.me.id) return;
+
       // Someone else read up to `lastReadSeq`; turn our ticks over.
       var list = getMessages(payload.conversationId);
       var changed = false;
@@ -3247,6 +3450,183 @@
   }
 
   /* ------------------------------------------------------------------
+   * Reactions
+   * ---------------------------------------------------------------- */
+
+  /*
+   * Add or remove one of the viewer's own reactions.
+   *
+   * Applied optimistically against the grouped shape the bubble renders, then
+   * reconciled with the server's authoritative copy. The server treats this as
+   * a toggle, so the local prediction has to match that: same emoji again
+   * removes it.
+   */
+  function toggleReaction(root, state, render, messageId, emoji) {
+    var msg = findMessageById(state.selectedId, messageId);
+    if (!msg || !emoji) return;
+
+    var before = JSON.parse(JSON.stringify(msg.reactions || []));
+    var me = STORE.me || {};
+    var group = null;
+
+    (msg.reactions = msg.reactions || []).forEach(function (r) {
+      if (r.emoji === emoji) group = r;
+    });
+
+    if (group && group.mine) {
+      group.count -= 1;
+      group.mine = false;
+      group.users = (group.users || []).filter(function (u) {
+        return u.id !== me.id;
+      });
+      if (group.count <= 0) {
+        msg.reactions = msg.reactions.filter(function (r) {
+          return r !== group;
+        });
+      }
+    } else if (group) {
+      group.count += 1;
+      group.mine = true;
+      group.users = (group.users || []).concat([{ id: me.id, name: me.name }]);
+    } else {
+      msg.reactions.push({
+        emoji: emoji,
+        count: 1,
+        mine: true,
+        users: [{ id: me.id, name: me.name }],
+      });
+    }
+
+    rememberEmoji(emoji);
+    render();
+
+    window.TMAMessagingAPI.react(messageId, emoji)
+      .then(function (data) {
+        // Trust the server's grouping over the local prediction.
+        if (data && data.message) msg.reactions = data.message.reactions || [];
+        render();
+      })
+      .catch(function (err) {
+        msg.reactions = before;
+        render();
+        showMessagesToast(
+          root,
+          err.status === 422 ? 'That reaction is not allowed' : 'Reaction not saved'
+        );
+      });
+  }
+
+  /*
+   * Full emoji picker opened for a *reaction* rather than the composer. Reuses
+   * the same grid; the difference is only what a chosen emoji does.
+   */
+  function openReactionPicker(root, state, render, messageId, position, anchor) {
+    closeMessageMenu();
+
+    var panel = document.createElement('div');
+    panel.className = 'tma-dash__messages-message-menu tma-dash__messages-reaction-picker';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Choose a reaction');
+
+    var pickerState = { emojiSearch: '', emojiCategory: null, emojiPickerOpen: true };
+
+    function paint() {
+      panel.innerHTML = renderEmojiPicker(pickerState);
+
+      var search = panel.querySelector('[data-messages-emoji-search]');
+      if (search) {
+        search.addEventListener('input', function () {
+          pickerState.emojiSearch = search.value;
+          var caret = search.selectionStart;
+          paint();
+          var again = panel.querySelector('[data-messages-emoji-search]');
+          if (again) {
+            again.focus();
+            try {
+              again.setSelectionRange(caret, caret);
+            } catch (err) {
+              /* ignore */
+            }
+          }
+        });
+      }
+
+      panel.querySelectorAll('[data-messages-emoji-category]').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          pickerState.emojiCategory = tab.getAttribute('data-messages-emoji-category');
+          paint();
+        });
+      });
+
+      panel.querySelectorAll('[data-messages-emoji-char]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          closeMessageMenu();
+          toggleReaction(root, state, render, messageId, btn.getAttribute('data-messages-emoji-char'));
+        });
+      });
+    }
+
+    document.body.appendChild(panel);
+    paint();
+    positionFloating(panel, anchor, position);
+
+    openMenuEl = panel;
+    setTimeout(function () {
+      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+    }, 0);
+  }
+
+  /*
+   * Who reacted, grouped by emoji — opened by clicking a reaction pill.
+   *
+   * Each row is a button: the viewer's own reaction is marked and clicking it
+   * removes it, which is how a reaction gets taken back without hunting for
+   * the picker again.
+   */
+  function openReactionDetails(root, state, render, anchor, messageId) {
+    closeMessageMenu();
+
+    var msg = findMessageById(state.selectedId, messageId);
+    if (!msg || !msg.reactions || !msg.reactions.length) return;
+
+    var panel = document.createElement('div');
+    panel.className = 'tma-dash__messages-message-menu tma-dash__messages-reaction-details';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Reactions');
+
+    panel.innerHTML = msg.reactions
+      .map(function (r) {
+        return (
+          '<button type="button" class="tma-dash__messages-reaction-detail' +
+          (r.mine ? ' is-mine' : '') +
+          '" data-reaction-detail="' + esc(r.emoji) + '">' +
+          '<span class="tma-dash__messages-reaction-detail-emoji">' + esc(r.emoji) + '</span>' +
+          '<span class="tma-dash__messages-reaction-detail-names">' +
+          esc((r.users || []).map(function (u) { return u.name; }).join(', ')) +
+          '</span>' +
+          (r.mine ? '<span class="tma-dash__messages-reaction-detail-hint">Tap to remove</span>' : '') +
+          '</button>'
+        );
+      })
+      .join('');
+
+    document.body.appendChild(panel);
+    positionFloating(panel, anchor, null);
+
+    panel.querySelectorAll('[data-reaction-detail]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        closeMessageMenu();
+        toggleReaction(root, state, render, messageId, btn.getAttribute('data-reaction-detail'));
+      });
+    });
+
+    openMenuEl = panel;
+    setTimeout(function () {
+      document.addEventListener('click', closeMessageMenuOnce, { once: true });
+    }, 0);
+  }
+
+  /* ------------------------------------------------------------------
    * Conversation menu
    *
    * One definition, shared by the chat header's three-dot button and a
@@ -3426,6 +3806,30 @@
         setReplyTo(state, msg.id);
         render();
         focusComposerInput(root);
+      });
+    });
+
+    // Clicking a reaction pill shows who reacted; the viewer's own reaction is
+    // marked there and can be removed from the same panel.
+    root.querySelectorAll('[data-messages-react-emoji]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openReactionDetails(root, state, render, btn, btn.getAttribute('data-messages-react'));
+      });
+    });
+
+    // The bubble's react button opens the full picker.
+    root.querySelectorAll('[data-messages-react-open]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openReactionPicker(
+          root, state, render,
+          btn.getAttribute('data-messages-react-open'),
+          null,
+          btn
+        );
       });
     });
 
@@ -3688,10 +4092,17 @@
     if (msg.can && msg.can.edit) items.push({ action: 'edit', label: 'Edit' });
     if (msg.can && msg.can.delete) items.push({ action: 'delete', label: 'Delete', danger: true });
 
+    // Which emoji this viewer already holds on the message, so the row can
+    // show them as active and a second tap removes them.
+    var mine = (msg.reactions || [])
+      .filter(function (r) { return r.mine; })
+      .map(function (r) { return r.emoji; });
+
     var menu = document.createElement('div');
     menu.className = 'tma-dash__messages-message-menu';
     menu.setAttribute('role', 'menu');
     menu.innerHTML =
+      renderQuickReactions(msg.id, mine) +
       items
         .map(function (item) {
           return (
@@ -3704,6 +4115,21 @@
 
     document.body.appendChild(menu);
     positionFloating(menu, anchor, position);
+
+    menu.querySelectorAll('[data-messages-quick-emoji]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        closeMessageMenu();
+        toggleReaction(root, state, render, msg.id, btn.getAttribute('data-messages-quick-emoji'));
+      });
+    });
+
+    var moreBtn = menu.querySelector('[data-messages-react-open]');
+    if (moreBtn) {
+      moreBtn.addEventListener('click', function () {
+        closeMessageMenu();
+        openReactionPicker(root, state, render, msg.id, position || null, anchor);
+      });
+    }
 
     menu.querySelectorAll('[data-menu-action]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -3786,6 +4212,8 @@
       composerDrafts: {},
       composerAttachments: {},
       emojiPickerOpen: false,
+      emojiSearch: '',
+      emojiCategory: null,
       voiceRecording: false,
       search: '',
       peopleResults: [],

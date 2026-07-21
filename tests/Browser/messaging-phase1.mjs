@@ -25,8 +25,11 @@ function check(ok, msg) {
 
 const browser = await chromium.launch();
 
+const contexts = {};
+
 async function session(email, track) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  contexts[email] = context;
   const page = await context.newPage();
   if (track) {
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -118,7 +121,14 @@ try {
   ).count();
   check(incomingTicks === 0, `no ticks on incoming messages (${incomingTicks} found)`);
 
-  step(6, 'A sends while B is elsewhere → one grey tick');
+  step(6, 'A sends while B is offline → one grey tick');
+  // "Elsewhere" has to mean *disconnected*, not merely on another screen: with
+  // the websocket up, an open page acknowledges receipt the instant a message
+  // arrives, so the sent-only state would never be observable. Closing B's
+  // context is the only honest way to hold it.
+  await contexts[USER_B].close();
+  await a.waitForTimeout(500);
+
   const probe = 'tick probe ' + Date.now();
   await a.click('[data-messages-composer-input]');
   await a.keyboard.type(probe);
@@ -129,11 +139,11 @@ try {
   check(status?.state === 'sent', `state is "sent" (got ${status?.state})`);
   check(status?.ticks === 1, `one tick drawn (${status?.ticks})`);
 
-  step(7, "B's client receives it → two grey ticks");
-  // B reloads the list without opening the thread: received, not read.
-  await b.reload({ waitUntil: 'networkidle' });
-  await b.waitForSelector('.tma-dash__messages-row', { timeout: 15000 });
-  await b.waitForTimeout(2500);
+  step(7, "B's client comes back and receives it → two grey ticks");
+  // B signs in again and lands on the list *without* opening the thread:
+  // received, not read.
+  b = await session(USER_B, false);
+  await b.waitForTimeout(2000);
 
   await a.reload({ waitUntil: 'networkidle' });
   await a.waitForSelector('.tma-dash__messages-row', { timeout: 15000 });

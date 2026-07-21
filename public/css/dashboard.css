@@ -24821,3 +24821,190 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-dash__messages-row-swipe-action--read {
   background: var(--color-bg-input);
 }
+
+/* ---------------------------------------------------------------------------
+ * Messages — emoji picker and reactions.
+ *
+ * Emoji render as native Unicode text, not images. The previous picker used 21
+ * SVG assets, 18 of which were malformed XML (unclosed <g> groups) and drew as
+ * broken-image placeholders — the "question marks". Text also makes categories,
+ * search and recents possible at all.
+ * ------------------------------------------------------------------------- */
+
+.tma-dash__messages-emoji-picker-item {
+  /* Sized as text now, so the glyph itself fills the button. */
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Wider grid: 700 emoji need more per row than the old 21 did. */
+.tma-dash__messages-emoji-picker-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.tma-dash__messages-emoji-search {
+  margin-bottom: var(--space-8);
+}
+
+.tma-dash__messages-emoji-search-input {
+  width: 100%;
+  min-height: 30px;
+  padding: 2px var(--space-8);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-input);
+  font: inherit;
+  font-size: var(--text-size-14);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+/* The grid scrolls; the search field and category strip stay put. */
+.tma-dash__messages-emoji-body {
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tma-dash__messages-emoji-empty {
+  padding: var(--space-16);
+  text-align: center;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-emoji-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: 0.5px solid var(--color-border-medium);
+}
+
+.tma-dash__messages-emoji-tab {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-4) 0;
+  border: none;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.tma-dash__messages-emoji-tab:hover {
+  background: var(--color-hover);
+  opacity: 1;
+}
+
+.tma-dash__messages-emoji-tab.is-active {
+  background: var(--color-hover);
+  opacity: 1;
+}
+
+/* Quick reaction row at the top of a message's context menu. */
+.tma-dash__messages-quick-reactions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-bottom: 0.5px solid var(--color-border-medium);
+}
+
+.tma-dash__messages-quick-reaction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Background only — a hover transform on a 30px target moves its hit box out
+ * from under the cursor, so the click can land on the container instead. */
+.tma-dash__messages-quick-reaction:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-quick-reaction.is-mine {
+  background: var(--color-hover);
+  outline: 1.5px solid var(--color-primary-brand, #1c6ef2);
+}
+
+.tma-dash__messages-quick-reaction--more {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+}
+
+/* The full picker, opened for a reaction rather than the composer. */
+.tma-dash__messages-reaction-picker {
+  width: 320px;
+  padding: var(--space-12);
+}
+
+.tma-dash__messages-reaction-picker .tma-dash__messages-emoji-picker {
+  position: static;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* Who reacted. */
+.tma-dash__messages-reaction-details {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.tma-dash__messages-reaction-detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__messages-reaction-detail:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-reaction-detail-emoji {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.tma-dash__messages-reaction-detail-names {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-reaction-detail-hint {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+/* Reaction pills under a bubble render the emoji as text too. */
+.tma-dash__messages-reaction-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
