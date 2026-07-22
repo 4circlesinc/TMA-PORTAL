@@ -212,6 +212,30 @@
       return api(BASE + '/attachments/' + encodeURIComponent(attachmentId), { method: 'DELETE' });
     },
 
+    /* Grouped search: people, conversations, messages, files, links. */
+    search: function (term) {
+      return api(BASE + '/search' + query({ q: term }));
+    },
+
+    /* The messaging profile panel for one conversation. */
+    info: function (conversationId) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/info');
+    },
+
+    /* Shared media, documents or links. */
+    gallery: function (conversationId, shelf) {
+      return api(
+        BASE + '/conversations/' + encodeURIComponent(conversationId) + '/gallery' + query({ shelf: shelf })
+      );
+    },
+
+    /* A window of history centred on one message, for jumping to a result. */
+    messagesAround: function (conversationId, seq) {
+      return api(
+        BASE + '/conversations/' + encodeURIComponent(conversationId) + '/messages' + query({ around: seq })
+      );
+    },
+
     /* Open Graph metadata for a URL. Cached server-side, so asking while the
      * user types is cheap after the first hit. */
     linkPreview: function (url) {

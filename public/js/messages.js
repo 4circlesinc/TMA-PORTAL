@@ -168,8 +168,12 @@
   }
 
   function renderContactName(row) {
+    // Opens the messaging profile *inside* the chat column — never the client
+    // record, which is a separate, permissioned action in that panel.
     return (
-      '<span class="tma-dash__messages-chat-name">' + esc(threadDisplayName(row)) + '</span>'
+      '<button type="button" class="tma-dash__messages-chat-name ' +
+      'tma-dash__messages-chat-name-link" data-messages-open-profile ' +
+      'aria-label="Conversation info">' + esc(threadDisplayName(row)) + '</button>'
     );
   }
 
@@ -184,7 +188,12 @@
   }
 
   function renderChatThreadIcon(row) {
-    return threadIcon(resolveThread(row));
+    return (
+      '<button type="button" class="tma-dash__messages-chat-avatar-link" ' +
+      'data-messages-open-profile aria-label="Conversation info">' +
+      threadIcon(resolveThread(row)) +
+      '</button>'
+    );
   }
 
   function esc(s) {
@@ -309,9 +318,9 @@
       // carries the detail so the field doesn't clip at this width.
       'placeholder="Search" aria-label="Search conversations and people" ' +
       'value="' + esc(value) + '" autocomplete="off">' +
-      (value
-        ? '<button type="button" class="tma-dash__messages-search-clear" data-messages-search-clear ' +
-          'aria-label="Clear search"><span aria-hidden="true">×</span></button>'
+      (value || state.searchMode
+        ? '<button type="button" class="tma-dash__messages-search-clear" data-messages-search-exit ' +
+          'aria-label="Exit search"><span aria-hidden="true">×</span></button>'
         : '<kbd class="tma-dash__kbd">/</kbd>') +
       '</div>'
     );
@@ -640,6 +649,148 @@
     );
   }
 
+  /* ------------------------------------------------------------------
+   * Search mode
+   *
+   * Focusing the search field takes over the inbox column with grouped
+   * results. Grouped rather than one ranked list because "a person called
+   * Ana", "a message about invoices" and "a file named invoice.pdf" are
+   * different kinds of answer — flattening them buries the useful one.
+   * ---------------------------------------------------------------- */
+
+  function renderSearchGroup(label, body) {
+    if (!body) return '';
+    return (
+      '<div class="tma-dash__messages-search-group">' +
+      '<div class="tma-dash__messages-list-group">' + esc(label) + '</div>' +
+      body +
+      '</div>'
+    );
+  }
+
+  function renderSearchResults(state) {
+    var results = state.searchResults;
+
+    if (state.searchLoading && !results) {
+      return '<div class="tma-dash__messages-list-state" role="status">Searching…</div>';
+    }
+
+    if (!results) {
+      return (
+        '<div class="tma-dash__messages-list-state">' +
+        'Search people, conversations, messages, files and links.' +
+        '</div>'
+      );
+    }
+
+    var total =
+      results.people.length + results.conversations.length + results.messages.length +
+      results.files.length + results.links.length;
+
+    if (!total) {
+      return '<div class="tma-dash__messages-list-state">Nothing matches “' + esc(state.search) + '”.</div>';
+    }
+
+    var html = '';
+
+    if (results.conversations.length) {
+      html += renderSearchGroup(
+        'Conversations',
+        results.conversations
+          .map(function (row) {
+            return (
+              '<button type="button" class="tma-dash__messages-person" ' +
+              'data-messages-search-conversation="' + esc(row.id) + '">' +
+              threadIcon(row) +
+              '<span class="tma-dash__messages-person-text">' +
+              '<span class="tma-dash__messages-person-name">' + esc(row.name) + '</span>' +
+              '<span class="tma-dash__messages-person-meta">' + esc(row.preview || '') + '</span>' +
+              '</span></button>'
+            );
+          })
+          .join('')
+      );
+    }
+
+    if (results.people.length) {
+      html += renderSearchGroup(
+        'People',
+        results.people
+          .map(function (person) {
+            return renderPersonRow(person, 'data-messages-start');
+          })
+          .join('')
+      );
+    }
+
+    if (results.messages.length) {
+      html += renderSearchGroup(
+        'Messages',
+        results.messages
+          .map(function (hit) {
+            return (
+              '<button type="button" class="tma-dash__messages-hit" ' +
+              'data-messages-jump-to="' + esc(hit.conversationId) + '" ' +
+              'data-messages-jump-seq="' + hit.seq + '">' +
+              '<span class="tma-dash__messages-hit-head">' +
+              '<span class="tma-dash__messages-hit-name">' + esc(hit.conversationName) + '</span>' +
+              '<span class="tma-dash__messages-hit-date">' + esc(hit.date) + '</span>' +
+              '</span>' +
+              '<span class="tma-dash__messages-hit-text">' +
+              esc(hit.senderName) + ': ' + esc(hit.excerpt) +
+              '</span></button>'
+            );
+          })
+          .join('')
+      );
+    }
+
+    if (results.files.length) {
+      html += renderSearchGroup(
+        'Files',
+        results.files
+          .map(function (file) {
+            return (
+              '<button type="button" class="tma-dash__messages-person" ' +
+              'data-messages-jump-to="' + esc(file.conversationId) + '" ' +
+              'data-messages-jump-seq="' + file.seq + '">' +
+              '<span class="tma-dash__messages-row-avatar">' +
+              '<img class="tma-dash__messages-tray-icon" src="' +
+              esc(attachmentIconSrc(file.name)) + '" alt=""></span>' +
+              '<span class="tma-dash__messages-person-text">' +
+              '<span class="tma-dash__messages-person-name">' + esc(file.name) + '</span>' +
+              '<span class="tma-dash__messages-person-meta">' +
+              esc(file.conversationName) + ' · ' + esc(file.date) + '</span>' +
+              '</span></button>'
+            );
+          })
+          .join('')
+      );
+    }
+
+    if (results.links.length) {
+      html += renderSearchGroup(
+        'Links',
+        results.links
+          .map(function (link) {
+            return (
+              '<button type="button" class="tma-dash__messages-person" ' +
+              'data-messages-jump-to="' + esc(link.conversationId) + '" ' +
+              'data-messages-jump-seq="' + link.seq + '">' +
+              '<span class="tma-dash__messages-person-text">' +
+              '<span class="tma-dash__messages-person-name">' + esc(link.domain || link.url) + '</span>' +
+              '<span class="tma-dash__messages-person-meta">' +
+              esc(link.conversationName) + ' · ' + esc(link.date) + '</span>' +
+              '</span></button>'
+            );
+          })
+          .join('')
+      );
+    }
+
+    return html;
+  }
+
   /* Loading / empty / error stand-ins. Never sample content. */
   function renderListPlaceholder(state) {
     if (STORE.loadError) {
@@ -709,8 +860,9 @@
       renderComposePanel(state) +
       renderSettingsPanel(state) +
       '<div class="tma-dash__messages-list-body" data-messages-list-body>' +
-      (rows.length ? body : (people ? '' : body)) +
-      people +
+      (state.searchMode
+        ? renderSearchResults(state)
+        : (rows.length ? body : (people ? '' : body)) + people) +
       '</div>' +
       renderListFoot(state) +
       '</div>'
@@ -2251,6 +2403,221 @@
     return head + html;
   }
 
+  /* ------------------------------------------------------------------
+   * Conversation profile
+   *
+   * Replaces the conversation *inside* the chat column — the inbox stays put
+   * and the scroll position with it. Deliberately separate from the client
+   * record: this is the messaging profile, and "Open client record" is an
+   * explicit, permissioned action rather than what a name click does.
+   * ---------------------------------------------------------------- */
+
+  function renderProfileRow(label, value) {
+    if (!value) return '';
+    return (
+      '<div class="tma-dash__messages-profile-row">' +
+      '<span class="tma-dash__messages-profile-label">' + esc(label) + '</span>' +
+      '<span class="tma-dash__messages-profile-value">' + esc(value) + '</span>' +
+      '</div>'
+    );
+  }
+
+  function renderGalleryItems(state) {
+    var shelf = state.profileShelf || 'media';
+    var items = (state.profileGallery && state.profileGallery[shelf]) || null;
+
+    if (!items) {
+      return '<div class="tma-dash__messages-list-state" role="status">Loading…</div>';
+    }
+
+    if (!items.length) {
+      return (
+        '<div class="tma-dash__messages-list-state">' +
+        (shelf === 'media' ? 'No photos or videos yet.'
+          : shelf === 'documents' ? 'No documents yet.'
+          : 'No links yet.') +
+        '</div>'
+      );
+    }
+
+    if (shelf === 'media') {
+      return (
+        '<div class="tma-dash__messages-gallery-grid">' +
+        items
+          .map(function (item) {
+            return (
+              '<button type="button" class="tma-dash__messages-gallery-tile" ' +
+              'data-messages-gallery-open="' + esc(item.id) + '" ' +
+              'data-messages-gallery-seq="' + (item.seq || '') + '">' +
+              (item.kind === 'video'
+                ? '<span class="tma-dash__messages-gallery-video">▶</span>'
+                : '') +
+              '<img src="' + esc(item.thumbUrl || item.url) + '" alt="' + esc(item.name) + '" loading="lazy">' +
+              '</button>'
+            );
+          })
+          .join('') +
+        '</div>'
+      );
+    }
+
+    if (shelf === 'links') {
+      return items
+        .map(function (item) {
+          return (
+            '<button type="button" class="tma-dash__messages-person" ' +
+            'data-messages-jump-to="' + esc(state.selectedId) + '" ' +
+            'data-messages-jump-seq="' + (item.seq || '') + '">' +
+            '<span class="tma-dash__messages-person-text">' +
+            '<span class="tma-dash__messages-person-name">' +
+            esc(item.title || item.domain || item.url) + '</span>' +
+            '<span class="tma-dash__messages-person-meta">' +
+            esc(item.senderName) + ' · ' + esc(item.date) + '</span>' +
+            '</span></button>'
+          );
+        })
+        .join('');
+    }
+
+    return items
+      .map(function (item) {
+        return (
+          '<button type="button" class="tma-dash__messages-person" ' +
+          'data-messages-gallery-open="' + esc(item.id) + '" ' +
+          'data-messages-gallery-seq="' + (item.seq || '') + '">' +
+          '<span class="tma-dash__messages-row-avatar">' +
+          '<img class="tma-dash__messages-tray-icon" src="' +
+          esc(attachmentIconSrc(item.name)) + '" alt=""></span>' +
+          '<span class="tma-dash__messages-person-text">' +
+          '<span class="tma-dash__messages-person-name">' + esc(item.name) + '</span>' +
+          '<span class="tma-dash__messages-person-meta">' +
+          esc(formatBytes(item.size)) + ' · ' + esc(item.senderName) + ' · ' + esc(item.date) +
+          '</span></span></button>'
+        );
+      })
+      .join('');
+  }
+
+  function renderProfile(state) {
+    var info = state.profile;
+
+    if (!info) {
+      return (
+        '<div class="tma-dash__messages-chat">' +
+        '<div class="tma-dash__messages-chat-state" role="status">Loading…</div>' +
+        '</div>'
+      );
+    }
+
+    var p = info.profile;
+    var row = findThread(state.selectedId) || {};
+    var shelf = state.profileShelf || 'media';
+
+    var presence = p.presence.online
+      ? 'Online'
+      : (p.presence.lastSeen || p.presence.label || '');
+
+    return (
+      '<div class="tma-dash__messages-chat tma-dash__messages-chat--profile">' +
+      '<div class="tma-dash__messages-chat-head">' +
+      '<button type="button" class="tma-dash__messages-icon-btn" data-messages-profile-back ' +
+      'aria-label="Back to conversation"><img src="' + ICONS.CaretLeft + '" alt=""></button>' +
+      '<span class="tma-dash__messages-chat-contact-text">' +
+      '<span class="tma-dash__messages-chat-name">Conversation info</span>' +
+      '</span>' +
+      '<div class="tma-dash__messages-chat-actions">' +
+      '<button type="button" class="tma-dash__messages-icon-btn" data-messages-close ' +
+      'aria-label="Close conversation"><span aria-hidden="true">×</span></button>' +
+      '</div></div>' +
+
+      '<div class="tma-dash__messages-profile" data-messages-profile-body>' +
+
+      // Cover + avatar. The avatar opens in the lightbox, but only when there
+      // is a real photo — an initials tile has nothing to enlarge.
+      '<div class="tma-dash__messages-profile-cover"></div>' +
+      '<div class="tma-dash__messages-profile-head">' +
+      (p.photo
+        ? '<button type="button" class="tma-dash__messages-profile-avatar" ' +
+          'data-messages-profile-photo="' + esc(p.photo) + '" aria-label="View photo">' +
+          '<img src="' + esc(p.photo) + '" alt=""></button>'
+        : '<span class="tma-dash__messages-profile-avatar">' +
+          renderInitialAvatar(p.name, 'tma-dash__messages-profile-initial') + '</span>') +
+      '<h2 class="tma-dash__messages-profile-name">' + esc(p.name) + '</h2>' +
+      (presence
+        ? '<p class="tma-dash__messages-profile-presence">' + esc(presence) + '</p>'
+        : '') +
+      '</div>' +
+
+      '<div class="tma-dash__messages-profile-section">' +
+      renderProfileRow('Email', p.email) +
+      renderProfileRow('Role', p.accountType) +
+      renderProfileRow('Job title', p.jobTitle) +
+      renderProfileRow('About', p.about) +
+      (info.profile.memberCount && row.type === 'group'
+        ? renderProfileRow('Members', info.profile.memberCount + ' people')
+        : '') +
+      '</div>' +
+
+      // Per-user controls, mirroring the conversation menu rather than
+      // duplicating its logic.
+      '<div class="tma-dash__messages-profile-section">' +
+      '<label class="tma-dash__messages-setting">' +
+      '<span class="tma-dash__messages-setting-text">' +
+      '<span class="tma-dash__messages-setting-label">Mute notifications</span></span>' +
+      '<input type="checkbox" class="tma-dash__messages-setting-input" ' +
+      'data-messages-profile-mute' + (row.muted ? ' checked' : '') + '></label>' +
+      '<label class="tma-dash__messages-setting">' +
+      '<span class="tma-dash__messages-setting-text">' +
+      '<span class="tma-dash__messages-setting-label">Pin conversation</span></span>' +
+      '<input type="checkbox" class="tma-dash__messages-setting-input" ' +
+      'data-messages-profile-pin' + (row.pinned ? ' checked' : '') + '></label>' +
+      '</div>' +
+
+      // Shared content.
+      '<div class="tma-dash__messages-profile-section">' +
+      '<div class="tma-dash__messages-gallery-tabs" role="tablist">' +
+      [
+        { key: 'media', label: 'Media', count: info.counts.media },
+        { key: 'documents', label: 'Documents', count: info.counts.documents },
+        { key: 'links', label: 'Links', count: info.counts.links },
+      ]
+        .map(function (tab) {
+          return (
+            '<button type="button" role="tab" class="tma-dash__messages-gallery-tab' +
+            (tab.key === shelf ? ' is-active' : '') +
+            '" data-messages-gallery-tab="' + tab.key + '" ' +
+            'aria-selected="' + (tab.key === shelf ? 'true' : 'false') + '">' +
+            esc(tab.label) + ' <span>' + (tab.count || 0) + '</span></button>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      '<div class="tma-dash__messages-gallery-body">' + renderGalleryItems(state) + '</div>' +
+      '</div>' +
+
+      // Privacy note, then the destructive actions last.
+      '<p class="tma-dash__messages-profile-note">' +
+      'Messages are stored on the portal and visible only to this conversation’s participants.' +
+      '</p>' +
+
+      '<div class="tma-dash__messages-profile-section tma-dash__messages-profile-actions">' +
+      (info.can.openClientRecord
+        ? '<button type="button" class="tma-dash__messages-profile-action" ' +
+          'data-messages-open-client>Open client record</button>'
+        : '') +
+      '<button type="button" class="tma-dash__messages-profile-action" ' +
+      'data-messages-profile-clear>Clear messages</button>' +
+      (info.can.block
+        ? '<button type="button" class="tma-dash__messages-profile-action ' +
+          'tma-dash__messages-profile-action--danger" data-messages-profile-block>' +
+          (row.blocked ? 'Unblock contact' : 'Block contact') + '</button>'
+        : '') +
+      '</div>' +
+
+      '</div></div>'
+    );
+  }
+
   function renderChat(state, render) {
     var row = findThread(state.selectedId);
 
@@ -2326,7 +2693,11 @@
       layoutCls += ' tma-dash__messages-layout--mobile';
       if (isMessagesReading(state)) layoutCls += ' tma-dash__messages-layout--mobile-reading';
     }
-    var html = '<div class="' + layoutCls + '">' + renderList(state) + renderChat(state, render) + '</div>';
+    var html =
+      '<div class="' + layoutCls + '">' +
+      renderList(state) +
+      (state.profileOpen && state.selectedId ? renderProfile(state) : renderChat(state, render)) +
+      '</div>';
     return html;
   }
 
@@ -4818,6 +5189,170 @@
   }
 
   /* ------------------------------------------------------------------
+   * Search mode, profile and gallery behaviour
+   * ---------------------------------------------------------------- */
+
+  var searchTimer = null;
+
+  function runSearch(state, render, term) {
+    if (searchTimer) clearTimeout(searchTimer);
+
+    if (!term || term.trim().length < 2) {
+      state.searchResults = null;
+      state.searchLoading = false;
+      render();
+      return;
+    }
+
+    state.searchLoading = true;
+    render();
+
+    searchTimer = setTimeout(function () {
+      searchTimer = null;
+
+      window.TMAMessagingAPI.search(term)
+        .then(function (data) {
+          // Discard a response the user has already typed past.
+          if ((state.search || '') !== term) return;
+          state.searchResults = data.results;
+          state.searchLoading = false;
+          render();
+        })
+        .catch(function () {
+          state.searchResults = null;
+          state.searchLoading = false;
+          render();
+        });
+    }, 280);
+  }
+
+  function exitSearchMode(state, render) {
+    if (!state.searchMode) return;
+    state.searchMode = false;
+    state.search = '';
+    state.searchResults = null;
+    state.peopleResults = [];
+    render();
+  }
+
+  /*
+   * Open a conversation at a specific message.
+   *
+   * Loads a window *around* the target rather than the newest page, so the
+   * message arrives with the context it was sent in, then scrolls to it and
+   * flashes it.
+   */
+  function jumpToConversationMessage(root, state, render, conversationId, seq) {
+    exitSearchMode(state, render);
+
+    var bucket = threadBucket(conversationId);
+    bucket.messages = [];
+    bucket.loaded = false;
+
+    state.selectedId = conversationId;
+    state.reading = true;
+    state.profileOpen = false;
+    clearReplyTo(state);
+    render();
+
+    window.TMAMessagingAPI.messagesAround(conversationId, seq)
+      .then(function (data) {
+        mergeMessages(conversationId, data.messages || [], false);
+        bucket.loaded = true;
+        bucket.hasMore = !!data.hasMore;
+        if (data.conversation) replaceThread(data.conversation);
+        render();
+
+        // Wait for the repaint before measuring where the bubble landed.
+        window.requestAnimationFrame(function () {
+          var target = (data.messages || []).filter(function (m) {
+            return m.seq === seq;
+          })[0];
+          if (target) jumpToMessage(root, target.id);
+        });
+
+        markConversationRead(root, state, render, conversationId);
+        subscribeToConversation(root, state, render, conversationId);
+      })
+      .catch(function () {
+        showMessagesToast(root, 'That message could not be opened');
+      });
+  }
+
+  function openProfile(root, state, render) {
+    if (!state.selectedId) return;
+
+    state.profileOpen = true;
+    state.profile = null;
+    state.profileGallery = null;
+    state.profileShelf = 'media';
+    render();
+
+    window.TMAMessagingAPI.info(state.selectedId)
+      .then(function (data) {
+        state.profile = data;
+        render();
+        loadGallery(root, state, render, 'media');
+      })
+      .catch(function () {
+        state.profileOpen = false;
+        render();
+        showMessagesToast(root, 'Conversation info could not be loaded');
+      });
+  }
+
+  function closeProfile(state, render) {
+    state.profileOpen = false;
+    state.profile = null;
+    state.profileGallery = null;
+    render();
+  }
+
+  function loadGallery(root, state, render, shelf) {
+    state.profileShelf = shelf;
+
+    if (!state.profileGallery) state.profileGallery = {};
+
+    // Already fetched — switching tabs should not refetch.
+    if (state.profileGallery[shelf]) {
+      render();
+      return;
+    }
+
+    render();
+
+    window.TMAMessagingAPI.gallery(state.selectedId, shelf)
+      .then(function (data) {
+        state.profileGallery[shelf] = data.items || [];
+        render();
+      })
+      .catch(function () {
+        state.profileGallery[shelf] = [];
+        render();
+      });
+  }
+
+  /* Open a gallery item: media in the lightbox, a document downloaded. */
+  function openGalleryItem(state, attachmentId) {
+    var shelf = state.profileShelf || 'media';
+    var items = (state.profileGallery && state.profileGallery[shelf]) || [];
+
+    var index = 0;
+    var all = items
+      .filter(function (i) {
+        return i.url;
+      })
+      .map(function (i, n) {
+        if (i.id === attachmentId) index = n;
+        return { name: i.name, mime: i.mime, size: i.size, url: i.url };
+      });
+
+    if (all.length && window.TMAPortalLightbox) {
+      window.TMAPortalLightbox.open(all, index);
+    }
+  }
+
+  /* ------------------------------------------------------------------
    * Conversation menu
    *
    * One definition, shared by the chat header's three-dot button and a
@@ -5180,16 +5715,138 @@
     // --- chat-list search -------------------------------------------------
     var search = root.querySelector('[data-messages-search]');
     if (search) {
+      // Focusing takes over the column: the field is a mode, not a filter.
+      search.addEventListener('focus', function () {
+        if (state.searchMode) return;
+        state.searchMode = true;
+        render();
+      });
+
       search.addEventListener('input', function () {
         state.search = search.value;
+        state.searchMode = true;
         render();
-        searchPeople(state, render, search.value, 'list');
+        runSearch(state, render, search.value);
       });
+
       search.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
-          state.search = '';
-          state.peopleResults = [];
-          render();
+          e.stopPropagation();
+          exitSearchMode(state, render);
+        }
+      });
+    }
+
+    var searchExit = root.querySelector('[data-messages-search-exit]');
+    if (searchExit) {
+      searchExit.addEventListener('click', function () {
+        exitSearchMode(state, render);
+      });
+    }
+
+    root.querySelectorAll('[data-messages-search-conversation]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-messages-search-conversation');
+        exitSearchMode(state, render);
+        state.selectedId = null;
+        openConversation(root, state, render, id);
+      });
+    });
+
+    root.querySelectorAll('[data-messages-jump-to]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        jumpToConversationMessage(
+          root, state, render,
+          btn.getAttribute('data-messages-jump-to'),
+          parseInt(btn.getAttribute('data-messages-jump-seq'), 10)
+        );
+      });
+    });
+
+    // --- profile ---------------------------------------------------------
+    root.querySelectorAll('[data-messages-open-profile]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        openProfile(root, state, render);
+      });
+    });
+
+    var profileBack = root.querySelector('[data-messages-profile-back]');
+    if (profileBack) {
+      profileBack.addEventListener('click', function () {
+        closeProfile(state, render);
+      });
+    }
+
+    root.querySelectorAll('[data-messages-gallery-tab]').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        loadGallery(root, state, render, tab.getAttribute('data-messages-gallery-tab'));
+      });
+    });
+
+    root.querySelectorAll('[data-messages-gallery-open]').forEach(function (tile) {
+      tile.addEventListener('click', function () {
+        openGalleryItem(state, tile.getAttribute('data-messages-gallery-open'));
+      });
+    });
+
+    var profilePhoto = root.querySelector('[data-messages-profile-photo]');
+    if (profilePhoto) {
+      profilePhoto.addEventListener('click', function () {
+        if (!window.TMAPortalLightbox) return;
+        var name = (state.profile && state.profile.profile.name) || 'Photo';
+        window.TMAPortalLightbox.open(
+          [{
+            name: name,
+            mime: 'image/*',
+            size: 0,
+            url: profilePhoto.getAttribute('data-messages-profile-photo'),
+            // A profile photo is someone else's picture; offering a download
+            // button on it is not the portal's call to make.
+            canDownload: false,
+          }],
+          0
+        );
+      });
+    }
+
+    var profileMute = root.querySelector('[data-messages-profile-mute]');
+    if (profileMute) {
+      profileMute.addEventListener('change', function () {
+        commitMessagesRowAction(root, state, render, state.selectedId, 'mute');
+      });
+    }
+
+    var profilePin = root.querySelector('[data-messages-profile-pin]');
+    if (profilePin) {
+      profilePin.addEventListener('change', function () {
+        commitMessagesRowAction(root, state, render, state.selectedId, 'pin');
+      });
+    }
+
+    var profileClear = root.querySelector('[data-messages-profile-clear]');
+    if (profileClear) {
+      profileClear.addEventListener('click', function () {
+        runConversationAction(root, state, render, state.selectedId, 'clear');
+      });
+    }
+
+    var profileBlock = root.querySelector('[data-messages-profile-block]');
+    if (profileBlock) {
+      profileBlock.addEventListener('click', function () {
+        runConversationAction(root, state, render, state.selectedId, 'block');
+      });
+    }
+
+    var openClient = root.querySelector('[data-messages-open-client]');
+    if (openClient) {
+      openClient.addEventListener('click', function () {
+        var row = findThread(state.selectedId);
+        // The separate, optional action — never what clicking a name does.
+        if (row && row.counterpartId && window.TMADashboard && window.TMADashboard.navigate) {
+          window.TMADashboard.navigate({ navId: 'clients', view: 'clients', title: row.name });
+        } else {
+          showMessagesToast(root, 'No client record is linked to this conversation');
         }
       });
     }
@@ -5496,6 +6153,13 @@
       composerLinkUrl: null,
       composerLinkDismissed: null,
       recording: null,
+      searchMode: false,
+      searchResults: null,
+      searchLoading: false,
+      profileOpen: false,
+      profile: null,
+      profileShelf: 'media',
+      profileGallery: null,
       voiceRecording: false,
       search: '',
       peopleResults: [],
@@ -5550,6 +6214,12 @@
     if (!root._messagesKeysBound) {
       root._messagesKeysBound = true;
 
+      /*
+       * Registered in the capture phase so the Messages page gets first refusal
+       * on these keys. The portal's global command palette also opens on "/",
+       * and without capturing, one keypress both focused this search *and*
+       * opened the palette — which then sat over the page swallowing clicks.
+       */
       document.addEventListener('keydown', function (e) {
         if (!root.isConnected) return;
 
@@ -5569,6 +6239,8 @@
           var field = root.querySelector('[data-messages-search]');
           if (field) {
             e.preventDefault();
+            // Claim the key outright: the global palette listens for it too.
+            e.stopPropagation();
             field.focus();
             field.select();
           }
@@ -5602,11 +6274,21 @@
           return;
         }
 
+        if (state.searchMode) {
+          exitSearchMode(state, render);
+          return;
+        }
+
+        if (state.profileOpen) {
+          closeProfile(state, render);
+          return;
+        }
+
         // Never yank the conversation out from under someone mid-sentence.
         if (state.selectedId && !typing && !getComposerDraft(state).trim()) {
           closeConversation(root, state, render);
         }
-      });
+      }, true);
 
       // Clicking away from an open panel closes it, but a click inside it (or
       // on the button that opened it) must not.

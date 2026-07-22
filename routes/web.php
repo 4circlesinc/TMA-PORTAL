@@ -264,6 +264,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/contacts', [MessagingController::class, 'contacts'])->name('contacts');
         Route::post('/heartbeat', [MessagingController::class, 'heartbeat'])->name('heartbeat');
         Route::get('/link-preview', [MessagingController::class, 'linkPreview'])->name('link-preview');
+        // Grouped search across people, conversations, messages, files, links.
+        Route::get('/search', [MessagingController::class, 'search'])->name('search');
         // Bulk receipt acknowledgement — one call covers every conversation.
         Route::post('/delivered', [MessagingController::class, 'markAllDelivered'])->name('delivered');
         Route::get('/settings', [MessagingController::class, 'settings'])->name('settings');
@@ -285,6 +287,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::put('/conversations/{uuid}/draft', [MessagingController::class, 'saveDraft'])->name('conversations.draft');
         Route::patch('/conversations/{uuid}', [MessagingController::class, 'updateConversation'])->name('conversations.update');
         Route::get('/conversations/{uuid}/photo', [MessagingAttachmentController::class, 'conversationPhoto'])->name('conversations.photo');
+        // The messaging profile panel and its shared-content shelves.
+        Route::get('/conversations/{uuid}/info', [MessagingController::class, 'info'])->name('conversations.info');
+        Route::get('/conversations/{uuid}/gallery', [MessagingController::class, 'gallery'])->name('conversations.gallery');
 
         Route::patch('/messages/{uuid}', [MessagingController::class, 'updateMessage'])->name('messages.update');
         Route::delete('/messages/{uuid}', [MessagingController::class, 'destroyMessage'])->name('messages.destroy');

@@ -50,18 +50,22 @@ try {
   const total = await rowCount();
   check(total > 5, `chat list has ${total} conversations`);
 
-  step(2, 'Search is a real input, and filters the list');
+  step(2, 'Search is a real input, and finds a conversation');
+  // Phase 6 replaced live row-filtering with a dedicated search mode: the
+  // column shows grouped results rather than a narrowed conversation list.
   const field = page.locator('[data-messages-search]');
   check(await field.count() === 1, 'search field exists as an <input>');
 
   await field.click();
   await page.keyboard.type('Ana');
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(1800);
 
-  const filtered = await rowCount();
-  check(filtered < total && filtered > 0, `list narrowed from ${total} to ${filtered} for "Ana"`);
   const names = await page.textContent('[data-messages-list-body]');
-  check(names.includes('Ana Ruiz'), 'the matching conversation is shown');
+  check(names.includes('Ana Ruiz'), 'the matching conversation is found');
+  check(
+    await page.locator('.tma-dash__messages-search-group').count() > 0,
+    'results are grouped by kind',
+  );
 
   step(3, 'Typing does not steal focus or reset the caret');
   const focusHeld = await page.evaluate(() =>
@@ -71,28 +75,28 @@ try {
   const caret = await page.evaluate(() => document.activeElement?.selectionStart);
   check(caret === 3, `caret stayed at the end (position ${caret})`);
 
-  step(4, 'Clearing search restores the full list');
-  await page.click('[data-messages-search-clear]');
-  await page.waitForTimeout(700);
+  step(4, 'Exiting search restores the full list');
+  await page.click('[data-messages-search-exit]');
+  await page.waitForTimeout(900);
   check(await rowCount() === total, `back to ${total} conversations`);
 
   step(5, 'Search surfaces people with no conversation yet');
   // "Zoe Winters" is seeded deliberately with no conversation — she can only
-  // be reached by the people half of the search.
+  // be reached by the People group of the search.
   await page.locator('[data-messages-search]').click();
   await page.keyboard.type('Zoe');
-  await page.waitForTimeout(1400);
+  await page.waitForTimeout(1800);
 
   const listText = await page.textContent('[data-messages-list-body]');
-  check(listText.includes('Start a new conversation'), 'a "start a new conversation" group appears');
+  check(/People/.test(listText), 'a People group appears');
   check(listText.includes('Zoe Winters'), 'someone with no existing conversation is findable');
   check(
     await page.locator('[data-messages-start]').count() > 0,
     'that person is offered as a startable conversation',
   );
 
-  await page.click('[data-messages-search-clear]');
-  await page.waitForTimeout(500);
+  await page.click('[data-messages-search-exit]');
+  await page.waitForTimeout(700);
 
   step(6, 'The "/" shortcut focuses search');
   await page.click('.tma-dash__messages-chat-body', { position: { x: 10, y: 10 } }).catch(() => {});

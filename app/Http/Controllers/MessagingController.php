@@ -10,6 +10,7 @@ use App\Events\MessageSent;
 use App\Events\MessageUpdated;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
+use App\Models\LinkPreview;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
@@ -18,6 +19,7 @@ use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\LinkPreviewService;
 use App\Support\Messaging\MessagingPresenter;
+use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\PresenceService;
 use Illuminate\Http\JsonResponse;
@@ -162,15 +164,47 @@ class MessagingController extends Controller
         $conversation = $this->conversationFor($request, $uuid);
 
         $before = $request->integer('before');
+        $around = $request->integer('around');
         $participant = $conversation->participantFor($user);
 
-        $query = $conversation->messages()
+        $cleared = $participant->cleared_before_message_id ?? 0;
+
+        $base = fn () => $conversation->messages()
             ->withTrashed()
             ->with(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments'])
             // Respect this participant's own "clear chat" marker. It is
             // personal: the other side still sees everything.
-            ->where('id', '>', $participant->cleared_before_message_id ?? 0)
-            ->orderByDesc('id');
+            ->where('id', '>', $cleared);
+
+        /*
+         * Jumping to a search result needs the message *and its surroundings*,
+         * not the newest page. Half a page either side gives it context to be
+         * read in, and tells the client there is more in both directions.
+         */
+        if ($around > 0) {
+            $half = (int) floor(self::MESSAGE_PAGE / 2);
+
+            $older = $base()->where('id', '<=', $around)->orderByDesc('id')->limit($half + 1)->get();
+            $newer = $base()->where('id', '>', $around)->orderBy('id')->limit($half)->get();
+
+            $messages = $older->reverse()->concat($newer)->values();
+
+            return response()->json([
+                'messages' => $messages->map(
+                    fn (Message $m) => MessagingPresenter::message($m, $user, $conversation)
+                ),
+                // More history exists above if the window did not reach the start.
+                'hasMore' => $older->count() > $half,
+                'hasNewer' => $newer->count() >= $half,
+                'around' => $around,
+                'conversation' => MessagingPresenter::conversation(
+                    $conversation, $user, $participant,
+                    (int) ($this->unreadCounts($user)[$conversation->id] ?? 0),
+                ),
+            ]);
+        }
+
+        $query = $base()->orderByDesc('id');
 
         // Cursor on the id, not an offset: new arrivals while the user reads
         // can't shift the window and make a page repeat or skip.
@@ -311,6 +345,173 @@ class MessagingController extends Controller
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $conversation),
         ]);
+    }
+
+    // -------------------------------------------------------------- search
+
+    /** Grouped search across people, conversations, messages, files and links. */
+    public function search(Request $request): JsonResponse
+    {
+        $data = $request->validate(['q' => ['nullable', 'string', 'max:200']]);
+
+        return response()->json([
+            'results' => MessagingSearch::run($request->user(), (string) ($data['q'] ?? '')),
+        ]);
+    }
+
+    // ------------------------------------------------ conversation profile
+
+    /**
+     * The conversation information panel: who it is with, what is shared, and
+     * the per-user controls that belong to it.
+     *
+     * Deliberately separate from the client record — this is the messaging
+     * profile, and it must not leak fields the viewer would not otherwise see.
+     */
+    public function info(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $participant = $conversation->participantFor($user);
+        $counterpart = $conversation->counterpartFor($user);
+
+        $attachments = MessageAttachment::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereNotNull('message_id')
+            ->get();
+
+        $linkCount = $conversation->messages()
+            ->whereNotNull('body')
+            ->whereRaw('lower(body) like ?', ['%http%'])
+            ->count();
+
+        $conversation->load(['messages' => fn ($q) => $q->latest('id')->limit(1)]);
+
+        return response()->json([
+            'conversation' => MessagingPresenter::conversation($conversation, $user, $participant),
+            'profile' => [
+                'name' => $conversation->isGroup()
+                    ? ($conversation->name ?: 'Group')
+                    : ($counterpart?->name ?? 'Unknown'),
+                'photo' => $conversation->isGroup()
+                    ? ($conversation->photo_path ? route('messaging.conversations.photo', $conversation->uuid) : null)
+                    : $counterpart?->avatar_url,
+                // A group has members rather than an email address.
+                'email' => $conversation->isGroup() ? null : $counterpart?->email,
+                'accountType' => $conversation->isGroup() ? null : $counterpart?->account_type,
+                'about' => $conversation->isGroup() ? null : $counterpart?->bio,
+                'jobTitle' => $conversation->isGroup() ? null : $counterpart?->job_title,
+                'presence' => $counterpart
+                    ? PresenceService::forViewer($counterpart, $user)
+                    : ['label' => 'Group chat'],
+                'memberCount' => $conversation->activeParticipants->count(),
+                'members' => $conversation->isGroup()
+                    ? $conversation->activeParticipants->map(fn (ConversationParticipant $p) => [
+                        'id' => $p->user?->id,
+                        'name' => $p->user?->name,
+                        'photo' => $p->user?->avatar_url,
+                        'role' => $p->role,
+                    ])->values()
+                    : [],
+            ],
+            'counts' => [
+                'media' => $attachments->filter(fn ($a) => $a->shelf() === 'media')->count(),
+                'documents' => $attachments->filter(fn ($a) => $a->shelf() === 'documents')->count(),
+                'links' => $linkCount,
+            ],
+            'can' => [
+                // Only a direct conversation has someone to block.
+                'block' => ! $conversation->isGroup() && $counterpart !== null,
+                'openClientRecord' => in_array($user->account_type, ['Administrator', 'Employee'], true)
+                    && ! $conversation->isGroup(),
+            ],
+        ]);
+    }
+
+    /**
+     * Shared media, documents or links for the conversation info panel.
+     *
+     * Paged like the thread is: a long-running conversation can hold far more
+     * than one screen of files.
+     */
+    public function gallery(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $participant = $conversation->participantFor($user);
+
+        $data = $request->validate([
+            'shelf' => ['required', 'in:media,documents,links'],
+            'before' => ['nullable', 'integer'],
+        ]);
+
+        $cleared = $participant->cleared_before_message_id ?? 0;
+
+        if ($data['shelf'] === 'links') {
+            return response()->json(['items' => $this->galleryLinks($conversation, $user, $cleared)]);
+        }
+
+        $attachments = MessageAttachment::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereNotNull('message_id')
+            ->whereHas('message', fn ($q) => $q->where('id', '>', $cleared))
+            ->with(['message.sender'])
+            ->latest('id')
+            ->get()
+            // The media/documents split is a model decision, not a column, so
+            // it is applied after loading rather than in SQL.
+            ->filter(fn (MessageAttachment $a) => $a->shelf() === $data['shelf'])
+            ->take(120)
+            ->map(fn (MessageAttachment $a) => array_merge(
+                MessagingPresenter::attachment($a),
+                [
+                    'messageId' => $a->message?->uuid,
+                    'seq' => $a->message?->id,
+                    'senderName' => $a->message?->user_id === $user->id
+                        ? 'You'
+                        : ($a->message?->sender?->name ?? 'Unknown'),
+                    'date' => $a->created_at->format('j M Y'),
+                ]
+            ))
+            ->values();
+
+        return response()->json(['items' => $attachments]);
+    }
+
+    /** Every URL shared in the conversation, newest first. */
+    private function galleryLinks(Conversation $conversation, User $user, int $cleared): array
+    {
+        return $conversation->messages()
+            ->whereNotNull('body')
+            ->where('id', '>', $cleared)
+            ->whereRaw('lower(body) like ?', ['%http%'])
+            ->with('sender')
+            ->latest('id')
+            ->limit(120)
+            ->get()
+            ->flatMap(function (Message $m) use ($user) {
+                return collect(LinkPreviewService::extract($m->body))->map(function (string $url) use ($m, $user) {
+                    // Only the cache is consulted here — the gallery must not
+                    // fetch dozens of sites to render a list.
+                    $preview = LinkPreview::where('url_hash', hash('sha256', $url))
+                        ->where('status', 'ok')
+                        ->first();
+
+                    return [
+                        'url' => $url,
+                        'domain' => parse_url($url, PHP_URL_HOST),
+                        'title' => $preview?->title,
+                        'imageUrl' => $preview?->image_url,
+                        'messageId' => $m->uuid,
+                        'seq' => $m->id,
+                        'senderName' => $m->user_id === $user->id ? 'You' : ($m->sender?->name ?? 'Unknown'),
+                        'date' => $m->created_at->format('j M Y'),
+                    ];
+                });
+            })
+            ->take(120)
+            ->values()
+            ->all();
     }
 
     // -------------------------------------------------------- link preview

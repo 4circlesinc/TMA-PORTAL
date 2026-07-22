@@ -254,7 +254,7 @@ picked up the live mailbox's token and synced a real account into itself.
 
 The Messages page was a pure mock — a hard-coded `THREADS` array with a
 scripted ByeWind conversation and no network calls at all. It is now backed by
-`/portal/messaging`, so these seven scripts exist to keep it that way.
+`/portal/messaging`, so these eight scripts exist to keep it that way.
 
 - **`messaging.mjs`** — the page against a real server: the list comes from the
   API (and contains none of the old mock names), messages load and send and
@@ -443,7 +443,31 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 node tests/Browser/messaging-phase4.mjs
 ```
 
-Seed all seven with several conversations, one of them deep enough to page:
+- **`messaging-phase6.mjs`** — search mode, the in-column conversation profile,
+  and the shared media/documents/links gallery.
+
+  The behaviours that matter: search results are **grouped** (people,
+  conversations, messages, files, links) rather than one ranked list; clicking a
+  message result opens that conversation *at that message* via the `around=`
+  cursor, which loads a window either side rather than the newest page; and
+  opening a profile replaces **only the chat column** — the script scrolls the
+  inbox first and asserts the offset is unchanged through opening the profile,
+  browsing the gallery and coming back.
+
+  It also pins the security property directly: every search hit must belong to a
+  conversation the caller is a member of, checked against their own conversation
+  list rather than trusting the endpoint.
+
+  **Search is a mode now, not a filter.** Focusing the field takes over the
+  column, so `.tma-dash__messages-row` counts go to zero while searching — the
+  old expectation in `messaging-toolbar.mjs` had to be rewritten. The clear
+  control is `data-messages-search-exit` (it was `-search-clear`).
+
+  Seeded users have no avatar, so the profile shows an initials tile; the script
+  handles both branches and asserts a missing photo is **not** clickable rather
+  than opening a broken image.
+
+Seed all eight with several conversations, one of them deep enough to page:
 
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
