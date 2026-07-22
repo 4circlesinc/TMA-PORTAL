@@ -7,6 +7,7 @@ use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\FileLibraryController;
 use App\Http\Controllers\Files\BrowserController;
@@ -43,6 +44,10 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', 'onboarded', 'mfa.enforced'])->group(function () {
     Route::get('/', DashboardController::class);
+
+    // KPI cards on the portal home. Staff-facing: see DashboardMetricsController.
+    Route::get('/portal/dashboard/metrics', DashboardMetricsController::class)
+        ->name('dashboard.metrics');
 
     // All settings now live in Account settings; this preserved URL (and
     // the flashes Fortify/social redirects attach to it) forwards there.

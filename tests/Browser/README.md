@@ -53,6 +53,12 @@ field placement and drawing, and computed CSS only exist in a browser.
   (`PHP_CLI_SERVER_WORKERS=12 php artisan serve`) — the single-threaded dev
   server drops API calls while the asset-heavy SPA is still loading, which reads
   as a hang, not a bug.
+- **`dashboard-kpis.mjs`** — the portal home KPI row, which used to be four
+  hard-coded strings (`3h 24m`, `128`, …). It signs in, waits out the skeletons,
+  and reads back the four rendered cards: each must carry a value the server
+  actually measured, and none may be left at the em-dash the client falls back
+  to when the metrics request fails. Needs the KPI fixture below — with an empty
+  database the cards are *correctly* empty and the run proves nothing.
 
 `fixtures/contract.pdf` is a hand-built two-page PDF (no library, no
 dependency) with distinct text on each page, so a wrong page or a blank canvas
@@ -135,6 +141,16 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 
 Neither user may be an `Administrator` — admins can see every folder, so the
 per-user permission checks would pass for the wrong reason.
+
+`dashboard-kpis.mjs` wants clients, conversations, mail, shares and signature
+requests — its fixture is a file rather than a one-liner, and it builds the
+staff account itself, so run it against a **fresh** database instead of the
+seed above:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= \
+  php artisan tinker tests/Browser/fixtures/kpi-seed.php
+```
 
 Only `/` serves the portal shell; deep paths like `/folders/all` exist purely
 as pushState URLs and 404 on a hard load. Reach the file library by clicking

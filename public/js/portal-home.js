@@ -43,12 +43,14 @@
     }
   }
 
-  function kpiCard(tone, label, iconName, value, delta, deltaUp) {
-    return '<article class="tma-dash__card tma-dash__card--' + tone + '">' +
+  function kpiCard(tone, label, iconName, card) {
+    var deltaUp = !!card.deltaUp;
+    return '<article class="tma-dash__card tma-dash__card--' + tone + '"' +
+      (card.hint ? ' title="' + ui().esc(card.hint) + '"' : '') + '>' +
       '<div class="tma-dash__card-head"><span class="tma-dash__card-label">' + ui().esc(label) + '</span>' +
       '<img class="tma-dash__card-ico" src="images/icons/phosphor/' + iconName + '.svg" alt=""></div>' +
-      '<div class="tma-dash__card-row"><div class="tma-dash__card-value">' + ui().esc(value) + '</div>' +
-      '<div class="tma-dash__card-delta"><span class="tma-dash__card-delta-text">' + ui().esc(delta) + '</span>' +
+      '<div class="tma-dash__card-row"><div class="tma-dash__card-value">' + ui().esc(card.value) + '</div>' +
+      '<div class="tma-dash__card-delta"><span class="tma-dash__card-delta-text">' + ui().esc(card.delta) + '</span>' +
       '<img src="images/icons/tma/' + (deltaUp ? 'ArrowRise' : 'ArrowFall') + '.svg" alt="' + (deltaUp ? 'up' : 'down') + '"></div></div></article>';
   }
 
@@ -59,25 +61,38 @@
       '<span class="tma-skeleton tma-dash__card-delta--skeleton"></span></div></article>';
   }
 
-  function renderKpis(s) {
-    if (!homeFilesLoaded) {
+  // Cards the server couldn't measure. Shown when the metrics request fails —
+  // an em-dash is honest about the gap; a number would not be.
+  var KPI_UNAVAILABLE = { value: '—', delta: 'Unavailable', deltaUp: false, hint: 'Could not load this metric.' };
+
+  function renderKpis() {
+    if (!homeMetricsLoaded) {
       return '<div class="tma-dash__cards" aria-busy="true">' +
         kpiSkeletonCard('blue') + kpiSkeletonCard('purple') + kpiSkeletonCard('blue') + kpiSkeletonCard('purple') +
         '</div>';
     }
-    var activeProjects = s.projects.filter(function (p) { return p.status === 'open'; }).length;
-    var sigLeft = Math.max(0, s.trial.signatureLimit - s.trial.signatureUsed);
+    // The KPI row measures how the firm serves its clients, so it is staff
+    // only — a client account gets no row rather than four meaningless cards.
+    if (homeMetrics && homeMetrics.staff === false) return '';
+
+    var c = (homeMetrics && homeMetrics.cards) || {};
+    function card(key) { return c[key] || KPI_UNAVAILABLE; }
+
     return '<div class="tma-dash__cards">' +
-      kpiCard('blue', 'Avg. Client Response', 'ClockCountdown', '3h 24m', '-12.4%', false) +
-      kpiCard('purple', 'Files Shared', 'Share', '128', '+11.02%', true) +
-      kpiCard('blue', 'Active Projects', 'Kanban', String(activeProjects), activeProjects ? '+' + activeProjects + ' new' : '-', true) +
-      kpiCard('purple', 'Signature Requests Left', 'Signature', String(sigLeft), s.trial.active ? 'Trial' : 'Plan', true) +
+      kpiCard('blue', 'Avg. Response to Clients', 'ClockCountdown', card('clientResponse')) +
+      kpiCard('purple', 'Files Shared', 'Share', card('filesShared')) +
+      kpiCard('blue', 'Clients Awaiting Reply', 'ChatDots', card('awaitingReply')) +
+      kpiCard('purple', 'Signature Requests Left', 'Signature', card('signaturesLeft')) +
       '</div>';
   }
 
   // Real Recent Files + Favorites are fetched on mount; until they arrive we
   // show shimmering skeletons rather than empty or placeholder rows.
   var homeFilesLoaded = false;
+
+  // Same contract for the KPI row: server-measured, skeletons until it lands.
+  var homeMetricsLoaded = false;
+  var homeMetrics = null;
 
   // `path` from the API is the full ancestor chain ([{id,name}, ...], root
   // first) rather than just the immediate parent's name — join it into one
@@ -431,6 +446,24 @@
     });
   }
 
+  /* The KPI row, measured server-side from real activity: response times come
+   * from portal messages and connected mailboxes, shares from the file
+   * library, signatures from the request log. A failure leaves the row in
+   * place with em-dashes rather than showing a stale or invented number. */
+  function loadHomeMetrics(el) {
+    fetch('/portal/dashboard/metrics', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { homeMetrics = j; })
+      .catch(function () { homeMetrics = null; })
+      .then(function () {
+        homeMetricsLoaded = true;
+        if (el.isConnected) mount(el, { fromLoad: true });
+      });
+  }
+
   // Email/Calendar are placeholder counts (no backend yet); Users is the real
   // pending-approvals count.
   function fillShortcutCounts(el) {
@@ -468,7 +501,7 @@
       '<div class="tma-portal-hello__actions">' +
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
       '</div></div>' +
-      renderKpis(s) +
+      renderKpis() +
       // Everything below the KPI row lives in one 2-column grid so no panel
       // (including "What's on the road?") ever spans the full width.
       '<div class="tma-portal-home-grid">' +
@@ -563,9 +596,12 @@
     if (edit) edit.addEventListener('click', function () { editDashboardModal(rerender); });
 
     fillShortcutCounts(el);
-    // Fetch real Recent Files + Favorites once per genuine mount (not on the
-    // re-render the fetch itself triggers).
-    if (!opts.fromLoad) loadHomeFiles(el);
+    // Fetch real Recent Files + Favorites, and the KPI metrics, once per
+    // genuine mount (not on the re-render the fetches themselves trigger).
+    if (!opts.fromLoad) {
+      loadHomeFiles(el);
+      loadHomeMetrics(el);
+    }
   }
 
   if (window.TMAPortalViews) window.TMAPortalViews.register('dashboard', mount);
