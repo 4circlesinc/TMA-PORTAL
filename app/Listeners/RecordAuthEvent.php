@@ -3,6 +3,8 @@
 namespace App\Listeners;
 
 use App\Models\AuthEvent;
+use App\Models\User;
+use App\Support\Messaging\PresenceService;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -35,8 +37,18 @@ class RecordAuthEvent
 
     public function handleLogout(Logout $event): void
     {
-        if ($event->user) {
-            $this->record('logout', $event->user->getAuthIdentifier());
+        if (! $event->user) {
+            return;
+        }
+
+        $this->record('logout', $event->user->getAuthIdentifier());
+
+        // Signing out is the one moment we *know* somebody is gone, rather
+        // than inferring it from a heartbeat that stopped arriving. Without
+        // this they stay "Online" to everyone else until the presence TTL
+        // expires, which is a lie we can easily avoid telling.
+        if ($event->user instanceof User) {
+            PresenceService::release($event->user);
         }
     }
 

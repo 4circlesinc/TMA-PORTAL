@@ -497,10 +497,52 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 "
 ```
 
+  **The shared reset blanks `pinned_at` for every participant, which strips the
+  org chat's default pin** — after which this script fails on "it is pinned by
+  default" with nothing actually broken. Re-pin it as part of the reset:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$c = App\Models\Conversation::where('is_default', true)->first();
+  if (\$c) \$c->participants()->update(['pinned_at' => now()]);
+"
+```
+
   Two assertions had to be *loosened* rather than fixed, and the reasons matter:
   the org chat is pinned but not necessarily at index 0 (other conversations can
   be pinned, and pinned rows still sort by recency), and its member count starts
   at 1 because membership grows as accounts sign in.
+
+- **`messaging-phase8.mjs`** — typing indicators, presence transitions, and
+  unread counts that move without a reload. Two live sessions **and Reverb**,
+  same setup as `messaging-realtime.mjs`.
+
+  **A types, B watches, and B must be `e2e@example.com`** — several checks need
+  B sitting in a conversation other than the one A is typing in, which Ana Ruiz
+  (one seeded conversation) cannot do. The roles are deliberately the reverse of
+  the other scripts; an earlier draft had them the usual way round and failed at
+  "typing shows in the chat list" for that reason alone.
+
+  Three checks are worth keeping honest, because each was a real bug first:
+
+  - *A lost stop event expires on its own* severs A's socket mid-type so the
+    retraction can never arrive. Without the receiver's own TTL the indicator
+    sticks forever.
+  - *Going offline and coming back* signs out through **`/auth/logout`** — not
+    `/logout`, which silently does nothing and made the check pass against a
+    session that had never ended. Sign-out is the only moment the server knows
+    somebody left; closing a tab just lets presence lapse.
+  - *Scroll stability* parks B mid-thread and sends into a **different**
+    conversation, which is what fires an inbox update. The point is that a
+    background arrival must not move the thread you are reading.
+
+  Typing persists a draft, so the script clears its composer server-side before
+  moving on. An earlier version cleared only the DOM and left `"about to
+  vanish"` in the database, which failed the *next* run on a `Draft:` preview.
+
+```sh
+node tests/Browser/messaging-phase8.mjs
+```
 
 Seed all nine with several conversations, one of them deep enough to page:
 

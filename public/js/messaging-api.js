@@ -398,5 +398,15 @@
     heartbeat: function () {
       return api(BASE + '/heartbeat', { method: 'POST' }).catch(function () {});
     },
+
+    /* Announce start/stop of typing. Fire-and-forget for the same reason as
+     * the heartbeat: nothing is stored, so a dropped call costs one indicator
+     * that the receiver's timer will expire anyway. */
+    typing: function (conversationId, typing) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/typing', {
+        method: 'POST',
+        json: { typing: !!typing },
+      }).catch(function () {});
+    },
   };
 })();

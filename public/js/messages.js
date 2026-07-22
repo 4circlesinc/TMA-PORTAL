@@ -148,10 +148,15 @@
     var presence = threadPresence(row);
 
     // A live typing / recording indicator outranks online-or-last-seen.
-    if (presence.typing) {
+    // Live typing is not part of `row.presence` — it is transient socket
+    // state that no reload should be able to bring back — so it is consulted
+    // separately and takes precedence over the recording flag.
+    var typing = typingLabel(row);
+
+    if (typing || presence.typing) {
       return (
         '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--typing">' +
-        esc(presence.typing === 'recording' ? 'Recording voice note…' : 'Typing…') +
+        esc(typing || (presence.typing === 'recording' ? 'Recording voice note…' : 'Typing…')) +
         '</span>'
       );
     }
@@ -165,6 +170,142 @@
     }
     var label = presence.label || presence.lastSeen || 'Offline';
     return '<span class="tma-dash__messages-chat-presence">' + esc(label) + '</span>';
+  }
+
+  /* ------------------------------------------------------------- typing */
+
+  /*
+   * Typing is live-only state: who is typing right now, per conversation.
+   * Nothing about it is persisted or reloaded, so it lives here rather than
+   * on a row — a re-render must not resurrect an indicator that has expired.
+   *
+   *   typingBy[conversationId] = { userId: { name: 'Ada', at: 1690000000 } }
+   */
+  var typingBy = {};
+
+  /*
+   * A typist re-announces every TYPING_REFRESH_MS while they keep going, so
+   * an entry older than TYPING_TTL_MS means their stop event never arrived —
+   * a closed tab, a dropped socket. Expiring locally is what keeps a lost
+   * stop from leaving "typing…" on screen forever.
+   */
+  var TYPING_TTL_MS = 7000;
+
+  var TYPING_REFRESH_MS = 3000;
+
+  /* Silence for this long counts as having stopped. */
+  var TYPING_IDLE_MS = 4000;
+
+  function typingNames(conversationId) {
+    var entry = typingBy[conversationId];
+    if (!entry) return [];
+
+    var cutoff = Date.now() - TYPING_TTL_MS;
+    var names = [];
+
+    Object.keys(entry).forEach(function (userId) {
+      if (entry[userId].at < cutoff) {
+        delete entry[userId];
+        return;
+      }
+      names.push(entry[userId].name);
+    });
+
+    return names;
+  }
+
+  /*
+   * "typing…" in a direct thread — you know who. A group has to name them,
+   * and past two people the names are longer than the information is worth.
+   */
+  function typingLabel(row) {
+    var names = typingNames(row && row.id);
+    if (!names.length) return '';
+
+    if (!row || row.type !== 'group') return 'typing…';
+    if (names.length === 1) return names[0] + ' is typing…';
+    if (names.length === 2) return names[0] + ' and ' + names[1] + ' are typing…';
+    return names.length + ' people are typing…';
+  }
+
+  function noteTyping(conversationId, userId, name, typing, render) {
+    if (!conversationId || !userId) return;
+    if (STORE.me && userId === STORE.me.id) return;   // never echo yourself
+
+    var entry = (typingBy[conversationId] = typingBy[conversationId] || {});
+    var had = Object.keys(entry).length > 0;
+
+    if (typing) {
+      entry[userId] = { name: String(name || 'Someone'), at: Date.now() };
+    } else {
+      delete entry[userId];
+    }
+
+    var has = Object.keys(entry).length > 0;
+
+    // Only repaint when the indicator actually appears or disappears. A
+    // typist refreshing every few seconds must not re-render the thread
+    // under them — that would fight the scroll and caret restoration.
+    if (had !== has && typeof render === 'function') render();
+
+    scheduleTypingExpiry(conversationId, render);
+  }
+
+  var typingExpiry = {};
+
+  function scheduleTypingExpiry(conversationId, render) {
+    if (typingExpiry[conversationId]) clearTimeout(typingExpiry[conversationId]);
+
+    typingExpiry[conversationId] = setTimeout(function () {
+      delete typingExpiry[conversationId];
+      var before = typingNames(conversationId).length;
+      // typingNames prunes as it reads, so calling it twice tells us whether
+      // anything actually dropped off.
+      if (before !== typingNames(conversationId).length || before === 0) {
+        if (typeof render === 'function') render();
+      }
+    }, TYPING_TTL_MS + 250);
+  }
+
+  /*
+   * Outbound side. Throttled to one call per TYPING_REFRESH_MS: the composer
+   * fires on every keystroke, and a request per character would be absurd.
+   */
+  var typingOut = { conversationId: null, sentAt: 0, idle: null };
+
+  function announceTyping(conversationId) {
+    if (!conversationId || !window.TMAMessagingAPI) return;
+
+    // Switched threads mid-type: tell the old one you stopped.
+    if (typingOut.conversationId && typingOut.conversationId !== conversationId) {
+      stopTyping();
+    }
+
+    var now = Date.now();
+
+    if (typingOut.conversationId !== conversationId || now - typingOut.sentAt > TYPING_REFRESH_MS) {
+      typingOut.conversationId = conversationId;
+      typingOut.sentAt = now;
+      window.TMAMessagingAPI.typing(conversationId, true);
+    }
+
+    if (typingOut.idle) clearTimeout(typingOut.idle);
+    typingOut.idle = setTimeout(stopTyping, TYPING_IDLE_MS);
+  }
+
+  function stopTyping() {
+    if (typingOut.idle) {
+      clearTimeout(typingOut.idle);
+      typingOut.idle = null;
+    }
+
+    if (!typingOut.conversationId) return;
+
+    var id = typingOut.conversationId;
+    typingOut.conversationId = null;
+    typingOut.sentAt = 0;
+
+    if (window.TMAMessagingAPI) window.TMAMessagingAPI.typing(id, false);
   }
 
   function threadDisplayName(row) {
@@ -187,6 +328,7 @@
     if (row.subtitle) {
       html += '<span class="tma-dash__messages-chat-subtitle">' + esc(row.subtitle) + '</span>';
     }
+
     html += renderPresence(row);
     return html;
   }
@@ -676,14 +818,17 @@
         : '') +
       '</span>' +
       '<span class="tma-dash__messages-row-preview">' +
-      // Precedence in the preview slot: an unsent draft first (you were part
-      // way through something), then a reaction newer than the last message,
+      // Precedence in the preview slot: someone typing right now beats
+      // anything already written, then an unsent draft (you were part way
+      // through something), then a reaction newer than the last message,
       // then the message itself.
-      (row.draft
-        ? '<span class="tma-dash__messages-row-draft">Draft: </span>' + esc(row.draft)
-        : row.reactionNote
-          ? '<span class="tma-dash__messages-row-reaction">' + esc(row.reactionNote) + '</span>'
-          : esc(row.preview || '')) +
+      (typingLabel(row)
+        ? '<span class="tma-dash__messages-row-typing">' + esc(typingLabel(row)) + '</span>'
+        : row.draft
+          ? '<span class="tma-dash__messages-row-draft">Draft: </span>' + esc(row.draft)
+          : row.reactionNote
+            ? '<span class="tma-dash__messages-row-reaction">' + esc(row.reactionNote) + '</span>'
+            : esc(row.preview || '')) +
       '</span>' +
       '</span>' +
       '<span class="tma-dash__messages-row-meta">' +
@@ -2738,6 +2883,16 @@
 
         if (state.selectedId && !state.editing) scheduleDraftSave(state.selectedId, text);
 
+        // Emptying the box is stopping, not typing — otherwise clearing a
+        // draft leaves the other side watching a phantom.
+        if (state.selectedId && !state.editing) {
+          if (text.trim()) {
+            announceTyping(state.selectedId);
+          } else {
+            stopTyping();
+          }
+        }
+
         // Look up a preview for the first link as it is typed. Debounced with
         // the draft save so a half-typed URL isn't fetched on every keystroke.
         scheduleLinkPreview(state, text, render);
@@ -4377,6 +4532,10 @@
         STORE.loaded = true;
         STORE.loadError = null;
 
+        // Needs STORE.me and STORE.realtime, so it cannot happen at boot.
+        // Guarded internally, so calling it on every load is free.
+        subscribeToOwnChannel(root, state, render);
+
         // Keep the open conversation if it still exists; otherwise fall back
         // to the first row on desktop, where an empty pane looks broken.
         if (state.selectedId && !findThread(state.selectedId)) {
@@ -4521,6 +4680,9 @@
       return;
     }
 
+    // The message itself is about to say everything the indicator was for.
+    stopTyping();
+
     var replyTo = state.replyTo && state.replyTo.threadId === conversationId
       ? state.replyTo.messageId
       : null;
@@ -4653,6 +4815,10 @@
     // with the conversation it was written in.
     if (state.selectedId) flushDraft(state.selectedId, getComposerDraft(state));
 
+    // Leaving a thread retracts the indicator there; announceTyping would do
+    // it on the next keystroke, but only if there is one.
+    stopTyping();
+
     state.selectedId = conversationId;
     state.reading = true;
     clearReplyTo(state);
@@ -4700,6 +4866,9 @@
    * ---------------------------------------------------------------- */
 
   var subscribed = {};
+
+  /* The own-channel subscription is one per session, not one per thread. */
+  var subscribedSelf = false;
 
   function startRealtime(root, state, render) {
     var realtime = window.TMAMessagingRealtime;
@@ -4860,6 +5029,90 @@
         }
       });
       if (changed) render();
+    });
+
+    window.TMAMessagingRealtime.listen(channel, 'messaging.typing', function (payload) {
+      noteTyping(payload.conversationId, payload.userId, payload.name, payload.typing, render);
+    });
+
+    window.TMAMessagingRealtime.listen(channel, 'messaging.presence', function (payload) {
+      if (STORE.me && payload.userId === STORE.me.id) return;
+      applyPresence(payload, render);
+    });
+  }
+
+  /*
+   * Somebody came online or went offline. The event carries no conversation,
+   * because one person's presence is the same fact in every thread they are
+   * in — so it is applied to every row that resolves to them.
+   */
+  function applyPresence(payload, render) {
+    var changed = false;
+
+    (STORE.threads || []).forEach(function (row) {
+      if (!row.counterpartId || row.counterpartId !== payload.userId) return;
+
+      row.presence = payload.online
+        ? { online: true }
+        : { online: false, lastSeen: payload.lastSeenLabel || 'Last seen recently' };
+
+      changed = true;
+    });
+
+    // A typing indicator cannot outlive its typist's connection.
+    if (!payload.online) {
+      Object.keys(typingBy).forEach(function (conversationId) {
+        if (typingBy[conversationId][payload.userId]) {
+          delete typingBy[conversationId][payload.userId];
+          changed = true;
+        }
+      });
+    }
+
+    if (changed) render();
+  }
+
+  /*
+   * The signed-in user's own fan-out channel.
+   *
+   * Conversation channels only cover the thread that happens to be open, so
+   * this is what moves the unread badge when a message arrives somewhere
+   * else, and what keeps two open tabs agreeing about pin, archive and read.
+   */
+  function subscribeToOwnChannel(root, state, render) {
+    if (!STORE.me || !window.TMAMessagingRealtime) return;
+    if (!STORE.realtime || !STORE.realtime.enabled) return;
+    if (subscribedSelf) return;
+
+    subscribedSelf = true;
+    var channel = 'private-messaging.user.' + STORE.me.id;
+
+    window.TMAMessagingRealtime.listen(channel, 'messaging.inbox', function (payload) {
+      // payload.totalUnread is deliberately not stored. The badge is summed
+      // from the visible rows, which excludes archived threads; the server
+      // total counts them. Keeping both would be two answers to one question.
+      var row = findThread(payload.conversationId);
+
+      if (row && payload.reason === 'state') {
+        if (payload.detail && typeof payload.detail.pinned === 'boolean') row.pinned = payload.detail.pinned;
+        if (payload.detail && typeof payload.detail.archived === 'boolean') row.archived = payload.detail.archived;
+        if (payload.detail && typeof payload.detail.muted === 'boolean') row.muted = payload.detail.muted;
+      }
+
+      if (row && payload.reason === 'read') {
+        row.unread = 0;
+      }
+
+      // A message that landed in a thread we do not have open still has to
+      // move that row's own badge, and the row's preview is stale either way.
+      if (payload.reason === 'message' && row && state.selectedId !== payload.conversationId) {
+        refreshConversationRow(root, state, render, payload.conversationId, {
+          conversationId: payload.conversationId,
+        });
+      } else {
+        syncTabBarBadges();
+        render();
+      }
     });
   }
 
@@ -7430,9 +7683,29 @@
 
     // Returning to the tab reconciles anything the socket missed while away.
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden || !root.isConnected) return;
+      if (document.hidden) {
+        // Nobody types in a hidden tab. Retract it now rather than leaving
+        // the other side waiting for the TTL to expire.
+        stopTyping();
+        return;
+      }
+      if (!root.isConnected) return;
       window.TMAMessagingAPI.heartbeat();
       loadConversations(root, state, render, { silent: true });
+    });
+
+    // Closing the tab has to retract the indicator too, and a normal request
+    // will not survive teardown — sendBeacon is the only thing that does.
+    window.addEventListener('pagehide', function () {
+      if (!typingOut.conversationId || !navigator.sendBeacon) return;
+
+      var url = '/portal/messaging/conversations/' +
+        encodeURIComponent(typingOut.conversationId) + '/typing';
+      var form = new FormData();
+      form.append('typing', '0');
+      var meta = document.querySelector('meta[name="csrf-token"]');
+      form.append('_token', meta ? meta.getAttribute('content') : '');
+      navigator.sendBeacon(url, form);
     });
 
     render();

@@ -26034,6 +26034,12 @@ button.tma-dash__header-popup-item:focus-visible {
   color: var(--color-text-secondary);
 }
 
+/* Live typing in a chat-list row, matching the header's italic treatment. */
+.tma-dash__messages-row-typing {
+  color: var(--chart-green);
+  font-style: italic;
+}
+
 /* ---------------------------------------------------------------------------
  * Messages — voice notes: the recorder in the composer, and the player on a
  * received note.

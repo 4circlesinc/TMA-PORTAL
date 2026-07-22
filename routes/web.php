@@ -300,6 +300,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/conversations/{uuid}/read', [MessagingController::class, 'markRead'])->name('conversations.read');
         Route::post('/conversations/{uuid}/unread', [MessagingController::class, 'markUnread'])->name('conversations.unread');
         Route::post('/conversations/{uuid}/delivered', [MessagingController::class, 'markDelivered'])->name('conversations.delivered');
+        Route::post('/conversations/{uuid}/typing', [MessagingController::class, 'typing'])->name('conversations.typing');
 
         // Conversation-level actions behind the chat menu. Clearing and
         // leaving are one-sided: neither touches the other participant's copy.

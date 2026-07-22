@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
+use App\Events\InboxUpdated;
 use App\Events\MessageDeleted;
 use App\Events\MessageReacted;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
+use App\Events\UserTyping;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\LinkPreview;
@@ -348,6 +350,7 @@ class MessagingController extends Controller
         $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageSent($message));
+        $this->announceInbox($conversation, $user, 'message');
 
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $conversation),
@@ -1002,6 +1005,9 @@ class MessagingController extends Controller
             Broadcaster::toOthers(new ConversationRead($conversation, $user, $participant->last_read_message_id));
         }
 
+        // Reading here has to clear the badge in this user's other tabs too.
+        $this->announceSelf($user, 'read', $conversation);
+
         return response()->json(['unread' => 0]);
     }
 
@@ -1100,6 +1106,8 @@ class MessagingController extends Controller
 
         $participant->forceFill(['marked_unread_at' => now()])->save();
 
+        $this->announceSelf($request->user(), 'unread', $conversation);
+
         return response()->json(['markedUnread' => true]);
     }
 
@@ -1153,6 +1161,12 @@ class MessagingController extends Controller
         }
 
         $participant->save();
+
+        $this->announceSelf($user, 'state', $conversation, [
+            'pinned' => $participant->pinned_at !== null,
+            'archived' => $participant->archived_at !== null,
+            'muted' => $participant->muted_until !== null && $participant->muted_until->isFuture(),
+        ]);
 
         $conversation->load(['activeParticipants.user', 'messages' => fn ($q) => $q->latest('id')->limit(1)]);
 
@@ -1388,6 +1402,42 @@ class MessagingController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Announce that the signed-in user started or stopped typing.
+     *
+     * Nothing is stored. A typing indicator is only true for a few seconds,
+     * and a row that outlives that would be worse than no row at all.
+     *
+     * Someone who turns typing indicators off never emits the event - the
+     * check is here, at the source, rather than on the receiving side where a
+     * client could ignore it.
+     */
+    public function typing(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+
+        $data = $request->validate(['typing' => ['required', 'boolean']]);
+
+        if (! MessagingSettings::get($user, 'typingIndicator')) {
+            return response()->json(['ok' => true, 'broadcast' => false]);
+        }
+
+        // A blocked pair should not see each other compose, for the same
+        // reason they cannot see each other send.
+        if (! $conversation->isGroup()) {
+            $other = $conversation->counterpartFor($user);
+
+            if ($other && UserBlock::blockedBetween($user->id, $other->id)) {
+                return response()->json(['ok' => true, 'broadcast' => false]);
+            }
+        }
+
+        Broadcaster::toOthers(new UserTyping($conversation, $user, (bool) $data['typing']));
+
+        return response()->json(['ok' => true, 'broadcast' => true]);
+    }
+
     // ------------------------------------------------------------- helpers
 
     /**
@@ -1401,6 +1451,53 @@ class MessagingController extends Controller
             ->with('activeParticipants.user')
             ->where('uuid', $uuid)
             ->firstOrFail();
+    }
+
+    /**
+     * Tell everyone else in a conversation that their inbox moved.
+     *
+     * The message itself already goes out on the conversation channel, but a
+     * client only subscribes to the thread it currently has open - so someone
+     * looking at a different conversation would not see their unread badge
+     * change until the next poll. This goes to each recipient's own fan-out
+     * channel, which they hold for the whole session.
+     *
+     * Each recipient gets their own total, because unread is per person. That
+     * is one count query each; the participant list is small and this only
+     * runs on a send.
+     */
+    private function announceInbox(Conversation $conversation, User $actor, string $reason): void
+    {
+        $recipients = $conversation->activeParticipants
+            ->filter(fn (ConversationParticipant $p) => $p->user_id !== $actor->id)
+            ->map(fn (ConversationParticipant $p) => $p->user)
+            ->filter();
+
+        foreach ($recipients as $recipient) {
+            Broadcaster::toOthers(new InboxUpdated(
+                user: $recipient,
+                reason: $reason,
+                totalUnread: (int) $this->unreadCounts($recipient)->sum(),
+                conversationUuid: $conversation->uuid,
+            ));
+        }
+    }
+
+    /**
+     * Tell this user's *other* sessions that their own personal state changed.
+     *
+     * Pin, archive, mute and read are per participant, so nobody else needs to
+     * know - but the same person in a second tab does, or the two disagree.
+     */
+    private function announceSelf(User $user, string $reason, ?Conversation $conversation = null, array $detail = []): void
+    {
+        Broadcaster::toOthers(new InboxUpdated(
+            user: $user,
+            reason: $reason,
+            totalUnread: (int) $this->unreadCounts($user)->sum(),
+            conversationUuid: $conversation?->uuid,
+            detail: $detail,
+        ));
     }
 
     /** Same guard, reached through the message's conversation. */
