@@ -25120,6 +25120,21 @@ button.tma-dash__header-popup-item:focus-visible {
   background: var(--color-hover);
 }
 
+/* The empty shelf is a label, not a control — it confirms the pull worked and
+ * has nothing to open. */
+.tma-dash__messages-archived-reveal-btn.is-empty {
+  cursor: default;
+}
+
+.tma-dash__messages-archived-reveal-btn.is-empty:hover {
+  background: transparent;
+}
+
+.tma-dash__messages-archived-reveal-btn.is-empty .tma-dash__messages-archived-reveal-label {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
 .tma-dash__messages-archived-reveal-btn img {
   width: 18px;
   height: 18px;
@@ -25203,14 +25218,20 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-8) var(--space-12);
 }
 
+/* Three tabs share a ~320px column, so they shrink together and truncate
+ * rather than pushing the row wider than the column. */
 .tma-dash__messages-media-tab {
   flex: 1 1 0;
-  padding: var(--space-6);
+  min-width: 0;
+  padding: var(--space-6) var(--space-4);
   border: none;
   border-radius: var(--radius-8);
   background: transparent;
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
@@ -25294,6 +25315,9 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: 0 var(--space-8) var(--space-12);
 }
 
+/* Documents are buttons (they open a preview); links are anchors (they leave
+ * the portal). Same row, so the anchor has its underline and inherited colour
+ * reset to match. */
 .tma-dash__messages-media-doc {
   display: flex;
   flex-direction: column;
@@ -25303,6 +25327,8 @@ button.tma-dash__header-popup-item:focus-visible {
   border-radius: var(--radius-8);
   background: transparent;
   text-align: left;
+  text-decoration: none;
+  color: inherit;
   cursor: pointer;
 }
 

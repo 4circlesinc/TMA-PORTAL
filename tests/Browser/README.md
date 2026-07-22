@@ -254,7 +254,7 @@ picked up the live mailbox's token and synced a real account into itself.
 
 The Messages page was a pure mock — a hard-coded `THREADS` array with a
 scripted ByeWind conversation and no network calls at all. It is now backed by
-`/portal/messaging`, so these eight scripts exist to keep it that way.
+`/portal/messaging`, so these nine scripts exist to keep it that way.
 
 - **`messaging.mjs`** — the page against a real server: the list comes from the
   API (and contains none of the old mock names), messages load and send and
@@ -467,7 +467,42 @@ node tests/Browser/messaging-phase4.mjs
   handles both branches and asserts a missing photo is **not** clickable rather
   than opening a broken image.
 
-Seed all eight with several conversations, one of them deep enough to page:
+- **`messaging-phase7.mjs`** — group conversations and the firm-wide chat.
+  Creates a group through the composer, checks the system messages that record
+  its own history (created / promoted / renamed / removed), and pins the
+  *ownership* rules that make the organization chat different: administrator-only
+  to change, **impossible to leave** (the server returns 422), and membership
+  that follows the staff list rather than being curated.
+
+  The org chat must exist before running it:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan messaging:org-chat
+
+node tests/Browser/messaging-phase7.mjs
+```
+
+  Membership is **not** seeded by that command — `OrganizationChat::syncMembership`
+  runs when a user loads their conversations, so each account joins on its next
+  visit. The script proves that by signing in a second account and watching the
+  member count grow without re-seeding.
+
+  Groups created by a run are named `Falcon …`; purge them between runs or the
+  conversation list fills up:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  App\Models\Conversation::where('type', 'group')->where('is_default', false)
+    ->where('name', 'like', 'Falcon%')->forceDelete();
+"
+```
+
+  Two assertions had to be *loosened* rather than fixed, and the reasons matter:
+  the org chat is pinned but not necessarily at index 0 (other conversations can
+  be pinned, and pinned rows still sort by recency), and its member count starts
+  at 1 because membership grows as accounts sign in.
+
+Seed all nine with several conversations, one of them deep enough to page:
 
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="

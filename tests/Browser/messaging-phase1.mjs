@@ -76,38 +76,55 @@ try {
   b = await session(USER_B, false);
   check(true, `A = ${USER_A}, B = ${USER_B}`);
 
-  step(2, 'Inbox toolbar: search on top, actions pinned at the bottom');
+  step(2, 'Inbox layout: search on top, compose and settings below the list');
+  // The requirement is search at the top and the two actions reachable at the
+  // bottom — not where exactly they live. Compose is a floating button and
+  // settings sits in the bottom nav bar; both are outside the scrolling list.
   const layout = await a.evaluate(() => {
     const head = document.querySelector('.tma-dash__messages-list-head');
-    const foot = document.querySelector('.tma-dash__messages-list-foot');
     const body = document.querySelector('[data-messages-list-body]');
-    if (!head || !foot || !body) return null;
+    const compose = document.querySelector('[data-messages-compose]');
+    const settings = document.querySelector('[data-messages-settings]');
+    if (!head || !body) return null;
+
+    const bodyBox = body.getBoundingClientRect();
+    const midY = bodyBox.top + bodyBox.height / 2;
+
     return {
       searchInHead: !!head.querySelector('[data-messages-search]'),
       composeInHead: !!head.querySelector('[data-messages-compose]'),
-      composeInFoot: !!foot.querySelector('[data-messages-compose]'),
-      settingsInFoot: !!foot.querySelector('[data-messages-settings]'),
-      footBelowBody: foot.getBoundingClientRect().top >= body.getBoundingClientRect().top,
+      composeBelowMiddle: compose ? compose.getBoundingClientRect().top > midY : false,
+      settingsBelowMiddle: settings ? settings.getBoundingClientRect().top > midY : false,
+      // Neither may scroll away with the conversations.
+      composeOutsideList: compose ? !body.contains(compose) : false,
+      settingsOutsideList: settings ? !body.contains(settings) : false,
       composeCount: document.querySelectorAll('[data-messages-compose]').length,
       settingsCount: document.querySelectorAll('[data-messages-settings]').length,
     };
   });
   check(layout?.searchInHead, 'search is at the top');
   check(!layout?.composeInHead, 'compose is no longer at the top');
-  check(layout?.composeInFoot && layout?.settingsInFoot, 'compose and settings are in the footer');
-  check(layout?.footBelowBody, 'the footer sits below the conversation list');
+  check(layout?.composeBelowMiddle && layout?.settingsBelowMiddle, 'both sit in the lower half');
+  check(
+    layout?.composeOutsideList && layout?.settingsOutsideList,
+    'neither scrolls away with the conversation list',
+  );
   check(layout?.composeCount === 1, `exactly one compose control (${layout?.composeCount})`);
   check(layout?.settingsCount === 1, `exactly one settings control (${layout?.settingsCount})`);
 
-  step(3, 'The footer stays reachable when the list is scrolled');
+  step(3, 'Both stay reachable when the list is scrolled');
   await a.evaluate(() => {
     const el = document.querySelector('[data-messages-list-body]');
     el.scrollTop = el.scrollHeight;
   });
   await a.waitForTimeout(300);
   check(
-    await a.locator('.tma-dash__messages-list-foot [data-messages-compose]').isVisible(),
+    await a.locator('[data-messages-compose]').isVisible(),
     'compose still visible after scrolling the list to the bottom',
+  );
+  check(
+    await a.locator('[data-messages-settings]').isVisible(),
+    'settings still visible too',
   );
 
   step(4, 'Open the shared conversation on both sides');

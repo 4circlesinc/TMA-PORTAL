@@ -328,4 +328,81 @@ class MessagingMediaTest extends TestCase
         $this->assertSame(1, UserWorkStatus::where('user_id', $me->id)->count());
         $this->assertSame('Second', UserWorkStatus::where('user_id', $me->id)->value('text'));
     }
+
+    // --------------------------------------------------------------- links
+
+    /** Links live in message bodies, so they get their own shelf. */
+    public function test_links_are_pooled_from_message_bodies(): void
+    {
+        $me = $this->user();
+        $bob = $this->user('bob@example.com');
+        $c = $this->conversation($me, $bob);
+
+        Message::create([
+            'conversation_id' => $c->id,
+            'user_id' => $bob->id,
+            'type' => Message::TYPE_TEXT,
+            'body' => 'Filing portal is at https://cip.gov.lc/forms today',
+        ]);
+
+        $items = $this->actingAs($me)->getJson('/portal/messaging/media?shelf=links')
+            ->assertOk()->json('items');
+
+        $this->assertCount(1, $items);
+        $this->assertSame('https://cip.gov.lc/forms', $items[0]['url']);
+        $this->assertSame('cip.gov.lc', $items[0]['domain']);
+        $this->assertSame($bob->name, $items[0]['senderName']);
+        $this->assertSame($bob->name, $items[0]['conversationName']);
+    }
+
+    /** The same membership and clearing rules as the other shelves. */
+    public function test_links_respect_membership_and_clearing(): void
+    {
+        $me = $this->user();
+        $bob = $this->user('bob@example.com');
+        $carol = $this->user('carol@example.com');
+
+        // Someone else's conversation entirely.
+        $theirs = $this->conversation($bob, $carol);
+        Message::create([
+            'conversation_id' => $theirs->id, 'user_id' => $bob->id,
+            'type' => Message::TYPE_TEXT, 'body' => 'private https://secret.example.com',
+        ]);
+
+        // Mine, but cleared past the first link.
+        $mine = $this->conversation($me, $bob);
+        $old = Message::create([
+            'conversation_id' => $mine->id, 'user_id' => $bob->id,
+            'type' => Message::TYPE_TEXT, 'body' => 'old https://before.example.com',
+        ]);
+        Message::create([
+            'conversation_id' => $mine->id, 'user_id' => $bob->id,
+            'type' => Message::TYPE_TEXT, 'body' => 'new https://after.example.com',
+        ]);
+
+        ConversationParticipant::where('conversation_id', $mine->id)
+            ->where('user_id', $me->id)
+            ->update(['cleared_before_message_id' => $old->id]);
+
+        $urls = collect($this->actingAs($me)->getJson('/portal/messaging/media?shelf=links')
+            ->assertOk()->json('items'))->pluck('url')->all();
+
+        $this->assertSame(['https://after.example.com'], $urls);
+    }
+
+    /** A message with no link never reaches the shelf. */
+    public function test_plain_messages_are_not_links(): void
+    {
+        $me = $this->user();
+        $bob = $this->user('bob@example.com');
+        $c = $this->conversation($me, $bob);
+
+        Message::create([
+            'conversation_id' => $c->id, 'user_id' => $bob->id,
+            'type' => Message::TYPE_TEXT, 'body' => 'No link in here at all',
+        ]);
+
+        $this->actingAs($me)->getJson('/portal/messaging/media?shelf=links')
+            ->assertOk()->assertJsonCount(0, 'items');
+    }
 }

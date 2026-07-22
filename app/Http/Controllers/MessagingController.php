@@ -508,7 +508,7 @@ class MessagingController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'shelf' => ['sometimes', 'in:media,documents'],
+            'shelf' => ['sometimes', 'in:media,documents,links'],
         ]);
 
         $shelf = $data['shelf'] ?? 'media';
@@ -523,6 +523,12 @@ class MessagingController extends Controller
 
         if ($cleared->isEmpty()) {
             return response()->json(['items' => []]);
+        }
+
+        // Links are not attachments — they live in message bodies — so they
+        // come from their own query rather than this one.
+        if ($shelf === 'links') {
+            return response()->json(['items' => $this->pooledLinks($user, $cleared)]);
         }
 
         $attachments = MessageAttachment::query()
@@ -560,6 +566,69 @@ class MessagingController extends Controller
             ->values();
 
         return response()->json(['items' => $attachments]);
+    }
+
+    /**
+     * Every link shared with this user, across all their conversations.
+     *
+     * The pooled counterpart to {@see galleryLinks}. Links live in message
+     * bodies rather than in the attachments table, so they need their own
+     * query — but the same rules apply: only conversations the user is still
+     * in, and each thread's own cleared point respected individually.
+     *
+     * Previews are read from cache only. This list can hold a hundred links
+     * and must never turn into a hundred outbound page fetches.
+     *
+     * @param  Collection<int, int>  $cleared  conversation id => cleared-before message id
+     * @return array<int, array<string, mixed>>
+     */
+    private function pooledLinks(User $user, Collection $cleared): array
+    {
+        $messages = Message::query()
+            ->whereIn('conversation_id', $cleared->keys())
+            ->whereNotNull('body')
+            ->whereRaw('lower(body) like ?', ['%http%'])
+            ->with(['sender', 'conversation.activeParticipants.user'])
+            ->latest('id')
+            ->limit(400)
+            ->get()
+            // Per-conversation cutoffs cannot be one SQL predicate.
+            ->filter(fn (Message $m) => $m->id > ($cleared[$m->conversation_id] ?? 0));
+
+        // Every URL first, so the preview cache is read in one query rather
+        // than once per link.
+        $extracted = $messages->flatMap(fn (Message $m) => collect(LinkPreviewService::extract($m->body))
+            ->map(fn (string $url) => ['url' => $url, 'message' => $m]));
+
+        $previews = LinkPreview::query()
+            ->whereIn('url_hash', $extracted->pluck('url')->unique()->map(fn ($u) => hash('sha256', $u)))
+            ->where('status', 'ok')
+            ->get()
+            ->keyBy('url_hash');
+
+        return $extracted
+            ->map(function (array $row) use ($user, $previews) {
+                $m = $row['message'];
+                $preview = $previews->get(hash('sha256', $row['url']));
+
+                return [
+                    'url' => $row['url'],
+                    'domain' => parse_url($row['url'], PHP_URL_HOST),
+                    'title' => $preview?->title,
+                    'imageUrl' => $preview?->image_url,
+                    'messageId' => $m->uuid,
+                    'seq' => $m->id,
+                    'senderName' => $m->user_id === $user->id ? 'You' : ($m->sender?->name ?? 'Unknown'),
+                    'date' => $m->created_at->format('j M Y'),
+                    'conversationId' => $m->conversation?->uuid,
+                    'conversationName' => $m->conversation
+                        ? MessagingPresenter::title($m->conversation, $user)
+                        : null,
+                ];
+            })
+            ->take(120)
+            ->values()
+            ->all();
     }
 
     // ------------------------------------------------------------- updates

@@ -360,17 +360,26 @@
   function renderArchivedReveal(state) {
     var count = getThreads().filter(function (row) { return row.archived; }).length;
 
-    // Nothing archived, nothing to reveal — pulling on an empty shelf would
-    // just be a gesture that appears to do nothing.
-    if (!count) return '';
+    // Rendered even with nothing archived. Hiding it in that case meant the
+    // pull produced no response at all on a mailbox that had never archived
+    // anything — which reads as a broken gesture rather than an empty shelf,
+    // and leaves no way to tell the two apart.
+    var inner = count
+      ? '<button type="button" class="tma-dash__messages-archived-reveal-btn" data-messages-archived>' +
+        '<img src="' + ICONS.Archive + '" alt="">' +
+        '<span class="tma-dash__messages-archived-reveal-label">Archived</span>' +
+        '<span class="tma-dash__messages-archived-reveal-count">' + count + '</span>' +
+        '</button>'
+      // Nothing to open, so it is not a control — just the shelf saying it is
+      // empty, which still confirms the pull worked.
+      : '<span class="tma-dash__messages-archived-reveal-btn is-empty">' +
+        '<img src="' + ICONS.Archive + '" alt="">' +
+        '<span class="tma-dash__messages-archived-reveal-label">No archived chats</span>' +
+        '</span>';
 
     return (
       '<div class="tma-dash__messages-archived-reveal" data-messages-archived-reveal>' +
-      '<button type="button" class="tma-dash__messages-archived-reveal-btn" data-messages-archived>' +
-      '<img src="' + ICONS.Archive + '" alt="">' +
-      '<span class="tma-dash__messages-archived-reveal-label">Archived</span>' +
-      '<span class="tma-dash__messages-archived-reveal-count">' + count + '</span>' +
-      '</button>' +
+      inner +
       '</div>'
     );
   }
@@ -1393,9 +1402,12 @@
 
     var tabs =
       '<div class="tma-dash__messages-media-tabs" role="tablist">' +
+      // Short labels: three tabs share a ~320px column, and "Photos & video"
+      // only truncated to "Photos & v…" anyway.
       [
-        { key: 'media', label: 'Photos & video' },
+        { key: 'media', label: 'Photos' },
         { key: 'documents', label: 'Documents' },
+        { key: 'links', label: 'Links' },
       ].map(function (t) {
         return (
           '<button type="button" class="tma-dash__messages-media-tab' +
@@ -1417,7 +1429,35 @@
         '<div class="tma-dash__messages-media-note">' +
         (shelf === 'documents'
           ? 'No documents have been shared yet.'
-          : 'No photos or videos have been shared yet.') +
+          : shelf === 'links'
+            ? 'No links have been shared yet.'
+            : 'No photos or videos have been shared yet.') +
+        '</div>';
+    } else if (shelf === 'links') {
+      // Links open externally rather than in the lightbox, and are titled by
+      // whatever the preview cache knows — falling back to the domain, then to
+      // the raw URL, so a link with no cached preview is still readable.
+      body =
+        '<div class="tma-dash__messages-media-docs">' +
+        state.mediaItems.map(function (item) {
+          var title = item.title || item.domain || item.url;
+
+          // A link with no cached preview is titled by its domain, so repeating
+          // the domain underneath would print it twice in a row.
+          var meta = [
+            title === item.domain ? null : item.domain,
+            item.conversationName,
+            item.date,
+          ].filter(Boolean).join(' · ');
+
+          return (
+            '<a class="tma-dash__messages-media-doc" href="' + esc(item.url) + '"' +
+            ' target="_blank" rel="noopener noreferrer" title="' + esc(item.url) + '">' +
+            '<span class="tma-dash__messages-media-doc-name">' + esc(title) + '</span>' +
+            '<span class="tma-dash__messages-media-doc-meta">' + esc(meta) + '</span>' +
+            '</a>'
+          );
+        }).join('') +
         '</div>';
     } else if (shelf === 'documents') {
       // Documents read better as rows than tiles — the filename is the point.
