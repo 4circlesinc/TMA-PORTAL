@@ -56,7 +56,7 @@ if (row) await row.screenshot({ path: SHOT });
 const fail = [];
 if (cards.length !== 4) fail.push(`expected 4 cards, got ${cards.length}`);
 const labels = cards.map((c) => c.label);
-for (const want of ['Avg. Response to Clients', 'Files Shared', 'Clients Awaiting Reply', 'Signature Requests Left']) {
+for (const want of ['Avg. Response to Clients', 'Files Shared', 'Clients Awaiting Reply', 'Awaiting Signature']) {
   if (!labels.includes(want)) fail.push(`missing card: ${want}`);
 }
 for (const c of cards) {

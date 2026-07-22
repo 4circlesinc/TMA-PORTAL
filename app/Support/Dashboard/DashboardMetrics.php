@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\Share;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Signatures\Status;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -87,7 +88,7 @@ class DashboardMetrics
                 'clientResponse' => $this->clientResponseCard($timelines),
                 'filesShared' => $this->filesSharedCard(),
                 'awaitingReply' => $this->awaitingReplyCard($timelines),
-                'signaturesLeft' => $this->signaturesLeftCard(),
+                'awaitingSignature' => $this->awaitingSignatureCard(),
             ],
         ];
     }
@@ -190,41 +191,54 @@ class DashboardMetrics
         ];
     }
 
-    /* ── card 4: signature requests left ───────────────────────────── */
+    /* ── card 4: documents awaiting signature ──────────────────────── */
 
-    /** @return array<string, mixed> */
-    private function signaturesLeftCard(): array
+    /**
+     * Documents that are out with recipients and not signed yet.
+     *
+     * Counted per document, not per recipient: a request three people still
+     * have to sign is one thing waiting on the admin's desk, not three.
+     *
+     * @return array<string, mixed>
+     */
+    private function awaitingSignatureCard(): array
     {
-        $limit = (int) config('portal.signatures.limit', 5);
-        $planLabel = (string) config('portal.signatures.plan_label', 'Trial');
-
-        // Sending is what consumes the allowance — a draft has cost nothing,
-        // and deleting a sent request does not hand the credit back.
-        $used = SignatureRequest::withTrashed()
+        $outstanding = SignatureRequest::query()
             ->whereIn('created_by', $this->scopeStaffIds)
-            ->whereNotNull('sent_at')
-            ->count();
+            ->whereIn('status', Status::PENDING)
+            // A request past its expiry can't be signed any more, so it is no
+            // longer outstanding — it needs re-sending, which is a different
+            // problem from waiting on a signer.
+            ->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', $this->now);
+            })
+            ->orderBy('sent_at')
+            ->get(['sent_at']);
 
-        if ($limit <= 0) {
+        $count = $outstanding->count();
+
+        if ($count === 0) {
             return [
-                'value' => '∞',
-                'used' => $used,
-                'delta' => $planLabel,
+                'value' => '0',
+                'count' => 0,
+                'delta' => 'All signed',
                 'deltaUp' => true,
-                'hint' => 'Unlimited signature requests on this plan.',
+                'hint' => 'No documents are waiting to be signed.',
             ];
         }
 
-        $left = max(0, $limit - $used);
+        // Oldest first, so the head of the list is the one that has been out
+        // longest — the one worth chasing.
+        $oldestSentAt = $outstanding->first()->sent_at;
+        $waiting = $oldestSentAt ? (int) $oldestSentAt->diffInSeconds($this->now) : null;
 
         return [
-            'value' => Format::count($left),
-            'left' => $left,
-            'limit' => $limit,
-            'used' => $used,
-            'delta' => $planLabel,
-            'deltaUp' => $left > 0,
-            'hint' => $used.' of '.$limit.' signature requests sent.',
+            'value' => Format::count($count),
+            'count' => $count,
+            'longestSeconds' => $waiting,
+            'delta' => $waiting === null ? 'Awaiting' : Format::duration($waiting).' waiting',
+            'deltaUp' => false,
+            'hint' => Format::plural($count, 'document is', 'documents are').' out for signature and unsigned.',
         ];
     }
 

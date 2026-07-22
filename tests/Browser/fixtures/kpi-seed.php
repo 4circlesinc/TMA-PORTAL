@@ -121,12 +121,17 @@ foreach (['33 days', '38 days', '42 days', '50 days', '55 days'] as $ago) {
 }
 $share('3 days', revoked: true);
 
-// Two signature requests sent out of the allowance of five.
-foreach (['sent', 'completed', 'draft'] as $status) {
-    SignatureRequest::create([
-        'uuid' => (string) Str::uuid(), 'created_by' => $staff->id, 'title' => 'Engagement letter',
-        'status' => $status, 'sent_at' => $status === 'draft' ? null : now()->subDays(4),
-    ]);
-}
+// Three documents still out for signature — plus a draft, a signed one and a
+// lapsed one, none of which are outstanding.
+$request = fn (string $status, $sentAt = null, $expiresAt = null) => SignatureRequest::create([
+    'uuid' => (string) Str::uuid(), 'created_by' => $staff->id, 'title' => 'Engagement letter',
+    'status' => $status, 'sent_at' => $sentAt, 'expires_at' => $expiresAt,
+]);
+$request('sent', now()->subDays(7));        // the oldest — sets the delta
+$request('viewed', now()->subDays(3));
+$request('in_progress', now()->subHours(6));
+$request('draft');
+$request('completed', now()->subDays(9));
+$request('sent', now()->subDays(40), now()->subDays(2));   // lapsed
 
 echo "seeded\n";

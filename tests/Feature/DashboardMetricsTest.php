@@ -323,35 +323,71 @@ class DashboardMetricsTest extends TestCase
         return $share;
     }
 
-    /* ── signature allowance ───────────────────────────────────────── */
+    /* ── documents awaiting signature ──────────────────────────────── */
 
-    public function test_signatures_left_counts_sent_requests_against_the_limit(): void
+    private function request(User $by, string $status, array $overrides = []): SignatureRequest
     {
-        config(['portal.signatures.limit' => 5]);
-        $staff = $this->staff();
-
-        foreach ([true, true, false] as $sent) {
-            SignatureRequest::create([
-                'uuid' => (string) Str::uuid(),
-                'created_by' => $staff->id,
-                'title' => 'NDA',
-                'status' => $sent ? 'sent' : 'draft',
-                'sent_at' => $sent ? now()->subDay() : null,
-            ]);
-        }
-
-        $card = $this->metrics($staff)['cards']['signaturesLeft'];
-
-        // Drafts cost nothing; two sent leaves three.
-        $this->assertSame('3', $card['value']);
-        $this->assertSame(2, $card['used']);
+        return SignatureRequest::create(array_merge([
+            'uuid' => (string) Str::uuid(),
+            'created_by' => $by->id,
+            'title' => 'Engagement letter',
+            'status' => $status,
+            'sent_at' => $status === 'draft' ? null : now()->subDays(2),
+        ], $overrides));
     }
 
-    public function test_a_zero_limit_means_unlimited(): void
+    public function test_it_counts_documents_that_are_out_and_still_unsigned(): void
     {
-        config(['portal.signatures.limit' => 0]);
+        $staff = $this->staff();
 
-        $this->assertSame('∞', $this->metrics($this->staff())['cards']['signaturesLeft']['value']);
+        $this->request($staff, 'sent');
+        $this->request($staff, 'viewed');
+        $this->request($staff, 'in_progress');
+        $this->request($staff, 'draft');        // never went out
+        $this->request($staff, 'completed');    // already signed
+        $this->request($staff, 'declined');
+        $this->request($staff, 'cancelled');
+
+        $card = $this->metrics($staff)['cards']['awaitingSignature'];
+
+        $this->assertSame('3', $card['value']);
+        $this->assertSame('3 documents are out for signature and unsigned.', $card['hint']);
+    }
+
+    public function test_the_delta_reports_how_long_the_oldest_one_has_been_out(): void
+    {
+        $staff = $this->staff();
+
+        $this->request($staff, 'sent', ['sent_at' => now()->subDays(6)]);
+        $this->request($staff, 'sent', ['sent_at' => now()->subHours(2)]);
+
+        $card = $this->metrics($staff)['cards']['awaitingSignature'];
+
+        $this->assertSame(2, $card['count']);
+        $this->assertSame('6d waiting', $card['delta']);
+    }
+
+    public function test_an_expired_request_is_no_longer_outstanding(): void
+    {
+        $staff = $this->staff();
+
+        $this->request($staff, 'sent', ['expires_at' => now()->subDay()]);
+        $this->request($staff, 'sent', ['expires_at' => now()->addWeek()]);
+
+        // The lapsed one needs re-sending, not chasing.
+        $this->assertSame(1, $this->metrics($staff)['cards']['awaitingSignature']['count']);
+    }
+
+    public function test_nothing_outstanding_reads_as_all_signed(): void
+    {
+        $staff = $this->staff();
+        $this->request($staff, 'completed');
+
+        $card = $this->metrics($staff)['cards']['awaitingSignature'];
+
+        $this->assertSame('0', $card['value']);
+        $this->assertSame('All signed', $card['delta']);
+        $this->assertTrue($card['deltaUp']);
     }
 
     /* ── scope ─────────────────────────────────────────────────────── */

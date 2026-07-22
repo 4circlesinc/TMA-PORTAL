@@ -3201,16 +3201,15 @@
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__subnav,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-item--fav { display: none; }
 
-  /* Folder Shortcuts stays visible as icons in the resting rail even when
-     Main Menu is the last-active tab: showList() (dashboard.js) leaves the
-     inactive list carrying the native `hidden` attribute, and
-     .tma-dash__nav-section[hidden] is `display:none !important` - beaten
-     here the same way, so both lists render stacked (icons only) instead of
-     only whichever tab was open last. The remove button and the padding it
-     reserves only make sense with a visible label, so both are dropped too. */
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) [data-list="shortcuts"][hidden],
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard [data-list="shortcuts"][hidden] {
-    display: flex !important;
+  /* Folder Shortcuts is not shown in the resting rail.
+     It used to be forced visible here — both lists stacked as icons whichever
+     tab was last open — but a rail of unlabelled folder glyphs sitting under
+     the main nav reads as more menu items, at a different size and indent,
+     spilling into the profile block at the bottom. Shortcuts belong to the
+     expanded sidebar, where they have their tab and their names. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) [data-list="shortcuts"],
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard [data-list="shortcuts"] {
+    display: none !important;
   }
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-remove,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-remove,

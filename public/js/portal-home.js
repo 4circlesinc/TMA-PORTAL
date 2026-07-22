@@ -82,7 +82,7 @@
       kpiCard('blue', 'Avg. Response to Clients', 'ClockCountdown', card('clientResponse')) +
       kpiCard('purple', 'Files Shared', 'Share', card('filesShared')) +
       kpiCard('blue', 'Clients Awaiting Reply', 'ChatDots', card('awaitingReply')) +
-      kpiCard('purple', 'Signature Requests Left', 'Signature', card('signaturesLeft')) +
+      kpiCard('purple', 'Awaiting Signature', 'Signature', card('awaitingSignature')) +
       '</div>';
   }
 
