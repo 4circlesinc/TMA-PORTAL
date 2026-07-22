@@ -26,6 +26,7 @@ use App\Http\Controllers\MailController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
+use App\Http\Controllers\MessagingGroupController;
 use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
@@ -266,6 +267,17 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
 
         // Literal paths before the {uuid} wildcard so it can't swallow them.
         Route::get('/contacts', [MessagingController::class, 'contacts'])->name('contacts');
+
+        /*
+         * Group administration. Membership is still checked first, so a
+         * non-member gets a 404 before permissions are considered.
+         */
+        Route::post('/groups', [MessagingGroupController::class, 'store'])->name('groups.store');
+        Route::patch('/groups/{uuid}', [MessagingGroupController::class, 'update'])->name('groups.update');
+        Route::post('/groups/{uuid}/photo', [MessagingGroupController::class, 'updatePhoto'])->name('groups.photo');
+        Route::post('/groups/{uuid}/members', [MessagingGroupController::class, 'addMembers'])->name('groups.members.add');
+        Route::patch('/groups/{uuid}/members/{userId}', [MessagingGroupController::class, 'updateMember'])->name('groups.members.update');
+        Route::delete('/groups/{uuid}/members/{userId}', [MessagingGroupController::class, 'removeMember'])->name('groups.members.remove');
         Route::post('/heartbeat', [MessagingController::class, 'heartbeat'])->name('heartbeat');
         Route::get('/link-preview', [MessagingController::class, 'linkPreview'])->name('link-preview');
         // Grouped search across people, conversations, messages, files, links.
@@ -274,6 +286,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // conversations — the inbox column's Media view, as opposed to the
         // per-thread shelf on conversations/{uuid}/gallery.
         Route::get('/media', [MessagingController::class, 'media'])->name('media');
+        // What colleagues are working on — the Updates tab, and where the
+        // signed-in user sets their own.
+        Route::get('/updates', [MessagingController::class, 'updates'])->name('updates');
+        Route::put('/updates', [MessagingController::class, 'setUpdate'])->name('updates.set');
         // Bulk receipt acknowledgement — one call covers every conversation.
         Route::post('/delivered', [MessagingController::class, 'markAllDelivered'])->name('delivered');
         Route::get('/settings', [MessagingController::class, 'settings'])->name('settings');

@@ -7,6 +7,8 @@ use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Models\UserBlock;
+use App\Models\UserWorkStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -228,5 +230,102 @@ class MessagingMediaTest extends TestCase
 
         $this->actingAs($me)->getJson('/portal/messaging/media')
             ->assertOk()->assertJsonCount(0, 'items');
+    }
+
+    // ------------------------------------------------------------- updates
+
+    public function test_updates_lists_colleagues_current_statuses(): void
+    {
+        $me = $this->user();
+        $bob = $this->user('bob@example.com');
+
+        UserWorkStatus::create(['user_id' => $bob->id, 'text' => 'Drafting the Mensah affidavit']);
+
+        $body = $this->actingAs($me)->getJson('/portal/messaging/updates')->assertOk();
+
+        $body->assertJsonPath('updates.0.name', $bob->name);
+        $body->assertJsonPath('updates.0.text', 'Drafting the Mensah affidavit');
+        // Your own status is reported separately, not mixed into the list.
+        $body->assertJsonPath('mine', null);
+    }
+
+    public function test_your_own_status_is_returned_separately_not_in_the_list(): void
+    {
+        $me = $this->user();
+        UserWorkStatus::create(['user_id' => $me->id, 'text' => 'In court']);
+
+        $this->actingAs($me)->getJson('/portal/messaging/updates')
+            ->assertOk()
+            ->assertJsonPath('mine.text', 'In court')
+            ->assertJsonCount(0, 'updates');
+    }
+
+    /** An expired status is invisible the moment it lapses, with no sweep. */
+    public function test_expired_statuses_are_hidden(): void
+    {
+        $me = $this->user();
+        $bob = $this->user('bob@example.com');
+
+        UserWorkStatus::create([
+            'user_id' => $bob->id,
+            'text' => 'Back at 3',
+            'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->actingAs($me)->getJson('/portal/messaging/updates')
+            ->assertOk()->assertJsonCount(0, 'updates');
+    }
+
+    /** Updates may never show someone the directory would not. */
+    public function test_blocked_people_are_excluded(): void
+    {
+        $me = $this->user();
+        $bob = $this->user('bob@example.com');
+
+        UserWorkStatus::create(['user_id' => $bob->id, 'text' => 'Visible?']);
+        UserBlock::create(['user_id' => $me->id, 'blocked_user_id' => $bob->id]);
+
+        $this->actingAs($me)->getJson('/portal/messaging/updates')
+            ->assertOk()->assertJsonCount(0, 'updates');
+    }
+
+    public function test_unapproved_accounts_are_excluded(): void
+    {
+        $me = $this->user();
+        $pending = $this->user('pending@example.com');
+        $pending->forceFill(['status' => 'pending'])->save();
+
+        UserWorkStatus::create(['user_id' => $pending->id, 'text' => 'Not approved']);
+
+        $this->actingAs($me)->getJson('/portal/messaging/updates')
+            ->assertOk()->assertJsonCount(0, 'updates');
+    }
+
+    public function test_setting_and_clearing_your_own_status(): void
+    {
+        $me = $this->user();
+
+        $this->actingAs($me)->putJson('/portal/messaging/updates', ['text' => 'Reviewing contracts'])
+            ->assertOk()->assertJsonPath('mine.text', 'Reviewing contracts');
+
+        $this->assertDatabaseHas('user_work_statuses', ['user_id' => $me->id, 'text' => 'Reviewing contracts']);
+
+        // Empty clears outright rather than storing a blank row.
+        $this->actingAs($me)->putJson('/portal/messaging/updates', ['text' => ''])
+            ->assertOk()->assertJsonPath('mine', null);
+
+        $this->assertDatabaseMissing('user_work_statuses', ['user_id' => $me->id]);
+    }
+
+    /** Setting again replaces, so a user can never accumulate statuses. */
+    public function test_setting_twice_replaces_rather_than_duplicates(): void
+    {
+        $me = $this->user();
+
+        $this->actingAs($me)->putJson('/portal/messaging/updates', ['text' => 'First'])->assertOk();
+        $this->actingAs($me)->putJson('/portal/messaging/updates', ['text' => 'Second'])->assertOk();
+
+        $this->assertSame(1, UserWorkStatus::where('user_id', $me->id)->count());
+        $this->assertSame('Second', UserWorkStatus::where('user_id', $me->id)->value('text'));
     }
 }

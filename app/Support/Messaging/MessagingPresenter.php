@@ -92,6 +92,12 @@ class MessagingPresenter
                 ? PresenceService::forViewer($counterpart, $viewer)
                 : ['label' => 'Group chat'],
             'counterpartId' => $counterpart?->id,
+            'description' => $conversation->description,
+            // The firm's own chat: managed by administrators, and nobody
+            // leaves it.
+            'isDefault' => (bool) $conversation->is_default,
+            'canManage' => $conversation->isManageableBy($viewer),
+            'canLeave' => $conversation->isLeavableBy($viewer),
             // Drives Block vs Unblock in the conversation menu.
             'blocked' => $counterpart !== null
                 && in_array($counterpart->id, self::blockedIds($viewer), true),

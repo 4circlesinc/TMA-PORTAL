@@ -15,12 +15,15 @@ use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Models\UserBlock;
+use App\Models\UserPresence;
+use App\Models\UserWorkStatus;
 use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\LinkPreviewService;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
+use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\PresenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,6 +51,10 @@ class MessagingController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+
+        // Self-healing membership for firm-wide chats: anyone approved after
+        // one was created is added on their next visit.
+        OrganizationChat::syncMembership($user);
 
         $conversations = Conversation::query()
             ->forUser($user)
@@ -555,6 +562,98 @@ class MessagingController extends Controller
         return response()->json(['items' => $attachments]);
     }
 
+    // ------------------------------------------------------------- updates
+
+    /**
+     * What colleagues are working on right now — the Updates tab.
+     *
+     * Scoped exactly as {@see contacts} is: approved accounts, minus anyone
+     * blocked in either direction. Reusing that rule rather than inventing a
+     * second one means Updates can never show someone the directory would not.
+     *
+     * The viewer's own status comes back separately under `mine`, because the
+     * tab both shows other people's and is where you set your own.
+     */
+    public function updates(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $blocked = UserBlock::query()
+            ->where('user_id', $user->id)->pluck('blocked_user_id')
+            ->merge(UserBlock::where('blocked_user_id', $user->id)->pluck('user_id'));
+
+        $statuses = UserWorkStatus::query()
+            ->current()
+            ->whereHas('user', fn ($q) => $q
+                ->where('id', '!=', $user->id)
+                ->whereNotIn('id', $blocked)
+                ->where('status', User::STATUS_APPROVED))
+            ->with('user')
+            ->latest('updated_at')
+            ->limit(100)
+            ->get();
+
+        // Presence in one query rather than one per row: this list is short but
+        // it is polled, and a lookup per person adds up.
+        $presence = UserPresence::query()
+            ->whereIn('user_id', $statuses->pluck('user_id'))
+            ->get()
+            ->keyBy('user_id');
+
+        $mine = UserWorkStatus::where('user_id', $user->id)->first();
+
+        return response()->json([
+            'mine' => $mine && ! $mine->hasExpired() ? $mine->toRecord() : null,
+            'updates' => $statuses->map(fn (UserWorkStatus $s) => array_merge(
+                $s->toRecord(),
+                [
+                    'userId' => $s->user_id,
+                    'name' => $s->user?->name ?? 'Unknown',
+                    'photo' => $s->user?->avatar_url,
+                    'online' => (bool) $presence->get($s->user_id)?->isOnline(),
+                ]
+            ))->values(),
+        ]);
+    }
+
+    /**
+     * Set or clear the signed-in user's own status.
+     *
+     * An empty text clears it outright rather than storing a blank, so the
+     * Updates list never has to filter empties out.
+     */
+    public function setUpdate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'text' => ['present', 'nullable', 'string', 'max:140'],
+            'emoji' => ['sometimes', 'nullable', 'string', 'max:16'],
+            // Minutes from now. Null/absent means "until I clear it".
+            'expiresInMinutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:20160'],
+        ]);
+
+        $user = $request->user();
+        $text = trim((string) ($data['text'] ?? ''));
+
+        if ($text === '') {
+            UserWorkStatus::where('user_id', $user->id)->delete();
+
+            return response()->json(['mine' => null]);
+        }
+
+        $status = UserWorkStatus::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'text' => $text,
+                'emoji' => $data['emoji'] ?? null,
+                'expires_at' => isset($data['expiresInMinutes']) && $data['expiresInMinutes']
+                    ? now()->addMinutes((int) $data['expiresInMinutes'])
+                    : null,
+            ]
+        );
+
+        return response()->json(['mine' => $status->toRecord()]);
+    }
+
     /** Every URL shared in the conversation, newest first. */
     private function galleryLinks(Conversation $conversation, User $user, int $cleared): array
     {
@@ -1031,6 +1130,13 @@ class MessagingController extends Controller
         $user = $request->user();
         $conversation = $this->conversationFor($request, $uuid);
         $participant = $conversation->participantFor($user);
+
+        // The firm's own chat is not something a person opts out of.
+        abort_unless(
+            $conversation->isLeavableBy($user) || ! $conversation->isGroup(),
+            422,
+            'The organization chat cannot be left.'
+        );
 
         if ($conversation->isGroup()) {
             // Announce a departure so the remaining members see why.

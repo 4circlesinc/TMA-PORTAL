@@ -41,6 +41,22 @@ Artisan::command('messaging:prune-attachments {--hours=24}', function () {
 Schedule::command('messaging:prune-attachments')->hourly();
 
 /*
+ * Create the firm-wide default conversation if it does not exist yet.
+ *
+ * Membership is not seeded here: OrganizationChat::syncMembership runs when a
+ * user loads their conversations, so anyone approved later joins on their next
+ * visit rather than needing this to be re-run.
+ */
+Artisan::command('messaging:org-chat', function () {
+    $chat = App\Support\Messaging\OrganizationChat::ensure(
+        App\Models\User::where('account_type', 'Administrator')->orderBy('id')->first()
+    );
+
+    $this->info("Organization chat ready: \"{$chat->name}\" ({$chat->uuid}).");
+    $this->line('Members join automatically the next time they open Messages.');
+})->purpose('Create the firm-wide default conversation');
+
+/*
  * Pull every connected mailbox on a timer.
  *
  * Sync used to be dispatched only when someone opened the email page, so a

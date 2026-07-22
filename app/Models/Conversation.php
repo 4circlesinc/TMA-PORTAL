@@ -10,7 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
-#[Fillable(['uuid', 'type', 'name', 'photo_disk', 'photo_path', 'created_by', 'last_message_at'])]
+#[Fillable([
+    'uuid', 'type', 'name', 'description', 'photo_disk', 'photo_path',
+    'created_by', 'last_message_at', 'is_default', 'auto_join', 'disabled_at',
+])]
 class Conversation extends Model
 {
     use SoftDeletes;
@@ -24,6 +27,9 @@ class Conversation extends Model
         return [
             'last_message_at' => 'datetime',
             'deleted_at' => 'datetime',
+            'disabled_at' => 'datetime',
+            'is_default' => 'boolean',
+            'auto_join' => 'boolean',
         ];
     }
 
@@ -58,6 +64,46 @@ class Conversation extends Model
     public function isGroup(): bool
     {
         return $this->type === self::TYPE_GROUP;
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->disabled_at !== null;
+    }
+
+    /**
+     * Who may rename, re-photograph, or change the membership of this group.
+     *
+     * The organization-wide chat belongs to the firm, not to whoever happens
+     * to be in it, so it is administrator-only however its participant roles
+     * are set. Any other group is run by its own admins.
+     */
+    public function isManageableBy(User $user): bool
+    {
+        if (! $this->isGroup()) {
+            return false;
+        }
+
+        if ($this->is_default) {
+            return $user->account_type === 'Administrator';
+        }
+
+        return (bool) $this->participantFor($user)?->isAdmin();
+    }
+
+    /**
+     * Whether a participant may walk away.
+     *
+     * Nobody leaves the organization chat by choice — it is the firm's shared
+     * record, and an accidental tap should not remove someone from it.
+     */
+    public function isLeavableBy(User $user): bool
+    {
+        if ($this->is_default) {
+            return false;
+        }
+
+        return $this->participantFor($user) !== null;
     }
 
     /**

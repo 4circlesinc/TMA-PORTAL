@@ -30,6 +30,8 @@
     CheckCircle: ICON + 'CheckCircle.svg',
     Images: ICON + 'Images.svg',
     ArrowLineDown: ICON + 'ArrowLineDown.svg',
+    ChatCircleDots: ICON + 'ChatCircleDots.svg',
+    Broadcast: ICON + 'Broadcast.svg',
   };
 
   var MESSAGES_MOBILE_MQ = '(max-width: 1024px)';
@@ -354,41 +356,78 @@
     );
   }
 
+  /*
+   * The inbox column's navigation: which view the column is showing, plus the
+   * two actions that are not views (New message, Settings).
+   *
+   * Each entry carries its name under the icon — six unlabelled glyphs are a
+   * guessing game, and Updates in particular is not something anyone would
+   * infer from a picture.
+   */
   function renderListFoot(state) {
-    var archived = state && state.tab === 'archived';
-    var media = !!(state && state.mediaMode);
+    state = state || {};
 
-    // Archived count is worth showing: the tab is otherwise invisible, and a
-    // conversation swiped away by accident is hard to find again without it.
     var archivedCount = getThreads().filter(function (row) { return row.archived; }).length;
+    var unreadUpdates = (state.updates || []).length;
+
+    // Exactly one of these is the current view; "chats" is the default when no
+    // takeover is active.
+    var view = state.mediaMode ? 'media'
+      : state.updatesMode ? 'updates'
+      : state.callsMode ? 'calls'
+      : state.tab === 'archived' ? 'archived'
+      : 'chats';
+
+    var items = [
+      { key: 'chats', icon: 'ChatCircleDots', label: 'Chats', attr: 'data-messages-nav-chats' },
+      { key: 'updates', icon: 'Broadcast', label: 'Updates', attr: 'data-messages-nav-updates', count: unreadUpdates },
+      // Calling is not built. The entry is present because the design asks for
+      // it, but it says so rather than opening an empty imitation of a call
+      // log — the chat header already marks its call buttons unavailable the
+      // same way, and this stays consistent with that.
+      { key: 'calls', icon: 'Phone', label: 'Calls', attr: 'data-messages-nav-calls' },
+      { key: 'archived', icon: 'Archive', label: 'Archived', attr: 'data-messages-archived', count: archivedCount },
+      { key: 'media', icon: 'Images', label: 'Media', attr: 'data-messages-media' },
+      { key: 'settings', icon: 'GearSix', label: 'Settings', attr: 'data-messages-settings', action: true },
+    ];
+
+    var nav = items.map(function (item) {
+      var active = item.action
+        ? (item.key === 'settings' && state.settingsOpen)
+        : view === item.key;
+
+      return (
+        '<button type="button" class="tma-dash__messages-nav-btn' + (active ? ' is-active' : '') + '"' +
+        ' ' + item.attr +
+        ' aria-label="' + esc(item.label) + '" title="' + esc(item.label) + '"' +
+        (item.action
+          ? ' aria-expanded="' + (active ? 'true' : 'false') + '"'
+          : ' aria-current="' + (active ? 'page' : 'false') + '"') +
+        '>' +
+        '<span class="tma-dash__messages-nav-icon">' +
+        '<img src="' + ICONS[item.icon] + '" alt="">' +
+        (item.count
+          ? '<span class="tma-dash__messages-nav-count">' + item.count + '</span>'
+          : '') +
+        '</span>' +
+        '<span class="tma-dash__messages-nav-label">' + esc(item.label) + '</span>' +
+        '</button>'
+      );
+    }).join('');
+
+    // Compose is written out rather than reusing renderComposeBtn: it needs the
+    // same icon/label structure as every other entry, and that helper renders a
+    // bare icon button used elsewhere at a different size.
+    var compose =
+      '<button type="button" class="tma-dash__messages-nav-btn tma-dash__messages-nav-btn--compose"' +
+      ' data-messages-compose aria-label="New message" title="New message">' +
+      '<span class="tma-dash__messages-nav-icon"><img src="' + ICONS.NotePencil + '" alt=""></span>' +
+      '<span class="tma-dash__messages-nav-label">New</span>' +
+      '</button>';
 
     return (
-      '<div class="tma-dash__messages-list-foot">' +
-      renderComposeBtn(
-        'tma-dash__messages-list-foot-btn',
-        ' data-messages-compose'
-      ).replace('aria-label="New message"', 'aria-label="New message" title="New message"') +
-      '<button type="button" class="tma-dash__messages-list-foot-btn' +
-      (archived ? ' is-active' : '') +
-      '" aria-label="Archived chats" title="Archived chats" data-messages-archived' +
-      ' aria-pressed="' + (archived ? 'true' : 'false') + '">' +
-      '<img src="' + ICONS.Archive + '" alt="">' +
-      (archivedCount
-        ? '<span class="tma-dash__messages-list-foot-count">' + archivedCount + '</span>'
-        : '') +
-      '</button>' +
-      '<button type="button" class="tma-dash__messages-list-foot-btn' +
-      (media ? ' is-active' : '') +
-      '" aria-label="Media" title="Media from all chats" data-messages-media' +
-      ' aria-pressed="' + (media ? 'true' : 'false') + '">' +
-      '<img src="' + ICONS.Images + '" alt="">' +
-      '</button>' +
-      '<button type="button" class="tma-dash__messages-list-foot-btn' +
-      (state && state.settingsOpen ? ' is-active' : '') +
-      '" aria-label="Messages settings" title="Messages settings" data-messages-settings' +
-      ' aria-expanded="' + (state && state.settingsOpen ? 'true' : 'false') + '">' +
-      '<img src="' + ICONS.GearSix + '" alt="">' +
-      '</button>' +
+      '<div class="tma-dash__messages-list-foot" role="tablist" aria-label="Messages sections">' +
+      compose + nav +
       '</div>'
     );
   }
@@ -572,7 +611,85 @@
     );
   }
 
+  /*
+   * The group-creation half of the new-message panel.
+   *
+   * Same panel, second step: pick people first (the panel is already a people
+   * picker), then name it. Splitting it into a separate dialog would duplicate
+   * the search that is already here.
+   */
+  function renderGroupPanel(state) {
+    var chosen = state.groupMembers || [];
+    var results = state.composeResults || [];
+
+    return (
+      '<div class="tma-dash__messages-panel" data-messages-panel role="dialog" aria-label="New group">' +
+      '<div class="tma-dash__messages-panel-head">' +
+      '<button type="button" class="tma-dash__messages-icon-btn" data-messages-group-back ' +
+      'aria-label="Back"><img src="' + ICONS.CaretLeft + '" alt=""></button>' +
+      '<span class="tma-dash__messages-panel-title">New group</span>' +
+      '<button type="button" class="tma-dash__messages-icon-btn" data-messages-panel-close ' +
+      'aria-label="Close"><span aria-hidden="true">×</span></button>' +
+      '</div>' +
+
+      '<div class="tma-dash__messages-group-name">' +
+      '<input type="text" class="tma-dash__messages-search-input" data-messages-group-name ' +
+      'placeholder="Group name" aria-label="Group name" maxlength="120" ' +
+      'value="' + esc(state.groupName || '') + '">' +
+      '</div>' +
+
+      // Chosen people stay visible as removable chips while searching for more.
+      (chosen.length
+        ? '<div class="tma-dash__messages-chips">' +
+          chosen
+            .map(function (person) {
+              return (
+                '<button type="button" class="tma-dash__messages-chip" ' +
+                'data-messages-group-drop="' + person.id + '" ' +
+                'aria-label="Remove ' + esc(person.name) + '">' +
+                esc(person.name) + ' <span aria-hidden="true">×</span></button>'
+              );
+            })
+            .join('') +
+          '</div>'
+        : '') +
+
+      '<div class="tma-dash__messages-search tma-dash__messages-search--panel" role="search">' +
+      '<img src="' + ICONS.MagnifyingGlass + '" alt="">' +
+      '<input type="search" class="tma-dash__messages-search-input" data-messages-compose-search ' +
+      'placeholder="Add people" aria-label="Add people" value="' + esc(state.composeQuery || '') + '" ' +
+      'autocomplete="off">' +
+      '</div>' +
+
+      '<div class="tma-dash__messages-panel-body">' +
+      (state.composeLoading
+        ? '<div class="tma-dash__messages-list-state" role="status">Searching…</div>'
+        : results.length
+          ? results
+              .map(function (person) {
+                var picked = chosen.some(function (p) {
+                  return p.id === person.id;
+                });
+                return renderPersonRow(person, 'data-messages-group-pick').replace(
+                  'class="tma-dash__messages-person"',
+                  'class="tma-dash__messages-person' + (picked ? ' is-picked' : '') + '"'
+                );
+              })
+              .join('')
+          : '<div class="tma-dash__messages-list-state">No one else to add.</div>') +
+      '</div>' +
+
+      '<div class="tma-dash__messages-panel-foot">' +
+      '<button type="button" class="tma-dash__messages-primary" data-messages-group-create' +
+      (chosen.length && (state.groupName || '').trim() ? '' : ' disabled') +
+      '>Create group' + (chosen.length ? ' (' + chosen.length + ')' : '') + '</button>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
   function renderComposePanel(state) {
+    if (state.groupOpen) return renderGroupPanel(state);
     if (!state.composeOpen) return '';
 
     var body;
@@ -605,6 +722,14 @@
       '<input type="search" class="tma-dash__messages-search-input" data-messages-compose-search ' +
       'placeholder="Search people" aria-label="Search people" value="' + esc(state.composeQuery || '') + '" autocomplete="off">' +
       '</div>' +
+      '<button type="button" class="tma-dash__messages-person tma-dash__messages-new-group" ' +
+      'data-messages-new-group>' +
+      '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group ' +
+      'tma-dash__messages-new-group-icon">+</span>' +
+      '<span class="tma-dash__messages-person-text">' +
+      '<span class="tma-dash__messages-person-name">New group</span>' +
+      '<span class="tma-dash__messages-person-meta">Message several people at once</span>' +
+      '</span></button>' +
       '<div class="tma-dash__messages-panel-body">' + body + '</div>' +
       '</div>'
     );
@@ -901,12 +1026,144 @@
       // saying what you are looking at and how to get back.
       (state.mediaMode
         ? renderMediaPanel(state)
-        : (state.searchMode
-          ? renderSearchResults(state)
-          : (state.tab === 'archived' ? renderArchivedHead() : '') +
-            (rows.length ? body : (people ? '' : body)) + people)) +
+        : state.updatesMode
+          ? renderUpdatesPanel(state)
+          : state.callsMode
+            ? renderCallsPanel()
+            : (state.searchMode
+              ? renderSearchResults(state)
+              : (state.tab === 'archived' ? renderArchivedHead() : '') +
+                (rows.length ? body : (people ? '' : body)) + people)) +
       '</div>' +
       renderListFoot(state) +
+      '</div>'
+    );
+  }
+
+  /* ------------------------------------------------------------------
+   * Updates
+   *
+   * What colleagues are working on right now. Distinct from presence, which
+   * only says whether someone's tab is open — this is what they chose to tell
+   * people, so it is set explicitly and cleared explicitly.
+   * ---------------------------------------------------------------- */
+
+  function loadMessagesUpdates(root, state, render) {
+    if (state.updatesLoading) return;
+
+    state.updatesLoading = true;
+    state.updatesError = null;
+    render();
+
+    window.TMAMessagingAPI.updates().then(function (data) {
+      state.updates = (data && data.updates) || [];
+      state.myUpdate = (data && data.mine) || null;
+      state.updatesLoading = false;
+      render();
+    }).catch(function (err) {
+      state.updatesLoading = false;
+      state.updatesError = (err && err.message) || 'Updates could not be loaded.';
+      render();
+    });
+  }
+
+  function saveMyUpdate(root, state, render, text) {
+    window.TMAMessagingAPI.setUpdate({ text: text }).then(function (data) {
+      state.myUpdate = (data && data.mine) || null;
+      state.updateDraft = null;
+      render();
+    }).catch(function (err) {
+      state.updatesError = (err && err.message) || 'That status could not be saved.';
+      render();
+    });
+  }
+
+  function renderUpdatesPanel(state) {
+    var mine = state.myUpdate;
+
+    // Your own status sits at the top: this is both where you read others' and
+    // where you set your own, the way a status feed usually works.
+    var self =
+      '<div class="tma-dash__messages-update-self">' +
+      '<div class="tma-dash__messages-update-self-label">Your status</div>' +
+      '<div class="tma-dash__messages-update-self-row">' +
+      '<input type="text" class="tma-dash__messages-update-input"' +
+      ' data-messages-update-input maxlength="140"' +
+      ' placeholder="What are you working on?"' +
+      ' value="' + esc(state.updateDraft !== null && state.updateDraft !== undefined
+        ? state.updateDraft
+        : (mine ? mine.text : '')) + '">' +
+      '<button type="button" class="tma-dash__messages-update-save" data-messages-update-save>' +
+      (mine ? 'Update' : 'Set') + '</button>' +
+      '</div>' +
+      (mine
+        ? '<button type="button" class="tma-dash__messages-update-clear" data-messages-update-clear>' +
+          'Clear my status</button>'
+        : '') +
+      '</div>';
+
+    var body;
+
+    if (state.updatesLoading) {
+      body = '<div class="tma-dash__messages-media-note">Loading…</div>';
+    } else if (state.updatesError) {
+      body = '<div class="tma-dash__messages-media-note" role="alert">' + esc(state.updatesError) + '</div>';
+    } else if (!state.updates || !state.updates.length) {
+      body = '<div class="tma-dash__messages-media-note">Nobody has posted a status yet.</div>';
+    } else {
+      body = state.updates.map(function (u) {
+        return (
+          '<div class="tma-dash__messages-update-row">' +
+          '<span class="tma-dash__messages-update-avatar' + (u.online ? ' is-online' : '') + '">' +
+          (u.photo
+            ? '<img src="' + esc(u.photo) + '" alt="">'
+            : '<span class="tma-dash__messages-update-initials">' + esc(initialsOf(u.name)) + '</span>') +
+          '</span>' +
+          '<span class="tma-dash__messages-update-copy">' +
+          '<span class="tma-dash__messages-update-name">' + esc(u.name) + '</span>' +
+          '<span class="tma-dash__messages-update-text">' +
+          (u.emoji ? esc(u.emoji) + ' ' : '') + esc(u.text) +
+          '</span>' +
+          '</span>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    return (
+      '<div class="tma-dash__messages-updates">' + self +
+      '<div class="tma-dash__messages-update-list">' + body + '</div>' +
+      '</div>'
+    );
+  }
+
+  /* Initials for someone with no photo — never an invented avatar. */
+  function initialsOf(name) {
+    return String(name || '?')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(function (part) { return part.charAt(0).toUpperCase(); })
+      .join('');
+  }
+
+  /* ------------------------------------------------------------------
+   * Calls
+   *
+   * There is no calling in the portal — no signalling, no media transport,
+   * nothing that could place or record one. The chat header already marks its
+   * call buttons unavailable rather than pretending; this says the same thing
+   * in the same words instead of showing an empty call log, which would read
+   * as "you have no calls" rather than "calls do not exist yet".
+   * ---------------------------------------------------------------- */
+  function renderCallsPanel() {
+    return (
+      '<div class="tma-dash__messages-media">' +
+      '<div class="tma-dash__messages-media-note">' +
+      '<strong>Calls aren’t available yet.</strong><br>' +
+      'Voice and video calling hasn’t been built into the portal. ' +
+      'When it is, your call history will appear here.' +
+      '</div>' +
       '</div>'
     );
   }
@@ -2682,6 +2939,79 @@
       .join('');
   }
 
+  /*
+   * Group membership and administration.
+   *
+   * What is offered depends on the server's own verdict (`canManage`), not on
+   * a guess here — the organization chat is administrator-only however the
+   * participant roles happen to be set, and nobody can leave it at all.
+   */
+  function renderGroupSection(state, info, row) {
+    var members = info.profile.members || [];
+    var canManage = !!info.conversation.canManage;
+    var me = (STORE.me || {}).id;
+
+    return (
+      '<div class="tma-dash__messages-profile-section">' +
+      '<div class="tma-dash__messages-list-group">' +
+      members.length + ' member' + (members.length === 1 ? '' : 's') +
+      (info.conversation.isDefault ? ' · Organization chat' : '') +
+      '</div>' +
+
+      (canManage
+        ? '<button type="button" class="tma-dash__messages-profile-action" ' +
+          'data-messages-group-add>Add people</button>' +
+          '<button type="button" class="tma-dash__messages-profile-action" ' +
+          'data-messages-group-rename>Rename group</button>' +
+          '<button type="button" class="tma-dash__messages-profile-action" ' +
+          'data-messages-group-photo>Change group photo</button>' +
+          '<input type="file" accept="image/*" hidden data-messages-group-photo-file>'
+        : '') +
+
+      members
+        .map(function (member) {
+          var isMe = member.id === me;
+          var isAdmin = member.role === 'admin';
+
+          return (
+            '<div class="tma-dash__messages-member">' +
+            (member.photo
+              ? '<span class="tma-dash__messages-row-avatar">' +
+                '<img src="' + esc(member.photo) + '" alt="" loading="lazy"></span>'
+              : renderInitialAvatar(member.name || '?')) +
+            '<span class="tma-dash__messages-person-text">' +
+            '<span class="tma-dash__messages-person-name">' +
+            esc(member.name || 'Unknown') + (isMe ? ' (you)' : '') + '</span>' +
+            '<span class="tma-dash__messages-person-meta">' +
+            (isAdmin ? 'Administrator' : 'Member') + '</span>' +
+            '</span>' +
+            // No management controls against yourself: leaving is its own
+            // action, and self-demotion is the last-admin trap.
+            (canManage && !isMe
+              ? '<button type="button" class="tma-dash__messages-member-btn" ' +
+                'data-messages-member-role="' + member.id + '" ' +
+                'data-messages-member-next="' + (isAdmin ? 'member' : 'admin') + '">' +
+                (isAdmin ? 'Demote' : 'Make admin') + '</button>' +
+                '<button type="button" class="tma-dash__messages-member-btn ' +
+                'tma-dash__messages-member-btn--danger" data-messages-member-remove="' + member.id + '" ' +
+                'aria-label="Remove ' + esc(member.name || '') + '">Remove</button>'
+              : '') +
+            '</div>'
+          );
+        })
+        .join('') +
+
+      (info.conversation.canLeave
+        ? '<button type="button" class="tma-dash__messages-profile-action ' +
+          'tma-dash__messages-profile-action--danger" data-messages-group-leave>Leave group</button>'
+        : info.conversation.isDefault
+          ? '<p class="tma-dash__messages-profile-note">' +
+            'Everyone at the firm is a member of this conversation.</p>'
+          : '') +
+      '</div>'
+    );
+  }
+
   function renderProfile(state) {
     var info = state.profile;
 
@@ -2732,8 +3062,13 @@
         : '') +
       '</div>' +
 
+      // Group management sits above the details: it is what an admin opens
+      // this panel to do.
+      (row.type === 'group' ? renderGroupSection(state, info, row) : '') +
+
       '<div class="tma-dash__messages-profile-section">' +
       renderProfileRow('Email', p.email) +
+      renderProfileRow('Description', info.conversation.description) +
       renderProfileRow('Role', p.accountType) +
       renderProfileRow('Job title', p.jobTitle) +
       renderProfileRow('About', p.about) +
@@ -5536,6 +5871,93 @@
     }
   }
 
+
+  /* ------------------------------------------------------------------
+   * Groups
+   * ---------------------------------------------------------------- */
+
+  function openGroupPanel(root, state, render) {
+    state.groupOpen = true;
+    state.composeOpen = false;
+    state.settingsOpen = false;
+    state.groupMembers = [];
+    state.groupName = '';
+    state.composeQuery = '';
+    state.composeResults = [];
+    render();
+    searchPeople(state, render, '', 'compose');
+  }
+
+  function toggleGroupMember(state, render, person) {
+    var chosen = state.groupMembers || (state.groupMembers = []);
+    var index = -1;
+    chosen.forEach(function (p, i) {
+      if (p.id === person.id) index = i;
+    });
+
+    if (index === -1) chosen.push(person);
+    else chosen.splice(index, 1);
+
+    render();
+  }
+
+  function createGroup(root, state, render) {
+    var name = (state.groupName || '').trim();
+    var members = state.groupMembers || [];
+
+    if (!name || !members.length) return;
+
+    window.TMAMessagingAPI.createGroup({
+      name: name,
+      memberIds: members.map(function (p) {
+        return p.id;
+      }),
+    })
+      .then(function (data) {
+        var conversation = data.conversation;
+        replaceThread(conversation);
+
+        state.groupOpen = false;
+        state.groupMembers = [];
+        state.groupName = '';
+        state.selectedId = null;
+        render();
+
+        openConversation(root, state, render, conversation.id);
+        subscribeToConversation(root, state, render, conversation.id);
+        showMessagesToast(root, 'Group created');
+      })
+      .catch(function (err) {
+        showMessagesToast(root, err.message || 'Group could not be created');
+      });
+  }
+
+  /* Reload the profile after any change, so members and roles stay truthful. */
+  function refreshProfile(root, state, render) {
+    if (!state.profileOpen || !state.selectedId) return;
+
+    window.TMAMessagingAPI.info(state.selectedId)
+      .then(function (data) {
+        state.profile = data;
+        replaceThread(data.conversation);
+        render();
+      })
+      .catch(function () {});
+  }
+
+  function groupAction(root, state, render, promise, failure) {
+    promise
+      .then(function (data) {
+        if (data && data.conversation) replaceThread(data.conversation);
+        // The change lands as a system message too, so pull the thread.
+        loadThread(root, state, render, state.selectedId, {});
+        refreshProfile(root, state, render);
+      })
+      .catch(function (err) {
+        showMessagesToast(root, err.message || failure);
+      });
+  }
+
   /* ------------------------------------------------------------------
    * Conversation menu
    *
@@ -5947,6 +6369,136 @@
       });
     });
 
+
+    // --- groups ----------------------------------------------------------
+    var newGroupBtn = root.querySelector('[data-messages-new-group]');
+    if (newGroupBtn) {
+      newGroupBtn.addEventListener('click', function () {
+        openGroupPanel(root, state, render);
+      });
+    }
+
+    var groupBack = root.querySelector('[data-messages-group-back]');
+    if (groupBack) {
+      groupBack.addEventListener('click', function () {
+        state.groupOpen = false;
+        openComposePanel(root, state, render);
+      });
+    }
+
+    var groupName = root.querySelector('[data-messages-group-name]');
+    if (groupName) {
+      groupName.addEventListener('input', function () {
+        state.groupName = groupName.value;
+        // Repaint only the create button so the field keeps its caret.
+        var create = root.querySelector('[data-messages-group-create]');
+        if (create) create.disabled = !(state.groupName.trim() && (state.groupMembers || []).length);
+      });
+    }
+
+    root.querySelectorAll('[data-messages-group-pick]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = parseInt(btn.getAttribute('data-messages-group-pick'), 10);
+        var person = (state.composeResults || []).filter(function (p) {
+          return p.id === id;
+        })[0];
+        if (person) toggleGroupMember(state, render, person);
+      });
+    });
+
+    root.querySelectorAll('[data-messages-group-drop]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = parseInt(btn.getAttribute('data-messages-group-drop'), 10);
+        state.groupMembers = (state.groupMembers || []).filter(function (p) {
+          return p.id !== id;
+        });
+        render();
+      });
+    });
+
+    var groupCreate = root.querySelector('[data-messages-group-create]');
+    if (groupCreate) {
+      groupCreate.addEventListener('click', function () {
+        createGroup(root, state, render);
+      });
+    }
+
+    // --- group management from the profile panel --------------------------
+    var groupRename = root.querySelector('[data-messages-group-rename]');
+    if (groupRename) {
+      groupRename.addEventListener('click', function () {
+        var row = findThread(state.selectedId) || {};
+        var next = window.prompt('Group name', row.name || '');
+        if (next === null) return;
+        groupAction(
+          root, state, render,
+          window.TMAMessagingAPI.updateGroup(state.selectedId, { name: next }),
+          'The group could not be renamed'
+        );
+      });
+    }
+
+    var groupPhotoBtn = root.querySelector('[data-messages-group-photo]');
+    var groupPhotoFile = root.querySelector('[data-messages-group-photo-file]');
+    if (groupPhotoBtn && groupPhotoFile) {
+      groupPhotoBtn.addEventListener('click', function () {
+        groupPhotoFile.click();
+      });
+      groupPhotoFile.addEventListener('change', function () {
+        if (!groupPhotoFile.files || !groupPhotoFile.files.length) return;
+        groupAction(
+          root, state, render,
+          window.TMAMessagingAPI.updateGroupPhoto(state.selectedId, groupPhotoFile.files[0]),
+          'The photo could not be saved'
+        );
+        groupPhotoFile.value = '';
+      });
+    }
+
+    var groupAdd = root.querySelector('[data-messages-group-add]');
+    if (groupAdd) {
+      groupAdd.addEventListener('click', function () {
+        // Reuses the people picker rather than a second search UI.
+        state.groupAddMode = true;
+        openComposePanel(root, state, render);
+      });
+    }
+
+    root.querySelectorAll('[data-messages-member-role]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        groupAction(
+          root, state, render,
+          window.TMAMessagingAPI.setGroupMemberRole(
+            state.selectedId,
+            btn.getAttribute('data-messages-member-role'),
+            btn.getAttribute('data-messages-member-next')
+          ),
+          'That role could not be changed'
+        );
+      });
+    });
+
+    root.querySelectorAll('[data-messages-member-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!window.confirm('Remove this person from the group?')) return;
+        groupAction(
+          root, state, render,
+          window.TMAMessagingAPI.removeGroupMember(
+            state.selectedId,
+            btn.getAttribute('data-messages-member-remove')
+          ),
+          'They could not be removed'
+        );
+      });
+    });
+
+    var groupLeave = root.querySelector('[data-messages-group-leave]');
+    if (groupLeave) {
+      groupLeave.addEventListener('click', function () {
+        runConversationAction(root, state, render, state.selectedId, 'leave');
+      });
+    }
+
     // --- profile ---------------------------------------------------------
     root.querySelectorAll('[data-messages-open-profile]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
@@ -6065,19 +6617,87 @@
     root.querySelectorAll('[data-messages-start]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = parseInt(btn.getAttribute('data-messages-start'), 10);
-        if (!isNaN(id)) startConversationWith(root, state, render, id);
+        if (isNaN(id)) return;
+
+        // The same picker serves "message someone" and "add to this group".
+        if (state.groupAddMode && state.selectedId) {
+          state.groupAddMode = false;
+          state.composeOpen = false;
+          render();
+          groupAction(
+            root, state, render,
+            window.TMAMessagingAPI.addGroupMembers(state.selectedId, [id]),
+            'They could not be added'
+          );
+          return;
+        }
+
+        startConversationWith(root, state, render, id);
+      });
+    });
+
+    /* One view owns the inbox column at a time. Every nav entry goes through
+     * this so a new one can never forget to close the others — which is
+     * exactly how two panels end up stacked on top of each other. */
+    function showListView(view) {
+      state.mediaMode = view === 'media';
+      state.updatesMode = view === 'updates';
+      state.callsMode = view === 'calls';
+      state.tab = view === 'archived' ? 'archived' : 'all';
+      state.settingsOpen = false;
+      state.composeOpen = false;
+    }
+
+    // --- chats (the default view) -----------------------------------------
+    root.querySelectorAll('[data-messages-nav-chats]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        showListView('chats');
+        render();
+      });
+    });
+
+    // --- updates ----------------------------------------------------------
+    root.querySelectorAll('[data-messages-nav-updates]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var opening = !state.updatesMode;
+        showListView(opening ? 'updates' : 'chats');
+        render();
+        if (opening) loadMessagesUpdates(root, state, render);
+      });
+    });
+
+    root.querySelectorAll('[data-messages-update-input]').forEach(function (input) {
+      input.addEventListener('input', function () { state.updateDraft = input.value; });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); saveMyUpdate(root, state, render, input.value); }
+      });
+    });
+
+    root.querySelectorAll('[data-messages-update-save]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var input = root.querySelector('[data-messages-update-input]');
+        saveMyUpdate(root, state, render, input ? input.value : '');
+      });
+    });
+
+    root.querySelectorAll('[data-messages-update-clear]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        saveMyUpdate(root, state, render, '');
+      });
+    });
+
+    // --- calls ------------------------------------------------------------
+    root.querySelectorAll('[data-messages-nav-calls]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        showListView(state.callsMode ? 'chats' : 'calls');
+        render();
       });
     });
 
     // --- archived chats ---------------------------------------------------
     root.querySelectorAll('[data-messages-archived]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        state.tab = state.tab === 'archived' ? 'all' : 'archived';
-        // The three inbox-column takeovers are mutually exclusive; entering
-        // one has to leave the others, or the column renders two at once.
-        state.mediaMode = false;
-        state.settingsOpen = false;
-        state.composeOpen = false;
+        showListView(state.tab === 'archived' ? 'chats' : 'archived');
         render();
       });
     });
@@ -6093,10 +6713,7 @@
     root.querySelectorAll('[data-messages-media]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var opening = !state.mediaMode;
-        state.mediaMode = opening;
-        state.settingsOpen = false;
-        state.composeOpen = false;
-        state.tab = 'all';
+        showListView(opening ? 'media' : 'chats');
         render();
         if (opening) loadMessagesMedia(root, state, render);
       });
@@ -6413,6 +7030,18 @@
       mediaItems: [],
       mediaLoading: false,
       mediaError: null,
+      /* Updates: what colleagues are working on, and the status the signed-in
+       * user is showing. updateDraft holds unsaved typing so a re-render
+       * cannot discard it. */
+      updatesMode: false,
+      updates: [],
+      myUpdate: null,
+      updateDraft: null,
+      updatesLoading: false,
+      updatesError: null,
+      /* Calls has no backing feature yet — the view says so rather than
+       * showing an empty history. */
+      callsMode: false,
       profileOpen: false,
       profile: null,
       profileShelf: 'media',
@@ -6423,6 +7052,9 @@
       composeOpen: false,
       composeQuery: '',
       composeResults: [],
+      groupOpen: false,
+      groupMembers: [],
+      groupName: '',
       settingsOpen: false,
       tab: 'all',
     };

@@ -24812,16 +24812,74 @@ button.tma-dash__header-popup-item:focus-visible {
   opacity: 0.75;
 }
 
-/* Archived count on the footer button. The tab is otherwise invisible, so a
- * conversation swiped away by accident would be hard to find again. */
-.tma-dash__messages-list-foot-btn {
-  position: relative;
+/* ── inbox column navigation ──────────────────────────────────────
+ * Seven entries with their names under the icons. They share the row evenly
+ * and shrink together rather than wrapping, so the bar keeps its shape at any
+ * column width the user drags it to. */
+.tma-dash__messages-list-foot {
+  gap: 0;
+  padding: var(--space-4);
 }
 
-.tma-dash__messages-list-foot-count {
+.tma-dash__messages-nav-btn {
+  position: relative;
+  flex: 1 1 0;
+  /* Lets the flex items shrink below their content width, which is what stops
+   * a long label forcing the bar to overflow the column. */
+  min-width: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-6) 2px;
+  border: none;
+  border-radius: var(--radius-12);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__messages-nav-btn:hover,
+.tma-dash__messages-nav-btn.is-active {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-nav-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tma-dash__messages-nav-btn img {
+  width: 20px;
+  height: 20px;
+  opacity: 0.75;
+}
+
+.tma-dash__messages-nav-btn.is-active img {
+  opacity: 1;
+}
+
+.tma-dash__messages-nav-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-nav-btn.is-active .tma-dash__messages-nav-label {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+/* Counts sit on the icon, not the label, so they don't shift the text. */
+.tma-dash__messages-nav-count {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: -4px;
+  right: -8px;
   min-width: 15px;
   padding: 0 3px;
   border-radius: 999px;
@@ -24830,6 +24888,142 @@ button.tma-dash__header-popup-item:focus-visible {
   font-size: 10px;
   line-height: 15px;
   text-align: center;
+}
+
+/* ── updates ──────────────────────────────────────────────────────
+ * What colleagues are working on. The viewer's own status sits on top, since
+ * this is where it is set as well as read. */
+.tma-dash__messages-updates {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tma-dash__messages-update-self {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-12);
+  border-bottom: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__messages-update-self-label {
+  font-size: var(--font-size-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-update-self-row {
+  display: flex;
+  gap: var(--space-6);
+}
+
+.tma-dash__messages-update-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--color-overlay-8, var(--color-overlay-4));
+  border-radius: var(--radius-8);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-13);
+}
+
+.tma-dash__messages-update-save {
+  flex: none;
+  padding: var(--space-6) var(--space-12);
+  border: none;
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tma-dash__messages-update-clear {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tma-dash__messages-update-list {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-8) var(--space-12);
+}
+
+.tma-dash__messages-update-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+}
+
+/* Not overflow:hidden — the online dot sits on the rim and would be clipped
+ * away by it. The photo is rounded on its own instead. */
+.tma-dash__messages-update-avatar {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-update-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Initials, never an invented avatar, when someone has no photo. */
+.tma-dash__messages-update-initials {
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* The online dot rides the avatar, outside its clipped circle. */
+.tma-dash__messages-update-avatar.is-online::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #12b76a;
+  box-shadow: 0 0 0 2px var(--color-bg-card);
+}
+
+.tma-dash__messages-update-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__messages-update-name {
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-update-text {
+  font-size: var(--font-size-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── archived tab ─────────────────────────────────────────────────
@@ -26193,4 +26387,125 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__messages-chat-name-link:hover {
   text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------------
+ * Messages — groups: creating one, and managing it from the profile panel.
+ * ------------------------------------------------------------------------- */
+
+.tma-dash__messages-new-group {
+  border-bottom: 0.5px solid var(--color-border-medium);
+  border-radius: 0;
+}
+
+.tma-dash__messages-new-group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-brand, #1c6ef2);
+  color: #fff;
+  font-size: 18px;
+}
+
+.tma-dash__messages-group-name {
+  padding: 0 var(--space-12) var(--space-8);
+}
+
+/* Chosen people stay visible while searching for more. */
+.tma-dash__messages-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: 0 var(--space-12) var(--space-8);
+}
+
+.tma-dash__messages-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 2px var(--space-8);
+  border: 0;
+  border-radius: var(--radius-16);
+  background: var(--color-1);
+  font: inherit;
+  font-size: var(--text-size-12);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+/* An already-chosen person stays in the list, marked rather than removed, so
+ * the list does not jump under the pointer while picking. */
+.tma-dash__messages-person.is-picked {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-person.is-picked .tma-dash__messages-person-name::after {
+  content: ' ✓';
+  color: var(--color-primary-brand, #1c6ef2);
+}
+
+.tma-dash__messages-panel-foot {
+  padding: var(--space-8) var(--space-12) var(--space-12);
+  border-top: 0.5px solid var(--color-border-medium);
+}
+
+.tma-dash__messages-primary {
+  width: 100%;
+  padding: var(--space-8) var(--space-16);
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-primary-brand, #1c6ef2);
+  font: inherit;
+  font-size: var(--text-size-14);
+  color: #fff;
+  cursor: pointer;
+}
+
+.tma-dash__messages-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- member list in the profile panel --- */
+
+.tma-dash__messages-member {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+}
+
+.tma-dash__messages-member .tma-dash__messages-person-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.tma-dash__messages-member-btn {
+  flex-shrink: 0;
+  padding: 2px var(--space-8);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-dash__messages-member-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-member-btn--danger {
+  color: var(--color-danger, #d92d20);
+}
+
+/* System messages read as narration, not as somebody's message. */
+.tma-dash__messages-divider--system {
+  max-width: 80%;
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-16);
+  background: var(--color-1);
+  font-size: var(--text-size-12);
+  text-align: center;
 }

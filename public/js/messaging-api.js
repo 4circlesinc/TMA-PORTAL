@@ -212,6 +212,67 @@
       return api(BASE + '/attachments/' + encodeURIComponent(attachmentId), { method: 'DELETE' });
     },
 
+    /* --- groups --- */
+
+    createGroup: function (payload) {
+      return api(BASE + '/groups', { method: 'POST', json: payload });
+    },
+
+    updateGroup: function (conversationId, changes) {
+      return api(BASE + '/groups/' + encodeURIComponent(conversationId), {
+        method: 'PATCH',
+        json: changes,
+      });
+    },
+
+    addGroupMembers: function (conversationId, memberIds) {
+      return api(BASE + '/groups/' + encodeURIComponent(conversationId) + '/members', {
+        method: 'POST',
+        json: { memberIds: memberIds },
+      });
+    },
+
+    setGroupMemberRole: function (conversationId, userId, role) {
+      return api(
+        BASE + '/groups/' + encodeURIComponent(conversationId) + '/members/' + encodeURIComponent(userId),
+        { method: 'PATCH', json: { role: role } }
+      );
+    },
+
+    removeGroupMember: function (conversationId, userId) {
+      return api(
+        BASE + '/groups/' + encodeURIComponent(conversationId) + '/members/' + encodeURIComponent(userId),
+        { method: 'DELETE' }
+      );
+    },
+
+    /* Group photo. Multipart, so it goes through XHR like other uploads. */
+    updateGroupPhoto: function (conversationId, file) {
+      var form = new FormData();
+      form.append('photo', file);
+
+      return fetch(BASE + '/groups/' + encodeURIComponent(conversationId) + '/photo', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: (function () {
+          var h = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': csrf() };
+          var socket = socketId();
+          if (socket) h['X-Socket-ID'] = socket;
+          return h;
+        })(),
+        body: form,
+      }).then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (data) {
+          if (!res.ok) {
+            var err = new Error((data && data.message) || 'Photo could not be saved');
+            err.status = res.status;
+            throw err;
+          }
+          return data;
+        });
+      });
+    },
+
     /* Grouped search: people, conversations, messages, files, links. */
     search: function (term) {
       return api(BASE + '/search' + query({ q: term }));
@@ -222,6 +283,16 @@
      * gallery() which is scoped to one thread. */
     media: function (shelf) {
       return api(BASE + '/media' + query({ shelf: shelf }));
+    },
+
+    /* What colleagues are working on, plus the viewer's own status. */
+    updates: function () {
+      return api(BASE + '/updates');
+    },
+
+    /* Set the viewer's own status. An empty text clears it. */
+    setUpdate: function (payload) {
+      return api(BASE + '/updates', { method: 'PUT', json: payload });
     },
 
     /* The messaging profile panel for one conversation. */
