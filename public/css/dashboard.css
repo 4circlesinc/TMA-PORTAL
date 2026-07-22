@@ -3216,15 +3216,31 @@
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__subnav,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-item--fav { display: none; }
 
-  /* Folder Shortcuts is not shown in the resting rail.
-     It used to be forced visible here — both lists stacked as icons whichever
-     tab was last open — but a rail of unlabelled folder glyphs sitting under
-     the main nav reads as more menu items, at a different size and indent,
-     spilling into the profile block at the bottom. Shortcuts belong to the
-     expanded sidebar, where they have their tab and their names. */
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) [data-list="shortcuts"],
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard [data-list="shortcuts"] {
-    display: none !important;
+  /* The resting rail follows the selected tab, and nothing overrides it here.
+     Two earlier attempts both got this wrong in opposite directions: one
+     forced Folder Shortcuts visible whichever tab was open (so folders showed
+     under Main Menu), the other hid them outright (so they were unreachable
+     while collapsed). The `hidden` attribute showList() already maintains is
+     the correct answer on its own — Main Menu selected means no folders,
+     Folder Shortcuts selected means folders. */
+
+  /* Folder rows in the rail are icon-only, so the remove button and the
+     padding reserved for it are dropped — and the row is centred like every
+     other rail icon rather than sitting at the label indent. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut .tma-dash__nav-item,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut .tma-dash__nav-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Match the nav icons exactly. Left alone, the folder art renders at its own
+     size and the rail reads as two different icon sets stacked together. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut .tma-dash__nav-icon,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut .tma-dash__nav-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
   }
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-remove,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-remove,
