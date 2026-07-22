@@ -366,7 +366,14 @@
     else html += (state.view === 'grid' ? renderGrid() : renderTable());
     html += '</div></div>';
 
-    state.el.innerHTML = html;
+    /*
+     * Reconciled, not replaced. Rebuilding this subtree threw away every file
+     * thumbnail and folder icon on each render — including renames, colour
+     * changes and selection toggles, none of which touch the images at all.
+     * Rows and cards key on their data-id, so an unchanged file is left alone.
+     */
+    if (window.TMAMorph) window.TMAMorph.patch(state.el, html);
+    else state.el.innerHTML = html;
     wire();
     bindGlobals();
   }
@@ -623,7 +630,14 @@
       debouncedLoad();
     });
 
-    el.querySelectorAll('[data-files-view]').forEach(function (b) {
+    // Bound once per element rather than once per render: these buttons now
+    // survive reconciliation, so re-binding would stack handlers. The
+    // delegated listeners further down are safe as they are — they pass named
+    // functions, and addEventListener ignores an identical re-registration.
+    var viewBtns = window.TMAMorph
+      ? window.TMAMorph.unwired(el, '[data-files-view]')
+      : Array.prototype.slice.call(el.querySelectorAll('[data-files-view]'));
+    viewBtns.forEach(function (b) {
       b.addEventListener('click', function () { state.view = b.getAttribute('data-files-view'); render(); });
     });
     ui().wireHeadDropdownAll(el, '[data-files-sort-menu]', function (sel) { state.sort = sel.action; load(); });

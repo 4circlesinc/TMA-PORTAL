@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\Dashboard\DashboardMetrics;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * The KPI row on the portal home.
@@ -16,14 +17,34 @@ use Illuminate\Http\Request;
  */
 class DashboardMetricsController extends Controller
 {
+    /**
+     * How long a computed row stays warm.
+     *
+     * The cards measure rolling multi-week windows, so a few minutes of lag is
+     * invisible in the numbers but removes roughly ten queries — including
+     * timeline scans over messages and mail — from every visit to the
+     * dashboard. Deliberately short: this is a staleness budget, not a cache
+     * that needs invalidating on write.
+     */
+    private const TTL_SECONDS = 300;
+
     public function __invoke(Request $request): JsonResponse
     {
-        $metrics = new DashboardMetrics($request->user());
+        $user = $request->user();
+        $metrics = new DashboardMetrics($user);
 
         if (! $metrics->isStaff()) {
             return response()->json(['staff' => false]);
         }
 
-        return response()->json(['staff' => true] + $metrics->toArray());
+        // Keyed per user: an administrator sees organization scope and everyone
+        // else sees their own, so one shared entry would show the wrong numbers.
+        $payload = Cache::remember(
+            "dashboard-metrics.{$user->id}",
+            self::TTL_SECONDS,
+            fn () => $metrics->toArray(),
+        );
+
+        return response()->json(['staff' => true] + $payload);
     }
 }

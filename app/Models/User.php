@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -94,6 +95,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function favorites(): HasMany
     {
         return $this->hasMany(Favorite::class);
+    }
+
+    /**
+     * Online/last-seen state, as a relation so it can be eager loaded.
+     *
+     * PresenceService::forViewer used to fetch this per subject, which meant one
+     * query per participant when presenting a conversation list — the single
+     * biggest cost of loading the Messages page.
+     */
+    public function presence(): HasOne
+    {
+        return $this->hasOne(UserPresence::class);
     }
 
     public function connectedAccount(string $provider): ?ConnectedAccount

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Jobs\GenerateFileThumbnail;
 use App\Models\UploadSession;
 use App\Support\Files\ChunkedUpload;
 use App\Support\Files\FileAccess;
+use App\Support\Files\Thumbnail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -97,6 +99,17 @@ class UploadController extends BaseFilesController
             $request->input('conflict'),
             $request->input('newName'),
         );
+
+        /*
+         * Build the thumbnail in the background rather than on the first
+         * request that happens to need it. The upload response does not wait on
+         * it, and by the time the file shows up in a listing the image is
+         * usually already there. ThumbnailController still generates on demand
+         * for anything this misses.
+         */
+        if (Thumbnail::supportsExt($file->extension)) {
+            GenerateFileThumbnail::dispatch($file->id)->afterResponse();
+        }
 
         return response()->json($this->presenter($request)->file($file), 201);
     }

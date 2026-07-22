@@ -5,6 +5,23 @@
 (function () {
   'use strict';
 
+  /*
+   * Keyed DOM reconciliation (js/dom-morph.js). The inbox list is the reason
+   * this matters most here: rebuilding it threw away every sender photo and
+   * attachment thumbnail whenever a single row was read, starred or labelled.
+   * Rows key on data-email-row, so only the row that changed is rewritten.
+   *
+   * Wiring goes through MORPH.unwired / unwiredOne / on because nodes now
+   * survive a render — plain addEventListener in a render path would stack a
+   * handler per render.
+   */
+  var MORPH = window.TMAMorph || {
+    patch: function (root, html) { root.innerHTML = html; },
+    unwired: function (root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); },
+    unwiredOne: function (root, sel) { return root.querySelector(sel); },
+    on: function (el, type, fn) { if (el) el.addEventListener(type, fn); },
+  };
+
   var AVATAR = 'images/avatars/';
   var ICON = 'images/icons/phosphor/';
   var BRAND = 'images/icons/brands/';
@@ -478,7 +495,7 @@
     var panel = root.querySelector('[data-email-inline-compose-panel]');
     if (!panel) return;
 
-    panel.querySelectorAll('[data-email-inline-compose-field]').forEach(function (input) {
+    MORPH.unwired(panel, '[data-email-inline-compose-field]').forEach(function (input) {
       input.addEventListener('input', function () {
         if (!state.inlineCompose) return;
         state.inlineCompose[input.getAttribute('data-email-inline-compose-field')] = input.value;
@@ -487,7 +504,7 @@
 
     var editor = panel.querySelector('[data-email-inline-compose-editor]');
     if (editor) {
-      editor.addEventListener('input', function () {
+      MORPH.on(editor, 'input', function () {
         if (!state.inlineCompose) return;
         state.inlineCompose.bodyHtml = editor.innerHTML;
       });
@@ -495,7 +512,7 @@
 
     var sendBtn = panel.querySelector('[data-email-inline-compose-send]');
     if (sendBtn) {
-      sendBtn.addEventListener('click', function (event) {
+      MORPH.on(sendBtn, 'click', function (event) {
         event.stopPropagation();
         sendInlineCompose(root, state, render);
       });
@@ -2691,7 +2708,7 @@
 
   /* Delegated so it works whichever branch of the detail render is showing. */
   function wireAttachmentPreviews(root) {
-    root.querySelectorAll('[data-email-attachments]').forEach(function (section) {
+    MORPH.unwired(root, '[data-email-attachments]').forEach(function (section) {
       if (section._wired) return;
       section._wired = true;
 
@@ -3600,7 +3617,7 @@
   }
 
   function wireComposeEvents(root, state, render) {
-    root.querySelectorAll('[data-email-compose-window]').forEach(function (windowEl) {
+    MORPH.unwired(root, '[data-email-compose-window]').forEach(function (windowEl) {
       windowEl.addEventListener('mousedown', function () {
         var id = windowEl.getAttribute('data-email-compose-window');
         if (state.focusedComposeId !== id) {
@@ -3610,7 +3627,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-minimize]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-minimize]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         minimizeCompose(state, btn.getAttribute('data-email-compose-minimize'));
@@ -3618,7 +3635,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-expand]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-expand]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         toggleComposeExpand(state, btn.getAttribute('data-email-compose-expand'));
@@ -3626,7 +3643,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-close]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-close]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         closeCompose(state, btn.getAttribute('data-email-compose-close'));
@@ -3634,7 +3651,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-restore]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-restore]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         if (event.target.closest('[data-email-compose-close]')) return;
         restoreCompose(state, btn.getAttribute('data-email-compose-restore'));
@@ -3642,7 +3659,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-discard]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-discard]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-email-compose-discard');
         var draft = findComposeDraft(state, id);
@@ -3659,7 +3676,7 @@
 
     /* Field edits write straight to the draft. No re-render on input —
      * repainting the window would move the caret out from under the user. */
-    root.querySelectorAll('[data-email-compose-field]').forEach(function (input) {
+    MORPH.unwired(root, '[data-email-compose-field]').forEach(function (input) {
       input.addEventListener('input', function () {
         var draft = findComposeDraft(state, input.getAttribute('data-email-compose-id'));
         if (!draft) return;
@@ -3668,7 +3685,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-body]').forEach(function (body) {
+    MORPH.unwired(root, '[data-email-compose-body]').forEach(function (body) {
       body.addEventListener('input', function () {
         var draft = findComposeDraft(state, body.getAttribute('data-email-compose-body'));
         if (!draft) return;
@@ -3677,7 +3694,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-cc]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-cc]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var draft = findComposeDraft(state, btn.getAttribute('data-email-compose-cc'));
@@ -3687,7 +3704,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-save]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-save]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var draft = findComposeDraft(state, btn.getAttribute('data-email-compose-save'));
@@ -3700,7 +3717,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-compose-send]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-compose-send]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         sendCompose(root, state, render, btn.getAttribute('data-email-compose-send'));
@@ -4158,20 +4175,20 @@
   }
 
   function wireEmailSettings(root, state, render) {
-    root.querySelectorAll('[data-email-open-settings]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-open-settings]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openEmailSettings(root, state, render);
       });
     });
 
-    root.querySelectorAll('[data-email-settings-close]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-settings-close]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.settingsOpen = false;
         render();
       });
     });
 
-    root.querySelectorAll('[data-email-settings-sync]').forEach(function (input) {
+    MORPH.unwired(root, '[data-email-settings-sync]').forEach(function (input) {
       input.addEventListener('change', function () {
         var provider = input.getAttribute('data-email-settings-sync');
         api().saveSettings({ provider: provider, syncEnabled: input.checked })
@@ -4188,7 +4205,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-settings-syncnow]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-settings-syncnow]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         btn.disabled = true;
         btn.textContent = 'Syncing…';
@@ -4209,13 +4226,13 @@
       });
     });
 
-    root.querySelectorAll('[data-email-pref]').forEach(function (input) {
+    MORPH.unwired(root, '[data-email-pref]').forEach(function (input) {
       input.addEventListener('change', function () {
         saveEmailPreference(root, state, input.getAttribute('data-email-pref'), input.checked);
       });
     });
 
-    root.querySelectorAll('[data-email-pref-number]').forEach(function (input) {
+    MORPH.unwired(root, '[data-email-pref-number]').forEach(function (input) {
       input.addEventListener('change', function () {
         var value = Math.max(0, Math.min(30, parseInt(input.value, 10) || 0));
         input.value = value;
@@ -4223,7 +4240,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-pref-text]').forEach(function (input) {
+    MORPH.unwired(root, '[data-email-pref-text]').forEach(function (input) {
       // Signatures are long; save on blur rather than per keystroke.
       input.addEventListener('blur', function () {
         saveEmailPreference(root, state, input.getAttribute('data-email-pref-text'), input.value);
@@ -5020,7 +5037,7 @@
       track.addEventListener('pointercancel', endDrag);
     });
 
-    root.querySelectorAll('[data-email-row-swipe-action]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-row-swipe-action]').forEach(function (btn) {
       if (btn.dataset.bound) return;
       btn.dataset.bound = '1';
       btn.addEventListener('click', function (e) {
@@ -5099,9 +5116,9 @@
     }
 
     var rows = filteredInbox(state);
-    listBody.innerHTML = rows.map(function (row) {
+    MORPH.patch(listBody, rows.map(function (row) {
       return buildInboxRowHtml(row, state);
-    }).join('');
+    }).join(''));
 
     var selectAll = root.querySelector('[data-email-selectall]');
     if (selectAll) {
@@ -5128,7 +5145,7 @@
       }, true);
     }
 
-    root.querySelectorAll('[data-email-row]').forEach(function (rowEl) {
+    MORPH.unwired(root, '[data-email-row]').forEach(function (rowEl) {
       rowEl.addEventListener('click', function (event) {
         if (isEmailRowSelectTarget(event.target)) return;
         if (event.target.closest('.tma-dash__email-row-action')) return;
@@ -5204,21 +5221,21 @@
       var rowEl = cb.closest('[data-email-row]');
       var id = rowEl ? rowEl.getAttribute('data-email-row') : '';
 
-      cb.addEventListener('click', function (event) {
+      MORPH.on(cb, 'click', function (event) {
         event.stopPropagation();
       });
 
-      cb.addEventListener('change', function (event) {
+      MORPH.on(cb, 'change', function (event) {
         event.stopPropagation();
         syncRowCheck(cb, id);
         syncSelectAll();
       });
     });
 
-    root.querySelectorAll('[data-email-avatar-select]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-avatar-select]').forEach(function (btn) {
       if (btn.dataset.bound) return;
       btn.dataset.bound = '1';
-      btn.addEventListener('click', function (event) {
+      MORPH.on(btn, 'click', function (event) {
         event.preventDefault();
         event.stopPropagation();
         var rowEl = btn.closest('[data-email-row]');
@@ -5233,7 +5250,7 @@
     });
 
     if (selectAll) {
-      selectAll.addEventListener('change', function () {
+      MORPH.on(selectAll, 'change', function () {
         rowChecks.forEach(function (cb) {
           var rowEl = cb.closest('[data-email-row]');
           var id = rowEl ? rowEl.getAttribute('data-email-row') : '';
@@ -5245,7 +5262,7 @@
       syncSelectAll();
     }
 
-    root.querySelectorAll('[data-email-refresh]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-refresh]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         if (state.refreshing) return;
@@ -5263,7 +5280,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-star]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-star]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var id = btn.getAttribute('data-email-star');
@@ -5276,7 +5293,7 @@
           reportMailError(state, err);
           render();
         });
-        root.querySelectorAll('[data-email-star="' + id + '"]').forEach(function (el) {
+        MORPH.unwired(root, '[data-email-star="' + id + '"]').forEach(function (el) {
           el.classList.toggle('tma-dash__email-row-action--active', starred);
           el.classList.toggle('tma-dash__email-detail-star--active', starred);
           el.setAttribute('aria-pressed', starred ? 'true' : 'false');
@@ -5286,7 +5303,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-important]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-important]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var id = btn.getAttribute('data-email-important');
@@ -5299,7 +5316,7 @@
           reportMailError(state, err);
           render();
         });
-        root.querySelectorAll('[data-email-important="' + id + '"]').forEach(function (el) {
+        MORPH.unwired(root, '[data-email-important="' + id + '"]').forEach(function (el) {
           el.classList.toggle('tma-dash__email-detail-important--active', important);
           el.classList.toggle('tma-dash__email-row-action--active', important);
           el.setAttribute('aria-pressed', important ? 'true' : 'false');
@@ -5309,7 +5326,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-detail-label-remove]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-detail-label-remove]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var rowId = btn.getAttribute('data-email-row-id');
@@ -5334,7 +5351,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-label]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-label]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var id = btn.getAttribute('data-email-label');
@@ -5346,7 +5363,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-label-option]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-label-option]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var labelId = btn.getAttribute('data-email-label-option');
@@ -5357,7 +5374,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-sidebar-label]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-sidebar-label]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var labelId = btn.getAttribute('data-email-sidebar-label');
         if (state.activeLabelId === labelId) state.activeLabelId = null;
@@ -5370,7 +5387,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-row-hover]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-row-hover]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var action = btn.getAttribute('data-email-row-hover');
@@ -5437,7 +5454,7 @@
 
     // Pager: step pages, or change how many messages a page holds. Both refetch
     // from the server — the mailbox is far too large to page in memory.
-    root.querySelectorAll('[data-email-page]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-page]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (btn.disabled) return;
         var target = parseInt(btn.getAttribute('data-email-page'), 10);
@@ -5448,7 +5465,7 @@
       });
     });
 
-    var perPageSelect = root.querySelector('[data-email-perpage]');
+    var perPageSelect = MORPH.unwiredOne(root, '[data-email-perpage]');
     if (perPageSelect) {
       perPageSelect.addEventListener('change', function () {
         var n = parseInt(perPageSelect.value, 10);
@@ -5796,7 +5813,7 @@
       }
     }
 
-    root.querySelectorAll('[data-email-folder]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-folder]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var folder = btn.getAttribute('data-email-folder');
         if (folder === 'compose') {
@@ -5815,7 +5832,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-bulk-more-item]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-bulk-more-item]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var item = btn.getAttribute('data-email-bulk-more-item');
@@ -5885,7 +5902,7 @@
       });
     }
 
-    root.querySelectorAll('[data-email-template]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-template]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.selectedTemplateId = btn.getAttribute('data-email-template');
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
@@ -5893,7 +5910,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-mobile-scrim]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-mobile-scrim]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.mobileNavOpen = false;
         closeEmailProfileSidebar(state);
@@ -5901,7 +5918,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-mobile-compose]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-mobile-compose]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openCompose(state, {});
         state.mobileNavOpen = false;
@@ -5954,7 +5971,7 @@
       }
     }
 
-    root.querySelectorAll('[data-email-layout]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-layout]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var layout = btn.getAttribute('data-email-layout');
         if (layout !== 'split' && layout !== 'single') return;
@@ -5982,7 +5999,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-nav]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-nav]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (btn.disabled) return;
         var nav = getDetailNavState(state);
@@ -5995,7 +6012,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-use-template]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-use-template]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openCompose(state, { templateId: btn.getAttribute('data-email-use-template') });
         syncEmailUrl('inbox');
@@ -6003,7 +6020,7 @@
       });
     });
 
-    root.querySelectorAll('[data-email-template-viewport]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-template-viewport]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.templateViewport = btn.getAttribute('data-email-template-viewport');
         render();
@@ -6229,7 +6246,7 @@
       closeEmailLabelPopup(root, state);
       syncEmailHeaderSearch(root, state);
       ensureEmailMobileHeader(root, state);
-      root.innerHTML =
+      MORPH.patch(root,
         '<div class="tma-dash__email-page">' +
         renderEmailMobileChrome(state) +
         renderEmailProfilePopup(state) +
@@ -6242,7 +6259,7 @@
         renderComposeWindows(state) +
         renderComposeDock(state) +
         renderEmailSettings(state) +
-        '</div>';
+        '</div>');
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
       wireInlineComposeEvents(root, state, render);

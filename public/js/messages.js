@@ -5,6 +5,30 @@
 (function () {
   'use strict';
 
+  /*
+   * Keyed DOM reconciliation (js/dom-morph.js).
+   *
+   * render() replaces this view's markup on every state change — a delivery
+   * tick, a reaction, a typing indicator. Assigning innerHTML for that threw
+   * away and rebuilt the entire thread each time, which re-requested every
+   * avatar and attachment, dropped scroll position, and interrupted typing.
+   * MORPH.patch applies the same markup by updating the existing nodes instead.
+   *
+   * Because nodes now survive a render, the wiring below binds through
+   * MORPH.unwired / unwiredOne / on, which register a listener once per element
+   * rather than once per render. Without that, one click would fire as many
+   * times as the view had rendered.
+   *
+   * The fallbacks keep the page working if the library fails to load: the old
+   * destructive behaviour, which is degraded but not broken.
+   */
+  var MORPH = window.TMAMorph || {
+    patch: function (root, html) { root.innerHTML = html; },
+    unwired: function (root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); },
+    unwiredOne: function (root, sel) { return root.querySelector(sel); },
+    on: function (el, type, fn) { if (el) el.addEventListener(type, fn); },
+  };
+
   var ICON = 'images/icons/phosphor/';
 
   var ICONS = {
@@ -2399,6 +2423,20 @@
       side +
       '" data-messages-index="' +
       index +
+      /*
+       * This is the bubble's reconciliation key (TMAMorph reads data-*-id), so
+       * it has to stay identical for a given message across every render.
+       *
+       * Do not be tempted to key on the send nonce to keep the optimistic
+       * bubble and its confirmed replacement as one node: the nonce is only
+       * attached client-side when the send resolves, and a later refetch of the
+       * thread returns the same message *without* it. The key would then
+       * alternate between the nonce and the id from one render to the next,
+       * rebuilding the bubble each time and closing any menu open on it.
+       *
+       * Confirming a send therefore replaces the bubble once, which is the same
+       * as it has always been, and every render after that reuses it.
+       */
       '" data-messages-id="' +
       esc(msg.id) +
       '">' +
@@ -2876,7 +2914,7 @@
     if (input) {
       syncComposerInputState(input);
 
-      input.addEventListener('input', function () {
+      MORPH.on(input, 'input', function () {
         var text = input.textContent || '';
         setComposerDraft(state, text);
         syncComposerInputState(input);
@@ -2903,7 +2941,7 @@
         scheduleLinkPreview(state, text, render);
       });
 
-      input.addEventListener('keydown', function (e) {
+      MORPH.on(input, 'keydown', function (e) {
         if (e.key === 'Escape' && state.editing) {
           e.preventDefault();
           state.editing = null;
@@ -2928,7 +2966,7 @@
       // Paste as plain text: the composer is contenteditable, so pasted markup
       // would otherwise land as live HTML inside the message. A pasted *file*
       // (a screenshot, typically) is attached instead.
-      input.addEventListener('paste', function (e) {
+      MORPH.on(input, 'paste', function (e) {
         if (!e.clipboardData) return;
 
         var files = e.clipboardData.files;
@@ -2979,7 +3017,7 @@
     }
 
     if (emojiBtn) {
-      emojiBtn.addEventListener('click', function (e) {
+      MORPH.on(emojiBtn, 'click', function (e) {
         e.stopPropagation();
         toggleEmojiPicker();
       });
@@ -2988,8 +3026,8 @@
     if (picker) {
       // Inserting keeps the picker open — people usually add more than one —
       // and remembers the choice for the Recent tab.
-      picker.querySelectorAll('[data-messages-emoji-char]').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
+      MORPH.unwired(picker, '[data-messages-emoji-char]').forEach(function (btn) {
+        MORPH.on(btn, 'click', function (e) {
           e.stopPropagation();
           var char = btn.getAttribute('data-messages-emoji-char');
           rememberEmoji(char);
@@ -2999,17 +3037,17 @@
 
       var emojiSearch = picker.querySelector('[data-messages-emoji-search]');
       if (emojiSearch) {
-        emojiSearch.addEventListener('click', function (e) {
+        MORPH.on(emojiSearch, 'click', function (e) {
           e.stopPropagation();
         });
-        emojiSearch.addEventListener('input', function () {
+        MORPH.on(emojiSearch, 'input', function () {
           state.emojiSearch = emojiSearch.value;
           render();
         });
       }
 
-      picker.querySelectorAll('[data-messages-emoji-category]').forEach(function (tab) {
-        tab.addEventListener('click', function (e) {
+      MORPH.unwired(picker, '[data-messages-emoji-category]').forEach(function (tab) {
+        MORPH.on(tab, 'click', function (e) {
           e.stopPropagation();
           state.emojiCategory = tab.getAttribute('data-messages-emoji-category');
           state.emojiSearch = '';
@@ -3022,10 +3060,10 @@
     var fileInput = composer.querySelector('[data-messages-composer-file]');
 
     if (attachBtn && fileInput) {
-      attachBtn.addEventListener('click', function () {
+      MORPH.on(attachBtn, 'click', function () {
         fileInput.click();
       });
-      fileInput.addEventListener('change', function () {
+      MORPH.on(fileInput, 'change', function () {
         queueFiles(root, state, render, fileInput.files);
         // Reset so choosing the same file twice still fires a change event.
         fileInput.value = '';
@@ -3034,20 +3072,20 @@
 
     var linkDismiss = composer.querySelector('[data-messages-link-dismiss]');
     if (linkDismiss) {
-      linkDismiss.addEventListener('click', function () {
+      MORPH.on(linkDismiss, 'click', function () {
         state.composerLinkDismissed = state.composerLinkUrl;
         render();
       });
     }
 
-    composer.querySelectorAll('[data-messages-tray-remove]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+    MORPH.unwired(composer, '[data-messages-tray-remove]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
         removeAttachment(root, state, render, btn.getAttribute('data-messages-tray-remove'));
       });
     });
 
-    composer.querySelectorAll('[data-messages-tray-retry]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+    MORPH.unwired(composer, '[data-messages-tray-retry]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
         var id = btn.getAttribute('data-messages-tray-retry');
         pendingAttachments(state).forEach(function (item) {
           if (item.localId === id) startUpload(root, state, render, item);
@@ -3058,7 +3096,7 @@
 
     var voiceBtn = composer.querySelector('[data-messages-composer-voice]');
     if (voiceBtn) {
-      voiceBtn.addEventListener('click', function () {
+      MORPH.on(voiceBtn, 'click', function () {
         startRecording(root, state, render);
       });
     }
@@ -3074,11 +3112,11 @@
 
     recControls.forEach(function (pair) {
       var el = composer.querySelector(pair[0]);
-      if (el) el.addEventListener('click', pair[1]);
+      if (el) MORPH.on(el, 'click', pair[1]);
     });
 
     if (sendBtn) {
-      sendBtn.addEventListener('click', function () {
+      MORPH.on(sendBtn, 'click', function () {
         var text = input ? (input.textContent || '').trim() : getComposerDraft(state).trim();
 
         // A message may be files only. Bailing on empty text here is what
@@ -3631,8 +3669,11 @@
     var chatBody = root.querySelector('.tma-dash__messages-chat-body');
 
     root.querySelectorAll('[data-messages-swipe]').forEach(function (row) {
-      if (row.dataset.messagesSwipeBound) return;
-      row.dataset.messagesSwipeBound = '1';
+      // A JS property, not a data attribute: TMAMorph syncs attributes
+      // from the rendered markup and would strip an imperative flag,
+      // resetting the guard and re-binding this row on every render.
+      if (row._messagesSwipeBound) return;
+      row._messagesSwipeBound = true;
 
       var side = row.getAttribute('data-messages-swipe');
       var index = parseInt(row.getAttribute('data-messages-index'), 10);
@@ -4054,8 +4095,10 @@
     var listBody = root.querySelector('.tma-dash__messages-list-body');
 
     root.querySelectorAll('[data-messages-row-swipe]').forEach(function (wrap) {
-      if (wrap.dataset.swipeBound) return;
-      wrap.dataset.swipeBound = '1';
+      // See the note on _messagesSwipeBound: an attribute flag does not
+      // survive attribute syncing, a property does.
+      if (wrap._swipeBound) return;
+      wrap._swipeBound = true;
 
       var track = wrap.querySelector('[data-messages-row-swipe-track]');
       if (!track) return;
@@ -4305,7 +4348,7 @@
       );
     });
 
-    root.querySelectorAll('[data-messages-row-swipe-action]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-row-swipe-action]').forEach(function (btn) {
       if (btn.dataset.bound) return;
       btn.dataset.bound = '1';
       btn.addEventListener('click', function (e) {
@@ -6598,14 +6641,14 @@
 
   function wireEvents(root, state, render) {
     if (!isMessagesMobile()) {
-      root.querySelectorAll('[data-messages-row]').forEach(function (btn) {
+      MORPH.unwired(root, '[data-messages-row]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           openConversation(root, state, render, btn.getAttribute('data-messages-row'));
         });
       });
     }
 
-    root.querySelectorAll('[data-messages-reply]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-reply]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
         e.preventDefault();
@@ -6621,7 +6664,7 @@
 
     // Clicking a reaction pill shows who reacted; the viewer's own reaction is
     // marked there and can be removed from the same panel.
-    root.querySelectorAll('[data-messages-react-emoji]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-react-emoji]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -6630,7 +6673,7 @@
     });
 
     // The bubble's react button opens the full picker.
-    root.querySelectorAll('[data-messages-react-open]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-react-open]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -6644,7 +6687,7 @@
     });
 
     // Clicking a reply quote scrolls to, and flashes, the original.
-    root.querySelectorAll('[data-messages-jump]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-jump]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -6652,7 +6695,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-load-more]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-load-more]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var messages = getMessages(state.selectedId);
         var oldest = null;
@@ -6666,7 +6709,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-menu]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-menu]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -6679,10 +6722,10 @@
      * is the mobile equivalent — there is no hover there — and it must not fire
      * when the finger is actually scrolling or swiping to reply.
      */
-    root.querySelectorAll('[data-messages-id]').forEach(function (row) {
+    MORPH.unwired(root, '[data-messages-id]').forEach(function (row) {
       var messageId = row.getAttribute('data-messages-id');
-      if (!messageId || row.dataset.contextBound) return;
-      row.dataset.contextBound = '1';
+      if (!messageId || row._contextBound) return;
+      row._contextBound = true;
 
       row.addEventListener('contextmenu', function (e) {
         // Let the browser's own menu handle links and selected text.
@@ -6724,7 +6767,7 @@
     });
 
     // The chat header's three-dot menu.
-    var convMenuBtn = root.querySelector('[data-messages-conversation-menu]');
+    var convMenuBtn = MORPH.unwiredOne(root, '[data-messages-conversation-menu]');
     if (convMenuBtn) {
       convMenuBtn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -6733,7 +6776,7 @@
       });
     }
 
-    var closeBtn = root.querySelector('[data-messages-close]');
+    var closeBtn = MORPH.unwiredOne(root, '[data-messages-close]');
     if (closeBtn) {
       closeBtn.addEventListener('click', function () {
         closeConversation(root, state, render);
@@ -6742,7 +6785,7 @@
 
     // Desktop right-click on a conversation row gets the same actions the
     // mobile swipe reveals.
-    root.querySelectorAll('[data-messages-row]').forEach(function (rowEl) {
+    MORPH.unwired(root, '[data-messages-row]', 'contextmenu').forEach(function (rowEl) {
       rowEl.addEventListener('contextmenu', function (e) {
         e.preventDefault();
         openConversationMenu(
@@ -6753,7 +6796,7 @@
       });
     });
 
-    var clearReplyBtn = root.querySelector('[data-messages-reply-clear]');
+    var clearReplyBtn = MORPH.unwiredOne(root, '[data-messages-reply-clear]');
     if (clearReplyBtn) {
       clearReplyBtn.addEventListener('click', function () {
         clearReplyTo(state);
@@ -6763,7 +6806,7 @@
 
     var retry = root.querySelector('[data-messages-retry]');
     if (retry) {
-      retry.addEventListener('click', function () {
+      MORPH.on(retry, 'click', function () {
         STORE.loaded = false;
         STORE.loadError = null;
         render();
@@ -6771,7 +6814,7 @@
       });
     }
 
-    var threadRetry = root.querySelector('[data-messages-thread-retry]');
+    var threadRetry = MORPH.unwiredOne(root, '[data-messages-thread-retry]');
     if (threadRetry) {
       threadRetry.addEventListener('click', function () {
         loadThread(root, state, render, state.selectedId, { toBottom: true });
@@ -6779,7 +6822,7 @@
     }
 
     // Paging upward: reaching the top of the thread pulls in older history.
-    var chatBody = root.querySelector('[data-messages-chat-body]');
+    var chatBody = MORPH.unwiredOne(root, '[data-messages-chat-body]');
     if (chatBody) {
       chatBody.addEventListener('scroll', function () {
         if (chatBody.scrollTop > 80) return;
@@ -6800,20 +6843,20 @@
     var search = root.querySelector('[data-messages-search]');
     if (search) {
       // Focusing takes over the column: the field is a mode, not a filter.
-      search.addEventListener('focus', function () {
+      MORPH.on(search, 'focus', function () {
         if (state.searchMode) return;
         state.searchMode = true;
         render();
       });
 
-      search.addEventListener('input', function () {
+      MORPH.on(search, 'input', function () {
         state.search = search.value;
         state.searchMode = true;
         render();
         runSearch(state, render, search.value);
       });
 
-      search.addEventListener('keydown', function (e) {
+      MORPH.on(search, 'keydown', function (e) {
         if (e.key === 'Escape') {
           e.stopPropagation();
           exitSearchMode(state, render);
@@ -6821,14 +6864,14 @@
       });
     }
 
-    var searchExit = root.querySelector('[data-messages-search-exit]');
+    var searchExit = MORPH.unwiredOne(root, '[data-messages-search-exit]');
     if (searchExit) {
       searchExit.addEventListener('click', function () {
         exitSearchMode(state, render);
       });
     }
 
-    root.querySelectorAll('[data-messages-search-conversation]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-search-conversation]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-messages-search-conversation');
         exitSearchMode(state, render);
@@ -6837,7 +6880,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-jump-to]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-jump-to]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         jumpToConversationMessage(
           root, state, render,
@@ -6849,14 +6892,14 @@
 
 
     // --- groups ----------------------------------------------------------
-    var newGroupBtn = root.querySelector('[data-messages-new-group]');
+    var newGroupBtn = MORPH.unwiredOne(root, '[data-messages-new-group]');
     if (newGroupBtn) {
       newGroupBtn.addEventListener('click', function () {
         openGroupPanel(root, state, render);
       });
     }
 
-    var groupBack = root.querySelector('[data-messages-group-back]');
+    var groupBack = MORPH.unwiredOne(root, '[data-messages-group-back]');
     if (groupBack) {
       groupBack.addEventListener('click', function () {
         state.groupOpen = false;
@@ -6864,7 +6907,7 @@
       });
     }
 
-    var groupName = root.querySelector('[data-messages-group-name]');
+    var groupName = MORPH.unwiredOne(root, '[data-messages-group-name]');
     if (groupName) {
       groupName.addEventListener('input', function () {
         state.groupName = groupName.value;
@@ -6874,7 +6917,7 @@
       });
     }
 
-    root.querySelectorAll('[data-messages-group-pick]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-group-pick]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = parseInt(btn.getAttribute('data-messages-group-pick'), 10);
         var person = (state.composeResults || []).filter(function (p) {
@@ -6884,7 +6927,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-group-drop]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-group-drop]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = parseInt(btn.getAttribute('data-messages-group-drop'), 10);
         state.groupMembers = (state.groupMembers || []).filter(function (p) {
@@ -6894,7 +6937,7 @@
       });
     });
 
-    var groupCreate = root.querySelector('[data-messages-group-create]');
+    var groupCreate = MORPH.unwiredOne(root, '[data-messages-group-create]');
     if (groupCreate) {
       groupCreate.addEventListener('click', function () {
         createGroup(root, state, render);
@@ -6902,7 +6945,7 @@
     }
 
     // --- group management from the profile panel --------------------------
-    var groupRename = root.querySelector('[data-messages-group-rename]');
+    var groupRename = MORPH.unwiredOne(root, '[data-messages-group-rename]');
     if (groupRename) {
       groupRename.addEventListener('click', function () {
         var row = findThread(state.selectedId) || {};
@@ -6919,10 +6962,10 @@
     var groupPhotoBtn = root.querySelector('[data-messages-group-photo]');
     var groupPhotoFile = root.querySelector('[data-messages-group-photo-file]');
     if (groupPhotoBtn && groupPhotoFile) {
-      groupPhotoBtn.addEventListener('click', function () {
+      MORPH.on(groupPhotoBtn, 'click', function () {
         groupPhotoFile.click();
       });
-      groupPhotoFile.addEventListener('change', function () {
+      MORPH.on(groupPhotoFile, 'change', function () {
         if (!groupPhotoFile.files || !groupPhotoFile.files.length) return;
         groupAction(
           root, state, render,
@@ -6933,7 +6976,7 @@
       });
     }
 
-    var groupAdd = root.querySelector('[data-messages-group-add]');
+    var groupAdd = MORPH.unwiredOne(root, '[data-messages-group-add]');
     if (groupAdd) {
       groupAdd.addEventListener('click', function () {
         // Reuses the people picker rather than a second search UI.
@@ -6942,7 +6985,7 @@
       });
     }
 
-    root.querySelectorAll('[data-messages-member-role]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-member-role]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         groupAction(
           root, state, render,
@@ -6956,7 +6999,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-member-remove]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-member-remove]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (!window.confirm('Remove this person from the group?')) return;
         groupAction(
@@ -6970,7 +7013,7 @@
       });
     });
 
-    var groupLeave = root.querySelector('[data-messages-group-leave]');
+    var groupLeave = MORPH.unwiredOne(root, '[data-messages-group-leave]');
     if (groupLeave) {
       groupLeave.addEventListener('click', function () {
         runConversationAction(root, state, render, state.selectedId, 'leave');
@@ -6978,33 +7021,33 @@
     }
 
     // --- profile ---------------------------------------------------------
-    root.querySelectorAll('[data-messages-open-profile]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-open-profile]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         openProfile(root, state, render);
       });
     });
 
-    var profileBack = root.querySelector('[data-messages-profile-back]');
+    var profileBack = MORPH.unwiredOne(root, '[data-messages-profile-back]');
     if (profileBack) {
       profileBack.addEventListener('click', function () {
         closeProfile(state, render);
       });
     }
 
-    root.querySelectorAll('[data-messages-gallery-tab]').forEach(function (tab) {
+    MORPH.unwired(root, '[data-messages-gallery-tab]').forEach(function (tab) {
       tab.addEventListener('click', function () {
         loadGallery(root, state, render, tab.getAttribute('data-messages-gallery-tab'));
       });
     });
 
-    root.querySelectorAll('[data-messages-gallery-open]').forEach(function (tile) {
+    MORPH.unwired(root, '[data-messages-gallery-open]').forEach(function (tile) {
       tile.addEventListener('click', function () {
         openGalleryItem(state, tile.getAttribute('data-messages-gallery-open'));
       });
     });
 
-    var profilePhoto = root.querySelector('[data-messages-profile-photo]');
+    var profilePhoto = MORPH.unwiredOne(root, '[data-messages-profile-photo]');
     if (profilePhoto) {
       profilePhoto.addEventListener('click', function () {
         if (!window.TMAPortalLightbox) return;
@@ -7024,35 +7067,35 @@
       });
     }
 
-    var profileMute = root.querySelector('[data-messages-profile-mute]');
+    var profileMute = MORPH.unwiredOne(root, '[data-messages-profile-mute]');
     if (profileMute) {
       profileMute.addEventListener('change', function () {
         commitMessagesRowAction(root, state, render, state.selectedId, 'mute');
       });
     }
 
-    var profilePin = root.querySelector('[data-messages-profile-pin]');
+    var profilePin = MORPH.unwiredOne(root, '[data-messages-profile-pin]');
     if (profilePin) {
       profilePin.addEventListener('change', function () {
         commitMessagesRowAction(root, state, render, state.selectedId, 'pin');
       });
     }
 
-    var profileClear = root.querySelector('[data-messages-profile-clear]');
+    var profileClear = MORPH.unwiredOne(root, '[data-messages-profile-clear]');
     if (profileClear) {
       profileClear.addEventListener('click', function () {
         runConversationAction(root, state, render, state.selectedId, 'clear');
       });
     }
 
-    var profileBlock = root.querySelector('[data-messages-profile-block]');
+    var profileBlock = MORPH.unwiredOne(root, '[data-messages-profile-block]');
     if (profileBlock) {
       profileBlock.addEventListener('click', function () {
         runConversationAction(root, state, render, state.selectedId, 'block');
       });
     }
 
-    var openClient = root.querySelector('[data-messages-open-client]');
+    var openClient = MORPH.unwiredOne(root, '[data-messages-open-client]');
     if (openClient) {
       openClient.addEventListener('click', function () {
         var row = findThread(state.selectedId);
@@ -7065,7 +7108,7 @@
       });
     }
 
-    var searchClear = root.querySelector('[data-messages-search-clear]');
+    var searchClear = MORPH.unwiredOne(root, '[data-messages-search-clear]');
     if (searchClear) {
       searchClear.addEventListener('click', function () {
         state.search = '';
@@ -7077,13 +7120,13 @@
     }
 
     // --- new message ------------------------------------------------------
-    root.querySelectorAll('[data-messages-compose]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-compose]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openComposePanel(root, state, render);
       });
     });
 
-    var composeSearch = root.querySelector('[data-messages-compose-search]');
+    var composeSearch = MORPH.unwiredOne(root, '[data-messages-compose-search]');
     if (composeSearch) {
       composeSearch.addEventListener('input', function () {
         state.composeQuery = composeSearch.value;
@@ -7092,7 +7135,7 @@
       });
     }
 
-    root.querySelectorAll('[data-messages-start]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-start]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = parseInt(btn.getAttribute('data-messages-start'), 10);
         if (isNaN(id)) return;
@@ -7127,7 +7170,7 @@
     }
 
     // --- chats (the default view) -----------------------------------------
-    root.querySelectorAll('[data-messages-nav-chats]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-nav-chats]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         showListView('chats');
         render();
@@ -7135,7 +7178,7 @@
     });
 
     // --- updates ----------------------------------------------------------
-    root.querySelectorAll('[data-messages-nav-updates]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-nav-updates]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var opening = !state.updatesMode;
         showListView(opening ? 'updates' : 'chats');
@@ -7144,28 +7187,28 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-update-input]').forEach(function (input) {
+    MORPH.unwired(root, '[data-messages-update-input]').forEach(function (input) {
       input.addEventListener('input', function () { state.updateDraft = input.value; });
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); saveMyUpdate(root, state, render, input.value); }
       });
     });
 
-    root.querySelectorAll('[data-messages-update-save]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-update-save]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var input = root.querySelector('[data-messages-update-input]');
         saveMyUpdate(root, state, render, input ? input.value : '');
       });
     });
 
-    root.querySelectorAll('[data-messages-update-clear]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-update-clear]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         saveMyUpdate(root, state, render, '');
       });
     });
 
     // --- calls ------------------------------------------------------------
-    root.querySelectorAll('[data-messages-nav-calls]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-nav-calls]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         showListView(state.callsMode ? 'chats' : 'calls');
         render();
@@ -7175,14 +7218,14 @@
     // --- archived chats ---------------------------------------------------
     wireArchivedPull(root);
 
-    root.querySelectorAll('[data-messages-archived]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-archived]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         showListView(state.tab === 'archived' ? 'chats' : 'archived');
         render();
       });
     });
 
-    root.querySelectorAll('[data-messages-archived-exit]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-archived-exit]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.tab = 'all';
         render();
@@ -7190,7 +7233,7 @@
     });
 
     // --- media across all chats -------------------------------------------
-    root.querySelectorAll('[data-messages-media]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-media]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var opening = !state.mediaMode;
         showListView(opening ? 'media' : 'chats');
@@ -7199,7 +7242,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-media-shelf]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-media-shelf]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var shelf = btn.getAttribute('data-messages-media-shelf');
         if (shelf === (state.mediaShelf || 'media')) return;
@@ -7209,7 +7252,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-media-open]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-media-open]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openMessagesMediaItem(state, parseInt(btn.getAttribute('data-messages-media-open'), 10));
       });
@@ -7219,7 +7262,7 @@
     // its tile so the filename shows through instead of a broken-image icon.
     // Bound as a real listener rather than an inline onerror: `error` does not
     // bubble, so it has to be attached per image.
-    root.querySelectorAll('[data-messages-media-thumb]').forEach(function (img) {
+    MORPH.unwired(root, '[data-messages-media-thumb]').forEach(function (img) {
       if (img._fallbackWired) return;
       img._fallbackWired = true;
       img.addEventListener('error', function () {
@@ -7229,7 +7272,7 @@
     });
 
     // --- messages settings ------------------------------------------------
-    root.querySelectorAll('[data-messages-settings]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-settings]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var opening = !state.settingsOpen;
         state.settingsOpen = opening;
@@ -7240,7 +7283,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-setting]').forEach(function (field) {
+    MORPH.unwired(root, '[data-messages-setting]').forEach(function (field) {
       field.addEventListener('change', function () {
         var key = field.getAttribute('data-messages-setting');
         var value = field.type === 'checkbox' ? field.checked : field.value;
@@ -7248,7 +7291,7 @@
       });
     });
 
-    root.querySelectorAll('[data-messages-panel-close]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-messages-panel-close]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         closePanels(state, render);
       });
@@ -7266,25 +7309,25 @@
     if (dropZone && state.selectedId) {
       var depth = 0;
 
-      dropZone.addEventListener('dragenter', function (e) {
+      MORPH.on(dropZone, 'dragenter', function (e) {
         if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
         e.preventDefault();
         depth += 1;
         dropZone.classList.add('is-drop-target');
       });
 
-      dropZone.addEventListener('dragover', function (e) {
+      MORPH.on(dropZone, 'dragover', function (e) {
         if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') === -1) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       });
 
-      dropZone.addEventListener('dragleave', function () {
+      MORPH.on(dropZone, 'dragleave', function () {
         depth = Math.max(0, depth - 1);
         if (depth === 0) dropZone.classList.remove('is-drop-target');
       });
 
-      dropZone.addEventListener('drop', function (e) {
+      MORPH.on(dropZone, 'drop', function (e) {
         if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
         e.preventDefault();
         depth = 0;
@@ -7293,7 +7336,7 @@
       });
     }
 
-    root.querySelectorAll('[data-messages-voice]').forEach(function (el) {
+    MORPH.unwired(root, '[data-messages-voice]').forEach(function (el) {
       var play = el.querySelector('[data-messages-voice-play]');
       if (play) {
         play.addEventListener('click', function (e) {
@@ -7323,7 +7366,7 @@
     });
 
     // Opening an attachment in the shared lightbox.
-    root.querySelectorAll('[data-messages-attachment]').forEach(function (el) {
+    MORPH.unwired(root, '[data-messages-attachment]').forEach(function (el) {
       el.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -7337,7 +7380,7 @@
 
     var backBtn = root.querySelector('[data-messages-back]');
     if (backBtn && root._messagesOnBack) {
-      backBtn.addEventListener('click', root._messagesOnBack);
+      MORPH.on(backBtn, 'click', root._messagesOnBack);
     }
   }
 
@@ -7548,10 +7591,17 @@
     function render(intent) {
       var snapshot = captureScroll(root);
 
-      root.innerHTML = renderLayout(state, render);
+      // Reconciled, not replaced. Unchanged bubbles, avatars and attachments
+      // are left alone entirely, so the thread no longer flashes and reloads
+      // its images on every send, tick and reaction.
+      MORPH.patch(root, renderLayout(state, render));
       ensureMessagesMobileHeader(root, state);
       wireEvents(root, state, render);
 
+      // Scroll is largely preserved by reconciliation itself now — the panes
+      // are never destroyed. This still runs because it also handles the
+      // deliberate moves: opening a conversation jumps to the newest message,
+      // and loading older history holds the reader's place.
       restoreScroll(root, snapshot, intent);
       syncTabBarBadges();
     }

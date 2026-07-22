@@ -86,13 +86,28 @@
       '</div>';
   }
 
-  // Real Recent Files + Favorites are fetched on mount; until they arrive we
-  // show shimmering skeletons rather than empty or placeholder rows.
+  /*
+   * Recent Files, Favorites and the KPI row are server-owned and cached here for
+   * the life of the page, not re-fetched per mount.
+   *
+   * These flags are deliberately module-level rather than per-mount. Returning
+   * to the Dashboard re-runs mount(), and if "have we loaded?" lived on the
+   * element, every visit would start from nothing: skeletons, a fetch, then a
+   * rebuild. Kept here, a revisit paints the data it already has and revalidates
+   * quietly behind it.
+   *
+   * The *Inflight promises collapse overlapping refreshes into one request.
+   */
   var homeFilesLoaded = false;
+  var homeFilesInflight = null;
 
-  // Same contract for the KPI row: server-measured, skeletons until it lands.
   var homeMetricsLoaded = false;
   var homeMetrics = null;
+  var homeMetricsInflight = null;
+
+  // Pending-approvals count, fetched once and reused. It was previously
+  // requested on every mount, including the two re-renders each load triggers.
+  var pendingUsersCount = null;
 
   // `path` from the API is the full ancestor chain ([{id,name}, ...], root
   // first) rather than just the immediate parent's name — join it into one
@@ -130,12 +145,20 @@
   }
 
   function renderRecentFiles(s) {
+    // data-key ties this panel to *itself* across renders. Panels are siblings
+    // in one grid and can be shown or hidden individually, so without a key a
+    // hidden neighbour would shift the others along and this panel's contents —
+    // thumbnails included — would be rewritten onto a different node.
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" aria-label="Recent files" aria-busy="true">' +
+      return '<section class="tma-portal-panel" data-key="panel-recent" aria-label="Recent files" aria-busy="true">' +
         '<h2 class="tma-portal-panel__title">Recent Files</h2>' + skeletonFileRows(3) + '</section>';
     }
     var rows = s.recentFiles.map(function (f) {
-      return '<button type="button" class="tma-portal-file-row" data-home-file="' + ui().esc(f.id) + '"' +
+      // Keyed by kind+id: a folder and a file can share a numeric id, and
+      // matching the wrong one would swap a row's icon and name.
+      return '<button type="button" class="tma-portal-file-row"' +
+        ' data-key="recent-' + ui().esc(f.kind) + '-' + ui().esc(f.id) + '"' +
+        ' data-home-file="' + ui().esc(f.id) + '"' +
         ' data-home-file-kind="' + ui().esc(f.kind) + '"' +
         (f.folderId ? ' data-home-file-folder="' + ui().esc(f.folderId) + '"' : '') + '>' +
         rowIconHtml(f) +
@@ -144,7 +167,7 @@
         (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
         '</span></button>';
     }).join('');
-    return '<section class="tma-portal-panel" aria-label="Recent files">' +
+    return '<section class="tma-portal-panel" data-key="panel-recent" aria-label="Recent files">' +
       '<h2 class="tma-portal-panel__title">Recent Files</h2>' +
       (rows || '<p class="tma-portal-panel__note">No recent files yet.</p>') +
       '</section>';
@@ -155,11 +178,11 @@
       var tile = '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
         '<span class="tma-skeleton" style="width:44px;height:44px;border-radius:var(--radius-12)"></span>' +
         '<span class="tma-skeleton tma-skeleton--text" style="width:70%;height:11px"></span></div>';
-      return '<section class="tma-portal-panel" aria-label="Shortcuts" aria-busy="true">' +
+      return '<section class="tma-portal-panel" data-key="panel-shortcuts" aria-label="Shortcuts" aria-busy="true">' +
         '<h2 class="tma-portal-panel__title">Shortcuts</h2>' +
         '<div class="tma-portal-shortcuts">' + new Array(8).fill(tile).join('') + '</div></section>';
     }
-    return '<section class="tma-portal-panel" aria-label="Shortcuts">' +
+    return '<section class="tma-portal-panel" data-key="panel-shortcuts" aria-label="Shortcuts">' +
       '<h2 class="tma-portal-panel__title">Shortcuts</h2>' +
       '<div class="tma-portal-shortcuts">' +
       SHORTCUTS.map(function (sc) {
@@ -174,11 +197,11 @@
 
   function renderTutorials(s) {
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" aria-label="Tutorials" aria-busy="true">' +
+      return '<section class="tma-portal-panel" data-key="panel-tutorials" aria-label="Tutorials" aria-busy="true">' +
         '<h2 class="tma-portal-panel__title">Tutorials</h2>' + skeletonFileRows(4) + '</section>';
     }
     var done = s.tutorials.filter(function (t) { return t.done; }).length;
-    return '<section class="tma-portal-panel" aria-label="Tutorials">' +
+    return '<section class="tma-portal-panel" data-key="panel-tutorials" aria-label="Tutorials">' +
       '<div class="tma-portal-head" style="gap:var(--space-8)">' +
       '<h2 class="tma-portal-panel__title">Tutorials</h2>' +
       ui().select(['Getting Started'], 'Getting Started', 'data-home-tutorial-set', 'Tutorial set') +
@@ -354,14 +377,16 @@
 
   function renderFavorites(s) {
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" aria-label="Favorites" aria-busy="true">' +
+      return '<section class="tma-portal-panel" data-key="panel-favorites" aria-label="Favorites" aria-busy="true">' +
         '<h2 class="tma-portal-panel__title">Favorites</h2>' +
         '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
         skeletonFileRows(2) + '</section>';
     }
     var favs = (s.folders && s.folders.favorites) || [];
     var rows = favs.map(function (f) {
-      return '<button type="button" class="tma-portal-file-row" data-home-favorite="' + ui().esc(f.id) + '"' +
+      return '<button type="button" class="tma-portal-file-row"' +
+        ' data-key="fav-' + ui().esc(f.kind) + '-' + ui().esc(f.id) + '"' +
+        ' data-home-favorite="' + ui().esc(f.id) + '"' +
         ' data-home-favorite-kind="' + ui().esc(f.kind) + '"' +
         (f.folderId ? ' data-home-favorite-folder="' + ui().esc(f.folderId) + '"' : '') + '>' +
         rowIconHtml(f) +
@@ -370,7 +395,7 @@
         (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
         '</span></button>';
     }).join('');
-    return '<section class="tma-portal-panel" aria-label="Favorites">' +
+    return '<section class="tma-portal-panel" data-key="panel-favorites" aria-label="Favorites">' +
       '<h2 class="tma-portal-panel__title">Favorites</h2>' +
       '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
       (rows || '<p class="tma-portal-panel__note">No favorites yet.</p>') +
@@ -384,13 +409,21 @@
     var net = window.TMAFilesNet;
     if (!net) { homeFilesLoaded = true; return; }
 
-    // Drop any stale, localStorage-persisted mock immediately: Recent Files and
-    // Favorites are server-owned, so old cached values must never render. They
-    // are refilled from the API below (or left empty if it fails).
-    var s0 = data().state();
-    s0.recentFiles = [];
-    s0.folders = s0.folders || {};
-    s0.folders.favorites = [];
+    // One flight at a time. Returning to the Dashboard while a refresh is still
+    // running used to start a second identical pair of requests, and whichever
+    // landed last won.
+    if (homeFilesInflight) return;
+
+    // Recent Files and Favorites are server-owned, so any value persisted by the
+    // old localStorage mock must never reach the screen. That purge belongs to
+    // the *first* load only — doing it on every refresh is what emptied the
+    // panel and forced the skeleton back each time the Dashboard was opened.
+    if (!homeFilesLoaded) {
+      var s0 = data().state();
+      s0.recentFiles = [];
+      s0.folders = s0.folders || {};
+      s0.folders.favorites = [];
+    }
 
     // If the fetch stalls (slow single-threaded dev server), stop showing the
     // skeleton after a while and fall back to the empty state. The real data is
@@ -405,42 +438,54 @@
     // every other section uses), so a plain perPage=6 could return e.g. 6
     // folders and cut off a file modified a minute ago. Ask for a wider
     // candidate pool and do the true recency merge across both types here.
-    Promise.all([
+    homeFilesInflight = Promise.all([
       net.fetchJSON(net.url('/?section=recent&perPage=24')).catch(function () { return null; }),
       net.fetchJSON(net.url('/?section=favorites&perPage=8')).catch(function () { return null; }),
     ]).then(function (res) {
       clearTimeout(giveUp);
+      homeFilesInflight = null;
+
+      // A failed refresh keeps whatever is already on screen rather than
+      // clearing the panel: the rows shown are still the last known-good truth,
+      // and blanking them is both a worse answer and a visible flash.
+      if (!res[0] && !res[1]) { homeFilesLoaded = true; return; }
+
       homeFilesLoaded = true;
       var s = data().state();
 
-      // Always assign — a failed fetch yields an empty list, never stale data.
-      var recentFolders = (res[0] && res[0].folders || []).map(function (f) {
-        return {
-          kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour,
-          path: pathLabel('folder', f.path), sortAt: f.modifiedAt,
-        };
-      });
-      var recentFiles = (res[0] && res[0].files || []).map(function (f) {
-        return {
-          kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
-          folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
-        };
-      });
-      s.recentFiles = recentFolders.concat(recentFiles)
-        .sort(function (a, b) { return new Date(b.sortAt || 0) - new Date(a.sortAt || 0); })
-        .slice(0, 6);
+      // Each section is applied only if its own request succeeded, so a failing
+      // Favorites call cannot wipe a good Recent Files list.
+      if (res[0]) {
+        var recentFolders = (res[0].folders || []).map(function (f) {
+          return {
+            kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour,
+            path: pathLabel('folder', f.path), sortAt: f.modifiedAt,
+          };
+        });
+        var recentFiles = (res[0].files || []).map(function (f) {
+          return {
+            kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+            folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
+          };
+        });
+        s.recentFiles = recentFolders.concat(recentFiles)
+          .sort(function (a, b) { return new Date(b.sortAt || 0) - new Date(a.sortAt || 0); })
+          .slice(0, 6);
+      }
 
-      var favFolders = (res[1] && res[1].folders || []).map(function (f) {
-        return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
-      });
-      var favFiles = (res[1] && res[1].files || []).map(function (f) {
-        return {
-          kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
-          folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
-        };
-      });
-      s.folders = s.folders || {};
-      s.folders.favorites = favFolders.concat(favFiles);
+      if (res[1]) {
+        var favFolders = (res[1].folders || []).map(function (f) {
+          return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
+        });
+        var favFiles = (res[1].files || []).map(function (f) {
+          return {
+            kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+            folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
+          };
+        });
+        s.folders = s.folders || {};
+        s.folders.favorites = favFolders.concat(favFiles);
+      }
 
       if (el.isConnected) mount(el, { fromLoad: true });
     });
@@ -451,14 +496,19 @@
    * library, signatures from the request log. A failure leaves the row in
    * place with em-dashes rather than showing a stale or invented number. */
   function loadHomeMetrics(el) {
-    fetch('/portal/dashboard/metrics', {
+    if (homeMetricsInflight) return;
+
+    homeMetricsInflight = fetch('/portal/dashboard/metrics', {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { homeMetrics = j; })
-      .catch(function () { homeMetrics = null; })
+      // A failed refresh keeps the numbers already on the cards; only the very
+      // first attempt has nothing to fall back to.
+      .then(function (j) { if (j) homeMetrics = j; })
+      .catch(function () {})
       .then(function () {
+        homeMetricsInflight = null;
         homeMetricsLoaded = true;
         if (el.isConnected) mount(el, { fromLoad: true });
       });
@@ -477,9 +527,17 @@
     var cal = (window.TMACalendar && window.TMACalendar.getTodayEventCount) ? window.TMACalendar.getTodayEventCount() : 0;
     setCount('email', email || 4);
     setCount('calendar', cal || 2);
+
+    // Painted from cache when known, so the badge does not blink back to zero
+    // and re-populate on every render.
+    if (pendingUsersCount !== null) { setCount('users', pendingUsersCount); return; }
+
     fetch('/admin/users/pending-count', { credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
-      .then(function (j) { setCount('users', (j && j.count) || 0); })
+      .then(function (j) {
+        pendingUsersCount = (j && j.count) || 0;
+        setCount('users', pendingUsersCount);
+      })
       .catch(function () {});
   }
 
@@ -487,16 +545,43 @@
     opts = opts || {};
     var s = data().state();
     var show = tiles();
-    function rerender() { mount(el); }
+    // Local re-render only. Toggling a tile or ticking a tutorial is a change to
+    // *this* view, not a reason to re-request Recent Files, Favorites and the
+    // KPI row from the server.
+    function rerender() { mount(el, { fromLoad: true }); }
 
-    el.innerHTML =
+    /*
+     * The greeting is rendered with the real name and avatar whenever
+     * TMACurrentUser already has them.
+     *
+     * It used to always emit a blank skeleton avatar and then assign the true
+     * src further down. Under a reconciling render that reads as: reset the
+     * image to a 1x1 placeholder, then set it back — a visible flash of every
+     * profile picture on every render, and a fresh network request each time.
+     */
+    var me = window.TMACurrentUser ? window.TMACurrentUser.get() : null;
+    var heroSrc = me ? window.TMACurrentUser.avatarSrc(me.avatar, me.name) : null;
+
+    var heroAvatarHtml = heroSrc
+      ? '<img class="tma-portal-hello__avatar" src="' + ui().esc(heroSrc) + '" alt="" width="56" height="56">'
+      : '<img class="tma-portal-hello__avatar tma-skeleton tma-skeleton--avatar" width="56" height="56"' +
+        ' src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">';
+
+    var heroTitleHtml = me
+      ? '<h2 class="tma-portal-hello__title">Hello ' + ui().esc(me.firstName) + '</h2>'
+      : '<h2 class="tma-portal-hello__title tma-skeleton tma-skeleton--text"></h2>';
+
+    var picLinkLabel = me && me.hasAvatar ? 'Change profile picture' : 'Add profile picture';
+
+    var html =
       '<div class="tma-portal-page" data-node-id="portal-home">' +
       '<div class="tma-portal-hello">' +
       '<div class="tma-portal-hello__main">' +
-      '<img class="tma-portal-hello__avatar tma-skeleton tma-skeleton--avatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">' +
+      heroAvatarHtml +
       '<div class="tma-portal-hello__copy">' +
-      '<h2 class="tma-portal-hello__title tma-skeleton tma-skeleton--text"></h2>' +
-      '<button type="button" class="tma-portal-link tma-portal-hello__picture-link" data-home-add-picture>Add profile picture</button>' +
+      heroTitleHtml +
+      '<button type="button" class="tma-portal-link tma-portal-hello__picture-link" data-home-add-picture>' +
+      picLinkLabel + '</button>' +
       '</div></div>' +
       '<div class="tma-portal-hello__actions">' +
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
@@ -513,7 +598,30 @@
       '</div>' +
       '</div>';
 
-    el.querySelectorAll('.tma-dash__overview-day').forEach(function (day) {
+    /*
+     * Reconcile rather than replace.
+     *
+     * Assigning innerHTML here destroyed and rebuilt the whole Dashboard on
+     * every render — including each Recent Files thumbnail and the profile
+     * photo, which is what made the panel blink and the images re-request. The
+     * panels and rows carry stable keys, so unchanged rows are now left
+     * untouched and only genuinely changed ones are rewritten.
+     */
+    if (window.TMAMorph) window.TMAMorph.patch(el, html);
+    else el.innerHTML = html;
+
+    // Wiring runs after every render, but the nodes it walks now survive across
+    // renders — so each binding is registered once per element rather than once
+    // per render. Without this, a single click would fire N times on the Nth
+    // render. See TMAMorph.unwired.
+    var pick = window.TMAMorph
+      ? function (sel) { return window.TMAMorph.unwired(el, sel); }
+      : function (sel) { return Array.prototype.slice.call(el.querySelectorAll(sel)); };
+    var bind = window.TMAMorph
+      ? window.TMAMorph.on
+      : function (node, type, fn) { if (node) node.addEventListener(type, fn); };
+
+    pick('.tma-dash__overview-day').forEach(function (day) {
       day.addEventListener('click', function () {
         el.querySelectorAll('.tma-dash__overview-day').forEach(function (d) {
           d.classList.remove('tma-dash__overview-day--active');
@@ -522,7 +630,7 @@
       });
     });
 
-    el.querySelectorAll('[data-home-shortcut]').forEach(function (b) {
+    pick('[data-home-shortcut]').forEach(function (b) {
       b.addEventListener('click', function () {
         var id = b.getAttribute('data-home-shortcut');
         var sc = SHORTCUTS.filter(function (x) { return x.id === id; })[0];
@@ -534,7 +642,7 @@
       });
     });
 
-    el.querySelectorAll('[data-home-file]').forEach(function (b) {
+    pick('[data-home-file]').forEach(function (b) {
       b.addEventListener('click', function () {
         if (b.getAttribute('data-home-file-kind') === 'folder') {
           navigate({ navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: b.getAttribute('data-home-file') });
@@ -548,7 +656,7 @@
       });
     });
 
-    el.querySelectorAll('[data-home-favorite]').forEach(function (b) {
+    pick('[data-home-favorite]').forEach(function (b) {
       b.addEventListener('click', function () {
         var kind = b.getAttribute('data-home-favorite-kind');
         if (kind === 'folder') {
@@ -564,7 +672,7 @@
       });
     });
 
-    el.querySelectorAll('[data-home-tutorial]').forEach(function (b) {
+    pick('[data-home-tutorial]').forEach(function (b) {
       b.addEventListener('click', function () {
         var t = s.tutorials.filter(function (x) { return x.id === b.getAttribute('data-home-tutorial'); })[0];
         if (!t) return;
@@ -574,26 +682,13 @@
       });
     });
 
-    /* the picker is owned by current-user.js (delegated click) */
-    if (window.TMACurrentUser) {
-      var meNow = window.TMACurrentUser.get();
-      if (meNow) {
-        var hello = el.querySelector('.tma-portal-hello__title');
-        var heroAvatar = el.querySelector('.tma-portal-hello__avatar');
-        // The markup mounts these as skeletons (see the template above); this
-        // sync fast-path — taken when TMACurrentUser already has data by the
-        // time this view mounts — has to clear that state itself, same as
-        // current-user.js's own async listener does for the general case.
-        if (window.TMASkeleton) { window.TMASkeleton.clear(hello); window.TMASkeleton.clear(heroAvatar); }
-        if (hello) hello.textContent = 'Hello ' + meNow.firstName;
-        if (heroAvatar) heroAvatar.src = window.TMACurrentUser.avatarSrc(meNow.avatar, meNow.name);
-        var picLink = el.querySelector('[data-home-add-picture]');
-        if (picLink) picLink.textContent = meNow.hasAvatar ? 'Change profile picture' : 'Add profile picture';
-      }
-    }
+    /* The greeting and avatar are rendered directly in the markup above when
+     * TMACurrentUser is ready. When it isn't yet, the skeleton stands until
+     * current-user.js's own listener fires and re-renders this view — no
+     * post-render patching of the DOM is needed here.
+     * The picture picker itself is owned by current-user.js (delegated click). */
 
-    var edit = el.querySelector('[data-home-edit]');
-    if (edit) edit.addEventListener('click', function () { editDashboardModal(rerender); });
+    bind(el.querySelector('[data-home-edit]'), 'click', function () { editDashboardModal(rerender); });
 
     fillShortcutCounts(el);
     // Fetch real Recent Files + Favorites, and the KPI metrics, once per

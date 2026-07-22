@@ -30,6 +30,7 @@ use App\Support\Messaging\PresenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use App\Models\MessageReaction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -61,7 +62,9 @@ class MessagingController extends Controller
         $conversations = Conversation::query()
             ->forUser($user)
             ->with([
-                'activeParticipants.user',
+                // presence comes along so PresenceService does not fetch it one
+                // subject at a time while presenting the list.
+                'activeParticipants.user.presence',
                 // Only the newest message is needed for the list preview.
                 'messages' => fn ($q) => $q->latest('id')->limit(1),
             ])
@@ -76,9 +79,12 @@ class MessagingController extends Controller
 
         $unread = $this->unreadCounts($user);
 
+        $latestReactions = $this->latestReactionsFor($conversations->pluck('id'));
+
         $rows = $conversations
             ->map(fn (Conversation $c) => MessagingPresenter::conversation(
-                $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0)
+                $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0),
+                $latestReactions
             ))
             // Pinned conversations sort above the rest but keep recency within
             // each band, which is the order the list expects to render.
@@ -116,6 +122,40 @@ class MessagingController extends Controller
      * One grouped query rather than a count per row: the chat list asks for
      * this on every load, and the sidebar badge sums it.
      */
+    /**
+     * The newest reaction in each of the given conversations, keyed by
+     * conversation id.
+     *
+     * Two bounded queries rather than one per conversation: the first picks the
+     * winning id per conversation, the second hydrates just those rows. Doing
+     * this inside the presenter cost a query per row, which was the largest
+     * single component of loading the Messages page.
+     */
+    private function latestReactionsFor(Collection $conversationIds): Collection
+    {
+        if ($conversationIds->isEmpty()) {
+            return collect();
+        }
+
+        $ids = DB::table('message_reactions')
+            ->join('messages', 'messages.id', '=', 'message_reactions.message_id')
+            ->whereIn('messages.conversation_id', $conversationIds)
+            ->whereNull('messages.deleted_at')
+            ->groupBy('messages.conversation_id')
+            ->selectRaw('max(message_reactions.id) as id')
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return MessageReaction::query()
+            ->whereIn('message_reactions.id', $ids)
+            ->with(['user', 'message'])
+            ->get()
+            ->keyBy(fn (MessageReaction $r) => $r->message?->conversation_id);
+    }
+
     private function unreadCounts(User $user): Collection
     {
         return DB::table('messages')

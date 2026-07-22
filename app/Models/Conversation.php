@@ -121,6 +121,16 @@ class Conversation extends Model
     /** This user's own membership row, or null if they are not a member. */
     public function participantFor(User $user): ?ConversationParticipant
     {
+        /*
+         * activeParticipants is exactly "participants with left_at null", so a
+         * caller that already loaded it has the answer in memory. Querying
+         * anyway cost one round trip per conversation in the list endpoint,
+         * via isManageableBy()/isLeavableBy().
+         */
+        if ($this->relationLoaded('activeParticipants')) {
+            return $this->activeParticipants->firstWhere('user_id', $user->id);
+        }
+
         return $this->participants()
             ->where('user_id', $user->id)
             ->whereNull('left_at')

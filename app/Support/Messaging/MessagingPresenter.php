@@ -43,11 +43,17 @@ class MessagingPresenter
             ->first()?->name ?? 'Unknown';
     }
 
+    /**
+     * @param  ?\Illuminate\Support\Collection  $latestReactions  Newest reaction
+     *   per conversation id, when the caller has already batched them. Passing
+     *   null keeps the single-conversation behaviour of looking one up.
+     */
     public static function conversation(
         Conversation $conversation,
         User $viewer,
         ?ConversationParticipant $participant = null,
         ?int $unread = null,
+        ?\Illuminate\Support\Collection $latestReactions = null,
     ): array {
         $participant ??= $conversation->participantFor($viewer);
         $others = $conversation->activeParticipants
@@ -78,7 +84,7 @@ class MessagingPresenter
             'preview' => self::preview($last, $viewer, $conversation),
             // Surfaced in the list the way an unsent draft is, without letting
             // a reaction masquerade as a message.
-            'reactionNote' => self::reactionNote($conversation, $viewer, $last),
+            'reactionNote' => self::reactionNote($conversation, $viewer, $last, $latestReactions),
             'time' => self::listTime($conversation->last_message_at),
             'timestamp' => $conversation->last_message_at?->toIso8601String(),
             'unread' => $participant ? self::unreadFor($participant, $conversation, $unread) : 0,
@@ -332,13 +338,28 @@ class MessagingPresenter
      * you want to see from the list, the same way an unsent draft is surfaced
      * there. Only shown when it is newer than the last message.
      */
-    private static function reactionNote(Conversation $conversation, User $viewer, ?Message $last): ?string
-    {
-        $reaction = MessageReaction::query()
-            ->whereHas('message', fn ($q) => $q->where('conversation_id', $conversation->id))
-            ->with(['user', 'message'])
-            ->latest('id')
-            ->first();
+    private static function reactionNote(
+        Conversation $conversation,
+        User $viewer,
+        ?Message $last,
+        ?\Illuminate\Support\Collection $latestReactions = null,
+    ): ?string {
+        /*
+         * Presenting a list means asking this for every row. Left to itself
+         * that is one query per conversation, so the list endpoint batches the
+         * lookup (see MessagingController::latestReactionsFor) and hands the
+         * result in. A caller presenting a single conversation passes nothing
+         * and takes the direct query, which is cheaper than batching one row.
+         */
+        if ($latestReactions !== null) {
+            $reaction = $latestReactions->get($conversation->id);
+        } else {
+            $reaction = MessageReaction::query()
+                ->whereHas('message', fn ($q) => $q->where('conversation_id', $conversation->id))
+                ->with(['user', 'message'])
+                ->latest('id')
+                ->first();
+        }
 
         if (! $reaction) {
             return null;

@@ -122,6 +122,12 @@
     var wrap = input.closest('[data-portal-search-wrap]');
     if (!wrap) return;
 
+    // Views call this from their render path. Under reconciliation the input
+    // survives the render, so without this guard each pass stacks another set
+    // of handlers and one keystroke fires the search several times over.
+    if (input._portalToolbarSearchWired) return;
+    input._portalToolbarSearchWired = true;
+
     function sync() {
       var has = !!input.value.trim();
       wrap.classList.toggle('tma-dash__toolbar-search--has-value', has);
@@ -317,8 +323,11 @@
   }
 
   function wireHeadDropdown(wrap, onSelect) {
-    if (!wrap || wrap.dataset.portalHeadDropdownWired) return;
-    wrap.dataset.portalHeadDropdownWired = '1';
+    // A JS property, not a dataset flag. TMAMorph syncs attributes from the
+    // rendered markup, so an imperative data-* guard is stripped on the next
+    // render — the guard resets and this binds a second time on the same node.
+    if (!wrap || wrap._portalHeadDropdownWired) return;
+    wrap._portalHeadDropdownWired = true;
     if (window.TMAHeadDropdown) window.TMAHeadDropdown.mount();
     wrap.addEventListener('head-dropdown:select', function (e) {
       if (e.detail.wrap !== wrap) return;
@@ -340,8 +349,10 @@
 
   /* Small dropdown menu anchored to a trigger */
   function wireMenu(trigger, items, onPick) {
-    if (!trigger || trigger.dataset.portalMenuWired) return;
-    trigger.dataset.portalMenuWired = '1';
+    // See wireHeadDropdown: a property survives attribute syncing, an attribute
+    // does not.
+    if (!trigger || trigger._portalMenuWired) return;
+    trigger._portalMenuWired = true;
     trigger.addEventListener('click', function (e) {
       e.stopPropagation();
       var existing = document.querySelector('.tma-portal-menu-pop');

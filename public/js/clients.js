@@ -5,6 +5,19 @@
 (function () {
   'use strict';
 
+  /*
+   * Keyed DOM reconciliation (js/dom-morph.js). See dom-morph.js for why the
+   * views no longer assign innerHTML, and why the wiring below binds through
+   * MORPH.unwired / unwiredOne / on — nodes survive a render now, so plain
+   * addEventListener in a render path stacks one handler per render.
+   */
+  var MORPH = window.TMAMorph || {
+    patch: function (root, html) { root.innerHTML = html; },
+    unwired: function (root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); },
+    unwiredOne: function (root, sel) { return root.querySelector(sel); },
+    on: function (el, type, fn) { if (el) el.addEventListener(type, fn); },
+  };
+
   var AVATAR = 'images/avatars/';
   var ICON = 'images/icons/phosphor/';
 
@@ -1898,7 +1911,7 @@
   }
 
   function wireDirectoryRows(root, state, navigate) {
-    root.querySelectorAll('[data-clients-row]').forEach(function (row) {
+    MORPH.unwired(root, '[data-clients-row]').forEach(function (row) {
       row.addEventListener('click', function (e) {
         if (e.target.closest('[data-clients-check]') || e.target.closest('[data-clients-search-wrap]')) return;
         e.preventDefault();
@@ -1932,8 +1945,8 @@
     var pagination = root.querySelector('[data-clients-pagination]');
     if (!pagination) return;
 
-    pagination.querySelectorAll('[data-page]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+    MORPH.unwired(pagination, '[data-page]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
         var page = parseInt(btn.getAttribute('data-page'), 10);
         if (!page || page === state.page) return;
         state.page = page;
@@ -1943,7 +1956,7 @@
 
     var prev = pagination.querySelector('[data-direction="prev"]');
     if (prev) {
-      prev.addEventListener('click', function () {
+      MORPH.on(prev, 'click', function () {
         if (state.page <= 1) return;
         state.page -= 1;
         render({ forceFull: true });
@@ -1952,7 +1965,7 @@
 
     var next = pagination.querySelector('[data-direction="next"]');
     if (next) {
-      next.addEventListener('click', function () {
+      MORPH.on(next, 'click', function () {
         var totalPages = Math.max(1, Math.ceil(filteredDirectoryItems(state).length / (state.pageSize || 10)));
         if (state.page >= totalPages) return;
         state.page += 1;
@@ -1962,7 +1975,7 @@
 
     var pageSizeBtn = pagination.querySelector('[data-clients-page-size]');
     if (pageSizeBtn) {
-      pageSizeBtn.addEventListener('click', function () {
+      MORPH.on(pageSizeBtn, 'click', function () {
         var idx = CLIENTS_PAGE_SIZES.indexOf(state.pageSize || 10);
         var nextSize = CLIENTS_PAGE_SIZES[(idx + 1) % CLIENTS_PAGE_SIZES.length];
         state.pageSize = nextSize;
@@ -2014,8 +2027,8 @@
   }
 
   function wireTableBulkActions(root, state, render) {
-    root.querySelectorAll('[data-clients-bulk-action]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+    MORPH.unwired(root, '[data-clients-bulk-action]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
         var action = btn.getAttribute('data-clients-bulk-action');
         if (action === 'delete') deleteSelectedClients(state, render);
         else if (action === 'duplicate') duplicateSelectedClients(state, render);
@@ -2049,14 +2062,14 @@
     rowChecks.forEach(function (cb) {
       var rowEl = cb.closest('[data-row-index]');
       var rowIndex = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : 0;
-      cb.addEventListener('change', function () {
+      MORPH.on(cb, 'change', function () {
         syncRow(cb, rowIndex);
         syncSelectAll();
       });
     });
 
     if (selectAll) {
-      selectAll.addEventListener('change', function () {
+      MORPH.on(selectAll, 'change', function () {
         rowChecks.forEach(function (cb) {
           var rowEl = cb.closest('[data-row-index]');
           var rowIndex = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : 0;
@@ -2156,7 +2169,7 @@
   function syncDirectoryList(root, state) {
     var body = root.querySelector('.tma-dash__clients-directory-body');
     if (!body) return false;
-    body.innerHTML = renderDirectoryListBody(state);
+    MORPH.patch(body, renderDirectoryListBody(state));
     return true;
   }
 
@@ -2222,7 +2235,7 @@
       wireDirectoryRows(root, state, navigate);
       wireSearchEvents(root, state);
 
-      root.querySelectorAll('[data-clients-layout]').forEach(function (btn) {
+      MORPH.unwired(root, '[data-clients-layout]').forEach(function (btn) {
         btn.remove();
       });
 
@@ -2234,7 +2247,7 @@
       }
     }
 
-    var backBtn = root.querySelector('[data-clients-back]');
+    var backBtn = MORPH.unwiredOne(root, '[data-clients-back]');
     if (backBtn) {
       backBtn.addEventListener('click', function () {
         if (state.screen === 'edit') navigate('detail', state.selectedId);
@@ -2242,14 +2255,14 @@
       });
     }
 
-    var editBtn = root.querySelector('[data-clients-edit]');
+    var editBtn = MORPH.unwiredOne(root, '[data-clients-edit]');
     if (editBtn) {
       editBtn.addEventListener('click', function () {
         navigate('edit', state.selectedId);
       });
     }
 
-    var cancelBtn = root.querySelector('[data-clients-cancel]');
+    var cancelBtn = MORPH.unwiredOne(root, '[data-clients-cancel]');
     if (cancelBtn) {
       cancelBtn.addEventListener('click', function () {
         if (state.screen === 'add' || state.adding) {
@@ -2261,7 +2274,7 @@
       });
     }
 
-    var saveBtn = root.querySelector('[data-clients-save]');
+    var saveBtn = MORPH.unwiredOne(root, '[data-clients-save]');
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
         if (saveBtn.disabled) return;
@@ -2287,7 +2300,7 @@
       });
     }
 
-    root.querySelectorAll('[data-clients-add-group]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-clients-add-group]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         syncDraftFromForm(root, state);
         var group = btn.getAttribute('data-clients-add-group');
@@ -2300,7 +2313,7 @@
       });
     });
 
-    root.querySelectorAll('[data-clients-remove]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-clients-remove]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         syncDraftFromForm(root, state);
         var group = btn.getAttribute('data-clients-remove');
@@ -2321,11 +2334,11 @@
     var formHead = root.querySelector('.tma-dash__clients-profile--form .tma-dash__clients-profile-head');
 
     if (photoBtn && photoInput) {
-      photoBtn.addEventListener('click', function () {
+      MORPH.on(photoBtn, 'click', function () {
         photoInput.click();
       });
 
-      photoInput.addEventListener('change', function () {
+      MORPH.on(photoInput, 'change', function () {
         var file = photoInput.files && photoInput.files[0];
         if (!file || !photoPreview) return;
         var reader = new FileReader();
@@ -2345,7 +2358,7 @@
     }
 
     if (photoRemove) {
-      photoRemove.addEventListener('click', function (e) {
+      MORPH.on(photoRemove, 'click', function (e) {
         e.preventDefault();
         e.stopPropagation();
         if (photoBtn) delete photoBtn.dataset.hasImage;
@@ -2364,7 +2377,7 @@
       });
     }
 
-    root.querySelectorAll('[data-clients-date-type]').forEach(function (sel) {
+    MORPH.unwired(root, '[data-clients-date-type]').forEach(function (sel) {
       sel.addEventListener('change', function () {
         var i = sel.getAttribute('data-clients-date-type');
         var labelEl = root.querySelector('[data-clients-date-label="' + i + '"]');
@@ -2375,7 +2388,7 @@
       });
     });
 
-    var messageBtn = root.querySelector('[data-clients-message]');
+    var messageBtn = MORPH.unwiredOne(root, '[data-clients-message]');
     if (messageBtn) {
       messageBtn.addEventListener('click', function () {
         if (window.TMADashboard && window.TMADashboard.navigate) {
@@ -2389,7 +2402,7 @@
       });
     }
 
-    root.querySelectorAll('[data-clients-open-folder]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-clients-open-folder]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openClientFolder(state.selectedId);
       });
@@ -2397,7 +2410,7 @@
 
     wireClientFolderPanel(root);
 
-    var shareBtn = root.querySelector('[data-clients-share]');
+    var shareBtn = MORPH.unwiredOne(root, '[data-clients-share]');
     if (shareBtn) {
       shareBtn.addEventListener('click', function () {
         var c = contactFor(state.selectedId);
@@ -2410,7 +2423,7 @@
       });
     }
 
-    root.querySelectorAll('[data-clients-tab]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-clients-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.profileTab = btn.getAttribute('data-clients-tab');
         if (usesPagedClientsFlow(state)) render();
@@ -2529,9 +2542,9 @@
 
       if (usesPagedClientsFlow(state)) {
         if (state.screen === 'list') {
-          root.innerHTML = state.viewMode === 'list'
+          MORPH.patch(root, state.viewMode === 'list'
             ? renderTableListPage(state)
-            : renderListPage(state);
+            : renderListPage(state));
           wireEvents(root, state, 'list', navigate, render);
           if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
           requestAnimationFrame(function () {
@@ -2541,7 +2554,7 @@
           return;
         }
 
-        root.innerHTML = renderDetailPage(state);
+        MORPH.patch(root, renderDetailPage(state));
         wireEvents(root, state, 'detail', navigate, render);
         if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
         return;
@@ -2554,7 +2567,7 @@
           wireEvents(root, state, 'split', navigate, render);
           return;
         }
-        root.innerHTML = renderDesktopPage(state);
+        MORPH.patch(root, renderDesktopPage(state));
         wireEvents(root, state, 'split', navigate, render);
         if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
         requestAnimationFrame(function () {
@@ -2565,7 +2578,7 @@
       }
 
       if (state.screen === 'list') {
-        root.innerHTML = renderListPage(state);
+        MORPH.patch(root, renderListPage(state));
         wireEvents(root, state, 'list', navigate, render);
         requestAnimationFrame(function () {
           var dirBody = root.querySelector('.tma-dash__clients-directory-body');
@@ -2574,7 +2587,7 @@
         return;
       }
 
-      root.innerHTML = renderDetailPage(state);
+      MORPH.patch(root, renderDetailPage(state));
       wireEvents(root, state, 'detail', navigate, render);
     }
 

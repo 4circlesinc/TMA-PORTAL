@@ -108,7 +108,17 @@ class PresenceService
      */
     public static function forViewer(User $subject, User $viewer, ?UserPresence $presence = null): array
     {
-        $presence ??= UserPresence::where('user_id', $subject->id)->first();
+        /*
+         * Prefer an eager-loaded relation over a fresh query. Callers that
+         * present a whole list (the conversation index) load
+         * `activeParticipants.user.presence` up front; without this check each
+         * participant would still cost a query of its own.
+         */
+        if ($presence === null && $subject->relationLoaded('presence')) {
+            $presence = $subject->presence;
+        } elseif ($presence === null) {
+            $presence = UserPresence::where('user_id', $subject->id)->first();
+        }
 
         $showOnline = MessagingSettings::allowsVisibility($subject, $viewer, 'onlineStatus');
         $showLastSeen = MessagingSettings::allowsVisibility($subject, $viewer, 'lastSeen');
