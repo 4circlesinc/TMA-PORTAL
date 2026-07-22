@@ -125,7 +125,20 @@
   overflow: hidden;
   min-height: 0;
   background: var(--color-white);
-  transition: width 0.36s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.36s ease;
+  transition: width var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open),
+              box-shadow var(--dash-sidebar-open-ms) ease;
+}
+
+/* Motion is a preference, not a given. Everything still opens and closes —
+   it just arrives immediately.
+   Overridden on .tma-dash, not :root: the durations are declared on .tma-dash
+   itself, and a custom property set directly on an element always beats one
+   inherited from an ancestor no matter how the specificity compares. */
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash {
+    --dash-sidebar-open-ms: 0ms;
+    --dash-sidebar-close-ms: 0ms;
+  }
 }
 
 .tma-dash__resize-handle {
@@ -3252,15 +3265,30 @@
      content beside it — the content column never resizes or shifts. The
      standard style never hits this: its toggle removes `.is-sidebar-collapsed`
      outright instead of relying on hover/focus. */
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar:hover,
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar:focus-within {
+  /* Fixed at rest as well as on hover, not only on hover.
+     `position` is not an animatable property, so switching relative → fixed
+     at the moment of opening meant the panel jumped to its full width in a
+     single frame with the width transition never getting a chance to run.
+     Held fixed in both states, the only thing that changes is `width`, which
+     does animate. Visually identical at rest: the grid track above already
+     reserves the rail width, so nothing beside it moves either way. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar {
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
-    width: var(--dash-sidebar-w);
+    width: var(--dash-sidebar-collapsed-w);
     z-index: 45;
+    transition: width var(--dash-sidebar-close-ms) var(--dash-sidebar-ease-close),
+                box-shadow var(--dash-sidebar-close-ms) ease;
+  }
+
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar:hover,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar:focus-within {
+    width: var(--dash-sidebar-w);
     box-shadow: var(--shadow-popup);
+    transition: width var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open),
+                box-shadow var(--dash-sidebar-open-ms) ease;
   }
   /* The resize handle only makes sense for a persistently-widened sidebar;
      the hover overlay always opens at the same width, and the standard
