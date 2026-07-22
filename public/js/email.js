@@ -1068,7 +1068,17 @@
    * writes — only the repaint is held back (see mailRepaintShouldWait), which
    * is what would actually disturb them. */
   function mailPollShouldWait(state) {
-    return document.hidden || !state.connected || state.folder === 'templates';
+    return (
+      document.hidden ||
+      !state.connected ||
+      state.folder === 'templates' ||
+      // A mailbox that needs reconnecting will answer 409 to every single
+      // attempt. Polling it on a five-second timer produced a 409 in the
+      // console every five seconds for as long as the page stayed open, and
+      // not one of them could have succeeded — reconnecting is the only thing
+      // that clears it, and the banner already says so.
+      state.reconnectNeeded
+    );
   }
 
   /* True while a re-render would do more harm than good: it would yank the
@@ -1133,8 +1143,18 @@
     state._mailPollTick = (state._mailPollTick || 0) + 1;
     var full = state._mailPollTick % MAIL_FULL_SYNC_EVERY === 0;
 
-    api().sync({ fast: !full }).catch(function () {
-      // Best-effort: fall through to listMessages with whatever is local.
+    api().sync({ fast: !full }).then(function () {
+      // A sync that goes through means the grant is alive again — resume
+      // polling without needing a reload.
+      state.reconnectNeeded = false;
+    }).catch(function (err) {
+      // A dead grant is terminal until the user reconnects, so record it and
+      // let mailPollShouldWait stop the timer. Every other failure is
+      // transient — fall through to listMessages with whatever is local.
+      if (err && err.reconnect) {
+        state.reconnectNeeded = true;
+        state.mailError = err.message;
+      }
     }).then(function () {
       // Repainting mid-compose would move the caret, so the list is left alone
       // until the compose window closes. The sync above still ran, so the mail

@@ -108,7 +108,9 @@
       ' placeholder="' + esc(placeholder || 'Search') + '" value="' + esc(v) + '"' +
       ' aria-label="' + esc(placeholder || 'Search') + '" autocomplete="off" spellcheck="false">' +
       '<button type="button" class="tma-dash__search-clear" aria-label="Clear search" data-search-clear>' +
-      '<img src="images/icons/phosphor/XCircle.svg" alt="" width="16" height="16"></button>' +
+      // The file on disk is Xcircle.svg (lowercase c). macOS is case-insensitive
+      // so this 404'd only once it hit a case-sensitive filesystem.
+      '<img src="images/icons/phosphor/Xcircle.svg" alt="" width="16" height="16"></button>' +
       '<kbd class="tma-dash__kbd" data-search-shortcut>/</kbd>' +
       '</div>';
   }

@@ -2113,8 +2113,13 @@
         ? '<span class="tma-dash__messages-link-desc">' + esc(card.description) + '</span>'
         : '') +
       '<span class="tma-dash__messages-link-site">' +
+      // The favicon comes from Google's lookup service, which 404s for any
+      // domain it has no icon for — a broken image plus a console error on a
+      // perfectly good link. Removing itself on error leaves just the domain
+      // name, which is all the favicon was decorating anyway.
       (card.faviconUrl
-        ? '<img class="tma-dash__messages-link-favicon" src="' + esc(card.faviconUrl) + '" alt="">'
+        ? '<img class="tma-dash__messages-link-favicon" src="' + esc(card.faviconUrl) + '" alt=""' +
+          ' onerror="this.remove()">'
         : '') +
       esc(card.domain || card.siteName || '') +
       '</span>' +
