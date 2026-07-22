@@ -73,24 +73,23 @@
       return;
     }
 
-    var g = groups || {};
-    var auto =
-      groupHtml('Libraries', g.libraries) +
-      groupHtml('Assigned Clients', g.assignedClients) +
-      groupHtml('Organization Folders', g.organization) +
-      groupHtml('My Staff Folder', g.staff);
-
+    // Only folders this user pinned. The server still sends automatic
+    // sections (assigned clients, organization folders, the staff folder, the
+    // Client/Staff Files roots) and they are deliberately not rendered: this
+    // list is the user's own shelf, and filling it with folders they never
+    // chose made it impossible to tell what they had actually pinned. Those
+    // folders remain reachable through the File Library, which is where they
+    // are browsed anyway.
     var pinned = (items && items.length)
-      ? '<div class="tma-dash__group-label">Pinned Folders</div>' +
-        items.map(function (it) { return itemHtml(it, { pinned: true }); }).join('')
+      ? items.map(function (it) { return itemHtml(it, { pinned: true }); }).join('')
       : '';
 
-    if (!auto && !pinned) {
+    if (!pinned) {
       host.innerHTML = '<p class="tma-dash__shortcut-note">Add folders from the File Library for quick access.</p>';
       return;
     }
 
-    host.innerHTML = auto + pinned;
+    host.innerHTML = pinned;
   }
 
   /* ── data ──────────────────────────────────────────── */

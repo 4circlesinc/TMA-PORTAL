@@ -474,8 +474,7 @@
     var iconable = sel.length === 1 && sel[0].type === 'folder' && perm(sel[0], 'icon');
     return toolBtn('ArrowLineDown', 'bulk-download', 'Download') +
       (signable ? toolBtn('Signature', 'bulk-signature', 'Send for signature') : '') +
-      (colourable ? toolBtn('Palette', 'bulk-colour', 'Folder colour') : '') +
-      (iconable ? toolBtn('Image', 'bulk-icon', 'Folder icon') : '') +
+      (colourable || iconable ? toolBtn('Palette', 'bulk-appearance', 'Folder appearance') : '') +
       toolBtn('ArrowsOutCardinal', 'bulk-move', 'Move', { disabled: !canMove }) +
       toolBtn('Copy', 'bulk-copy', 'Copy', { disabled: !canCopy }) +
       toolBtn('Star', 'bulk-favorite', 'Add to favourites') +
@@ -538,7 +537,7 @@
       var star = showStar ? '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' : '';
       var typeLabel = it.type === 'folder' ? 'Folder' : (it.category ? cap(it.category) : 'File');
       var size = it.type === 'folder' ? (it.sizeLabel || '—') : it.sizeLabel;
-      var owner = it.owner ? it.owner.name : '—';
+      var owner = ownerCell(it.owner);
       var when = isRecycle() ? fmtDate(it.deletedAt) : fmtDate(it.modifiedAt || it.createdAt);
       var sharing = (it.assignedTo && it.assignedTo.length)
         ? '<span class="tma-portal-chip tma-portal-chip--shared">Shared</span>'
@@ -552,7 +551,7 @@
         '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '">' + esc(it.name) + '</button>' + busySpin + '</span></td>' +
         '<td class="tma-portal-table__muted">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(size || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(owner) + '</td>' +
+        '<td class="tma-portal-table__muted">' + owner + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(when) + '</td>' +
         '<td>' + sharing + '</td>' +
         '<td class="tma-portal-cell--tight"><button type="button" class="tma-portal-row-menu" data-files-menu="' + esc(it.id) + '" aria-label="More actions"><img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
@@ -1094,8 +1093,7 @@
       case 'clear-selection': return clearSelection();
       case 'bulk-download': return bulkDownload();
       case 'bulk-signature': return sendSelectionForSignature();
-      case 'bulk-colour': return bulkColour();
-      case 'bulk-icon': return bulkIcon();
+      case 'bulk-appearance': return bulkAppearance();
       case 'bulk-move': return bulkDestination('move');
       case 'bulk-copy': return bulkDestination('copy');
       case 'bulk-delete': return bulkDelete();
@@ -1228,97 +1226,56 @@
     });
   }
 
-  function openColourModal(item) {
+  /*
+   * Folder appearance: colour and icon in one place.
+   *
+   * They were two menu entries opening two modals, which meant setting a
+   * folder's look was two trips and you could never see the pair together —
+   * yet the icon is tinted from the colour, so they are one decision. One
+   * modal, one live preview, one Save.
+   *
+   * The two values still have their own endpoints, so Save issues whichever
+   * of them actually changed rather than always writing both.
+   */
+  function openAppearanceModal(item) {
     var colours = window.TMAFolderColours;
+    var icons = window.TMAFolderIcons;
     if (!colours) return;
+
     var isDefaultFolder = item.folderType && item.folderType !== 'user';
     var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
-    var selected = colours.isValid(item.colour) ? item.colour : 'default';
+
+    var startColour = colours.isValid(item.colour) ? item.colour : 'default';
+    var startIcon = (icons && icons.isValid(item.iconName)) ? item.iconName : null;
+    var colour = startColour;
+    var icon = startIcon;
+
+    var canColour = perm(item, 'colour');
+    var canIcon = icons && perm(item, 'icon');
+
+    function previewHtml() {
+      return icons
+        ? icons.html(base, colour === 'default' ? null : colour, icon, 40)
+        : '<img src="' + esc(colours.iconSrc(base, colour)) + '" alt="" width="40" height="40">';
+    }
 
     function swatchHtml(c) {
-      var isSel = c.key === selected;
+      var isSel = c.key === colour;
       return '<button type="button" class="tma-portal-colour-swatch' + (isSel ? ' is-selected' : '') + '"' +
         ' data-colour-key="' + esc(c.key) + '" style="background:' + esc(c.hex) + '"' +
         ' aria-label="' + esc(c.label) + '" aria-pressed="' + isSel + '" title="' + esc(c.label) + '"></button>';
     }
 
-    ui().openModal({
-      title: 'Folder colour',
-      body: '<div class="tma-portal-colour-head">' +
-        '<img class="tma-portal-colour-preview" data-colour-preview src="' + esc(colours.iconSrc(base, selected)) + '" alt="" width="40" height="40">' +
-        '<strong>' + esc(item.name) + '</strong>' +
-        '</div>' +
-        '<div class="tma-portal-colour-swatches" data-colour-swatches>' +
-        colours.PALETTE.map(swatchHtml).join('') +
-        '</div>' +
-        (isDefaultFolder ? '<p class="tma-portal-modal__text">This colour applies to everyone in the organization.</p>' : '') +
-        '<div class="tma-portal-modal__foot">' +
-        '<button type="button" class="tma-portal-link" data-colour-reset>Reset to default</button>' +
-        '<span class="tma-portal-modal__foot-spacer"></span>' +
-        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-colour-cancel>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-colour-save>Save</button>' +
-        '</div>',
-      onMount: function (host) {
-        var preview = host.querySelector('[data-colour-preview]');
-        var save = host.querySelector('[data-colour-save]');
-
-        function choose(key) {
-          selected = key;
-          preview.src = colours.iconSrc(base, selected);
-          host.querySelectorAll('[data-colour-key]').forEach(function (btn) {
-            var isSel = btn.getAttribute('data-colour-key') === selected;
-            btn.classList.toggle('is-selected', isSel);
-            btn.setAttribute('aria-pressed', isSel);
-          });
-        }
-
-        host.querySelectorAll('[data-colour-key]').forEach(function (btn) {
-          btn.addEventListener('click', function () { choose(btn.getAttribute('data-colour-key')); });
-        });
-        host.querySelector('[data-colour-reset]').addEventListener('click', function () { choose('default'); });
-        host.querySelector('[data-colour-cancel]').addEventListener('click', ui().closeModal);
-        save.addEventListener('click', function () {
-          save.disabled = true;
-          setBusy(item.id, true);
-          var payload = selected === 'default' ? null : selected;
-          net().fetchJSON(net().url('/folders/' + item.id + '/colour'), { method: 'PATCH', json: { colour: payload } })
-            .then(function (res) {
-              setBusy(item.id, false);
-              updateItem(item.id, res);
-              ui().closeModal();
-              ui().toast('Folder colour updated');
-              foldersChanged();
-              rerender();
-            })
-            .catch(function (err) {
-              setBusy(item.id, false);
-              save.disabled = false;
-              showModalError(host, err.message);
-              rerender();
-            });
-        });
-      },
-    });
-  }
-
-  function openIconModal(item) {
-    var icons = window.TMAFolderIcons;
-    var colours = window.TMAFolderColours;
-    if (!icons) return;
-    var isDefaultFolder = item.folderType && item.folderType !== 'user';
-    var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
-    var shade = colours ? colours.shade(item.colour) : '#ef9f2c';
-    var selected = icons.isValid(item.iconName) ? item.iconName : null;
-
     function glyphHtml(name) {
       var url = icons.iconPath(name);
+      var shade = colours.shade(colour === 'default' ? null : colour);
       return '<span class="tma-portal-icon-swatch__glyph" style="background-color:' + shade + ';' +
         'mask-image:url(\'' + url + '\');-webkit-mask-image:url(\'' + url + '\')"></span>';
     }
 
     function categoryHtml(label, names) {
       var buttons = names.map(function (name) {
-        var isSel = name === selected;
+        var isSel = name === icon;
         return '<button type="button" class="tma-portal-icon-swatch' + (isSel ? ' is-selected' : '') + '"' +
           ' data-icon-name="' + esc(name) + '" aria-pressed="' + isSel + '" title="' + esc(name) + '">' + glyphHtml(name) + '</button>';
       }).join('');
@@ -1327,348 +1284,154 @@
         '<div class="tma-portal-icon-grid">' + buttons + '</div></div>';
     }
 
-    var categoriesHtml = Object.keys(icons.CATEGORIES).map(function (label) {
-      return categoryHtml(label, icons.CATEGORIES[label]);
-    }).join('');
+    var colourSection = canColour
+      ? '<div class="tma-portal-appearance__section">' +
+        '<div class="tma-portal-appearance__label">Colour</div>' +
+        '<div class="tma-portal-colour-swatches" data-colour-swatches>' +
+        colours.PALETTE.map(swatchHtml).join('') +
+        '</div></div>'
+      : '';
+
+    var iconSection = canIcon
+      ? '<div class="tma-portal-appearance__section">' +
+        '<div class="tma-portal-appearance__label">Icon</div>' +
+        '<div class="tma-portal-icon-search">' + ui().input({ placeholder: 'Search icons…', attrs: 'data-icon-search maxlength="60"' }) + '</div>' +
+        '<div class="tma-portal-icon-categories" data-icon-categories>' +
+        Object.keys(icons.CATEGORIES).map(function (label) {
+          return categoryHtml(label, icons.CATEGORIES[label]);
+        }).join('') +
+        '</div>' +
+        '<p class="tma-portal-icon-empty" data-icon-empty hidden>No icons match your search.</p>' +
+        '</div>'
+      : '';
 
     ui().openModal({
-      title: 'Folder icon',
+      title: 'Folder appearance',
       body: '<div class="tma-portal-colour-head">' +
-        '<span data-icon-preview>' + icons.html(base, item.colour, selected, 40) + '</span>' +
+        '<span data-appearance-preview>' + previewHtml() + '</span>' +
         '<strong>' + esc(item.name) + '</strong>' +
         '</div>' +
-        '<div class="tma-portal-icon-search">' + ui().input({ placeholder: 'Search icons…', attrs: 'data-icon-search maxlength="60"' }) + '</div>' +
-        '<div class="tma-portal-icon-categories" data-icon-categories>' + categoriesHtml + '</div>' +
-        '<p class="tma-portal-icon-empty" data-icon-empty hidden>No icons match your search.</p>' +
-        (isDefaultFolder ? '<p class="tma-portal-modal__text">This icon applies to everyone in the organization.</p>' : '') +
+        colourSection + iconSection +
+        (isDefaultFolder ? '<p class="tma-portal-modal__text">This applies to everyone in the organization.</p>' : '') +
         '<div class="tma-portal-modal__foot">' +
-        '<button type="button" class="tma-portal-link" data-icon-reset>Remove custom icon</button>' +
+        '<button type="button" class="tma-portal-link" data-appearance-reset>Reset to default</button>' +
         '<span class="tma-portal-modal__foot-spacer"></span>' +
-        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-icon-cancel>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-icon-save>Save</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-appearance-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-appearance-save>Save</button>' +
         '</div>',
       onMount: function (host) {
-        var preview = host.querySelector('[data-icon-preview]');
-        var save = host.querySelector('[data-icon-save]');
-        var search = host.querySelector('[data-icon-search]');
-        var categoriesEl = host.querySelector('[data-icon-categories]');
-        var emptyEl = host.querySelector('[data-icon-empty]');
+        var preview = host.querySelector('[data-appearance-preview]');
+        var save = host.querySelector('[data-appearance-save]');
 
-        function choose(name) {
-          selected = name;
-          preview.innerHTML = icons.html(base, item.colour, selected, 40);
-          host.querySelectorAll('[data-icon-name]').forEach(function (btn) {
-            var isSel = btn.getAttribute('data-icon-name') === selected;
+        function repaint() {
+          preview.innerHTML = previewHtml();
+
+          host.querySelectorAll('[data-colour-key]').forEach(function (btn) {
+            var isSel = btn.getAttribute('data-colour-key') === colour;
             btn.classList.toggle('is-selected', isSel);
             btn.setAttribute('aria-pressed', isSel);
           });
+
+          host.querySelectorAll('[data-icon-name]').forEach(function (btn) {
+            var isSel = btn.getAttribute('data-icon-name') === icon;
+            btn.classList.toggle('is-selected', isSel);
+            btn.setAttribute('aria-pressed', isSel);
+            // The glyph is tinted from the colour, so it has to be redrawn
+            // when the colour changes — this is the whole reason the two
+            // belong in one dialog.
+            var glyph = btn.querySelector('.tma-portal-icon-swatch__glyph');
+            if (glyph) glyph.style.backgroundColor = colours.shade(colour === 'default' ? null : colour);
+          });
         }
 
-        host.querySelectorAll('[data-icon-name]').forEach(function (btn) {
-          btn.addEventListener('click', function () { choose(btn.getAttribute('data-icon-name')); });
-        });
-        host.querySelector('[data-icon-reset]').addEventListener('click', function () { choose(null); });
-        host.querySelector('[data-icon-cancel]').addEventListener('click', ui().closeModal);
-
-        // Client-side only - no network call, just show/hide what's already rendered.
-        search.addEventListener('input', function () {
-          var q = search.value.trim().toLowerCase();
-          var anyVisible = false;
-          categoriesEl.querySelectorAll('[data-icon-category]').forEach(function (cat) {
-            var catVisible = false;
-            cat.querySelectorAll('[data-icon-name]').forEach(function (btn) {
-              var match = !q || btn.getAttribute('data-icon-name').toLowerCase().indexOf(q) !== -1;
-              btn.hidden = !match;
-              if (match) catVisible = true;
-            });
-            cat.hidden = !catVisible;
-            if (catVisible) anyVisible = true;
+        host.querySelectorAll('[data-colour-key]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            colour = btn.getAttribute('data-colour-key');
+            repaint();
           });
-          emptyEl.hidden = anyVisible;
         });
+
+        host.querySelectorAll('[data-icon-name]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var name = btn.getAttribute('data-icon-name');
+            // Clicking the chosen icon again clears it.
+            icon = icon === name ? null : name;
+            repaint();
+          });
+        });
+
+        var search = host.querySelector('[data-icon-search]');
+        if (search) {
+          search.addEventListener('input', function () {
+            var term = search.value.trim().toLowerCase();
+            var emptyEl = host.querySelector('[data-icon-empty]');
+            var anyVisible = false;
+
+            host.querySelectorAll('[data-icon-category]').forEach(function (cat) {
+              var catVisible = false;
+              cat.querySelectorAll('[data-icon-name]').forEach(function (btn) {
+                var hit = !term || btn.getAttribute('data-icon-name').toLowerCase().indexOf(term) !== -1;
+                btn.hidden = !hit;
+                if (hit) catVisible = true;
+              });
+              cat.hidden = !catVisible;
+              if (catVisible) anyVisible = true;
+            });
+
+            if (emptyEl) emptyEl.hidden = anyVisible;
+          });
+        }
+
+        host.querySelector('[data-appearance-reset]').addEventListener('click', function () {
+          colour = 'default';
+          icon = null;
+          repaint();
+        });
+
+        host.querySelector('[data-appearance-cancel]').addEventListener('click', ui().closeModal);
 
         save.addEventListener('click', function () {
           save.disabled = true;
           setBusy(item.id, true);
-          net().fetchJSON(net().url('/folders/' + item.id + '/icon'), { method: 'PATCH', json: { icon: selected } })
-            .then(function (res) {
-              setBusy(item.id, false);
-              updateItem(item.id, res);
-              ui().closeModal();
-              ui().toast('Folder icon updated');
-              foldersChanged();
-              rerender();
-            })
-            .catch(function (err) {
-              setBusy(item.id, false);
-              save.disabled = false;
-              showModalError(host, err.message);
-              rerender();
+
+          // Only what actually changed. Chained rather than parallel so the
+          // second write sees the first — the response carries the merged row.
+          var work = Promise.resolve(null);
+
+          if (canColour && colour !== startColour) {
+            work = work.then(function () {
+              return net().fetchJSON(net().url('/folders/' + item.id + '/colour'), {
+                method: 'PATCH', json: { colour: colour === 'default' ? null : colour },
+              });
             });
-        });
-      },
-    });
-  }
+          }
 
-  function showModalError(host, message) {
-    var body = host.querySelector('.tma-portal-modal__body');
-    var old = host.querySelector('.tma-portal-modal__error');
-    if (old) old.remove();
-    var div = document.createElement('div');
-    div.className = 'tma-portal-modal__error';
-    div.textContent = message || 'Something needs attention.';
-    body.insertBefore(div, body.firstChild);
-  }
+          if (canIcon && icon !== startIcon) {
+            work = work.then(function (res) {
+              return net().fetchJSON(net().url('/folders/' + item.id + '/icon'), {
+                method: 'PATCH', json: { icon: icon },
+              }).then(function (iconRes) { return iconRes || res; });
+            });
+          }
 
-  function confirmModal(opts) {
-    ui().openModal({
-      title: opts.title,
-      body: '<p class="tma-portal-modal__text">' + esc(opts.message) + '</p>' +
-        '<div class="tma-portal-modal__foot">' +
-        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-confirm-cancel>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn' + (opts.danger ? ' tma-portal-btn--danger' : '') + '" data-confirm-ok>' + esc(opts.confirmLabel || 'Confirm') + '</button>' +
-        '</div>',
-      onMount: function (host) {
-        host.querySelector('[data-confirm-cancel]').addEventListener('click', ui().closeModal);
-        host.querySelector('[data-confirm-ok]').addEventListener('click', function () { ui().closeModal(); opts.onConfirm(); });
-      },
-    });
-  }
-
-  function toggleStar(id) {
-    if (isBusy(id)) return;
-    var it = findItem(id);
-    if (!it) return;
-    var prev = !!it.favorite;
-    setBusy(id, true);
-    // Optimistic: flip to yellow (or off) immediately, reconcile with server.
-    it.favorite = !prev;
-    rerender();
-    net().fetchJSON(net().url('/favorites/toggle'), { method: 'POST', json: { type: it.type, id: it.id } })
-      .then(function (res) {
-        setBusy(id, false);
-        // Already known locally that it must leave a favorites-only view -
-        // no need to hit the network again to find that out.
-        if (state.section === 'favorites' && !res.favorite) removeItem(id);
-        else it.favorite = res.favorite;
-        rerender();
-      })
-      .catch(function (err) {
-        setBusy(id, false);
-        it.favorite = prev;
-        rerender();
-        ui().toast(err.message || 'Could not update favourite');
-      });
-  }
-
-  function deleteItem(item) {
-    if (isBusy(item.id)) return;
-    confirmModal({
-      title: 'Move to recycle bin',
-      message: 'Move “' + item.name + '” to the recycle bin?' + (item.type === 'folder' ? ' Its contents go with it and can be restored.' : ''),
-      confirmLabel: 'Move to bin', danger: true,
-      onConfirm: function () {
-        setBusy(item.id, true);
-        rerender();
-        var url = item.type === 'folder' ? '/folders/' + item.id : '/files/' + item.id;
-        net().fetchJSON(net().url(url), { method: 'DELETE' })
-          .then(function () {
+          work.then(function (res) {
             setBusy(item.id, false);
-            removeItem(item.id);
-            ui().toast('Moved to recycle bin');
-            foldersChanged();
-            rerender();
-          })
-          .catch(function (err) { setBusy(item.id, false); ui().toast(err.message || 'Could not delete'); rerender(); });
-      },
-    });
-  }
-
-  function restoreItem(item) {
-    if (isBusy(item.id)) return;
-    setBusy(item.id, true);
-    rerender();
-    var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/restore';
-    net().fetchJSON(net().url(url), { method: 'POST' })
-      .then(function () {
-        setBusy(item.id, false);
-        removeItem(item.id);
-        ui().toast('Restored');
-        foldersChanged();
-        rerender();
-      })
-      .catch(function (err) { setBusy(item.id, false); ui().toast(err.message || 'Could not restore'); rerender(); });
-  }
-
-  function forceDeleteItem(item) {
-    if (isBusy(item.id)) return;
-    confirmModal({
-      title: 'Delete permanently',
-      message: 'Permanently delete “' + item.name + '”? This cannot be undone.',
-      confirmLabel: 'Delete forever', danger: true,
-      onConfirm: function () {
-        setBusy(item.id, true);
-        rerender();
-        var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/force';
-        net().fetchJSON(net().url(url), { method: 'DELETE' })
-          .then(function () {
-            setBusy(item.id, false);
-            removeItem(item.id);
-            ui().toast('Permanently deleted');
-            foldersChanged();
-            rerender();
-          })
-          .catch(function (err) { setBusy(item.id, false); ui().toast(err.message || 'Could not delete'); rerender(); });
-      },
-    });
-  }
-
-  function emptyBin() {
-    confirmModal({
-      title: 'Empty recycle bin',
-      message: 'Permanently delete everything in the recycle bin? This cannot be undone.',
-      confirmLabel: 'Empty bin', danger: true,
-      onConfirm: function () {
-        net().fetchJSON(net().url('/recycle-bin/empty'), { method: 'POST' })
-          .then(function (r) { state.data = { folders: [], files: [] }; state.selected = {}; ui().toast('Recycle bin emptied'); rerender(); })
-          .catch(function (err) { ui().toast(err.message || 'Could not empty bin'); });
-      },
-    });
-  }
-
-  function downloadItem(item) {
-    var url = item.type === 'folder'
-      ? net().url('/folders/' + item.id + '/download')
-      : item.downloadUrl;
-    var a = document.createElement('a');
-    a.href = url; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
-  }
-
-  function copyItem(item) { setClipboard('copy', [item]); }
-  function cutItem(item) { setClipboard('cut', [item]); }
-  function setClipboard(mode, list) {
-    state.clipboard = { mode: mode, items: list.map(function (i) { return { type: i.type, id: i.id, name: i.name }; }) };
-    ui().toast((mode === 'cut' ? 'Cut ' : 'Copied ') + list.length + ' item' + (list.length === 1 ? '' : 's'));
-    render();
-  }
-
-  function pasteClipboard() {
-    if (!state.clipboard) return;
-    var action = state.clipboard.mode === 'cut' ? 'move' : 'copy';
-    var wasCut = state.clipboard.mode === 'cut';
-    bulkRun(action, state.clipboard.items, state.folder, function () {
-      if (wasCut) state.clipboard = null;
-    });
-  }
-
-  /* ── details ────────────────────────────────────────── */
-
-  function openDetails(item) {
-    var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id;
-    net().fetchJSON(net().url(url)).then(function (d) { renderDetails(d); });
-  }
-
-  function renderDetails(d) {
-    function row(label, value) {
-      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">' + esc(label) + '</span><span class="tma-portal-details__value">' + esc(value == null || value === '' ? '—' : value) + '</span></div>';
-    }
-    function colourRow(item) {
-      var colours = window.TMAFolderColours;
-      if (!colours) return '';
-      var key = colours.isValid(item.colour) ? item.colour : 'default';
-      var swatch = colours.PALETTE.filter(function (c) { return c.key === key; })[0];
-      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">Colour</span>' +
-        '<span class="tma-portal-details__value tma-portal-details__value--colour">' +
-        '<span class="tma-portal-colour-dot" style="background:' + esc(swatch ? swatch.hex : '#fec656') + '"></span>' +
-        esc(colours.label(key)) + '</span></div>';
-    }
-    function iconRow(item) {
-      if (!item.iconName) return '';
-      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">Icon</span>' +
-        '<span class="tma-portal-details__value tma-portal-details__value--colour">' +
-        '<span style="margin-right:var(--space-6, 6px)">' + folderIconHtml(item, 18) + '</span>' + esc(item.iconName) + '</span></div>';
-    }
-    var rows = '';
-    rows += row('Name', d.name);
-    rows += row('Type', d.type === 'folder' ? 'Folder' : (d.category ? cap(d.category) : 'File'));
-    if (d.type === 'file') {
-      rows += row('Extension', d.extension ? '.' + d.extension : '—');
-      rows += row('MIME type', d.mime);
-      rows += row('Size', d.sizeLabel);
-      rows += row('Location', d.folder ? d.folder.name : 'File Box');
-      rows += row('Uploaded', fmtDate(d.uploadedAt));
-      rows += row('Modified', fmtDate(d.modifiedAt));
-      rows += row('Uploaded by', d.uploadedBy ? d.uploadedBy.name : '—');
-    } else {
-      rows += row('Files', d.fileCount);
-      rows += row('Subfolders', d.folderCount);
-      rows += colourRow(d);
-      rows += iconRow(d);
-      rows += row('Total size', d.sizeLabel);
-      rows += row('Location', d.parent ? d.parent.name : 'Top level');
-      rows += row('Created', fmtDate(d.createdAt));
-      rows += row('Modified', fmtDate(d.modifiedAt));
-      rows += row('Created by', d.createdBy ? d.createdBy.name : '—');
-    }
-    rows += row('Owner', d.owner ? d.owner.name : '—');
-    rows += row('Assigned to', (d.assignedTo && d.assignedTo.length) ? d.assignedTo.join(', ') : 'No one');
-    rows += row('Sharing', (d.assignedTo && d.assignedTo.length) ? 'Shared' : 'Private');
-    rows += row('Favourite', d.favorite ? 'Yes' : 'No');
-
-    var canRecolour = d.type === 'folder' && perm(d, 'colour');
-    var canReicon = d.type === 'folder' && perm(d, 'icon');
-    var headIcon = d.type === 'folder' ? folderIconHtml(d, 32) : '<img src="' + esc(fileIconSrc(d)) + '" alt="" width="32" height="32" style="border-radius:0">';
-    var host = ui().openModal({
-      title: 'Details',
-      body: '<div class="tma-portal-details">' +
-        '<div class="tma-portal-details__head">' + headIcon + '<strong>' + esc(d.name) + '</strong></div>' +
-        rows +
-        (d.type === 'file' && perm(d, 'download') ? '<div class="tma-portal-modal__foot"><a class="tma-no-data__btn" href="' + esc(d.downloadUrl) + '" download>Download</a></div>' : '') +
-        (canRecolour ? '<div class="tma-portal-modal__foot"><button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-details-colour>Change colour</button></div>' : '') +
-        (canReicon ? '<div class="tma-portal-modal__foot"><button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-details-icon>Change icon</button></div>' : '') +
-        '</div>',
-      onMount: function (host) {
-        if (canReicon) {
-          host.querySelector('[data-details-icon]').addEventListener('click', function () {
+            if (res) updateItem(item.id, res);
             ui().closeModal();
-            openIconModal(d);
+            ui().toast('Folder appearance updated');
+            foldersChanged();
+            rerender();
+          }).catch(function (err) {
+            setBusy(item.id, false);
+            save.disabled = false;
+            showModalError(host, err.message);
+            rerender();
           });
-        }
-        if (!canRecolour) return;
-        host.querySelector('[data-details-colour]').addEventListener('click', function () {
-          ui().closeModal();
-          openColourModal(d);
         });
       },
     });
-    // When opened from the lightbox, the details modal must sit IN FRONT of it
-    // (the lightbox is z-index 600; the modal is normally 240).
-    if (lb && host) host.style.zIndex = '700';
   }
 
-  /* ── sharing ────────────────────────────────────────── */
-
-  var ROLE_LABELS = { viewer: 'Can view', downloader: 'Can download', editor: 'Can edit', full: 'Full access' };
-
-  // Avatar for a person (user or client): their real photo, else initials.
-  // Reuses the shared resolver so it matches the rest of the portal.
-  function personAvatar(person) {
-    var name = (person && person.name) || (person && person.email) || '?';
-    var avatar = person && person.avatar;
-    var src = (window.TMACurrentUser && window.TMACurrentUser.avatarSrc)
-      ? window.TMACurrentUser.avatarSrc(avatar, name)
-      : (avatar || '');
-    return '<img class="tma-portal-share__avatar" src="' + esc(src) + '" alt="" width="32" height="32">';
-  }
-
-  function roleSelect(roles, current, attrs) {
-    return '<select class="tma-portal-share__role"' + (attrs || '') + '>' +
-      (roles || ['viewer', 'downloader', 'editor', 'full']).map(function (r) {
-        return '<option value="' + r + '"' + (r === current ? ' selected' : '') + '>' + esc(ROLE_LABELS[r] || r) + '</option>';
-      }).join('') + '</select>';
-  }
-
-  // Share = the public link. Assign = give a specific user/client access.
   function openShareModal(item) { openShareUi(item, 'link'); }
   function openAssignModal(item) { openShareUi(item, 'assign'); }
 
@@ -1870,16 +1633,11 @@
     sendForSignature(sel[0]);
   }
 
-  function bulkColour() {
+  function bulkAppearance() {
     var sel = selectedItems();
-    if (sel.length !== 1 || sel[0].type !== 'folder' || !perm(sel[0], 'colour')) return;
-    openColourModal(sel[0]);
-  }
-
-  function bulkIcon() {
-    var sel = selectedItems();
-    if (sel.length !== 1 || sel[0].type !== 'folder' || !perm(sel[0], 'icon')) return;
-    openIconModal(sel[0]);
+    if (sel.length !== 1 || sel[0].type !== 'folder') return;
+    if (!perm(sel[0], 'colour') && !perm(sel[0], 'icon')) return;
+    openAppearanceModal(sel[0]);
   }
 
   function contextItems(item) {
@@ -1906,8 +1664,11 @@
     if (perm(item, 'copy')) list.push({ label: 'Copy', icon: 'Copy', fn: function () { copyItem(item); } });
     if (perm(item, 'move')) list.push({ label: 'Move to…', icon: 'ArrowsOutCardinal', fn: function () { bulkRun('move', [item], null, load, true); } });
     if (perm(item, 'rename')) list.push({ label: 'Rename', icon: 'PencilSimple', fn: function () { startRename(item.id); } });
-    if (isFolder && perm(item, 'colour')) list.push({ label: 'Folder colour', icon: 'Palette', fn: function () { openColourModal(item); } });
-    if (isFolder && perm(item, 'icon')) list.push({ label: 'Folder icon', icon: 'Image', fn: function () { openIconModal(item); } });
+    // Colour and icon are one decision (the icon is tinted from the colour),
+    // so they are one entry opening one dialog.
+    if (isFolder && (perm(item, 'colour') || perm(item, 'icon'))) {
+      list.push({ label: 'Folder appearance', icon: 'Palette', fn: function () { openAppearanceModal(item); } });
+    }
     list.push({ label: item.favorite ? 'Remove from favourites' : 'Add to favourites', icon: 'Star', fn: function () { toggleStar(item.id); } });
     if (isFolder && window.TMASidebarShortcuts) {
       var pinned = window.TMASidebarShortcuts.isPinned(item.id);

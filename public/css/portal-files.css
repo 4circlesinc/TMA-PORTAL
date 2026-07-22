@@ -443,3 +443,39 @@ body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(250%); }
 }
+
+/* ── owner cell ────────────────────────────────────
+ * The owner's picture beside their name. A column of identical names is hard
+ * to scan; a face is recognised before it is read. */
+.tma-portal-owner-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6, 6px);
+  min-width: 0;
+}
+
+.tma-portal-owner-avatar {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-bg-card, #f4f5f7);
+}
+
+.tma-portal-owner-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── folder appearance dialog ──────────────────────
+ * Colour and icon in one modal, since the icon is tinted from the colour. */
+.tma-portal-appearance__section { margin-top: var(--space-12, 12px); }
+
+.tma-portal-appearance__label {
+  margin-bottom: var(--space-6, 6px);
+  font-size: var(--text-size-12, 12px);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
