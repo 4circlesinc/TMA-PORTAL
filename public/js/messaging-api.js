@@ -217,6 +217,13 @@
       return api(BASE + '/search' + query({ q: term }));
     },
 
+    /* Every photo, video or document the user can see, pooled across all of
+     * their conversations — the inbox column's Media view, as opposed to
+     * gallery() which is scoped to one thread. */
+    media: function (shelf) {
+      return api(BASE + '/media' + query({ shelf: shelf }));
+    },
+
     /* The messaging profile panel for one conversation. */
     info: function (conversationId) {
       return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/info');

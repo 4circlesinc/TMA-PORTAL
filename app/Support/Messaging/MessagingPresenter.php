@@ -22,6 +22,27 @@ use Illuminate\Support\Str;
 class MessagingPresenter
 {
     /** One row in the chat list. */
+    /**
+     * What this conversation is called, from one viewer's point of view.
+     *
+     * A group has its own name; a direct thread is named after the other
+     * person, so the same row reads differently for each side. Extracted so
+     * the cross-conversation media view can label where a file came from
+     * without restating the rule.
+     */
+    public static function title(Conversation $conversation, User $viewer): string
+    {
+        if ($conversation->isGroup()) {
+            return $conversation->name ?: 'Group';
+        }
+
+        return $conversation->activeParticipants
+            ->where('user_id', '!=', $viewer->id)
+            ->map(fn (ConversationParticipant $p) => $p->user)
+            ->filter()
+            ->first()?->name ?? 'Unknown';
+    }
+
     public static function conversation(
         Conversation $conversation,
         User $viewer,
@@ -41,9 +62,7 @@ class MessagingPresenter
         return [
             'id' => $conversation->uuid,
             'type' => $conversation->type,
-            'name' => $conversation->isGroup()
-                ? ($conversation->name ?: 'Group')
-                : ($counterpart?->name ?? 'Unknown'),
+            'name' => self::title($conversation, $viewer),
             'photo' => $conversation->isGroup()
                 ? self::groupPhotoUrl($conversation)
                 : $counterpart?->avatar_url,

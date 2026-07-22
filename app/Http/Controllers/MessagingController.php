@@ -478,6 +478,83 @@ class MessagingController extends Controller
         return response()->json(['items' => $attachments]);
     }
 
+    /**
+     * Every piece of media the user can see, across all of their conversations.
+     *
+     * The same shelf as {@see gallery}, but not scoped to one thread — this is
+     * the "Media" view in the inbox column, where someone looks for a photo
+     * they remember receiving without remembering who sent it.
+     *
+     * Three things keep it honest rather than just a big query:
+     *
+     *  - Only conversations the user is still a member of. `forUser` is the
+     *    same authorization boundary every other messaging endpoint uses, so
+     *    leaving a group stops its media appearing here too.
+     *  - Each conversation's own "cleared chat" point is respected
+     *    individually. Clearing a thread has to hide its history here as well,
+     *    or the media view becomes a way to read back what was cleared.
+     *  - Voice notes are excluded, as they are from the per-thread shelf: they
+     *    belong to their conversation, not to a gallery.
+     */
+    public function media(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'shelf' => ['sometimes', 'in:media,documents'],
+        ]);
+
+        $shelf = $data['shelf'] ?? 'media';
+
+        // Conversation id => the message id below which that thread was
+        // cleared. Also doubles as the set of conversations the user may see.
+        $cleared = ConversationParticipant::query()
+            ->where('user_id', $user->id)
+            ->whereNull('left_at')
+            ->pluck('cleared_before_message_id', 'conversation_id')
+            ->map(fn ($id) => (int) $id);
+
+        if ($cleared->isEmpty()) {
+            return response()->json(['items' => []]);
+        }
+
+        $attachments = MessageAttachment::query()
+            ->whereIn('conversation_id', $cleared->keys())
+            ->whereNotNull('message_id')
+            ->where('status', MessageAttachment::STATUS_READY)
+            ->with(['message.sender', 'conversation.activeParticipants.user'])
+            ->latest('id')
+            // Bounded before the per-shelf filter, which happens in PHP. Taken
+            // generously so a mailbox full of documents still yields a full
+            // page of media once the filter runs.
+            ->limit(600)
+            ->get()
+            // Each thread's clear point is personal, so this cannot be one SQL
+            // predicate — it is a different cutoff per conversation.
+            ->filter(fn (MessageAttachment $a) => ($a->message?->id ?? 0) > ($cleared[$a->conversation_id] ?? 0))
+            ->filter(fn (MessageAttachment $a) => $a->shelf() === $shelf)
+            ->take(120)
+            ->map(fn (MessageAttachment $a) => array_merge(
+                MessagingPresenter::attachment($a),
+                [
+                    'messageId' => $a->message?->uuid,
+                    'seq' => $a->message?->id,
+                    'senderName' => $a->message?->user_id === $user->id
+                        ? 'You'
+                        : ($a->message?->sender?->name ?? 'Unknown'),
+                    'date' => $a->created_at->format('j M Y'),
+                    // Which thread it came from, so a hit can be traced back.
+                    'conversationId' => $a->conversation?->uuid,
+                    'conversationName' => $a->conversation
+                        ? MessagingPresenter::title($a->conversation, $user)
+                        : null,
+                ]
+            ))
+            ->values();
+
+        return response()->json(['items' => $attachments]);
+    }
+
     /** Every URL shared in the conversation, newest first. */
     private function galleryLinks(Conversation $conversation, User $user, int $cleared): array
     {

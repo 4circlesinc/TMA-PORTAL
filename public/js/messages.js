@@ -28,6 +28,8 @@
     Archive: ICON + 'Archive.svg',
     Trash: ICON + 'Trash.svg',
     CheckCircle: ICON + 'CheckCircle.svg',
+    Images: ICON + 'Images.svg',
+    ArrowLineDown: ICON + 'ArrowLineDown.svg',
   };
 
   var MESSAGES_MOBILE_MQ = '(max-width: 1024px)';
@@ -340,13 +342,47 @@
    * outside the scrolling list so both stay reachable however far the
    * conversation list runs.
    */
+  /* A way back out of the archived tab. Without it the list looks like an
+   * inbox that has lost most of its conversations. */
+  function renderArchivedHead() {
+    return (
+      '<div class="tma-dash__messages-archived-head">' +
+      '<span class="tma-dash__messages-archived-title">Archived</span>' +
+      '<button type="button" class="tma-dash__messages-archived-back" data-messages-archived-exit>' +
+      'Back to chats</button>' +
+      '</div>'
+    );
+  }
+
   function renderListFoot(state) {
+    var archived = state && state.tab === 'archived';
+    var media = !!(state && state.mediaMode);
+
+    // Archived count is worth showing: the tab is otherwise invisible, and a
+    // conversation swiped away by accident is hard to find again without it.
+    var archivedCount = getThreads().filter(function (row) { return row.archived; }).length;
+
     return (
       '<div class="tma-dash__messages-list-foot">' +
       renderComposeBtn(
         'tma-dash__messages-list-foot-btn',
         ' data-messages-compose'
       ).replace('aria-label="New message"', 'aria-label="New message" title="New message"') +
+      '<button type="button" class="tma-dash__messages-list-foot-btn' +
+      (archived ? ' is-active' : '') +
+      '" aria-label="Archived chats" title="Archived chats" data-messages-archived' +
+      ' aria-pressed="' + (archived ? 'true' : 'false') + '">' +
+      '<img src="' + ICONS.Archive + '" alt="">' +
+      (archivedCount
+        ? '<span class="tma-dash__messages-list-foot-count">' + archivedCount + '</span>'
+        : '') +
+      '</button>' +
+      '<button type="button" class="tma-dash__messages-list-foot-btn' +
+      (media ? ' is-active' : '') +
+      '" aria-label="Media" title="Media from all chats" data-messages-media' +
+      ' aria-pressed="' + (media ? 'true' : 'false') + '">' +
+      '<img src="' + ICONS.Images + '" alt="">' +
+      '</button>' +
       '<button type="button" class="tma-dash__messages-list-foot-btn' +
       (state && state.settingsOpen ? ' is-active' : '') +
       '" aria-label="Messages settings" title="Messages settings" data-messages-settings' +
@@ -860,12 +896,160 @@
       renderComposePanel(state) +
       renderSettingsPanel(state) +
       '<div class="tma-dash__messages-list-body" data-messages-list-body>' +
-      (state.searchMode
-        ? renderSearchResults(state)
-        : (rows.length ? body : (people ? '' : body)) + people) +
+      // Media takes over the column the way search does; the archived tab is
+      // still the ordinary list, just filtered, so it only gains a header
+      // saying what you are looking at and how to get back.
+      (state.mediaMode
+        ? renderMediaPanel(state)
+        : (state.searchMode
+          ? renderSearchResults(state)
+          : (state.tab === 'archived' ? renderArchivedHead() : '') +
+            (rows.length ? body : (people ? '' : body)) + people)) +
       '</div>' +
       renderListFoot(state) +
       '</div>'
+    );
+  }
+
+  /* ------------------------------------------------------------------
+   * Media
+   *
+   * Every photo and video the user can see, pooled across all of their
+   * conversations — for finding a file you remember receiving without
+   * remembering who sent it. The per-thread shelf in the profile panel stays
+   * as it is; this is the same shelf without the thread filter.
+   *
+   * It takes over the inbox column exactly as search does, rather than opening
+   * a separate overlay, so the reading pane keeps whatever conversation is open
+   * behind it.
+   * ---------------------------------------------------------------- */
+
+  /* Media is fetched once per opening rather than kept in sync: it is a
+   * browsing view, not a live one, and re-fetching on every render would make
+   * scrolling it stutter. */
+  function loadMessagesMedia(root, state, render) {
+    if (state.mediaLoading) return;
+
+    state.mediaLoading = true;
+    state.mediaError = null;
+    render();
+
+    window.TMAMessagingAPI.media(state.mediaShelf || 'media').then(function (data) {
+      state.mediaItems = (data && data.items) || [];
+      state.mediaLoading = false;
+      render();
+    }).catch(function (err) {
+      state.mediaLoading = false;
+      state.mediaError = (err && err.message) || 'Media could not be loaded.';
+      render();
+    });
+  }
+
+  function renderMediaPanel(state) {
+    var shelf = state.mediaShelf || 'media';
+
+    var tabs =
+      '<div class="tma-dash__messages-media-tabs" role="tablist">' +
+      [
+        { key: 'media', label: 'Photos & video' },
+        { key: 'documents', label: 'Documents' },
+      ].map(function (t) {
+        return (
+          '<button type="button" class="tma-dash__messages-media-tab' +
+          (shelf === t.key ? ' is-active' : '') +
+          '" role="tab" aria-selected="' + (shelf === t.key ? 'true' : 'false') +
+          '" data-messages-media-shelf="' + t.key + '">' + esc(t.label) + '</button>'
+        );
+      }).join('') +
+      '</div>';
+
+    var body;
+
+    if (state.mediaLoading) {
+      body = '<div class="tma-dash__messages-media-note">Loading…</div>';
+    } else if (state.mediaError) {
+      body = '<div class="tma-dash__messages-media-note" role="alert">' + esc(state.mediaError) + '</div>';
+    } else if (!state.mediaItems || !state.mediaItems.length) {
+      body =
+        '<div class="tma-dash__messages-media-note">' +
+        (shelf === 'documents'
+          ? 'No documents have been shared yet.'
+          : 'No photos or videos have been shared yet.') +
+        '</div>';
+    } else if (shelf === 'documents') {
+      // Documents read better as rows than tiles — the filename is the point.
+      body =
+        '<div class="tma-dash__messages-media-docs">' +
+        state.mediaItems.map(function (item, i) {
+          return (
+            '<button type="button" class="tma-dash__messages-media-doc" data-messages-media-open="' + i + '">' +
+            '<span class="tma-dash__messages-media-doc-name">' + esc(item.name || 'File') + '</span>' +
+            '<span class="tma-dash__messages-media-doc-meta">' +
+            esc(item.conversationName || '') + ' · ' + esc(item.date || '') +
+            '</span>' +
+            '</button>'
+          );
+        }).join('') +
+        '</div>';
+    } else {
+      body =
+        '<div class="tma-dash__messages-media-grid">' +
+        state.mediaItems.map(function (item, i) {
+          var src = item.thumbUrl || item.url;
+          return (
+            '<button type="button" class="tma-dash__messages-media-tile"' +
+            ' data-messages-media-open="' + i + '"' +
+            ' title="' + esc((item.conversationName || '') + ' · ' + (item.date || '')) + '">' +
+            // alt is deliberately empty: a thumbnail that fails to load should
+            // fall back to the tile's own label (see wireMediaThumbFallbacks),
+            // not to the browser's broken-image icon with a filename beside it.
+            '<img src="' + esc(src) + '" alt="" loading="lazy" data-messages-media-thumb>' +
+            '<span class="tma-dash__messages-media-tile-name" aria-hidden="true">' +
+            esc(item.name || '') + '</span>' +
+            (item.kind === 'video'
+              ? '<span class="tma-dash__messages-media-tile-badge" aria-hidden="true">▶</span>'
+              : '') +
+            '</button>'
+          );
+        }).join('') +
+        '</div>';
+    }
+
+    return (
+      '<div class="tma-dash__messages-media">' +
+      tabs +
+      body +
+      '</div>'
+    );
+  }
+
+  /* Opens a media item in the shared portal lightbox, with the rest of the
+   * shelf as its gallery — the same component the conversation gallery and the
+   * File Library use, so a preview looks identical wherever it was opened. */
+  function openMessagesMediaItem(state, index) {
+    var items = state.mediaItems || [];
+    var item = items[index];
+    if (!item) return;
+
+    // A document has no in-browser preview worth showing; hand it straight to
+    // the browser to download rather than opening an empty viewer.
+    if (item.shelf === 'documents' || item.kind === 'file') {
+      window.open(item.url, '_blank', 'noopener');
+      return;
+    }
+
+    if (!window.TMAPortalLightbox) return;
+
+    var viewable = items.filter(function (i) {
+      return i.kind === 'image' || i.kind === 'video';
+    });
+    var target = viewable.indexOf(item);
+
+    window.TMAPortalLightbox.open(
+      viewable.map(function (i) {
+        return { url: i.url, name: i.name, mime: i.mime, size: i.size };
+      }),
+      target < 0 ? 0 : target
     );
   }
 
@@ -5885,12 +6069,76 @@
       });
     });
 
+    // --- archived chats ---------------------------------------------------
+    root.querySelectorAll('[data-messages-archived]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.tab = state.tab === 'archived' ? 'all' : 'archived';
+        // The three inbox-column takeovers are mutually exclusive; entering
+        // one has to leave the others, or the column renders two at once.
+        state.mediaMode = false;
+        state.settingsOpen = false;
+        state.composeOpen = false;
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-messages-archived-exit]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.tab = 'all';
+        render();
+      });
+    });
+
+    // --- media across all chats -------------------------------------------
+    root.querySelectorAll('[data-messages-media]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var opening = !state.mediaMode;
+        state.mediaMode = opening;
+        state.settingsOpen = false;
+        state.composeOpen = false;
+        state.tab = 'all';
+        render();
+        if (opening) loadMessagesMedia(root, state, render);
+      });
+    });
+
+    root.querySelectorAll('[data-messages-media-shelf]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var shelf = btn.getAttribute('data-messages-media-shelf');
+        if (shelf === (state.mediaShelf || 'media')) return;
+        state.mediaShelf = shelf;
+        state.mediaItems = [];
+        loadMessagesMedia(root, state, render);
+      });
+    });
+
+    root.querySelectorAll('[data-messages-media-open]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openMessagesMediaItem(state, parseInt(btn.getAttribute('data-messages-media-open'), 10));
+      });
+    });
+
+    // A thumbnail whose file has gone (deleted, or storage unreachable) marks
+    // its tile so the filename shows through instead of a broken-image icon.
+    // Bound as a real listener rather than an inline onerror: `error` does not
+    // bubble, so it has to be attached per image.
+    root.querySelectorAll('[data-messages-media-thumb]').forEach(function (img) {
+      if (img._fallbackWired) return;
+      img._fallbackWired = true;
+      img.addEventListener('error', function () {
+        var tile = img.closest('.tma-dash__messages-media-tile');
+        if (tile) tile.classList.add('is-missing');
+      });
+    });
+
     // --- messages settings ------------------------------------------------
     root.querySelectorAll('[data-messages-settings]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var opening = !state.settingsOpen;
         state.settingsOpen = opening;
         state.composeOpen = false;
+        // Same exclusivity as above.
+        state.mediaMode = false;
         render();
       });
     });
@@ -6156,6 +6404,15 @@
       searchMode: false,
       searchResults: null,
       searchLoading: false,
+      /* The pooled Media view over the inbox column: which shelf is showing,
+       * what it holds, and whether it is still loading. Fetched once per
+       * opening rather than kept live — it is a browsing view, and re-fetching
+       * on every render would make scrolling it stutter. */
+      mediaMode: false,
+      mediaShelf: 'media',
+      mediaItems: [],
+      mediaLoading: false,
+      mediaError: null,
       profileOpen: false,
       profile: null,
       profileShelf: 'media',

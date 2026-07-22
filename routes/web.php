@@ -2,34 +2,38 @@
 
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
+use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ConnectorsController;
-use App\Http\Controllers\FileLibraryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DevDatabaseController;
-use App\Http\Controllers\GettingStartedController;
-use App\Http\Controllers\AvatarController;
-use App\Http\Controllers\MeController;
-use App\Http\Controllers\PreferencesController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\ProfileSetupController;
-use App\Http\Controllers\SocialAuthController;
-use App\Http\Controllers\LegacyPageController;
-use App\Http\Controllers\MailController;
-use App\Http\Controllers\MessagingAttachmentController;
-use App\Http\Controllers\MessagingController;
-use App\Http\Controllers\SecuritySettingsController;
+use App\Http\Controllers\FileLibraryController;
 use App\Http\Controllers\Files\BrowserController;
 use App\Http\Controllers\Files\BulkController;
 use App\Http\Controllers\Files\FavoriteController;
 use App\Http\Controllers\Files\FileController;
 use App\Http\Controllers\Files\FolderController;
+use App\Http\Controllers\Files\PublicShareController;
 use App\Http\Controllers\Files\RecycleBinController;
+use App\Http\Controllers\Files\ShareController;
+use App\Http\Controllers\Files\ShortcutController;
+use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
+use App\Http\Controllers\GettingStartedController;
+use App\Http\Controllers\LegacyPageController;
+use App\Http\Controllers\MailController;
+use App\Http\Controllers\MeController;
+use App\Http\Controllers\MessagingAttachmentController;
+use App\Http\Controllers\MessagingController;
+use App\Http\Controllers\PreferencesController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProfileSetupController;
+use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\Signatures\PublicSigningController;
 use App\Http\Controllers\Signatures\SignatureFieldController;
 use App\Http\Controllers\Signatures\SignatureRequestController;
+use App\Http\Controllers\SocialAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -138,7 +142,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/files/{uuid}/force', [FileController::class, 'forceDelete'])->name('force');
         Route::get('/files/{uuid}/download', [FileController::class, 'download'])->name('download');
         Route::get('/files/{uuid}/preview', [FileController::class, 'preview'])->name('preview');
-        Route::get('/files/{uuid}/thumb', [\App\Http\Controllers\Files\ThumbnailController::class, 'show'])->name('thumb');
+        Route::get('/files/{uuid}/thumb', [ThumbnailController::class, 'show'])->name('thumb');
 
         Route::post('/uploads', [UploadController::class, 'init'])->name('uploads.init');
         Route::post('/uploads/{uuid}/chunk', [UploadController::class, 'chunk'])->name('uploads.chunk');
@@ -146,19 +150,19 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/uploads/{uuid}/complete', [UploadController::class, 'complete'])->name('uploads.complete');
         Route::delete('/uploads/{uuid}', [UploadController::class, 'abort'])->name('uploads.abort');
 
-        Route::get('/shortcuts', [\App\Http\Controllers\Files\ShortcutController::class, 'index'])->name('shortcuts.index');
-        Route::post('/shortcuts', [\App\Http\Controllers\Files\ShortcutController::class, 'store'])->name('shortcuts.store');
-        Route::put('/shortcuts/reorder', [\App\Http\Controllers\Files\ShortcutController::class, 'reorder'])->name('shortcuts.reorder');
-        Route::delete('/shortcuts/{uuid}', [\App\Http\Controllers\Files\ShortcutController::class, 'destroy'])->name('shortcuts.destroy');
+        Route::get('/shortcuts', [ShortcutController::class, 'index'])->name('shortcuts.index');
+        Route::post('/shortcuts', [ShortcutController::class, 'store'])->name('shortcuts.store');
+        Route::put('/shortcuts/reorder', [ShortcutController::class, 'reorder'])->name('shortcuts.reorder');
+        Route::delete('/shortcuts/{uuid}', [ShortcutController::class, 'destroy'])->name('shortcuts.destroy');
 
         Route::post('/favorites/toggle', [FavoriteController::class, 'toggle'])->name('favorites.toggle');
         Route::post('/recycle-bin/empty', [RecycleBinController::class, 'empty'])->name('recycle.empty');
         Route::post('/bulk', [BulkController::class, 'handle'])->name('bulk');
 
-        Route::get('/shares', [\App\Http\Controllers\Files\ShareController::class, 'index'])->name('shares.index');
-        Route::post('/shares', [\App\Http\Controllers\Files\ShareController::class, 'store'])->name('shares.store');
-        Route::patch('/shares/{uuid}', [\App\Http\Controllers\Files\ShareController::class, 'update'])->name('shares.update');
-        Route::delete('/shares/{uuid}', [\App\Http\Controllers\Files\ShareController::class, 'destroy'])->name('shares.destroy');
+        Route::get('/shares', [ShareController::class, 'index'])->name('shares.index');
+        Route::post('/shares', [ShareController::class, 'store'])->name('shares.store');
+        Route::patch('/shares/{uuid}', [ShareController::class, 'update'])->name('shares.update');
+        Route::delete('/shares/{uuid}', [ShareController::class, 'destroy'])->name('shares.destroy');
     });
 
     /*
@@ -266,6 +270,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/link-preview', [MessagingController::class, 'linkPreview'])->name('link-preview');
         // Grouped search across people, conversations, messages, files, links.
         Route::get('/search', [MessagingController::class, 'search'])->name('search');
+        // Every piece of media the user can see, pooled across all their
+        // conversations — the inbox column's Media view, as opposed to the
+        // per-thread shelf on conversations/{uuid}/gallery.
+        Route::get('/media', [MessagingController::class, 'media'])->name('media');
         // Bulk receipt acknowledgement — one call covers every conversation.
         Route::post('/delivered', [MessagingController::class, 'markAllDelivered'])->name('delivered');
         Route::get('/settings', [MessagingController::class, 'settings'])->name('settings');
@@ -375,11 +383,11 @@ Route::middleware('throttle:signing')->group(function () {
  * Public share links (no login). Keyed off the random token only — never a
  * storage path or database id.
  */
-Route::get('/s/{token}', [\App\Http\Controllers\Files\PublicShareController::class, 'show'])->name('share.show');
-Route::post('/s/{token}/unlock', [\App\Http\Controllers\Files\PublicShareController::class, 'unlock'])->name('share.unlock');
-Route::get('/s/{token}/preview', [\App\Http\Controllers\Files\PublicShareController::class, 'preview'])->name('share.preview');
-Route::get('/s/{token}/download', [\App\Http\Controllers\Files\PublicShareController::class, 'download'])->name('share.download');
-Route::get('/s/{token}/file/{fileUuid}', [\App\Http\Controllers\Files\PublicShareController::class, 'file'])->name('share.file');
+Route::get('/s/{token}', [PublicShareController::class, 'show'])->name('share.show');
+Route::post('/s/{token}/unlock', [PublicShareController::class, 'unlock'])->name('share.unlock');
+Route::get('/s/{token}/preview', [PublicShareController::class, 'preview'])->name('share.preview');
+Route::get('/s/{token}/download', [PublicShareController::class, 'download'])->name('share.download');
+Route::get('/s/{token}/file/{fileUuid}', [PublicShareController::class, 'file'])->name('share.file');
 
 /*
  * Friendly aliases from the design-phase URLs.
