@@ -691,11 +691,15 @@
   width: 100%;
   min-width: 0;
 }
-/* The sidebar shows only the mark (never the full wordmark), left-aligned,
-   at all times — collapsed rail or hover-expanded alike. Standard-style
-   sidebars override this once expanded, below. */
-.tma-dash__sidebar-logo .tma-dash__logo-expanded { display: none; }
-.tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: flex; }
+/* An open sidebar shows the full logo; the mark is the *collapsed rail's*
+   treatment and nothing else. Stated in that direction on purpose — the rail
+   is the one narrow state, so it carries the exception, and both ways of being
+   open (the hover overlay and the standard style expanded) get the wordmark
+   without needing a rule each. The rail swaps them back inside the
+   desktop-collapse block below; mobile hides this whole block and uses
+   .tma-dash__sidebar-mobile-head instead. */
+.tma-dash__sidebar-logo .tma-dash__logo-expanded { display: flex; justify-content: center; }
+.tma-dash__sidebar-logo .tma-dash__logo-collapsed { display: none; }
 
 .tma-dash__header-logo {
   display: none;
@@ -3182,6 +3186,17 @@
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__sidebar-logo {
     padding-left: calc((var(--dash-sidebar-collapsed-w) - var(--space-8) * 2 - clamp(24px, 21px + 0.5vw, 28px)) / 2);
   }
+  /* The resting rail is the only state narrow enough for the wordmark, so it
+     is the only state that swaps in the mark. Both styles' rails qualify; a
+     hover-expanded overlay does not, which is the case this used to miss. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__sidebar-logo .tma-dash__logo-expanded,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__sidebar-logo .tma-dash__logo-expanded {
+    display: none;
+  }
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__sidebar-logo .tma-dash__logo-collapsed,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__sidebar-logo .tma-dash__logo-collapsed {
+    display: flex;
+  }
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile-meta,
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-section--tabs,
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
@@ -3296,17 +3311,14 @@
     display: none;
   }
 
-  /* Standard style, expanded: show the full regular logo, centered, instead
-     of the mark-only treatment every other state uses. */
-  .tma-dash--sidebar-standard:not(.is-sidebar-collapsed) .tma-dash__sidebar-logo {
+  /* An open sidebar is wide enough to centre the wordmark, so it drops the
+     inset that lines the *mark* up with the nav icon column. Both ways of
+     being open want this — the standard style's expanded rail and the hover
+     overlay alike. Which logo shows is settled by the base rules; this is
+     only where it sits. */
+  .tma-dash--sidebar-standard:not(.is-sidebar-collapsed) .tma-dash__sidebar-logo,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within) .tma-dash__sidebar-logo {
     padding-left: var(--space-4);
-  }
-  .tma-dash--sidebar-standard:not(.is-sidebar-collapsed) .tma-dash__sidebar-logo .tma-dash__logo-expanded {
-    display: flex;
-    justify-content: center;
-  }
-  .tma-dash--sidebar-standard:not(.is-sidebar-collapsed) .tma-dash__sidebar-logo .tma-dash__logo-collapsed {
-    display: none;
   }
 
   /* Hover style only: no dedicated open/close control on desktop — hover or

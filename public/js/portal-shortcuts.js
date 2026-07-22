@@ -73,23 +73,32 @@
       return;
     }
 
-    // Only folders this user pinned. The server still sends automatic
-    // sections (assigned clients, organization folders, the staff folder, the
-    // Client/Staff Files roots) and they are deliberately not rendered: this
-    // list is the user's own shelf, and filling it with folders they never
-    // chose made it impossible to tell what they had actually pinned. Those
-    // folders remain reachable through the File Library, which is where they
-    // are browsed anyway.
+    // The standing sections come first — the libraries, the client folders
+    // this user is assigned to, the organization folders they may see, and
+    // their own staff folder. They are not pins and cannot be unpinned;
+    // they are the folders this user is expected to work out of, which is
+    // exactly why they belong at the top of the shelf rather than being
+    // something each person has to go and find for themselves.
+    var g = groups || {};
+    var auto =
+      groupHtml('Libraries', g.libraries) +
+      groupHtml('Assigned Clients', g.assignedClients) +
+      groupHtml('Organization Folders', g.organization) +
+      groupHtml('My Staff Folder', g.staff);
+
+    // Then whatever they pinned themselves, labelled so the two are tellable
+    // apart — only these carry a remove button.
     var pinned = (items && items.length)
-      ? items.map(function (it) { return itemHtml(it, { pinned: true }); }).join('')
+      ? '<div class="tma-dash__group-label">Pinned Folders</div>' +
+        items.map(function (it) { return itemHtml(it, { pinned: true }); }).join('')
       : '';
 
-    if (!pinned) {
+    if (!auto && !pinned) {
       host.innerHTML = '<p class="tma-dash__shortcut-note">Add folders from the File Library for quick access.</p>';
       return;
     }
 
-    host.innerHTML = pinned;
+    host.innerHTML = auto + pinned;
   }
 
   /* ── data ──────────────────────────────────────────── */

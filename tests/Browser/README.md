@@ -59,6 +59,13 @@ field placement and drawing, and computed CSS only exist in a browser.
   actually measured, and none may be left at the em-dash the client falls back
   to when the metrics request fails. Needs the KPI fixture below — with an empty
   database the cards are *correctly* empty and the run proves nothing.
+- **`sidebar-logo.mjs`** — which logo the sidebar shows. The rule is one
+  sentence (open = wordmark, collapsed rail = mark) but there are four states
+  across two sidebar styles, and the hover overlay was showing the mark while
+  fully expanded. Reads *computed* display in each state, so a rule overridden
+  later in the cascade fails here instead of in someone's eyes. Also pins that
+  mobile hides the logo block entirely in favour of the mobile head. Any
+  signed-in account will do.
 
 `fixtures/contract.pdf` is a hand-built two-page PDF (no library, no
 dependency) with distinct text on each page, so a wrong page or a blank canvas
