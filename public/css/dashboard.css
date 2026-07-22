@@ -11,6 +11,15 @@
   /* Layout gutters (DESIGN_SYSTEM.md → Spacing) */
   --dash-sidebar-w: 225px;
   --dash-sidebar-collapsed-w: 72px;
+
+  /* Sidebar motion. Opening is the slower of the two and decelerates into
+     place; closing is quicker and leads with its own movement, because
+     waiting for something to get out of the way feels slower than waiting
+     for it to arrive. */
+  --dash-sidebar-open-ms: 280ms;
+  --dash-sidebar-close-ms: 190ms;
+  --dash-sidebar-ease-open: cubic-bezier(0.22, 1, 0.36, 1);
+  --dash-sidebar-ease-close: cubic-bezier(0.4, 0, 1, 1);
   --dash-rightbar-w: 280px;
   --dash-gutter: var(--space-28);
 
@@ -3217,7 +3226,23 @@
      once it's expanded (`.is-sidebar-collapsed` removed), it falls through
      to the un-collapsed `.tma-dash` grid earlier in this file, which gives
      the sidebar its full track width and shifts the content beside it. */
-  .tma-dash.is-sidebar-collapsed { grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) var(--dash-rightbar-w); }
+  /* The standard style's width comes from this grid track, not from a width
+     on the sidebar — so the sidebar's own `transition: width` never fired and
+     the panel snapped between sizes. The track itself has to be the thing
+     that animates.
+
+     Split across the two states so the timing can differ by direction: a
+     transition applies as an element enters the state that declares it, so
+     the un-collapsed rule governs opening and the collapsed rule closing. */
+  .tma-dash {
+    transition: grid-template-columns var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open);
+  }
+
+  .tma-dash.is-sidebar-collapsed {
+    grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) var(--dash-rightbar-w);
+    transition: grid-template-columns var(--dash-sidebar-close-ms) var(--dash-sidebar-ease-close);
+  }
+
   .tma-dash.is-rightbar-collapsed { grid-template-columns: var(--dash-sidebar-w) minmax(0, 1fr) 0; }
   .tma-dash.is-sidebar-collapsed.is-rightbar-collapsed { grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) 0; }
   .tma-dash.is-rightbar-collapsed .tma-dash__rightbar { display: none; }
