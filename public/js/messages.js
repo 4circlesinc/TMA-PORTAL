@@ -5103,16 +5103,10 @@
         row.unread = 0;
       }
 
-      // A message that landed in a thread we do not have open still has to
-      // move that row's own badge, and the row's preview is stale either way.
-      if (payload.reason === 'message' && row && state.selectedId !== payload.conversationId) {
-        refreshConversationRow(root, state, render, payload.conversationId, {
-          conversationId: payload.conversationId,
-        });
-      } else {
-        syncTabBarBadges();
-        render();
-      }
+      // Arriving messages are not announced here — the conversation channel
+      // already covers them for every thread, open or not.
+      syncTabBarBadges();
+      render();
     });
   }
 

@@ -350,7 +350,6 @@ class MessagingController extends Controller
         $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageSent($message));
-        $this->announceInbox($conversation, $user, 'message');
 
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $conversation),
@@ -1454,40 +1453,16 @@ class MessagingController extends Controller
     }
 
     /**
-     * Tell everyone else in a conversation that their inbox moved.
-     *
-     * The message itself already goes out on the conversation channel, but a
-     * client only subscribes to the thread it currently has open - so someone
-     * looking at a different conversation would not see their unread badge
-     * change until the next poll. This goes to each recipient's own fan-out
-     * channel, which they hold for the whole session.
-     *
-     * Each recipient gets their own total, because unread is per person. That
-     * is one count query each; the participant list is small and this only
-     * runs on a send.
-     */
-    private function announceInbox(Conversation $conversation, User $actor, string $reason): void
-    {
-        $recipients = $conversation->activeParticipants
-            ->filter(fn (ConversationParticipant $p) => $p->user_id !== $actor->id)
-            ->map(fn (ConversationParticipant $p) => $p->user)
-            ->filter();
-
-        foreach ($recipients as $recipient) {
-            Broadcaster::toOthers(new InboxUpdated(
-                user: $recipient,
-                reason: $reason,
-                totalUnread: (int) $this->unreadCounts($recipient)->sum(),
-                conversationUuid: $conversation->uuid,
-            ));
-        }
-    }
-
-    /**
      * Tell this user's *other* sessions that their own personal state changed.
      *
      * Pin, archive, mute and read are per participant, so nobody else needs to
      * know - but the same person in a second tab does, or the two disagree.
+     *
+     * Deliberately *not* used for arriving messages. The client subscribes to
+     * every one of its conversations, not just the open one, so `message.sent`
+     * already reaches a background thread and refreshes its row - a second
+     * announcement per recipient would cost an unread count query and a
+     * broadcast each to say what the client had already been told.
      */
     private function announceSelf(User $user, string $reason, ?Conversation $conversation = null, array $detail = []): void
     {
