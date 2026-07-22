@@ -344,6 +344,170 @@
    * outside the scrolling list so both stay reachable however far the
    * conversation list runs.
    */
+  /*
+   * The archived shelf, revealed by pulling down at the top of the chat list.
+   *
+   * Rendered collapsed on every pass rather than added when it opens: this
+   * page's render() rebuilds the whole column and resets its scroll position,
+   * so opening the shelf through a re-render would yank the list out from
+   * under the finger that just pulled it. It exists at zero height and the
+   * gesture only toggles a class — see wireArchivedPull.
+   *
+   * It stays in the tab order even while collapsed, and opens on focus. Making
+   * it a gesture removed the only visible way to reach archived chats, and a
+   * control nobody can reach with a keyboard is not a control.
+   */
+  function renderArchivedReveal(state) {
+    var count = getThreads().filter(function (row) { return row.archived; }).length;
+
+    // Nothing archived, nothing to reveal — pulling on an empty shelf would
+    // just be a gesture that appears to do nothing.
+    if (!count) return '';
+
+    return (
+      '<div class="tma-dash__messages-archived-reveal" data-messages-archived-reveal>' +
+      '<button type="button" class="tma-dash__messages-archived-reveal-btn" data-messages-archived>' +
+      '<img src="' + ICONS.Archive + '" alt="">' +
+      '<span class="tma-dash__messages-archived-reveal-label">Archived</span>' +
+      '<span class="tma-dash__messages-archived-reveal-count">' + count + '</span>' +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  /*
+   * Pull down at the top of the list to reveal the archived shelf.
+   *
+   * Two gestures, because the page is used on both: a finger drag (tracked
+   * live, so the shelf follows the pull rather than snapping), and a trackpad
+   * overscroll upward. Both only engage at scrollTop 0 and only when the
+   * movement is clearly vertical — the rows have their own horizontal swipe
+   * actions, and stealing those would break archiving from the list itself.
+   *
+   * Nothing here calls render(). The shelf is already in the DOM; this only
+   * sets its height and a class.
+   */
+  function wireArchivedPull(root) {
+    var body = root.querySelector('[data-messages-list-body]');
+    var shelf = root.querySelector('[data-messages-archived-reveal]');
+    if (!body || !shelf || body._archivePullBound) return;
+    body._archivePullBound = true;
+
+    var OPEN_HEIGHT = 46;
+    // How far the pull has to travel before it latches open.
+    var THRESHOLD = 40;
+    // How long it stays before retracting on its own.
+    var HIDE_AFTER = 4000;
+
+    var startY = 0;
+    var startX = 0;
+    var pulling = false;
+    var latched = false;
+    var hideTimer = null;
+    var wheelPull = 0;
+    var wheelTimer = null;
+
+    function clearHide() {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    }
+
+    function scheduleHide() {
+      clearHide();
+      hideTimer = setTimeout(close, HIDE_AFTER);
+    }
+
+    function setHeight(px, animate) {
+      shelf.classList.toggle('is-dragging', !animate);
+      shelf.style.height = px > 0 ? px + 'px' : '';
+    }
+
+    function open() {
+      latched = true;
+      shelf.classList.add('is-open');
+      setHeight(OPEN_HEIGHT, true);
+      scheduleHide();
+    }
+
+    function close() {
+      clearHide();
+      latched = false;
+      wheelPull = 0;
+      shelf.classList.remove('is-open');
+      setHeight(0, true);
+    }
+
+    // Hovering or focusing the shelf means it is being read or aimed at, so
+    // the timer should not pull it away mid-reach.
+    shelf.addEventListener('pointerenter', clearHide);
+    shelf.addEventListener('pointerleave', function () { if (latched) scheduleHide(); });
+    shelf.addEventListener('focusin', function () { clearHide(); open(); });
+    shelf.addEventListener('focusout', function () { if (latched) scheduleHide(); });
+
+    // --- finger drag ---
+    body.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse') return; // desktop uses the wheel path
+      if (body.scrollTop > 0) return;
+      startY = e.clientY;
+      startX = e.clientX;
+      pulling = true;
+    });
+
+    body.addEventListener('pointermove', function (e) {
+      if (!pulling) return;
+
+      var dy = e.clientY - startY;
+      var dx = e.clientX - startX;
+
+      // Horizontal intent belongs to the row's own swipe actions.
+      if (Math.abs(dx) > Math.abs(dy)) { pulling = false; return; }
+      if (dy <= 0 || body.scrollTop > 0) { setHeight(0, false); return; }
+
+      // Resistance, so the shelf trails the finger rather than matching it —
+      // the pull should feel like it is being stretched open.
+      setHeight(Math.min(OPEN_HEIGHT * 1.4, dy * 0.5), false);
+    });
+
+    function endDrag() {
+      if (!pulling) return;
+      pulling = false;
+
+      var height = parseFloat(shelf.style.height || '0');
+      if (height >= THRESHOLD) open();
+      else close();
+    }
+
+    body.addEventListener('pointerup', endDrag);
+    body.addEventListener('pointercancel', endDrag);
+
+    // --- trackpad / wheel overscroll ---
+    body.addEventListener('wheel', function (e) {
+      // Only an upward push while already at the top counts as a pull.
+      if (body.scrollTop > 0 || e.deltaY >= 0) {
+        if (e.deltaY > 0 && latched) close();
+        return;
+      }
+
+      if (latched) { scheduleHide(); return; }
+
+      wheelPull += -e.deltaY;
+
+      if (wheelTimer) clearTimeout(wheelTimer);
+      // A trackpad emits momentum after the fingers lift; this settles the
+      // gesture once the events stop rather than on every tick.
+      wheelTimer = setTimeout(function () {
+        if (!latched) { wheelPull = 0; setHeight(0, true); }
+      }, 140);
+
+      if (wheelPull >= THRESHOLD) open();
+      else setHeight(Math.min(OPEN_HEIGHT, wheelPull * 0.7), false);
+    }, { passive: true });
+
+    // Scrolling into the list puts it away.
+    body.addEventListener('scroll', function () {
+      if (latched && body.scrollTop > 4) close();
+    }, { passive: true });
+  }
+
   /* A way back out of the archived tab. Without it the list looks like an
    * inbox that has lost most of its conversations. */
   function renderArchivedHead() {
@@ -367,7 +531,6 @@
   function renderListFoot(state) {
     state = state || {};
 
-    var archivedCount = getThreads().filter(function (row) { return row.archived; }).length;
     var unreadUpdates = (state.updates || []).length;
 
     // Exactly one of these is the current view; "chats" is the default when no
@@ -386,7 +549,9 @@
       // log — the chat header already marks its call buttons unavailable the
       // same way, and this stays consistent with that.
       { key: 'calls', icon: 'Phone', label: 'Calls', attr: 'data-messages-nav-calls' },
-      { key: 'archived', icon: 'Archive', label: 'Archived', attr: 'data-messages-archived', count: archivedCount },
+      // Archived is not a nav entry: it lives behind the pull-down shelf at
+      // the top of the list (see renderArchivedReveal), which is where it is
+      // looked for and keeps the bar from crowding its labels into ellipses.
       { key: 'media', icon: 'Images', label: 'Media', attr: 'data-messages-media' },
       { key: 'settings', icon: 'GearSix', label: 'Settings', attr: 'data-messages-settings', action: true },
     ];
@@ -415,19 +580,32 @@
       );
     }).join('');
 
-    // Compose is written out rather than reusing renderComposeBtn: it needs the
-    // same icon/label structure as every other entry, and that helper renders a
-    // bare icon button used elsewhere at a different size.
-    var compose =
-      '<button type="button" class="tma-dash__messages-nav-btn tma-dash__messages-nav-btn--compose"' +
-      ' data-messages-compose aria-label="New message" title="New message">' +
-      '<span class="tma-dash__messages-nav-icon"><img src="' + ICONS.NotePencil + '" alt=""></span>' +
-      '<span class="tma-dash__messages-nav-label">New</span>' +
-      '</button>';
-
+    // New message is not in here: it is an action, not a destination, and it
+    // floats over the list instead (see renderComposeFab). That also leaves the
+    // six real destinations room for their labels.
     return (
       '<div class="tma-dash__messages-list-foot" role="tablist" aria-label="Messages sections">' +
-      compose + nav +
+      nav +
+      '</div>'
+    );
+  }
+
+  /*
+   * The floating New message button, bottom-right of the inbox column.
+   *
+   * The slot around it is deliberately zero-height: it sits in the column's
+   * flex flow directly above the navigation, so the button anchors itself just
+   * clear of the bar without anyone having to hard-code the bar's height. Put
+   * inside the scrolling list body instead, it would scroll away with the
+   * conversations.
+   */
+  function renderComposeFab() {
+    return (
+      '<div class="tma-dash__messages-fab-slot">' +
+      '<button type="button" class="tma-dash__messages-fab" data-messages-compose' +
+      ' aria-label="New message" title="New message">' +
+      '<img src="' + ICONS.NotePencil + '" alt="">' +
+      '</button>' +
       '</div>'
     );
   }
@@ -1020,6 +1198,12 @@
       (mobile ? renderListMobileHead(state) : renderListHead(state)) +
       renderComposePanel(state) +
       renderSettingsPanel(state) +
+      // Only over the chat list: pulling down inside Media or Updates should
+      // not produce a shelf belonging to a list that isn't on screen.
+      (state.searchMode || state.mediaMode || state.updatesMode ||
+        state.callsMode || state.tab === 'archived'
+        ? ''
+        : renderArchivedReveal(state)) +
       '<div class="tma-dash__messages-list-body" data-messages-list-body>' +
       // Media takes over the column the way search does; the archived tab is
       // still the ordinary list, just filtered, so it only gains a header
@@ -1035,6 +1219,8 @@
               : (state.tab === 'archived' ? renderArchivedHead() : '') +
                 (rows.length ? body : (people ? '' : body)) + people)) +
       '</div>' +
+      // Between the scrolling body and the nav bar, so it floats clear of both.
+      renderComposeFab() +
       renderListFoot(state) +
       '</div>'
     );
@@ -6695,6 +6881,8 @@
     });
 
     // --- archived chats ---------------------------------------------------
+    wireArchivedPull(root);
+
     root.querySelectorAll('[data-messages-archived]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         showListView(state.tab === 'archived' ? 'chats' : 'archived');

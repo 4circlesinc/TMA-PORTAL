@@ -24821,6 +24821,59 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-4);
 }
 
+/* ── floating New message button ──────────────────────────────────
+ * The slot takes no vertical space and sits directly above the navigation, so
+ * the button anchors just clear of the bar without hard-coding its height.
+ * Inside the scrolling list body it would scroll away with the conversations. */
+.tma-dash__messages-fab-slot {
+  position: relative;
+  flex: none;
+  height: 0;
+}
+
+.tma-dash__messages-fab {
+  position: absolute;
+  right: var(--space-12);
+  bottom: var(--space-12);
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-bg-card);
+  box-shadow: 0 2px 10px rgb(16 24 40 / 16%), 0 0 0 1px var(--color-overlay-4);
+  cursor: pointer;
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+
+.tma-dash__messages-fab:hover {
+  box-shadow: 0 4px 16px rgb(16 24 40 / 22%), 0 0 0 1px var(--color-overlay-8, var(--color-overlay-4));
+  transform: translateY(-1px);
+}
+
+.tma-dash__messages-fab:active {
+  transform: translateY(0);
+}
+
+.tma-dash__messages-fab img {
+  width: 22px;
+  height: 22px;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash__messages-fab {
+    transition: none;
+  }
+
+  .tma-dash__messages-fab:hover {
+    transform: none;
+  }
+}
+
 .tma-dash__messages-nav-btn {
   position: relative;
   flex: 1 1 0;
@@ -25024,6 +25077,83 @@ button.tma-dash__header-popup-item:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── archived pull-down shelf ─────────────────────────────────────
+ * Sits above the chat list at zero height and is stretched open by pulling
+ * down at the top of it. Height is driven from JS during the drag so the shelf
+ * tracks the finger; the transition here only covers the settle and the
+ * automatic retract, and is switched off mid-drag by .is-dragging. */
+.tma-dash__messages-archived-reveal {
+  flex: none;
+  height: 0;
+  overflow: hidden;
+  transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tma-dash__messages-archived-reveal.is-dragging {
+  transition: none;
+}
+
+.tma-dash__messages-archived-reveal-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  height: 46px;
+  padding: 0 var(--space-12);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  /* Follows the shelf down rather than appearing at full opacity the instant
+   * the pull starts. */
+  opacity: 0.55;
+  transition: opacity 180ms ease, background 120ms ease;
+}
+
+.tma-dash__messages-archived-reveal.is-open .tma-dash__messages-archived-reveal-btn {
+  opacity: 1;
+}
+
+.tma-dash__messages-archived-reveal-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-archived-reveal-btn img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.75;
+}
+
+.tma-dash__messages-archived-reveal-label {
+  flex: 1 1 auto;
+  text-align: left;
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-archived-reveal-count {
+  flex: none;
+  font-size: var(--font-size-12);
+  color: var(--color-text-secondary);
+}
+
+/* The keyboard route in: collapsed, the button is still focusable, and
+ * focusing it opens the shelf (see wireArchivedPull). Without a visible ring
+ * here that would be an invisible focus stop. */
+.tma-dash__messages-archived-reveal-btn:focus-visible {
+  outline: 2px solid var(--color-text-link, #175cd3);
+  outline-offset: -2px;
+  border-radius: var(--radius-8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash__messages-archived-reveal,
+  .tma-dash__messages-archived-reveal-btn {
+    transition: none;
+  }
 }
 
 /* ── archived tab ─────────────────────────────────────────────────

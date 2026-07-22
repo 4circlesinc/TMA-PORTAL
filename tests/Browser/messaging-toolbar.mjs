@@ -123,7 +123,10 @@ try {
   check(narrowed > 0 && narrowed < people, `people search narrowed ${people} → ${narrowed}`);
 
   step(8, 'Picking a person opens that conversation');
-  const chosen = (await page.locator('.tma-dash__messages-person-name').first().textContent()).trim();
+  // Scope to real people: the panel's first row is now the "New group" action.
+  const chosen = (
+    await page.locator('[data-messages-start] .tma-dash__messages-person-name').first().textContent()
+  ).trim();
   await page.locator('[data-messages-start]').first().click();
   await page.waitForTimeout(2000);
 

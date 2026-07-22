@@ -250,9 +250,20 @@ try {
     check(await loadMore.count() > 0, `"load earlier" offered (${before} of 45 loaded)`);
 
     if (await loadMore.count()) {
-      await loadMore.click();
-      await page.waitForTimeout(1500);
-      const after = await page.locator('.tma-dash__messages-bubble').count();
+      // Scrolling to the top also triggers a load, so the button can be
+      // disabled ("Loading…") and then replaced by a re-render. Wait for it to
+      // settle before clicking, and treat an already-running load as fine.
+      await page
+        .waitForSelector('[data-messages-load-more]:not([disabled])', { timeout: 8000 })
+        .catch(() => {});
+      await page.locator('[data-messages-load-more]').click({ timeout: 8000 }).catch(() => {});
+
+      let after = before;
+      for (let i = 0; i < 20; i++) {
+        after = await page.locator('.tma-dash__messages-bubble').count();
+        if (after > before) break;
+        await page.waitForTimeout(300);
+      }
       check(after > before, `older messages loaded (${before} → ${after})`);
     }
   } else {

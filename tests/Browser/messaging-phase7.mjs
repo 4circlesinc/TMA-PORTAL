@@ -69,13 +69,20 @@ try {
     return chat ? {
       name: chat.name, pinned: chat.pinned, canManage: chat.canManage,
       canLeave: chat.canLeave, members: chat.memberCount, index: r.conversations.indexOf(chat),
+      // Every row above it must also be pinned.
+      pinnedBandTop: r.conversations
+        .slice(0, r.conversations.indexOf(chat))
+        .every((c) => c.pinned),
     } : null;
   }, BASE);
 
   check(!!org, 'the organization chat exists');
   check(org?.name === 'TM Antoine Advisory and Partners', `named "${org?.name}"`);
   check(org?.pinned === true, 'it is pinned by default');
-  check(org?.index === 0, 'so it sits at the top of the list');
+  // Pinned, so it sits in the pinned band at the top — but not necessarily at
+  // index 0 forever, since other conversations can be pinned too and pinned
+  // rows still sort by recency among themselves.
+  check(org?.pinnedBandTop === true, `it sits in the pinned band (index ${org?.index})`);
   // Membership grows as accounts open Messages, so it is asserted in step 12
   // once a second account has been through the auto-join path.
   check(org?.members >= 1, `this account is already a member (${org?.members})`);
