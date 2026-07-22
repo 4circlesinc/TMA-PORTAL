@@ -4027,21 +4027,56 @@
           advanceChangePasswordMobile(root);
           return;
         }
-        var repeat = form.querySelector('[name="repeatPassword"]');
-        var next = form.querySelector('[name="newPassword"]');
-        if (repeat && next && repeat.value !== next.value) {
-          repeat.focus();
+      }
+      var repeat = form.querySelector('[name="repeatPassword"]');
+      var next = form.querySelector('[name="newPassword"]');
+      if (repeat && next && repeat.value !== next.value) {
+        repeat.focus();
+        showToast(root, "Passwords don't match.");
+        return;
+      }
+
+      var saveBtn = form.querySelector('.tma-dash__settings-submit--password-desktop, [data-change-password-save]');
+      if (saveBtn) saveBtn.disabled = true;
+
+      fetch('/auth/user/password', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': prefXsrf(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({
+          current_password: (form.querySelector('[name="currentPassword"]') || {}).value || '',
+          password: next ? next.value : '',
+          password_confirmation: repeat ? repeat.value : '',
+        }),
+      }).then(function (res) {
+        if (res.ok) {
+          closePopups(root);
+          showToast(root, 'Password changed');
+          root.querySelectorAll('[data-settings-action="change-password"]').forEach(function (row) {
+            row.classList.remove('tma-dash__settings-row--highlight');
+          });
+          form.reset();
+          updatePasswordStrength(root, '');
+          resetChangePasswordFlow(root);
           return;
         }
-      }
-      closePopups(root);
-      showToast(root, 'Password changed');
-      root.querySelectorAll('[data-settings-action="change-password"]').forEach(function (row) {
-        row.classList.remove('tma-dash__settings-row--highlight');
+        res.json().catch(function () { return null; }).then(function (json) {
+          var errors = json && json.errors;
+          var message = errors && (errors.current_password || errors.password) ?
+            (errors.current_password || errors.password)[0] :
+            (json && json.message) || 'Could not change your password.';
+          showToast(root, message);
+        });
+      }).catch(function () {
+        showToast(root, 'Could not reach the server. Try again.');
+      }).finally(function () {
+        if (saveBtn) saveBtn.disabled = false;
       });
-      form.reset();
-      updatePasswordStrength(root, '');
-      resetChangePasswordFlow(root);
     });
   }
 
