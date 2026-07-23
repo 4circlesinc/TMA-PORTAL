@@ -3,6 +3,10 @@
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\AvatarController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CalendarEventController;
+use App\Http\Controllers\CalendarIcsController;
+use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ConnectorsController;
@@ -22,6 +26,7 @@ use App\Http\Controllers\Files\ShortcutController;
 use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
 use App\Http\Controllers\GettingStartedController;
+use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\LegacyPageController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\MeController;
@@ -259,6 +264,102 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/organization-folders', [FileLibraryController::class, 'storeOrganizationFolder'])->name('org.store');
         Route::patch('/organization-folders/{uuid}', [FileLibraryController::class, 'updateOrganizationFolder'])->name('org.update');
         Route::post('/adopt-folder', [FileLibraryController::class, 'adoptFolder'])->name('adopt-folder');
+    });
+
+    /*
+     * Calendar API. Calendars are addressed by uuid and every route resolves
+     * permission through App\Support\Calendar\CalendarAccess, so a caller
+     * without access gets a 403 rather than a filtered response.
+     *
+     * Subscriptions are the user's own sidebar list: subscribing adds a
+     * calendar to it, and the subscription route toggles show/hide and the
+     * personal colour. Neither ever changes the calendar itself.
+     */
+    Route::prefix('portal/calendar')->name('calendar.')->group(function () {
+        Route::get('/calendars', [CalendarController::class, 'index'])->name('calendars.index');
+        Route::post('/calendars', [CalendarController::class, 'store'])->name('calendars.store');
+
+        // Literal paths before the {uuid} wildcard so it can't swallow them.
+        Route::get('/discover', [CalendarController::class, 'discover'])->name('discover');
+
+        // Free/busy for people and groups. Literal, so it can't be read as an
+        // event uuid by the routes below.
+        Route::get('/availability', [CalendarEventController::class, 'availability'])->name('availability');
+
+        Route::get('/events', [CalendarEventController::class, 'index'])->name('events.index');
+        Route::post('/events', [CalendarEventController::class, 'store'])->name('events.store');
+        Route::get('/events/{uuid}', [CalendarEventController::class, 'show'])->name('events.show');
+        Route::patch('/events/{uuid}', [CalendarEventController::class, 'update'])->name('events.update');
+        Route::delete('/events/{uuid}', [CalendarEventController::class, 'destroy'])->name('events.destroy');
+        Route::post('/events/{uuid}/complete', [CalendarEventController::class, 'complete'])->name('events.complete');
+
+        // Guest list and RSVPs. `respond` answers for the signed-in user only.
+        Route::post('/events/{uuid}/attendees', [CalendarEventController::class, 'invite'])->name('events.invite');
+        Route::delete('/events/{uuid}/attendees/{attendeeId}', [CalendarEventController::class, 'removeAttendee'])->name('events.attendees.remove');
+        Route::post('/events/{uuid}/respond', [CalendarEventController::class, 'respond'])->name('events.respond');
+
+        Route::patch('/calendars/{uuid}', [CalendarController::class, 'update'])->name('calendars.update');
+        Route::delete('/calendars/{uuid}', [CalendarController::class, 'destroy'])->name('calendars.destroy');
+
+        Route::post('/calendars/{uuid}/subscribe', [CalendarController::class, 'subscribe'])->name('calendars.subscribe');
+        Route::delete('/calendars/{uuid}/subscribe', [CalendarController::class, 'unsubscribe'])->name('calendars.unsubscribe');
+        Route::put('/calendars/{uuid}/subscription', [CalendarController::class, 'updateSubscription'])->name('calendars.subscription');
+
+        /*
+         * ICS. Import is two steps — preview the file, then commit the chosen
+         * events — so nothing is written before it has been seen. Subscription
+         * URLs are validated against private address ranges before the server
+         * ever fetches them (SubscriptionUrl).
+         */
+        Route::post('/ics/preview', [CalendarIcsController::class, 'preview'])->name('ics.preview');
+        Route::post('/ics/import', [CalendarIcsController::class, 'import'])->name('ics.import');
+        Route::post('/ics/subscribe', [CalendarIcsController::class, 'subscribe'])->name('ics.subscribe');
+        Route::post('/ics/{uuid}/refresh', [CalendarIcsController::class, 'refresh'])->name('ics.refresh');
+        Route::put('/ics/{uuid}/enabled', [CalendarIcsController::class, 'setEnabled'])->name('ics.enabled');
+        Route::get('/ics/events/{uuid}/export', [CalendarIcsController::class, 'exportEvent'])->name('ics.export-event');
+        Route::get('/ics/{uuid}/export', [CalendarIcsController::class, 'export'])->name('ics.export');
+
+        /*
+         * Provider sync (Google, Microsoft). Connecting a provider calendar
+         * creates a local mirror and queues a background sync; a failure is
+         * recorded on that calendar's row, never surfaced as a page error.
+         */
+        Route::get('/sync/accounts', [CalendarSyncController::class, 'accounts'])->name('sync.accounts');
+        Route::get('/sync/accounts/{accountId}/calendars', [CalendarSyncController::class, 'providerCalendars'])->name('sync.provider-calendars');
+        Route::post('/sync/accounts/{accountId}/connect', [CalendarSyncController::class, 'connect'])->name('sync.connect');
+        Route::put('/sync/{uuid}', [CalendarSyncController::class, 'updateSync'])->name('sync.update');
+        Route::post('/sync/{uuid}/run', [CalendarSyncController::class, 'sync'])->name('sync.run');
+        Route::delete('/sync/{uuid}', [CalendarSyncController::class, 'disconnect'])->name('sync.disconnect');
+        Route::get('/sync/{uuid}/conflicts', [CalendarSyncController::class, 'conflicts'])->name('sync.conflicts');
+        Route::post('/events/{uuid}/resolve-conflict', [CalendarSyncController::class, 'resolveConflict'])->name('sync.resolve');
+
+        Route::get('/calendars/{uuid}/history', [CalendarController::class, 'history'])->name('calendars.history');
+        Route::get('/calendars/{uuid}/members', [CalendarController::class, 'members'])->name('calendars.members');
+        Route::post('/calendars/{uuid}/members', [CalendarController::class, 'addMember'])->name('calendars.members.add');
+        // Group grants are removed by group uuid; the numeric route is for a
+        // single person, and is declared first so it wins for numeric ids.
+        Route::delete('/calendars/{uuid}/members/{userId}', [CalendarController::class, 'removeMember'])
+            ->whereNumber('userId')->name('calendars.members.remove');
+        Route::delete('/calendars/{uuid}/group-members/{groupUuid}', [CalendarController::class, 'removeGroupMember'])
+            ->name('calendars.group-members.remove');
+    });
+
+    /*
+     * Groups: teams, departments, projects and committees. Staff-only, and
+     * administrator-managed — a group manager curates membership but cannot
+     * create or delete groups. What a group may *see* is never set here; that
+     * is a grant made against a calendar.
+     */
+    Route::prefix('portal/groups')->name('groups.')->group(function () {
+        Route::get('/', [GroupsController::class, 'index'])->name('index');
+        Route::post('/', [GroupsController::class, 'store'])->name('store');
+        // Literal path before /{uuid} so the wildcard can't swallow it.
+        Route::get('/staff', [GroupsController::class, 'staff'])->name('staff');
+        Route::patch('/{uuid}', [GroupsController::class, 'update'])->name('update');
+        Route::delete('/{uuid}', [GroupsController::class, 'destroy'])->name('destroy');
+        Route::get('/{uuid}/members', [GroupsController::class, 'members'])->name('members');
+        Route::post('/{uuid}/members', [GroupsController::class, 'addMembers'])->name('members.add');
+        Route::delete('/{uuid}/members/{userId}', [GroupsController::class, 'removeMember'])->name('members.remove');
     });
 
     /*

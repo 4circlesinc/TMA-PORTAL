@@ -41,7 +41,13 @@ return [
         // equally restricted, so this widens what we can do without changing
         // the tier of review the app needs.
         'scope_email' => 'https://www.googleapis.com/auth/gmail.modify',
-        'scope_calendar' => 'https://www.googleapis.com/auth/calendar.readonly',
+        // Two-way calendar sync. `calendar.events` is read+write on events and
+        // is a SENSITIVE scope: production use by anyone outside the test-user
+        // list needs Google's app-verification (not the heavier CASA the Gmail
+        // restricted scope requires). Existing connections granted only
+        // calendar.readonly must reconnect once to gain write — the account's
+        // canWriteCalendar() detects that and the UI prompts for it.
+        'scope_calendar' => 'https://www.googleapis.com/auth/calendar.events',
     ],
 
     'microsoft' => [
@@ -64,7 +70,10 @@ return [
         // tenant, and only with a directory read permission. Without it every
         // sender simply falls back to initials.
         'scope_email' => 'Mail.ReadWrite Mail.Send User.ReadBasic.All',
-        'scope_calendar' => 'Calendars.Read',
+        // ReadWrite covers listing, creating, updating and deleting events —
+        // the two-way sync needs it. Existing Calendars.Read connections must
+        // reconnect once; canWriteCalendar() detects the narrower grant.
+        'scope_calendar' => 'Calendars.ReadWrite',
         'scope_onedrive' => 'Files.Read',
         'scope_sharepoint' => 'Sites.Read.All',
     ],

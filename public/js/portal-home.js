@@ -514,8 +514,7 @@
       });
   }
 
-  // Email/Calendar are placeholder counts (no backend yet); Users is the real
-  // pending-approvals count.
+  // Email is still a placeholder count; Calendar and Users are real.
   function fillShortcutCounts(el) {
     function setCount(kind, n) {
       el.querySelectorAll('[data-home-shortcut-count="' + kind + '"]').forEach(function (b) {
@@ -526,7 +525,10 @@
     var email = (window.TMAEmail && window.TMAEmail.getInboxUnreadCount) ? window.TMAEmail.getInboxUnreadCount(null) : 0;
     var cal = (window.TMACalendar && window.TMACalendar.getTodayEventCount) ? window.TMACalendar.getTodayEventCount() : 0;
     setCount('email', email || 4);
-    setCount('calendar', cal || 2);
+    // Real count now. It answers 0 until the first fetch lands, which hides
+    // the badge rather than showing an invented number; the calendar module
+    // fires tma-calendar-count when the true value arrives.
+    setCount('calendar', cal);
 
     // Painted from cache when known, so the badge does not blink back to zero
     // and re-populate on every render.

@@ -57,4 +57,48 @@ class ConnectedAccount extends Model
 
         return false;
     }
+
+    /**
+     * Whether this account granted enough to *write* calendar events, as
+     * opposed to only reading them.
+     *
+     * Read-only calendar scopes (calendar.readonly / Calendars.Read) are
+     * enough to import but not to push, so the connect screen uses this to
+     * offer import-only sync and prompt a reconnect for two-way — the same
+     * pattern as canWriteMail().
+     */
+    public function canWriteCalendar(): bool
+    {
+        $granted = $this->scopes ?? [];
+
+        $write = $this->provider === 'google'
+            ? ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events']
+            : ['Calendars.ReadWrite'];
+
+        foreach ($write as $scope) {
+            if (in_array($scope, $granted, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Whether this account can read calendars at all (read or write scope). */
+    public function canReadCalendar(): bool
+    {
+        $granted = $this->scopes ?? [];
+
+        $read = $this->provider === 'google'
+            ? ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events',
+                'https://www.googleapis.com/auth/calendar.readonly']
+            : ['Calendars.ReadWrite', 'Calendars.Read'];
+
+        return (bool) array_intersect($read, $granted);
+    }
+
+    public function calendars(): HasMany
+    {
+        return $this->hasMany(Calendar::class);
+    }
 }

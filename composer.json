@@ -15,6 +15,7 @@
         "league/flysystem-aws-s3-v3": "^3.0",
         "predis/predis": "^3.5",
         "resend/resend-php": "^1.5",
+        "sabre/vobject": "^4.5",
         "setasign/fpdf": "^1.9",
         "setasign/fpdi": "^2.6",
         "socialiteproviders/microsoft": "^4.9"

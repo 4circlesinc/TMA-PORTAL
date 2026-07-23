@@ -1,8 +1,14 @@
 <?php
 
+use App\Jobs\RefreshIcsSubscription;
 use App\Jobs\SyncMailbox;
+use App\Jobs\SyncProviderCalendar;
+use App\Models\Calendar;
 use App\Models\ConnectedAccount;
+use App\Models\User;
 use App\Support\Files\ChunkedUpload;
+use App\Support\Messaging\OrganizationChat;
+use App\Support\Messaging\Thumbnailer;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -33,7 +39,7 @@ Schedule::command('files:cleanup-uploads')->hourly();
  */
 Artisan::command('messaging:prune-attachments {--hours=24}', function () {
     $hours = max(1, (int) $this->option('hours'));
-    $removed = App\Support\Messaging\Thumbnailer::pruneStaged($hours);
+    $removed = Thumbnailer::pruneStaged($hours);
 
     $this->info("Removed {$removed} abandoned attachment(s) older than {$hours}h.");
 })->purpose('Remove staged message attachments that were never sent');
@@ -48,8 +54,8 @@ Schedule::command('messaging:prune-attachments')->hourly();
  * visit rather than needing this to be re-run.
  */
 Artisan::command('messaging:org-chat', function () {
-    $chat = App\Support\Messaging\OrganizationChat::ensure(
-        App\Models\User::where('account_type', 'Administrator')->orderBy('id')->first()
+    $chat = OrganizationChat::ensure(
+        User::where('account_type', 'Administrator')->orderBy('id')->first()
     );
 
     $this->info("Organization chat ready: \"{$chat->name}\" ({$chat->uuid}).");
@@ -86,4 +92,72 @@ Schedule::command('mail:sync-all')
     ->everyMinute()
     // The job already drops overlapping runs per mailbox; this stops a slow
     // provider from stacking scheduler ticks on top of each other as well.
+    ->withoutOverlapping();
+
+/*
+ * Re-fetch subscribed ICS calendars that are due.
+ *
+ * "Due" is per calendar: each carries its own refresh frequency, so an hourly
+ * feed and a daily one both get what they asked for from the same tick. A
+ * subscription that has failed repeatedly is marked disabled by the job and
+ * drops out of this query, so a dead URL stops being retried forever.
+ */
+Artisan::command('calendar:refresh-subscriptions', function () {
+    $due = Calendar::query()
+        ->where('source', Calendar::SOURCE_ICS_SUBSCRIPTION)
+        ->whereNotNull('subscription_url')
+        ->whereNotNull('subscription_frequency')
+        ->where(function ($q) {
+            $q->whereNull('subscription_status')
+                ->orWhereNotIn('subscription_status', ['disabled', 'syncing']);
+        })
+        ->where(function ($q) {
+            $q->whereNull('subscription_synced_at')
+                ->orWhereRaw('subscription_synced_at < ?', [now()->subMinutes(1)]);
+        })
+        ->get()
+        // The frequency comparison is done here rather than in SQL because it
+        // is per row, and the set is small.
+        ->filter(fn (Calendar $c) => $c->subscription_synced_at === null
+            || $c->subscription_synced_at->addMinutes((int) $c->subscription_frequency)->isPast());
+
+    foreach ($due as $calendar) {
+        RefreshIcsSubscription::dispatch($calendar->id);
+    }
+
+    $this->info("Queued refresh for {$due->count()} subscription(s).");
+})->purpose('Queue a refresh for every ICS subscription that is due');
+
+Schedule::command('calendar:refresh-subscriptions')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();
+
+/*
+ * Pull every connected provider calendar up to date.
+ *
+ * Runs on the same principle as mail:sync-all — a calendar nobody has open
+ * still needs to receive, so the timer covers it. The job drops overlapping
+ * runs per calendar, and a calendar in a failed/backing-off state is skipped
+ * until a manual sync clears it.
+ */
+Artisan::command('calendar:sync-providers', function () {
+    $calendars = Calendar::query()
+        ->whereIn('source', [Calendar::SOURCE_GOOGLE, Calendar::SOURCE_MICROSOFT])
+        ->whereNotNull('connected_account_id')
+        ->where(function ($q) {
+            $q->whereNull('subscription_status')
+                ->orWhereNotIn('subscription_status', ['syncing']);
+        })
+        ->where('subscription_failures', '<', 10)
+        ->get();
+
+    foreach ($calendars as $calendar) {
+        SyncProviderCalendar::dispatch($calendar->id);
+    }
+
+    $this->info("Queued sync for {$calendars->count()} provider calendar(s).");
+})->purpose('Queue an incremental sync for every connected provider calendar');
+
+Schedule::command('calendar:sync-providers')
+    ->everyTenMinutes()
     ->withoutOverlapping();

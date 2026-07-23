@@ -111,7 +111,8 @@
       prospects: [],
       sharedAddressBook: [],
       personalAddressBook: [],
-      distributionGroups: [],
+      // distributionGroups removed: groups are server-backed now, via
+      // /portal/groups (see portal-people.js).
       superUsers: ['emp-1'],
       hideSuperGroup: false,
       serviceTeams: [],

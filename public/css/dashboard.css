@@ -16023,6 +16023,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Anchors the recurring-scope prompt, which covers the calendar only —
+     not the whole shell. */
+  position: relative;
 }
 
 .tma-dash__clients-schedule--standalone {
@@ -16169,7 +16172,9 @@
 }
 
 .tma-dash__calendar-detail-mark--purple {
-  background: var(--color-violet);
+  /* --color-violet is aliased to the brand blue, which made this mark
+     identical to the blue one. See the calendar palette notes below. */
+  background: var(--color-primary-dark);
 }
 
 .tma-dash__calendar-detail-title {
@@ -16731,6 +16736,770 @@
     bottom: calc(56px + var(--space-24, 24px) + env(safe-area-inset-bottom, 0px));
     z-index: 200;
   }
+}
+
+/* ── Calendar sidebar (calendar list) ────────────────── */
+
+.tma-dash__calendar-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-dash__calendar-syncing {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-dash__calendar-sidebar {
+  flex: 0 0 232px;
+  width: 232px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tma-dash__calendar-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-dash__calendar-sidebar-title {
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__calendar-group + .tma-dash__calendar-group {
+  margin-top: var(--space-16);
+}
+
+.tma-dash__calendar-group-title {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+.tma-dash__calendar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-dash__calendar-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  border-radius: var(--radius-8);
+  padding: var(--space-4);
+}
+
+.tma-dash__calendar-item:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__calendar-item.is-busy {
+  opacity: 0.6;
+}
+
+.tma-dash__calendar-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  cursor: pointer;
+}
+
+.tma-dash__calendar-item-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-dash__calendar-item-name {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__calendar-item-meta {
+  font-size: var(--text-size-10, 10px);
+  line-height: 14px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The actions button only appears on hover or while its menu is open, so a
+   long list of calendars stays quiet. */
+.tma-dash__calendar-item-menu {
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.tma-dash__calendar-item:hover .tma-dash__calendar-item-menu,
+.tma-dash__calendar-item-menu:focus-visible,
+.tma-dash__calendar-item-menu[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.tma-dash__calendar-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 40;
+  min-width: 200px;
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tma-dash__calendar-menu-label {
+  font-size: var(--text-size-10, 10px);
+  line-height: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-4);
+}
+
+.tma-dash__calendar-menu-colours,
+.tma-dash__calendar-colour-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+
+.tma-dash__calendar-colour-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 2px;
+  border-radius: var(--radius-8);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.tma-dash__calendar-colour-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__calendar-colour-btn.is-active {
+  border-color: var(--color-text-primary);
+}
+
+.tma-dash__menu-item--danger {
+  color: #c0392b;
+}
+
+/* ── Calendar colours ────────────────────────────────── */
+
+/* One swatch element, recoloured by modifier — so the sidebar dot, the month
+   dot, the picker and the detail mark can never drift apart. */
+.tma-dash__calendar-swatch {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--color-blue);
+}
+
+/* `purple` is the calendar's historical name for this tone; the design system
+   has no purple, so it resolves to the deep brand blue --color-primary-dark
+   (the colour --color-2, its existing event tint, is derived from). Using
+   --color-violet here would render it identically to `blue`. */
+.tma-dash__calendar-swatch--blue   { background: var(--color-blue); }
+.tma-dash__calendar-swatch--purple { background: var(--color-primary-dark); }
+.tma-dash__calendar-swatch--green  { background: var(--color-green); }
+.tma-dash__calendar-swatch--teal   { background: var(--color-mint); }
+.tma-dash__calendar-swatch--pink   { background: var(--color-pink); }
+.tma-dash__calendar-swatch--red    { background: var(--color-red); }
+
+/* "Use the calendar's colour" in the event form. */
+.tma-dash__calendar-swatch--inherit {
+  background: transparent;
+  border: 1px dashed var(--color-text-secondary);
+}
+
+/* The detail panel mark. blue/purple are defined with the original calendar
+   styles further up; these extend that set. */
+.tma-dash__calendar-detail-mark--green { background: var(--color-green); }
+.tma-dash__calendar-detail-mark--teal  { background: var(--color-mint); }
+.tma-dash__calendar-detail-mark--pink  { background: var(--color-pink); }
+.tma-dash__calendar-detail-mark--red   { background: var(--color-red); }
+
+.tma-dash__calendar-month-dot--blue   { background: var(--color-blue); }
+.tma-dash__calendar-month-dot--purple { background: var(--color-primary-dark); }
+.tma-dash__calendar-month-dot--green  { background: var(--color-green); }
+.tma-dash__calendar-month-dot--teal   { background: var(--color-mint); }
+.tma-dash__calendar-month-dot--pink   { background: var(--color-pink); }
+.tma-dash__calendar-month-dot--red    { background: var(--color-red); }
+
+/* Event blocks and agenda rows are filled with a pale *tint* of the calendar
+   colour, never the saturated token — the existing blue/purple use --color-1
+   and --color-2 (tints of #03a5e9 / #136da0) and carry dark body text on top.
+   The added colours are mixed to the same weight so they sit at the same
+   lightness and stay readable. */
+/* `purple`'s shipped tint (--color-2) is so close to blue's (--color-1) that
+   two different calendars read as the same colour on the grid. Deepened to
+   match its sidebar dot — scoped to the calendar page so the Clients page's
+   schedule widget, which shares these classes, is left exactly as it was. */
+.tma-dash__calendar .tma-dash__clients-event--purple,
+.tma-dash__calendar .tma-dash__calendar-agenda-item--purple {
+  background: color-mix(in srgb, var(--color-primary-dark) 18%, white);
+}
+
+.tma-dash__clients-event--green,
+.tma-dash__calendar-agenda-item--green {
+  background: color-mix(in srgb, var(--color-green) 22%, white);
+}
+
+.tma-dash__clients-event--teal,
+.tma-dash__calendar-agenda-item--teal {
+  background: color-mix(in srgb, var(--color-mint) 22%, white);
+}
+
+.tma-dash__clients-event--pink,
+.tma-dash__calendar-agenda-item--pink {
+  background: color-mix(in srgb, var(--color-pink) 22%, white);
+}
+
+.tma-dash__clients-event--red,
+.tma-dash__calendar-agenda-item--red {
+  background: color-mix(in srgb, var(--color-red) 22%, white);
+}
+
+.tma-dash__calendar-loading,
+.tma-dash__calendar-error {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  text-align: center;
+}
+
+.tma-dash__calendar-form-check {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+/* Sidebar + grid + panel is one column too many below very wide screens: the
+   grid gets squeezed to a sliver. The calendar list yields first — it is
+   reference, while the grid and the open panel are what's being worked on.
+   It comes straight back when the panel closes. */
+@media (max-width: 1500px) {
+  .tma-dash__calendar-layout--panel-open .tma-dash__calendar-sidebar {
+    display: none;
+  }
+}
+
+/* The sidebar is a column on wide screens; below that it stacks above the
+   grid so the calendar itself keeps the full width. */
+@media (max-width: 900px) {
+  .tma-dash__calendar-sidebar {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: 200px;
+  }
+
+  .tma-dash__calendar-layout--sidebar-open {
+    flex-direction: column;
+  }
+}
+
+/* ── Calendar sharing, guests and availability ───────── */
+
+.tma-dash__calendar-share-list,
+.tma-dash__calendar-attendee-list,
+.tma-dash__calendar-avail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tma-dash__calendar-share-row,
+.tma-dash__calendar-attendee,
+.tma-dash__calendar-avail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4);
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__calendar-share-row:hover,
+.tma-dash__calendar-attendee:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__calendar-share-who,
+.tma-dash__calendar-attendee-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-dash__calendar-share-name,
+.tma-dash__calendar-attendee-name {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__calendar-share-meta {
+  font-size: var(--text-size-10, 10px);
+  line-height: 14px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__calendar-role-select {
+  flex-shrink: 0;
+  max-width: 150px;
+  font-size: var(--text-size-12);
+}
+
+.tma-dash__calendar-share-owner {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-8);
+}
+
+.tma-dash__calendar-share-level {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin: var(--space-8) 0 var(--space-16);
+}
+
+/* Search results sit directly under the field they belong to. */
+.tma-dash__calendar-share-results {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-8);
+  margin-top: var(--space-4);
+}
+
+.tma-dash__calendar-share-result {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-dash__calendar-share-result:hover {
+  background: var(--color-hover);
+}
+
+/* Response chips: colour carries the state, the word carries the meaning —
+   neither alone, so it reads without relying on colour vision. */
+.tma-dash__calendar-attendee-response {
+  flex-shrink: 0;
+  font-size: var(--text-size-10, 10px);
+  line-height: 14px;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-8);
+  white-space: nowrap;
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__calendar-attendee-response--accepted {
+  background: color-mix(in srgb, var(--color-green) 22%, white);
+  color: #2f6b40;
+}
+
+.tma-dash__calendar-attendee-response--tentative {
+  background: color-mix(in srgb, var(--color-orange) 22%, white);
+  color: #8a5a12;
+}
+
+.tma-dash__calendar-attendee-response--declined {
+  background: color-mix(in srgb, var(--color-red) 18%, white);
+  color: #a32a2a;
+}
+
+.tma-dash__calendar-attendees,
+.tma-dash__calendar-avail {
+  margin-top: var(--space-16);
+}
+
+.tma-dash__calendar-rsvp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12) 0 0;
+  border-top: 1px solid var(--color-overlay-4);
+  margin-top: var(--space-12);
+}
+
+.tma-dash__calendar-rsvp-buttons {
+  display: inline-flex;
+  gap: var(--space-4);
+}
+
+.tma-dash__calendar-rsvp-btn {
+  appearance: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  cursor: pointer;
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-8);
+  border: 1px solid var(--color-overlay-4);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__calendar-rsvp-btn:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__calendar-rsvp-btn.is-active {
+  border-color: transparent;
+  background: var(--color-text-primary);
+  color: var(--color-text-white);
+}
+
+/* Guest chips on the create/edit form. */
+.tma-dash__calendar-guest-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.tma-dash__calendar-guest-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__calendar-guest-remove {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  padding: 0 2px;
+}
+
+.tma-dash__calendar-guest-remove:hover {
+  color: var(--color-text-primary);
+}
+
+/* "No visibility" must not read as free — muted, not green. */
+.tma-dash__calendar-avail-row {
+  justify-content: space-between;
+}
+
+.tma-dash__calendar-avail-row--unknown .tma-dash__calendar-share-meta {
+  font-style: italic;
+}
+
+/* ── Calendar recurrence, import and subscriptions ───── */
+
+.tma-dash__calendar-add-wrap {
+  position: relative;
+}
+
+.tma-dash__calendar-add-wrap .tma-dash__calendar-menu {
+  min-width: 240px;
+}
+
+.tma-dash__calendar-recur-custom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+  padding: var(--space-8);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__calendar-recur-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.tma-dash__calendar-recur-interval {
+  width: 72px;
+  flex: 0 0 72px;
+}
+
+.tma-dash__calendar-recur-days {
+  display: flex;
+  gap: var(--space-4);
+}
+
+/* Day toggles carry a title attribute because M/T/W/T/F/S/S is ambiguous by
+   letter alone — Tue/Thu and Sat/Sun share an initial. */
+.tma-dash__calendar-recur-day {
+  appearance: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--color-overlay-4);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__calendar-recur-day:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__calendar-recur-day.is-active {
+  border-color: transparent;
+  background: var(--color-text-primary);
+  color: var(--color-text-white);
+}
+
+.tma-dash__calendar-detail-repeat {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+/* The this/following/all prompt. Sits above the panel (which is 40) but below
+   the toast host, so a failure message is still readable over it. */
+.tma-dash__calendar-scope {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 17, 21, 0.32);
+  border-radius: var(--radius-16);
+}
+
+.tma-dash__calendar-scope-card {
+  width: min(320px, calc(100% - var(--space-32)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-16);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.tma-dash__calendar-scope-title {
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.tma-dash__calendar-scope-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-8);
+}
+
+/* Import wizard. */
+.tma-dash__calendar-import-list {
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__calendar-import-row + .tma-dash__calendar-import-row {
+  border-top: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__calendar-import-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  cursor: pointer;
+}
+
+.tma-dash__calendar-import-check:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__calendar-import-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.tma-dash__calendar-import-counts {
+  list-style: none;
+  margin: var(--space-8) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-8);
+}
+
+.tma-dash__calendar-import-counts li {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--dash-panel-bg);
+}
+
+.tma-dash__calendar-import-counts strong {
+  display: block;
+  font-size: var(--text-size-16, 16px);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__calendar-import-errors {
+  margin-top: var(--space-12);
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__calendar-import-errors ul {
+  margin: var(--space-8) 0 0;
+  padding-left: var(--space-16);
+}
+
+/* A failing feed is called out on its own row, never as a page error. */
+.tma-dash__calendar-item-meta--error {
+  color: #c0392b;
+}
+
+/* ── Calendar provider sync, conflicts, history ──────── */
+
+.tma-dash__calendar-sync-note {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: #8a5a12;
+  background: color-mix(in srgb, var(--color-orange) 14%, white);
+  border-radius: var(--radius-8);
+  padding: var(--space-8);
+  margin-bottom: var(--space-12);
+}
+
+.tma-dash__calendar-sync-status {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__calendar-sync-status--error {
+  color: #c0392b;
+}
+
+.tma-dash__calendar-sync-status--ok {
+  color: #2f6b40;
+}
+
+/* Conflicts: the two versions side by side, so what was overwritten is
+   visible next to what replaced it — nothing is lost silently. */
+.tma-dash__calendar-conflict + .tma-dash__calendar-conflict {
+  margin-top: var(--space-16);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__calendar-conflict-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-8);
+}
+
+.tma-dash__calendar-conflict-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__calendar-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-dash__calendar-history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-8) 0;
+}
+
+.tma-dash__calendar-history-row + .tma-dash__calendar-history-row {
+  border-top: 1px solid var(--color-overlay-4);
 }
 
 /* ── Social Feed ─────────────────────────────────────── */

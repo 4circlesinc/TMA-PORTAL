@@ -214,26 +214,83 @@
           '<p class="tma-portal-empty__subtitle">No users in this address book yet.</p></div></div>');
   }
 
-  /* ── distribution groups ────────────────────────── */
+  /* ── groups (teams, departments, projects, committees) ────
+   *
+   * Server-backed via /portal/groups. These are the same groups a calendar
+   * can be shared with and a whole team invited to an event by — not a
+   * page-local list, which is what this screen used to keep.
+   */
+
+  var groupsState = { loaded: false, loading: false, error: null, groups: [], canManage: false, staff: [] };
+
+  function groupsNet(url, opts) {
+    var root = window.__TMA_SITE_ROOT || '';
+    return window.TMAFilesNet.fetchJSON(root + url, opts);
+  }
+
+  function loadGroups(then) {
+    groupsState.loading = true;
+    groupsState.error = null;
+
+    groupsNet('/portal/groups')
+      .then(function (d) {
+        groupsState.loaded = true;
+        groupsState.loading = false;
+        groupsState.groups = (d && d.groups) || [];
+        groupsState.canManage = !!(d && d.canManage);
+        if (then) then();
+      })
+      .catch(function (e) {
+        groupsState.loaded = true;
+        groupsState.loading = false;
+        groupsState.error = (e && e.message) || 'Couldn’t load groups.';
+        if (then) then();
+      });
+  }
+
+  var GROUP_TYPE_LABELS = {
+    team: 'Team', department: 'Department', project: 'Project',
+    committee: 'Committee', organization: 'Organization',
+  };
+
   function renderGroups() {
-    var s = data().state();
-    var rows = s.distributionGroups.map(function (g) {
-      return '<tr><td><strong>' + ui().esc(g.name) + '</strong></td>' +
-        '<td class="tma-portal-table__muted">' + g.members.length + ' member' + (g.members.length === 1 ? '' : 's') + '</td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(g.created) + '</td>' +
+    if (!groupsState.loaded) {
+      return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Groups</h2></div>' +
+        ui().loading({ count: 4 });
+    }
+
+    if (groupsState.error) {
+      return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Groups</h2></div>' +
+        ui().banner('error', groupsState.error);
+    }
+
+    var rows = groupsState.groups.map(function (g) {
+      return '<tr><td><strong>' + ui().esc(g.name) + '</strong>' +
+        (g.description ? '<div class="tma-portal-table__muted">' + ui().esc(g.description) + '</div>' : '') +
+        '</td>' +
+        '<td class="tma-portal-table__muted">' + ui().esc(GROUP_TYPE_LABELS[g.type] || g.type) + '</td>' +
+        '<td class="tma-portal-table__muted">' + g.memberCount + ' member' + (g.memberCount === 1 ? '' : 's') +
+        (g.autoJoin ? ' · all staff' : '') + '</td>' +
         '<td><div class="tma-portal-row-actions">' +
-        '<button type="button" class="tma-portal-icon-btn" data-people-group-delete="' + g.id + '" title="Delete group" aria-label="Delete group"><img src="images/icons/phosphor/Trash.svg" alt=""></button>' +
+        (groupsState.canManage
+          ? '<button type="button" class="tma-portal-icon-btn" data-people-group-delete="' + ui().esc(g.id) +
+            '" title="Delete group" aria-label="Delete group"><img src="images/icons/phosphor/Trash.svg" alt=""></button>'
+          : '') +
         '</div></td></tr>';
     }).join('');
 
-    return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Distribution Groups</h2>' +
-      '<div class="tma-portal-head__actions">' + ui().btn({ label: 'New group', icon: 'Plus', attrs: 'data-people-new-group' }) + '</div></div>' +
-      (s.distributionGroups.length
-        ? ui().table(['Group', 'Members', 'Created', ''], rows)
+    return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Groups</h2>' +
+      '<p class="tma-portal-subtitle">Teams, departments, projects and committees. Share a calendar or invite a whole team at once.</p>' +
+      (groupsState.canManage
+        ? '<div class="tma-portal-head__actions">' + ui().btn({ label: 'New group', icon: 'Plus', attrs: 'data-people-new-group' }) + '</div>'
+        : '') +
+      '</div>' +
+      (groupsState.groups.length
+        ? ui().table(['Group', 'Type', 'Members', ''], rows)
         : ui().emptyState({
             illustration: 'Illustration13',
-            title: 'No distribution groups yet',
-            subtitle: 'Create a group to share folders or send messages to many people at once.',
+            title: 'No groups yet',
+            subtitle: 'Create a group to share calendars and invite several people at once.',
           }));
   }
 
@@ -270,8 +327,12 @@
     else if (state.screen === 'prospects') body = renderContacts('prospects');
     else if (state.screen === 'shared-address') body = renderAddressBook('shared-address');
     else if (state.screen === 'personal-address') body = renderAddressBook('personal-address');
-    else if (state.screen === 'groups') body = renderGroups();
-    else body = renderResend();
+    else if (state.screen === 'groups') {
+      // Groups are server-backed; fetch on first arrival, then render from
+      // what we hold so revisiting the screen doesn't re-skeleton.
+      if (!groupsState.loaded && !groupsState.loading) loadGroups(render);
+      body = renderGroups();
+    } else body = renderResend();
 
     el.innerHTML = '<div class="tma-portal-page">' + body + '</div>';
 
@@ -405,32 +466,95 @@
     /* groups */
     var newGroup = el.querySelector('[data-people-new-group]');
     if (newGroup) newGroup.addEventListener('click', function () {
+      // The staff picker is a real list, fetched when the modal opens.
+      groupsNet('/portal/groups/staff').then(function (d) {
+        groupsState.staff = (d && d.staff) || [];
+        openGroupModal();
+      }).catch(function (e) {
+        ui().toast((e && e.message) || 'Couldn’t load the staff list');
+      });
+    });
+
+    function openGroupModal() {
+      var typeOptions = Object.keys(GROUP_TYPE_LABELS).map(function (k) {
+        return '<option value="' + k + '">' + ui().esc(GROUP_TYPE_LABELS[k]) + '</option>';
+      }).join('');
+
+      var staffRows = groupsState.staff.map(function (p) {
+        return '<label class="tma-portal-check-row">' +
+          '<input type="checkbox" class="tma-dash__check" data-group-member="' + p.id + '">' +
+          '<span>' + ui().esc(p.name) + '<span class="tma-portal-table__muted"> · ' + ui().esc(p.email) + '</span></span>' +
+          '</label>';
+      }).join('');
+
       ui().openModal({
-        title: 'New distribution group',
+        title: 'New group',
         body:
-          ui().field('Group name', ui().input({ placeholder: 'e.g. Tax Season Clients', attrs: 'data-group-name' })) +
-          ui().field('Members (comma separated emails)', ui().input({ placeholder: 'a@x.com, b@y.com', attrs: 'data-group-members' })) +
+          ui().field('Group name', ui().input({ placeholder: 'e.g. Marketing Team', attrs: 'data-group-name' })) +
+          ui().field('Description', ui().input({ placeholder: 'What is this group for?', attrs: 'data-group-desc' })) +
+          ui().field('Type', '<select class="tma-portal-input" data-group-type>' + typeOptions + '</select>') +
+          ui().field('Everyone on staff',
+            '<label class="tma-portal-check-row"><input type="checkbox" class="tma-dash__check" data-group-auto>' +
+            '<span>Membership follows the staff list — new joiners are added automatically</span></label>') +
+          ui().field('Members',
+            '<div class="tma-portal-check-list" data-group-members>' +
+            (staffRows || '<p class="tma-portal-table__muted">No staff to add yet.</p>') + '</div>') +
           '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create group', attrs: 'data-group-create' }) + '</div>',
         onMount: function (host) {
+          // An auto-join group manages its own membership, so the picker is
+          // meaningless for it.
+          var auto = host.querySelector('[data-group-auto]');
+          var list = host.querySelector('[data-group-members]');
+          if (auto && list) {
+            auto.addEventListener('change', function () {
+              list.style.opacity = auto.checked ? '0.4' : '';
+              list.querySelectorAll('input').forEach(function (i) { i.disabled = auto.checked; });
+            });
+          }
+
           host.querySelector('[data-group-create]').addEventListener('click', function () {
-            var name = host.querySelector('[data-group-name]').value.trim();
-            if (!name) { host.querySelector('[data-group-name]').focus(); return; }
-            var members = host.querySelector('[data-group-members]').value.split(',').map(function (m) { return m.trim(); }).filter(Boolean);
-            s.distributionGroups.unshift({ id: data().uid('group'), name: name, members: members, created: data().shortDate() });
-            data().save();
-            ui().closeModal();
-            ui().toast('Group created');
-            render();
+            var nameEl = host.querySelector('[data-group-name]');
+            var name = nameEl.value.trim();
+            if (!name) { nameEl.focus(); return; }
+
+            var memberIds = Array.prototype.slice
+              .call(host.querySelectorAll('[data-group-member]:checked'))
+              .map(function (i) { return Number(i.getAttribute('data-group-member')); });
+
+            groupsNet('/portal/groups', {
+              method: 'POST',
+              json: {
+                name: name,
+                description: host.querySelector('[data-group-desc]').value.trim() || null,
+                group_type: host.querySelector('[data-group-type]').value,
+                auto_join: !!(auto && auto.checked),
+                memberIds: memberIds,
+              },
+            }).then(function () {
+              ui().closeModal();
+              ui().toast('Group created');
+              loadGroups(render);
+            }).catch(function (e) {
+              ui().toast((e && e.message) || 'Couldn’t create the group');
+            });
           });
         },
       });
-    });
+    }
+
     el.querySelectorAll('[data-people-group-delete]').forEach(function (b) {
       b.addEventListener('click', function () {
-        s.distributionGroups = s.distributionGroups.filter(function (g) { return g.id !== b.getAttribute('data-people-group-delete'); });
-        data().save();
-        ui().toast('Group deleted');
-        render();
+        var id = b.getAttribute('data-people-group-delete');
+        var group = groupsState.groups.filter(function (g) { return g.id === id; })[0];
+        if (!group) return;
+        if (!window.confirm('Delete “' + group.name + '”? Calendars shared with it lose that access.')) return;
+
+        groupsNet('/portal/groups/' + encodeURIComponent(id), { method: 'DELETE' })
+          .then(function () {
+            ui().toast('Group deleted');
+            loadGroups(render);
+          })
+          .catch(function (e) { ui().toast((e && e.message) || 'Couldn’t delete the group'); });
       });
     });
 

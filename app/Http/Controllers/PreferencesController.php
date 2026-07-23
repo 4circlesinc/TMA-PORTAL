@@ -18,6 +18,11 @@ class PreferencesController extends Controller
         'language' => 'en',
         'voice' => 'en-us',
         'sidebarStyle' => 'hover',
+        // Calendar page chrome, remembered per user so the page reopens the
+        // way it was left. Which calendars are ticked is not here — that is
+        // server state on calendar_subscriptions.
+        'calendarView' => 'week',
+        'calendarSidebarOpen' => true,
     ];
 
     private const RULES = [
@@ -26,6 +31,8 @@ class PreferencesController extends Controller
         'language' => ['string', 'max:16', 'regex:/^[a-z]{2}(-[a-z]{2,7})?$/i'],
         'voice' => ['string', 'max:32'],
         'sidebarStyle' => ['string', 'in:standard,hover'],
+        'calendarView' => ['string', 'in:week,month,agenda'],
+        'calendarSidebarOpen' => ['boolean'],
     ];
 
     /** The signed-in user's preferences, filled in with defaults. */
@@ -44,8 +51,9 @@ class PreferencesController extends Controller
         $data = $request->validate($rules);
 
         $current = $request->user()->preferences ?? [];
+        $booleans = ['autoTimezone', 'calendarSidebarOpen'];
         foreach ($data as $key => $value) {
-            $current[$key] = $key === 'autoTimezone' ? (bool) $value : $value;
+            $current[$key] = in_array($key, $booleans, true) ? (bool) $value : $value;
         }
 
         $request->user()->forceFill(['preferences' => $current])->save();

@@ -25,6 +25,49 @@ field placement and drawing, and computed CSS only exist in a browser.
   mock: create a client through the form, confirm it survives a reload, then
   bulk-delete it. Reads the directory back through the API so the check doesn't
   depend on how the list renders. Needs a staff account.
+- **`calendar-sync.mjs`** — Phase 4 (Google/Microsoft). Real providers can't be
+  reached from a test, so the seed supplies a `google`-source calendar carrying
+  one conflicted event (its `conflict_snapshot` holds the overwritten local
+  version). The script drives the sidebar's provider menu, opens the conflict
+  resolver and checks **both** versions are shown side by side before restoring
+  the local one, flips the sync direction through the settings panel, and reads
+  the audit history back. Needs the Phase 4 seed — a ConnectedAccount (google,
+  with a `calendar.events` scope) plus that calendar and event; see the seed
+  block at the top of the script's git history. Use a viewport wider than
+  1500px or the sidebar hides behind the open panel.
+
+- **`calendar-ics.mjs`** — recurrence and ICS. Creates a weekly series through
+  the form and checks it *expands* rather than being stored per instance
+  (composite `<master-uuid>@<instant>` ids, one row), that editing one instance
+  raises the this/following/all prompt and renames exactly one occurrence, that
+  export writes the series as a single VEVENT with its RRULE instead of dozens
+  of copies, and that the import wizard round-trips a file. Ends by checking a
+  subscription URL pointed at `169.254.169.254` is refused — the SSRF guard.
+
+  Needs a fresh database: it asserts on absolute occurrence counts.
+
+- **`calendar-sharing.mjs`** — Phase 2, and it needs **three** staff accounts
+  (`e2e@example.com` as administrator, plus `bea@example.com` and one more).
+  Creates a real group on the People screen, shares a private calendar with
+  that group, and checks a member reaches the calendar *through the group
+  alone* — before sharing they must not see it, after revoking it must drop off
+  their list. Then invites the group to an event, replies as the member, and
+  confirms the organizer sees the acceptance. The check worth keeping is that
+  no event title appears anywhere in an availability response.
+
+  Two setup notes it was written around: there is no served shell for
+  `/people/*`, so that URL 404s on a cold load and the script reaches the
+  Groups screen via `TMADashboard.navigate`; and the staff picker is ordered by
+  name, so members are selected by email rather than index.
+
+- **`calendar.mjs`** — the Calendar page is server-backed, not the old
+  localStorage prototype: a fresh account is provisioned one Personal calendar
+  and shows *no* invented events (the old build seeded eleven), an event
+  created through the panel survives a reload, and unticking a calendar clears
+  its events from the grid while the calendar itself — and its events — stay on
+  the server. Also checks that switching views never reloads the page (a
+  sentinel set on `window` has to survive) and that the view the user left in
+  comes back. Needs a staff account.
 - **`file-library.mjs`** — the client/organization folder wiring: an assigned
   client folder and an all-staff organization folder appear as labelled groups
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
