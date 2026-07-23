@@ -106,9 +106,14 @@
     function clientItem(c) {
       var name = c.name || 'Client';
       var company = (c.profile && c.profile.work && c.profile.work.company) || c.company || '';
-      var avatar = R().initialsUri(name);
+      // Real client photo (an upload or provider URL) if there is one; the
+      // initials tile only stands in when there isn't (§5).
+      var initials = R().initialsUri(name);
+      var photo = c.profile && c.profile.photo;
+      var src = (photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo)) ? photo : initials;
       return '<div class="tma-dash__contact" role="button" tabindex="0" data-client-id="' + R().esc(c.id) + '">' +
-        '<img class="tma-dash__rb-avatar" src="' + avatar + '" alt="">' +
+        '<img class="tma-dash__rb-avatar" src="' + R().esc(src) + '" alt="" ' +
+          "onerror=\"this.onerror=null;this.src='" + initials + "'\">" +
         '<span class="tma-dash__contact-name">' + R().esc(name) +
         (company ? '<span class="tma-dash__contact-company">' + R().esc(company) + '</span>' : '') +
         '</span></div>';
