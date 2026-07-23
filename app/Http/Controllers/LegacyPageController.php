@@ -13,6 +13,8 @@ class LegacyPageController extends Controller
         'coming-soon',
         'maintenance',
         'pricing',
+        'privacy-policy',
+        'terms-of-service',
     ];
 
     /**

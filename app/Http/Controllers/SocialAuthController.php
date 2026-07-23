@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as OAuthUser;
 use Throwable;
 
@@ -103,7 +104,29 @@ class SocialAuthController extends Controller
         try {
             /** @var OAuthUser $oauth */
             $oauth = Socialite::driver($provider)->user();
-        } catch (Throwable) {
+        } catch (InvalidStateException $e) {
+            // The state token in the callback didn't match the one we stored at
+            // redirect — almost always a lost/expired session between the two
+            // hops (cookie not persisting, wrong SESSION_DOMAIN, or the user
+            // took too long / reused a stale link).
+            Log::warning('Social sign-in state mismatch', [
+                'provider' => $provider,
+                'host' => $request->getHost(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->fail($request, 'Your '.ucfirst($provider).' sign-in session expired. Please start again.');
+        } catch (Throwable $e) {
+            // Log the real cause: expired/invalid client secret, unregistered
+            // redirect URI at token exchange, network failure to the token
+            // endpoint, etc. The user sees a generic message; we don't.
+            Log::error('Social sign-in failed', [
+                'provider' => $provider,
+                'host' => $request->getHost(),
+                'exception' => $e::class,
+                'error' => $e->getMessage(),
+            ]);
+
             return $this->fail($request, 'Sign-in with '.ucfirst($provider)." didn't complete. Please try again.");
         }
 
