@@ -1061,12 +1061,99 @@
         valueMuted: true,
       }) +
       renderPicker('slack', '30919:278125', SLACK_STATES, prefs.slack) +
-      '</div></div></div>' +
+      '</div></div>' +
+      renderNotificationPrefsGroup() +
+      '</div>' +
       renderMobileSelectOverlay('30919:293271') +
       '</section>';
   }
 
+  /* Per-module notification preferences (§21), backed by the server. Portal
+     delivery of Security and Approval alerts can't be switched off. */
+  var NOTIF_PREF_MODULES = [
+    { id: 'email', label: 'Email' },
+    { id: 'messages', label: 'Messages' },
+    { id: 'calendar', label: 'Calendar' },
+    { id: 'files', label: 'Files' },
+    { id: 'signatures', label: 'Signatures' },
+    { id: 'clients', label: 'Clients' },
+    { id: 'groups', label: 'Groups' },
+    { id: 'approvals', label: 'Approvals' },
+    { id: 'security', label: 'Security' },
+    { id: 'system', label: 'System updates' },
+  ];
+  var NOTIF_PREF_CHANNELS = [
+    { id: 'portal', label: 'Portal' },
+    { id: 'email', label: 'Email' },
+    { id: 'desktop', label: 'Desktop' },
+    { id: 'sound', label: 'Sound' },
+  ];
+  var NOTIF_PREF_LOCKED = ['security', 'approvals'];
+
+  function renderNotificationPrefsGroup() {
+    return '<div class="tma-dash__settings-notifications-group">' +
+      '<p class="tma-dash__settings-notifications-group-label">Notify me about</p>' +
+      '<p class="tma-dash__settings-notifications-hint">Choose how each kind of update reaches you. Security and approval alerts can’t be turned off in the portal.</p>' +
+      '<div class="tma-dash__notifprefs" data-notif-prefs>' +
+        '<div class="tma-dash__notifprefs-loading">Loading…</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function notifPrefsGridHtml(prefs) {
+    var head = '<div class="tma-dash__notifprefs-row tma-dash__notifprefs-row--head">' +
+      '<span class="tma-dash__notifprefs-module"></span>' +
+      NOTIF_PREF_CHANNELS.map(function (c) { return '<span class="tma-dash__notifprefs-col">' + c.label + '</span>'; }).join('') +
+    '</div>';
+    var rows = NOTIF_PREF_MODULES.map(function (m) {
+      var group = prefs[m.id] || {};
+      var cells = NOTIF_PREF_CHANNELS.map(function (c) {
+        var checked = !!group[c.id];
+        var locked = c.id === 'portal' && NOTIF_PREF_LOCKED.indexOf(m.id) !== -1;
+        return '<span class="tma-dash__notifprefs-col">' +
+          renderSwitch(checked || locked, m.label + ' ' + c.label,
+            'data-notif-pref="' + m.id + ':' + c.id + '"' + (locked ? ' disabled' : '')) +
+        '</span>';
+      }).join('');
+      return '<div class="tma-dash__notifprefs-row">' +
+        '<span class="tma-dash__notifprefs-module">' + m.label + '</span>' + cells +
+      '</div>';
+    }).join('');
+    return head + rows;
+  }
+
+  function loadNotificationPrefs(root) {
+    var host = root.querySelector('[data-notif-prefs]');
+    if (!host || host.dataset.loaded === '1' || host.dataset.loading === '1') return;
+    host.dataset.loading = '1';
+    fetch('/portal/notifications/preferences', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        host.dataset.loading = '';
+        if (!data || !data.preferences) { host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; return; }
+        host.dataset.loaded = '1';
+        host.innerHTML = notifPrefsGridHtml(data.preferences);
+      })
+      .catch(function () { host.dataset.loading = ''; if (host) host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; });
+  }
+
+  function saveNotificationPref(group, channel, on) {
+    var body = {}; body[group] = {}; body[group][channel] = on;
+    fetch('/portal/notifications/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': csrfToken() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ preferences: body }),
+    }).catch(function () {});
+  }
+
+  function csrfToken() {
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
   function syncNotificationsPanelUI(root) {
+    loadNotificationPrefs(root);
     var prefs = readNotificationsPrefs();
     var slack = findOption(SLACK_STATES, prefs.slack, 'off');
 
@@ -1109,6 +1196,19 @@
         syncNotificationsPanelUI(root);
       });
     });
+
+    // Per-module preference toggles are added asynchronously, so listen on the
+    // panel and save each change through to the server.
+    var panel = root.querySelector('[data-settings-panel="notifications"]');
+    if (panel && !panel.dataset.notifPrefsBound) {
+      panel.dataset.notifPrefsBound = '1';
+      panel.addEventListener('change', function (e) {
+        var input = e.target.closest('[data-notif-pref]');
+        if (!input) return;
+        var parts = input.getAttribute('data-notif-pref').split(':');
+        saveNotificationPref(parts[0], parts[1], input.checked);
+      });
+    }
 
     syncNotificationsPanelUI(root);
   }

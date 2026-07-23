@@ -249,9 +249,26 @@
     });
   }
 
+  /* Map a deep-link tab token (?tab=activity, or the pending value the shell
+     stored) to a real tab label, so "See all activities" lands on Activity. */
+  function normalizeTab(token) {
+    var map = { overview: 'Overview', users: 'Users', files: 'Files', activity: 'Activity' };
+    return map[String(token || '').toLowerCase()] || null;
+  }
+
+  function tabFromUrl() {
+    try {
+      var t = new URLSearchParams(window.location.search).get('tab');
+      return normalizeTab(t);
+    } catch (e) { return null; }
+  }
+
   function mount(container, opts) {
     if (!container) return;
-    var activeTab = (opts && opts.tab) || 'Overview';
+    var pending = (typeof document !== 'undefined' && document.querySelector('.tma-dash'))
+      ? document.querySelector('.tma-dash')._pendingOverviewTab : null;
+    var activeTab = (opts && opts.tab) || normalizeTab(pending) || tabFromUrl() || 'Overview';
+    if (pending) { try { document.querySelector('.tma-dash')._pendingOverviewTab = null; } catch (e) {} }
     container.innerHTML = render(activeTab);
     bindTabs(container);
     if (activeTab === 'Users') mountUsersTab(container);
@@ -260,5 +277,19 @@
     setActiveTab(container, activeTab);
   }
 
-  window.TMAOverview = { mount: mount, render: render, setActiveTab: setActiveTab, renderRoad: renderRoad };
+  /* Open a tab on an already-mounted Overview (used by the "See all
+     activities" deep link). Mounts the tab's content on demand. */
+  function selectTab(token) {
+    var tab = normalizeTab(token) || 'Overview';
+    var container = document.querySelector('[data-overview]');
+    if (!container || !container.querySelector('.tma-dash__overview')) {
+      // Not mounted yet — leave a marker mount() will pick up.
+      var dash = document.querySelector('.tma-dash');
+      if (dash) dash._pendingOverviewTab = token;
+      return;
+    }
+    setActiveTab(container, tab);
+  }
+
+  window.TMAOverview = { mount: mount, render: render, setActiveTab: setActiveTab, selectTab: selectTab, renderRoad: renderRoad };
 })();

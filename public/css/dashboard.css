@@ -5052,7 +5052,9 @@
 }
 
 .tma-dash__overview-file-icon--purple,
-.tma-dash__overview-file-icon--blue {
+.tma-dash__overview-file-icon--blue,
+.tma-dash__overview-file-icon--red,
+.tma-dash__overview-file-icon--amber {
   background: transparent;
 }
 
@@ -27551,3 +27553,327 @@ span.tma-dash__messages-profile-avatar {
   font-size: var(--text-size-12);
   text-align: center;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Live notifications & activity — right sidebar sections + header popups.
+   Only adds states/tones the originals lacked; the base card, spacing and
+   avatar styles are the existing ones, reused as-is.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The live-section wrapper is invisible to layout: the three sections flow
+   inside the rightbar's flex column exactly as the static ones did. */
+.tma-dash__rb-sections { display: contents; }
+.tma-dash__rb-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Rows are now clickable; keep the card look, add pointer + focus ring. */
+.tma-dash__notice[role="button"],
+.tma-dash__activity[data-activity-id],
+.tma-dash__contact[role="button"] { cursor: pointer; }
+.tma-dash__notice:focus-visible,
+.tma-dash__activity:focus-visible,
+.tma-dash__contact:focus-visible {
+  outline: 2px solid var(--color-1);
+  outline-offset: -2px;
+  border-radius: var(--radius-12);
+}
+
+/* System-icon tones for the remaining semantic levels (§14). Every value is a
+   token the dashboard already ships — no new palette is introduced. */
+.tma-dash__notice-icon--green  { background: color-mix(in srgb, var(--color-green) 16%, #ffffff); }
+.tma-dash__notice-icon--amber  { background: color-mix(in srgb, var(--color-warning, #c77d18) 16%, #ffffff); }
+.tma-dash__notice-icon--red    { background: color-mix(in srgb, var(--color-red) 14%, #ffffff); }
+
+/* Unread indicator: a small dot, matching the header popup's language. */
+.tma-dash__notice { position: relative; }
+.tma-dash__unread-dot {
+  position: absolute;
+  top: 50%;
+  right: var(--space-8);
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-1);
+}
+.tma-dash__notice--unread .tma-dash__notice-title { font-weight: 600; }
+
+/* Per-item dismiss (§20): a hover × that replaces the unread dot's spot. */
+.tma-dash__notif-dismiss {
+  position: absolute;
+  top: 50%;
+  right: var(--space-8);
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 50%;
+  display: none;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+}
+.tma-dash__notice:hover .tma-dash__notif-dismiss,
+.tma-dash__header-popup-item:hover .tma-dash__notif-dismiss { display: grid; }
+.tma-dash__notice:hover .tma-dash__unread-dot,
+.tma-dash__header-popup-item:hover .tma-dash__unread-dot { display: none; }
+.tma-dash__notif-dismiss:hover { background: var(--color-hover); color: var(--color-black); }
+
+/* Optional company line under a client name (shown only where available). */
+.tma-dash__contact-name { display: flex; flex-direction: column; overflow: hidden; }
+.tma-dash__contact-company {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Section empty / error / loading states. */
+.tma-dash__rb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-8);
+  color: var(--color-text-secondary);
+}
+.tma-dash__rb-empty-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-hover);
+}
+.tma-dash__rb-empty-icon img { width: 18px; height: 18px; opacity: 0.7; }
+.tma-dash__rb-empty-text { font-size: var(--text-size-12); line-height: var(--text-lh-12); }
+.tma-dash__rb-retry {
+  border: 0.5px solid var(--dash-border);
+  background: transparent;
+  color: var(--color-black);
+  border-radius: var(--radius-8);
+  padding: 4px 12px;
+  font-size: var(--text-size-12);
+  cursor: pointer;
+}
+.tma-dash__rb-retry:hover { background: var(--color-hover); }
+
+.tma-dash__rb-more {
+  width: 100%;
+  margin-top: var(--space-4);
+  padding: var(--space-8);
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-8);
+}
+.tma-dash__rb-more:hover { background: var(--color-hover); color: var(--color-black); }
+
+/* ── Overview → Activity: the full server-backed log ── */
+.tma-dash__actlog { position: relative; }
+.tma-dash__tool-btn.is-active { background: var(--color-hover); }
+.tma-dash__actlog-filter-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; margin-left: 4px; padding: 0 4px;
+  border-radius: 999px; background: var(--color-1); color: #fff;
+  font-size: 10px; line-height: 15px;
+}
+.tma-dash__cc--module { flex: 0 0 120px; min-width: 0; }
+.tma-dash__actlog-tag {
+  display: inline-block; max-width: 100%;
+  padding: 2px 8px; border-radius: var(--radius-8);
+  background: var(--color-hover); color: var(--color-text-secondary);
+  font-size: var(--text-size-12); line-height: var(--text-lh-12);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tma-dash__actlog-status {
+  margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10px; text-transform: capitalize; flex: 0 0 auto;
+}
+.tma-dash__actlog-status--failure { background: color-mix(in srgb, var(--color-red) 16%, #fff); color: var(--color-danger, #b42318); }
+.tma-dash__actlog-status--pending { background: color-mix(in srgb, var(--color-warning, #c77d18) 18%, #fff); color: var(--color-warning, #8a5a10); }
+.tma-dash__actlog-system-chip {
+  flex: 0 0 24px; width: 24px; height: 24px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--color-hover);
+}
+.tma-dash__actlog-system-chip img { width: 14px; height: 14px; opacity: 0.7; }
+
+.tma-dash__actlog-filter-panel {
+  display: flex; flex-wrap: wrap; gap: var(--space-12);
+  align-items: flex-end; padding: var(--space-12);
+  margin-bottom: var(--space-8);
+  border: 0.5px solid var(--dash-border); border-radius: var(--radius-12);
+  background: var(--color-card, #fff);
+}
+.tma-dash__actlog-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-dash__actlog-field select,
+.tma-dash__actlog-field input {
+  min-width: 140px; padding: 6px 8px; font: inherit; font-size: var(--text-size-12);
+  border: 0.5px solid var(--dash-border); border-radius: var(--radius-8);
+  background: var(--color-card, #fff); color: var(--color-black);
+}
+.tma-dash__actlog-check { display: flex; align-items: center; gap: 6px; font-size: var(--text-size-12); color: var(--color-black); }
+.tma-dash__actlog-filter-foot { display: flex; align-items: flex-end; }
+
+.tma-dash__actlog-more {
+  width: 100%; margin: var(--space-8) 0; padding: var(--space-8);
+  border: 0.5px solid var(--dash-border); background: transparent;
+  font: inherit; font-size: var(--text-size-12); color: var(--color-text-secondary);
+  cursor: pointer; border-radius: var(--radius-8);
+}
+.tma-dash__actlog-more:hover:not(:disabled) { background: var(--color-hover); color: var(--color-black); }
+.tma-dash__actlog-empty { padding: var(--space-24) var(--space-8); text-align: center; color: var(--color-text-secondary); font-size: var(--text-size-12); }
+
+.tma-dash__actlog-row { cursor: pointer; }
+.tma-dash__actlog-detail {
+  padding: var(--space-8) var(--space-12) var(--space-12) 48px;
+  border-bottom: 1px solid var(--color-overlay-4);
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--color-hover);
+}
+.tma-dash__actlog-detail-line { display: flex; gap: var(--space-8); font-size: var(--text-size-12); }
+.tma-dash__actlog-detail-line > span:first-child { flex: 0 0 96px; color: var(--color-text-secondary); }
+.tma-dash__actlog-detail-line code { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; color: var(--color-black); }
+
+.tma-dash[data-theme="dark"] .tma-dash__actlog-filter-panel,
+.tma-dash[data-theme="dark"] .tma-dash__actlog-field select,
+.tma-dash[data-theme="dark"] .tma-dash__actlog-field input { background: var(--dash-card-2); }
+
+/* ── Notification preferences grid (Settings → Notifications) ── */
+.tma-dash__settings-notifications-hint {
+  margin: 0 0 var(--space-12);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+.tma-dash__notifprefs { display: flex; flex-direction: column; }
+.tma-dash__notifprefs-loading { padding: var(--space-12) 0; font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-dash__notifprefs-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) repeat(4, minmax(52px, 1fr));
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+}
+.tma-dash__notifprefs-row:last-child { border-bottom: 0; }
+.tma-dash__notifprefs-row--head {
+  border-bottom: 1px solid var(--color-overlay-20);
+  padding-bottom: var(--space-4);
+}
+.tma-dash__notifprefs-row--head .tma-dash__notifprefs-col {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+.tma-dash__notifprefs-module { font-size: var(--text-size-14); color: var(--color-black); }
+.tma-dash__notifprefs-col { display: flex; justify-content: center; align-items: center; }
+.tma-dash__notifprefs-col .tma-dash__settings-switch-input:disabled + .tma-dash__settings-switch-ui { opacity: 0.55; cursor: not-allowed; }
+@media (max-width: 560px) {
+  .tma-dash__notifprefs-row { grid-template-columns: minmax(90px, 1.2fr) repeat(4, 1fr); gap: var(--space-4); font-size: var(--text-size-12); }
+  .tma-dash__notifprefs-module { font-size: var(--text-size-12); }
+}
+
+.tma-dash__rb-skel {
+  display: grid;
+  grid-template-columns: var(--dash-icon-lg) minmax(0, 1fr);
+  column-gap: var(--dash-icon-text-gap);
+  align-items: center;
+  padding: var(--space-8);
+}
+.tma-dash__rb-skel-avatar {
+  width: var(--dash-icon-lg);
+  height: var(--dash-icon-lg);
+  border-radius: 50%;
+  background: var(--color-hover);
+}
+.tma-dash__rb-skel-lines { display: flex; flex-direction: column; gap: 6px; }
+.tma-dash__rb-skel-lines span { height: 8px; border-radius: 4px; background: var(--color-hover); }
+.tma-dash__rb-skel-lines span:first-child { width: 80%; }
+.tma-dash__rb-skel-lines span:last-child { width: 50%; }
+
+/* The sidebar notice stays single-line to match the original design; any
+   description/CTA a notification carries is shown in the popup, not here. */
+.tma-dash__notice-desc,
+.tma-dash__notice-cta { display: none; }
+
+/* ── Header popups: level tones, description, CTA, div-item states ── */
+.tma-dash__header-popup-icon--blue   { background: var(--dash-card-1); }
+.tma-dash__header-popup-icon--purple { background: var(--dash-card-2); }
+.tma-dash__header-popup-icon--green  { background: color-mix(in srgb, var(--color-green) 18%, #ffffff); }
+.tma-dash__header-popup-icon--amber  { background: color-mix(in srgb, var(--color-warning, #c77d18) 18%, #ffffff); }
+.tma-dash__header-popup-icon--red    { background: color-mix(in srgb, var(--color-red) 16%, #ffffff); }
+
+.tma-dash__header-popup-desc {
+  margin-top: 2px;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.tma-dash__header-popup-cta {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: var(--text-size-12);
+  font-weight: 600;
+  color: var(--color-1);
+}
+/* Both popups scroll their own list within the bounded panel height, so a long
+   list never pushes the footer ("See all…") off-screen. */
+.tma-dash__header-popup .tma-dash__header-popup-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.tma-dash__header-popup-more {
+  width: 100%;
+  margin-top: var(--space-4);
+  padding: var(--space-8);
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-8);
+}
+.tma-dash__header-popup-more:hover { color: var(--color-black); background: rgba(255, 255, 255, 0.28); }
+
+/* The render layer emits div[role=button] items; give them the same
+   affordances the original <button> items had. */
+.tma-dash__header-popup-action--active { color: var(--color-1); font-weight: 600; }
+.tma-dash__header-popup-item[role="button"] { cursor: pointer; }
+.tma-dash__header-popup-item:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.12);
+  outline-offset: 2px;
+}
+.tma-dash__header-popup-item { position: relative; }
+.tma-dash__header-popup-item .tma-dash__unread-dot { right: var(--space-8); background: var(--color-1); }
+
+/* Dark theme: the extra tones read on the dark popup/sidebar too. */
+.tma-dash[data-theme="dark"] .tma-dash__notice-icon--green,
+.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--green { background: color-mix(in srgb, var(--color-green) 30%, #1e2b38); }
+.tma-dash[data-theme="dark"] .tma-dash__notice-icon--amber,
+.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--amber { background: color-mix(in srgb, var(--color-warning, #c77d18) 30%, #1e2b38); }
+.tma-dash[data-theme="dark"] .tma-dash__notice-icon--red,
+.tma-dash[data-theme="dark"] .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-icon--red { background: color-mix(in srgb, var(--color-red) 30%, #1e2b38); }

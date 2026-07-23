@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\AvatarService;
+use App\Support\RealtimeConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -18,6 +19,7 @@ class MeController extends Controller
         $user = $request->user();
 
         return response()->json([
+            'id' => $user->id,
             'name' => $user->name,
             'firstName' => $user->first_name ?: $user->name,
             'lastName' => $user->last_name,
@@ -28,6 +30,8 @@ class MeController extends Controller
             'accountType' => $user->account_type,
             'isAdmin' => $user->account_type === 'Administrator',
             'providerPhoto' => $user->provider_avatar_url,
+            // Lets the notification realtime share the messaging websocket.
+            'realtime' => RealtimeConfig::client(),
         ]);
     }
 

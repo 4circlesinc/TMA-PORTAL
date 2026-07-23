@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\AvatarController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\LegacyPageController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\MessagingAttachmentController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingGroupController;
 use App\Http\Controllers\PreferencesController;
@@ -98,6 +100,27 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
     Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
 
+    // Notifications: the bell popup, the right-sidebar section, and the badge.
+    Route::prefix('portal/notifications')->name('notifications.')->group(function () {
+        Route::get('/', [NotificationController::class, 'index'])->name('index');
+        Route::get('/count', [NotificationController::class, 'count'])->name('count');
+        Route::get('/preferences', [NotificationController::class, 'preferences'])->name('preferences');
+        Route::put('/preferences', [NotificationController::class, 'updatePreferences'])->name('preferences.update');
+        Route::post('/read-all', [NotificationController::class, 'readAll'])->name('read-all');
+        Route::post('/{uid}/read', [NotificationController::class, 'read'])->name('read');
+        Route::post('/{uid}/unread', [NotificationController::class, 'unread'])->name('unread');
+        Route::post('/{uid}/complete', [NotificationController::class, 'complete'])->name('complete');
+        Route::delete('/{uid}', [NotificationController::class, 'destroy'])->name('destroy');
+    });
+
+    // Activity trail: Overview → Activity, the right-sidebar section, the popup.
+    Route::prefix('portal/activity')->name('activity.')->group(function () {
+        Route::get('/', [ActivityController::class, 'index'])->name('index');
+        Route::get('/count', [ActivityController::class, 'count'])->name('count');
+        Route::get('/filters', [ActivityController::class, 'filters'])->name('filters');
+        Route::post('/seen', [ActivityController::class, 'markSeen'])->name('seen');
+    });
+
     Route::get('/admin/users', [AdminUsersController::class, 'index'])->name('admin.users');
     Route::get('/admin/users/pending-count', [AdminUsersController::class, 'pendingCount'])->name('admin.users.pending-count');
     Route::post('/admin/users', [AdminUsersController::class, 'store'])->name('admin.users.store');
@@ -109,6 +132,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::post('/admin/users/{user}/generate-password', [AdminUsersController::class, 'generatePassword'])->name('admin.users.generate-password');
     Route::post('/admin/users/{user}/reset-two-factor', [AdminUsersController::class, 'resetTwoFactor'])->name('admin.users.reset-two-factor');
     Route::post('/admin/users/{user}/approve', [AdminUsersController::class, 'approve'])->name('admin.users.approve');
+    Route::post('/admin/users/{user}/deny', [AdminUsersController::class, 'deny'])->name('admin.users.deny');
     Route::post('/admin/users/{user}/suspend', [AdminUsersController::class, 'suspend'])->name('admin.users.suspend');
     Route::post('/admin/users/{user}/reactivate', [AdminUsersController::class, 'reactivate'])->name('admin.users.reactivate');
 

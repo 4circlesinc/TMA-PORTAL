@@ -1,150 +1,172 @@
 /*
- * TMA - Notifications & Activities header popups (Figma 32546:96099)
+ * TMA - Notifications & Activities header popups (Figma 32546:96099).
+ *
+ * The bell and clock icons in the header. Both popups read from the shared
+ * stores (so they agree with the right sidebar and the badges to the item),
+ * render through the shared render layer, and are mutually exclusive: opening
+ * one closes the other, clicking outside or pressing Escape closes it, and the
+ * two never overlap (§2, §6, §7, §11, §12).
+ *
  * Global: window.TMAActivityPopups
  */
 (function () {
   'use strict';
 
-  var AVATAR = 'images/avatars/';
-  var ICON = 'images/icons/phosphor/';
-
-  var NOTIFICATIONS = [
-    { id: 'n1', icon: 'BugBeetle', title: 'You fixed a bug.', meta: 'Just now', read: false },
-    { id: 'n2', icon: 'User', title: 'New user registered.', meta: '59 minutes ago', read: false },
-    { id: 'n3', icon: 'BugBeetle', title: 'You fixed a bug.', meta: '12 hours ago', read: false },
-    { id: 'n4', icon: 'Broadcast', title: 'Andi Lane subscribed to you.', meta: 'Today, 11:59 AM', read: false },
-    { id: 'n5', icon: 'BugBeetle', title: 'You have a bug that needs to be fixed.', meta: 'Yesterday', read: false },
-    { id: 'n6', icon: 'User', title: 'New user registered', meta: 'Feb 4, 2026', read: false },
-    { id: 'n7', icon: 'Bell', title: 'Reminder: team standup in 15 minutes.', meta: 'Feb 3, 2026', read: false },
-    { id: 'n8', icon: 'Broadcast', title: 'Andi Lane subscribed to you', meta: 'Feb 2, 2026', read: false },
-  ];
-
-  function getNotificationCount() {
-    return NOTIFICATIONS.filter(function (item) { return !item.read; }).length;
-  }
-
-  function getActivityCount() {
-    return ACTIVITIES.length;
-  }
-
-  var ACTIVITIES = [
-    { avatar: 'AvatarAbstract03', title: 'Changed the style.', meta: 'Just now' },
-    { avatar: 'AvatarFemale03', title: 'Released a new version.', meta: '59 minutes ago' },
-    { avatar: 'AvatarMale02', title: 'Submitted a bug.', meta: '12 hours ago' },
-    { avatar: 'Avatar3d03', title: 'Modified A data in Page X.', meta: 'Today, 11:59 AM' },
-    { avatar: 'AvatarAbstract04', title: 'Deleted a page in Project X.', meta: 'Feb 2, 2026' },
-  ];
+  function R() { return window.TMANotifyRender; }
+  function NOTIF() { return window.TMANotifications; }
+  function ACT() { return window.TMAActivities; }
 
   function esc(s) {
-    return String(s).replace(/[&<>"]/g, function (c) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
     });
   }
 
-  function renderNotificationItem(item) {
-    var cls = 'tma-dash__header-popup-item';
-    if (!item.read) cls += ' tma-dash__header-popup-item--unread';
-    return (
-      '<button type="button" class="' + cls + '" data-notification-id="' + esc(item.id) + '">' +
-      '<span class="tma-dash__header-popup-icon" aria-hidden="true">' +
-      '<img src="' + ICON + esc(item.icon) + '.svg" alt="">' +
-      '</span>' +
-      '<div class="tma-dash__header-popup-copy">' +
-      '<div class="tma-dash__header-popup-title">' + esc(item.title) + '</div>' +
-      '<div class="tma-dash__header-popup-meta">' + esc(item.meta) + '</div>' +
-      '</div></button>'
-    );
-  }
-
-  function renderActivityItem(item) {
-    return (
-      '<div class="tma-dash__header-popup-item">' +
-      '<span class="tma-dash__header-popup-avatar" aria-hidden="true">' +
-      '<img src="' + AVATAR + esc(item.avatar) + '.png" alt="">' +
-      '</span>' +
-      '<div class="tma-dash__header-popup-copy">' +
-      '<div class="tma-dash__header-popup-title">' + esc(item.title) + '</div>' +
-      '<div class="tma-dash__header-popup-meta">' + esc(item.meta) + '</div>' +
-      '</div></div>'
-    );
-  }
-
-  function renderNotificationsPanel() {
-    var hasUnread = NOTIFICATIONS.some(function (item) { return !item.read; });
-    return (
-      '<section class="tma-dash__header-popup tma-dash__header-popup--notifications" data-popup-panel="notifications" data-node-id="33296:181107" hidden aria-label="Notifications">' +
+  function notificationsPanelShell() {
+    return '<section class="tma-dash__header-popup tma-dash__header-popup--notifications" data-popup-panel="notifications" data-node-id="33296:181107" hidden aria-label="Notifications">' +
       '<div class="tma-dash__header-popup-head">' +
-      '<h2 class="tma-dash__header-popup-heading">Notifications</h2>' +
-      '<button type="button" class="tma-dash__header-popup-action" data-popup-action="mark-notifications-read"' +
-      (hasUnread ? '' : ' disabled') +
-      '>Mark all as read</button>' +
+        '<h2 class="tma-dash__header-popup-heading">Notifications</h2>' +
+        '<button type="button" class="tma-dash__header-popup-action" data-popup-action="toggle-unread" aria-pressed="false">Unread</button>' +
+        '<button type="button" class="tma-dash__header-popup-action" data-popup-action="mark-notifications-read">Mark all as read</button>' +
       '</div>' +
-      '<div class="tma-dash__header-popup-list">' + NOTIFICATIONS.map(renderNotificationItem).join('') + '</div>' +
+      '<div class="tma-dash__header-popup-list" data-popup-list></div>' +
       '<div class="tma-dash__header-popup-foot">' +
-      '<button type="button" class="tma-dash__header-popup-action tma-dash__header-popup-action--footer" data-popup-action="see-all-notifications">See all notifications</button>' +
+        '<button type="button" class="tma-dash__header-popup-action tma-dash__header-popup-action--footer" data-popup-action="see-all-notifications">See all notifications</button>' +
       '</div>' +
-      '</section>'
-    );
+    '</section>';
   }
 
-  function renderPanel(kind, title, bodyHtml) {
-    return (
-      '<section class="tma-dash__header-popup" data-popup-panel="' + kind + '" data-node-id="' +
-      (kind === 'notifications' ? '33296:181107' : '33296:146832') +
-      '" hidden aria-label="' + esc(title) + '">' +
-      '<h2 class="tma-dash__header-popup-heading">' + esc(title) + '</h2>' +
-      '<div class="tma-dash__header-popup-list">' + bodyHtml + '</div>' +
-      '</section>'
-    );
+  function activitiesPanelShell() {
+    return '<section class="tma-dash__header-popup tma-dash__header-popup--notifications" data-popup-panel="activities" data-node-id="33296:146832" hidden aria-label="Activities">' +
+      '<h2 class="tma-dash__header-popup-heading">Activities</h2>' +
+      '<div class="tma-dash__header-popup-list" data-popup-list></div>' +
+      '<div class="tma-dash__header-popup-foot">' +
+        '<button type="button" class="tma-dash__header-popup-action tma-dash__header-popup-action--footer" data-popup-action="see-all-activities">See all activities</button>' +
+      '</div>' +
+    '</section>';
   }
 
   function mount(root) {
     var host = root.querySelector('[data-header-popups]');
     if (!host) return;
-
-    if (host.parentNode !== document.body) {
-      document.body.appendChild(host);
-    }
-
+    if (host.parentNode !== document.body) document.body.appendChild(host);
     host.setAttribute('data-node-id', '32546:96099');
-    host.innerHTML =
-      renderNotificationsPanel() +
-      renderPanel('activities', 'Activities', ACTIVITIES.map(renderActivityItem).join(''));
+    host.innerHTML = notificationsPanelShell() + activitiesPanelShell();
 
-    var state = { notifications: false, activities: false };
+    var state = { notifications: false, activities: false, unreadOnly: false };
     var notificationsBtn = root.querySelector('[data-action="toggle-notifications-popup"]');
     var activitiesBtn = root.querySelector('[data-action="toggle-activities-popup"]');
     var notificationsPanel = host.querySelector('[data-popup-panel="notifications"]');
     var activitiesPanel = host.querySelector('[data-popup-panel="activities"]');
 
-    function syncBadgeCounts() {
-      if (root._syncTabBarBadges) root._syncTabBarBadges();
-    }
+    function syncBadges() { if (root._syncTabBarBadges) root._syncTabBarBadges(); }
 
-    function refreshNotificationsPanel() {
-      if (!notificationsPanel) return;
-      var list = notificationsPanel.querySelector('.tma-dash__header-popup-list');
+    /* ── rendering from the stores ─────────────────────────────── */
+    function renderNotifications() {
+      var listEl = notificationsPanel.querySelector('[data-popup-list]');
+      if (!listEl) return;
+      var s = NOTIF().state;
+      var items = state.unreadOnly ? s.items.filter(function (it) { return !it.read; }) : s.items;
+      if (!s.loaded && s.loading) listEl.innerHTML = R().skeleton(4);
+      else if (s.error && !s.items.length) listEl.innerHTML = R().errorState('Could not load notifications.');
+      else if (!items.length) listEl.innerHTML = R().emptyState(state.unreadOnly ? 'No unread notifications.' : 'You are all caught up.', 'Bell');
+      else {
+        listEl.innerHTML = items.map(function (it) { return R().notificationItem(it, 'popup'); }).join('') +
+          (!state.unreadOnly && s.hasMore ? '<button type="button" class="tma-dash__header-popup-more" data-popup-loadmore="notifications">Load more</button>' : '');
+      }
       var markBtn = notificationsPanel.querySelector('[data-popup-action="mark-notifications-read"]');
-      if (list) list.innerHTML = NOTIFICATIONS.map(renderNotificationItem).join('');
-      if (markBtn) markBtn.disabled = !NOTIFICATIONS.some(function (item) { return !item.read; });
+      if (markBtn) markBtn.disabled = s.unread === 0;
+      var unreadBtn = notificationsPanel.querySelector('[data-popup-action="toggle-unread"]');
+      if (unreadBtn) {
+        unreadBtn.setAttribute('aria-pressed', String(state.unreadOnly));
+        unreadBtn.classList.toggle('tma-dash__header-popup-action--active', state.unreadOnly);
+      }
     }
 
-    function markAllNotificationsRead() {
-      NOTIFICATIONS.forEach(function (item) { item.read = true; });
-      refreshNotificationsPanel();
-      syncBadgeCounts();
+    function renderActivities() {
+      var listEl = activitiesPanel.querySelector('[data-popup-list]');
+      if (!listEl) return;
+      var s = ACT().state;
+      if (!s.loaded && s.loading) listEl.innerHTML = R().skeleton(4);
+      else if (s.error && !s.items.length) listEl.innerHTML = R().errorState('Could not load activity.');
+      else if (!s.items.length) listEl.innerHTML = R().emptyState('No recent activity.', 'ClockCounterClockwise');
+      else {
+        listEl.innerHTML = s.items.map(function (it) { return R().activityItem(it, 'popup'); }).join('') +
+          (s.hasMore ? '<button type="button" class="tma-dash__header-popup-more" data-popup-loadmore="activities">Load more</button>' : '');
+      }
     }
 
-    function markNotificationRead(id) {
-      var item = NOTIFICATIONS.find(function (entry) { return entry.id === id; });
-      if (!item || item.read) return;
-      item.read = true;
-      refreshNotificationsPanel();
-      syncBadgeCounts();
+    NOTIF().subscribe(function () { if (state.notifications) renderNotifications(); syncBadges(); });
+    ACT().subscribe(function () { if (state.activities) renderActivities(); syncBadges(); });
+
+    /* ── interactions ──────────────────────────────────────────── */
+    host.addEventListener('click', function (e) {
+      var actionBtn = e.target.closest('[data-popup-action]');
+      if (actionBtn) {
+        e.preventDefault();
+        var action = actionBtn.getAttribute('data-popup-action');
+        if (action === 'mark-notifications-read') NOTIF().markAllRead();
+        else if (action === 'toggle-unread') { state.unreadOnly = !state.unreadOnly; renderNotifications(); }
+        else if (action === 'see-all-notifications') seeAllNotifications();
+        else if (action === 'see-all-activities') seeAllActivities();
+        return;
+      }
+      var more = e.target.closest('[data-popup-loadmore]');
+      if (more) {
+        e.preventDefault();
+        if (more.getAttribute('data-popup-loadmore') === 'notifications') NOTIF().loadMore();
+        else ACT().loadMore();
+        return;
+      }
+      var retry = e.target.closest('[data-rb-retry]');
+      if (retry) {
+        e.preventDefault();
+        if (retry.closest('[data-popup-panel="notifications"]')) NOTIF().load({ limit: 20 });
+        else ACT().load({ limit: 25 });
+        return;
+      }
+      var dismiss = e.target.closest('[data-notification-dismiss]');
+      if (dismiss) { e.preventDefault(); e.stopPropagation(); NOTIF().remove(dismiss.getAttribute('data-notification-dismiss')); return; }
+      var notif = e.target.closest('[data-notification-id]');
+      if (notif) { e.preventDefault(); openNotification(notif.getAttribute('data-notification-id'), notif.getAttribute('data-action-url')); return; }
+      var act = e.target.closest('[data-activity-id]');
+      if (act) { e.preventDefault(); navigate(act.getAttribute('data-action-url')); }
+    });
+
+    host.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var row = e.target.closest('[data-notification-id],[data-activity-id]');
+      if (!row) return;
+      e.preventDefault();
+      row.click();
+    });
+
+    function openNotification(uid, url) {
+      NOTIF().markRead(uid);
+      navigate(url);
+    }
+
+    function navigate(url) {
+      closeAll();
+      if (!url) return;
+      if (root._portalNavigate) root._portalNavigate(url);
+      else window.location.assign((window.__TMA_SITE_ROOT || '') + url);
     }
 
     function seeAllNotifications() {
       closeAll();
+      openRightbar();
+      if (window.TMARightSidebar && window.TMARightSidebar.expand) {
+        window.TMARightSidebar.expand(root, 'notifications');
+      }
+    }
+
+    function seeAllActivities() {
+      // The complete activity log lives in Overview → Activity (§7).
+      navigate('/overview?tab=activity');
+    }
+
+    function openRightbar() {
       if (window.innerWidth <= 1024) {
         root.classList.remove('is-nav-open');
         root.classList.add('is-rb-open');
@@ -152,28 +174,10 @@
         root.classList.remove('is-rightbar-collapsed');
       }
       var rightbar = root.querySelector('.tma-dash__rightbar');
-      if (!rightbar) return;
-      rightbar.scrollTop = 0;
-      var section = rightbar.querySelector('.tma-dash__rb-section');
-      if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (rightbar) rightbar.scrollTop = 0;
     }
 
-    host.addEventListener('click', function (e) {
-      var actionBtn = e.target.closest('[data-popup-action]');
-      if (actionBtn) {
-        e.preventDefault();
-        var action = actionBtn.getAttribute('data-popup-action');
-        if (action === 'mark-notifications-read') markAllNotificationsRead();
-        if (action === 'see-all-notifications') seeAllNotifications();
-        return;
-      }
-      var itemBtn = e.target.closest('[data-notification-id]');
-      if (itemBtn) {
-        e.preventDefault();
-        markNotificationRead(itemBtn.getAttribute('data-notification-id'));
-      }
-    });
-
+    /* ── open/close + single-panel-at-a-time ───────────────────── */
     function syncTheme() {
       host.setAttribute('data-popup-theme', root.getAttribute('data-theme') || 'light');
     }
@@ -189,17 +193,14 @@
         activitiesBtn.classList.toggle('tma-dash__icon-btn--active', state.activities);
       }
       var anyOpen = state.notifications || state.activities;
-      var openCount = (state.notifications ? 1 : 0) + (state.activities ? 1 : 0);
       host.hidden = !anyOpen;
-      host.classList.toggle('tma-dash__header-popups--single', openCount === 1);
-      host.classList.toggle('tma-dash__header-popups--both', openCount === 2);
+      // Only ever one panel — they must never overlap (§2).
+      host.classList.toggle('tma-dash__header-popups--single', anyOpen);
+      host.classList.remove('tma-dash__header-popups--both');
       if (notificationsPanel) notificationsPanel.hidden = !state.notifications;
       if (activitiesPanel) activitiesPanel.hidden = !state.activities;
-      if (anyOpen) {
-        requestAnimationFrame(positionPopups);
-      } else {
-        clearPopupHeights();
-      }
+      if (anyOpen) requestAnimationFrame(function () { positionPopups(); });
+      else clearPopupHeights();
     }
 
     function clearPopupHeights() {
@@ -212,22 +213,16 @@
 
     function applySinglePopupHeight(top) {
       clearPopupHeights();
-      var openCount = (state.notifications ? 1 : 0) + (state.activities ? 1 : 0);
-      if (openCount !== 1) return;
-
-      var panel = state.notifications ? notificationsPanel : activitiesPanel;
+      var panel = state.notifications ? notificationsPanel : (state.activities ? activitiesPanel : null);
       if (!panel || panel.hidden) return;
-
-      var margin = 16;
-      var shadowRoom = 28;
-      var hostPadding = 40;
+      var margin = 16, shadowRoom = 28, hostPadding = 40;
       var available = window.innerHeight - top - margin - shadowRoom - hostPadding;
       var minHeight = Math.max(320, Math.min(available, 560));
       panel.style.minHeight = minHeight + 'px';
-      if (state.notifications) panel.style.height = minHeight + 'px';
+      panel.style.height = minHeight + 'px';
     }
 
-    function positionPopups(anchorEl) {
+    function positionPopups() {
       var tabbar = root.querySelector('.tma-dash__tabbar');
       var useTabBar = window.innerWidth <= 1024 && tabbar && getComputedStyle(tabbar).display !== 'none';
 
@@ -252,8 +247,7 @@
       if (!icons) return;
 
       var rect = icons.getBoundingClientRect();
-      var margin = 16;
-      var shadowRoom = 28;
+      var margin = 16, shadowRoom = 28;
       var top = Math.round(rect.bottom + 8);
 
       host.style.top = top + 'px';
@@ -280,33 +274,42 @@
       if (root._activityPopups && root._activityPopups.onClose) root._activityPopups.onClose();
     }
 
+    function onOpen(kind) {
+      if (kind === 'notifications') {
+        NOTIF().ensureLoaded({ limit: 20 });
+        renderNotifications();
+      } else {
+        ACT().ensureLoaded({ limit: 25 });
+        renderActivities();
+        // Opening the panel means the user has now seen the activity (§12).
+        ACT().markSeen();
+      }
+      syncBadges();
+    }
+
     function openKind(kind) {
       state.notifications = kind === 'notifications';
       state.activities = kind === 'activities';
       syncTriggers();
+      onOpen(kind);
       requestAnimationFrame(function () { positionPopups(); });
     }
 
     function toggle(kind) {
-      if (kind === 'notifications') state.notifications = !state.notifications;
-      if (kind === 'activities') state.activities = !state.activities;
+      var willOpen = !state[kind];
+      // Single-open: opening one always closes the other.
+      state.notifications = false;
+      state.activities = false;
+      state[kind] = willOpen;
       syncTriggers();
+      if (willOpen) onOpen(kind);
     }
 
     if (notificationsBtn) {
-      notificationsBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggle('notifications');
-      });
+      notificationsBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); toggle('notifications'); });
     }
-
     if (activitiesBtn) {
-      activitiesBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggle('activities');
-      });
+      activitiesBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); toggle('activities'); });
     }
 
     document.addEventListener('click', function (e) {
@@ -330,25 +333,30 @@
     var themeObserver = new MutationObserver(syncTheme);
     themeObserver.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
 
+    // Prime the badge counts so the bell/clock are accurate before first open.
+    NOTIF().refreshCount();
+    ACT().refreshCount();
+
     root._activityPopups = {
       toggle: toggle,
       close: closeAll,
       isOpen: function () { return state.notifications || state.activities; },
       openNotifications: function () { openKind('notifications'); },
       openActivities: function () { openKind('activities'); },
-      getNotificationCount: getNotificationCount,
-      getActivityCount: getActivityCount,
-      markAllNotificationsRead: markAllNotificationsRead,
+      getNotificationCount: function () { return NOTIF() ? NOTIF().getUnreadCount() : 0; },
+      getActivityCount: function () { return ACT() ? ACT().getNewCount() : 0; },
+      markAllNotificationsRead: function () { NOTIF().markAllRead(); },
       seeAllNotifications: seeAllNotifications,
       onClose: null,
     };
 
     syncTriggers();
+    syncBadges();
   }
 
   window.TMAActivityPopups = {
     mount: mount,
-    getNotificationCount: getNotificationCount,
-    getActivityCount: getActivityCount,
+    getNotificationCount: function () { return window.TMANotifications ? window.TMANotifications.getUnreadCount() : 0; },
+    getActivityCount: function () { return window.TMAActivities ? window.TMAActivities.getNewCount() : 0; },
   };
 })();

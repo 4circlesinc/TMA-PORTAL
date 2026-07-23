@@ -5,6 +5,7 @@ namespace App\Listeners;
 use App\Models\AuthEvent;
 use App\Models\User;
 use App\Support\Messaging\PresenceService;
+use App\Support\Notifications\Notifier;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -23,6 +24,29 @@ class RecordAuthEvent
     public function handleRegistered(Registered $event): void
     {
         $this->record('registered', $event->user->getAuthIdentifier());
+
+        // A self-registered account starts pending. Tell the administrators it
+        // needs review, and drop it into the audit trail (§16).
+        $user = $event->user;
+        if ($user instanceof User && $user->status === User::STATUS_PENDING) {
+            \App\Support\Activity\ActivityLogger::log([
+                'actor' => $user,
+                'type' => 'account.registered',
+                'module' => 'account',
+                'status' => 'pending',
+                'description' => $user->name.' registered and is awaiting approval',
+                'subject' => $user,
+            ]);
+            Notifier::notifyAdmins([
+                'actor' => $user,
+                'type' => 'account.pending',
+                'title' => $user->name.' requested access',
+                'message' => $user->email,
+                'subject' => $user,
+                'action_url' => '/users',
+                'dedupe_key' => 'account.pending:'.$user->id,
+            ]);
+        }
     }
 
     public function handleVerified(Verified $event): void
@@ -32,7 +56,29 @@ class RecordAuthEvent
 
     public function handleLogin(Login $event): void
     {
-        $this->record('login', $event->user->getAuthIdentifier());
+        $userId = $event->user->getAuthIdentifier();
+        $ip = request()->ip();
+        $ua = (string) request()->userAgent();
+
+        // A device is "known" if this user has signed in from this IP or agent
+        // before. Notify only when a returning user signs in somewhere new — a
+        // first-ever login is expected, and every-login alerts are just noise.
+        $priorLogins = AuthEvent::where('user_id', $userId)->where('event', 'login')->count();
+        $knownDevice = AuthEvent::where('user_id', $userId)->where('event', 'login')
+            ->where(fn ($q) => $q->where('ip', $ip)->orWhere('user_agent', $ua))
+            ->exists();
+
+        $this->record('login', $userId);
+
+        if ($priorLogins > 0 && ! $knownDevice && $event->user instanceof User) {
+            Notifier::send([
+                'user' => $event->user,
+                'type' => 'security.new_login',
+                'title' => 'New sign-in to your account',
+                'message' => trim(($ua ?: 'A new device').' · '.($ip ?: '')),
+                'action_url' => '/account-settings?settings-page=security',
+            ]);
+        }
     }
 
     public function handleLogout(Logout $event): void
@@ -60,6 +106,16 @@ class RecordAuthEvent
     public function handlePasswordReset(PasswordReset $event): void
     {
         $this->record('password_reset', $event->user->getAuthIdentifier());
+
+        if ($event->user instanceof User) {
+            Notifier::send([
+                'user' => $event->user,
+                'type' => 'security.password_changed',
+                'title' => 'Your password was changed',
+                'message' => 'If this was not you, secure your account immediately.',
+                'action_url' => '/account-settings?settings-page=security',
+            ]);
+        }
     }
 
     public function handleLockout(Lockout $event): void

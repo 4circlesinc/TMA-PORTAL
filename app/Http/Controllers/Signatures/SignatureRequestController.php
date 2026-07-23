@@ -8,7 +8,9 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\Files\FileAccess;
+use App\Support\Notifications\Notifier;
 use App\Support\Signatures\Activity;
 use App\Support\Signatures\Presenter;
 use App\Support\Signatures\Sender;
@@ -346,9 +348,49 @@ class SignatureRequestController extends Controller
 
         $signatureRequest->refresh()->load(['recipients', 'file', 'signedFile', 'folder', 'creator']);
 
+        $this->announceSent($request, $signatureRequest);
+
         return response()->json([
             'request' => (new Presenter($request->user()))->request($signatureRequest),
         ]);
+    }
+
+    /**
+     * Record that a signature request went out, and notify any recipients who
+     * are portal users so their signature shows up as an action-required item
+     * in the bell (§13, §15). External recipients still get their email link.
+     */
+    private function announceSent(Request $request, SignatureRequest $signatureRequest): void
+    {
+        $actor = $request->user();
+        $title = $signatureRequest->title ?: ($signatureRequest->file?->name ?: 'a document');
+
+        ActivityLogger::log([
+            'actor' => $actor,
+            'type' => 'signature.requested',
+            'description' => $actor->name.' sent "'.$title.'" for signature',
+            'subject' => $signatureRequest,
+            'metadata' => ['recipients' => $signatureRequest->recipients->count()],
+        ]);
+
+        foreach ($signatureRequest->recipients as $recipient) {
+            if (($recipient->role ?? 'signer') === 'cc') {
+                continue;
+            }
+            $user = User::where('email', $recipient->email)->first();
+            if (! $user) {
+                continue;
+            }
+            Notifier::send([
+                'user' => $user,
+                'actor' => $actor,
+                'type' => 'signature.requested',
+                'title' => $actor->name.' requested your signature on "'.$title.'"',
+                'subject' => $signatureRequest,
+                'action_url' => '/signatures',
+                'dedupe_key' => 'signature:'.$signatureRequest->id.':'.$user->id,
+            ]);
+        }
     }
 
     /** Nudge whoever the request is currently waiting on. */

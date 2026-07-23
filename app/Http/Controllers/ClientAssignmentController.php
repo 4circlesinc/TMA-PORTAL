@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
+use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -75,6 +77,26 @@ class ClientAssignmentController extends Controller
 
         if ($assignment->is_primary) {
             $this->makePrimary($client, $staff->id);
+        }
+
+        // Only tell someone the first time they're assigned, not on every level tweak.
+        if ($assignment->wasRecentlyCreated) {
+            ActivityLogger::log([
+                'actor' => $request->user(),
+                'type' => 'client.assigned',
+                'description' => $request->user()->name.' assigned '.$staff->name.' to '.$client->name,
+                'subject' => $client,
+                'client' => $client,
+            ]);
+            Notifier::send([
+                'user' => $staff,
+                'actor' => $request->user(),
+                'type' => 'client.assigned',
+                'title' => $request->user()->name.' assigned you to '.$client->name,
+                'subject' => $client,
+                'client' => $client,
+                'action_url' => '/clients?client='.$client->uid,
+            ]);
         }
 
         return response()->json(['assignments' => $this->present($client->fresh())]);

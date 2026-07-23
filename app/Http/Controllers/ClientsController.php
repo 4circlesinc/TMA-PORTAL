@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -44,6 +46,23 @@ class ClientsController extends Controller
         // when assigned; the client sees nothing until something is shared.
         FolderProvisioner::provisionClientFolder($client, $request->user());
 
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'client.created',
+            'description' => $request->user()->name.' created client '.$client->name,
+            'subject' => $client,
+            'client' => $client,
+            'new' => ['name' => $client->name, 'company' => $client->company],
+        ]);
+        Notifier::notifyAdmins([
+            'actor' => $request->user(),
+            'type' => 'client.created',
+            'title' => $request->user()->name.' added a new client: '.$client->name,
+            'subject' => $client,
+            'client' => $client,
+            'action_url' => '/clients?client='.$client->uid,
+        ]);
+
         return response()->json(['client' => $client->fresh()->toRecord()]);
     }
 
@@ -71,6 +90,14 @@ class ClientsController extends Controller
         FolderProvisioner::provisionClientFolder($client, $request->user());
         FolderProvisioner::syncClientFolderName($client);
 
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'client.updated',
+            'description' => $request->user()->name.' edited client '.$client->name,
+            'subject' => $client,
+            'client' => $client,
+        ]);
+
         return response()->json(['client' => $client->fresh()->toRecord()]);
     }
 
@@ -78,7 +105,15 @@ class ClientsController extends Controller
     {
         $this->authorizeStaff($request);
 
-        Client::where('uid', $uid)->firstOrFail()->delete();
+        $client = Client::where('uid', $uid)->firstOrFail();
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'client.deleted',
+            'description' => $request->user()->name.' deleted client '.$client->name,
+            'subject' => $client,
+            'client' => $client,
+        ]);
+        $client->delete();
 
         return response()->json(['status' => 'ok']);
     }

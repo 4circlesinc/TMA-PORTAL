@@ -931,6 +931,83 @@
       syncTabFromView(viewName);
     }
 
+    /*
+     * Open a portal path in-place (no full reload) — the destination a
+     * notification, activity, or client item points at (§15, §25). Resolves the
+     * path to an SPA view when this shell contains it, opening a specific record
+     * where the module supports it (a client detail, the Overview activity tab).
+     * Only genuinely cross-shell targets fall back to a real navigation.
+     * Returns true once handled.
+     */
+    function portalNavigate(path) {
+      if (!path) return false;
+      var base = String(path);
+      var q = '';
+      var qi = base.indexOf('?');
+      if (qi !== -1) { q = base.slice(qi + 1); base = base.slice(0, qi); }
+      base = normalizePath(base);
+      var params = {};
+      q.split('&').forEach(function (kv) {
+        if (!kv) return;
+        var p = kv.split('=');
+        params[decodeURIComponent(p[0])] = decodeURIComponent((p[1] || '').replace(/\+/g, ' '));
+      });
+
+      if (base === '/clients' || base.indexOf('/clients/') === 0) {
+        var contactId = params.client || null;
+        if (!contactId) {
+          var mm = base.match(/^\/clients\/([^/]+)/);
+          if (mm) contactId = decodeURIComponent(mm[1]);
+        }
+        if (root.querySelector('.tma-dash__view[data-view="clients"]')) {
+          activate('clients', {
+            view: 'clients', title: 'Clients', crumb: 'Clients',
+            clientsScreen: contactId ? 'detail' : 'list', contactId: contactId,
+          });
+          return true;
+        }
+      }
+
+      if (base === '/overview') {
+        if (root.querySelector('.tma-dash__view[data-view="overview"]')) {
+          activate('dash-project-overview', { view: 'overview', title: 'Project Overview', crumb: 'Dashboard / Overview' });
+          if (params.tab) {
+            if (window.TMAOverview && window.TMAOverview.selectTab) window.TMAOverview.selectTab(params.tab);
+            else root._pendingOverviewTab = params.tab;
+          }
+          return true;
+        }
+      }
+
+      if (base === '/settings' || base === '/account-settings') {
+        if (root.querySelector('.tma-dash__view[data-view="settings"]')) {
+          activate('settings', { view: 'settings', title: 'Settings', crumb: 'Settings', settingsNav: params['settings-page'] || null });
+          return true;
+        }
+      }
+
+      var leaf = leaves.filter(function (l) { return normalizePath(l.getAttribute('href') || '') === base; })[0];
+      if (leaf && root.querySelector('.tma-dash__view[data-view="' + (leaf.getAttribute('data-view') || '') + '"]')) {
+        activate(leaf.getAttribute('data-nav'), {
+          view: leaf.getAttribute('data-view') || undefined,
+          title: leaf.getAttribute('data-title') || undefined,
+          crumb: leaf.getAttribute('data-crumb') || undefined,
+        });
+        return true;
+      }
+
+      var route = routeFromPath(base);
+      if (route && root.querySelector('.tma-dash__view[data-view="' + route.view + '"]')) {
+        activate(route.navId, { view: route.view, title: route.title, crumb: route.crumb });
+        return true;
+      }
+
+      // Cross-shell target this page can't render in place: real navigation.
+      window.location.assign(appUrl(base + (q ? '?' + q : '')));
+      return true;
+    }
+    root._portalNavigate = portalNavigate;
+
     /* ── expandable nav groups ─────────────────── */
     function setExpanded(btn, open) {
       btn.setAttribute('aria-expanded', String(open));
@@ -1506,7 +1583,7 @@
     }
 
     function getActiveViewName() {
-      var active = views.filter(function (v) { return !v.hidden; })[0];
+      var active = getViewElements().filter(function (v) { return !v.hidden; })[0];
       return active ? active.getAttribute('data-view') : 'dashboard';
     }
 
@@ -2043,6 +2120,9 @@
       }
       syncTabBarBadges();
     }
+
+    // Fill the right sidebar's three sections with live data (§1, §5).
+    if (window.TMARightSidebar) window.TMARightSidebar.mount(root);
 
     var usersRoot = root.querySelector('[data-users]');
     if (usersRoot && window.TMAUsers) {

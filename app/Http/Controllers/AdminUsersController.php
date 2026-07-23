@@ -6,10 +6,13 @@ use App\Models\AuthEvent;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\Folder;
+use App\Models\Notification;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\DeviceName;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -307,7 +310,80 @@ class AdminUsersController extends Controller
         $this->record($user->id, 'account_approved');
         $this->maybeProvisionStaffFolder($user->fresh(), $request->user());
 
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'account.approved',
+            'module' => 'account',
+            'description' => $request->user()->name.' approved '.$user->name.'’s account',
+            'subject' => $user,
+            'new' => ['account_type' => $user->account_type],
+        ]);
+        Notifier::send([
+            'user' => $user,
+            'actor' => $request->user(),
+            'type' => 'account.approved',
+            'title' => 'Your account has been approved',
+            'message' => 'Welcome to the portal — you now have full access.',
+            'action_url' => '/',
+        ]);
+        $this->clearPendingApprovalNotifications($user);
+
         return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Deny a pending account (§18). The request is refused, the reason is
+     * recorded, the user is notified, and it drops out of the pending count and
+     * the administrators' outstanding approval notifications.
+     */
+    public function deny(Request $request, User $user): JsonResponse
+    {
+        abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can deny accounts.');
+        abort_unless($user->status === 'pending', 422, 'Only pending accounts can be denied.');
+
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $user->forceFill([
+            'status' => 'suspended',
+            'admin_note' => $data['reason'] ?? $user->admin_note,
+        ])->save();
+        DB::table('sessions')->where('user_id', $user->id)->delete();
+
+        $this->record($user->id, 'account_denied');
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'account.denied',
+            'module' => 'account',
+            'description' => $request->user()->name.' denied '.$user->name.'’s access request',
+            'subject' => $user,
+            'metadata' => ['reason' => $data['reason'] ?? null],
+        ]);
+        Notifier::send([
+            'user' => $user,
+            'actor' => $request->user(),
+            'type' => 'account.denied',
+            'title' => 'Your access request was declined',
+            'message' => $data['reason'] ?? null,
+        ]);
+        $this->clearPendingApprovalNotifications($user);
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Once an account is approved or denied, every administrator's outstanding
+     * "needs approval" notification for it is completed and marked read, so it
+     * stops showing as an action still to do — and can't be processed twice.
+     */
+    private function clearPendingApprovalNotifications(User $subject): void
+    {
+        Notification::where('type', 'account.pending')
+            ->where('subject_type', $subject->getMorphClass())
+            ->where('subject_id', $subject->id)
+            ->whereNull('completed_at')
+            ->update(['completed_at' => now(), 'read_at' => now()]);
     }
 
     /** Give a newly active staff member a personal folder, if configured. */

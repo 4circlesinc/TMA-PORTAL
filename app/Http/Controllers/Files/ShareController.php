@@ -6,9 +6,11 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Sharing;
+use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -131,6 +133,28 @@ class ShareController extends BaseFilesController
         }
 
         Activity::log($user->id, $type, $item->id, 'assign', ['to' => $email, 'role' => $data['role']]);
+
+        // Portal-wide audit entry (feeds the Overview log) and a notification to
+        // the person the item was shared with, when they're a real account (§13).
+        ActivityLogger::log([
+            'actor' => $user,
+            'type' => $type === 'folder' ? 'folder.shared' : 'file.shared',
+            'description' => $user->name.' shared '.($type === 'folder' ? 'folder ' : '').'"'.$item->name.'" with '.$email,
+            'subject' => $item,
+            'new' => ['role' => $data['role']],
+        ]);
+
+        if ($target) {
+            Notifier::send([
+                'user' => $target,
+                'actor' => $user,
+                'type' => $type === 'folder' ? 'folder.shared' : 'file.shared',
+                'title' => $user->name.' shared '.($type === 'folder' ? 'a folder' : 'a file').' with you: '.$item->name,
+                'subject' => $item,
+                'action_url' => '/portal/files',
+                'dedupe_key' => 'share:'.$type.':'.$item->id.':'.$target->id,
+            ]);
+        }
     }
 
     private function link(User $user, FileItem|Folder $item, string $type, array $data): void
