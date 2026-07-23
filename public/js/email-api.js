@@ -161,6 +161,17 @@
       return mailFetch(BASE + '/settings', { method: 'PUT', json: payload });
     },
 
+    /* Signs the mailbox out: removes the connected provider account so the page
+     * drops back to the "Connect your mailbox" state. Shares the social-connect
+     * disconnect endpoint that Security settings uses (not a /portal/mail
+     * route). A 422 means it can't be removed yet — e.g. it is the only way you
+     * sign in — and mailFetch surfaces that message. */
+    disconnect: function (provider) {
+      return mailFetch(ROOT + '/auth/social/' + encodeURIComponent(provider) + '/disconnect', {
+        method: 'POST',
+      });
+    },
+
     /* Where the sidebar's Reconnect button sends the user. Asking for mail
      * scopes goes through the normal social-connect flow with sync_email on. */
     connectUrl: function (provider) {

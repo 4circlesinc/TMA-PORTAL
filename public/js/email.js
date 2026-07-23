@@ -2093,24 +2093,27 @@
     });
   }
 
-  /* End the portal session. Delegates to the shell's shared sign-out handler
-   * when it is present, so there is one implementation of the POST + CSRF
-   * dance; falls back to doing it here if this view is loaded on its own. */
-  function signOut() {
-    var shared = document.querySelector('[data-action="sign-out"]');
-    if (shared) { shared.click(); return; }
+  /* Sign out of the mailbox: disconnect the connected Google/Microsoft account
+   * so the page returns to the "Connect your mailbox" state. This does NOT end
+   * the portal session — portal sign-out lives on the shell sidebar profile,
+   * not this menu. Because a provider account is shared with calendar sync,
+   * disconnecting here also stops that provider's calendar sync. */
+  function disconnectMailbox(root, state, render) {
+    var provider = state.account && state.account.provider;
+    if (!provider) {
+      showEmailToast(root, 'No mailbox is connected.');
+      return;
+    }
 
-    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-    var done = function () { window.location.href = '/auth/login'; };
-    fetch('/auth/logout', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        Accept: 'application/json',
-        'X-XSRF-TOKEN': m ? decodeURIComponent(m[1]) : '',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-    }).then(done, done);
+    api().disconnect(provider).then(function () {
+      // Re-read connection state so the page settles into the connect view;
+      // the sync poller stops itself once connected is false.
+      bootstrapMailbox(root, state, render);
+      showEmailToast(root, 'Signed out of your mailbox.');
+    }).catch(function (err) {
+      // e.g. "Set a password first…" when this is the only way you sign in.
+      showEmailToast(root, (err && err.message) || 'Could not sign out of the mailbox.');
+    });
   }
 
   var profileBound = false;
@@ -5634,10 +5637,11 @@
             openEmailSettings(root, state, render);
             return;
           }
-          // Signing out is a POST to Fortify with the CSRF token — navigating
-          // to a URL only *looked* like signing out and left the session live.
+          // "Sign out" here means the mailbox, not the portal: it disconnects
+          // the connected provider and drops back to the connect state. The
+          // portal session stays — its sign-out is the shell sidebar profile.
           if (action === 'sign-out') {
-            signOut();
+            disconnectMailbox(root, state, render);
             return;
           }
           render();
