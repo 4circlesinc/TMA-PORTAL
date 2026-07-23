@@ -7,6 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\User;
 use App\Support\AvatarService;
 use App\Support\TrustedDevices;
+use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -120,11 +121,20 @@ class SocialAuthController extends Controller
             // Log the real cause: expired/invalid client secret, unregistered
             // redirect URI at token exchange, network failure to the token
             // endpoint, etc. The user sees a generic message; we don't.
+            // When the provider's token endpoint answers with a 4xx (Guzzle
+            // ClientException), the response body carries the precise reason —
+            // e.g. AADSTS7000215 "Invalid client secret" — so capture it.
+            $body = null;
+            if ($e instanceof RequestException && $e->hasResponse()) {
+                $body = Str::limit((string) $e->getResponse()->getBody(), 1000, '');
+            }
+
             Log::error('Social sign-in failed', [
                 'provider' => $provider,
                 'host' => $request->getHost(),
                 'exception' => $e::class,
                 'error' => $e->getMessage(),
+                'response' => $body,
             ]);
 
             return $this->fail($request, 'Sign-in with '.ucfirst($provider)." didn't complete. Please try again.");
