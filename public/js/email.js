@@ -2133,17 +2133,39 @@
     });
   }
 
-  function renderEmailProfileCard(variant) {
+  /* The account chip stands for the connected mailbox, not the portal user.
+   * With no mailbox connected it must stop showing the signed-in name — that
+   * reads as "still signed in" right after a mailbox sign-out. */
+  function profileDisplay(connected) {
+    return connected
+      ? { name: PROFILE.name, email: PROFILE.email }
+      : { name: 'Mailbox', email: 'Not connected' };
+  }
+
+  /* Menu items differ by connection: a connected mailbox can be signed out of;
+   * a disconnected one only offers the way back to Settings to reconnect. */
+  function profileMenuActions(connected) {
+    if (!connected) {
+      return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-email-profile-action="settings">Connect mailbox</button>';
+    }
+    return (
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-email-profile-action="settings">Settings</button>' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-email-profile-action="sign-out">Sign out</button>'
+    );
+  }
+
+  function renderEmailProfileCard(variant, connected) {
     var wrapCls = 'tma-dash__email-profile-wrap tma-dash__email-profile-wrap--' + variant;
     var profileCls = 'tma-dash__email-profile tma-dash__email-profile--' + variant;
+    var who = profileDisplay(connected);
     return (
       '<div class="' + wrapCls + '">' +
       '<div class="' + profileCls + '">' +
       '<img class="tma-dash__email-profile-avatar" src="' +
-      esc(profileAvatarSrc()) + '" alt="' + esc(PROFILE.name) + ' avatar" width="40" height="40">' +
+      esc(profileAvatarSrc()) + '" alt="" width="40" height="40">' +
       '<span class="tma-dash__email-profile-meta">' +
-      '<span class="tma-dash__email-profile-name" title="' + esc(PROFILE.name) + '">' + esc(PROFILE.name) + '</span>' +
-      '<span class="tma-dash__email-profile-email" title="' + esc(PROFILE.email) + '">' + esc(PROFILE.email) + '</span>' +
+      '<span class="tma-dash__email-profile-name" title="' + esc(who.name) + '">' + esc(who.name) + '</span>' +
+      '<span class="tma-dash__email-profile-email" title="' + esc(who.email) + '">' + esc(who.email) + '</span>' +
       '</span>' +
       '</div>' +
       '</div>'
@@ -2162,13 +2184,13 @@
 
   function renderEmailProfilePopup(state) {
     if (!isEmailMobile()) return '';
+    var connected = state.connected !== false;
     return (
       '<div class="tma-dash__email-profile-popup-card tma-dash__menu" data-email-profile-popup-card role="menu"' +
       ' aria-label="Account"' + (state.profileSidebarOpen ? '' : ' hidden') + '>' +
-      renderEmailProfileCard('popup') +
+      renderEmailProfileCard('popup', connected) +
       '<nav class="tma-dash__email-profile-popup-actions" aria-label="Account actions">' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-email-profile-action="settings">Settings</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-email-profile-action="sign-out">Sign out</button>' +
+      profileMenuActions(connected) +
       '</nav>' +
       '</div>'
     );
@@ -2185,7 +2207,7 @@
     state.profileSidebarOpen = true;
   }
 
-  function renderEmailProfile(isOpen, variant) {
+  function renderEmailProfile(isOpen, variant, connected) {
     var wrapCls = 'tma-dash__email-profile-wrap';
     var profileCls = 'tma-dash__email-profile';
     var menuCls = 'tma-dash__email-profile-menu tma-dash__menu';
@@ -2199,18 +2221,19 @@
       profileCls += ' tma-dash__email-profile--sidebar';
       menuCls += ' tma-dash__email-profile-menu--sidebar';
     }
+    var who = profileDisplay(connected);
     return (
       '<div class="' + wrapCls + '">' +
       '<button type="button" class="' + profileCls + '"' +
       ' data-email-profile-toggle aria-haspopup="menu"' +
       ' aria-expanded="' + (isOpen ? 'true' : 'false') + '">' +
       '<img class="tma-dash__email-profile-avatar" src="' +
-      esc(profileAvatarSrc()) + '" alt="' + esc(PROFILE.name) + ' avatar" width="24" height="24">' +
+      esc(profileAvatarSrc()) + '" alt="" width="24" height="24">' +
       '<span class="tma-dash__email-profile-meta">' +
       // The rail is too narrow for a full name and work address, so the value
       // is on the element itself — hovering shows what the ellipsis hides.
-      '<span class="tma-dash__email-profile-name" title="' + esc(PROFILE.name) + '">' + esc(PROFILE.name) + '</span>' +
-      '<span class="tma-dash__email-profile-email" title="' + esc(PROFILE.email) + '">' + esc(PROFILE.email) + '</span>' +
+      '<span class="tma-dash__email-profile-name" title="' + esc(who.name) + '">' + esc(who.name) + '</span>' +
+      '<span class="tma-dash__email-profile-email" title="' + esc(who.email) + '">' + esc(who.email) + '</span>' +
       '</span>' +
       '<img class="tma-dash__email-profile-caret" src="' + ICONS.CaretDown + '" alt="" aria-hidden="true">' +
       '</button>' +
@@ -2220,13 +2243,12 @@
       '<img class="tma-dash__email-profile-menu-avatar" src="' +
       esc(profileAvatarSrc()) + '" alt="" width="40" height="40">' +
       '<div class="tma-dash__email-profile-menu-meta">' +
-      '<span class="tma-dash__email-profile-menu-name">' + esc(PROFILE.name) + '</span>' +
-      '<span class="tma-dash__email-profile-menu-email">' + esc(PROFILE.email) + '</span>' +
+      '<span class="tma-dash__email-profile-menu-name">' + esc(who.name) + '</span>' +
+      '<span class="tma-dash__email-profile-menu-email">' + esc(who.email) + '</span>' +
       '</div>' +
       '</div>' +
       '<div class="tma-dash__email-profile-menu-divider" role="separator"></div>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-email-profile-action="settings">Settings</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-email-profile-action="sign-out">Sign out</button>' +
+      profileMenuActions(connected) +
       '</div>' +
       '</div>'
     );
@@ -2272,7 +2294,7 @@
     if (state.mobileNavOpen) sidebarCls += ' tma-dash__email-sidebar--open';
     return (
       '<div class="' + sidebarCls + '">' +
-      (isEmailMobile() ? '' : renderEmailProfile(!!state.profileMenuOpen, 'sidebar')) +
+      (isEmailMobile() ? '' : renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false)) +
       '<div class="tma-dash__email-sidebar-nav">' +
       renderFolders(state) +
       renderEmailLabelsSection(state) +
