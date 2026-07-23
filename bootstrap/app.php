@@ -23,6 +23,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // In production the app sits behind Laravel Cloud's TLS-terminating
+        // load balancer. Trust its forwarded headers so the request's real
+        // scheme (https), host and client IP are honoured — otherwise PHP sees
+        // plain http and $request->isSecure() is wrongly false.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'account.approved' => EnsureAccountApproved::class,
             'mfa.enforced' => EnforceTwoFactor::class,
