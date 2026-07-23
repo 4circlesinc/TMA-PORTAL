@@ -40,7 +40,36 @@
   var SCHED = window.TMASchedule;
 
   function morph() { return window.TMAMorph; }
-  function colours() { return window.TMACalendarColours; }
+
+  /*
+   * The colour palette lives in calendar-colours.js, loaded as a sibling
+   * script. If that file ever fails to load — a stale static export, a cache
+   * miss, a blocked request — this used to hard-crash the whole page on the
+   * first colours().normalise(). A missing palette should degrade to "plain
+   * blue", not a white screen, so fall back to a self-contained shim with the
+   * same interface. Kept minimal on purpose; calendar-colours.js remains the
+   * source of truth when present.
+   */
+  var COLOUR_FALLBACK = (function () {
+    var PALETTE = [
+      { key: 'blue', label: 'Blue', token: '--color-blue' },
+      { key: 'purple', label: 'Deep blue', token: '--color-primary-dark' },
+      { key: 'green', label: 'Green', token: '--color-green' },
+      { key: 'teal', label: 'Teal', token: '--color-mint' },
+      { key: 'pink', label: 'Pink', token: '--color-pink' },
+      { key: 'red', label: 'Red', token: '--color-red' },
+    ];
+    var keys = PALETTE.reduce(function (s, c) { s[c.key] = c; return s; }, {});
+    return {
+      PALETTE: PALETTE,
+      isValid: function (c) { return !!c && Object.prototype.hasOwnProperty.call(keys, c); },
+      normalise: function (c) { return (c && keys[c]) ? c : 'blue'; },
+      label: function (c) { return (keys[c] || keys.blue).label; },
+      token: function (c) { return (keys[c] || keys.blue).token; },
+    };
+  })();
+
+  function colours() { return window.TMACalendarColours || COLOUR_FALLBACK; }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
