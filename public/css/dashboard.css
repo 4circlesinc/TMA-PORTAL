@@ -16774,6 +16774,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
+  /* Anchors the add-menu dropdown to the full header width rather than to the
+     tiny + button, so it fits inside the narrow sidebar instead of spilling
+     past the left edge and being clipped by the sidebar's overflow. */
+  position: relative;
 }
 
 .tma-dash__calendar-sidebar-title {
@@ -17258,12 +17262,39 @@
 
 /* ── Calendar recurrence, import and subscriptions ───── */
 
+/* Static, so its dropdown anchors to the header (which is position:relative and
+   spans the sidebar) rather than to this 28px button — the menu then fits the
+   sidebar width instead of overflowing it. */
 .tma-dash__calendar-add-wrap {
-  position: relative;
+  position: static;
 }
 
+/* The add menu spans the sidebar's inner width and drops below the header, so
+   nothing is clipped. Long labels wrap rather than force the menu wider than
+   the sidebar. */
 .tma-dash__calendar-add-wrap .tma-dash__calendar-menu {
-  min-width: 240px;
+  top: calc(100% + var(--space-4));
+  left: 0;
+  right: 0;
+  /* width:auto is load-bearing: the base .tma-dash__menu sets
+     `width: max-content`, and an explicit width overrides the left/right pair,
+     so without this the menu keeps sizing to its longest label and spilling
+     out of the sidebar. */
+  width: auto;
+  min-width: 0;
+}
+
+/* Menu items may wrap in the narrow sidebar rather than being clipped.
+   The base .tma-dash__menu-item is `white-space: nowrap; width: max-content`,
+   which sizes the whole menu to its longest label — the reason the add menu
+   grew wider than the sidebar. Here it fills the menu and wraps instead. */
+.tma-dash__calendar-menu .tma-dash__menu-item {
+  white-space: normal;
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 28px;
 }
 
 .tma-dash__calendar-recur-custom {
