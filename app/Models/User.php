@@ -82,6 +82,15 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->two_factor_confirmed_at !== null;
     }
 
+    /**
+     * The picture to show for this person: their uploaded portal avatar, or
+     * the Microsoft/Google photo captured at sign-in when they never set one.
+     */
+    public function photoUrl(): ?string
+    {
+        return $this->avatar_url ?: $this->provider_avatar_url;
+    }
+
     public function connectedAccounts(): HasMany
     {
         return $this->hasMany(ConnectedAccount::class);

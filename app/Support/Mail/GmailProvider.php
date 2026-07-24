@@ -632,11 +632,98 @@ class GmailProvider implements MailProvider
     }
 
     /**
-     * Gmail exposes no directory photo lookup for arbitrary senders, so there
-     * is nothing honest to return here — the UI draws initials instead.
+     * Look up a person's photo from Google's directory / other-contacts.
+     *
+     * Gmail itself has no photo API. Workspace tenants expose directory
+     * people; personal accounts expose "other contacts" (people you've
+     * emailed). Either needs the matching People scope on the token — when
+     * the scope is missing the call fails soft and the UI keeps initials.
      */
     public function photoFor(string $email): ?string
     {
+        $email = mb_strtolower(trim($email));
+        if ($email === '' || ! str_contains($email, '@')) {
+            return null;
+        }
+
+        $token = MailTokens::accessToken($this->account);
+        if (! $token) {
+            return null;
+        }
+
+        // Workspace directory first — org colleagues with profile photos.
+        $directory = Http::withToken($token)
+            ->acceptJson()
+            ->timeout(8)
+            ->get('https://people.googleapis.com/v1/people:searchDirectoryPeople', [
+                'query' => $email,
+                'readMask' => 'photos,emailAddresses',
+                'sources' => 'DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE',
+                'pageSize' => 5,
+            ]);
+
+        if ($directory->successful()) {
+            $bytes = $this->photoBytesFromPeople($directory->json('people') ?? [], $email);
+            if ($bytes !== null) {
+                return $bytes;
+            }
+        }
+
+        // Fall back to people the user has interacted with (other contacts).
+        $others = Http::withToken($token)
+            ->acceptJson()
+            ->timeout(8)
+            ->get('https://people.googleapis.com/v1/otherContacts:search', [
+                'query' => $email,
+                'readMask' => 'emailAddresses,photos',
+                'pageSize' => 5,
+            ]);
+
+        if ($others->successful()) {
+            $bytes = $this->photoBytesFromPeople(
+                collect($others->json('results') ?? [])->pluck('person')->all(),
+                $email
+            );
+            if ($bytes !== null) {
+                return $bytes;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $people
+     */
+    private function photoBytesFromPeople(array $people, string $email): ?string
+    {
+        foreach ($people as $person) {
+            if (! is_array($person)) {
+                continue;
+            }
+            $emails = collect($person['emailAddresses'] ?? [])
+                ->pluck('value')
+                ->map(fn ($v) => mb_strtolower((string) $v));
+            if ($emails->isNotEmpty() && ! $emails->contains($email)) {
+                continue;
+            }
+            foreach ($person['photos'] ?? [] as $photo) {
+                if (! empty($photo['default'])) {
+                    continue;
+                }
+                $url = $photo['url'] ?? null;
+                if (! is_string($url) || $url === '') {
+                    continue;
+                }
+                // Ask for a larger crop when Google returns a size-parameterized URL.
+                $url = preg_replace('/=s\d+(-c)?/', '=s256$1', $url) ?: $url;
+                $image = Http::timeout(8)->get($url);
+                if ($image->successful() && $image->body() !== '') {
+                    return $image->body();
+                }
+            }
+        }
+
         return null;
     }
 }

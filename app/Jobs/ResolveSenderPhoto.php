@@ -48,11 +48,11 @@ class ResolveSenderPhoto implements ShouldBeUnique, ShouldQueue
         public ConnectedAccount $account,
         public string $email,
     ) {
-        // Never the default queue: photos are cosmetic and unbounded in number,
-        // sync is neither. A worker consuming `default` first (or a separate
-        // worker on this queue) keeps new mail arriving regardless of how many
-        // senders are waiting to be looked up.
-        $this->onQueue('mail-photos');
+        // Prefer the dedicated photo queue when a worker is listening on it
+        // (keeps SyncMailbox unblocked). Fall back to default so a single
+        // `queue:work` process — the usual Laravel Cloud setup — still
+        // resolves faces instead of leaving every sender as initials forever.
+        $this->onQueue(config('mail.photos_queue', 'default'));
     }
 
     public function uniqueId(): string

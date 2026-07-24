@@ -115,4 +115,18 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Sender photo lookup queue
+    |--------------------------------------------------------------------------
+    |
+    | ResolveSenderPhoto jobs land here. Use "mail-photos" when you run a
+    | dedicated worker (`queue:work --queue=mail-photos,default`) so photo
+    | backlogs cannot starve mail sync. With a single worker, leave this as
+    | "default" — otherwise every face stays stuck on initials.
+    |
+    */
+
+    'photos_queue' => env('MAIL_PHOTOS_QUEUE', 'default'),
+
 ];

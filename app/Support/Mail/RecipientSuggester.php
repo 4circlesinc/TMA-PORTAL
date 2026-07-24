@@ -8,7 +8,6 @@ use App\Models\Group;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Phase-1 recipient suggestions for compose To/Cc/Bcc — no provider OAuth.
@@ -84,6 +83,11 @@ final class RecipientSuggester
     }
 
     /**
+     * Prefer Microsoft / Google directory photos — not portal uploads.
+     *
+     * Portal avatars are ignored here on purpose. Uncached addresses are
+     * resolved inline (capped) so the first typeahead can show a real face.
+     *
      * @param  list<array<string, mixed>>  $rows
      * @return list<array<string, mixed>>
      */
@@ -107,44 +111,55 @@ final class RecipientSuggester
             return $rows;
         }
 
-        $portal = User::query()
-            ->whereIn(DB::raw('lower(email)'), $emails)
-            ->whereNotNull('avatar_url')
-            ->get(['email', 'avatar_url'])
-            ->mapWithKeys(fn (User $u) => [mb_strtolower($u->email) => $u->avatar_url])
-            ->all();
-
         $account = Mailbox::accountFor($viewer);
         $own = $account ? mb_strtolower((string) $account->email) : null;
+        $candidates = collect($emails)->reject(fn ($e) => $e === $own)->values();
 
-        $needPhoto = collect($emails)
-            ->reject(fn ($e) => $e === $own || isset($portal[$e]))
-            ->values();
-
-        $cached = $needPhoto->isEmpty() ? collect() : MailSenderPhoto::query()
-            ->whereIn('hash', $needPhoto->map(fn ($e) => MailSenderPhoto::hashFor($e)))
+        $cached = $candidates->isEmpty() ? collect() : MailSenderPhoto::query()
+            ->whereIn('hash', $candidates->map(fn ($e) => MailSenderPhoto::hashFor($e)))
             ->get()
             ->keyBy(fn (MailSenderPhoto $p) => mb_strtolower((string) $p->email));
 
         if ($account) {
-            foreach ($needPhoto as $email) {
+            $resolved = 0;
+            foreach ($candidates as $email) {
                 $row = $cached->get($email);
-                if ($row && $row->isFresh()) {
+                // A fresh *hit* is done; a fresh *miss* is retried here because
+                // earlier misses were often "queue never ran" or missing scopes,
+                // not a real absence of a Microsoft/Google photo.
+                if ($row && $row->isFresh() && $row->has_photo) {
                     continue;
                 }
-                ResolveSenderPhoto::dispatch($account, $email);
+                if ($resolved >= 6) {
+                    ResolveSenderPhoto::dispatch($account, $email);
+                    continue;
+                }
+                try {
+                    // Bust a stale miss so resolve() actually calls the provider.
+                    if ($row && ! $row->has_photo) {
+                        $row->forceFill(['checked_at' => now()->subDays(30)])->save();
+                    }
+                    MailSenderPhoto::resolve($account, $email);
+                    $resolved++;
+                } catch (\Throwable) {
+                    ResolveSenderPhoto::dispatch($account, $email);
+                }
+            }
+
+            if ($resolved > 0) {
+                $cached = MailSenderPhoto::query()
+                    ->whereIn('hash', $candidates->map(fn ($e) => MailSenderPhoto::hashFor($e)))
+                    ->get()
+                    ->keyBy(fn (MailSenderPhoto $p) => mb_strtolower((string) $p->email));
             }
         }
 
         foreach ($rows as &$row) {
-            if (! empty($row['avatarUrl'])) {
-                continue;
-            }
-
             if (($row['source'] ?? null) === 'group' && is_array($row['emails'] ?? null)) {
+                $row['avatarUrl'] = null;
                 foreach ($row['emails'] as $member) {
                     $email = mb_strtolower((string) ($member['email'] ?? ''));
-                    if ($url = self::avatarUrlFor($email, $portal, $cached)) {
+                    if ($url = self::directoryPhotoUrl($email, $cached)) {
                         $row['avatarUrl'] = $url;
                         break;
                     }
@@ -153,7 +168,7 @@ final class RecipientSuggester
             }
 
             $email = mb_strtolower((string) ($row['email'] ?? ''));
-            $row['avatarUrl'] = self::avatarUrlFor($email, $portal, $cached);
+            $row['avatarUrl'] = self::directoryPhotoUrl($email, $cached);
         }
         unset($row);
 
@@ -161,16 +176,12 @@ final class RecipientSuggester
     }
 
     /**
-     * @param  array<string, string>  $portal
      * @param  \Illuminate\Support\Collection<string, MailSenderPhoto>  $cached
      */
-    private static function avatarUrlFor(string $email, array $portal, $cached): ?string
+    private static function directoryPhotoUrl(string $email, $cached): ?string
     {
         if ($email === '') {
             return null;
-        }
-        if ($url = $portal[$email] ?? null) {
-            return $url;
         }
         $photo = $cached->get($email);
         if ($photo && $photo->isFresh() && $photo->has_photo) {
@@ -197,14 +208,14 @@ final class RecipientSuggester
             })
             ->orderBy('name')
             ->limit(self::LIMIT)
-            ->get(['id', 'name', 'email', 'avatar_url', 'account_type']);
+            ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type']);
 
         return $people->map(fn (User $u) => [
             'email' => mb_strtolower((string) $u->email),
             'name' => $u->name,
             'source' => 'staff',
             'sourceLabel' => 'Organization',
-            'avatarUrl' => $u->avatar_url,
+            'avatarUrl' => null, // filled from Microsoft/Google directory below
             'initial' => mb_strtoupper(mb_substr($u->name ?: $u->email, 0, 1)),
             'initialColor' => null,
             'emails' => null,
@@ -217,7 +228,7 @@ final class RecipientSuggester
     private static function clients(string $term): array
     {
         $rows = Client::query()
-            ->with(['user:id,email,avatar_url'])
+            ->with(['user:id,email,avatar_url,provider_avatar_url'])
             ->when($term !== '', function ($q) use ($term) {
                 $needle = '%'.$term.'%';
                 $q->where(function ($w) use ($needle) {
@@ -243,7 +254,7 @@ final class RecipientSuggester
                 'name' => $client->name ?: ($client->company ?: null),
                 'source' => 'client',
                 'sourceLabel' => 'Client',
-                'avatarUrl' => $client->user?->avatar_url,
+                'avatarUrl' => null, // Microsoft/Google directory photo, not portal
                 'initial' => $client->initial ?: mb_strtoupper(mb_substr($client->name ?: $email, 0, 1)),
                 'initialColor' => $client->initial_color,
                 'emails' => null,
@@ -263,7 +274,7 @@ final class RecipientSuggester
         }
 
         $groups = Group::query()
-            ->with(['members.user' => fn ($q) => $q->select('id', 'name', 'email', 'status', 'avatar_url')])
+            ->with(['members.user' => fn ($q) => $q->select('id', 'name', 'email', 'status', 'avatar_url', 'provider_avatar_url')])
             ->where('is_archived', false)
             ->whereRaw('lower(name) like ?', ['%'.$term.'%'])
             ->orderBy('name')
@@ -287,14 +298,14 @@ final class RecipientSuggester
                 'name' => $u->name,
             ])->values()->all();
 
-            $face = $members->first(fn (User $u) => (bool) $u->avatar_url) ?: $members->first();
+            $face = $members->first();
 
             $out[] = [
                 'email' => null,
                 'name' => $group->name,
                 'source' => 'group',
                 'sourceLabel' => 'Group · '.$members->count().' '.($members->count() === 1 ? 'person' : 'people'),
-                'avatarUrl' => $face?->avatar_url,
+                'avatarUrl' => null, // Microsoft/Google directory photo for a member
                 'initial' => mb_strtoupper(mb_substr($group->name, 0, 1)),
                 'initialColor' => null,
                 'emails' => $emails,

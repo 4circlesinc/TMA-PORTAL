@@ -492,9 +492,12 @@ class MailController extends Controller
 
         $avatars = $emails === [] ? [] : User::query()
             ->whereIn(DB::raw('lower(email)'), $emails)
-            ->whereNotNull('avatar_url')
-            ->get(['email', 'avatar_url'])
-            ->mapWithKeys(fn (User $u) => [mb_strtolower($u->email) => $u->avatar_url])
+            ->get(['email', 'avatar_url', 'provider_avatar_url'])
+            ->mapWithKeys(function (User $u) {
+                $url = $u->photoUrl();
+
+                return $url ? [mb_strtolower($u->email) => $url] : [];
+            })
             ->all();
 
         // Sender photos come from two places: the provider directory (a real

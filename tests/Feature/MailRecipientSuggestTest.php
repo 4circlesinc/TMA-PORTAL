@@ -51,7 +51,8 @@ class MailRecipientSuggestTest extends TestCase
         $this->assertSame('dana@example.com', $items[0]['email']);
         $this->assertSame('staff', $items[0]['source']);
         $this->assertSame('Organization', $items[0]['sourceLabel']);
-        $this->assertSame('/images/avatars/Avatar3d01.png', $items[0]['avatarUrl']);
+        // Portal uploads are intentionally NOT used — Microsoft/Google only.
+        $this->assertNull($items[0]['avatarUrl']);
     }
 
     public function test_suggests_clients_for_staff_and_hides_them_from_client_accounts(): void

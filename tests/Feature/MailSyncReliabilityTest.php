@@ -155,7 +155,7 @@ class MailSyncReliabilityTest extends TestCase
         ResolveSenderPhoto::dispatch($account, 'someone@example.com');
         SyncMailbox::dispatch($account);
 
-        Queue::assertPushedOn('mail-photos', ResolveSenderPhoto::class);
+        Queue::assertPushedOn(config('mail.photos_queue', 'default'), ResolveSenderPhoto::class);
 
         // Sync stays on the default queue, so a worker draining that queue is
         // never held up behind the photo backlog.
