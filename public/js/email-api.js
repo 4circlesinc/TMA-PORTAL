@@ -85,6 +85,12 @@
       }));
     },
 
+    /* Recipient typeahead for To/Cc/Bcc — portal people, clients, groups,
+     * and addresses from previous conversations. No provider OAuth. */
+    suggest: function (q) {
+      return mailFetch(BASE + '/suggest' + query({ q: q || '' }));
+    },
+
     getMessage: function (id) {
       return mailFetch(BASE + '/messages/' + encodeURIComponent(id));
     },

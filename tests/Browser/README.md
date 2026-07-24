@@ -167,6 +167,17 @@ sqlite3 "$DB" "UPDATE mail_messages SET is_pinned = 0, folder = 'inbox' WHERE fo
 node tests/Browser/mail-pins.mjs
 ```
 
+- **`mail-suggest.mjs`** — Phase-1 compose recipient typeahead. Typing in To
+  surfaces organization staff, clients, and prior-mail addresses from
+  `/portal/mail/suggest`; clicking or pressing Enter inserts
+  `Name <email>` without wiping the caret. Needs a staff user, a colleague
+  (`dana@example.com`), a client (`Acme` / `hello@acme.test`), a connected
+  mailbox, and at least one prior message from `pat.partner@example.com`.
+
+```sh
+node tests/Browser/mail-suggest.mjs
+```
+
 - **`mail-snooze.mjs`** — snooze as a working reminder. The hover clock opens
   a "Snooze until…" picker (In 15 minutes / In 1 hour / Later today /
   Tomorrow / Next week + custom datetime); picking a preset hides the row

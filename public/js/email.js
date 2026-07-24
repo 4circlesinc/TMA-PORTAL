@@ -502,6 +502,10 @@
         if (!state.inlineCompose) return;
         state.inlineCompose[input.getAttribute('data-email-inline-compose-field')] = input.value;
       });
+      var field = input.getAttribute('data-email-inline-compose-field');
+      if (field === 'to' || field === 'cc') {
+        wireRecipientSuggest(input);
+      }
     });
 
     var editor = panel.querySelector('[data-email-inline-compose-editor]');
@@ -3787,6 +3791,212 @@
       .filter(function (address) { return address.email.indexOf('@') !== -1; });
   }
 
+  /* ── Recipient typeahead (Phase 1) ───────────────────────────────
+   * Portal users, clients, groups, and prior-mail addresses. The dropdown
+   * is a body-level popup so compose re-renders / overflow never clip it,
+   * and picks write straight into the input without a full re-render. */
+
+  var SUGGEST_DEBOUNCE_MS = 200;
+  var suggestCache = {};
+  var suggestActive = null;
+
+  function closeRecipientSuggest() {
+    var menu = document.querySelector('[data-email-suggest-menu]');
+    if (menu) menu.remove();
+    if (suggestActive && suggestActive.cleanup) suggestActive.cleanup();
+    suggestActive = null;
+  }
+
+  function currentAddressToken(value, caret) {
+    var before = String(value || '').slice(0, caret == null ? String(value || '').length : caret);
+    var start = before.lastIndexOf(',') + 1;
+    return { start: start, text: before.slice(start).replace(/^\s+/, '') };
+  }
+
+  function alreadyAddressed(value, email) {
+    var needle = String(email || '').toLowerCase();
+    if (!needle) return false;
+    return parseAddresses(value).some(function (a) {
+      return String(a.email || '').toLowerCase() === needle;
+    });
+  }
+
+  function applyRecipientSuggestion(input, suggestion) {
+    var value = input.value || '';
+    var caret = input.selectionStart == null ? value.length : input.selectionStart;
+    var token = currentAddressToken(value, caret);
+    var after = value.slice(caret);
+    var comma = after.indexOf(',');
+    var rest = comma === -1 ? '' : after.slice(comma);
+
+    var pieces = (suggestion.source === 'group' && suggestion.emails && suggestion.emails.length)
+      ? suggestion.emails.filter(function (e) { return !alreadyAddressed(value.slice(0, token.start), e.email); })
+      : [{ name: suggestion.name, email: suggestion.email }];
+
+    if (!pieces.length) {
+      closeRecipientSuggest();
+      return;
+    }
+
+    var inserted = formatAddressList(pieces);
+    var prefix = value.slice(0, token.start).replace(/\s*$/, '');
+    if (prefix && !/,\s*$/.test(prefix)) prefix += ', ';
+    else if (/,$/.test(prefix)) prefix += ' ';
+
+    var next = (prefix + inserted + (rest ? rest : ', ')).replace(/^\s*,\s*/, '');
+    input.value = next;
+    var pos = (prefix + inserted).length + (rest ? 0 : 2);
+    try { input.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    closeRecipientSuggest();
+    input.focus();
+  }
+
+  function renderSuggestMenu(items, activeIndex) {
+    if (!items.length) {
+      return '<div class="tma-dash__email-suggest-empty">No matches</div>';
+    }
+    return items.map(function (item, i) {
+      var label = item.source === 'group'
+        ? esc(item.name || 'Group')
+        : esc(item.name ? item.name : item.email);
+      var meta = item.source === 'group'
+        ? esc(item.sourceLabel || 'Group')
+        : esc((item.email || '') + (item.sourceLabel ? ' · ' + item.sourceLabel : ''));
+      var avatar = item.avatarUrl
+        ? '<img class="tma-dash__email-suggest-avatar" src="' + esc(item.avatarUrl) + '" alt="">'
+        : '<span class="tma-dash__email-suggest-avatar tma-dash__email-suggest-avatar--initial" aria-hidden="true">' +
+          esc(String(item.name || item.email || '?').charAt(0).toUpperCase()) + '</span>';
+      return (
+        '<button type="button" class="tma-dash__email-suggest-item' +
+        (i === activeIndex ? ' tma-dash__email-suggest-item--active' : '') + '"' +
+        ' data-email-suggest-index="' + i + '" role="option" aria-selected="' + (i === activeIndex ? 'true' : 'false') + '">' +
+        avatar +
+        '<span class="tma-dash__email-suggest-copy">' +
+        '<span class="tma-dash__email-suggest-name">' + label + '</span>' +
+        '<span class="tma-dash__email-suggest-meta">' + meta + '</span>' +
+        '</span>' +
+        '</button>'
+      );
+    }).join('');
+  }
+
+  function openRecipientSuggest(input, items) {
+    closeRecipientSuggest();
+    if (!items || !items.length) return;
+
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__email-suggest-menu';
+    menu.setAttribute('data-email-suggest-menu', '');
+    menu.setAttribute('role', 'listbox');
+    var activeIndex = 0;
+    menu.innerHTML = renderSuggestMenu(items, activeIndex);
+    document.body.appendChild(menu);
+
+    var rect = input.getBoundingClientRect();
+    menu.style.minWidth = Math.max(260, Math.round(rect.width)) + 'px';
+    positionEmailPopupMenu(input, menu);
+
+    function setActive(next) {
+      activeIndex = Math.max(0, Math.min(items.length - 1, next));
+      menu.innerHTML = renderSuggestMenu(items, activeIndex);
+      bindItemClicks();
+      var active = menu.querySelector('.tma-dash__email-suggest-item--active');
+      if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    function bindItemClicks() {
+      menu.querySelectorAll('[data-email-suggest-index]').forEach(function (btn) {
+        btn.addEventListener('mousedown', function (e) {
+          // mousedown so the input doesn't blur before we apply
+          e.preventDefault();
+          var idx = parseInt(btn.getAttribute('data-email-suggest-index'), 10);
+          if (!isNaN(idx) && items[idx]) applyRecipientSuggestion(input, items[idx]);
+        });
+      });
+    }
+    bindItemClicks();
+
+    function onKey(e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIndex + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIndex - 1); }
+      else if (e.key === 'Enter' && items[activeIndex]) {
+        e.preventDefault();
+        applyRecipientSuggestion(input, items[activeIndex]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeRecipientSuggest();
+      }
+    }
+
+    function onDoc(e) {
+      if (e.target === input || menu.contains(e.target)) return;
+      closeRecipientSuggest();
+    }
+
+    input.addEventListener('keydown', onKey);
+    setTimeout(function () { document.addEventListener('mousedown', onDoc, true); }, 0);
+
+    suggestActive = {
+      input: input,
+      cleanup: function () {
+        input.removeEventListener('keydown', onKey);
+        document.removeEventListener('mousedown', onDoc, true);
+      },
+    };
+  }
+
+  function requestRecipientSuggest(input) {
+    var token = currentAddressToken(input.value, input.selectionStart).text;
+    // Skip when the token already looks like a finished address.
+    if (token.indexOf('@') !== -1 && token.indexOf(' ') === -1 && /\.[a-z]{2,}$/i.test(token)) {
+      closeRecipientSuggest();
+      return;
+    }
+
+    var q = token;
+    var cacheKey = q.toLowerCase();
+    if (suggestCache[cacheKey]) {
+      openRecipientSuggest(input, suggestCache[cacheKey]);
+      return;
+    }
+
+    var seq = (input._suggestSeq = (input._suggestSeq || 0) + 1);
+    api().suggest(q).then(function (data) {
+      if (seq !== input._suggestSeq) return;
+      var items = (data && data.suggestions) || [];
+      suggestCache[cacheKey] = items;
+      if (document.activeElement !== input) return;
+      if (!items.length) { closeRecipientSuggest(); return; }
+      openRecipientSuggest(input, items);
+    }).catch(function () {
+      /* Suggest is best-effort — a failure just means no dropdown. */
+    });
+  }
+
+  function wireRecipientSuggest(input) {
+    if (!input || input._suggestWired) return;
+    input._suggestWired = true;
+    input.setAttribute('autocomplete', 'off');
+    input.setAttribute('aria-autocomplete', 'list');
+
+    var timer = null;
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { requestRecipientSuggest(input); }, SUGGEST_DEBOUNCE_MS);
+    });
+    input.addEventListener('focus', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { requestRecipientSuggest(input); }, SUGGEST_DEBOUNCE_MS);
+    });
+    input.addEventListener('blur', function () {
+      // Delay so a mousedown on a suggestion can fire first.
+      setTimeout(function () {
+        if (suggestActive && suggestActive.input === input) closeRecipientSuggest();
+      }, 150);
+    });
+  }
+
   function findComposeDraft(state, id) {
     return state.composeDrafts.filter(function (draft) { return draft.id === id; })[0] || null;
   }
@@ -4069,6 +4279,11 @@
         draft[input.getAttribute('data-email-compose-field')] = input.value;
         scheduleDraftSave(state, draft);
       });
+      // To / Cc / Bcc get the recipient typeahead; subject does not.
+      var field = input.getAttribute('data-email-compose-field');
+      if (field === 'to' || field === 'cc' || field === 'bcc') {
+        wireRecipientSuggest(input);
+      }
     });
 
     MORPH.unwired(root, '[data-email-compose-body]').forEach(function (body) {

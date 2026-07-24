@@ -268,6 +268,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/drafts', [MailController::class, 'saveDraft'])->name('drafts.save');
         Route::delete('/drafts/{uuid}', [MailController::class, 'deleteDraft'])->name('drafts.delete');
 
+        // Recipient typeahead for compose To/Cc/Bcc (portal + prior mail).
+        Route::get('/suggest', [MailController::class, 'suggest'])->name('suggest');
+
         Route::post('/send', [MailController::class, 'send'])->name('send');
         Route::post('/bulk', [MailController::class, 'bulk'])->name('bulk');
         Route::get('/attachments/{uuid}', [MailController::class, 'attachment'])->name('attachment');

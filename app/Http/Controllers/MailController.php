@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
+use App\Support\Mail\RecipientSuggester;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -1151,6 +1152,26 @@ class MailController extends Controller
         $label->delete();
 
         return response()->json(['deleted' => true]);
+    }
+
+    /**
+     * Recipient typeahead for To / Cc / Bcc (Phase 1 — no provider contacts).
+     *
+     * Merges portal users, clients (staff only), expandable groups, and
+     * addresses mined from the viewer's mirrored mailbox.
+     */
+    public function suggest(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['sometimes', 'nullable', 'string', 'max:200'],
+        ]);
+
+        return response()->json([
+            'suggestions' => RecipientSuggester::suggest(
+                $request->user(),
+                (string) ($data['q'] ?? ''),
+            ),
+        ]);
     }
 
     /** Send a message, optionally consuming a draft. */
