@@ -636,6 +636,8 @@ if (state.filters.user) {
     var state = {
       rows: [],
       loadError: false,
+      loadErrorStatus: 0,
+      loadErrorMessage: '',
       search: '',
       searchFocused: false,
       searchLoading: false,
@@ -661,6 +663,10 @@ if (state.filters.user) {
           // Keep empty — never fall back to design-system demo rows in production.
           state.rows = [];
           state.loadError = true;
+          state.loadErrorStatus = res.status || 0;
+          state.loadErrorMessage = res.status === 403
+            ? 'Only administrators can view the user directory.'
+            : 'Could not load users right now.';
           state.live = false;
           state.selected = {};
           render();
@@ -671,6 +677,8 @@ if (state.filters.user) {
           if (j.avatarChoices) SYSTEM_AVATARS = j.avatarChoices;
           state.rows = (j.users || []).map(realRow);
           state.loadError = false;
+          state.loadErrorStatus = 0;
+          state.loadErrorMessage = '';
           state.live = true;
           state.selected = {};
           state.page = 1;
@@ -679,6 +687,8 @@ if (state.filters.user) {
       }).catch(function (err) {
         state.rows = [];
         state.loadError = true;
+        state.loadErrorStatus = 0;
+        state.loadErrorMessage = 'Could not reach the server to load users.';
         state.live = false;
         state.selected = {};
         if (window.console && console.warn) console.warn('Users: failed to load real accounts —', err);
@@ -982,6 +992,23 @@ if (state.filters.user) {
       if (!state.rows.length) {
         container.className = 'tma-dash__users tma-dash__users--empty';
         if (window.TMATableViewToggle) window.TMATableViewToggle.sync('users');
+        if (state.loadError) {
+          var denied = state.loadErrorStatus === 403;
+          if (window.TMASectionError && window.TMASectionError.mount) {
+            window.TMASectionError.mount(container, {
+              title: denied ? 'Administrator access required' : 'Unable to load users',
+              message: state.loadErrorMessage || (denied
+                ? 'Only administrators can view the user directory.'
+                : 'There was a problem loading users.'),
+              permissionDenied: denied,
+              onRetry: denied ? null : loadRealUsers,
+            });
+          } else {
+            container.innerHTML = '<p class="tma-dash__cc--empty">' +
+              escapeHtml(state.loadErrorMessage || 'Unable to load users.') + '</p>';
+          }
+          return;
+        }
         if (window.TMANoData && window.TMANoData.mount) {
           window.TMANoData.mount(container, {
             itemLabel: 'User',
