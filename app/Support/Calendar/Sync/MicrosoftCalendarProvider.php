@@ -51,18 +51,29 @@ class MicrosoftCalendarProvider implements CalendarProvider
     {
         // A stored deltaLink is followed as-is; otherwise start a delta run
         // bounded by the import window.
-        $url = $cursor ?: self::BASE.'/me/calendars/'.rawurlencode($externalCalendarId).'/calendarView/delta'
-            .'?startDateTime='.CarbonImmutable::parse($windowStart)->utc()->toIso8601String()
-            .'&endDateTime='.now()->addYears(2)->utc()->toIso8601String();
+        // Pass datetimes as query params (Zulu) — a bare `+00:00` in a hand-
+        // built query string is decoded as a space and Graph returns HTTP 400.
+        $url = $cursor;
+        $query = [];
+        if (! $url) {
+            $url = self::BASE.'/me/calendars/'.rawurlencode($externalCalendarId).'/calendarView/delta';
+            $query = [
+                'startDateTime' => CarbonImmutable::parse($windowStart)->utc()->format('Y-m-d\TH:i:s\Z'),
+                'endDateTime' => now()->addYears(2)->utc()->format('Y-m-d\TH:i:s\Z'),
+            ];
+        }
 
         $events = [];
         $deleted = [];
         $nextCursor = $cursor;
 
         do {
-            $response = $this->request()
-                ->withHeaders(['Prefer' => 'odata.maxpagesize=100'])
-                ->get($url);
+            $request = $this->request()
+                ->withHeaders(['Prefer' => 'odata.maxpagesize=100']);
+            $response = $query
+                ? $request->get($url, $query)
+                : $request->get($url);
+            $query = [];
 
             if ($response->status() === 410) {
                 throw new CalendarSyncException('Microsoft sync state expired.', cursorExpired: true);
@@ -289,6 +300,11 @@ class MicrosoftCalendarProvider implements CalendarProvider
             throw new CalendarSyncException("Microsoft refused to {$what} — the connection may need reauthorising.");
         }
 
-        throw new CalendarSyncException("Microsoft could not {$what} (HTTP {$response->status()}).");
+        $detail = $response->json('error.message')
+            ?? $response->json('error.code')
+            ?? trim(mb_substr((string) $response->body(), 0, 160));
+        $suffix = $detail !== '' ? ': '.$detail : '';
+
+        throw new CalendarSyncException("Microsoft could not {$what} (HTTP {$response->status()}){$suffix}");
     }
 }

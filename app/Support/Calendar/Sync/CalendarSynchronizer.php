@@ -5,6 +5,7 @@ namespace App\Support\Calendar\Sync;
 use App\Models\Calendar;
 use App\Models\CalendarEvent;
 use App\Support\Calendar\CalendarAudit;
+use App\Support\Notifications\Notifier;
 use Illuminate\Support\Str;
 
 /**
@@ -236,6 +237,25 @@ class CalendarSynchronizer
 
         $stats['conflicts']++;
         CalendarAudit::record(CalendarAudit::CONFLICT_DETECTED, null, $this->calendar, $local);
+
+        $ownerId = $this->calendar->owner_id ?? $this->calendar->connectedAccount?->user_id;
+        if ($ownerId) {
+            Notifier::send([
+                'user' => $ownerId,
+                'type' => 'calendar.conflict',
+                'title' => 'Calendar sync conflict',
+                'message' => mb_substr(
+                    ($this->calendar->name ? $this->calendar->name.': ' : '').
+                    ($local->title ?: 'An event').' was updated in both places. Open Calendar to review.',
+                    0,
+                    280
+                ),
+                'subject' => $local,
+                'action_url' => '/calendar',
+                'dedupe_key' => 'calendar.conflict:'.$local->id,
+                'dedupe_minutes' => 30,
+            ]);
+        }
     }
 
     /* ── push ────────────────────────────────────────────────── */
@@ -311,5 +331,19 @@ class CalendarSynchronizer
         ])->save();
 
         CalendarAudit::record(CalendarAudit::SYNC_FAILED, null, $this->calendar, context: ['error' => $message]);
+
+        $ownerId = $this->calendar->owner_id ?? $this->calendar->connectedAccount?->user_id;
+        if ($ownerId) {
+            Notifier::send([
+                'user' => $ownerId,
+                'type' => 'calendar.sync_error',
+                'title' => 'Calendar sync failed',
+                'message' => mb_substr(($this->calendar->name ? $this->calendar->name.': ' : '').$message, 0, 280),
+                'subject' => $this->calendar,
+                'action_url' => '/calendar',
+                'dedupe_key' => 'calendar.sync_error:'.$this->calendar->id,
+                'dedupe_minutes' => 60,
+            ]);
+        }
     }
 }

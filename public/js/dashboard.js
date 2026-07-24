@@ -998,6 +998,7 @@
       var crumb = opts.crumb != null ? opts.crumb : (navEl && navEl.getAttribute('data-crumb'));
       if (title && pageTitleEl) pageTitleEl.textContent = title;
       if (crumb != null) renderBreadcrumb(crumb);
+      syncDocumentTitleBadge();
       var viewName = opts.view || (navEl && navEl.getAttribute('data-view')) || 'dashboard';
       if (viewName === 'add-data') {
         addDataSourceNav = 'users';
@@ -1408,7 +1409,8 @@
       } else {
         img.src = SIDEBAR_TOGGLE_ICON;
         btn.setAttribute('aria-label', 'Toggle sidebar');
-        btn.hidden = false;
+        // Hover sidebar style has no click toggle — only standard mode does.
+        btn.hidden = !root.classList.contains('tma-dash--sidebar-standard');
       }
     }
 
@@ -1688,6 +1690,16 @@
       return 0;
     }
 
+    function syncDocumentTitleBadge() {
+      // Exact unread count in the browser tab title (never "99+").
+      var pageName = (pageTitleEl && pageTitleEl.textContent.trim())
+        || document.title.replace(/^\(\d+\)\s+/, '').trim()
+        || 'TMA Portal';
+      root._titleBase = pageName;
+      var count = getNotificationBadgeCount();
+      document.title = count > 0 ? '(' + String(count) + ') ' + pageName : pageName;
+    }
+
     function syncHeaderIconBadges() {
       setIconBtnBadge(
         root.querySelector('[data-action="toggle-notifications-popup"]'),
@@ -1701,6 +1713,7 @@
         'activities',
         'Activities'
       );
+      syncDocumentTitleBadge();
     }
 
     function syncTabBarBadges() {

@@ -40,7 +40,8 @@
 
   function usersApi(method, url, body) {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-    return fetch(url, {
+    var root = window.__TMA_SITE_ROOT || '';
+    return fetch(root + url, {
       method: method,
       credentials: 'same-origin',
       headers: {
@@ -481,7 +482,9 @@ if (state.filters.user) {
 
     return '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
         '<div class="tma-dash__toolbar-actions">' +
-          '<button type="button" class="tma-dash__tool-btn" aria-label="Add row" data-users-add><img src="' + ICONS.Plus + '" alt=""></button>' +
+          (state.canManage
+            ? '<button type="button" class="tma-dash__tool-btn" aria-label="Add row" data-users-add><img src="' + ICONS.Plus + '" alt=""></button>'
+            : '') +
           '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-users-filter-trigger aria-expanded="false" aria-pressed="false"><img src="' + ICONS.FunnelSimple + '" alt=""></button>' +
           '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-users-sort-trigger aria-expanded="false"><img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
           '<div class="tma-dash__toolbar-bulk" data-users-bulk' + bulkHidden + '>' +
@@ -638,6 +641,7 @@ if (state.filters.user) {
       loadError: false,
       loadErrorStatus: 0,
       loadErrorMessage: '',
+      canManage: false,
       search: '',
       searchFocused: false,
       searchLoading: false,
@@ -665,9 +669,10 @@ if (state.filters.user) {
           state.loadError = true;
           state.loadErrorStatus = res.status || 0;
           state.loadErrorMessage = res.status === 403
-            ? 'Only administrators can view the user directory.'
+            ? 'Only staff can view the user directory.'
             : 'Could not load users right now.';
           state.live = false;
+          state.canManage = false;
           state.selected = {};
           render();
           return;
@@ -679,6 +684,7 @@ if (state.filters.user) {
           state.loadError = false;
           state.loadErrorStatus = 0;
           state.loadErrorMessage = '';
+          state.canManage = !!j.canManage;
           state.live = true;
           state.selected = {};
           state.page = 1;
@@ -996,9 +1002,9 @@ if (state.filters.user) {
           var denied = state.loadErrorStatus === 403;
           if (window.TMASectionError && window.TMASectionError.mount) {
             window.TMASectionError.mount(container, {
-              title: denied ? 'Administrator access required' : 'Unable to load users',
+              title: denied ? 'Staff access required' : 'Unable to load users',
               message: state.loadErrorMessage || (denied
-                ? 'Only administrators can view the user directory.'
+                ? 'Only staff can view the user directory.'
                 : 'There was a problem loading users.'),
               permissionDenied: denied,
               onRetry: denied ? null : loadRealUsers,

@@ -29,6 +29,10 @@
     return m ? decodeURIComponent(m[1]) : '';
   }
 
+  /* A socket that still says "connected" but has been silent this long is
+     treated as a zombie (laptop sleep / background tab) and force-reopened. */
+  var STALE_MS = 90000;
+
   function Realtime() {
     this.config = null;
     this.socket = null;
@@ -39,17 +43,78 @@
     this.connected = false;
     this.stateHandlers = [];
     this.closedByUs = false;
+    this.lastMessageAt = 0;
+    this._wakeBound = false;
   }
 
   Realtime.prototype.start = function (config) {
     if (!config || !config.enabled || !config.key) return false;
     // Reconnecting with the same config is a no-op; a changed one restarts.
-    if (this.socket && this.config && this.config.key === config.key) return true;
+    if (this.socket && this.config && this.config.key === config.key) {
+      this.bindWakeHandlers();
+      return true;
+    }
 
     this.config = config;
     this.closedByUs = false;
     this.open();
+    this.bindWakeHandlers();
     return true;
+  };
+
+  /* Tear down a zombie/dead socket and open a fresh one, keeping channel
+     registrations so resubscribeAll() re-auths them on connect. */
+  Realtime.prototype.reconnect = function () {
+    if (!this.config || this.closedByUs) return;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    if (this.socket) {
+      try { this.socket.close(); } catch (e) { /* ignore */ }
+      this.socket = null;
+    }
+    this.connected = false;
+    this.socketId = null;
+    Object.keys(this.channels).forEach(function (name) {
+      this.channels[name].subscribed = false;
+    }.bind(this));
+    this.retries = 0;
+    this.open();
+  };
+
+  Realtime.prototype.isHealthy = function () {
+    if (!this.connected || !this.socketId || !this.socket) return false;
+    if (this.socket.readyState !== 1) return false;
+    if (!this.lastMessageAt) return true;
+    return (Date.now() - this.lastMessageAt) < STALE_MS;
+  };
+
+  Realtime.prototype.ensureAlive = function () {
+    if (!this.config || this.closedByUs) return;
+    if (this.isHealthy()) return;
+    this.reconnect();
+  };
+
+  Realtime.prototype.bindWakeHandlers = function () {
+    if (this._wakeBound) return;
+    this._wakeBound = true;
+    var self = this;
+    function onWake() {
+      if (document.hidden) return;
+      self.ensureAlive();
+    }
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('focus', onWake);
+    window.addEventListener('online', onWake);
+    // Visible idle tabs can keep a half-open socket that never fires
+    // close/visibility events — poke health on a timer too.
+    if (!this._healthTimer) {
+      this._healthTimer = window.setInterval(function () {
+        if (document.hidden) return;
+        self.ensureAlive();
+      }, 30000);
+    }
   };
 
   Realtime.prototype.url = function () {
@@ -104,6 +169,7 @@
       return;
     }
 
+    this.lastMessageAt = Date.now();
     var event = payload.event;
 
     // Reverb sends event data as a JSON *string*, not a nested object.
@@ -119,6 +185,7 @@
     if (event === 'pusher:connection_established') {
       this.socketId = data && data.socket_id;
       this.connected = true;
+      this.lastMessageAt = Date.now();
       this.emitState('connected');
       this.resubscribeAll();
       return;

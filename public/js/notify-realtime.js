@@ -8,8 +8,7 @@
  * or a reset scroll.
  *
  * Degrades quietly: with no websocket configured (or Reverb unreachable) the
- * portal simply shows new notifications on the next load. Nothing here can
- * throw into the rest of the page.
+ * portal falls back to the count-poll / wake catch-up in notify-store.js.
  *
  * Global: window.TMANotifyRealtime
  */
@@ -17,6 +16,7 @@
   'use strict';
 
   var started = false;
+  var channel = null;
 
   function apply(payload) {
     if (!payload) return;
@@ -27,6 +27,11 @@
       var root = document.querySelector('.tma-dash');
       if (root && root._syncTabBarBadges) root._syncTabBarBadges();
     } catch (e) { /* a bad payload must not break the socket loop */ }
+  }
+
+  function bindChannel(rt, userId) {
+    channel = 'private-App.Models.User.' + userId;
+    rt.listen(channel, 'notification.created', apply);
   }
 
   function start() {
@@ -45,8 +50,18 @@
         // No socket configured → rely on loads/polls, not this.
         if (!rt || !cfg || !cfg.enabled) return;
         if (!rt.start(cfg)) return;
-        var channel = 'private-App.Models.User.' + me.id;
-        rt.listen(channel, 'notification.created', apply);
+        bindChannel(rt, me.id);
+
+        // After a reconnect, re-listen is already covered by channel registry;
+        // still catch up HTTP so anything missed while the socket was dead
+        // surfaces as toasts / badge updates.
+        if (rt.onState) {
+          rt.onState(function (state) {
+            if (state === 'connected' && window.TMANotifications && window.TMANotifications.catchUp) {
+              window.TMANotifications.catchUp({ forceLoad: true });
+            }
+          });
+        }
       })
       .catch(function () {});
   }

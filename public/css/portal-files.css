@@ -556,7 +556,8 @@ body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
  * that mode keeps precedence via :not(.is-user-info-docked).
  * ───────────────────────────────────────── */
 @media (min-width: 1281px) {
-  .tma-dash.tma-dash--email:not(.is-user-info-docked),
+  /* Email keeps the right sidebar (notifications / activities). Other
+     full-bleed views still hide it. */
   .tma-dash.tma-dash--messages:not(.is-user-info-docked),
   .tma-dash.tma-dash--calendar:not(.is-user-info-docked),
   .tma-dash.tma-dash--feed:not(.is-user-info-docked),
@@ -564,7 +565,6 @@ body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
     grid-template-columns: var(--dash-sidebar-w) minmax(0, 1fr) 0;
   }
 
-  .tma-dash.is-sidebar-collapsed.tma-dash--email:not(.is-user-info-docked),
   .tma-dash.is-sidebar-collapsed.tma-dash--messages:not(.is-user-info-docked),
   .tma-dash.is-sidebar-collapsed.tma-dash--calendar:not(.is-user-info-docked),
   .tma-dash.is-sidebar-collapsed.tma-dash--feed:not(.is-user-info-docked),
@@ -572,7 +572,6 @@ body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
     grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) 0;
   }
 
-  .tma-dash--email .tma-dash__rightbar,
   .tma-dash--messages .tma-dash__rightbar,
   .tma-dash--calendar .tma-dash__rightbar,
   .tma-dash--feed .tma-dash__rightbar,
@@ -581,7 +580,6 @@ body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
   }
 
   /* The header's rightbar toggle would be a dead button on these views. */
-  .tma-dash--email .tma-dash__header-right [data-action="toggle-rightbar"],
   .tma-dash--messages .tma-dash__header-right [data-action="toggle-rightbar"],
   .tma-dash--calendar .tma-dash__header-right [data-action="toggle-rightbar"],
   .tma-dash--feed .tma-dash__header-right [data-action="toggle-rightbar"],

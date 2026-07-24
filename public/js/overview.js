@@ -42,6 +42,73 @@
 
   var ROAD = [];
   var FILES = [];
+  var ROOT = window.__TMA_SITE_ROOT || '';
+
+  function apiGet(url) {
+    return fetch(ROOT + url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  }
+
+  function formatRoadTime(iso) {
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    } catch (e) { return ''; }
+  }
+
+  function weekRangeIso() {
+    var now = new Date();
+    var day = now.getDay();
+    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day, 0, 0, 0, 0);
+    var end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7, 0, 0, 0, 0);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }
+
+  function loadRoadFromCalendar() {
+    var range = weekRangeIso();
+    return apiGet('/portal/calendar/events?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to))
+      .then(function (j) {
+        var events = (j && j.events) || [];
+        ROAD = events.slice(0, 8).map(function (ev) {
+          return {
+            text: ev.title || 'Untitled event',
+            time: formatRoadTime(ev.startsAt || ev.starts_at),
+            avatar: 'Avatar3d01',
+          };
+        });
+      });
+  }
+
+  function fileTone(name) {
+    var ext = String(name || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf') return 'red';
+    if (ext === 'doc' || ext === 'docx') return 'blue';
+    if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') return 'green';
+    if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif' || ext === 'webp') return 'purple';
+    return 'grey';
+  }
+
+  function loadLatestFiles() {
+    return apiGet('/portal/files?section=recent&perPage=6')
+      .then(function (j) {
+        var files = (j && j.files) || [];
+        FILES = files.slice(0, 6).map(function (f) {
+          var name = f.name || f.filename || 'File';
+          var meta = [f.sizeLabel || f.size || '', f.updatedAtLabel || f.updated_at || f.uploadedAt || '']
+            .filter(Boolean).join(' · ');
+          return {
+            name: name,
+            meta: meta || 'Recent file',
+            icon: (window.TMAFileIcons && TMAFileIcons.iconKeyFor) ? TMAFileIcons.iconKeyFor(name) : 'File',
+            tone: fileTone(name),
+            download: !!(f.downloadUrl || f.id),
+          };
+        });
+      });
+  }
 
   var TAB_PANELS = {
     Overview: '.tma-dash__overview-grid',
@@ -243,6 +310,13 @@
     } catch (e) { return null; }
   }
 
+  function remountOverviewGrid(container, activeTab) {
+    if (!container || activeTab !== 'Overview') return;
+    var grid = container.querySelector('.tma-dash__overview-grid');
+    if (!grid) return;
+    grid.innerHTML = renderHero() + renderRoad() + renderFiles();
+  }
+
   function mount(container, opts) {
     if (!container) return;
     var pending = (typeof document !== 'undefined' && document.querySelector('.tma-dash'))
@@ -255,6 +329,13 @@
     if (activeTab === 'Files') mountFilesTab(container);
     if (activeTab === 'Activity') mountActivityTab(container);
     setActiveTab(container, activeTab);
+
+    // Wire live calendar + recent files into the Overview grid.
+    Promise.all([loadRoadFromCalendar(), loadLatestFiles()]).then(function () {
+      var current = container.querySelector('[role="tab"][aria-selected="true"]');
+      var tab = (current && current.getAttribute('data-overview-tab')) || activeTab;
+      if (tab === 'Overview') remountOverviewGrid(container, 'Overview');
+    });
   }
 
   /* Open a tab on an already-mounted Overview (used by the "See all

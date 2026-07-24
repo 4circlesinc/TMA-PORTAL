@@ -407,38 +407,71 @@
   window.TMAActivities = activities;
 
   /*
-   * Fallback freshness: the badge normally updates over the websocket
-   * (notify-realtime.js), but when Reverb is down or the origin refuses the
-   * socket, nothing would move the count until the next full page load. A
-   * slow poll of the count endpoint keeps the bell honest in that case; it
-   * stands down whenever the realtime socket is actually connected, and
-   * while the tab is hidden.
+   * Fallback freshness + wake catch-up. The badge normally updates over the
+   * websocket, but after long idle the socket can look "connected" while
+   * dead (zombie). Stand down the poll only when the transport is healthy
+   * recently; on visibility/focus always reconcile and toast newcomers.
    */
   var COUNT_POLL_MS = 60000;
-  window.setInterval(function () {
-    if (document.hidden) return;
+  var catchingUp = false;
+
+  function socketLooksHealthy() {
     var rt = window.TMAMessagingRealtime;
-    if (rt && rt.connected && rt.socketId) return;
+    if (!rt) return false;
+    if (typeof rt.isHealthy === 'function') return rt.isHealthy();
+    return !!(rt.connected && rt.socketId);
+  }
+
+  function catchUpNotifications(opts) {
+    opts = opts || {};
+    if (catchingUp) return;
+    catchingUp = true;
 
     var prevUnread = notifications.state.unread;
+    var knownIds = {};
+    notifications.state.items.forEach(function (it) { knownIds[it.id] = true; });
+    var hadList = notifications.state.loaded && notifications.state.items.length > 0;
+
     notifications.refreshCount().then(function () {
-      // More unread than before means something arrived while the socket was
-      // down. Pull the fresh page and toast the newcomers, so the fallback
-      // path surfaces notifications the same way realtime does. Only when the
-      // list has been loaded once — otherwise there is nothing to diff against
-      // and page load would toast old history.
-      if (!notifications.state.loaded || notifications.state.unread <= prevUnread) return;
-
-      var knownIds = {};
-      notifications.state.items.forEach(function (it) { knownIds[it.id] = true; });
-
-      notifications.load().then(function () {
-        if (!window.TMAToast || !window.TMAToast.showNotificationToast) return;
-        notifications.state.items
-          .filter(function (it) { return !knownIds[it.id] && !it.read; })
-          .slice(0, 3)
-          .forEach(function (it) { window.TMAToast.showNotificationToast(it); });
-      });
+      var rose = notifications.state.unread > prevUnread;
+      if (!rose && !opts.forceLoad) {
+        catchingUp = false;
+        return null;
+      }
+      return notifications.load();
+    }).then(function () {
+      catchingUp = false;
+      if (!window.TMAToast || !window.TMAToast.showNotificationToast) return;
+      // Only toast when we had a baseline list (or a prior count) so a cold
+      // page load does not replay old history as brand-new toasts.
+      if (!hadList && prevUnread === 0 && !opts.forceToast) return;
+      notifications.state.items
+        .filter(function (it) { return !knownIds[it.id] && !it.read; })
+        .slice(0, 3)
+        .forEach(function (it) { window.TMAToast.showNotificationToast(it); });
+      var root = document.querySelector('.tma-dash');
+      if (root && root._syncTabBarBadges) root._syncTabBarBadges();
+    }).catch(function () {
+      catchingUp = false;
     });
+  }
+
+  window.setInterval(function () {
+    if (document.hidden) return;
+    if (socketLooksHealthy()) return;
+    catchUpNotifications();
   }, COUNT_POLL_MS);
+
+  function onNotifyWake() {
+    if (document.hidden) return;
+    var rt = window.TMAMessagingRealtime;
+    if (rt && typeof rt.ensureAlive === 'function') rt.ensureAlive();
+    // Always reconcile after wake — even if the socket claims health.
+    catchUpNotifications({ forceLoad: true });
+  }
+  document.addEventListener('visibilitychange', onNotifyWake);
+  window.addEventListener('focus', onNotifyWake);
+  window.addEventListener('online', onNotifyWake);
+
+  notifications.catchUp = catchUpNotifications;
 })();

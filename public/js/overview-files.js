@@ -137,6 +137,34 @@
     });
   }
 
+  function formatWhen(iso) {
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) { return '—'; }
+  }
+
+  function mapApiFile(f) {
+    var name = f.name || 'File';
+    var uploader = (f.uploadedBy && f.uploadedBy.name) || (f.owner && f.owner.name) || 'Someone';
+    var ext = (f.extension || name.split('.').pop() || '').toLowerCase();
+    var tone = 'grey';
+    if (ext === 'pdf') tone = 'red';
+    else if (ext === 'doc' || ext === 'docx') tone = 'blue';
+    else if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') tone = 'green';
+    else if (/png|jpe?g|gif|webp/.test(ext)) tone = 'purple';
+    return {
+      name: name,
+      size: f.sizeLabel || '—',
+      time: formatWhen(f.uploadedAt || f.createdAt || f.updatedAt),
+      uploader: uploader,
+      avatar: 'Avatar3d01',
+      tone: tone,
+      icon: f.icon || 'File',
+    };
+  }
+
   function mount(container) {
     if (!container || container.hasAttribute('data-files-mounted')) return;
 
@@ -317,6 +345,22 @@
     }
 
     render();
+
+    // Live recent files for the Overview → Files tab.
+    var root = window.__TMA_SITE_ROOT || '';
+    fetch(root + '/portal/files?section=recent&perPage=50', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j) return;
+        var files = j.files || [];
+        state.rows = files.map(mapApiFile);
+        state.page = 1;
+        render();
+      })
+      .catch(function () { /* keep empty state */ });
   }
 
   window.TMAOverviewFiles = { mount: mount };

@@ -996,14 +996,31 @@ a.tma-dash__tab-btn:visited {
     display: flex !important;
   }
 
-  .tma-dash__header-left [data-action="toggle-sidebar"] {
+  /* Desktop: left toggle only in standard (click) sidebar style. Hover mode
+     expands the rail on hover — showing a dead toggle next to the title is wrong. */
+  .tma-dash--sidebar-standard .tma-dash__header-left [data-action="toggle-sidebar"] {
+    display: grid;
+  }
+  .tma-dash:not(.tma-dash--sidebar-standard) .tma-dash__header-left [data-action="toggle-sidebar"] {
+    display: none !important;
+  }
+
+  /* Email keeps the right sidebar; ensure its header toggle stays visible. */
+  .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header-right [data-action="toggle-rightbar"] {
     display: grid;
   }
 }
 
 
-/* Email page - keep sidebar toggle visible on desktop (yesterday fix) */
-.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header-left [data-action="toggle-sidebar"] {
+/* Email page - sidebar toggle only for standard (click) sidebar style. */
+.tma-dash--email:not(.tma-dash--email-mobile).tma-dash--sidebar-standard .tma-dash__header-left [data-action="toggle-sidebar"] {
+  display: grid !important;
+}
+.tma-dash--email:not(.tma-dash--email-mobile):not(.tma-dash--sidebar-standard) .tma-dash__header-left [data-action="toggle-sidebar"] {
+  display: none !important;
+}
+
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header-right [data-action="toggle-rightbar"] {
   display: grid !important;
 }
 

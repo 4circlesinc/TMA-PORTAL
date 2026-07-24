@@ -26,7 +26,14 @@ class AdminUsersController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can manage users.');
+        // Staff directory is readable by Employees and Administrators; write
+        // actions on this controller stay admin-only.
+        $viewer = $request->user();
+        abort_unless(
+            in_array($viewer->account_type, ['Administrator', 'Employee'], true),
+            403,
+            'Only staff can view the user directory.'
+        );
 
         $lastSeen = DB::table('sessions')
             ->select('user_id', DB::raw('MAX(last_activity) as last_activity'))
@@ -56,12 +63,13 @@ class AdminUsersController extends Controller
             'lastActive' => isset($lastSeen[$user->id])
                 ? now()->setTimestamp($lastSeen[$user->id])->diffForHumans()
                 : null,
-            'self' => $user->id === $request->user()->id,
+            'self' => $user->id === $viewer->id,
         ]);
 
         return response()->json([
             'accountTypes' => self::ACCOUNT_TYPES,
             'users' => $users,
+            'canManage' => $this->isAdmin($viewer),
         ]);
     }
 
