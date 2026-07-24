@@ -26,8 +26,10 @@
     return '<section class="tma-dash__header-popup tma-dash__header-popup--notifications" data-popup-panel="notifications" data-node-id="33296:181107" hidden aria-label="Notifications">' +
       '<div class="tma-dash__header-popup-head">' +
         '<h2 class="tma-dash__header-popup-heading">Notifications</h2>' +
-        '<button type="button" class="tma-dash__header-popup-action" data-popup-action="toggle-unread" aria-pressed="false">Unread</button>' +
-        '<button type="button" class="tma-dash__header-popup-action" data-popup-action="mark-notifications-read">Mark all as read</button>' +
+        '<div class="tma-dash__header-popup-head-actions">' +
+          '<button type="button" class="tma-dash__header-popup-action" data-popup-action="toggle-unread" aria-pressed="false">Unread</button>' +
+          '<button type="button" class="tma-dash__header-popup-action" data-popup-action="mark-notifications-read">Mark all as read</button>' +
+        '</div>' +
       '</div>' +
       '<div class="tma-dash__header-popup-list" data-popup-list></div>' +
       '<div class="tma-dash__header-popup-foot">' +
