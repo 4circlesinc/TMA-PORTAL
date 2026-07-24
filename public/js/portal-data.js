@@ -32,14 +32,33 @@
     return shortDate(d) + ' ' + h + ':' + pad(d.getMinutes()) + ampm;
   }
 
+  var FAKE_PERSONAL_NAMES = {
+    'Project_Brief.pdf': 1,
+    'Client_Onboarding_Template.docx': 1,
+    Test: 1,
+  };
+
+  function isSeededFakeFolderItem(item) {
+    if (!item) return false;
+    if (item.id === 'folder-test' || item.id === 'file-seed-1' || item.id === 'file-seed-2') return true;
+    return !!FAKE_PERSONAL_NAMES[item.name];
+  }
+
+  function isSeededFakeEmployee(emp) {
+    if (!emp) return false;
+    if (emp.id === 'emp-1') return true;
+    var full = [emp.firstName, emp.lastName].filter(Boolean).join(' ');
+    return full === 'Travis Francis';
+  }
+
   function seed() {
     return {
       user: {
-        firstName: 'Vernon',
-        lastName: 'Francis',
-        name: 'Vernon Francis',
-        email: 'vfrancis@tmantoinelaw.com',
-        company: 'TM ANTOINE Advisory',
+        firstName: '',
+        lastName: '',
+        name: '',
+        email: '',
+        company: '',
       },
       trial: {
         active: true,
@@ -49,8 +68,8 @@
         employeeLimit: 3,
       },
       branding: {
-        accountName: 'Testing',
-        pageTitle: 'TM ANTOINE Advisory - Where Companies Connect',
+        accountName: '',
+        pageTitle: '',
         logoName: '',
         headerColor: '#FFFFFF',
         accentColor: '#0C0C0C',
@@ -65,18 +84,14 @@
       // starts empty so no placeholder filenames flash before the real data.
       recentFiles: [],
       folders: {
-        personal: [
-          { id: 'folder-test', name: 'Test', kind: 'folder', items: 3, created: '06/28/2026' },
-          { id: 'file-seed-1', name: 'Project_Brief.pdf', kind: 'file', created: '06/28/2026' },
-          { id: 'file-seed-2', name: 'Client_Onboarding_Template.docx', kind: 'file', created: '06/27/2026' },
-        ],
+        personal: [],
         shared: [],
         favorites: [],
         recycle: [],
       },
       tutorials: [
-        { id: 'tut-1', label: 'Share a file securely', done: true },
-        { id: 'tut-2', label: 'Request files from a client', done: true },
+        { id: 'tut-1', label: 'Share a file securely', done: false },
+        { id: 'tut-2', label: 'Request files from a client', done: false },
         { id: 'tut-3', label: 'Add people to your account', done: false },
         { id: 'tut-4', label: 'Personalize your account branding', done: false },
         { id: 'tut-5', label: 'Create your first project', done: false },
@@ -96,24 +111,14 @@
       workflows: [],
       workflowRuns: [],
       messages: [],
-      employees: [
-        {
-          id: 'emp-1',
-          firstName: 'Travis',
-          lastName: 'Francis',
-          email: 'igraphixmarketingco@gmail.com',
-          company: 'Testing',
-          lastLogin: '07/06/2026 12:56PM',
-          admin: true,
-        },
-      ],
+      employees: [],
       clientContacts: [],
       prospects: [],
       sharedAddressBook: [],
       personalAddressBook: [],
       // distributionGroups removed: groups are server-backed now, via
       // /portal/groups (see portal-people.js).
-      superUsers: ['emp-1'],
+      superUsers: [],
       hideSuperGroup: false,
       serviceTeams: [],
       customFields: [],
@@ -231,12 +236,31 @@
         Object.keys(fresh.settings).forEach(function (k) {
           if (!state.settings[k]) state.settings[k] = fresh.settings[k];
         });
+        var stripped = false;
         if (state.folders && state.folders.personal) {
-          state.folders.personal = state.folders.personal.filter(function (f) { return f.kind !== 'filebox'; });
+          var personalBefore = state.folders.personal.length;
+          state.folders.personal = state.folders.personal.filter(function (f) {
+            return f.kind !== 'filebox' && !isSeededFakeFolderItem(f);
+          });
+          if (state.folders.personal.length !== personalBefore) stripped = true;
+        }
+        if (state.employees && state.employees.length) {
+          var employeesBefore = state.employees.length;
+          state.employees = state.employees.filter(function (emp) { return !isSeededFakeEmployee(emp); });
+          if (state.employees.length !== employeesBefore) stripped = true;
+        }
+        if (state.superUsers && state.superUsers.length) {
+          var supersBefore = state.superUsers.length;
+          state.superUsers = state.superUsers.filter(function (id) { return id !== 'emp-1'; });
+          if (state.superUsers.length !== supersBefore) stripped = true;
         }
         // Signature requests are server-backed now; drop any seeded copies a
         // browser still holds from the prototype so nothing stale can surface.
-        delete state.signatureRequests;
+        if (state.signatureRequests) {
+          delete state.signatureRequests;
+          stripped = true;
+        }
+        if (stripped) save();
         return state;
       }
     } catch (e) { /* fall through to seed */ }

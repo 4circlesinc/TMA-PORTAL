@@ -59,7 +59,13 @@ class MailSenderPhoto extends Model
             return false;
         }
 
-        $ttl = $this->has_photo ? self::HIT_TTL_DAYS : self::MISS_TTL_DAYS;
+        // Brand favicons are a weak inbox fallback — keep them fresh for a
+        // shorter window so directory / Gravatar can still win for faces.
+        $ttl = match (true) {
+            $this->source === 'brand' => self::MISS_TTL_DAYS,
+            $this->has_photo => self::HIT_TTL_DAYS,
+            default => self::MISS_TTL_DAYS,
+        };
 
         return $this->checked_at->gt(now()->subDays($ttl));
     }
@@ -186,6 +192,40 @@ class MailSenderPhoto extends Model
     }
 
     /**
+     * True when a background resolve is worth queuing for a *face* avatar
+     * (notifications / toasts). Brand-only caches count as unresolved faces.
+     */
+    public static function needsFaceResolve(string $email): bool
+    {
+        $email = mb_strtolower(trim($email));
+        if ($email === '' || ! str_contains($email, '@')) {
+            return false;
+        }
+
+        $row = self::where('hash', self::hashFor($email))->first();
+        if (! $row) {
+            return true;
+        }
+
+        if ($row->isFacePhoto() && $row->isFresh()) {
+            return false;
+        }
+
+        // Fresh miss — wait out the miss TTL before asking again.
+        if (! $row->has_photo && $row->isFresh()) {
+            return false;
+        }
+
+        // Brand logos are not faces. Retry directory/Gravatar only after the
+        // shorter brand freshness window has ended (avoids queue spam).
+        if ($row->source === 'brand') {
+            return ! $row->isFresh();
+        }
+
+        return ! $row->isFresh();
+    }
+
+    /**
      * True when nobody has asked the provider about this address recently -
      * i.e. a background resolve is worth queuing. Cheap: one indexed lookup,
      * no network.
@@ -214,14 +254,22 @@ class MailSenderPhoto extends Model
         $row = self::where('hash', $hash)->first();
 
         if ($row && $row->isFresh()) {
+            // A fresh brand logo is not a face. Fall through so directory /
+            // Gravatar can still run when brand freshness has ended (see
+            // isFresh brand TTL) — but while brand is "fresh", skip network.
+            if ($row->source === 'brand') {
+                return null;
+            }
+
             return $row->has_photo ? $row->read() : null;
         }
 
         // Directory / contacts first — a real face from the mailbox provider.
         // When the primary mailbox is Microsoft, Gmail faces are unreachable
         // via Graph; if this user also linked Google, try that next for the
-        // same address. Then Gravatar, then company-domain brand logos.
-        // Consumer domains never get a brand favicon.
+        // same address. Then Gravatar. Company-domain brand logos are last,
+        // and never for same-organisation addresses (those must stay as
+        // initials until a real directory face exists — favicons are not faces).
         $photo = null;
         $source = null;
         try {
@@ -261,7 +309,7 @@ class MailSenderPhoto extends Model
             }
         }
 
-        if ($photo === null) {
+        if ($photo === null && ! self::sameOrgAs($account, $email)) {
             $photo = self::brandLogoFor($email);
             if ($photo !== null) {
                 $source = 'brand';

@@ -116,6 +116,17 @@
       '</div>';
   }
 
+  function personAvatarSrc(p) {
+    var name = displayName(p);
+    if (window.TMACurrentUser && typeof window.TMACurrentUser.avatarSrc === 'function') {
+      return window.TMACurrentUser.avatarSrc(p.avatar || null, name);
+    }
+    if (window.TMACurrentUser && typeof window.TMACurrentUser.initialsFor === 'function') {
+      return window.TMACurrentUser.initialsFor(name, p.email || p.id);
+    }
+    return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  }
+
   /* ── employees ──────────────────────────────────── */
   function renderEmployees() {
     var s = data().state();
@@ -125,7 +136,7 @@
     var rows = list.map(function (p) {
       return '<tr>' +
         '<td><span class="tma-portal-avatar-cell">' +
-        '<img src="images/avatars/AvatarByewind.png" alt="">' +
+        '<img src="' + personAvatarSrc(p) + '" alt="">' +
         '<strong>' + ui().esc(displayName(p)) + '</strong>' +
         (p.admin ? ' <span class="tma-portal-chip">Admin</span>' : '') +
         '</span></td>' +

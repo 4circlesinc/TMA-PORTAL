@@ -2,17 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <base href="/" id="tma-site-base">
-  <script>(function(){if(!location.hostname.endsWith("github.io"))return;var s=location.pathname.split("/").filter(Boolean)[0];if(!s)return;window.__TMA_SITE_ROOT="/"+s;var b=document.getElementById("tma-site-base");if(b)b.href="/"+s+"/";})();</script>
+  <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/tokens.css?v=2">
-  <link rel="stylesheet" href="css/theme.css?v=2">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/pagination.css">
-  <link rel="stylesheet" href="css/dashboard.css?v=36">
+  <link rel="stylesheet" href="css/dashboard.css?v=39">
   <link rel="stylesheet" href="css/global-search.css">
   <link rel="stylesheet" href="css/filter-and-sort.css">
   <link rel="stylesheet" href="css/table-filter-sort.css">
@@ -21,7 +20,8 @@
   <link rel="stylesheet" href="css/user-info-panel.css">
   <link rel="stylesheet" href="css/card.css">
   <link rel="stylesheet" href="css/strip.css">
-  <link rel="stylesheet" href="css/no-data.css">
+  <link rel="stylesheet" href="css/no-data.css?v=2">
+  <link rel="stylesheet" href="css/section-error.css?v=1">
   <link rel="stylesheet" href="css/charts.css">
   <link rel="stylesheet" href="css/status-badge.css">
   <link rel="stylesheet" href="css/tag.css">
@@ -32,13 +32,14 @@
   <link rel="stylesheet" href="css/table-a.css">
   <link rel="stylesheet" href="css/portal.css?v=3">
   <link rel="stylesheet" href="css/portal-files.css?v=2">
+  <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=5">
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
   </style>
 </head>
 <body>
-  <div class="tma-dash is-sidebar-collapsed" data-node-id="32546:96098">
+  <div class="tma-dash" data-node-id="32546:96098">
 
     <!-- ── Sidebar ─────────────────────────────────────── -->
     <aside class="tma-dash__sidebar" aria-label="Primary">
@@ -85,10 +86,20 @@
           <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--chatscircle" aria-hidden="true"></span>
           <span>Messages</span>
         </a>
+        <a class="tma-dash__nav-item" href="/social/feed" data-nav="so-feed" data-title="Feed" data-crumb="Social / Feed" data-view="feed">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--chatsteardrop" aria-hidden="true"></span>
+          <span>Feed</span>
+        </a>
         <a class="tma-dash__nav-item" href="/calendar" data-nav="calendar" data-title="Calendar" data-crumb="Calendar" data-view="calendar">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--calendarblank" aria-hidden="true"></span>
           <span>Calendar</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/signatures" data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--signature" aria-hidden="true"></span>
+          <span>Signatures</span>
         </a>
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="folders" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -105,25 +116,19 @@
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/filebox" data-nav="folders-filebox" data-title="File Box" data-crumb="Folders / File Box" data-view="folders">File Box</a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recycle" data-nav="folders-recycle" data-title="Recycle Bin" data-crumb="Folders / Recycle Bin" data-view="folders">Recycle Bin</a>
         </div>
-
-        <a class="tma-dash__nav-item" href="/signatures" data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--signature" aria-hidden="true"></span>
-          <span>Signatures</span>
-        </a>
       </div>
 
       <div class="tma-dash__nav-section" data-list="main">
         <div class="tma-dash__group-label">Pages</div>
-        <a class="tma-dash__nav-item" href="/social/feed" data-nav="so-feed" data-title="Feed" data-crumb="Social / Feed" data-view="feed">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--chatsteardrop" aria-hidden="true"></span>
-          <span>Feed</span>
-        </a>
         <a class="tma-dash__nav-item" href="/users" data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--userlist" aria-hidden="true"></span>
           <span>Users</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/templates" data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--table" aria-hidden="true"></span>
+          <span>Templates</span>
         </a>
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="projects" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -145,12 +150,6 @@
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/workflows" data-nav="workflows-automated" data-title="Automated Workflows" data-crumb="Workflows / Automated Workflows" data-view="workflows">Automated Workflows</a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/workflows/feedback" data-nav="workflows-feedback" data-title="Feedback and Approval" data-crumb="Workflows / Feedback and Approval" data-view="workflows">Feedback and Approval</a>
         </div>
-
-        <a class="tma-dash__nav-item" href="/templates" data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
-          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
-          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--table" aria-hidden="true"></span>
-          <span>Templates</span>
-        </a>
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="people" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -317,7 +316,7 @@
         <div class="tma-dash__feed" data-feed></div>
       </div>
 
-      <div class="tma-dash__view" data-view="clients" hidden>
+      <div class="tma-dash__view" data-view="clients" data-table-view hidden>
         <div class="tma-dash__clients" data-clients></div>
       </div>
 
@@ -344,85 +343,26 @@
 
     <!-- ── Right sidebar ───────────────────────────────── -->
     <aside class="tma-dash__rightbar" aria-label="Activity">
-      <div class="tma-dash__rb-section">
-        <div class="tma-dash__rb-title">Notifications</div>
-        <div class="tma-dash__notice">
-          <span class="tma-dash__notice-icon tma-dash__notice-icon--purple"><img src="images/icons/phosphor/BugBeetle.svg" alt=""></span>
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">You fixed a bug.</div>
-            <div class="tma-dash__notice-meta">Just now</div>
+      <!-- Filled by right-sidebar.js from live APIs. No sample rows in the shell. -->
+      <div class="tma-dash__rb-sections" data-rb-sections>
+        <section class="tma-dash__rb-section" data-rb-section="notifications">
+          <div class="tma-dash__rb-title">Notifications</div>
+          <div class="tma-dash__rb-body" data-rb-body="notifications">
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
           </div>
-        </div>
-        <div class="tma-dash__notice">
-          <span class="tma-dash__notice-icon tma-dash__notice-icon--blue"><img src="images/icons/phosphor/User.svg" alt=""></span>
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">New user registered.</div>
-            <div class="tma-dash__notice-meta">59 minutes ago</div>
+        </section>
+        <section class="tma-dash__rb-section tma-dash__rb-section--activities" data-rb-section="activities">
+          <div class="tma-dash__rb-title">Activities</div>
+          <div class="tma-dash__rb-body" data-rb-body="activities">
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
           </div>
-        </div>
-        <div class="tma-dash__notice">
-          <span class="tma-dash__notice-icon tma-dash__notice-icon--purple"><img src="images/icons/phosphor/BugBeetle.svg" alt=""></span>
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">You fixed a bug.</div>
-            <div class="tma-dash__notice-meta">12 hours ago</div>
+        </section>
+        <section class="tma-dash__rb-section" data-rb-section="clients">
+          <div class="tma-dash__rb-title">Clients</div>
+          <div class="tma-dash__rb-body" data-rb-body="clients">
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
           </div>
-        </div>
-        <div class="tma-dash__notice">
-          <span class="tma-dash__notice-icon tma-dash__notice-icon--blue"><img src="images/icons/phosphor/Broadcast.svg" alt=""></span>
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">Andi Lane subscribed to you.</div>
-            <div class="tma-dash__notice-meta">Today, 11:59 AM</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="tma-dash__rb-section tma-dash__rb-section--activities">
-        <div class="tma-dash__rb-title">Activities</div>
-        <div class="tma-dash__activity">
-          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarAbstract03.png" alt="">
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">Changed the style.</div>
-            <div class="tma-dash__notice-meta">Just now</div>
-          </div>
-        </div>
-        <div class="tma-dash__activity">
-          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale03.png" alt="">
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">Released a new version.</div>
-            <div class="tma-dash__notice-meta">59 minutes ago</div>
-          </div>
-        </div>
-        <div class="tma-dash__activity">
-          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarMale02.png" alt="">
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">Submitted a bug.</div>
-            <div class="tma-dash__notice-meta">12 hours ago</div>
-          </div>
-        </div>
-        <div class="tma-dash__activity">
-          <img class="tma-dash__rb-avatar" src="images/avatars/Avatar3d03.png" alt="">
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">Modified A data in Page X.</div>
-            <div class="tma-dash__notice-meta">Today, 11:59 AM</div>
-          </div>
-        </div>
-        <div class="tma-dash__activity">
-          <img class="tma-dash__rb-avatar" src="images/avatars/AvatarAbstract04.png" alt="">
-          <div class="tma-dash__notice-body">
-            <div class="tma-dash__notice-title">Deleted a page in Project X.</div>
-            <div class="tma-dash__notice-meta">Feb 2, 2026</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="tma-dash__rb-section">
-        <div class="tma-dash__rb-title">Clients</div>
-        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale06.png" alt=""><span class="tma-dash__contact-name">Natali Craig</span></div>
-        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarMale01.png" alt=""><span class="tma-dash__contact-name">Drew Cano</span></div>
-        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale01.png" alt=""><span class="tma-dash__contact-name">Andi Lane</span></div>
-        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarMale04.png" alt=""><span class="tma-dash__contact-name">Koray Okumus</span></div>
-        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale04.png" alt=""><span class="tma-dash__contact-name">Kate Morrison</span></div>
-        <div class="tma-dash__contact"><img class="tma-dash__rb-avatar" src="images/avatars/AvatarFemale05.png" alt=""><span class="tma-dash__contact-name">Melody Macy</span></div>
+        </section>
       </div>
     </aside>
 
@@ -481,27 +421,27 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="calendar" data-title="Calendar" data-crumb="Calendar" data-view="calendar">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/CalendarBlank.svg" alt=""><span>Calendar</span>
         </button>
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
-          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>Users</span>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Signature.svg" alt=""><span>Signatures</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="folders-personal" data-title="Personal Folders" data-crumb="Folders / Personal Folders" data-view="folders">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/FolderNotch.svg" alt=""><span>Folders</span>
         </button>
       </div>
 
       <div class="tma-dash__mmenu-label">Pages</div>
       <div class="tma-dash__mmenu-card">
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="folders-personal" data-title="Personal Folders" data-crumb="Folders / Personal Folders" data-view="folders">
-          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/FolderNotch.svg" alt=""><span>Folders</span>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="users" data-title="Users" data-crumb="Users" data-view="users">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>Users</span>
+        </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Templates</span>
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="projects-all" data-title="Projects" data-crumb="Projects / All Projects" data-view="projects-hub">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Kanban.svg" alt=""><span>Projects</span>
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="workflows-automated" data-title="Automated Workflows" data-crumb="Workflows / Automated Workflows" data-view="workflows">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ArrowsClockwise.svg" alt=""><span>Workflows</span>
-        </button>
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates" data-title="Templates" data-crumb="Templates" data-view="templates">
-          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Templates</span>
-        </button>
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
-          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Signature.svg" alt=""><span>Signatures</span>
         </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="people-home" data-title="Manage users" data-crumb="People / Manage users" data-view="people">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>People</span>
@@ -534,7 +474,8 @@
   <script src="js/date-picker-icons.js"></script>
   <script src="js/date-picker.js"></script>
   <script src="js/table-add-data.js"></script>
-  <script src="js/no-data.js"></script>
+  <script src="js/no-data.js?v=2"></script>
+  <script src="js/section-error.js?v=1"></script>
   <script src="js/table-view-toggle.js"></script>
   <script src="js/dashboard-add-data.js"></script>
   <script src="js/card-icons.js"></script>
@@ -545,9 +486,9 @@
   <script src="js/file-icons.js"></script>
   <script src="js/folder-colours.js"></script>
   <script src="js/folder-icons.js"></script>
-  <script src="js/overview-files.js"></script>
+  <script src="js/overview-files.js?v=2"></script>
   <script src="js/overview-activity.js"></script>
-  <script src="js/overview.js"></script>
+  <script src="js/overview.js?v=3"></script>
   <script src="js/table-b.js"></script>
   <script src="js/chart-motion.js"></script>
   <script src="js/account.js"></script>
@@ -564,14 +505,13 @@
   <script src="js/messaging-api.js"></script>
   <script src="js/messaging-realtime.js"></script>
   <script src="js/messages.js"></script>
-  <script src="js/feed.js"></script>
+  <script src="js/feed.js?v=2"></script>
   <script src="js/schedule.js"></script>
   <script src="js/tab-group.js"></script>
   <script src="js/toast-icons.js"></script>
   <script src="js/toast.js?v=8"></script>
   <script src="js/head-dropdown.js"></script>
-  <script src="js/clients.js"></script>
-  <script src="js/calendar-colours.js"></script>
+  <script src="js/clients.js?v=2"></script>
   <script src="js/calendar.js"></script>
   <script src="js/pricing.js"></script>
   <script src="js/two-step-countries.js"></script>
@@ -590,19 +530,18 @@
   <script src="js/dash-search-chrome.js"></script>
     <script src="js/tabbar-indicator.js"></script>
   <script src="js/portal-data.js"></script>
-  <script src="js/portal-views.js"></script>
+  <script src="js/portal-views.js?v=2"></script>
   <script src="js/portal-home.js?v=3"></script>
   <script src="js/portal-projects.js"></script>
-  <script src="js/portal-folders.js"></script>
-  <script src="js/portal-upload-manager.js"></script>
-  <script src="js/portal-files.js"></script>
+  <script src="js/portal-folders.js?v=2"></script>
   <script src="js/portal-work.js"></script>
   <script src="js/portal-people.js"></script>
   <script src="js/portal-admin.js"></script>
+  <script src="js/portal-upload-manager.js"></script>
+  <script src="js/portal-files.js"></script>
   <script src="js/portal-shortcuts.js"></script>
-  <script src="js/dashboard.js?v=5"></script>
+  <script src="js/dashboard.js?v=8"></script>
   <script src="js/phone-input.js"></script>
-  <script src="js/avatar-cropper.js"></script>
   <script src="js/current-user.js"></script>
   <script src="js/sign-out.js"></script>
 </body>

@@ -14,6 +14,9 @@ class DatabaseSeeder extends Seeder
     /**
      * Seed an approved administrator so the portal is never locked out.
      * Credentials come from ADMIN_EMAIL / ADMIN_PASSWORD in .env.
+     *
+     * Never seed fictional demo users, clients, or sample content.
+     * Factories and demo datasets belong in tests / local only.
      */
     public function run(): void
     {

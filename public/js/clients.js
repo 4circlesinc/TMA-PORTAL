@@ -80,49 +80,8 @@
     { id: 'assigned', label: 'Assigned' },
   ];
 
-  var CONTACT_FOLDERS = {
-    byewind: [
-      { id: 'contracts', name: 'Contracts', count: 4, updated: 'Feb 12, 2026' },
-      { id: 'proposals', name: 'Proposals', count: 7, updated: 'Jan 28, 2026' },
-      { id: 'invoices', name: 'Invoices', count: 3, updated: 'Dec 4, 2025' },
-    ],
-    andi: [
-      { id: 'design', name: 'Design assets', count: 18, updated: 'Mar 1, 2026' },
-      { id: 'research', name: 'Research', count: 6, updated: 'Feb 20, 2026' },
-    ],
-    natali: [
-      { id: 'support', name: 'Support tickets', count: 6, updated: 'Mar 12, 2026' },
-      { id: 'onboarding', name: 'Onboarding', count: 3, updated: 'Feb 28, 2026' },
-    ],
-    bruce: [
-      { id: 'legal', name: 'Legal', count: 9, updated: 'Jan 15, 2026' },
-      { id: 'board', name: 'Board materials', count: 5, updated: 'Nov 8, 2025' },
-    ],
-  };
-
-  var DEFAULT_FOLDERS = [
-    { id: 'documents', name: 'Documents', count: 0, updated: '-' },
-  ];
-
-  var CONTACT_ASSIGNED = {
-    byewind: [
-      { id: 'tma-dashboard', title: 'TM ANTOINE Advisory dashboard', project: 'TM ANTOINE Advisory', time: '12hr 30min', due: 'Mar 18, 2026', status: 'in-progress', statusLabel: 'In Progress' },
-      { id: 'api-integration', title: 'API integration review', project: 'TM ANTOINE Advisory', time: '4hr 15min', due: 'Mar 22, 2026', status: 'pending', statusLabel: 'Pending' },
-      { id: 'prototype-handoff', title: 'Prototype handoff', project: 'Internal tools', time: '2hr 5min', due: 'Apr 1, 2026', status: 'approved', statusLabel: 'Approved' },
-    ],
-    andi: [
-      { id: 'design-system', title: 'Design system refresh', project: 'TM ANTOINE Advisory', time: '26hr 10min', due: 'Mar 25, 2026', status: 'in-progress', statusLabel: 'In Progress' },
-      { id: 'mobile-screens', title: 'Mobile screen polish', project: 'Client portal', time: '8hr 40min', due: 'Apr 4, 2026', status: 'pending', statusLabel: 'Pending' },
-    ],
-    drew: [
-      { id: 'roadmap-q2', title: 'Q2 roadmap planning', project: 'Product ops', time: '6hr 20min', due: 'Mar 20, 2026', status: 'complete', statusLabel: 'Complete' },
-      { id: 'stakeholder-review', title: 'Stakeholder review', project: 'TM ANTOINE Advisory', time: '3hr 0min', due: 'Mar 28, 2026', status: 'in-progress', statusLabel: 'In Progress' },
-    ],
-    bruce: [
-      { id: 'vendor-contract', title: 'Vendor contract review', project: 'Wayne Enterprises', time: '1hr 45min', due: 'Mar 15, 2026', status: 'approved', statusLabel: 'Approved' },
-    ],
-  };
-
+  /* Assigned work is empty until a real work API exists — never invent tasks. */
+  var CONTACT_ASSIGNED = {};
   var DEFAULT_ASSIGNED = [];
 
   var ASSIGNED_STATUS_COLORS = {
@@ -1273,10 +1232,6 @@
       }).join('') +
       '</div>'
     );
-  }
-
-  function foldersFor(id) {
-    return (CONTACT_FOLDERS[id] || DEFAULT_FOLDERS).slice();
   }
 
   function assignedFor(id) {
@@ -2453,7 +2408,7 @@
 
     var state = {
       screen: 'list',
-      selectedId: 'byewind',
+      selectedId: null,
       adding: false,
       editing: false,
       draft: null,
@@ -2700,7 +2655,7 @@
         } else {
           state.screen = 'detail';
         }
-        if (!state.selectedId) state.selectedId = 'byewind';
+        if (!state.selectedId) state.selectedId = null;
 
         syncClientsShell(state.screen, state.viewMode);
 

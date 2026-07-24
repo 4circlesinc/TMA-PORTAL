@@ -19597,7 +19597,7 @@ button.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread):not
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 14%, rgba(255, 255, 255, 0.55));
+  background: rgba(0, 0, 0, 0.045);
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
@@ -19606,7 +19606,7 @@ button.tma-dash__header-popup-item:hover {
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 20%, rgba(255, 255, 255, 0.6));
+  background: rgba(0, 0, 0, 0.07);
 }
 
 button.tma-dash__header-popup-item:focus-visible {
@@ -19615,7 +19615,7 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__header-popup-item--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 14%, rgba(255, 255, 255, 0.55));
+  background: rgba(0, 0, 0, 0.045);
 }
 
 .tma-dash__header-popup-item--active,
@@ -19625,7 +19625,7 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash__header-popup-item--unread:hover,
 .tma-dash__header-popup-item--unread.tma-dash__header-popup-item--active {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 20%, rgba(255, 255, 255, 0.6));
+  background: rgba(0, 0, 0, 0.07);
 }
 
 .tma-dash__header-popup--notifications {
@@ -19819,7 +19819,7 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread,
 .tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 22%, rgba(255, 255, 255, 0.06));
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
@@ -19831,12 +19831,12 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover,
 .tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 28%, rgba(255, 255, 255, 0.08));
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 22%, rgba(255, 255, 255, 0.06));
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--active,
@@ -19850,7 +19850,7 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread.tma-dash__header-popup-item--active,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread:hover,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread.tma-dash__header-popup-item--active {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 28%, rgba(255, 255, 255, 0.08));
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-action,
@@ -28096,7 +28096,7 @@ span.tma-dash__messages-profile-avatar {
   pointer-events: none;
 }
 .tma-dash__notice--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 8%, transparent);
+  background: rgba(0, 0, 0, 0.045);
 }
 .tma-dash__notice--unread .tma-dash__notice-title {
   font-weight: 600;
@@ -28394,10 +28394,10 @@ span.tma-dash__messages-profile-avatar {
   background: var(--color-primary, #03a5e9);
 }
 
-/* Read vs unread must be obvious at a glance — unread is bold + blue-tinted
-   with a primary dot; read is muted without the highlight. */
+/* Read vs unread: unread is bold + light gray with a primary dot;
+   read is muted without the highlight. */
 .tma-dash__header-popup-item--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 14%, rgba(255, 255, 255, 0.55));
+  background: rgba(0, 0, 0, 0.045);
 }
 .tma-dash__header-popup-item--unread .tma-dash__header-popup-title {
   font-weight: 600;
@@ -28416,7 +28416,7 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 22%, rgba(255, 255, 255, 0.06));
+  background: rgba(255, 255, 255, 0.08);
 }
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread .tma-dash__header-popup-title,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread .tma-dash__header-popup-title {
@@ -28428,7 +28428,7 @@ span.tma-dash__messages-profile-avatar {
   box-shadow: 0 0 0 2px rgba(94, 200, 245, 0.2);
 }
 .tma-dash[data-theme="dark"] .tma-dash__notice--unread {
-  background: color-mix(in srgb, var(--color-primary, #03a5e9) 18%, transparent);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* Dark theme: the extra tones read on the dark popup/sidebar too. */

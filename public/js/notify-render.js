@@ -46,11 +46,35 @@
 
   function isRealPhoto(src) {
     // Portal-served sender photos live under /portal/mail/sender-photo/…
+    // Portal user photos under /media/avatars/… or /storage/…
     // Brand favicons are never handed down for email notifications anymore;
     // still reject obvious icon file URLs as a safety net.
     if (!src) return false;
-    if (/\.(ico|gif)(\?|$)/i.test(src)) return false;
-    return /^(https?:|\/(storage|media|portal)\/|data:)/.test(src);
+    var s = String(src).trim();
+    if (!s) return false;
+    if (/\.(ico|gif)(\?|$)/i.test(s)) return false;
+    if (/^(https?:|data:)/i.test(s)) return true;
+    if (/^\/(storage|media|portal)\//i.test(s)) return true;
+    // Relative portal paths without a leading host (e.g. after <base href="/">)
+    if (/^portal\/mail\/sender-photo\//i.test(s)) return true;
+    if (/^media\/avatars\//i.test(s)) return true;
+    return false;
+  }
+
+  function photoUrl(src, fallback) {
+    return isRealPhoto(src) ? src : fallback;
+  }
+
+  function personImg(src, fallback, size, imgClass) {
+    var url = photoUrl(src, fallback);
+    var cls = imgClass ? ' class="' + imgClass + '"' : '';
+    // Escape single quotes in the data-URI fallback so onerror stays valid.
+    var safeFallback = String(fallback || '').replace(/'/g, '%27');
+    return '<img' + cls +
+      ' src="' + esc(url) + '" alt="" width="' + size + '" height="' + size + '" ' +
+      'decoding="async" loading="lazy" ' +
+      'style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;border-radius:0;" ' +
+      "onerror=\"this.onerror=null;this.removeAttribute('srcset');this.src='" + safeFallback + "'\">";
   }
 
   /* §14 level -> existing design-system tone. No new colours are invented;
@@ -97,13 +121,8 @@
     var name = senderName(item);
     var fallback = initialsUri(name);
     var src = item.image || (item.actor && item.actor.avatar) || '';
-    var url = isRealPhoto(src) ? src : fallback;
-    var imgClass = cfg.avatarImgClass ? ' class="' + cfg.avatarImgClass + '"' : '';
     var size = cfg.avatarSize || 40;
-    var img = '<img' + imgClass +
-      ' src="' + esc(url) + '" alt="" width="' + size + '" height="' + size + '" ' +
-      'style="width:100%;height:100%;object-fit:cover;display:block;border-radius:0;" ' +
-      "onerror=\"this.onerror=null;this.src='" + fallback + "'\">";
+    var img = personImg(src, fallback, size, cfg.avatarImgClass || '');
     // Always clip inside a fixed square — bare <img> tags were stretching into
     // tall pills when height:auto won over the size rules. Inline size is the
     // last line of defence when a cached stylesheet lags behind the markup.
@@ -250,6 +269,7 @@
     esc: esc,
     iconUrl: iconUrl,
     initialsUri: initialsUri,
+    isRealPhoto: isRealPhoto,
     levelTone: levelTone,
     timeLabel: timeLabel,
     notificationItem: notificationItem,

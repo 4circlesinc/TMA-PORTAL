@@ -145,8 +145,6 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::put('/admin/security-policies/{section}', [AdminSecurityController::class, 'update'])
         ->name('admin.security-policies.update');
 
-    Route::view('/demo/avatars', 'demo.avatars');
-
     /*
      * File & folder manager API. Everything is authorized server-side in the
      * controllers (FileAccess) — the client's hidden buttons are never trusted.
@@ -569,6 +567,8 @@ if (app()->environment('local')) {
     Route::get('/design/db', DevDatabaseController::class)
         ->middleware(['auth', 'verified', 'account.approved'])
         ->name('dev.database');
+
+    Route::view('/demo/avatars', 'demo.avatars');
 
     Route::get('/design/auth/{page?}', function (?string $page = null) {
         $path = base_path('design/previews/auth/'.($page !== null ? $page.'/' : '').'index.html');

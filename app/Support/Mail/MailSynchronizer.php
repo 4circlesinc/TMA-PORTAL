@@ -557,7 +557,7 @@ class MailSynchronizer
         if ($email === '' || ! str_contains($email, '@')) {
             return;
         }
-        if (MailSenderPhoto::needsBackgroundResolve($email)) {
+        if (MailSenderPhoto::needsFaceResolve($email)) {
             ResolveSenderPhoto::dispatch($this->account, $email);
         }
     }

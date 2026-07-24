@@ -8,30 +8,9 @@
 
   var VIEW_KEY = 'tma.projectsViewMode.v1';
 
-  function due(month, day, year) {
-    return 'Due Date: ' + month + ' ' + day + ', ' + year;
-  }
-
-  var STATS = [
-    { nodeId: '33160:10066', label: 'Current Projects', value: '268', trend: '+11.02%', trendUp: true, bg: '#e6f1fd', icon: 'FolderNotch' },
-    { nodeId: '33160:10067', label: 'Project Finance', value: '$3,290', trend: '-0.03%', trendUp: false, bg: '#edeefc', icon: 'CurrencyCircleDollar' },
-    { nodeId: '33160:10068', label: 'Our Clients', value: '31', trend: '+15.03%', trendUp: true, bg: '#e6f1fd', icon: 'UsersThree' },
-  ];
-
-  var PROJECTS = [
-    { nodeId: '33160:10069', title: 'Advisory Portal', dueDate: due('Nov', 10, 2026), status: 'In Progress', statusColor: 'purple', completed: 36, total: 49, percent: 75, logoIcon: 'Figma', avatar: 'AvatarByewind' },
-    { nodeId: '33160:10070', title: 'Coffee detail page - Main Page', dueDate: due('Nov', 10, 2026), status: 'Complete', statusColor: 'green', completed: 56, total: 56, percent: 100, logoIcon: 'Copilot', avatar: 'AvatarFemale04', fullStrip: true },
-    { nodeId: '33160:10071', title: 'Drinking bottle graphics', dueDate: due('Nov', 10, 2026), status: 'Rejected', statusColor: 'gray', completed: 16, total: 65, percent: 45, logoIcon: 'Behance', avatar: 'Avatar3d04' },
-    { nodeId: '33160:10072', title: 'Company logo design', dueDate: due('Feb', 21, 2026), status: 'Complete', statusColor: 'green', completed: 20, total: 20, percent: 100, logoIcon: 'Dropbox', avatar: 'AvatarAbstract04', fullStrip: true },
-    { nodeId: '33160:10073', title: 'Landing page design', dueDate: due('Jun', 20, 2026), status: 'Pending', statusColor: 'blue', completed: 5, total: 23, percent: 36, logoIcon: 'ChatGPT', avatarGroup: ['AvatarByewind', 'AvatarFemale05', 3] },
-    { nodeId: '33160:10074', title: 'Product page redesign', dueDate: due('Jun', 20, 2026), status: 'In Progress', statusColor: 'purple', completed: 12, total: 49, percent: 38, logoIcon: 'Dribbble', avatar: 'AvatarMale02' },
-    { nodeId: '33160:10075', title: 'Coffee detail page', dueDate: due('Jun', 24, 2026), status: 'Rejected', statusColor: 'gray', completed: 8, total: 12, percent: 68, logoIcon: 'Messenger', avatar: 'AvatarMale01' },
-    { nodeId: '33160:10076', title: 'Aviasales App', dueDate: due('Oct', 25, 2026), status: 'Approved', statusColor: 'orange', completed: 17, total: 20, percent: 70, logoIcon: 'Loop', avatar: 'AvatarFemale06', stripColor: 'yellow', fullStrip: true },
-    { nodeId: '33160:10077', title: 'Finance Dispatch', dueDate: due('Nov', 10, 2026), status: 'Pending', statusColor: 'blue', completed: 2, total: 19, percent: 17, logoIcon: 'Slack', avatar: 'AvatarAbstract01' },
-    { nodeId: '33160:10078', title: 'Fitnes App', dueDate: due('Nov', 10, 2026), status: 'Pending', statusColor: 'blue', completed: 20, total: 48, percent: 45, logoIcon: 'Figma', avatar: 'AvatarMale04' },
-    { nodeId: '33160:10079', title: 'Atica Banking', dueDate: due('Jun', 20, 2026), status: 'In Progress', statusColor: 'purple', completed: 35, total: 49, percent: 66, logoIcon: 'Github', avatar: 'AvatarAbstract02' },
-    { nodeId: '33160:10080', title: 'Coffee detail page', dueDate: due('Jun', 24, 2026), status: 'Rejected', statusColor: 'gray', completed: 2, total: 12, percent: 10, logoIcon: 'PriorityMedium', avatar: 'Avatar3d03' },
-  ];
+  /* Live data only — design-system sample cards are not painted as real projects. */
+  var STATS = [];
+  var PROJECTS = [];
 
   var CHIP_CLASS = {
     purple: 'purple',
@@ -79,13 +58,13 @@
 
   function renderStats() {
     var C = cardApi();
-    if (!C) return '';
+    if (!C || !STATS.length) return '';
     return STATS.map(function (stat) { return C.renderStatCard(stat); }).join('');
   }
 
   function renderCardGrid() {
     var C = cardApi();
-    if (!C) return '';
+    if (!C || !PROJECTS.length) return '';
     return PROJECTS.map(function (project) { return C.renderProgressCard(project); }).join('');
   }
 
@@ -145,6 +124,25 @@
     return '<div class="tma-dash__projects-list">' + PROJECTS.map(renderListRow).join('') + '</div>';
   }
 
+  function renderEmpty() {
+    if (window.TMANoData && window.TMANoData.mount) {
+      window.TMANoData.mount(state.container, {
+        title: 'No projects yet',
+        subtitle: 'Coming soon',
+        itemLabel: 'Project',
+        showButton: false,
+        illustrationName: 'Illustration07',
+      });
+      return true;
+    }
+    state.container.innerHTML =
+      '<div class="tma-dash__projects-empty">' +
+        '<p class="tma-dash__projects-empty-title">No projects yet</p>' +
+        '<p class="tma-dash__projects-empty-text">Coming soon</p>' +
+      '</div>';
+    return true;
+  }
+
   function renderContent() {
     if (state.viewMode === 'list') {
       return '' +
@@ -156,6 +154,11 @@
 
   function render() {
     if (!state.container) return;
+    if (!PROJECTS.length && !STATS.length) {
+      renderEmpty();
+      if (window.TMATableViewToggle) window.TMATableViewToggle.sync('projects');
+      return;
+    }
     state.container.innerHTML = renderContent();
     if (window.TMATableViewToggle) window.TMATableViewToggle.sync('projects');
   }

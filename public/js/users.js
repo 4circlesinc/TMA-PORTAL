@@ -35,8 +35,6 @@
   };
 
   /* ── real user directory (database-backed, admin only) ── */
-  var ACCOUNT_TYPES = ['Client', 'Employee', 'Administrator'];
-  var AVATARS = ['AvatarMale01', 'AvatarFemale01', 'AvatarMale03', 'AvatarFemale04', 'AvatarFemale06'];
   /* the design system's own avatar set - filled from the server */
   var SYSTEM_AVATARS = [];
 
@@ -166,27 +164,6 @@
     { id: 'user', label: 'User', icon: 'User' },
     { id: 'email', label: 'Email', icon: 'EnvelopeSimple' },
     { id: 'address', label: 'Account type', icon: 'MapPin' },
-  ];
-
-  var USER_OPTIONS = [
-    { name: 'Natali Craig', avatar: 'AvatarFemale06' },
-    { name: 'Kate Morrison', avatar: 'AvatarFemale04' },
-    { name: 'Drew Cano', avatar: 'AvatarMale01' },
-    { name: 'Orlando Diggs', avatar: 'AvatarMale03' },
-    { name: 'Andi Lane', avatar: 'AvatarFemale01' },
-  ];
-
-  var DEFAULT_ROWS = [
-    { serial: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', email: 'smith@kpmg.com', address: 'Meadow Lane Oakland', date: 'Just now' },
-    { serial: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', email: 'melody@altbox.com', address: 'Larry San Francisco', date: '1 minute ago' },
-    { serial: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', email: 'max@kt.com', address: 'Bagwell Avenue Ocala', date: '1 hour ago' },
-    { serial: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', email: 'sean@dellito.com', address: 'Washburn Baton Rouge', date: 'Yesterday' },
-    { serial: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', email: 'brian@exchange.com', address: 'Nest Lane Olivette', date: 'Feb 2, 2026' },
-    { serial: '#CM9801', user: 'Natali Craig', avatar: 'AvatarFemale06', email: 'smith@kpmg.com', address: 'Meadow Lane Oakland', date: 'Just now' },
-    { serial: '#CM9802', user: 'Kate Morrison', avatar: 'AvatarFemale04', email: 'melody@altbox.com', address: 'Larry San Francisco', date: '1 minute ago' },
-    { serial: '#CM9803', user: 'Drew Cano', avatar: 'AvatarMale01', email: 'max@kt.com', address: 'Bagwell Avenue Ocala', date: '1 hour ago' },
-    { serial: '#CM9804', user: 'Orlando Diggs', avatar: 'AvatarMale03', email: 'sean@dellito.com', address: 'Washburn Baton Rouge', date: 'Yesterday' },
-    { serial: '#CM9805', user: 'Andi Lane', avatar: 'AvatarFemale01', email: 'brian@exchange.com', address: 'Nest Lane Olivette', date: 'Feb 2, 2026' },
   ];
 
   var mounts = {};
@@ -622,12 +599,8 @@ if (state.filters.user) {
 
 
   function renderUsersPopover() {
-    var items = USER_OPTIONS.map(function (u) {
-      return '<button type="button" class="tma-filter-popover__item" data-filter-user="' + escapeHtml(u.name) + '">' +
-        '<span class="tma-filter-popover__user-row"><img src="images/avatars/' + escapeHtml(u.avatar) + '.png" alt="" class="tma-filter-popover__user-avatar" width="24" height="24">' +
-        '<span class="tma-filter-popover__item-label">' + escapeHtml(u.name) + '</span></span></button>';
-    }).join('');
-    return '<div class="tma-filter-popover tma-filter-popover--fixed tma-dash__users-popover" data-users-popover="users" aria-hidden="true">' + items + '</div>';
+    return '<div class="tma-filter-popover tma-filter-popover--fixed tma-dash__users-popover" data-users-popover="users" aria-hidden="true">' +
+      '<div class="tma-filter-popover__item" style="opacity:0.5;pointer-events:none">No users</div></div>';
   }
 
   function renderSortPopover() {
@@ -660,11 +633,9 @@ if (state.filters.user) {
       return;
     }
 
-    var startEmpty = typeof URLSearchParams !== 'undefined' &&
-      new URLSearchParams(window.location.search).get('empty') === '1';
-
     var state = {
-      rows: startEmpty ? [] : DEFAULT_ROWS.map(function (r) { return Object.assign({}, r); }),
+      rows: [],
+      loadError: false,
       search: '',
       searchFocused: false,
       searchLoading: false,
@@ -672,7 +643,7 @@ if (state.filters.user) {
       sort: { column: null, direction: null },
       page: 1,
       pageSize: isOverview ? 10 : 5,
-      selected: isOverview ? { '3': true } : {},
+      selected: {},
       nextId: 9806,
       activeField: null,
       viewMode: 'list',
@@ -686,18 +657,32 @@ if (state.filters.user) {
 
     function loadRealUsers() {
       usersApi('GET', '/admin/users').then(function (res) {
-        if (!res.ok) return; // not an admin (or design preview): demo rows stay
+        if (!res.ok) {
+          // Keep empty — never fall back to design-system demo rows in production.
+          state.rows = [];
+          state.loadError = true;
+          state.live = false;
+          state.selected = {};
+          render();
+          return;
+        }
         return res.json().then(function (j) {
           if (j.accountTypes) ACCOUNT_TYPES = j.accountTypes;
-        if (j.avatarChoices) SYSTEM_AVATARS = j.avatarChoices;
+          if (j.avatarChoices) SYSTEM_AVATARS = j.avatarChoices;
           state.rows = (j.users || []).map(realRow);
+          state.loadError = false;
           state.live = true;
           state.selected = {};
           state.page = 1;
           render();
         });
       }).catch(function (err) {
+        state.rows = [];
+        state.loadError = true;
+        state.live = false;
+        state.selected = {};
         if (window.console && console.warn) console.warn('Users: failed to load real accounts —', err);
+        render();
       });
     }
     state.reloadReal = loadRealUsers;

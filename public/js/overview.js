@@ -22,31 +22,26 @@
      nobody entered are worse than absent sections. */
   var TABS = ['Overview', 'Users', 'Files', 'Activity'];
 
-  var WEEK = [
-    { label: 'SU', day: '22' },
-    { label: 'Mo', day: '23', active: true },
-    { label: 'Tu', day: '24' },
-    { label: 'We', day: '25' },
-    { label: 'Th', day: '26' },
-    { label: 'Fr', day: '27' },
-    { label: 'Sa', day: '28' },
-  ];
+  /* Real calendar week chrome — never hardcode sample day numbers. */
+  function currentWeekDays() {
+    var now = new Date();
+    var day = now.getDay(); // 0 = Sunday
+    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+    var labels = ['SU', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+    var days = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      days.push({
+        label: labels[i],
+        day: String(d.getDate()),
+        active: d.toDateString() === now.toDateString(),
+      });
+    }
+    return days;
+  }
 
-  var ROAD = [
-    { avatar: 'AvatarFemale05', text: 'You have a bug that needs to be fixed.', time: 'Just now' },
-    { avatar: 'AvatarMale05', text: 'Released a new version', time: '59 minutes ago' },
-    { avatar: 'AvatarFemale02', text: 'Submitted a bug', time: '12 hours ago' },
-    { avatar: 'AvatarAbstract01', text: 'Modified A data in Page X', time: 'Today, 11:59 AM' },
-    { avatar: 'AvatarMale05', text: 'Deleted a page in Project X', time: 'Feb 2, 2026' },
-  ];
-
-  var FILES = [
-    { icon: 'FilePdf', tone: 'purple', name: 'Project tech requirements.pdf', meta: '5.6 MB / Just now / Karina Clark', download: true },
-    { icon: 'FileImage', tone: 'blue', name: 'Dashboard-design.jpg', meta: '2.3 MB / 59 minutes ago / Marcus Blake', download: false },
-    { icon: 'FilePdf', tone: 'purple', name: 'Completed Project Stylings.pdf', meta: '4.6 MB / 12 hours ago / Terry Barry', download: false },
-    { icon: 'FileXls', tone: 'blue', name: 'Create Project Wireframes.xls', meta: '1.2 MB / Today, 11:59 AM / Roth Bloom', download: false },
-    { icon: 'FilePdf', tone: 'purple', name: 'Project tech requirements.pdf', meta: '2.8 MB / Yesterday / Natali Craig', download: false },
-  ];
+  var ROAD = [];
+  var FILES = [];
 
   var TAB_PANELS = {
     Overview: '.tma-dash__overview-grid',
@@ -82,35 +77,16 @@
   function renderHero() {
     return '<section class="tma-dash__overview-block tma-dash__overview-block--hero" data-node-id="32546:46983">' +
       '<div class="tma-dash__overview-hero-main">' +
-      '<div class="tma-dash__overview-metrics">' +
-      '<div class="tma-dash__overview-metric tma-dash__overview-metric--status">' +
-      '<span class="tma-dash__overview-metric-label">Status</span>' +
-      '<div class="tma-dash__overview-status" aria-label="In Progress 51 percent">' +
-      '<div class="tma-dash__overview-status-fill" style="width:51%"></div>' +
-      '<span class="tma-dash__overview-status-text">' +
-      '<span class="tma-dash__overview-status-label">In Progress</span>' +
-      '<span class="tma-dash__overview-status-pct">51%</span></span>' +
-      '</div></div>' +
-      '<div class="tma-dash__overview-metric-divider" aria-hidden="true"></div>' +
-      '<div class="tma-dash__overview-metric"><span class="tma-dash__overview-metric-label">Total Tasks</span>' +
-      '<p class="tma-dash__overview-metric-value"><strong>15</strong><span class="tma-dash__overview-metric-sep"> / </span><strong>48</strong></p></div>' +
-      '<div class="tma-dash__overview-metric-divider" aria-hidden="true"></div>' +
-      '<div class="tma-dash__overview-metric"><span class="tma-dash__overview-metric-label">Due Date</span>' +
-      '<p class="tma-dash__overview-metric-value"><strong>29 Jan, 2026</strong></p></div>' +
-      '<div class="tma-dash__overview-metric-divider" aria-hidden="true"></div>' +
-      '<div class="tma-dash__overview-metric"><span class="tma-dash__overview-metric-label">Budget Spent</span>' +
-      '<p class="tma-dash__overview-metric-value"><strong>$15,000</strong></p></div>' +
-      '</div></div>' +
-      '<div class="tma-dash__overview-hero-side">' +
-      '<div class="tma-dash__avatars tma-dash__avatars--project">' +
-      '<img class="tma-dash__avatar tma-dash__avatar--28" src="' + AVATAR + 'AvatarByewind.png" alt="">' +
-      '<img class="tma-dash__avatar tma-dash__avatar--28" src="' + AVATAR + 'AvatarFemale05.png" alt="">' +
-      '<span class="tma-dash__avatar tma-dash__avatar--more tma-dash__avatar--28">+3</span>' +
-      '</div></div></section>';
+      '<div class="tma-dash__overview-metrics tma-dash__overview-metrics--empty">' +
+      '<div class="tma-dash__overview-metric">' +
+      '<span class="tma-dash__overview-metric-label">Project metrics</span>' +
+      '<p class="tma-dash__overview-metric-value"><strong>No data yet</strong></p>' +
+      '<p class="tma-dash__overview-metric-empty-hint">Metrics will appear when project tracking is connected.</p>' +
+      '</div></div></div></section>';
   }
 
   function renderWeek() {
-    return WEEK.map(function (d) {
+    return currentWeekDays().map(function (d) {
       return '<button type="button" class="tma-dash__overview-day' + (d.active ? ' tma-dash__overview-day--active' : '') + '">' +
         '<span class="tma-dash__overview-day-label">' + esc(d.label) + '</span>' +
         '<span class="tma-dash__overview-day-num">' + esc(d.day) + '</span></button>';
@@ -118,13 +94,15 @@
   }
 
   function renderRoad() {
-    var items = ROAD.map(function (item) {
-      return '<div class="tma-dash__overview-road-item">' +
-        '<img class="tma-dash__overview-road-avatar" src="' + AVATAR + item.avatar + '.png" alt="">' +
-        '<div class="tma-dash__overview-road-body">' +
-        '<span class="tma-dash__overview-road-text">' + esc(item.text) + '</span>' +
-        '<span class="tma-dash__overview-road-time">' + esc(item.time) + '</span></div></div>';
-    }).join('');
+    var items = ROAD.length
+      ? ROAD.map(function (item) {
+          return '<div class="tma-dash__overview-road-item">' +
+            '<img class="tma-dash__overview-road-avatar" src="' + AVATAR + item.avatar + '.png" alt="">' +
+            '<div class="tma-dash__overview-road-body">' +
+            '<span class="tma-dash__overview-road-text">' + esc(item.text) + '</span>' +
+            '<span class="tma-dash__overview-road-time">' + esc(item.time) + '</span></div></div>';
+        }).join('')
+      : '<p class="tma-dash__overview-empty">No upcoming items yet.</p>';
     return '<section class="tma-dash__overview-block tma-dash__overview-block--road" data-node-id="32546:46995">' +
       '<h3 class="tma-dash__overview-block-title">What\'s on the road?</h3>' +
       '<div class="tma-dash__overview-week">' + renderWeek() + '</div>' +
@@ -134,18 +112,20 @@
   }
 
   function renderFiles() {
-    var rows = FILES.map(function (f) {
-      var dl = f.download
-        ? '<button type="button" class="tma-dash__overview-btn tma-dash__overview-btn--icon" aria-label="Download"><img src="' + ICON + 'DownloadSimple.svg" alt=""></button>'
-        : '';
-      return '<div class="tma-dash__overview-file-row">' +
-        '<div class="tma-dash__overview-file-main">' +
-        '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + esc(f.tone) + '">' +
-        '<img src="' + fileIconSrc(f.icon, f.name) + '" alt=""></span>' +
-        '<div class="tma-dash__overview-file-copy">' +
-        '<p class="tma-dash__overview-file-name">' + esc(f.name) + '</p>' +
-        '<p class="tma-dash__overview-file-meta">' + esc(f.meta) + '</p></div></div>' + dl + '</div>';
-    }).join('');
+    var rows = FILES.length
+      ? FILES.map(function (f) {
+          var dl = f.download
+            ? '<button type="button" class="tma-dash__overview-btn tma-dash__overview-btn--icon" aria-label="Download"><img src="' + ICON + 'DownloadSimple.svg" alt=""></button>'
+            : '';
+          return '<div class="tma-dash__overview-file-row">' +
+            '<div class="tma-dash__overview-file-main">' +
+            '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + esc(f.tone) + '">' +
+            '<img src="' + fileIconSrc(f.icon, f.name) + '" alt=""></span>' +
+            '<div class="tma-dash__overview-file-copy">' +
+            '<p class="tma-dash__overview-file-name">' + esc(f.name) + '</p>' +
+            '<p class="tma-dash__overview-file-meta">' + esc(f.meta) + '</p></div></div>' + dl + '</div>';
+        }).join('')
+      : '<p class="tma-dash__overview-empty">No files yet.</p>';
     return '<section class="tma-dash__overview-block tma-dash__overview-block--files" data-node-id="32546:47005">' +
       '<h3 class="tma-dash__overview-block-title">Latest Files</h3>' +
       '<div class="tma-dash__overview-files-body">' +

@@ -34,14 +34,18 @@
     'ac-logs': 'Logs',
   };
 
-  var PROFILE_DETAILS = [
-    { label: 'Company', value: 'Advisory Portal' },
-    { label: 'Contact Phone', value: '+852 19850622', icon: 'Info', pill: { label: 'Verified', color: 'green' } },
-    { label: 'Company Site', value: 'portal.tma.com' },
-    { label: 'Country', value: 'United States', icon: 'Info' },
-    { label: 'Communication', value: 'Email, Phone' },
-    { label: 'Allow Changes', value: 'Yes' },
-  ];
+  function currentUser() {
+    return (window.TMACurrentUser && window.TMACurrentUser.get()) || null;
+  }
+
+  function profileDetailsFor(me) {
+    return [
+      { label: 'Company', value: (me && me.company) || '—' },
+      { label: 'Contact Phone', value: (me && me.phone) || '—' },
+      { label: 'Email', value: (me && me.email) || '—' },
+      { label: 'Job title', value: (me && me.jobTitle) || '—' },
+    ];
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -71,31 +75,30 @@
       '</div></div>';
   }
 
-  function renderProfileHeader() {
+  function renderProfileHeader(me) {
+    var name = (me && me.name) || 'Loading…';
+    var email = (me && me.email) || '';
+    var job = (me && me.jobTitle) || '';
+    var avatarSrc = (window.TMACurrentUser && window.TMACurrentUser.avatarSrc)
+      ? window.TMACurrentUser.avatarSrc(me && me.avatar, name === 'Loading…' ? '' : name)
+      : '';
     return '<section class="tma-dash__account-block tma-dash__account-block--profile" data-node-id="32546:46791">' +
       '<div class="tma-dash__account-profile-main">' +
       '<div class="tma-dash__account-profile-head">' +
-      '<h2 class="tma-dash__account-name">ByeWind</h2>' +
+      '<h2 class="tma-dash__account-name" data-account-name>' + esc(name) + '</h2>' +
       '<div class="tma-dash__account-meta">' +
-      '<span class="tma-dash__account-meta-item"><img src="' + ICON + 'UserCircle.svg" alt="" width="16" height="16">Developer</span>' +
-      '<span class="tma-dash__account-meta-item"><img src="' + ICON + 'MapPin.svg" alt="" width="16" height="16">SF, Bay Area</span>' +
-      '<span class="tma-dash__account-meta-item"><img src="' + ICON + 'EnvelopeSimple.svg" alt="" width="16" height="16">byewind@twitter.com</span>' +
+      (job
+        ? '<span class="tma-dash__account-meta-item" data-account-job><img src="' + ICON + 'UserCircle.svg" alt="" width="16" height="16">' + esc(job) + '</span>'
+        : '') +
+      (email
+        ? '<span class="tma-dash__account-meta-item" data-account-email><img src="' + ICON + 'EnvelopeSimple.svg" alt="" width="16" height="16">' + esc(email) + '</span>'
+        : '') +
       '</div></div>' +
-      '<div class="tma-dash__account-stats">' +
-      '<div class="tma-dash__account-stat tma-dash__account-stat--completion">' +
-      '<span class="tma-dash__account-stat-label">Profile Completion</span>' +
-      '<div class="tma-dash__account-strip" aria-label="Profile completion 51 percent">' +
-      '<div class="tma-dash__account-strip-fill" style="width:51%"></div>' +
-      '<span class="tma-dash__account-strip-text"><strong>51</strong>%</span>' +
+      '<div class="tma-dash__account-stats tma-dash__account-stats--empty">' +
+      '<div class="tma-dash__account-stat"><span class="tma-dash__account-stat-label">Account stats</span>' +
+      '<p class="tma-dash__account-stat-value">Coming soon</p></div>' +
       '</div></div>' +
-      '<div class="tma-dash__account-stat-divider" aria-hidden="true"></div>' +
-      '<div class="tma-dash__account-stat"><span class="tma-dash__account-stat-label">Earnings</span><p class="tma-dash__account-stat-value">$4,500</p></div>' +
-      '<div class="tma-dash__account-stat-divider" aria-hidden="true"></div>' +
-      '<div class="tma-dash__account-stat"><span class="tma-dash__account-stat-label">Projects</span><p class="tma-dash__account-stat-value">75</p></div>' +
-      '<div class="tma-dash__account-stat-divider" aria-hidden="true"></div>' +
-      '<div class="tma-dash__account-stat"><span class="tma-dash__account-stat-label">Success Rate</span><p class="tma-dash__account-stat-value">60%</p></div>' +
-      '</div></div>' +
-      '<img class="tma-dash__account-avatar" src="' + AVATAR + 'AvatarByewind.png" alt="ByeWind" width="40" height="40">' +
+      '<img class="tma-dash__account-avatar" data-account-avatar src="' + esc(avatarSrc) + '" alt="' + esc(name) + '" width="40" height="40">' +
       '</section>';
   }
 
@@ -115,13 +118,13 @@
       '<div class="tma-dash__account-detail-value">' + valueHtml + '</div></div>';
   }
 
-  function renderProfileDetails() {
-    var rows = PROFILE_DETAILS.map(renderDetailRow).join('');
+  function renderProfileDetails(me) {
+    var rows = profileDetailsFor(me).map(renderDetailRow).join('');
     return '<section class="tma-dash__account-block tma-dash__account-block--details" data-node-id="32546:46802">' +
       '<div class="tma-dash__account-block-head">' +
       '<h3 class="tma-dash__account-block-title">Profile Details</h3>' +
       '<button type="button" class="tma-dash__account-block-link">Edit Profile</button></div>' +
-      '<div class="tma-dash__account-details">' + rows + '</div></section>';
+      '<div class="tma-dash__account-details" data-account-details>' + rows + '</div></section>';
   }
 
   function renderPromo() {
@@ -214,47 +217,31 @@
       '</div>';
   }
 
-  function renderSettingsProfileBlock() {
+  function renderSettingsProfileBlock(me) {
+    var first = (me && (me.firstName || (me.name || '').split(/\s+/)[0])) || '';
+    var last = (me && (me.lastName || (me.name || '').split(/\s+/).slice(1).join(' '))) || '';
     return '<section class="tma-dash__account-block tma-dash__account-block--settings" data-node-id="32546:46603">' +
       renderSettingsSectionHead('Profile Details') +
       '<div class="tma-dash__account-settings-grid">' +
-        settingsField('value', { nodeId: '32546:46605', title: 'First Name', value: 'ByeWind' }) +
-        settingsField('placeholder', { nodeId: '32546:46606', placeholder: 'Last Name' }) +
-        settingsField('value', { nodeId: '32546:46607', title: 'Contact Phone', value: '+852 19850622' }) +
-        settingsField('tags', { nodeId: '32546:46608', title: 'Skill', tags: ['UX/UI', 'Product design'] }) +
-        settingsField('value', { nodeId: '32546:46609', title: 'Company', value: 'Advisory Portal' }) +
-        settingsField('value', { nodeId: '32546:46610', title: 'Company Site', value: 'portal.tma.com' }) +
-        settingsField('select', {
-          nodeId: '32546:46611',
-          title: 'Country',
-          value: 'United States',
-          options: [
-            { value: 'United States', label: 'United States', selected: true },
-            { value: 'United Kingdom', label: 'United Kingdom' },
-            { value: 'Canada', label: 'Canada' },
-          ],
-        }) +
-        settingsField('select', {
-          nodeId: '32546:46612',
-          title: 'Language',
-          value: 'English',
-          options: [
-            { value: 'English', label: 'English', selected: true },
-            { value: 'Spanish', label: 'Spanish' },
-            { value: 'French', label: 'French' },
-          ],
-        }) +
+        settingsField('value', { nodeId: '32546:46605', title: 'First Name', value: first || 'Loading…' }) +
+        (last
+          ? settingsField('value', { nodeId: '32546:46606', title: 'Last Name', value: last })
+          : settingsField('placeholder', { nodeId: '32546:46606', placeholder: 'Last Name' })) +
+        settingsField('value', { nodeId: '32546:46607', title: 'Contact Phone', value: (me && me.phone) || '' }) +
+        settingsField('value', { nodeId: '32546:46609', title: 'Company', value: (me && me.company) || '' }) +
+        settingsField('value', { nodeId: '32546:46610', title: 'Email', value: (me && me.email) || '' }) +
+        settingsField('value', { nodeId: '32546:46611', title: 'Job title', value: (me && me.jobTitle) || '' }) +
         '<div class="tma-dash__account-settings-grid-span">' +
-          settingsField('switch', { nodeId: '32546:46613', title: 'Status', text: 'Active', on: true }) +
+          '<p class="tma-dash__account-stub-text">Additional profile fields are coming soon.</p>' +
         '</div>' +
       '</div></section>';
   }
 
-  function renderSettingsSignInBlock() {
+  function renderSettingsSignInBlock(me) {
     return '<section class="tma-dash__account-block tma-dash__account-block--settings" data-node-id="32546:46614">' +
       renderSettingsSectionHead('Sign-in Method') +
       '<div class="tma-dash__account-settings-grid">' +
-        settingsField('value', { nodeId: '32546:46616', title: 'Email Address', value: 'byewind@twitter.com' }) +
+        settingsField('value', { nodeId: '32546:46616', title: 'Email Address', value: (me && me.email) || 'Loading…' }) +
         settingsField('value', { nodeId: '32546:46617', title: 'Password', value: '*******************', type: 'password' }) +
         '<div class="tma-dash__account-settings-grid-span">' +
           '<div class="tma-dash__account-settings-callout">' +
@@ -775,39 +762,21 @@
   }
 
   function renderBillingPaymentMethodsBlock() {
-    var cards = renderCreditCardMarkup({ cardType: 'visa', edit: true }) +
-      renderCreditCardMarkup({
-        cardType: 'mastercard',
-        edit: false,
-        showStatus: false,
-        groups: ['1235', '6321', '1343', '7542'],
-      }) +
-      renderCreditCardMarkup({ cardType: 'paypal', name: 'PayPal', email: 'byewind@twitter.com' }) +
-      renderAddCardMarkup('Add card');
-
     return '<section class="tma-dash__account-block tma-dash__account-block--billing-cards" data-node-id="32546:96113">' +
       '<h3 class="tma-dash__account-block-title">Payment Methods</h3>' +
-      '<div class="tma-dash__account-billing-cards tma-dash__account-billing-cards--payment">' + cards + '</div></section>';
+      '<p class="tma-dash__account-stub-text">No payment methods yet. Coming soon.</p>' +
+      '<div class="tma-dash__account-billing-cards tma-dash__account-billing-cards--payment">' +
+      renderAddCardMarkup('Add card') +
+      '</div></section>';
   }
 
   function renderBillingAddressBlock() {
-    var cards = renderAddressCardMarkup({
-      label: "ByeWind's house",
-      active: true,
-      edit: true,
-      lines: ['One Apple Park Way', 'Cupertino, CA 95014', 'US'],
-    }) +
-      renderAddressCardMarkup({
-        label: 'Company',
-        static: true,
-        lines: ['Ap #285-7193 Ullamcorper Avenue', 'Amesbury HI 93373', 'US'],
-      }) +
-      renderAddCardMarkup('Add Address');
-
     return '<section class="tma-dash__account-block tma-dash__account-block--billing-cards" data-node-id="32546:96113">' +
       '<h3 class="tma-dash__account-block-title">Billing Address</h3>' +
-      '<div class="tma-dash__account-billing-cards tma-dash__account-billing-cards--address">' + cards + '</div>' +
-      '<p class="tma-dash__account-billing-muted">Tax Location : United States - 10% VAT</p></section>';
+      '<p class="tma-dash__account-stub-text">No billing addresses yet. Coming soon.</p>' +
+      '<div class="tma-dash__account-billing-cards tma-dash__account-billing-cards--address">' +
+      renderAddCardMarkup('Add Address') +
+      '</div></section>';
   }
 
   function renderBillingHistoryBlock() {
@@ -952,76 +921,18 @@
     bindAccountFilterTabs(panel);
   }
 
-  var REFERRED_USERS = [
-    { orderId: '678935899', manager: 'ByeWind', avatar: 'AvatarByewind', date: 'Just now', bonus: '26%', profit: '$1,200.00' },
-    { orderId: '578433345', manager: 'Natali Craig', avatar: 'AvatarFemale06', date: '1 minute ago', bonus: '35%', profit: '$2,400.00' },
-    { orderId: '678935899', manager: 'Drew Cano', avatar: 'AvatarMale01', date: '1 hour ago', bonus: '18%', profit: '$940.00' },
-    { orderId: '098669322', manager: 'Orlando Diggs', avatar: 'AvatarMale03', date: 'Yesterday', bonus: '43%', profit: '$200.00' },
-    { orderId: '245899092', manager: 'Andi Lane', avatar: 'AvatarFemale01', date: 'Feb 2, 2026', bonus: '21%', profit: '$380.00' },
-  ];
+  var REFERRED_USERS = [];
 
   function renderReferralsProgramBlock() {
-    var stats = [
-      { label: 'Net Earnings', value: '$6,840' },
-      { label: 'Balance', value: '$8,530' },
-      { label: 'Avg Deal Size', value: '$2,600' },
-      { label: 'Referral Signups', value: '783' },
-    ].map(function (stat, index) {
-      var sep = index ? '<span class="tma-dash__account-referrals-stat-sep" aria-hidden="true"></span>' : '';
-      return sep + '<div class="tma-dash__account-referrals-stat">' +
-        '<span class="tma-dash__account-referrals-stat-label">' + esc(stat.label) + '</span>' +
-        '<strong class="tma-dash__account-referrals-stat-value">' + esc(stat.value) + '</strong></div>';
-    }).join('');
-
     return '<section class="tma-dash__account-block tma-dash__account-block--referrals-program" data-node-id="32546:96110">' +
       '<h3 class="tma-dash__account-block-title tma-dash__account-block-title--lg">Referral Program</h3>' +
-      '<div class="tma-dash__account-referrals-stats">' + stats + '</div>' +
-      '<p class="tma-dash__account-referrals-subtitle">Your Referral Link</p>' +
-      '<div class="tma-dash__account-referrals-link">' +
-        '<span class="tma-dash__account-referrals-link-text">https://portal.tma.com/referral/TMAAdvisoryPortal</span>' +
-        '<button type="button" class="tma-dash__account-referrals-copy" aria-label="Copy referral link"><img src="' + TMA + 'Clipboard-16.svg" alt="" width="16" height="16"></button>' +
-      '</div>' +
-      '<p class="tma-dash__account-billing-muted tma-dash__account-billing-muted--border">Plan your blog post by choosing a topic, creating an outline conduct research, and checking facts.</p>' +
-      '<div class="tma-dash__account-referrals-action-row">' +
-        '<div class="tma-dash__account-referrals-action-copy">' +
-          '<p class="tma-dash__account-billing-copy-title">How to use Referral Program</p>' +
-          '<p class="tma-dash__account-billing-muted">Use images to enhance your post, improve its flow, add humor and explain complex topics.</p>' +
-        '</div>' +
-        '<button type="button" class="tma-dash__overview-btn"><span>Get Started</span></button>' +
-      '</div>' +
-      '<div class="tma-dash__account-referrals-withdraw">' +
-        '<div class="tma-dash__account-referrals-withdraw-main">' +
-          '<img src="' + ICON + 'CurrencyCircleDollar.svg" alt="" width="20" height="20">' +
-          '<div class="tma-dash__account-referrals-withdraw-copy">' +
-            '<p class="tma-dash__account-billing-copy-title">Withdraw Your Money to a Bank Account</p>' +
-            '<p class="tma-dash__account-billing-muted">Withdraw money securily to your bank account. Commision is $25 per transaction under $50,000.</p>' +
-          '</div></div>' +
-        '<button type="button" class="tma-dash__overview-btn"><span>Withdraw Money</span></button>' +
-      '</div></section>';
+      '<p class="tma-dash__account-stub-text">Coming soon.</p></section>';
   }
 
   function renderReferralsUsersBlock() {
-    return renderAccountSheetTable({
-      title: 'Referred Users',
-      nodeId: '32546:96110',
-      blockClass: 'tma-dash__account-block--referrals-users',
-      tabGroup: 'referrals-year',
-      tabAriaLabel: 'Referrals year',
-      tabs: [
-        { id: 'this-year', label: 'This Year', active: true },
-        { id: '2023', label: '2023', active: false },
-        { id: '2022', label: '2022', active: false },
-      ],
-      columns: [
-        { key: 'orderId', label: 'Order ID', type: 'text' },
-        { key: 'manager', label: 'Manager', type: 'manager' },
-        { key: 'date', label: 'Date', type: 'date' },
-        { key: 'bonus', label: 'Bonus', type: 'text' },
-        { key: 'profit', label: 'Profit', type: 'text' },
-      ],
-      rows: REFERRED_USERS,
-      gridCols: '1fr minmax(160px, 224px) minmax(88px, 120px) 72px 96px',
-    });
+    return '<section class="tma-dash__account-block tma-dash__account-block--referrals-users" data-node-id="32546:96110">' +
+      '<h3 class="tma-dash__account-block-title">Referred Users</h3>' +
+      '<p class="tma-dash__account-stub-text">No referred users yet.</p></section>';
   }
 
   function renderReferralsPanel(activeTab) {
@@ -1184,11 +1095,11 @@
     }
   }
 
-  function renderSettingsPanel(activeTab) {
+  function renderSettingsPanel(activeTab, me) {
     var hidden = activeTab !== 'Settings' ? ' hidden' : '';
     return '<div class="tma-dash__account-panel tma-dash__account-panel--settings"' + hidden + ' data-account-panel="Settings" data-node-id="32546:96111">' +
-      renderSettingsProfileBlock() +
-      renderSettingsSignInBlock() +
+      renderSettingsProfileBlock(me) +
+      renderSettingsSignInBlock(me) +
       renderSettingsConnectedBlock() +
       renderSettingsEmailPrefsBlock() +
       renderSettingsNotificationsBlock() +
@@ -1196,10 +1107,10 @@
       '</div>';
   }
 
-  function renderOverviewPanel(activeTab) {
+  function renderOverviewPanel(activeTab, me) {
     var hidden = activeTab !== 'Overview' ? ' hidden' : '';
     return '<div class="tma-dash__account-panel tma-dash__account-panel--overview"' + hidden + ' data-account-panel="Overview">' +
-      '<div class="tma-dash__account-row">' + renderProfileHeader() + renderProfileDetails() + '</div>' +
+      '<div class="tma-dash__account-row">' + renderProfileHeader(me) + renderProfileDetails(me) + '</div>' +
       '<div class="tma-dash__account-row">' + renderPromo() + '</div></div>';
   }
 
@@ -1211,8 +1122,9 @@
       '<p class="tma-dash__account-stub-text">This section is coming soon.</p></section></div>';
   }
 
-  function render(activeTab) {
+  function render(activeTab, me) {
     var tab = activeTab || 'Overview';
+    me = me !== undefined ? me : currentUser();
     var stubs = TABS.filter(function (t) {
       return t !== 'Overview' && t !== 'Settings' && t !== 'Security' && t !== 'Billing' && t !== 'Statements' && t !== 'Referrals' && t !== 'API Keys' && t !== 'Logs';
     }).map(function (t) {
@@ -1221,8 +1133,8 @@
     return '<div class="tma-dash__account">' +
       renderTabs(tab) +
       '<div class="tma-dash__account-panels">' +
-      renderOverviewPanel(tab) +
-      renderSettingsPanel(tab) +
+      renderOverviewPanel(tab, me) +
+      renderSettingsPanel(tab, me) +
       renderSecurityPanel(tab) +
       renderBillingPanel(tab) +
       renderStatementsPanel(tab) +
@@ -1272,10 +1184,33 @@
     });
   }
 
+  function hydrateAccountProfile(container, me) {
+    if (!container || !me) return;
+    var nameEl = container.querySelector('[data-account-name]');
+    if (nameEl) nameEl.textContent = me.name || '';
+    var emailEl = container.querySelector('[data-account-email]');
+    if (emailEl) {
+      emailEl.innerHTML = '<img src="' + ICON + 'EnvelopeSimple.svg" alt="" width="16" height="16">' + esc(me.email || '');
+    } else if (me.email) {
+      var meta = container.querySelector('.tma-dash__account-meta');
+      if (meta) {
+        meta.insertAdjacentHTML('beforeend',
+          '<span class="tma-dash__account-meta-item" data-account-email><img src="' + ICON + 'EnvelopeSimple.svg" alt="" width="16" height="16">' + esc(me.email) + '</span>');
+      }
+    }
+    var avatarEl = container.querySelector('[data-account-avatar]');
+    if (avatarEl && window.TMACurrentUser && window.TMACurrentUser.avatarSrc) {
+      avatarEl.src = window.TMACurrentUser.avatarSrc(me.avatar, me.name);
+      avatarEl.alt = me.name || '';
+    }
+    var details = container.querySelector('[data-account-details]');
+    if (details) details.innerHTML = profileDetailsFor(me).map(renderDetailRow).join('');
+  }
+
   function mount(container, opts) {
     if (!container) return;
     var activeTab = (opts && opts.tab) || 'Overview';
-    container.innerHTML = render(activeTab);
+    container.innerHTML = render(activeTab, currentUser());
     bindTabs(container);
     bindSettingsPanel(container);
     bindSecurityPanel(container);
@@ -1285,6 +1220,20 @@
     bindApiKeysPanel(container);
     bindLogsPanel(container);
     setActiveTab(container, activeTab);
+    if (window.TMACurrentUser && window.TMACurrentUser.onChange && !container.dataset.accountUserBound) {
+      container.dataset.accountUserBound = '1';
+      window.TMACurrentUser.onChange(function (me) {
+        if (!container.isConnected) return;
+        hydrateAccountProfile(container, me);
+        var settingsPanel = container.querySelector('.tma-dash__account-panel--settings');
+        if (settingsPanel && !settingsPanel.hidden) {
+          var wasBound = settingsPanel.dataset.accountSettingsBound;
+          delete settingsPanel.dataset.accountSettingsBound;
+          settingsPanel.outerHTML = renderSettingsPanel('Settings', me);
+          if (wasBound) bindSettingsPanel(container);
+        }
+      });
+    }
   }
 
   function tabForNav(navId) {

@@ -7,12 +7,11 @@
 
   var ICON = '/images/icons/phosphor/';
   var BRAND = '/images/icons/brands/';
-  var AVATAR = '/images/avatars/';
 
   var CHEVRON_RIGHT = 'M11.3193 24.7071C10.8936 24.3166 10.8936 23.6834 11.3193 23.2929L18.5 16.7071C18.9258 16.3166 18.9258 15.6834 18.5 15.2929L11.3194 8.70711C10.8936 8.31658 10.8936 7.68342 11.3194 7.29289C11.7451 6.90237 12.4355 6.90237 12.8613 7.29289L20.042 13.8787C21.3193 15.0503 21.3194 16.9497 20.042 18.1213L12.8613 24.7071C12.4355 25.0976 11.7451 25.0976 11.3193 24.7071Z';
 
   var NAV = [
-    { id: 'profile', label: 'ByeWind', avatar: true },
+    { id: 'profile', label: 'Profile', avatar: true },
     { id: 'theme', label: 'Theme', icon: 'Palette' },
     { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
@@ -21,6 +20,19 @@
     { id: 'payment', label: 'Payment', icon: 'CurrencyCircleDollar' },
     { id: 'plugins', label: 'Plugins', icon: 'Plugs' },
   ];
+
+  var TRANSPARENT_AVATAR = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+  function currentUserSnapshot() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    var name = (me && me.name) || '';
+    var email = (me && me.email) || '';
+    var avatar = '';
+    if (window.TMACurrentUser && window.TMACurrentUser.avatarSrc) {
+      avatar = window.TMACurrentUser.avatarSrc(me && me.avatar, name);
+    }
+    return { name: name, email: email, avatar: avatar || TRANSPARENT_AVATAR, me: me };
+  }
 
   var MOBILE_SETTINGS_MQ = typeof window.matchMedia === 'function'
     ? window.matchMedia('(max-width: 960px)')
@@ -141,18 +153,21 @@
   }
 
   function renderProfilePanel() {
+    var snap = currentUserSnapshot();
+    var name = snap.name || 'Loading…';
+    var email = snap.email || '';
     return '<section class="tma-dash__settings-panel is-active" data-settings-panel="profile">' +
       '<div class="tma-dash__settings-profile-stack">' +
       '<div class="tma-dash__settings-profile-head">' +
-      '<img class="tma-dash__settings-avatar" src="' + AVATAR + 'AvatarByewind.png" alt="" width="48" height="48">' +
-      '<div><p class="tma-dash__settings-profile-name">ByeWind</p><p class="tma-dash__settings-profile-email">byewind@twitter.com</p></div></div>' +
+      '<img class="tma-dash__settings-avatar" src="' + esc(snap.avatar) + '" alt="" width="48" height="48">' +
+      '<div><p class="tma-dash__settings-profile-name">' + esc(name) + '</p><p class="tma-dash__settings-profile-email">' + esc(email) + '</p></div></div>' +
       '<div class="tma-dash__settings-profile-block tma-dash__settings-profile-block--solo">' +
-      renderRow({ label: 'Name', value: 'ByeWind', valueMuted: true, action: 'change-name' }) +
+      renderRow({ label: 'Name', value: name, valueMuted: true, action: 'change-name' }) +
       '</div>' +
       '<hr class="tma-dash__settings-divider tma-dash__settings-profile-outer-divider">' +
       '<div class="tma-dash__settings-profile-block tma-dash__settings-profile-block--group">' +
       '<h2 class="tma-dash__settings-section-title tma-dash__settings-profile-group-label">Account security</h2>' +
-      renderRow({ label: 'Email', value: 'byewind@twitter.com', valueMuted: true, action: 'change-email' }) +
+      renderRow({ label: 'Email', value: email || 'Loading…', valueMuted: true, action: 'change-email' }) +
       profileInnerDivider() +
       renderRow({
         label: 'Password',
@@ -2295,7 +2310,7 @@
     }
     return renderPaymentCard({
       cardType: method.type || 'visa',
-      name: method.name || 'ByeWind',
+      name: method.name || '',
       groups: method.groups || ['0000', '0000', '0000', '0000'],
       expiry: method.expiry || 'Exp 06/25',
       status: method.isDefault ? 'Default' : 'Active',
@@ -2774,7 +2789,7 @@
     }
   }
 
-  var CURRENT_EMAIL = 'byewind@twitter.com';
+  var CURRENT_EMAIL = '';
   var TWO_STEP_AUTH_KEY = 'ABCD EFGH IJKL MNOP';
   var TWO_STEP_BACKUP_CODES = ['12345678', '23456789', '34567890', '45678901', '56789012', '67890123', '78901234', '89012345'];
   var TWO_STEP_PINNED_COUNTRY_CODE = '+1-758';
@@ -3196,9 +3211,11 @@
   }
 
   function renderNav(activeId) {
+    var snap = currentUserSnapshot();
+    if (snap.name) NAV[0].label = snap.name;
     return NAV.map(function (item) {
       var icon = item.avatar
-        ? '<span class="tma-dash__settings-nav-icon tma-dash__settings-nav-icon--avatar"><img src="' + AVATAR + 'AvatarByewind.png" alt=""></span>'
+        ? '<span class="tma-dash__settings-nav-icon tma-dash__settings-nav-icon--avatar"><img src="' + esc(snap.avatar) + '" alt=""></span>'
         : '<span class="tma-dash__settings-nav-icon"><img src="' + ICON + item.icon + '.svg" alt=""></span>';
       return '<button type="button" class="tma-dash__settings-nav-item' + (item.id === activeId ? ' is-active' : '') + '" data-settings-nav="' + esc(item.id) + '">' +
         icon +
@@ -3206,6 +3223,34 @@
         chevronIcon() +
         '</button>';
     }).join('');
+  }
+
+  function hydrateProfileFromCurrentUser(root) {
+    if (!root) return;
+    var snap = currentUserSnapshot();
+    CURRENT_EMAIL = snap.email || '';
+    if (snap.name) NAV[0].label = snap.name;
+    var displayName = snap.name || 'Loading…';
+
+    root.querySelectorAll('.tma-dash__settings-profile-name').forEach(function (el) {
+      el.textContent = displayName;
+    });
+    root.querySelectorAll('.tma-dash__settings-profile-email').forEach(function (el) {
+      el.textContent = snap.email || '';
+    });
+    root.querySelectorAll('.tma-dash__settings-avatar, .tma-dash__settings-nav-icon--avatar img').forEach(function (el) {
+      el.src = snap.avatar;
+      el.alt = snap.name || '';
+    });
+    root.querySelectorAll('[data-settings-nav="profile"] .tma-dash__settings-nav-label').forEach(function (el) {
+      el.textContent = snap.name || 'Profile';
+    });
+    root.querySelectorAll('[data-settings-action="change-name"] [data-settings-row-value]').forEach(function (el) {
+      el.textContent = snap.name || '';
+    });
+    root.querySelectorAll('[data-settings-action="change-email"] [data-settings-row-value]').forEach(function (el) {
+      el.textContent = snap.email || '';
+    });
   }
 
   function renderAccountSecurityPanel() {
@@ -3406,7 +3451,8 @@
     var form = root.querySelector('[data-change-name-form]');
     if (!form) return;
     var displayEl = root.querySelector('.tma-dash__settings-profile-name');
-    var raw = displayEl ? displayEl.textContent.trim() : 'ByeWind';
+    var raw = displayEl ? displayEl.textContent.trim() : '';
+    if (raw === 'Loading…') raw = '';
     var parts = raw.split(/\s+/).filter(Boolean);
     var first = form.querySelector('[name="firstName"]');
     var last = form.querySelector('[name="lastName"]');
@@ -4459,7 +4505,7 @@
       e.preventDefault();
       var first = form.querySelector('[name="firstName"]');
       var last = form.querySelector('[name="lastName"]');
-      var display = [first && first.value.trim(), last && last.value.trim()].filter(Boolean).join(' ') || 'ByeWind';
+      var display = [first && first.value.trim(), last && last.value.trim()].filter(Boolean).join(' ');
       closePopups(root);
       showToast(root, 'Name changed.');
       root.querySelectorAll('.tma-dash__settings-profile-name').forEach(function (el) {
@@ -4468,6 +4514,10 @@
       root.querySelectorAll('[data-settings-action="change-name"] .tma-dash__settings-row-value > span').forEach(function (el) {
         el.textContent = display;
       });
+      root.querySelectorAll('[data-settings-nav="profile"] .tma-dash__settings-nav-label').forEach(function (el) {
+        el.textContent = display || 'Profile';
+      });
+      if (display) NAV[0].label = display;
     });
 
     var nextBtn = root.querySelector('[data-change-name-next]');
@@ -4633,16 +4683,26 @@
     // per page load), so the panels reflect what's stored on the account.
     applyLanguage();
     if (!prefsHydrated) { prefsHydrated = true; hydratePrefs(root); }
+    var snap = currentUserSnapshot();
+    CURRENT_EMAIL = snap.email || '';
     var initialNav = (opts && (opts.activeNav || opts.settingsNav)) || 'profile';
     var openDetailOnMobile = !!(opts && (opts.activeNav || opts.settingsNav || opts.paymentAdded || opts.openChangeEmail));
     root.innerHTML = render(initialNav);
     delete root.dataset.settingsBound;
     bind(root);
+    hydrateProfileFromCurrentUser(root);
     activateNav(root, initialNav);
     if (isSettingsMobile()) {
       setMobileView(root, openDetailOnMobile ? 'detail' : 'menu', initialNav);
     } else {
       syncSettingsLayout(root, initialNav);
+    }
+    if (window.TMACurrentUser && window.TMACurrentUser.onChange && !root.dataset.settingsUserBound) {
+      root.dataset.settingsUserBound = '1';
+      window.TMACurrentUser.onChange(function () {
+        if (!root.isConnected) return;
+        hydrateProfileFromCurrentUser(root);
+      });
     }
     if (opts && opts.openChangeEmail) openChangeEmailPopup(root);
     if (opts && opts.paymentAdded) {

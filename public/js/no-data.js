@@ -1,6 +1,10 @@
 /**
  * TMA - No data empty state (Figma 32546:96126)
- * https://www.figma.com/design/58ZXC7sZYQsbenzf0foWCH/Portal-Design?node-id=32546-96126
+ * Global: window.TMANoData
+ *
+ * Use for production empty lists — never fill with sample records.
+ * Supports title, subtitle, optional action, compact inline mode,
+ * and permission-aware messaging.
  */
 (function () {
   'use strict';
@@ -31,10 +35,34 @@
   function render(opts) {
     var o = opts || {};
     var title = o.title != null ? o.title : 'No data';
-    var subtitle = o.subtitle != null ? o.subtitle : 'You may need';
+    var subtitle = o.subtitle != null
+      ? o.subtitle
+      : (o.permissionDenied
+        ? 'You do not have permission to view this information.'
+        : 'Nothing to show yet.');
     var buttonLabel = addButtonLabel(o);
-    var showButton = o.showButton !== false;
+    var showButton = o.showButton !== false && !o.permissionDenied;
     var illustration = illustrationSrc(o);
+    var compact = !!o.compact;
+    var icon = o.icon || null;
+
+    if (compact) {
+      return (
+        '<div class="tma-no-data tma-no-data--compact" data-no-data role="status">' +
+          (icon
+            ? '<span class="tma-no-data__icon" aria-hidden="true"><img src="' + escapeHtml(icon) + '" alt="" width="20" height="20"></span>'
+            : '') +
+          '<div class="tma-no-data__compact-copy">' +
+            '<p class="tma-no-data__title">' + escapeHtml(title) + '</p>' +
+            (subtitle ? '<p class="tma-no-data__subtitle">' + escapeHtml(subtitle) + '</p>' : '') +
+          '</div>' +
+          (showButton
+            ? '<button type="button" class="tma-no-data__btn tma-no-data__btn--compact" data-no-data-action="add">' +
+                '<span>' + escapeHtml(buttonLabel) + '</span></button>'
+            : '') +
+        '</div>'
+      );
+    }
 
     return (
       '<section class="tma-no-data" data-no-data aria-labelledby="tma-no-data-title">' +

@@ -1,0 +1,76 @@
+/*
+ * TMA - Section error state (failed API loads)
+ */
+
+.tma-section-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  margin: var(--space-16) 0;
+  padding: var(--space-16);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 71, 71, 0.25);
+  background: rgba(255, 71, 71, 0.06);
+  color: var(--color-text-primary);
+}
+
+.tma-section-error__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.tma-section-error__icon img {
+  width: 20px;
+  height: 20px;
+}
+
+.tma-section-error__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.tma-section-error__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.tma-section-error__message,
+.tma-section-error__ref {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-text-secondary, rgba(0, 0, 0, 0.55));
+}
+
+.tma-section-error__retry {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tma-section-error__retry:hover {
+  filter: brightness(0.97);
+}
+
+.tma-dash[data-theme="dark"] .tma-section-error {
+  border-color: rgba(255, 71, 71, 0.35);
+  background: rgba(255, 71, 71, 0.12);
+}
+
+.tma-dash[data-theme="dark"] .tma-section-error__retry {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}

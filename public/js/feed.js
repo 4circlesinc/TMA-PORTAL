@@ -6,7 +6,6 @@
   'use strict';
 
   var ICON = 'images/icons/phosphor/';
-  var AVATAR = 'images/avatars/';
 
   var POST_TYPES = [
     { id: 'discussion', label: 'Discussion', icon: 'ChatTeardropText', tone: 'discussion' },
@@ -19,6 +18,15 @@
     return String(s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
     });
+  }
+
+  function composeAvatarSrc() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    if (me && me.avatar) return me.avatar;
+    if (window.TMACurrentUser && window.TMACurrentUser.initialsUri && me && me.name) {
+      return window.TMACurrentUser.initialsUri(me.name);
+    }
+    return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   }
 
   function renderTypeBtn(type, activeId) {
@@ -43,7 +51,7 @@
     return (
       '<section class="tma-dash__feed-composer" aria-label="Create post">' +
       '<button type="button" class="tma-dash__feed-compose-prompt" data-feed-compose-open>' +
-      '<img class="tma-dash__feed-compose-avatar" src="' + AVATAR + 'AvatarByewind.png" alt="" width="40" height="40">' +
+      '<img class="tma-dash__feed-compose-avatar" src="' + composeAvatarSrc() + '" alt="" width="40" height="40">' +
       '<span class="tma-dash__feed-compose-placeholder">Share thoughts, ideas, or updates</span>' +
       '</button>' +
       '<div class="tma-dash__feed-compose-divider" aria-hidden="true"></div>' +
@@ -97,16 +105,16 @@
     root.innerHTML =
       '<div class="tma-dash__feed-page">' +
       renderComposer('discussion') +
-      '<div class="tma-dash__feed-stream" data-feed-stream aria-label="Feed posts"></div>' +
+      '<div class="tma-dash__feed-stream" data-feed-stream aria-label="Feed posts">' +
+      '<div class="tma-dash__rb-empty"><span class="tma-dash__rb-empty-text">No posts yet</span></div>' +
+      '</div>' +
       '</div>';
 
     bindEvents(root);
   }
 
-  var UNREAD_MENTIONS = 4;
-
   function getUnreadCount() {
-    return UNREAD_MENTIONS;
+    return 0;
   }
 
   window.TMAFeed = { mount: mount, getUnreadCount: getUnreadCount };

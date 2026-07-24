@@ -29,18 +29,8 @@
     ThreeDots: 'images/icons/tma/ThreeDots-16.svg',
   };
 
-  var BASE_ROWS = [
-    { name: 'Project tech requirements.pdf', icon: 'FilePdf', tone: 'purple', uploader: 'Natali Craig', avatar: 'AvatarFemale06', size: '5.6 MB', time: 'Just now' },
-    { name: 'Create Project Wireframes.xls', icon: 'FileXls', tone: 'blue', uploader: 'Kate Morrison', avatar: 'AvatarFemale04', size: '2.3 MB', time: '1 minute ago' },
-    { name: 'Q4 stakeholder deck.pptx', icon: 'FilePpt', tone: 'purple', uploader: 'Drew Cano', avatar: 'AvatarMale01', size: '8.1 MB', time: '1 hour ago' },
-    { name: 'Product research notes.one', icon: 'FileOneNote', tone: 'blue', uploader: 'Orlando Diggs', avatar: 'AvatarMale03', size: '420 KB', time: 'Yesterday' },
-    { name: 'Client intake form.form', icon: 'FileForm', tone: 'purple', uploader: 'Andi Lane', avatar: 'AvatarFemale01', size: '96 KB', time: 'Feb 2, 2026' },
-    { name: 'Release checklist.txt', icon: 'FileTxt', tone: 'blue', uploader: 'Kate Morrison', avatar: 'AvatarFemale04', size: '12 KB', time: 'Feb 1, 2026' },
-    { name: 'Sprint retro notes', icon: 'Notepad', tone: 'purple', uploader: 'Natali Craig', avatar: 'AvatarFemale06', size: '64 KB', time: 'Jan 30, 2026' },
-    { name: 'Dashboard-design.jpg', icon: 'FileImage', tone: 'blue', uploader: 'Andi Lane', avatar: 'AvatarFemale01', size: '2.8 MB', time: 'Feb 2, 2026' },
-  ];
-
-  var DEFAULT_ROWS = BASE_ROWS.concat(BASE_ROWS.map(function (r) { return Object.assign({}, r); }));
+  /* Live Overview → Files only. Never seed sample uploaders/filenames. */
+  var DEFAULT_ROWS = [];
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -182,12 +172,22 @@
       var start = (state.page - 1) * state.pageSize;
       var pageRows = filtered.slice(start, start + state.pageSize);
 
+      var emptyMsg = state.search
+        ? 'No files match your search.'
+        : 'No files have been uploaded yet.';
       var bodyHtml = pageRows.length
         ? pageRows.map(function (row, i) {
             var globalIndex = start + i;
             return renderRow(row, globalIndex, !!state.selected[rowKey(globalIndex)]);
           }).join('')
-        : '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">No results</div></div>';
+        : (window.TMANoData
+          ? window.TMANoData.render({
+              title: state.search ? 'No matching files' : 'No files yet',
+              subtitle: emptyMsg,
+              showButton: false,
+              compact: true,
+            })
+          : '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">' + escapeHtml(emptyMsg) + '</div></div>');
 
       container.innerHTML =
         renderToolbar(state) +

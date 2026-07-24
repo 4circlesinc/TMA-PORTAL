@@ -1628,7 +1628,11 @@
         ui().table(['', 'Name', 'Email', 'Company'], list.map(function (p) {
           return '<tr>' +
             '<td><label class="tma-portal-checkbox"><input type="checkbox" data-super-select="' + p.id + '"' + (self.selected[p.id] ? ' checked' : '') + '></label></td>' +
-            '<td><span class="tma-portal-avatar-cell"><img src="images/avatars/AvatarByewind.png" alt=""><strong>' + ui().esc(p.lastName + ', ' + p.firstName) + '</strong></span></td>' +
+            '<td><span class="tma-portal-avatar-cell"><img src="' +
+            (window.TMACurrentUser && window.TMACurrentUser.avatarSrc
+              ? window.TMACurrentUser.avatarSrc(p.avatar || null, (p.firstName || '') + ' ' + (p.lastName || ''))
+              : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7') +
+            '" alt=""><strong>' + ui().esc(p.lastName + ', ' + p.firstName) + '</strong></span></td>' +
             '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
             '<td class="tma-portal-table__muted">' + ui().esc(p.company || '-') + '</td></tr>';
         }).join('') || '<tr class="tma-portal-table__empty"><td colspan="4">No members match your filters.</td></tr>') +

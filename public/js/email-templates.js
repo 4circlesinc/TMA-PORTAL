@@ -11,7 +11,7 @@
   var PHOSPHOR = 'images/icons/phosphor/';
   var SITE_NAME = 'TM ANTOINE Advisory';
   var AUTH_LINK = 'https://portal.tmantoine.com/';
-  var SUPPORT_EMAIL = 'byewind@live.com';
+  var SUPPORT_EMAIL = 'support@tmantoine.com';
   var MOBILE_ADDRESS = '+852 19850622, One Apple Park Way, Cupertino, CA 95014';
 
   function esc(s) {
@@ -35,7 +35,7 @@
     return (
       '<div class="tma-dash__email-template-auth-contact">' +
       '<div class="tma-dash__email-template-auth-contact-col">' +
-      '<p>+852 19850622</p><p>byewind@twitter.com</p><p>portal.tmantoine.com</p></div>' +
+      '<p>+852 19850622</p><p>support@tmantoine.com</p><p>portal.tmantoine.com</p></div>' +
       '<div class="tma-dash__email-template-auth-contact-col">' +
       '<p>One Apple Park Way</p><p>Cupertino, CA 95014</p></div></div>'
     );
@@ -221,12 +221,12 @@
       renderAuthMark() +
       renderAuthHeading('Welcome to ' + SITE_NAME) +
       '<div class="tma-dash__email-template-auth-body-copy">' +
-      '<p>Hey ByeWind,</p>' +
+      '<p>Hello,</p>' +
       '<p>We\u2019re so excited to welcome you to the <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(SITE_NAME) + '</a> community.</p>' +
       '<p>Here\u2019s your sign in address in case you forget:</p>' +
       '<p>Sign in: <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(AUTH_LINK) + '</a></p>' +
       '<p>If you need any help getting started reach out to us at <a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '"><strong>' + esc(SUPPORT_EMAIL) + '</strong></a>.</p>' +
-      '<p>Enjoy :)</p><p>ByeWind</p></div>'
+      '<p>Enjoy :)</p><p>TM ANTOINE Advisory</p></div>'
     );
   }
 
@@ -316,7 +316,7 @@
     var paymentValue =
       '<span class="tma-dash__email-template-invoice-payment">' +
       '<img src="' + ICON + 'PayPal40.svg" alt="" width="20" height="20">' +
-      '<span>byewind@twitter.com</span></span>';
+      '<span>support@tmantoine.com</span></span>';
 
     return (
       '<div class="tma-dash__email-template-canvas tma-dash__email-template-canvas--invoice" data-node-id="32546:96133">' +
@@ -326,7 +326,7 @@
       '<p><span class="tma-dash__email-template-invoice-meta-label">Invoice ID:</span> #VL25000355</p>' +
       '<p><span class="tma-dash__email-template-invoice-meta-label">Date:</span> Feb 2, 2026, 8:00 AM</p></div></div>' +
       '<div class="tma-dash__email-template-invoice-summary">' +
-      renderSummaryField('Invoice to', '<p>ByeWind</p>') +
+      renderSummaryField('Invoice to', '<p>TM ANTOINE Advisory</p>') +
       '<div class="tma-dash__email-template-invoice-summary-divider" aria-hidden="true"></div>' +
       renderSummaryField('Payment Method', paymentValue) +
       '<div class="tma-dash__email-template-invoice-summary-divider" aria-hidden="true"></div>' +
@@ -346,7 +346,7 @@
       '<p class="tma-dash__email-template-invoice-grand-total-value">$340.94</p></div></div>' +
       '<div class="tma-dash__email-template-invoice-foot">' + renderBrandFooter() +
       '<div class="tma-dash__email-template-invoice-contact">' +
-      '<div class="tma-dash__email-template-invoice-contact-col"><p>+852 19850622</p><p>byewind@twitter.com</p><p>advisory.tmantoine.com</p></div>' +
+      '<div class="tma-dash__email-template-invoice-contact-col"><p>+852 19850622</p><p>support@tmantoine.com</p><p>advisory.tmantoine.com</p></div>' +
       '<div class="tma-dash__email-template-invoice-contact-col"><p>One Apple Park Way</p><p>Cupertino, CA 95014</p></div></div></div></div></div>'
     );
   }
@@ -405,7 +405,7 @@
       name: 'Successful sign up',
       category: 'Authentication',
       subject: 'Welcome to ' + SITE_NAME,
-      preview: 'Hey ByeWind, welcome to the community.',
+      preview: 'Hello, welcome to the community.',
       thumb: 'auth',
       nodeId: '32534:3774',
       mobileNodeId: '32534:3790',

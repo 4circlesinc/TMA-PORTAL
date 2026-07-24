@@ -26,18 +26,24 @@
     if (!rightbar || rightbar._rbMounted) return;
     rightbar._rbMounted = true;
 
-    // Replace the static prototype sections with live ones, leaving any resize
-    // handle dashboard.js inserts as the first child in place.
-    Array.prototype.slice.call(rightbar.querySelectorAll('.tma-dash__rb-section')).forEach(function (n) { n.remove(); });
-
-    var host = document.createElement('div');
-    host.className = 'tma-dash__rb-sections';
-    host.setAttribute('data-rb-sections', '');
-    host.innerHTML =
-      section('notifications', 'Notifications') +
-      section('activities', 'Activities') +
-      section('clients', 'Clients');
-    rightbar.appendChild(host);
+    // Prefer the shell's empty hosts (skeletons, no sample names). Fall back to
+    // building them when an older page still has prototype filler.
+    var host = rightbar.querySelector('[data-rb-sections]');
+    if (host) {
+      Array.prototype.slice.call(host.querySelectorAll('[data-rb-body]')).forEach(function (body) {
+        body.innerHTML = '';
+      });
+    } else {
+      Array.prototype.slice.call(rightbar.querySelectorAll('.tma-dash__rb-section')).forEach(function (n) { n.remove(); });
+      host = document.createElement('div');
+      host.className = 'tma-dash__rb-sections';
+      host.setAttribute('data-rb-sections', '');
+      host.innerHTML =
+        section('notifications', 'Notifications') +
+        section('activities', 'Activities') +
+        section('clients', 'Clients');
+      rightbar.appendChild(host);
+    }
 
     var clients = { items: [], loaded: false, loading: false, error: false, forbidden: false };
     // "See all notifications" expands the section from the compact 6 to the full

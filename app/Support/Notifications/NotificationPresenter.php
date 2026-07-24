@@ -3,6 +3,7 @@
 namespace App\Support\Notifications;
 
 use App\Models\ActivityLog;
+use App\Models\MailSenderPhoto;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\DeviceName;
@@ -89,39 +90,75 @@ final class NotificationPresenter
             'id' => $user->id,
             'name' => $user->name,
             // Real photo only; null tells the front-end to draw initials.
-            'avatar' => $user->avatar_url ?: $user->provider_avatar_url,
+            'avatar' => $user->photoUrl(),
         ];
     }
 
     /**
      * Leading photo for the row/toast. For email notifications only a real
-     * face (directory / Gravatar) is used — never a company favicon, which
-     * crops into a weird sliver in a circular avatar. Missing faces fall
-     * through to initials on the front-end.
+     * face (portal user / directory / Gravatar) is used — never a company
+     * favicon. Missing faces fall through to initials on the front-end.
      */
     private static function image(Notification $n): ?string
     {
         $isEmail = $n->module === 'email' || str_starts_with((string) $n->type, 'email.');
-        $email = $n->metadata['from_email'] ?? null;
+        $email = is_string($n->metadata['from_email'] ?? null)
+            ? mb_strtolower(trim((string) $n->metadata['from_email']))
+            : '';
 
         if ($isEmail) {
-            if (is_string($email) && $email !== '') {
-                return \App\Models\MailSenderPhoto::faceUrlFor($email);
+            if ($email !== '' && str_contains($email, '@')) {
+                $portal = self::portalPhotoForEmail($email);
+                if ($portal) {
+                    return $portal;
+                }
+
+                return MailSenderPhoto::faceUrlFor($email);
             }
 
             // Ignore a stored brand-favicon URL that was saved before faces-only.
             return null;
         }
 
-        if (is_string($n->image) && $n->image !== '') {
+        if (is_string($n->image) && $n->image !== '' && self::isUsablePhotoUrl($n->image)) {
             return $n->image;
         }
 
-        if (is_string($email) && $email !== '') {
-            return \App\Models\MailSenderPhoto::urlFor($email);
+        if ($email !== '' && str_contains($email, '@')) {
+            $portal = self::portalPhotoForEmail($email);
+            if ($portal) {
+                return $portal;
+            }
+
+            return MailSenderPhoto::urlFor($email);
         }
 
         return null;
+    }
+
+    private static function portalPhotoForEmail(string $email): ?string
+    {
+        $user = User::query()
+            ->whereRaw('lower(email) = ?', [$email])
+            ->first(['avatar_url', 'provider_avatar_url']);
+
+        $url = $user?->photoUrl();
+
+        return self::isUsablePhotoUrl($url) ? $url : null;
+    }
+
+    private static function isUsablePhotoUrl(?string $url): bool
+    {
+        if (! is_string($url) || $url === '') {
+            return false;
+        }
+
+        // Reject obvious icon files; allow absolute and portal-relative photos.
+        if (preg_match('/\.(ico|gif)(\?|$)/i', $url)) {
+            return false;
+        }
+
+        return (bool) preg_match('#^(https?:|/(storage|media|portal)/|data:)#i', $url);
     }
 
     /**

@@ -211,16 +211,16 @@
     if (asPerson) {
       const fallback = R ? R.initialsUri(name) : '';
       const src = item.image || (item.actor && item.actor.avatar) || '';
-      const url = /^(https?:|\/(storage|media|portal)\/|data:)/.test(src || '')
-        && !/\.(ico|gif)(\?|$)/i.test(src || '')
+      const url = (R && R.isRealPhoto ? R.isRealPhoto(src) : /^(https?:|\/(storage|media|portal)\/|data:)/i.test(src || ''))
         ? src
         : fallback;
+      const safeFallback = String(fallback || '').replace(/'/g, '%27');
       const wrapStyle = 'width:36px;height:36px;min-width:36px;min-height:36px;max-width:36px;max-height:36px;' +
         'flex:0 0 36px;border-radius:50%;overflow:hidden;display:block;line-height:0;';
-      const imgStyle = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:0;';
+      const imgStyle = 'width:100%;height:100%;object-fit:cover;object-position:center;display:block;border-radius:0;';
       return '<span class="tma-notify-toast__avatar-wrap" style="' + wrapStyle + '">' +
-        '<img class="tma-notify-toast__avatar" src="' + esc(url || fallback) + '" alt="" width="36" height="36" style="' + imgStyle + '"' +
-        (fallback ? " onerror=\"this.onerror=null;this.src='" + fallback + "'\"" : '') + '>' +
+        '<img class="tma-notify-toast__avatar" src="' + esc(url || fallback) + '" alt="" width="36" height="36" decoding="async" style="' + imgStyle + '"' +
+        (fallback ? " onerror=\"this.onerror=null;this.src='" + safeFallback + "'\"" : '') + '>' +
         '</span>';
     }
     const tone = R ? R.levelTone(item.level) : 'blue';

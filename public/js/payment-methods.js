@@ -1,17 +1,15 @@
 /*
  * Shared payment method storage - Settings, billing-details/card
  * Global: window.TMAPaymentMethods
+ *
+ * Production never seeds sample cards. Empty until the user adds a method
+ * (or a real billing API hydrates the store).
  */
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'tma.payment.methods';
-
-  var DEFAULT_PAYMENT_METHODS = [
-    { id: 'visa-1', type: 'visa', name: 'ByeWind', groups: ['9656', '6598', '1236', '4698'], expiry: 'Exp 06/25', isDefault: true },
-    { id: 'mc-1', type: 'mastercard', name: 'ByeWind', groups: ['1235', '6321', '1343', '7542'], expiry: 'Exp 06/25', isDefault: false },
-    { id: 'paypal-1', type: 'paypal', name: 'PayPal', email: 'byewind@twitter.com', isDefault: false },
-  ];
+  var DEFAULT_PAYMENT_METHODS = [];
 
   function storeGet(key, fallback) {
     try {
@@ -26,6 +24,15 @@
     try {
       localStorage.setItem(key, value);
     } catch (e) {}
+  }
+
+  function isDemoPaymentMethod(m) {
+    if (!m) return true;
+    var name = String(m.name || '').toLowerCase();
+    var email = String(m.email || '').toLowerCase();
+    if (name === 'byewind' || email.indexOf('byewind') !== -1) return true;
+    if (m.id === 'visa-1' || m.id === 'mc-1' || m.id === 'paypal-1') return true;
+    return false;
   }
 
   function detectCardType(digits) {
@@ -46,16 +53,21 @@
   function readPaymentMethods() {
     try {
       var raw = storeGet(STORAGE_KEY, '');
-      if (!raw) return DEFAULT_PAYMENT_METHODS.map(function (m) { return Object.assign({}, m); });
+      if (!raw) return [];
       var parsed = JSON.parse(raw);
-      return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_PAYMENT_METHODS.map(function (m) { return Object.assign({}, m); });
+      if (!Array.isArray(parsed)) return [];
+      var cleaned = parsed.filter(function (m) { return !isDemoPaymentMethod(m); });
+      if (cleaned.length !== parsed.length) {
+        writePaymentMethods(cleaned);
+      }
+      return cleaned;
     } catch (e) {
-      return DEFAULT_PAYMENT_METHODS.map(function (m) { return Object.assign({}, m); });
+      return [];
     }
   }
 
   function writePaymentMethods(methods) {
-    storeSet(STORAGE_KEY, JSON.stringify(methods));
+    storeSet(STORAGE_KEY, JSON.stringify(methods || []));
   }
 
   function addCardMethod(opts) {
@@ -111,6 +123,9 @@
     return methods;
   }
 
+  // Drop any previously cached ByeWind sample cards on load.
+  try { readPaymentMethods(); } catch (e) {}
+
   window.TMAPaymentMethods = {
     STORAGE_KEY: STORAGE_KEY,
     DEFAULT_PAYMENT_METHODS: DEFAULT_PAYMENT_METHODS,
@@ -120,7 +135,5 @@
     addPayPalMethod: addPayPalMethod,
     setDefaultPaymentMethod: setDefaultPaymentMethod,
     removePaymentMethod: removePaymentMethod,
-    detectCardType: detectCardType,
-    splitCardGroups: splitCardGroups,
   };
 })();

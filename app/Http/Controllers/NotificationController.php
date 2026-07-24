@@ -2,24 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ResolveSenderPhoto;
+use App\Models\MailSenderPhoto;
 use App\Models\Notification;
+use App\Models\User;
+use App\Support\Mail\Mailbox;
 use App\Support\Notifications\NotificationPreferences;
 use App\Support\Notifications\NotificationPresenter;
 use App\Support\Notifications\NotificationType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * The signed-in user's own notifications: the bell popup, the right-sidebar
  * Notifications section, and the full list all read from here. Every query is
- * scoped to the caller — a user can only ever see, read, or delete their own
- * rows (§28).
+ * scoped to the caller ��� a user can only ever see, read, or delete their own
+ * rows (?28).
  */
 class NotificationController extends Controller
 {
     private const PAGE = 20;
 
-    /** A page of the caller's notifications, newest first, with filters (§20, §26). */
+    /** A page of the caller's notifications, newest first, with filters (?20, ?26). */
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -63,14 +68,17 @@ class NotificationController extends Controller
         $hasMore = $rows->count() > $limit;
         $rows = $rows->take($limit);
 
+        $items = $rows->map(fn (Notification $n) => NotificationPresenter::notification($n))->values();
+        $this->queueMissingEmailFaces($request->user(), $items);
+
         return response()->json([
-            'items' => $rows->map(fn (Notification $n) => NotificationPresenter::notification($n))->values(),
+            'items' => $items,
             'nextCursor' => $hasMore ? $rows->last()->id : null,
             'unread' => $this->unreadCount($request),
         ]);
     }
 
-    /** Badge source of truth (§11): unread and outstanding action-required counts. */
+    /** Badge source of truth (?11): unread and outstanding action-required counts. */
     public function count(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -85,7 +93,7 @@ class NotificationController extends Controller
         ]);
     }
 
-    /** Opening a notification marks it read (§20). */
+    /** Opening a notification marks it read (?20). */
     public function read(Request $request, string $uid): JsonResponse
     {
         $n = $this->find($request, $uid);
@@ -96,7 +104,7 @@ class NotificationController extends Controller
         return $this->itemResponse($request, $n);
     }
 
-    /** Let a user put a notification back to unread (§20). */
+    /** Let a user put a notification back to unread (?20). */
     public function unread(Request $request, string $uid): JsonResponse
     {
         $n = $this->find($request, $uid);
@@ -117,7 +125,7 @@ class NotificationController extends Controller
         return $this->itemResponse($request, $n);
     }
 
-    /** Mark everything (or one filtered module) read in a single call (§11, §20). */
+    /** Mark everything (or one filtered module) read in a single call (?11, ?20). */
     public function readAll(Request $request): JsonResponse
     {
         $query = Notification::query()->forUser($request->user())->unread();
@@ -129,7 +137,7 @@ class NotificationController extends Controller
         return response()->json(['unread' => $this->unreadCount($request)]);
     }
 
-    /** Dismiss a notification the user is allowed to remove (§20). */
+    /** Dismiss a notification the user is allowed to remove (?20). */
     public function destroy(Request $request, string $uid): JsonResponse
     {
         $n = $this->find($request, $uid);
@@ -138,7 +146,7 @@ class NotificationController extends Controller
         return response()->json(['ok' => true, 'unread' => $this->unreadCount($request)]);
     }
 
-    /** The user's per-module notification preferences (§21). */
+    /** The user's per-module notification preferences (?21). */
     public function preferences(Request $request): JsonResponse
     {
         return response()->json([
@@ -149,7 +157,7 @@ class NotificationController extends Controller
         ]);
     }
 
-    /** Merge-save notification preferences (§21). */
+    /** Merge-save notification preferences (?21). */
     public function updatePreferences(Request $request): JsonResponse
     {
         $input = $request->input('preferences', []);
@@ -183,5 +191,42 @@ class NotificationController extends Controller
             'item' => NotificationPresenter::notification($n),
             'unread' => $this->unreadCount($request),
         ]);
+    }
+
+    /**
+     * When the bell/sidebar loads email rows without a face yet, queue a
+     * background directory lookup so the next refresh can show a real photo.
+     * Never blocks the response; capped so a long list cannot flood the queue.
+     *
+     * @param  Collection<int, array<string, mixed>>  $items
+     */
+    private function queueMissingEmailFaces(User $user, Collection $items): void
+    {
+        $emails = $items
+            ->filter(function (array $item) {
+                $isEmail = ($item['module'] ?? '') === 'email'
+                    || str_starts_with((string) ($item['type'] ?? ''), 'email.');
+
+                return $isEmail && empty($item['image']);
+            })
+            ->map(fn (array $item) => mb_strtolower(trim((string) data_get($item, 'meta.from_email', ''))))
+            ->filter(fn (string $email) => $email !== '' && str_contains($email, '@'))
+            ->unique()
+            ->filter(fn (string $email) => MailSenderPhoto::needsFaceResolve($email))
+            ->take(12)
+            ->values();
+
+        if ($emails->isEmpty()) {
+            return;
+        }
+
+        $account = Mailbox::accountFor($user);
+        if (! $account) {
+            return;
+        }
+
+        foreach ($emails as $email) {
+            ResolveSenderPhoto::dispatch($account, $email);
+        }
     }
 }

@@ -250,8 +250,21 @@
 
     function bodyInner() {
       if (!state.loaded && state.loading) return R().skeleton ? tableSkeleton() : '';
-      if (state.error && !state.items.length) return '<div class="tma-dash__actlog-empty">' + esc('Could not load activity.') + ' <button type="button" class="tma-dash__rb-retry" data-actlog-retry>Retry</button></div>';
-      if (!state.items.length) return '<div class="tma-dash__actlog-empty">No activity yet.</div>';
+      if (state.error && !state.items.length) {
+        return window.TMASectionError
+          ? window.TMASectionError.render({
+              title: 'Unable to load activity',
+              message: 'Activity could not be loaded.',
+              showRetry: true,
+              retryAttr: 'data-actlog-retry',
+            })
+          : '<div class="tma-dash__actlog-empty">' + esc('Could not load activity.') + ' <button type="button" class="tma-dash__rb-retry" data-actlog-retry>Retry</button></div>';
+      }
+      if (!state.items.length) {
+        return window.TMANoData
+          ? window.TMANoData.render({ title: 'No activity yet', subtitle: 'Actions across the portal will appear here.', showButton: false, compact: true })
+          : '<div class="tma-dash__actlog-empty">No activity yet.</div>';
+      }
       var rows = orderedItems().map(row).join('');
       var more = state.hasMore
         ? '<button type="button" class="tma-dash__actlog-more" data-actlog-more' + (state.loading ? ' disabled' : '') + '>' + (state.loading ? 'Loading…' : 'Load more') + '</button>'

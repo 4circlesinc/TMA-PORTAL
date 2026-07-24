@@ -2,10 +2,17 @@
  * TMA - Dashboard application controller
  * Wires navigation, header controls, theme, search palette, and drawers.
  * Global: window.TMADashboard
+ *
+ * Menu order source of truth: resources/views/pages/dashboard.html
+ * (served for / and all SPA routes via LegacyPageController::SPA_PAGES).
+ * There is no user-reorderable menu preference — do not invent one in
+ * localStorage. Shell version below forces browsers to drop stale HTML caches
+ * when the approved order changes.
  */
 (function () {
   'use strict';
 
+  var NAV_SHELL_VERSION = '2026-07-24-menu-v2';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -13,6 +20,16 @@
     get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
     set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   };
+
+  // Drop any legacy keys that once tried to persist a custom menu order.
+  try {
+    ['tma.menuOrder', 'tma.navOrder', 'tma.sidebarOrder', 'tma.menuItems'].forEach(function (k) {
+      localStorage.removeItem(k);
+    });
+    if (store.get('tma.navShellVersion', '') !== NAV_SHELL_VERSION) {
+      store.set('tma.navShellVersion', NAV_SHELL_VERSION);
+    }
+  } catch (e) { /* ignore */ }
 
   var ACCENT_COLORS = {
     indigo: '#136da0', /* TMA brand blue (accent id kept as "indigo" for stored prefs) */
@@ -2023,44 +2040,19 @@
       syncTabBarBadges();
     });
 
-    /* ── task avatar profile tooltips (TMA tooltip + AvatarNames) ── */
-    var AVATAR_USERS = {
-      AvatarFemale01: 'Andi Lane',
-      AvatarFemale02: 'Aliah Davis',
-      AvatarMale06: 'Alexander Williams',
-      AvatarByewind: 'ByeWind',
-      AvatarMale05: 'James Wilson',
-      AvatarFemale03: 'Brie Larson',
-      Avatar3d01: 'Christopher Davis',
-      AvatarMale01: 'Drew Cano',
-      Avatar3d04: 'Emma Smith',
-      AvatarMale02: 'John Smith',
-      AvatarAbstract03: 'Benjamin Thompson',
-      AvatarAbstract04: 'Samuel Anderson',
-      Avatar3d03: 'Sophia Martinez',
-      AvatarAbstract01: 'Isabella Davis',
-      AvatarFemale04: 'Kate Morrison',
-      AvatarMale04: 'Koray Okumus',
-      AvatarFemale05: 'Melody Macy',
-      AvatarAbstract02: 'Matthew Johnson',
-      AvatarFemale06: 'Natali Craig',
-      AvatarMale03: 'Orlando Diggs',
-      Avatar3d02: 'Olivia Johnson'
-    };
-
-    function avatarKeyFromSrc(src) {
-      var match = (src || '').match(/\/([^/]+)\.(?:png|jpe?g|webp)$/i);
-      return match ? match[1] : '';
-    }
-
+    /* Task avatars: only show profile tooltips for real names (data-user-name
+       or a meaningful alt). Never invent names from stock avatar filenames. */
     function wireTaskAvatarTooltips() {
       var avatars = Array.prototype.slice.call(root.querySelectorAll('.tma-dash__tasks .tma-dash__avatar'));
       var tipIndex = 0;
       avatars.forEach(function (avatar) {
         if (avatar.classList.contains('tma-dash__avatar--more') || avatar.tagName !== 'IMG') return;
 
-        var key = avatarKeyFromSrc(avatar.getAttribute('src'));
-        var name = AVATAR_USERS[key];
+        var name = avatar.getAttribute('data-user-name')
+          || avatar.getAttribute('data-name')
+          || '';
+        var alt = avatar.getAttribute('alt') || '';
+        if (!name && alt && !/^avatar/i.test(alt) && alt !== '') name = alt;
         if (!name) return;
 
         var src = avatar.getAttribute('src');

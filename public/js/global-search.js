@@ -112,7 +112,11 @@
     return map[key] || map.XCircle || resolveAsset(ICON_FILES[key] || '') || '';
   }
 
-  const DEFAULT_INDEX = [
+  /* Live portal header/sidebar search starts empty; real entries come from options.index / TMAGlobalSearchIndex. */
+  const DEFAULT_INDEX = [];
+
+  /* ByeWind sample corpus — design-system interactive scenes only (never dashboard search). */
+  const DESIGN_DEMO_INDEX = [
     { type: 'query', label: 'Landing page design', keywords: ['landing', 'page', 'design'] },
     { type: 'user', label: 'ByeWind', avatar: 'AvatarByewind', keywords: ['byewind', 'bye', 'wind'], href: '#user-byewind' },
     { type: 'page', label: 'Overview', keywords: ['overview'], href: '#overview' },
@@ -356,7 +360,7 @@
     return `<${tag} class="tma-search-popup__row${selectedCls}${interactiveCls}"${attrs}>${textHtml}${hint}</${tag}>`;
   }
 
-  function getInitialItems() {
+  function getDesignDemoInitialItems() {
     return [
       { type: 'query', label: 'Landing page design' },
       { type: 'user', label: 'ByeWind', avatar: 'AvatarByewind', selected: true },
@@ -368,14 +372,18 @@
   }
 
   function renderInitialBody(options = {}) {
-    const { interactive = false } = options;
-    const recent = getInitialItems().slice(0, 2);
-    const visited = getInitialItems().slice(2, 3);
-    const contacts = getInitialItems().slice(3);
+    const { interactive = false, designDemo = false } = options;
+    if (!designDemo) {
+      return '<div class="tma-search-popup__empty">No recent searches</div>';
+    }
+    const items = getDesignDemoInitialItems();
+    const recent = items.slice(0, 2);
+    const visited = items.slice(2, 3);
+    const contacts = items.slice(3);
     let rowIndex = 0;
 
-    const group = (title, items) => {
-      const rows = items.map((item) => {
+    const group = (title, groupItems) => {
+      const rows = groupItems.map((item) => {
         const row = renderRow(item, {
           selected: item.selected,
           interactive,
@@ -461,19 +469,22 @@
       dismissBtn = `<button type="button" class="tma-search-popup__dismiss" data-search-dismiss aria-label="Close search">${iconMarkup('X', '', 24, 24)}</button>`;
     }
 
+    const designDemo = !!options.designDemo;
     let body = '';
     if (state === 'initial') {
-      body = renderInitialBody({ interactive });
+      body = renderInitialBody({ interactive, designDemo });
     } else if (state === 'results') {
-      const items = [
+      const items = designDemo ? [
         { type: 'user', label: 'ByeWind', avatar: 'AvatarByewind' },
         { type: 'user', label: 'ByeWind', match: query || 'Wind' },
         { type: 'page', title: 'Overview', subtitle: "I'm ByeWind, a Product UX/UI Designer, based in China. ", match: query || 'Wind' },
         { type: 'page', label: "ByeWind's profile", match: query || 'Wind' },
         { type: 'page', label: 'Farewell to Wind', match: query || 'Wind' },
         { type: 'page', label: 'https://twitter.com/FarewelltoWind', match: query || 'Wind' },
-      ];
-      body = renderResultsBody(query || 'Wind', items, { interactive, selectedIndex: 1 });
+      ] : [];
+      body = items.length
+        ? renderResultsBody(query || 'Wind', items, { interactive, selectedIndex: 1 })
+        : '<div class="tma-search-popup__empty">No results</div>';
     } else if (state === 'empty') {
       body = '<div class="tma-search-popup__empty">No results</div>';
     }
@@ -498,7 +509,9 @@
     const { interactive = false, popupOpen = true, popupState = 'initial' } = options;
     const sceneCls = interactive ? ' tma-global-search-scene--interactive' : '';
     const maskCls = popupOpen ? '' : ' style="display:none"';
-    const popup = popupOpen ? renderPopup({ variant: 'compact', state: popupState, interactive }) : '';
+    const popup = popupOpen
+      ? renderPopup({ variant: 'compact', state: popupState, interactive, designDemo: true })
+      : '';
 
     return `<div class="tma-global-search-scene${sceneCls}" data-global-search-scene>
       <div class="tma-global-search-scene__canvas" data-scene-canvas>
@@ -569,6 +582,7 @@
 
   function mountInteractiveScene(root, index, options = {}) {
     const startOpen = options.startOpen !== false;
+    const searchIndex = index && index.length ? index : DESIGN_DEMO_INDEX;
     root.innerHTML = renderScene({ interactive: true, popupOpen: startOpen, popupState: 'initial' });
     const scene = root.querySelector('[data-global-search-scene]');
     updateSceneScale(scene);
@@ -631,6 +645,7 @@
         state: stateName,
         query: q,
         interactive: true,
+        designDemo: true,
         selectedIndex: state.selectedIndex,
         loading: state.loading,
       });
@@ -657,7 +672,7 @@
       if (!body) return;
 
       if (stateName === 'initial') {
-        body.innerHTML = renderInitialBody({ interactive: true });
+        body.innerHTML = renderInitialBody({ interactive: true, designDemo: true });
         bindInitialBodyEvents(body, { onInitialSelect: handleInitialSelect });
         return;
       }
@@ -692,7 +707,7 @@
         return;
       }
 
-      state.results = filterIndex(index, query);
+      state.results = filterIndex(searchIndex, query);
       state.selectedIndex = state.results.length ? 0 : 0;
       renderLivePopup();
     }
@@ -785,7 +800,7 @@
 
   function bindInitialBodyEvents(body, handlers) {
     if (!body || !handlers) return;
-    const items = getInitialItems();
+    const items = getDesignDemoInitialItems();
     body.querySelectorAll('[data-search-result]').forEach((btn) => {
       const index = Number(btn.getAttribute('data-result-index'));
       btn.addEventListener('click', () => handlers.onInitialSelect(items[index]));
@@ -1029,6 +1044,6 @@
   };
 
   document.querySelectorAll('[data-global-search-live]').forEach((el) => {
-    mountInteractiveScene(el, window.TMAGlobalSearchIndex || DEFAULT_INDEX);
+    mountInteractiveScene(el, window.TMAGlobalSearchIndex || DESIGN_DEMO_INDEX);
   });
 })();
