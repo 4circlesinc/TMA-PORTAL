@@ -7,6 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\MailMessage;
+use App\Models\MailSenderPhoto;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -34,7 +35,11 @@ class MailRecipientSuggestTest extends TestCase
     public function test_suggests_organization_staff_by_name_or_email(): void
     {
         $me = $this->staff(['name' => 'Me', 'email' => 'me@example.com']);
-        $this->staff(['name' => 'Dana Reed', 'email' => 'dana@example.com']);
+        $this->staff([
+            'name' => 'Dana Reed',
+            'email' => 'dana@example.com',
+            'avatar_url' => '/images/avatars/Avatar3d01.png',
+        ]);
         $this->staff(['name' => 'Pat Lee', 'email' => 'pat@example.com']);
 
         $items = $this->actingAs($me)
@@ -46,6 +51,7 @@ class MailRecipientSuggestTest extends TestCase
         $this->assertSame('dana@example.com', $items[0]['email']);
         $this->assertSame('staff', $items[0]['source']);
         $this->assertSame('Organization', $items[0]['sourceLabel']);
+        $this->assertSame('/images/avatars/Avatar3d01.png', $items[0]['avatarUrl']);
     }
 
     public function test_suggests_clients_for_staff_and_hides_them_from_client_accounts(): void
@@ -174,6 +180,58 @@ class MailRecipientSuggestTest extends TestCase
             ->json('suggestions');
 
         $this->assertTrue(collect($prior)->contains(fn ($s) => ($s['email'] ?? null) === 'pat.partner@example.com' && $s['source'] === 'prior'));
+    }
+
+    public function test_prior_mail_suggestions_include_cached_sender_photos(): void
+    {
+        $me = $this->staff(['email' => 'me@example.com']);
+        $account = ConnectedAccount::create([
+            'user_id' => $me->id,
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$me->id,
+            'email' => 'me@example.com',
+            'name' => 'Me',
+            'token' => 'refresh',
+            'scopes' => ['Mail.ReadWrite'],
+            'sync_email' => true,
+        ]);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $me->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'm-photo',
+            'thread_id' => 't-photo',
+            'folder' => 'inbox',
+            'subject' => 'Hi',
+            'from_name' => 'Pat Partner',
+            'from_email' => 'pat.partner@example.com',
+            'to' => [['email' => 'me@example.com']],
+            'is_read' => true,
+            'sent_at' => now()->subHour(),
+        ]);
+
+        $hash = MailSenderPhoto::hashFor('pat.partner@example.com');
+        MailSenderPhoto::create([
+            'hash' => $hash,
+            'email' => 'pat.partner@example.com',
+            'connected_account_id' => $account->id,
+            'disk' => 'local',
+            'path' => 'sender-photos/pat.jpg',
+            'mime' => 'image/jpeg',
+            'has_photo' => true,
+            'checked_at' => now(),
+        ]);
+
+        $items = $this->actingAs($me)
+            ->getJson('/portal/mail/suggest?q=partner')
+            ->assertOk()
+            ->json('suggestions');
+
+        $hit = collect($items)->firstWhere('email', 'pat.partner@example.com');
+        $this->assertNotNull($hit);
+        $this->assertNotNull($hit['avatarUrl']);
+        $this->assertStringContainsString('/portal/mail/sender-photo/'.$hash, $hit['avatarUrl']);
     }
 
     public function test_empty_query_returns_recent_prior_and_staff_without_error(): void

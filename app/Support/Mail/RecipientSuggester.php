@@ -2,11 +2,13 @@
 
 namespace App\Support\Mail;
 
+use App\Jobs\ResolveSenderPhoto;
 use App\Models\Client;
 use App\Models\Group;
 use App\Models\MailMessage;
+use App\Models\MailSenderPhoto;
 use App\Models\User;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Phase-1 recipient suggestions for compose To/Cc/Bcc — no provider OAuth.
@@ -17,6 +19,11 @@ use Illuminate\Support\Collection;
  *   3. prior mail addresses from this user's mirrored mailbox
  * Groups are returned as expandable rows (all member emails) rather than a
  * single address, because portal groups have no mailbox of their own.
+ *
+ * Profile pictures reuse the same rule as the inbox: a portal avatar when the
+ * person has an account, otherwise a cached sender photo (directory / brand)
+ * via /portal/mail/sender-photo/{hash}. Never a live provider call here —
+ * uncached addresses get a background ResolveSenderPhoto job instead.
  */
 final class RecipientSuggester
 {
@@ -55,7 +62,6 @@ final class RecipientSuggester
 
         $people = array_values($byEmail);
 
-        // Rank: exact email prefix, then name prefix, then source priority, then name.
         usort($people, function (array $a, array $b) use ($term) {
             $score = self::score($b, $term) <=> self::score($a, $term);
             if ($score !== 0) {
@@ -67,7 +73,6 @@ final class RecipientSuggester
 
         $out = array_slice($people, 0, self::LIMIT);
 
-        // Groups sit after people so a name match on a person wins the top slots.
         foreach ($groups as $group) {
             if (count($out) >= self::LIMIT) {
                 break;
@@ -75,7 +80,104 @@ final class RecipientSuggester
             $out[] = $group;
         }
 
-        return $out;
+        return self::withAvatars($viewer, $out);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private static function withAvatars(User $viewer, array $rows): array
+    {
+        $emails = [];
+        foreach ($rows as $row) {
+            if (! empty($row['email'])) {
+                $emails[] = mb_strtolower((string) $row['email']);
+            }
+            if (($row['source'] ?? null) === 'group' && is_array($row['emails'] ?? null)) {
+                foreach ($row['emails'] as $member) {
+                    if (! empty($member['email'])) {
+                        $emails[] = mb_strtolower((string) $member['email']);
+                    }
+                }
+            }
+        }
+        $emails = array_values(array_unique($emails));
+        if ($emails === []) {
+            return $rows;
+        }
+
+        $portal = User::query()
+            ->whereIn(DB::raw('lower(email)'), $emails)
+            ->whereNotNull('avatar_url')
+            ->get(['email', 'avatar_url'])
+            ->mapWithKeys(fn (User $u) => [mb_strtolower($u->email) => $u->avatar_url])
+            ->all();
+
+        $account = Mailbox::accountFor($viewer);
+        $own = $account ? mb_strtolower((string) $account->email) : null;
+
+        $needPhoto = collect($emails)
+            ->reject(fn ($e) => $e === $own || isset($portal[$e]))
+            ->values();
+
+        $cached = $needPhoto->isEmpty() ? collect() : MailSenderPhoto::query()
+            ->whereIn('hash', $needPhoto->map(fn ($e) => MailSenderPhoto::hashFor($e)))
+            ->get()
+            ->keyBy(fn (MailSenderPhoto $p) => mb_strtolower((string) $p->email));
+
+        if ($account) {
+            foreach ($needPhoto as $email) {
+                $row = $cached->get($email);
+                if ($row && $row->isFresh()) {
+                    continue;
+                }
+                ResolveSenderPhoto::dispatch($account, $email);
+            }
+        }
+
+        foreach ($rows as &$row) {
+            if (! empty($row['avatarUrl'])) {
+                continue;
+            }
+
+            if (($row['source'] ?? null) === 'group' && is_array($row['emails'] ?? null)) {
+                foreach ($row['emails'] as $member) {
+                    $email = mb_strtolower((string) ($member['email'] ?? ''));
+                    if ($url = self::avatarUrlFor($email, $portal, $cached)) {
+                        $row['avatarUrl'] = $url;
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            $email = mb_strtolower((string) ($row['email'] ?? ''));
+            $row['avatarUrl'] = self::avatarUrlFor($email, $portal, $cached);
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string, string>  $portal
+     * @param  \Illuminate\Support\Collection<string, MailSenderPhoto>  $cached
+     */
+    private static function avatarUrlFor(string $email, array $portal, $cached): ?string
+    {
+        if ($email === '') {
+            return null;
+        }
+        if ($url = $portal[$email] ?? null) {
+            return $url;
+        }
+        $photo = $cached->get($email);
+        if ($photo && $photo->isFresh() && $photo->has_photo) {
+            return route('mail.sender-photo', ['hash' => $photo->hash]);
+        }
+
+        return null;
     }
 
     /**
@@ -103,6 +205,8 @@ final class RecipientSuggester
             'source' => 'staff',
             'sourceLabel' => 'Organization',
             'avatarUrl' => $u->avatar_url,
+            'initial' => mb_strtoupper(mb_substr($u->name ?: $u->email, 0, 1)),
+            'initialColor' => null,
             'emails' => null,
         ])->all();
     }
@@ -113,6 +217,7 @@ final class RecipientSuggester
     private static function clients(string $term): array
     {
         $rows = Client::query()
+            ->with(['user:id,email,avatar_url'])
             ->when($term !== '', function ($q) use ($term) {
                 $needle = '%'.$term.'%';
                 $q->where(function ($w) use ($needle) {
@@ -125,7 +230,7 @@ final class RecipientSuggester
             })
             ->orderBy('name')
             ->limit(self::LIMIT)
-            ->get(['name', 'company', 'email']);
+            ->get(['name', 'company', 'email', 'user_id', 'initial', 'initial_color']);
 
         $out = [];
         foreach ($rows as $client) {
@@ -138,7 +243,9 @@ final class RecipientSuggester
                 'name' => $client->name ?: ($client->company ?: null),
                 'source' => 'client',
                 'sourceLabel' => 'Client',
-                'avatarUrl' => null,
+                'avatarUrl' => $client->user?->avatar_url,
+                'initial' => $client->initial ?: mb_strtoupper(mb_substr($client->name ?: $email, 0, 1)),
+                'initialColor' => $client->initial_color,
                 'emails' => null,
             ];
         }
@@ -156,7 +263,7 @@ final class RecipientSuggester
         }
 
         $groups = Group::query()
-            ->with(['members.user' => fn ($q) => $q->select('id', 'name', 'email', 'status')])
+            ->with(['members.user' => fn ($q) => $q->select('id', 'name', 'email', 'status', 'avatar_url')])
             ->where('is_archived', false)
             ->whereRaw('lower(name) like ?', ['%'.$term.'%'])
             ->orderBy('name')
@@ -180,12 +287,16 @@ final class RecipientSuggester
                 'name' => $u->name,
             ])->values()->all();
 
+            $face = $members->first(fn (User $u) => (bool) $u->avatar_url) ?: $members->first();
+
             $out[] = [
                 'email' => null,
                 'name' => $group->name,
                 'source' => 'group',
                 'sourceLabel' => 'Group · '.$members->count().' '.($members->count() === 1 ? 'person' : 'people'),
-                'avatarUrl' => null,
+                'avatarUrl' => $face?->avatar_url,
+                'initial' => mb_strtoupper(mb_substr($group->name, 0, 1)),
+                'initialColor' => null,
                 'emails' => $emails,
             ];
         }
@@ -237,6 +348,8 @@ final class RecipientSuggester
                 'source' => 'prior',
                 'sourceLabel' => 'Previous email',
                 'avatarUrl' => null,
+                'initial' => mb_strtoupper(mb_substr($names[$email] ?? $email, 0, 1)),
+                'initialColor' => null,
                 'emails' => null,
                 '_count' => $count,
             ];
@@ -281,11 +394,15 @@ final class RecipientSuggester
             return;
         }
 
-        // Higher-priority sources win the display name / avatar.
         $rank = ['staff' => 3, 'client' => 2, 'prior' => 1];
         $existing = $byEmail[$email];
         if (($rank[$row['source']] ?? 0) > ($rank[$existing['source']] ?? 0)) {
+            if (empty($row['avatarUrl']) && ! empty($existing['avatarUrl'])) {
+                $row['avatarUrl'] = $existing['avatarUrl'];
+            }
             $byEmail[$email] = $row;
+        } elseif (empty($existing['avatarUrl']) && ! empty($row['avatarUrl'])) {
+            $byEmail[$email]['avatarUrl'] = $row['avatarUrl'];
         }
     }
 

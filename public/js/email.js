@@ -3863,10 +3863,14 @@
       var meta = item.source === 'group'
         ? esc(item.sourceLabel || 'Group')
         : esc((item.email || '') + (item.sourceLabel ? ' · ' + item.sourceLabel : ''));
+      var initial = esc(item.initial || String(item.name || item.email || '?').charAt(0).toUpperCase());
+      var colorStyle = item.initialColor ? ' style="background:' + esc(item.initialColor) + ';color:#fff"' : '';
       var avatar = item.avatarUrl
-        ? '<img class="tma-dash__email-suggest-avatar" src="' + esc(item.avatarUrl) + '" alt="">'
-        : '<span class="tma-dash__email-suggest-avatar tma-dash__email-suggest-avatar--initial" aria-hidden="true">' +
-          esc(String(item.name || item.email || '?').charAt(0).toUpperCase()) + '</span>';
+        ? '<img class="tma-dash__email-suggest-avatar" src="' + esc(item.avatarUrl) + '" alt=""' +
+          ' onerror="this.onerror=null;this.hidden=true;var f=this.nextElementSibling;if(f)f.hidden=false">' +
+          '<span class="tma-dash__email-suggest-avatar tma-dash__email-suggest-avatar--initial" hidden aria-hidden="true"' + colorStyle + '>' + initial + '</span>'
+        : '<span class="tma-dash__email-suggest-avatar tma-dash__email-suggest-avatar--initial" aria-hidden="true"' + colorStyle + '>' +
+          initial + '</span>';
       return (
         '<button type="button" class="tma-dash__email-suggest-item' +
         (i === activeIndex ? ' tma-dash__email-suggest-item--active' : '') + '"' +
