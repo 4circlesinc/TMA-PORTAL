@@ -42,7 +42,7 @@ final class NotificationPresenter
             'requiresAction' => $n->requiresAction(),
             'completed' => $n->completed_at !== null,
             'createdAt' => $n->created_at?->toIso8601String(),
-            'meta' => $n->metadata,
+            'meta' => self::meta($n),
         ];
     }
 
@@ -94,21 +94,56 @@ final class NotificationPresenter
     }
 
     /**
-     * Leading photo for the row/toast. Prefer the stored override; for email
-     * notifications also resolve a cached sender photo from metadata so a
-     * face shows even when the photo arrived after the notification was saved.
+     * Leading photo for the row/toast. For email notifications only a real
+     * face (directory / Gravatar) is used — never a company favicon, which
+     * crops into a weird sliver in a circular avatar. Missing faces fall
+     * through to initials on the front-end.
      */
     private static function image(Notification $n): ?string
     {
+        $isEmail = $n->module === 'email' || str_starts_with((string) $n->type, 'email.');
+        $email = $n->metadata['from_email'] ?? null;
+
+        if ($isEmail) {
+            if (is_string($email) && $email !== '') {
+                return \App\Models\MailSenderPhoto::faceUrlFor($email);
+            }
+
+            // Ignore a stored brand-favicon URL that was saved before faces-only.
+            return null;
+        }
+
         if (is_string($n->image) && $n->image !== '') {
             return $n->image;
         }
 
-        $email = $n->metadata['from_email'] ?? null;
-        if (! is_string($email) || $email === '') {
-            return null;
+        if (is_string($email) && $email !== '') {
+            return \App\Models\MailSenderPhoto::urlFor($email);
         }
 
-        return \App\Models\MailSenderPhoto::urlFor($email);
+        return null;
+    }
+
+    /**
+     * Ensure email notifications always expose a sender name for initials,
+     * even when they were saved before metadata.from_name existed.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function meta(Notification $n): ?array
+    {
+        $meta = is_array($n->metadata) ? $n->metadata : [];
+        $isEmail = $n->module === 'email' || str_starts_with((string) $n->type, 'email.');
+
+        if ($isEmail && empty($meta['from_name'])) {
+            $title = (string) $n->title;
+            if (preg_match('/^New email from\s+(.+)$/u', $title, $m)) {
+                $meta['from_name'] = trim($m[1]);
+            } elseif (preg_match('/^From\s+(.+?)\s+[—-]/u', (string) $n->message, $m)) {
+                $meta['from_name'] = trim($m[1]);
+            }
+        }
+
+        return $meta === [] ? null : $meta;
     }
 }

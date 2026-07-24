@@ -20,7 +20,7 @@ use Throwable;
  * initials). A sender with neither is cached as a miss and drawn as initials —
  * no invented pictures.
  */
-#[Fillable(['hash', 'email', 'connected_account_id', 'disk', 'path', 'mime', 'has_photo', 'checked_at'])]
+#[Fillable(['hash', 'email', 'connected_account_id', 'disk', 'path', 'mime', 'has_photo', 'source', 'checked_at'])]
 class MailSenderPhoto extends Model
 {
     /** How long before we ask the provider about a sender again. */
@@ -83,10 +83,52 @@ class MailSenderPhoto extends Model
     }
 
     /**
-     * Public URL for a cached sender photo, or null when we only have a miss /
-     * nothing yet. Safe for notification `image` fields and <img> src.
+     * Public URL for a cached sender image (face or brand logo), or null.
+     * Used by the inbox list. Prefer {@see faceUrlFor} for notification
+     * avatars — brand favicons look wrong cropped into a face circle.
      */
     public static function urlFor(string $email): ?string
+    {
+        return self::urlForRow(self::rowFor($email));
+    }
+
+    /**
+     * Public URL for a *person* photo only (directory / Gravatar). Brand
+     * favicons and ambiguous legacy PNGs are excluded so notification toasts
+     * never show a weird cropped company mark.
+     */
+    public static function faceUrlFor(string $email): ?string
+    {
+        $row = self::rowFor($email);
+        if (! $row || ! $row->isFacePhoto()) {
+            return null;
+        }
+
+        return self::urlForRow($row);
+    }
+
+    public function isFacePhoto(): bool
+    {
+        if (! $this->has_photo) {
+            return false;
+        }
+
+        if ($this->source === 'brand') {
+            return false;
+        }
+
+        if (in_array($this->source, ['directory', 'gravatar'], true)) {
+            return true;
+        }
+
+        // Legacy rows (no source yet): directory/Gravatar photos are jpeg;
+        // Google favicons are almost always png/ico — never treat those as faces.
+        $mime = mb_strtolower((string) $this->mime);
+
+        return str_starts_with($mime, 'image/jpeg') || $mime === 'image/jpg';
+    }
+
+    private static function rowFor(string $email): ?self
     {
         $email = mb_strtolower(trim($email));
         if ($email === '' || ! str_contains($email, '@')) {
@@ -98,7 +140,12 @@ class MailSenderPhoto extends Model
             return null;
         }
 
-        return route('mail.sender-photo', ['hash' => $row->hash]);
+        return $row;
+    }
+
+    private static function urlForRow(?self $row): ?string
+    {
+        return $row ? route('mail.sender-photo', ['hash' => $row->hash]) : null;
     }
 
     /**
@@ -139,10 +186,12 @@ class MailSenderPhoto extends Model
         // same address. Then Gravatar, then company-domain brand logos.
         // Consumer domains never get a brand favicon.
         $photo = null;
+        $source = null;
         try {
             $bytes = Mailbox::provider($account)->photoFor($email);
             if ($bytes !== null && $bytes !== '') {
                 $photo = ['body' => $bytes, 'mime' => 'image/jpeg'];
+                $source = 'directory';
             }
         } catch (Throwable) {
             // A provider error is a miss for now; the TTL brings us back.
@@ -160,6 +209,7 @@ class MailSenderPhoto extends Model
                     $bytes = Mailbox::provider($google)->photoFor($email);
                     if ($bytes !== null && $bytes !== '') {
                         $photo = ['body' => $bytes, 'mime' => 'image/jpeg'];
+                        $source = 'directory';
                     }
                 } catch (Throwable) {
                     // Soft miss — fall through to Gravatar.
@@ -167,8 +217,19 @@ class MailSenderPhoto extends Model
             }
         }
 
-        $photo ??= self::gravatarFor($email);
-        $photo ??= self::brandLogoFor($email);
+        if ($photo === null) {
+            $photo = self::gravatarFor($email);
+            if ($photo !== null) {
+                $source = 'gravatar';
+            }
+        }
+
+        if ($photo === null) {
+            $photo = self::brandLogoFor($email);
+            if ($photo !== null) {
+                $source = 'brand';
+            }
+        }
 
         $row ??= new self(['hash' => $hash, 'email' => mb_strtolower(trim($email))]);
         $row->connected_account_id = $account->id;
@@ -176,6 +237,7 @@ class MailSenderPhoto extends Model
 
         if ($photo === null) {
             $row->has_photo = false;
+            $row->source = null;
             $row->save();
 
             return null;
@@ -196,6 +258,7 @@ class MailSenderPhoto extends Model
             'path' => $path,
             'mime' => $photo['mime'],
             'has_photo' => true,
+            'source' => $source,
         ])->save();
 
         return $photo;

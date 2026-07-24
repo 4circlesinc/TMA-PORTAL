@@ -146,11 +146,15 @@
 }
 
 .tma-notify-toast__avatar {
+  display: block;
   width: 36px;
   height: 36px;
   border-radius: 50%;
   object-fit: cover;
+  object-position: center;
   flex-shrink: 0;
+  background: #e8f1fb;
+  overflow: hidden;
 }
 
 .tma-notify-toast__icon {

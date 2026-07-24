@@ -514,7 +514,7 @@ class MailSynchronizer
                 'title' => $rows->count().' new emails',
                 'message' => $senders->isNotEmpty() ? 'From '.$senders->implode(', ').'…' : null,
                 'action_url' => '/email',
-                'image' => MailSenderPhoto::urlFor((string) ($first->from_email ?? '')),
+                'image' => MailSenderPhoto::faceUrlFor((string) ($first->from_email ?? '')),
                 'metadata' => [
                     'from_email' => mb_strtolower((string) ($first->from_email ?? '')),
                     'from_name' => (string) ($first->from_name ?: $first->from_email ?: 'Sender'),
@@ -537,7 +537,7 @@ class MailSynchronizer
                 'message' => $m->subject ?: Str::limit((string) $m->snippet, 120),
                 'action_url' => '/email',
                 'subject' => $m,
-                'image' => MailSenderPhoto::urlFor($fromEmail),
+                'image' => MailSenderPhoto::faceUrlFor($fromEmail),
                 'metadata' => [
                     'from_email' => $fromEmail,
                     'from_name' => (string) ($m->from_name ?: $m->from_email ?: 'Sender'),

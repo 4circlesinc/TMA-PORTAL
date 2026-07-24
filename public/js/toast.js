@@ -156,16 +156,29 @@
 
   /* The same person-photo / system-glyph rule the notification panels use,
      borrowed from TMANotifyRender so a toast matches its panel row. */
+  function senderName(item) {
+    if (item.actor && item.actor.name) return item.actor.name;
+    if (item.meta && item.meta.from_name) return item.meta.from_name;
+    const title = String(item.title || '');
+    let m = title.match(/^New email from\s+(.+)$/i);
+    if (m) return m[1];
+    m = String(item.message || '').match(/^From\s+(.+?)\s+[—-]/);
+    return m ? m[1] : '';
+  }
+
   function notifyLeading(item) {
     const R = window.TMANotifyRender;
-    const fromName = item.meta && item.meta.from_name;
-    const asPerson = !!(item.actor || item.image || (item.module === 'email' && fromName));
+    const name = senderName(item);
+    const isEmail = item.module === 'email' || (item.type && String(item.type).indexOf('email.') === 0);
+    const asPerson = !!(item.actor || item.image || (isEmail && name));
     if (asPerson) {
-      const name = (item.actor && item.actor.name) || fromName || '';
       const fallback = R ? R.initialsUri(name) : '';
       const src = item.image || (item.actor && item.actor.avatar) || '';
-      const url = /^(https?:|\/(storage|media|portal)\/|data:)/.test(src || '') ? src : fallback;
-      return '<img class="tma-notify-toast__avatar" src="' + esc(url) + '" alt=""' +
+      const url = /^(https?:|\/(storage|media|portal)\/|data:)/.test(src || '')
+        && !/\.(ico|gif)(\?|$)/i.test(src || '')
+        ? src
+        : fallback;
+      return '<img class="tma-notify-toast__avatar" src="' + esc(url || fallback) + '" alt=""' +
         (fallback ? " onerror=\"this.onerror=null;this.src='" + fallback + "'\"" : '') + '>';
     }
     const tone = R ? R.levelTone(item.level) : 'blue';

@@ -45,7 +45,11 @@
 
   function isRealPhoto(src) {
     // Portal-served sender photos live under /portal/mail/sender-photo/…
-    return !!src && /^(https?:|\/(storage|media|portal)\/|data:)/.test(src);
+    // Brand favicons are never handed down for email notifications anymore;
+    // still reject obvious icon file URLs as a safety net.
+    if (!src) return false;
+    if (/\.(ico|gif)(\?|$)/i.test(src)) return false;
+    return /^(https?:|\/(storage|media|portal)\/|data:)/.test(src);
   }
 
   /* §14 level -> existing design-system tone. No new colours are invented;
@@ -78,8 +82,18 @@
   /* The leading visual: a person's photo/initials, or a system glyph. Popups
      wrap the photo in a sized span (existing CSS); the sidebar uses a bare
      rb-avatar image — so the markup follows each surface's existing styles. */
+  function senderName(item) {
+    if (item.actor && item.actor.name) return item.actor.name;
+    if (item.meta && item.meta.from_name) return item.meta.from_name;
+    var title = String(item.title || '');
+    var m = title.match(/^New email from\s+(.+)$/i);
+    if (m) return m[1];
+    m = String(item.message || '').match(/^From\s+(.+?)\s+[—-]/);
+    return m ? m[1] : '';
+  }
+
   function personVisual(item, cfg) {
-    var name = (item.actor && item.actor.name) || (item.meta && item.meta.from_name) || '';
+    var name = senderName(item);
     var fallback = initialsUri(name);
     var src = item.image || (item.actor && item.actor.avatar) || '';
     var url = isRealPhoto(src) ? src : fallback;
@@ -97,11 +111,12 @@
   }
 
   /* A notification's leading element. A person is anyone with an actor (§3);
-     an explicit image (sender photo / client logo) also counts; email rows
-     with a known sender show initials until their photo is cached. */
+     an explicit image (sender photo) also counts; email rows always show a
+     face or initials — never the envelope glyph. */
   function notificationLeading(item, cfg) {
-    var fromName = item.meta && item.meta.from_name;
-    if (item.actor || item.image || (item.module === 'email' && fromName)) {
+    var name = senderName(item);
+    var isEmail = item.module === 'email' || (item.type && String(item.type).indexOf('email.') === 0);
+    if (item.actor || item.image || (isEmail && name)) {
       return personVisual(item, cfg);
     }
     return systemVisual(item, cfg);
