@@ -114,8 +114,10 @@ class MailSenderPhoto extends Model
             return $row->has_photo ? $row->read() : null;
         }
 
-        // Directory first — a real face for a colleague — then the sender
-        // domain's brand logo for everyone else.
+        // Directory first — a real face for a colleague — then Gravatar for
+        // personal addresses (Gmail/Yahoo/iCloud/…), then the sender domain's
+        // brand logo for company mail. Consumer domains never get a brand
+        // favicon — that would put the Gmail mark on every gmail.com contact.
         $photo = null;
         try {
             $bytes = Mailbox::provider($account)->photoFor($email);
@@ -126,6 +128,7 @@ class MailSenderPhoto extends Model
             // A provider error is a miss for now; the TTL brings us back.
         }
 
+        $photo ??= self::gravatarFor($email);
         $photo ??= self::brandLogoFor($email);
 
         $row ??= new self(['hash' => $hash, 'email' => mb_strtolower(trim($email))]);
@@ -157,6 +160,44 @@ class MailSenderPhoto extends Model
         ])->save();
 
         return $photo;
+    }
+
+    /**
+     * Gravatar for personal addresses (Gmail, Yahoo, iCloud, …).
+     *
+     * Microsoft and Google will not hand out arbitrary consumer profile
+     * photos by email — privacy policy. Gravatar is the one public opt-in
+     * directory people actually use for that. `d=404` means "no avatar"
+     * returns a real miss instead of the mystery-person silhouette.
+     *
+     * @return array{body:string, mime:string}|null
+     */
+    private static function gravatarFor(string $email): ?array
+    {
+        $email = mb_strtolower(trim($email));
+        if ($email === '' || ! str_contains($email, '@')) {
+            return null;
+        }
+
+        $hash = md5($email);
+
+        try {
+            $response = Http::timeout(6)->get('https://www.gravatar.com/avatar/'.$hash, [
+                's' => 128,
+                'd' => '404',
+                'r' => 'pg',
+            ]);
+        } catch (Throwable) {
+            return null;
+        }
+
+        $mime = trim(explode(';', strtolower((string) $response->header('Content-Type')))[0]);
+
+        if ($response->status() === 404 || ! $response->successful() || $response->body() === '' || ! str_starts_with($mime, 'image/')) {
+            return null;
+        }
+
+        return ['body' => $response->body(), 'mime' => $mime ?: 'image/jpeg'];
     }
 
     /**

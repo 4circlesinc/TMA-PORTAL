@@ -20,7 +20,7 @@ use App\Models\User;
  * single address, because portal groups have no mailbox of their own.
  *
  * Profile pictures reuse the same rule as the inbox: a portal avatar when the
- * person has an account, otherwise a cached sender photo (directory / brand)
+ * person has an account, otherwise a cached sender photo (directory / Gravatar / brand)
  * via /portal/mail/sender-photo/{hash}. Never a live provider call here —
  * uncached addresses get a background ResolveSenderPhoto job instead.
  */
