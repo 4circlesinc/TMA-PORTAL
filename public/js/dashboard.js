@@ -87,14 +87,15 @@
     if (sections.length < 2) return;
 
     var primarySection = sections[0];
-    var pagesSection = null;
+    // Pages section used to be tagged by a "Pages" group label; identify it as
+    // the second main-list section (or any remaining section after primary).
+    var pagesSection = sections[1] || sections[0];
     for (var s = 0; s < sections.length; s++) {
-      if (sections[s].querySelector('.tma-dash__group-label')) {
+      if (sections[s] !== primarySection && sections[s].querySelector('[data-nav="users"], [data-expand="projects"]')) {
         pagesSection = sections[s];
         break;
       }
     }
-    if (!pagesSection) pagesSection = sections[1];
 
     var map = {};
     root.querySelectorAll('.tma-dash__sidebar .tma-dash__nav-item[data-nav], .tma-dash__sidebar .tma-dash__nav-item[data-expand]').forEach(function (el) {
@@ -102,15 +103,12 @@
       if (key) map[key] = el;
     });
 
-    var label = pagesSection.querySelector('.tma-dash__group-label');
-
     APPROVED_PRIMARY_NAV.forEach(function (id) {
       var nodes = takeNavBlock(map, id);
       if (!nodes) return;
       nodes.forEach(function (n) { primarySection.appendChild(n); });
     });
 
-    if (label) pagesSection.appendChild(label);
     APPROVED_PAGES_NAV.forEach(function (id) {
       var nodes = takeNavBlock(map, id);
       if (!nodes) return;

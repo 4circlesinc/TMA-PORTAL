@@ -218,6 +218,13 @@
   display: none !important;
 }
 
+/* Quiet section break (replaces the old "Pages" label): extra space only —
+   no border/rule — so the rail and expanded menu both read as two groups. */
+.tma-dash__nav-section--divided {
+  margin-top: var(--space-8);
+  padding-top: var(--space-4);
+}
+
 .tma-dash__profile {
   display: flex;
   align-items: center;
@@ -226,7 +233,7 @@
   border-radius: var(--radius-8);
   flex-shrink: 0;
   background: var(--color-white);
-  border-top: 0.5px solid var(--dash-border);
+  border-top: 0;
 }
 .tma-dash__profile-avatar {
   width: var(--dash-icon-lg);
