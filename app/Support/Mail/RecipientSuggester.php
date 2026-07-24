@@ -187,7 +187,7 @@ final class RecipientSuggester
         }
         $photo = $cached->get($email);
         if ($photo && $photo->isFresh() && $photo->has_photo) {
-            return route('mail.sender-photo', ['hash' => $photo->hash]);
+            return '/portal/mail/sender-photo/'.$photo->hash;
         }
 
         return null;

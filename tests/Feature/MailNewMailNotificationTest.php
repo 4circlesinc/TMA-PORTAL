@@ -107,6 +107,11 @@ class MailNewMailNotificationTest extends TestCase
         $this->assertSame('Hello there', $notification->message);
         $this->assertSame('dana@example.com', $notification->metadata['from_email'] ?? null);
         $this->assertSame('Dana Reed', $notification->metadata['from_name'] ?? null);
+        $this->assertStringStartsWith('/email?message=', (string) $notification->action_url);
+        $this->assertStringContainsString(
+            MailMessage::where('user_id', $user->id)->where('remote_id', 'new-1')->value('uuid'),
+            (string) $notification->action_url
+        );
     }
 
     public function test_the_same_arrival_never_notifies_twice(): void

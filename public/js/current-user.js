@@ -215,6 +215,10 @@
       if (!res.ok) return null;
       return res.json().then(function (j) {
         me = j;
+        if (j && j.toasts && window.TMAToast && window.TMAToast.applyToastPrefs) {
+          window.TMAToast.applyToastPrefs(j.toasts);
+          try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}
+        }
         paint();
         return j;
       });

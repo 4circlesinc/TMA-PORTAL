@@ -7186,6 +7186,7 @@
     opts = opts || {};
     var path = window.location.pathname.replace(/\/$/, '');
     var initialFolder = opts.folder || (path === '/email/templates' ? 'templates' : 'inbox');
+    var pendingMessageId = opts.messageId || null;
 
     if (root._emailState && root._emailRender) {
       if (opts.folder) root._emailState.folder = opts.folder;
@@ -7201,7 +7202,11 @@
         closeEmailProfileSidebar(state);
         root._emailRender();
       };
-      root._emailRender();
+      if (pendingMessageId) {
+        openMailById(root, root._emailState, root._emailRender, pendingMessageId);
+      } else {
+        root._emailRender();
+      }
       return;
     }
 
@@ -7267,6 +7272,7 @@
       inlineCompose: null,
       mobileNavOpen: false,
       profileSidebarOpen: false,
+      _pendingMessageId: pendingMessageId || null,
     };
 
     function render() {
@@ -7368,6 +7374,7 @@
       var mailNotice = mailParams.get('notice');
       var mailMessage = mailParams.get('message');
       if (mailMessage) state._pendingMessageId = mailMessage;
+      else if (pendingMessageId) state._pendingMessageId = pendingMessageId;
       if (mailNotice === 'mail-connected' || mailNotice === 'mail-error' || mailMessage) {
         var mailReason = mailParams.get('reason');
         mailParams.delete('notice');
@@ -7418,6 +7425,15 @@
     mount: mount,
     restoreHeaderSearch: restoreHeaderSearch,
     getInboxUnreadCount: getInboxUnreadCount,
+    /* Open a specific message from a notification / toast deep-link. */
+    openMessage: function (rootOrId, maybeId) {
+      var root = document.querySelector('[data-email]');
+      var id = maybeId;
+      if (typeof rootOrId === 'string') id = rootOrId;
+      else if (rootOrId && rootOrId.nodeType) root = rootOrId;
+      if (!root || !id || !root._emailState || !root._emailRender) return;
+      openMailById(root, root._emailState, root._emailRender, id);
+    },
     /* Swap a broken directory photo for a single initials tile — never leave
      * two circles side by side. */
     _suggestPhotoFallback: function (img) {

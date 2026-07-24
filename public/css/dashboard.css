@@ -3097,28 +3097,36 @@
 /* Fixed square clip for notification / activity person photos — prevents
    portrait images from stretching into tall pills when height:auto wins. */
 .tma-dash__person-avatar {
-  flex: 0 0 var(--dash-icon-lg);
-  width: var(--dash-icon-lg);
-  height: var(--dash-icon-lg);
-  min-width: var(--dash-icon-lg);
-  min-height: var(--dash-icon-lg);
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  overflow: hidden;
+  box-sizing: border-box;
+  flex: 0 0 var(--dash-icon-lg) !important;
+  flex-shrink: 0 !important;
+  align-self: flex-start !important;
+  width: var(--dash-icon-lg) !important;
+  height: var(--dash-icon-lg) !important;
+  min-width: var(--dash-icon-lg) !important;
+  min-height: var(--dash-icon-lg) !important;
+  max-width: var(--dash-icon-lg) !important;
+  max-height: var(--dash-icon-lg) !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
   background: var(--color-hover);
   position: relative;
   z-index: 1;
-  display: block;
+  display: block !important;
+  line-height: 0;
 }
 .tma-dash__person-avatar img {
-  display: block;
+  display: block !important;
+  box-sizing: border-box;
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
   max-height: none !important;
+  aspect-ratio: 1 / 1 !important;
   object-fit: cover !important;
-  object-position: center;
-  border-radius: 0;
+  object-position: center !important;
+  border-radius: 0 !important;
 }
 /* connector line behind activity avatars */
 .tma-dash__rb-section--activities .tma-dash__activity:not(:last-child)::before {
@@ -19588,10 +19596,17 @@ button.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread):not
   background: transparent;
 }
 
-button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread,
+button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 14%, rgba(255, 255, 255, 0.55));
+}
+
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
 button.tma-dash__header-popup-item:hover {
   background: rgba(255, 255, 255, 0.28);
+}
+
+button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 20%, rgba(255, 255, 255, 0.6));
 }
 
 button.tma-dash__header-popup-item:focus-visible {
@@ -19599,10 +19614,18 @@ button.tma-dash__header-popup-item:focus-visible {
   outline-offset: 2px;
 }
 
-.tma-dash__header-popup-item--unread,
+.tma-dash__header-popup-item--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 14%, rgba(255, 255, 255, 0.55));
+}
+
 .tma-dash__header-popup-item--active,
 .tma-dash__header-popup-item:hover {
   background: rgba(255, 255, 255, 0.28);
+}
+
+.tma-dash__header-popup-item--unread:hover,
+.tma-dash__header-popup-item--unread.tma-dash__header-popup-item--active {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 20%, rgba(255, 255, 255, 0.6));
 }
 
 .tma-dash__header-popup--notifications {
@@ -19698,27 +19721,36 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__header-popup-avatar {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  overflow: hidden;
+  box-sizing: border-box;
+  flex: 0 0 28px !important;
+  flex-shrink: 0 !important;
+  align-self: flex-start !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
   background: rgba(255, 255, 255, 0.25);
   border: 0.5px solid rgba(255, 255, 255, 0.3);
+  display: block !important;
+  line-height: 0;
 }
 
 .tma-dash__header-popup-avatar img {
-  display: block;
+  display: block !important;
+  box-sizing: border-box;
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
   max-height: none !important;
+  aspect-ratio: 1 / 1 !important;
   object-fit: cover !important;
-  object-position: center;
-  border-radius: 0;
+  object-position: center !important;
+  border-radius: 0 !important;
 }
 
 .tma-dash__header-popup-copy {
@@ -19786,21 +19818,39 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread,
+.tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 22%, rgba(255, 255, 255, 0.06));
+}
+
 .tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
 .tma-dash[data-theme="dark"] button.tma-dash__header-popup-item:hover,
-.tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread,
 .tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
 .tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.tma-dash[data-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover,
+.tma-dash__header-popups[data-popup-theme="dark"] button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 28%, rgba(255, 255, 255, 0.08));
+}
+
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 22%, rgba(255, 255, 255, 0.06));
+}
+
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item--active,
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-item:hover,
-.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--active,
 .tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread:hover,
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread.tma-dash__header-popup-item--active,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread:hover,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread.tma-dash__header-popup-item--active {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 28%, rgba(255, 255, 255, 0.08));
 }
 
 .tma-dash[data-theme="dark"] .tma-dash__header-popup-action,
@@ -28030,7 +28080,8 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__notice-icon--amber  { background: color-mix(in srgb, var(--color-warning, #c77d18) 16%, #ffffff); }
 .tma-dash__notice-icon--red    { background: color-mix(in srgb, var(--color-red) 14%, #ffffff); }
 
-/* Unread indicator: a small dot, matching the header popup's language. */
+/* Unread indicator: a small blue dot (never --color-1 — that tint is
+   background-only and disappears on light surfaces). */
 .tma-dash__notice { position: relative; }
 .tma-dash__unread-dot {
   position: absolute;
@@ -28040,9 +28091,24 @@ span.tma-dash__messages-profile-avatar {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-1);
+  background: var(--color-primary, #03a5e9);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #03a5e9) 18%, #ffffff);
+  pointer-events: none;
 }
-.tma-dash__notice--unread .tma-dash__notice-title { font-weight: 600; }
+.tma-dash__notice--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 8%, transparent);
+}
+.tma-dash__notice--unread .tma-dash__notice-title {
+  font-weight: 600;
+  color: var(--color-black);
+}
+.tma-dash__notice:not(.tma-dash__notice--unread) .tma-dash__notice-title {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+.tma-dash__notice:not(.tma-dash__notice--unread) {
+  opacity: 0.78;
+}
 
 /* Per-item dismiss (§20): a hover × that replaces the unread dot's spot. */
 .tma-dash__notif-dismiss {
@@ -28275,8 +28341,18 @@ span.tma-dash__messages-profile-avatar {
   display: inline-block;
   margin-top: 4px;
   font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
   font-weight: 600;
-  color: var(--color-1);
+  /* --color-1 is a pale tint (#e6f6fd) meant for backgrounds — unreadable as text. */
+  color: var(--color-primary, #03a5e9);
+  text-decoration: none;
+}
+.tma-dash__header-popup-cta:hover {
+  text-decoration: underline;
+}
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-cta,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-cta {
+  color: #5ec8f5;
 }
 /* Both popups scroll their own list within the bounded panel height, so a long
    list never pushes the footer ("See all…") off-screen. */
@@ -28303,14 +28379,57 @@ span.tma-dash__messages-profile-avatar {
 
 /* The render layer emits div[role=button] items; give them the same
    affordances the original <button> items had. */
-.tma-dash__header-popup-action--active { color: var(--color-1); font-weight: 600; }
+.tma-dash__header-popup-action--active {
+  color: var(--color-primary, #03a5e9);
+  font-weight: 600;
+}
 .tma-dash__header-popup-item[role="button"] { cursor: pointer; }
 .tma-dash__header-popup-item:focus-visible {
   outline: 2px solid rgba(0, 0, 0, 0.12);
   outline-offset: 2px;
 }
 .tma-dash__header-popup-item { position: relative; }
-.tma-dash__header-popup-item .tma-dash__unread-dot { right: var(--space-8); background: var(--color-1); }
+.tma-dash__header-popup-item .tma-dash__unread-dot {
+  right: var(--space-8);
+  background: var(--color-primary, #03a5e9);
+}
+
+/* Read vs unread must be obvious at a glance — unread is bold + blue-tinted
+   with a primary dot; read is muted without the highlight. */
+.tma-dash__header-popup-item--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 14%, rgba(255, 255, 255, 0.55));
+}
+.tma-dash__header-popup-item--unread .tma-dash__header-popup-title {
+  font-weight: 600;
+  color: var(--color-black);
+}
+.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread) .tma-dash__header-popup-title {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread) {
+  opacity: 0.82;
+}
+.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread):hover {
+  opacity: 1;
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 22%, rgba(255, 255, 255, 0.06));
+}
+.tma-dash[data-theme="dark"] .tma-dash__header-popup-item--unread .tma-dash__header-popup-title,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__header-popup-item--unread .tma-dash__header-popup-title {
+  color: #fff;
+}
+.tma-dash[data-theme="dark"] .tma-dash__unread-dot,
+.tma-dash__header-popups[data-popup-theme="dark"] .tma-dash__unread-dot {
+  background: #5ec8f5;
+  box-shadow: 0 0 0 2px rgba(94, 200, 245, 0.2);
+}
+.tma-dash[data-theme="dark"] .tma-dash__notice--unread {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 18%, transparent);
+}
 
 /* Dark theme: the extra tones read on the dark popup/sidebar too. */
 .tma-dash[data-theme="dark"] .tma-dash__notice-icon--green,

@@ -865,8 +865,12 @@
         var emailMount = root.querySelector('[data-email]');
         if (emailMount) {
           var emailPath = normalizePath(window.location.pathname);
-          var emailFolder = emailPath === '/email/templates' ? 'templates' : 'inbox';
-          window.TMAEmail.mount(emailMount, { folder: emailFolder });
+          var emailFolder = opts.emailFolder
+            || (emailPath === '/email/templates' ? 'templates' : 'inbox');
+          window.TMAEmail.mount(emailMount, {
+            folder: emailFolder,
+            messageId: opts.emailMessageId || null,
+          });
         }
       }
       if (viewName === 'messages' && window.TMAMessages) {
@@ -975,6 +979,19 @@
             if (window.TMAOverview && window.TMAOverview.selectTab) window.TMAOverview.selectTab(params.tab);
             else root._pendingOverviewTab = params.tab;
           }
+          return true;
+        }
+      }
+
+      if (base === '/email' || base.indexOf('/email/') === 0) {
+        if (root.querySelector('.tma-dash__view[data-view="email"]')) {
+          activate('email', {
+            view: 'email',
+            title: 'Email',
+            crumb: 'Email',
+            emailFolder: base === '/email/templates' ? 'templates' : 'inbox',
+            emailMessageId: params.message || null,
+          });
           return true;
         }
       }

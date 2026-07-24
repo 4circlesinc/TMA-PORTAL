@@ -121,11 +121,15 @@ class MailSenderPhoto extends Model
             return true;
         }
 
-        // Legacy rows (no source yet): directory/Gravatar photos are jpeg;
-        // Google favicons are almost always png/ico — never treat those as faces.
+        // Legacy rows (no source yet). Directory photos were always stored as
+        // jpeg by resolve(); Google favicons are almost always tiny png/ico.
+        // Treat substantial jpegs as faces; tiny png/gif/ico as brand marks.
         $mime = mb_strtolower((string) $this->mime);
+        if (str_starts_with($mime, 'image/jpeg') || $mime === 'image/jpg') {
+            return true;
+        }
 
-        return str_starts_with($mime, 'image/jpeg') || $mime === 'image/jpg';
+        return false;
     }
 
     private static function rowFor(string $email): ?self
@@ -143,9 +147,42 @@ class MailSenderPhoto extends Model
         return $row;
     }
 
+    /**
+     * Relative portal URL so avatars keep working when APP_URL host/port
+     * differs from the browser's address bar.
+     */
     private static function urlForRow(?self $row): ?string
     {
-        return $row ? route('mail.sender-photo', ['hash' => $row->hash]) : null;
+        return $row ? '/portal/mail/sender-photo/'.$row->hash : null;
+    }
+
+    /**
+     * Expire cached brand favicons / ambiguous legacy pngs so the next
+     * ResolveSenderPhoto run can replace them with a real directory face.
+     */
+    public static function expireNonFaceCaches(): int
+    {
+        return self::query()
+            ->where('has_photo', true)
+            ->where(function ($q) {
+                $q->where('source', 'brand')
+                    ->orWhere(function ($inner) {
+                        $inner->whereNull('source')
+                            ->where(function ($mime) {
+                                $mime->where('mime', 'like', '%png%')
+                                    ->orWhere('mime', 'like', '%icon%')
+                                    ->orWhere('mime', 'like', '%gif%')
+                                    ->orWhere('path', 'like', '%.ico')
+                                    ->orWhere('path', 'like', '%.png');
+                            });
+                    });
+            })
+            ->update([
+                'source' => 'brand',
+                // Must be older than HIT_TTL — these rows still have has_photo=true.
+                'checked_at' => now()->subDays(self::HIT_TTL_DAYS + 1),
+                'updated_at' => now(),
+            ]);
     }
 
     /**

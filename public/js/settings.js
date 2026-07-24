@@ -498,9 +498,15 @@
         var api = getPrefsApi();
         if (api && api.setSidebarStyle) api.setSidebarStyle(p.sidebarStyle);
       }
+      if (p.toasts) {
+        writeToastPrefs(p.toasts, { sync: false, preview: false });
+      }
       if (changed && root && document.body.contains(root)) {
         try { syncTimePanelUI(root); } catch (e) {}
         try { syncThemePanelUI(root); } catch (e) {}
+        try { syncNotificationsPanelUI(root); } catch (e) {}
+      } else if (root && document.body.contains(root) && p.toasts) {
+        try { syncNotificationsPanelUI(root); } catch (e) {}
       }
     }).catch(function () {});
   }
@@ -550,6 +556,8 @@
     language: 'Select language',
     voice: 'Select voice',
     slack: 'Slack notifications',
+    'toast-position': 'Toast position',
+    'toast-duration': 'Display duration',
   };
 
   var MOBILE_SELECT_PANEL = {
@@ -557,6 +565,8 @@
     language: 'time',
     voice: 'time',
     slack: 'notifications',
+    'toast-position': 'notifications',
+    'toast-duration': 'notifications',
   };
 
   function getMobileSelectPanel(root, selectId) {
@@ -712,11 +722,15 @@
 
   function getMobileSelectList(id) {
     if (id === 'slack') return SLACK_STATES;
+    if (id === 'toast-position') return TOAST_POSITIONS;
+    if (id === 'toast-duration') return TOAST_DURATIONS;
     return getTimeSelectList(id);
   }
 
   function getMobileSelectValue(id) {
     if (id === 'slack') return readNotificationsPrefs().slack;
+    if (id === 'toast-position') return String(readToastPrefs().position);
+    if (id === 'toast-duration') return String(readToastPrefs().durationSec);
     return getTimeSelectValue(readTimePrefs(), id);
   }
 
@@ -890,9 +904,16 @@
         if (!option) return;
         e.preventDefault();
         var id = mobileSelect.getAttribute('data-active-select');
+        var value = option.getAttribute('data-mobile-select-option');
+        if (id === 'toast-position' || id === 'toast-duration') {
+          applyToastPickerChoice(id, value);
+          closeMobileSelect(root);
+          syncNotificationsPanelUI(root);
+          return;
+        }
         var storageKey = PICKER_STORAGE_KEYS[id];
         if (!storageKey) return;
-        store.set(storageKey, option.getAttribute('data-mobile-select-option'));
+        store.set(storageKey, value);
         closeMobileSelect(root);
         if (id === 'slack') syncNotificationsPanelUI(root);
         else syncTimePanelUI(root);
@@ -955,9 +976,17 @@
       picker.addEventListener('click', function (e) {
         e.stopPropagation();
         var option = e.target.closest('[data-picker-option]');
-        if (!option || !storageKey) return;
+        if (!option) return;
         e.preventDefault();
-        store.set(storageKey, option.getAttribute('data-picker-option'));
+        var value = option.getAttribute('data-picker-option');
+        if (id === 'toast-position' || id === 'toast-duration') {
+          applyToastPickerChoice(id, value);
+          closePickers(root);
+          syncNotificationsPanelUI(root);
+          return;
+        }
+        if (!storageKey) return;
+        store.set(storageKey, value);
         closePickers(root);
         if (id === 'slack') syncNotificationsPanelUI(root);
         else if (id === 'history') syncPrivacyPanelUI(root);
@@ -990,6 +1019,29 @@
     { id: 'on', label: 'On' },
   ];
 
+  var TOAST_POSITIONS = [
+    { id: 'bottom-right', label: 'Bottom Right' },
+    { id: 'top-right', label: 'Top Right' },
+    { id: 'bottom-left', label: 'Bottom Left' },
+  ];
+
+  var TOAST_DURATIONS = [
+    { id: '3', label: '3 seconds' },
+    { id: '5', label: '5 seconds' },
+    { id: '8', label: '8 seconds' },
+    { id: '10', label: '10 seconds' },
+  ];
+
+  var TOAST_PREF_DEFAULTS = {
+    enabled: true,
+    position: 'bottom-right',
+    durationSec: 10,
+    stickyImportant: false,
+    sound: false,
+    previewText: true,
+    groupSimilar: false,
+  };
+
   var NOTIFY_STORAGE_KEYS = {
     'mobile-push': 'tma.notify.mobilePush',
     email: 'tma.notify.email',
@@ -1004,6 +1056,61 @@
     history: 'tma.privacy.historyDays',
   };
 
+  function readToastPrefs() {
+    var cached = null;
+    try {
+      cached = JSON.parse(localStorage.getItem('tma.toasts') || 'null');
+    } catch (e) { cached = null; }
+    var base = Object.assign({}, TOAST_PREF_DEFAULTS, cached && typeof cached === 'object' ? cached : {});
+    if (window.TMAToast && window.TMAToast.getToastPrefs) {
+      base = Object.assign(base, window.TMAToast.getToastPrefs());
+    }
+    base.durationSec = parseInt(base.durationSec, 10) || 10;
+    return base;
+  }
+
+  function writeToastPrefs(partial, opts) {
+    opts = opts || {};
+    var next = Object.assign({}, readToastPrefs(), partial || {});
+    next.durationSec = parseInt(next.durationSec, 10) || 10;
+    try { localStorage.setItem('tma.toasts', JSON.stringify(next)); } catch (e) {}
+    if (window.TMAToast && window.TMAToast.applyToastPrefs) {
+      window.TMAToast.applyToastPrefs(next);
+    }
+    if (opts.sync !== false) queueToastPrefSync(next);
+    if (opts.preview && window.TMAToast && window.TMAToast.previewNotificationToast) {
+      window.TMAToast.previewNotificationToast();
+    }
+    return next;
+  }
+
+  var toastPrefTimer = null;
+  function queueToastPrefSync(prefs) {
+    if (toastPrefTimer) clearTimeout(toastPrefTimer);
+    toastPrefTimer = setTimeout(function () {
+      toastPrefTimer = null;
+      fetch('/me/preferences', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': prefXsrf(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ toasts: prefs }),
+      }).catch(function () {});
+    }, 350);
+  }
+
+  function applyToastPickerChoice(id, value) {
+    if (id === 'toast-position') {
+      writeToastPrefs({ position: value }, { preview: true });
+    } else if (id === 'toast-duration') {
+      writeToastPrefs({ durationSec: parseInt(value, 10) || 10 }, { preview: true });
+    }
+  }
+
   function readNotificationsPrefs() {
     return {
       mobilePush: store.get('tma.notify.mobilePush', '1') === '1',
@@ -1011,6 +1118,88 @@
       alwaysEmail: store.get('tma.notify.alwaysEmail', '1') === '1',
       slack: store.get('tma.notify.slack', 'off'),
     };
+  }
+
+  function renderToastSettingsGroup() {
+    var prefs = readToastPrefs();
+    var position = findOption(TOAST_POSITIONS, prefs.position, 'bottom-right');
+    var duration = findOption(TOAST_DURATIONS, String(prefs.durationSec), '10');
+
+    return '<div class="tma-dash__settings-notifications-group">' +
+      '<p class="tma-dash__settings-notifications-group-label">Notification toasts</p>' +
+      '<p class="tma-dash__settings-notifications-hint">Choose where toast pop-ups appear and how they behave across the portal.</p>' +
+      renderRow({
+        label: 'Enable toast notifications',
+        desc: 'Show pop-up toasts for new messages, email, calendar, files, and other updates.',
+        switch: true,
+        switchChecked: prefs.enabled,
+        switchLabel: 'Enable toast notifications',
+        switchAttrs: 'data-settings-toast-pref="enabled"',
+        chevron: false,
+      }) +
+      profileInnerDivider() +
+      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="toast-position">' +
+      renderRow({
+        label: 'Toast position',
+        desc: 'Where notification toasts appear on your screen.',
+        action: 'pick-toast-position',
+        value: position.label + (position.id === 'bottom-right' ? ' (Default)' : ''),
+        valueMuted: true,
+      }) +
+      renderPicker('toast-position', '30919:278125', TOAST_POSITIONS, prefs.position) +
+      '</div>' +
+      profileInnerDivider() +
+      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="toast-duration">' +
+      renderRow({
+        label: 'Display duration',
+        desc: 'How long toasts stay visible before dismissing.',
+        action: 'pick-toast-duration',
+        value: duration.label,
+        valueMuted: true,
+      }) +
+      renderPicker('toast-duration', '30919:278125', TOAST_DURATIONS, String(prefs.durationSec)) +
+      '</div>' +
+      profileInnerDivider() +
+      renderRow({
+        label: 'Keep important notifications visible',
+        desc: 'Security, approvals, and other important toasts stay until you dismiss them.',
+        switch: true,
+        switchChecked: prefs.stickyImportant,
+        switchLabel: 'Keep important notifications visible',
+        switchAttrs: 'data-settings-toast-pref="stickyImportant"',
+        chevron: false,
+      }) +
+      profileInnerDivider() +
+      renderRow({
+        label: 'Play notification sound',
+        desc: 'Play a short sound when a toast appears.',
+        switch: true,
+        switchChecked: prefs.sound,
+        switchLabel: 'Play notification sound',
+        switchAttrs: 'data-settings-toast-pref="sound"',
+        chevron: false,
+      }) +
+      profileInnerDivider() +
+      renderRow({
+        label: 'Show notification preview text',
+        desc: 'Include the message preview under the toast title.',
+        switch: true,
+        switchChecked: prefs.previewText,
+        switchLabel: 'Show notification preview text',
+        switchAttrs: 'data-settings-toast-pref="previewText"',
+        chevron: false,
+      }) +
+      profileInnerDivider() +
+      renderRow({
+        label: 'Group similar notifications',
+        desc: 'Combine similar toasts that arrive close together into one.',
+        switch: true,
+        switchChecked: prefs.groupSimilar,
+        switchLabel: 'Group similar notifications',
+        switchAttrs: 'data-settings-toast-pref="groupSimilar"',
+        chevron: false,
+      }) +
+      '</div>';
   }
 
   function renderNotificationsPanel() {
@@ -1062,6 +1251,7 @@
       }) +
       renderPicker('slack', '30919:278125', SLACK_STATES, prefs.slack) +
       '</div></div>' +
+      renderToastSettingsGroup() +
       renderNotificationPrefsGroup() +
       '</div>' +
       renderMobileSelectOverlay('30919:293271') +
@@ -1155,7 +1345,10 @@
   function syncNotificationsPanelUI(root) {
     loadNotificationPrefs(root);
     var prefs = readNotificationsPrefs();
+    var toastPrefs = readToastPrefs();
     var slack = findOption(SLACK_STATES, prefs.slack, 'off');
+    var position = findOption(TOAST_POSITIONS, toastPrefs.position, 'bottom-right');
+    var duration = findOption(TOAST_DURATIONS, String(toastPrefs.durationSec), '10');
 
     root.querySelectorAll('[data-settings-notify]').forEach(function (input) {
       var key = input.getAttribute('data-settings-notify');
@@ -1164,16 +1357,49 @@
       else if (key === 'always-email') input.checked = prefs.alwaysEmail;
     });
 
+    root.querySelectorAll('[data-settings-toast-pref]').forEach(function (input) {
+      var key = input.getAttribute('data-settings-toast-pref');
+      if (key && Object.prototype.hasOwnProperty.call(toastPrefs, key)) {
+        input.checked = !!toastPrefs[key];
+      }
+    });
+
     var slackRow = root.querySelector('[data-settings-action="pick-slack"]');
     if (slackRow) {
       var slackValue = slackRow.querySelector('[data-settings-row-value="pick-slack"]');
       if (slackValue) slackValue.textContent = slack.label;
     }
 
+    var positionRow = root.querySelector('[data-settings-action="pick-toast-position"]');
+    if (positionRow) {
+      var positionValue = positionRow.querySelector('[data-settings-row-value="pick-toast-position"]');
+      if (positionValue) {
+        positionValue.textContent = position.label + (position.id === 'bottom-right' ? ' (Default)' : '');
+      }
+    }
+
+    var durationRow = root.querySelector('[data-settings-action="pick-toast-duration"]');
+    if (durationRow) {
+      var durationValue = durationRow.querySelector('[data-settings-row-value="pick-toast-duration"]');
+      if (durationValue) durationValue.textContent = duration.label;
+    }
+
     var slackPicker = root.querySelector('[data-settings-picker="slack"]');
     if (slackPicker) {
       var listEl = slackPicker.querySelector('[data-picker-list]');
       if (listEl) listEl.innerHTML = renderPickerList(SLACK_STATES, prefs.slack);
+    }
+
+    var positionPicker = root.querySelector('[data-settings-picker="toast-position"]');
+    if (positionPicker) {
+      var positionList = positionPicker.querySelector('[data-picker-list]');
+      if (positionList) positionList.innerHTML = renderPickerList(TOAST_POSITIONS, toastPrefs.position);
+    }
+
+    var durationPicker = root.querySelector('[data-settings-picker="toast-duration"]');
+    if (durationPicker) {
+      var durationList = durationPicker.querySelector('[data-picker-list]');
+      if (durationList) durationList.innerHTML = renderPickerList(TOAST_DURATIONS, String(toastPrefs.durationSec));
     }
 
     var notifPanel = root.querySelector('[data-settings-panel="notifications"]');
@@ -1193,6 +1419,21 @@
         var key = input.getAttribute('data-settings-notify');
         var storageKey = NOTIFY_STORAGE_KEYS[key];
         if (storageKey) store.set(storageKey, input.checked ? '1' : '0');
+        syncNotificationsPanelUI(root);
+      });
+    });
+
+    root.querySelectorAll('[data-settings-toast-pref]').forEach(function (input) {
+      if (input.dataset.toastBound) return;
+      input.dataset.toastBound = '1';
+      input.addEventListener('change', function () {
+        var key = input.getAttribute('data-settings-toast-pref');
+        if (!key) return;
+        var patch = {};
+        patch[key] = !!input.checked;
+        writeToastPrefs(patch, {
+          preview: (key === 'enabled' && input.checked) || key === 'previewText' || (key === 'sound' && input.checked),
+        });
         syncNotificationsPanelUI(root);
       });
     });

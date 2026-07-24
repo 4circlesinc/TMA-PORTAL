@@ -582,7 +582,7 @@ class MailController extends Controller
         $photo = $cached[$email] ?? null;
 
         return $photo && $photo->isFresh() && $photo->has_photo
-            ? route('mail.sender-photo', ['hash' => $photo->hash])
+            ? '/portal/mail/sender-photo/'.$photo->hash
             : null;
     }
 

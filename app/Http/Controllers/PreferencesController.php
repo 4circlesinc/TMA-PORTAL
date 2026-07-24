@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Support\Notifications\ToastSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -33,12 +35,21 @@ class PreferencesController extends Controller
         'sidebarStyle' => ['string', 'in:standard,hover'],
         'calendarView' => ['string', 'in:week,month,agenda'],
         'calendarSidebarOpen' => ['boolean'],
+        // Nested toast prefs — validated + cleaned by ToastSettings.
+        'toasts' => ['array'],
+        'toasts.enabled' => ['boolean'],
+        'toasts.position' => ['string', 'in:bottom-right,top-right,bottom-left'],
+        'toasts.durationSec' => ['integer', 'in:3,5,8,10'],
+        'toasts.stickyImportant' => ['boolean'],
+        'toasts.sound' => ['boolean'],
+        'toasts.previewText' => ['boolean'],
+        'toasts.groupSimilar' => ['boolean'],
     ];
 
     /** The signed-in user's preferences, filled in with defaults. */
     public function show(Request $request): JsonResponse
     {
-        return response()->json($this->merged($request->user()->preferences ?? []));
+        return response()->json($this->payload($request->user()));
     }
 
     /** Merge-save any of the whitelisted preference keys. */
@@ -50,19 +61,33 @@ class PreferencesController extends Controller
         }
         $data = $request->validate($rules);
 
-        $current = $request->user()->preferences ?? [];
+        $user = $request->user();
+        $current = $user->preferences ?? [];
         $booleans = ['autoTimezone', 'calendarSidebarOpen'];
         foreach ($data as $key => $value) {
+            if ($key === 'toasts') {
+                continue;
+            }
             $current[$key] = in_array($key, $booleans, true) ? (bool) $value : $value;
         }
 
-        $request->user()->forceFill(['preferences' => $current])->save();
+        $user->forceFill(['preferences' => $current])->save();
 
-        return response()->json($this->merged($current));
+        if (isset($data['toasts']) && is_array($data['toasts'])) {
+            ToastSettings::update($user, $data['toasts']);
+        }
+
+        return response()->json($this->payload($user->fresh()));
     }
 
-    private function merged(array $stored): array
+    /** @return array<string, mixed> */
+    private function payload(User $user): array
     {
-        return array_merge(self::DEFAULTS, array_intersect_key($stored, self::DEFAULTS));
+        $stored = $user->preferences ?? [];
+
+        return array_merge(
+            array_merge(self::DEFAULTS, array_intersect_key($stored, self::DEFAULTS)),
+            ['toasts' => ToastSettings::for($user)]
+        );
     }
 }

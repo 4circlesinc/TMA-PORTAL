@@ -99,13 +99,19 @@
     var src = item.image || (item.actor && item.actor.avatar) || '';
     var url = isRealPhoto(src) ? src : fallback;
     var imgClass = cfg.avatarImgClass ? ' class="' + cfg.avatarImgClass + '"' : '';
+    var size = cfg.avatarSize || 40;
     var img = '<img' + imgClass +
-      ' src="' + esc(url) + '" alt="" width="40" height="40" ' +
+      ' src="' + esc(url) + '" alt="" width="' + size + '" height="' + size + '" ' +
+      'style="width:100%;height:100%;object-fit:cover;display:block;border-radius:0;" ' +
       "onerror=\"this.onerror=null;this.src='" + fallback + "'\">";
     // Always clip inside a fixed square — bare <img> tags were stretching into
-    // tall pills when height:auto won over the size rules.
+    // tall pills when height:auto won over the size rules. Inline size is the
+    // last line of defence when a cached stylesheet lags behind the markup.
     var wrap = cfg.avatarWrap || 'tma-dash__person-avatar';
-    return '<span class="' + wrap + '">' + img + '</span>';
+    var wrapStyle = 'width:' + size + 'px;height:' + size + 'px;min-width:' + size +
+      'px;min-height:' + size + 'px;max-width:' + size + 'px;max-height:' + size +
+      'px;flex:0 0 ' + size + 'px;border-radius:50%;overflow:hidden;display:block;line-height:0;';
+    return '<span class="' + wrap + '" style="' + wrapStyle + '">' + img + '</span>';
   }
 
   function systemVisual(item, cfg) {
@@ -143,6 +149,7 @@
       cta: 'tma-dash__header-popup-cta',
       avatarWrap: 'tma-dash__header-popup-avatar',
       avatarImgClass: '',
+      avatarSize: 28,
       iconSpan: 'tma-dash__header-popup-icon',
       unread: 'tma-dash__header-popup-item--unread',
     },
@@ -157,6 +164,7 @@
       cta: 'tma-dash__notice-cta',
       avatarWrap: 'tma-dash__person-avatar',
       avatarImgClass: '',
+      avatarSize: 40,
       iconSpan: 'tma-dash__notice-icon',
       unread: 'tma-dash__notice--unread',
     },

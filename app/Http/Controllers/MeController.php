@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\AvatarService;
+use App\Support\Notifications\ToastSettings;
 use App\Support\RealtimeConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,9 @@ class MeController extends Controller
             'providerPhoto' => $user->provider_avatar_url,
             // Lets the notification realtime share the messaging websocket.
             'realtime' => RealtimeConfig::client(),
+            // Toast prefs load with identity so the first notification of the
+            // session already lands in the right corner with the right hold.
+            'toasts' => ToastSettings::for($user),
         ]);
     }
 
