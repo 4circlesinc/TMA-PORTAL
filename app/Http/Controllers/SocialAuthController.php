@@ -87,7 +87,15 @@ class SocialAuthController extends Controller
                 // needed to receive a refresh token for offline access
                 $params = ['access_type' => 'offline', 'prompt' => 'consent'];
             } else {
+                // offline_access is what makes Entra return a refresh token.
+                // prompt=consent forces a fresh consent covering the newly
+                // requested Mail scopes: without it, an account that already
+                // signed in with basic scopes gets an incremental-consent token
+                // limited to the *previously* granted scopes — a sign-in token
+                // with no Mail.* and no refresh token, which reads as
+                // "connected for reading only".
                 $driver->scopes(['offline_access']);
+                $params = ['prompt' => 'consent'];
             }
         }
 
