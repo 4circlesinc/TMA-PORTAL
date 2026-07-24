@@ -1988,11 +1988,16 @@
     return PROFILE.avatar || '';
   }
 
-  /* ── mailbox backfill progress ──────────────────────────────────
-   * A corner panel while the mailbox history downloads, using the same
+  /* ── mailbox sync progress ──────────────────────────────────────
+   * A corner panel while the mailbox is analyzed and imported, using the same
    * chrome as the File Library's upload panel so the two read as one thing.
-   * Polls the server, hides itself when there is nothing left to pull, and
-   * can be dismissed — the download continues on the queue either way.
+   *
+   * Everything shown here is server state (mail_sync_progress), so it
+   * survives refreshes and closed tabs: the stage the sync is in, real
+   * counts, an honest percentage, a measured time estimate, stall detection
+   * with a Retry action, and the failure reason when there is one. It is
+   * non-blocking by design — the panel can be collapsed or dismissed and the
+   * import carries on in the queue either way.
    */
   var syncPanel = null;
   var syncTimer = null;
@@ -2018,24 +2023,140 @@
       var action = btn.getAttribute('data-mail-sync-action');
       if (action === 'collapse') { syncCollapsed = !syncCollapsed; }
       if (action === 'close') { syncDismissed = true; stopSyncPolling(); hideSyncPanel(); }
+      if (action === 'retry') { retryMailSync(btn); }
     });
     document.body.appendChild(syncPanel);
     return syncPanel;
   }
 
+  /* Manual retry from the panel. The server resumes from its stored page
+   * tokens, so this never restarts the import from message zero. */
+  function retryMailSync(btn) {
+    if (btn) btn.disabled = true;
+    api().retrySync().then(function (data) {
+      if (data) renderSyncPanel(data);
+      stopSyncPolling();
+      syncTimer = setTimeout(pollSyncStatus, 3000);
+    }).catch(function () {
+      if (btn) btn.disabled = false;
+    });
+  }
+
+  function syncNum(n) {
+    return (n || 0).toLocaleString();
+  }
+
+  /* "just now" / "20s ago" — the panel's proof it is still being fed. */
+  function syncRelativeTime(iso) {
+    if (!iso) return '';
+    var secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+    if (secs < 10) return 'just now';
+    if (secs < 60) return secs + 's ago';
+    var mins = Math.round(secs / 60);
+    if (mins < 60) return mins + 'm ago';
+    return Math.round(mins / 60) + 'h ago';
+  }
+
+  function syncEtaText(seconds) {
+    if (seconds === null || seconds === undefined) return '';
+    if (seconds < 60) return 'under 1 min left';
+    var mins = Math.round(seconds / 60);
+    if (mins < 60) return 'about ' + mins + ' min left';
+    return 'about ' + Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm left';
+  }
+
+  /* The server's stall diagnosis, in words a reader can act on. */
+  function syncStallText(reason) {
+    switch (reason) {
+      case 'auth':
+        return 'The mailbox connection needs to be reconnected before the sync can continue.';
+      case 'queue':
+        return 'The background worker looks unavailable — ask an administrator to check the queue worker.';
+      case 'job-failed':
+        return 'The last sync step failed. Retrying resumes from where it stopped.';
+      case 'job-missing':
+        return 'The sync step went missing from the queue and is being restarted.';
+      default:
+        return 'We are retrying the current step.';
+    }
+  }
+
   function renderSyncPanel(data) {
-    var synced = (data && data.synced) || 0;
-    var total = data && data.total ? data.total : null;
-    var pct = total ? Math.max(0, Math.min(100, Math.round((synced / total) * 100))) : null;
+    var p = (data && data.progress) || null;
     var finished = !!(data && data.done);
+    var failed = !!(data && data.failed);
+    var stalled = !!(p && p.stalled) && !finished && !failed;
 
-    var title = finished
-      ? 'Mailbox up to date'
-      : 'Downloading mailbox…';
+    // Counts come from the progress record where there is one; older
+    // accounts without a record fall back to the plain synced/total pair.
+    var processed = p ? (p.processedMessages || 0) : ((data && data.synced) || 0);
+    var total = (p && p.totalMessages) || (data && data.total) || null;
+    var estimated = !!(p && p.estimated) && !finished;
+    var pct = p && p.percentage !== null && p.percentage !== undefined
+      ? p.percentage
+      : (total ? Math.max(0, Math.min(100, Math.round((processed / total) * 100))) : null);
+    if (finished) pct = 100;
 
+    var title = failed ? 'Mailbox sync problem'
+      : finished ? 'Mailbox up to date'
+        : stalled ? 'Mailbox sync delayed'
+          : (p && p.stageLabel ? p.stageLabel + '…' : 'Syncing mailbox…');
+
+    // "Importing Inbox — 1,250 of ~8,420 messages"
     var meta = total
-      ? synced.toLocaleString() + ' of ' + total.toLocaleString() + ' messages'
-      : synced.toLocaleString() + ' messages synced';
+      ? syncNum(processed) + ' of ' + (estimated ? '~' : '') + syncNum(total) + ' messages'
+      : syncNum(processed) + ' messages synced';
+    if (p && p.currentFolder && !finished && !failed) {
+      var folderName = p.currentFolder.charAt(0).toUpperCase() + p.currentFolder.slice(1);
+      meta = folderName + ' — ' + meta;
+    }
+
+    var stageLine = p && !finished && !failed
+      ? 'Step ' + p.stageNumber + ' of ' + p.stageCount
+      : '';
+
+    // What the analysis found. Only real numbers appear; a count of zero is
+    // simply not claimed yet.
+    var statBits = [];
+    if (p) {
+      if (p.totalConversations) statBits.push(syncNum(p.totalConversations) + ' conversations');
+      var attachments = (p.totalAttachments !== null && p.totalAttachments !== undefined)
+        ? p.totalAttachments
+        : p.attachmentsFound;
+      if (attachments) {
+        statBits.push(syncNum(attachments) + ' attachments' + (estimated ? ' (est.)' : ''));
+      }
+      if (p.totalImages) statBits.push(syncNum(p.totalImages) + ' images');
+      if (p.totalDocuments) statBits.push(syncNum(p.totalDocuments) + ' documents');
+      if (p.failedMessages) statBits.push(syncNum(p.failedMessages) + ' failed');
+    }
+
+    var timingBits = [];
+    if (p && !finished && !failed && p.etaSeconds !== null && p.etaSeconds !== undefined) {
+      timingBits.push(syncEtaText(p.etaSeconds));
+    }
+    if (p && p.lastProgressAt) timingBits.push('updated ' + syncRelativeTime(p.lastProgressAt));
+
+    // A stalled or failed sync explains itself and offers a way out — never
+    // an endless spinner with no explanation.
+    var problemHtml = '';
+    if (failed) {
+      problemHtml =
+        '<div class="tma-mail-sync__problem" role="alert">' +
+        '<span>' + esc((data && data.error) || 'The mailbox sync failed.') + '</span>' +
+        '<button type="button" class="tma-mail-sync__retry" data-mail-sync-action="retry">Retry</button>' +
+        '</div>';
+    } else if (stalled) {
+      problemHtml =
+        '<div class="tma-mail-sync__problem" role="status">' +
+        '<span>No progress for a little while. ' + esc(syncStallText(p.stallReason)) +
+        (p.retried ? ' Retrying automatically…' : '') + '</span>' +
+        '<button type="button" class="tma-mail-sync__retry" data-mail-sync-action="retry">Retry now</button>' +
+        '</div>';
+    }
+
+    var hintHtml = (finished || failed) ? '' :
+      '<div class="tma-mail-sync__hint">Syncing continues in the background — you can keep using the portal.</div>';
 
     var panel = ensureSyncPanel();
     panel.innerHTML =
@@ -2055,14 +2176,19 @@
         '<span class="tma-portal-upload__name">' + esc(meta) + '</span>' +
         '</div>' +
         // A div, not a span: the bar needs a block box or its height collapses.
-        // With no provider total we still show motion, via an indeterminate bar.
-        '<div class="tma-portal-upload__bar' + (pct === null && !finished ? ' tma-mail-sync__bar--indeterminate' : '') + '">' +
-        '<span class="tma-portal-upload__fill" style="width:' + (finished ? 100 : (pct === null ? 100 : pct)) + '%"></span>' +
+        // With no total yet we still show motion, via an indeterminate bar —
+        // but only while fresh progress is actually arriving.
+        '<div class="tma-portal-upload__bar' + (pct === null && !finished && !stalled && !failed ? ' tma-mail-sync__bar--indeterminate' : '') + '">' +
+        '<span class="tma-portal-upload__fill" style="width:' + (finished ? 100 : (pct === null ? 0 : pct)) + '%"></span>' +
         '</div>' +
         '<div class="tma-portal-upload__meta">' +
         '<span>' + (pct === null ? (finished ? 'Complete' : 'Working…') : pct + '%') + '</span>' +
-        '<span>' + esc(finished ? 'All folders' : 'Keeps going in the background') + '</span>' +
+        (stageLine ? '<span class="tma-mail-sync__stage">' + esc(stageLine) + '</span>' : '') +
         '</div>' +
+        (statBits.length ? '<div class="tma-mail-sync__stats">' + esc(statBits.join(' · ')) + '</div>' : '') +
+        (timingBits.length ? '<div class="tma-mail-sync__stats">' + esc(timingBits.join(' · ')) + '</div>' : '') +
+        problemHtml +
+        hintHtml +
         '</li></ul>');
   }
 
@@ -2086,18 +2212,22 @@
         return;
       }
 
-      syncTimer = setTimeout(pollSyncStatus, 5000);
+      // A failed sync polls slowly (an automatic recovery clears itself); a
+      // live one polls fast enough that the numbers visibly move.
+      syncTimer = setTimeout(pollSyncStatus, data.failed ? 10000 : 3000);
     }).catch(function () {
       // A failed poll is not worth surfacing; try again later.
       syncTimer = setTimeout(pollSyncStatus, 15000);
     });
   }
 
-  /* Sign out of the mailbox: disconnect the connected Google/Microsoft account
-   * so the page returns to the "Connect your mailbox" state. This does NOT end
-   * the portal session — portal sign-out lives on the shell sidebar profile,
-   * not this menu. Because a provider account is shared with calendar sync,
-   * disconnecting here also stops that provider's calendar sync. */
+  /* Sign out of the mailbox ONLY: stops mail sync so the page returns to the
+   * "Connect your mailbox" state. The Google/Microsoft account itself stays
+   * connected to the portal — sign-in, calendar and file sync are untouched,
+   * and imported mail is kept so reconnecting later is instant. Fully
+   * disconnecting the account lives in Security settings. This also does NOT
+   * end the portal session — portal sign-out lives on the shell sidebar
+   * profile, not this menu. */
   function disconnectMailbox(root, state, render) {
     var provider = state.account && state.account.provider;
     if (!provider) {
@@ -2108,10 +2238,10 @@
     api().disconnect(provider).then(function () {
       // Re-read connection state so the page settles into the connect view;
       // the sync poller stops itself once connected is false.
+      hideSyncPanel();
       bootstrapMailbox(root, state, render);
-      showEmailToast(root, 'Signed out of your mailbox.');
+      showEmailToast(root, 'Signed out of your mailbox. Your account is still connected to the portal.');
     }).catch(function (err) {
-      // e.g. "Set a password first…" when this is the only way you sign in.
       showEmailToast(root, (err && err.message) || 'Could not sign out of the mailbox.');
     });
   }
@@ -6350,9 +6480,29 @@
     bindCurrentUser(render);
     render();
     bootstrapMailbox(root, state, render);
-    // Show how far the mailbox history has downloaded, bottom-right.
+    // Show the sync's stage and counts, bottom-right.
     stopSyncPolling();
     pollSyncStatus();
+
+    // Landing back from the OAuth connect flow: confirm the connection
+    // immediately (the analysis is already running server-side) and strip
+    // the notice from the URL so a refresh doesn't repeat it.
+    try {
+      var mailParams = new URLSearchParams(window.location.search);
+      var mailNotice = mailParams.get('notice');
+      if (mailNotice === 'mail-connected' || mailNotice === 'mail-error') {
+        var mailReason = mailParams.get('reason');
+        mailParams.delete('notice');
+        mailParams.delete('reason');
+        var qs = mailParams.toString();
+        window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
+        setTimeout(function () {
+          showEmailToast(root, mailNotice === 'mail-connected'
+            ? 'Mailbox connected successfully — analyzing your mailbox…'
+            : (mailReason || 'The mailbox could not be connected.'));
+        }, 300);
+      }
+    } catch (e) { /* URL handling is cosmetic; never block the page on it. */ }
 
     // New mail shows up on its own, like a real inbox — quiet background
     // poll, no spinner, no toast.

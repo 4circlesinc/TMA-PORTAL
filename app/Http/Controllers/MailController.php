@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AnalyzeMailbox;
+use App\Jobs\BackfillMailbox;
 use App\Jobs\ResolveSenderPhoto;
 use App\Jobs\SyncMailbox;
 use App\Models\ConnectedAccount;
@@ -10,6 +12,7 @@ use App\Models\MailDraft;
 use App\Models\MailLabel;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
+use App\Models\MailSyncProgress;
 use App\Models\User;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
@@ -61,6 +64,15 @@ class MailController extends Controller
             // PendingDispatch that only fires when it is destroyed, and
             // returning it would push that past this guard.
             SyncMailbox::dispatch($account);
+
+            // A mailbox whose history was never fully imported gets the
+            // analyze → import pipeline (re)started here. Both jobs are
+            // unique per account, so opening the page twice costs nothing —
+            // and a backfill that quietly died resumes from its saved page
+            // tokens instead of leaving the panel spinning forever.
+            if (! $account->mail_backfilled_at) {
+                AnalyzeMailbox::dispatch($account);
+            }
         }, report: false);
 
         return response()->json([
@@ -129,7 +141,9 @@ class MailController extends Controller
     }
 
     /**
-     * Progress of the history backfill, for the corner panel on the email page.
+     * Everything the progress panel on the email page shows: the stage the
+     * sync is in, real counts, an honest percentage, stall detection and the
+     * failure reason when there is one.
      *
      * `total` is what the provider says the mailbox holds; it is absent for a
      * folder the provider does not report, so the UI shows a count rather than
@@ -164,20 +178,215 @@ class MailController extends Controller
             ];
         }
 
-        $done = $account->mail_backfilled_at !== null;
+        $tracker = MailSyncProgress::where('connected_account_id', $account->id)->first();
+
+        $done = $account->mail_backfilled_at !== null
+            || ($tracker && $tracker->status === 'completed');
+        $failed = ! $done && $tracker && $tracker->status === 'failed';
+        $running = ! $done && ! $failed;
+
+        // The watchdog. A run that has shown no life for STALL_AFTER_SECONDS
+        // is diagnosed (worker down? token dead? job failed?) and — where a
+        // retry could actually help — re-dispatched automatically.
+        $stalled = false;
+        $stallReason = null;
+        $retried = false;
+
+        if ($tracker && $tracker->isStalled()) {
+            $stalled = true;
+            $stallReason = $this->diagnoseStall($account, $tracker);
+            $retried = $this->autoRetry($account, $tracker, $stallReason);
+        }
 
         return response()->json([
             'connected' => true,
             // Running while there is history still to pull. The panel hides
             // itself once this goes false.
-            'running' => ! $done,
+            'running' => $running,
             'done' => $done,
+            'failed' => $failed,
             'status' => $account->mail_status,
-            'error' => $account->mail_error,
+            'error' => $failed ? $tracker->error_message : $account->mail_error,
+            'errorCode' => $failed ? $tracker->error_code : null,
             'synced' => array_sum($synced),
             'total' => $totals === [] ? null : array_sum($totals),
             'folders' => $folders,
             'syncedAt' => $account->mail_synced_at?->toIso8601String(),
+            'progress' => $tracker ? $this->progressPayload($tracker, $running, $stalled, $stallReason, $retried) : null,
+        ]);
+    }
+
+    /**
+     * The stage/count/timing block of the sync-status payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function progressPayload(
+        MailSyncProgress $tracker,
+        bool $running,
+        bool $stalled,
+        ?string $stallReason,
+        bool $retried,
+    ): array {
+        // Estimated time remaining, from the measured import rate — never a
+        // made-up number. Only offered once enough messages have landed for
+        // the rate to mean something.
+        $eta = null;
+
+        if ($running && $tracker->total_messages && $tracker->started_at && $tracker->processed_messages >= 100) {
+            $elapsed = max(1, (int) abs($tracker->started_at->diffInSeconds(now())));
+            $rate = $tracker->processed_messages / $elapsed;
+
+            if ($rate > 0) {
+                $eta = (int) round(max(0, $tracker->total_messages - $tracker->processed_messages) / $rate);
+            }
+        }
+
+        return [
+            'stage' => $tracker->current_stage,
+            'stageLabel' => $tracker->stageLabel(),
+            'stageNumber' => $tracker->stageNumber(),
+            'stageCount' => count(MailSyncProgress::STAGES),
+            'status' => $tracker->status,
+            'estimated' => (bool) $tracker->totals_estimated,
+            'totalMessages' => $tracker->total_messages,
+            'processedMessages' => (int) $tracker->processed_messages,
+            'totalConversations' => $tracker->total_conversations,
+            'totalAttachments' => $tracker->total_attachments,
+            'attachmentsFound' => (int) $tracker->processed_attachments,
+            'totalImages' => $tracker->total_images,
+            'totalDocuments' => $tracker->total_documents,
+            'failedMessages' => (int) $tracker->failed_messages,
+            'currentFolder' => $tracker->current_folder,
+            'percentage' => $tracker->percentage !== null ? (int) $tracker->percentage : null,
+            'startedAt' => $tracker->started_at?->toIso8601String(),
+            'lastProgressAt' => $tracker->last_progress_at?->toIso8601String(),
+            'completedAt' => $tracker->completed_at?->toIso8601String(),
+            'elapsedSeconds' => $tracker->started_at ? (int) abs($tracker->started_at->diffInSeconds(now())) : null,
+            'etaSeconds' => $eta,
+            'stalled' => $stalled,
+            'stallReason' => $stallReason,
+            'retried' => $retried,
+        ];
+    }
+
+    /**
+     * Why a sync has stopped moving. Checked in order of what the user can
+     * least do anything about: a dead grant needs a reconnect, a stopped
+     * worker needs ops, a failed job can simply be retried.
+     */
+    private function diagnoseStall(ConnectedAccount $account, MailSyncProgress $tracker): string
+    {
+        if ($account->mail_status === 'error' && $account->mail_error) {
+            return 'auth';
+        }
+
+        // Database queue: a job nobody has claimed in 30s means no worker is
+        // pulling work at all — dispatching more jobs cannot help that.
+        if (config('queue.default') === 'database') {
+            $oldestWaiting = DB::table('jobs')->whereNull('reserved_at')->min('available_at');
+
+            if ($oldestWaiting !== null && now()->getTimestamp() - (int) $oldestWaiting > 30) {
+                return 'queue';
+            }
+
+            $queuedMailJob = DB::table('jobs')->where('payload', 'like', '%Mailbox%')->exists();
+
+            if (! $queuedMailJob) {
+                $recentFailure = DB::table('failed_jobs')
+                    ->where('payload', 'like', '%Mailbox%')
+                    ->where('failed_at', '>=', $tracker->started_at ?? now()->subDay())
+                    ->exists();
+
+                return $recentFailure ? 'job-failed' : 'job-missing';
+            }
+        }
+
+        return 'unknown';
+    }
+
+    /**
+     * Re-dispatch the pipeline for a stalled run, where a retry can help.
+     * Throttled to once a minute so a poll every few seconds does not turn
+     * into a dispatch storm; the jobs' own uniqueness/overlap locks are the
+     * second line of defence.
+     */
+    private function autoRetry(ConnectedAccount $account, MailSyncProgress $tracker, string $reason): bool
+    {
+        // A dead grant needs the user to reconnect; a stopped worker needs
+        // the worker started. Neither is fixed by queueing more jobs.
+        if (in_array($reason, ['auth', 'queue'], true)) {
+            return false;
+        }
+
+        if ($tracker->last_retry_at && $tracker->last_retry_at->gt(now()->subSeconds(60))) {
+            return false;
+        }
+
+        $tracker->forceFill(['last_retry_at' => now()])->save();
+
+        rescue(function () use ($account, $tracker) {
+            // Mid-import resumes from the saved page tokens; anything earlier
+            // re-runs the (cheap) analysis, which re-enters the pipeline.
+            $tracker->current_stage === 'importing' && ! $account->mail_backfilled_at
+                ? BackfillMailbox::dispatch($account)
+                : AnalyzeMailbox::dispatch($account);
+        }, report: false);
+
+        return true;
+    }
+
+    /**
+     * Manual "Retry" from the progress panel: clear the failure and re-enter
+     * the pipeline. The import resumes from its stored page tokens — a retry
+     * never means starting the mailbox over.
+     */
+    public function retrySync(Request $request): JsonResponse
+    {
+        $account = Mailbox::requireAccountFor($request->user());
+        $tracker = MailSyncProgress::for($account);
+
+        $tracker->forceFill([
+            'status' => 'running',
+            'error_code' => null,
+            'error_message' => null,
+            'last_retry_at' => now(),
+            'last_progress_at' => now(),
+        ])->save();
+
+        rescue(function () use ($account, $tracker) {
+            $tracker->current_stage === 'importing' && ! $account->mail_backfilled_at
+                ? BackfillMailbox::dispatch($account)
+                : AnalyzeMailbox::dispatch($account);
+        }, report: false);
+
+        return $this->syncStatus($request);
+    }
+
+    /**
+     * Sign out of the mailbox — and only the mailbox.
+     *
+     * This stops mail sync and returns the email page to its "connect"
+     * state, but the Microsoft/Google account itself stays connected to the
+     * portal (sign-in, calendar, files are untouched). Imported messages are
+     * kept, so reconnecting later picks up where this left off instead of
+     * re-importing history; the provider-message-id upsert prevents
+     * duplicates either way. Fully disconnecting the account lives in
+     * Security settings, deliberately elsewhere.
+     */
+    public function signOut(Request $request): JsonResponse
+    {
+        $account = Mailbox::accountFor($request->user());
+
+        if (! $account) {
+            return response()->json(['message' => 'No mailbox is connected.'], 422);
+        }
+
+        $account->forceFill(['sync_email' => false])->save();
+
+        return response()->json([
+            'signedOut' => true,
+            'provider' => $account->provider,
         ]);
     }
 
@@ -1113,7 +1322,15 @@ class MailController extends Controller
             $account->forceFill(['sync_email' => $data['syncEnabled']])->save();
 
             if ($data['syncEnabled']) {
-                SyncMailbox::dispatch($account);
+                rescue(function () use ($account) {
+                    SyncMailbox::dispatch($account);
+
+                    // Re-enabling sync re-enters the pipeline: a mailbox seen
+                    // before completes analysis in seconds (history is kept,
+                    // duplicates prevented by message-id upsert); a new one
+                    // starts its background import.
+                    AnalyzeMailbox::start($account);
+                }, report: false);
             }
         }
 

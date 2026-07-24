@@ -114,6 +114,16 @@ interface MailProvider
     public function folderTotals(): array;
 
     /**
+     * How many messages in each folder carry attachments, where the provider
+     * can answer cheaply. Used only for the initial "N attachments found"
+     * estimate on the progress panel — a provider with no cheap answer
+     * returns [] and the panel counts what the import actually finds instead.
+     *
+     * @return array<string, int> keyed by our folder names
+     */
+    public function attachmentCounts(): array;
+
+    /**
      * That person's profile photo as raw image bytes, or null when the
      * provider has none for them (or will not share it). Providers only hold
      * photos for people inside the account's own organisation.

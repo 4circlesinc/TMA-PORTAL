@@ -3,7 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\ConnectedAccount;
+use App\Models\MailSyncProgress;
 use App\Support\Mail\MailAuthException;
+use App\Support\Mail\MailSyncError;
 use App\Support\Mail\MailSynchronizer;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -71,6 +73,15 @@ class SyncMailbox implements ShouldBeUnique, ShouldQueue
                 'mail_status' => 'error',
                 'mail_error' => $e->getMessage(),
             ])->save();
+        }
+
+        // If the first-run pipeline is what dispatched this, its progress
+        // panel needs the reason too — not a spinner that never resolves.
+        $tracker = MailSyncProgress::for($this->account);
+
+        if ($tracker->isRunning()) {
+            $failure = MailSyncError::describe($e);
+            $tracker->fail($failure['code'], $failure['message']);
         }
     }
 

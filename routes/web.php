@@ -253,6 +253,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/', [MailController::class, 'index'])->name('index');
         Route::post('/sync', [MailController::class, 'sync'])->name('sync');
         Route::get('/sync-status', [MailController::class, 'syncStatus'])->name('sync-status');
+        Route::post('/sync/retry', [MailController::class, 'retrySync'])->name('sync.retry');
+        // Mailbox-only sign-out: stops mail sync without disconnecting the
+        // provider account from the portal (that lives in Security settings).
+        Route::post('/sign-out', [MailController::class, 'signOut'])->name('sign-out');
         Route::get('/sender-photo/{hash}', [MailController::class, 'senderPhoto'])
             ->where('hash', '[a-f0-9]{64}')->name('sender-photo');
 

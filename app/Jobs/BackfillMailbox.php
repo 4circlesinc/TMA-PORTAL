@@ -3,7 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\ConnectedAccount;
+use App\Models\MailSyncProgress;
 use App\Support\Mail\MailAuthException;
+use App\Support\Mail\MailSyncError;
 use App\Support\Mail\MailSynchronizer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -46,11 +48,42 @@ class BackfillMailbox implements ShouldQueue
             // Fresh job rather than a loop: keeps memory flat and lets other
             // queued work (sends, syncs) interleave.
             self::dispatch($this->account->fresh());
+
+            return;
         }
+
+        // Every folder drained: walk the closing stages and seal the record
+        // with the real counts. Conversations are grouped by the thread ids
+        // the import stored, so "building conversations" is a recount, not a
+        // second pass over the mailbox.
+        $tracker = MailSyncProgress::for($this->account);
+
+        $tracker->enterStage('threads');
+        $stats = MailSyncProgress::statsFor($this->account);
+
+        $tracker->enterStage('finalizing', $stats);
+
+        $tracker->finish(array_merge($stats, [
+            'totals_estimated' => false,
+            'total_messages' => $stats['processed_messages'],
+            'total_attachments' => $stats['processed_attachments'],
+            'current_folder' => null,
+            'next_link' => null,
+        ]));
     }
 
     public function failed(\Throwable $e): void
     {
+        // The page tokens are already persisted per folder, so the retry (or
+        // the stall watchdog's re-dispatch) resumes from the failed batch —
+        // never from message zero.
+        $tracker = MailSyncProgress::for($this->account);
+
+        if ($tracker->isRunning()) {
+            $failure = MailSyncError::describe($e);
+            $tracker->fail($failure['code'], $failure['message']);
+        }
+
         if ($e instanceof MailAuthException) {
             $this->account->forceFill([
                 'mail_status' => 'error',

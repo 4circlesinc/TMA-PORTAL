@@ -707,6 +707,45 @@ class GraphProvider implements MailProvider
     }
 
     /**
+     * How many messages in each folder carry attachments, from Graph's
+     * server-side count — one small request per folder, no enumeration.
+     * Folders that refuse the count (some tenants restrict $count on mail)
+     * are left out rather than guessed at.
+     *
+     * @return array<string, int>
+     */
+    public function attachmentCounts(): array
+    {
+        $counts = [];
+
+        foreach (['inbox', 'sent', 'archive'] as $folder) {
+            $response = $this->request(timeout: 8, tries: 1)->get(
+                self::BASE.'/mailFolders/'.self::folderId($folder).'/messages',
+                [
+                    '$filter' => 'hasAttachments eq true',
+                    '$count' => 'true',
+                    '$top' => 1,
+                    '$select' => 'id',
+                ]
+            );
+
+            if (! $response->successful()) {
+                continue;
+            }
+
+            // Read from the raw array: json('@odata.count') would treat the
+            // dot as a nested path and always miss.
+            $count = ($response->json() ?? [])['@odata.count'] ?? null;
+
+            if ($count !== null) {
+                $counts[$folder] = (int) $count;
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
      * A colleague's profile photo from the directory. Only works for people in
      * the same tenant and only with User.ReadBasic.All granted; anything else
      * (404 no photo, 403 scope not consented) is reported as "no photo" so the

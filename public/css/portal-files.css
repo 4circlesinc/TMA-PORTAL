@@ -456,6 +456,56 @@ body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
   100% { transform: translateX(250%); }
 }
 
+/* "Step 4 of 10", right-aligned beside the message counts. */
+.tma-mail-sync__stage {
+  margin-left: auto;
+  font-size: var(--text-size-11, 11px);
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  white-space: nowrap;
+}
+
+/* What the analysis found so far: conversations, attachments, images… */
+.tma-mail-sync__stats {
+  margin-top: var(--space-6, 6px);
+  font-size: var(--text-size-11, 11px);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* Stall / failure notice with its Retry action — the panel's answer to the
+   endless spinner: it says what is wrong and offers a way out. */
+.tma-mail-sync__problem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8, 8px);
+  margin-top: var(--space-8, 8px);
+  padding: var(--space-8, 8px);
+  border-radius: 8px;
+  background: var(--color-bg-warning, rgba(214, 158, 46, 0.12));
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-11, 11px);
+  line-height: 1.45;
+}
+.tma-mail-sync__retry {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 999px;
+  background: var(--color-bg-primary, #fff);
+  font-size: var(--text-size-11, 11px);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tma-mail-sync__retry:disabled { opacity: 0.5; cursor: default; }
+
+/* The one-line reassurance that leaving the page is fine. */
+.tma-mail-sync__hint {
+  margin-top: var(--space-6, 6px);
+  font-size: var(--text-size-11, 11px);
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+}
+
 /* ── owner cell ────────────────────────────────────
  * The owner's picture beside their name. A column of identical names is hard
  * to scan; a face is recognised before it is read. */

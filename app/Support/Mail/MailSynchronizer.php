@@ -5,6 +5,7 @@ namespace App\Support\Mail;
 use App\Models\ConnectedAccount;
 use App\Models\MailLabel;
 use App\Models\MailMessage;
+use App\Models\MailSyncProgress;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -158,6 +159,7 @@ class MailSynchronizer
     {
         $provider = Mailbox::provider($this->account);
         $progress = $this->account->mail_backfill ?? [];
+        $tracker = MailSyncProgress::for($this->account);
         $written = 0;
         $pages = 0;
 
@@ -167,6 +169,12 @@ class MailSynchronizer
             $progress['_totals'] = rescue(fn () => $provider->folderTotals(), [], report: false);
             $this->account->forceFill(['mail_backfill' => $progress])->save();
         }
+
+        // The denominator for the percentage. Usually set by AnalyzeMailbox;
+        // adopted from the provider totals when the backfill was started some
+        // other way (e.g. the artisan command).
+        $totalMessages = $tracker->total_messages
+            ?: (($progress['_totals'] ?? []) === [] ? null : array_sum(array_map('intval', $progress['_totals'])));
 
         foreach (Mailbox::FOLDERS as $folder) {
             $state = $progress[$folder] ?? ['token' => null, 'done' => false];
@@ -186,6 +194,21 @@ class MailSynchronizer
                 // Persist after each page so a crash resumes here, not at zero.
                 $progress[$folder] = $state;
                 $this->account->forceFill(['mail_backfill' => $progress])->save();
+
+                // Heartbeat after every batch: real counts, the folder being
+                // walked, and the resume token. This is what the progress
+                // panel reads, and what stall detection measures against.
+                $stats = MailSyncProgress::statsFor($this->account);
+                $tracker->beat(array_merge($stats, [
+                    'status' => 'running',
+                    'current_stage' => 'importing',
+                    'current_folder' => $folder,
+                    'total_messages' => $totalMessages,
+                    'percentage' => $totalMessages
+                        ? min(99, (int) floor($stats['processed_messages'] / max(1, $totalMessages) * 100))
+                        : null,
+                    'next_link' => $state['token'],
+                ]));
             }
 
             if ($pages >= $maxPages) {

@@ -80,6 +80,46 @@ field placement and drawing, and computed CSS only exist in a browser.
   pins the failure case that matters — a dead OAuth grant degrades to a
   reconnect banner over an intact list rather than blanking the mailbox. Needs
   a user with a connected account row (see the mailbox fixture below).
+- **`mail-sync-progress.mjs`** — the mailbox sync progress panel and the
+  mailbox-only sign-out. Seeds a running `mail_sync_progress` row and then
+  mutates it via sqlite the way the queue jobs would (importing → stalled →
+  retried → failed → completed), asserting the panel shows the stage, real
+  counts with the `~` estimate marker, a measured time estimate, the stall
+  notice with a working Retry, the actual failure reason, and that it clears
+  itself on completion. Ends by signing the mailbox out and checking the
+  provider account (and the imported mail) survive it. Needs the microsoft
+  fixture below plus `TMA_E2E_DB` pointing at the sqlite file:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+  \$a = App\Models\ConnectedAccount::create(['user_id' => \$u->id, 'provider' => 'microsoft',
+    'provider_id' => 'ms-e2e', 'email' => 'e2e@example.com', 'name' => 'Test User',
+    'token' => 'refresh', 'scopes' => ['Mail.ReadWrite'], 'sync_email' => true]);
+  \$a->forceFill(['mail_cursor' => 'ts:'.now()->toIso8601ZuluString(), 'mail_synced_at' => now()])->save();
+  foreach (range(1, 12) as \$i) {
+    App\Models\MailMessage::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+      'connected_account_id' => \$a->id, 'remote_id' => 'm'.\$i, 'thread_id' => 't'.(\$i % 5),
+      'folder' => 'inbox', 'subject' => 'Seeded message '.\$i, 'snippet' => 'Preview '.\$i,
+      'from_name' => 'Dana Reed', 'from_email' => 'dana@example.com', 'is_read' => \$i % 2 === 0,
+      'has_attachments' => \$i % 3 === 0, 'sent_at' => now()->subMinutes(\$i * 9)]);
+  }
+  App\Models\MailSyncProgress::create(['user_id' => \$u->id, 'connected_account_id' => \$a->id,
+    'provider' => 'microsoft', 'status' => 'running', 'current_stage' => 'importing',
+    'current_folder' => 'inbox', 'totals_estimated' => true, 'total_messages' => 8420,
+    'processed_messages' => 1250, 'total_conversations' => 3180, 'total_attachments' => 1245,
+    'processed_attachments' => 310, 'total_images' => 680, 'total_documents' => 565,
+    'percentage' => 15, 'started_at' => now()->subMinutes(2), 'last_progress_at' => now()]);
+"
+
+TMA_E2E_DB="$DB" node tests/Browser/mail-sync-progress.mjs
+```
+
+  Serve with `QUEUE_CONNECTION=database` and no worker, so jobs the page
+  dispatches queue up instead of running inline against a token that cannot
+  work. Re-seed between runs — the script ends signed out with the progress
+  row completed.
+
 - **`mail-thread.mjs`** — the reading pane as a *conversation*. It used to
   render only the message that was clicked, so a reply arrived with none of the
   thread it belonged to and the quoted history it carried was dumped inline

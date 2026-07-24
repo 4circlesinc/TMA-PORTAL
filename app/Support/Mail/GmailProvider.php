@@ -599,6 +599,16 @@ class GmailProvider implements MailProvider
     }
 
     /**
+     * Gmail has no cheap "how many messages have attachments" counter — a
+     * search estimate is the closest and it is famously unreliable — so
+     * nothing is claimed and the import counts what it actually finds.
+     */
+    public function attachmentCounts(): array
+    {
+        return [];
+    }
+
+    /**
      * Gmail exposes no directory photo lookup for arbitrary senders, so there
      * is nothing honest to return here — the UI draws initials instead.
      */

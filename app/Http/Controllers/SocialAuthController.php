@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AnalyzeMailbox;
 use App\Models\AuthEvent;
 use App\Models\ConnectedAccount;
 use App\Models\User;
@@ -56,7 +57,7 @@ class SocialAuthController extends Controller
         $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
         $request->session()->put(
             'social.return',
-            in_array($request->query('return'), ['getting-started', 'connectors', 'profile'], true) ? $request->query('return') : 'security-settings',
+            in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email'], true) ? $request->query('return') : 'security-settings',
         );
 
         // Data sync opt-in (email, calendar, OneDrive, SharePoint). Only
@@ -201,13 +202,15 @@ class SocialAuthController extends Controller
             return $this->fail($request, "That ".ucfirst($provider)." account's email doesn't match your portal email.");
         }
 
-        $user->connectedAccounts()->updateOrCreate(
+        $account = $user->connectedAccounts()->updateOrCreate(
             ['provider' => $provider],
             array_merge(
                 ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
                 $this->syncPayload($request, $oauth),
             ),
         );
+
+        $this->startMailPipeline($account);
 
         $this->rememberAvatar($user, $oauth, $provider);
 
@@ -264,13 +267,15 @@ class SocialAuthController extends Controller
             $this->record($user->id, 'registered');
         }
 
-        $user->connectedAccounts()->updateOrCreate(
+        $account = $user->connectedAccounts()->updateOrCreate(
             ['provider' => $provider],
             array_merge(
                 ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
                 $this->syncPayload($request, $oauth),
             ),
         );
+
+        $this->startMailPipeline($account);
 
         // A Google-verified matching email also settles our own verification.
         if (! $user->hasVerifiedEmail()) {
@@ -301,8 +306,32 @@ class SocialAuthController extends Controller
         return redirect()->intended('/');
     }
 
+    /**
+     * The moment mail sync is (re)enabled, start the analyze → import
+     * pipeline so the user sees mailbox totals within seconds of landing
+     * back on the portal — not after the whole import. Guarded because on a
+     * synchronous queue this runs inline, and a provider hiccup must not
+     * break the OAuth callback; the progress record carries any failure.
+     */
+    private function startMailPipeline(ConnectedAccount $account): void
+    {
+        if (! $account->sync_email || ! $account->token) {
+            return;
+        }
+
+        rescue(function () use ($account) {
+            AnalyzeMailbox::start($account);
+        }, report: false);
+    }
+
     private function returnTo(string $return, bool $ok, string $message): RedirectResponse
     {
+        if ($return === 'email') {
+            // Connecting from the email page goes back to the email page —
+            // the progress panel there picks the sync up immediately.
+            return redirect('/email?notice='.($ok ? 'mail-connected' : 'mail-error&reason='.urlencode($message)));
+        }
+
         if ($return === 'connectors') {
             return redirect('/account-settings?settings-page=connectors&notice='.($ok ? 'social-connected' : 'social-error')
                 .($ok ? '' : '&reason='.urlencode($message)));
