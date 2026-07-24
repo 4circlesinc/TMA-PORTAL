@@ -1,11 +1,8 @@
 /*
  * Which logo the sidebar shows, in every state it has.
  *
- * The rule is one sentence — open shows the wordmark, the collapsed rail shows
- * the mark — but there are four ways to be open or closed across two sidebar
- * styles, and the hover overlay used to be the one that got it wrong. Each
- * state is asserted from *computed* display, so a rule that is overridden
- * somewhere later in the cascade fails here rather than in someone's eyes.
+ * Desktop always shows the mark (never the wordmark), including the hover-
+ * expanded overlay. Mobile hides the whole logo block for the mobile head.
  */
 import { chromium } from 'playwright';
 
@@ -31,7 +28,9 @@ await page.waitForSelector('.tma-dash__sidebar-logo', { timeout: 20000 });
 const shown = () => page.evaluate(() => {
   const vis = (sel) => {
     const el = document.querySelector('.tma-dash__sidebar-logo ' + sel);
-    return el ? getComputedStyle(el).display !== 'none' : false;
+    if (!el) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== 'none' && Number(cs.opacity) > 0.5;
   };
   return { wordmark: vis('.tma-dash__logo-expanded'), mark: vis('.tma-dash__logo-collapsed') };
 });
@@ -43,36 +42,31 @@ const setStyle = (style) => page.evaluate((s) => {
 }, style);
 
 const failures = [];
-const check = (state, got, wantWordmark) => {
-  const ok = got.wordmark === wantWordmark && got.mark === !wantWordmark;
-  console.log(`  ${ok ? '✓' : '✗'} ${state}: ${got.wordmark ? 'wordmark' : ''}${got.mark ? 'mark' : ''}${!got.wordmark && !got.mark ? 'neither' : ''}`);
-  if (!ok) failures.push(`${state} should show the ${wantWordmark ? 'wordmark' : 'mark'}`);
+const checkMarkOnly = (state, got) => {
+  const ok = got.mark && !got.wordmark;
+  console.log(`  ${ok ? '✓' : '✗'} ${state}: ${got.mark ? 'mark' : ''}${got.wordmark ? 'wordmark' : ''}${!got.wordmark && !got.mark ? 'neither' : ''}`);
+  if (!ok) failures.push(`${state} should show the mark only`);
 };
 
-// Hover style (the default): rests as a rail, expands on hover.
 await setStyle('hover');
 await page.mouse.move(1400, 500);
 await page.waitForTimeout(400);
-check('hover style, resting rail', await shown(), false);
+checkMarkOnly('hover style, resting rail', await shown());
 
 await page.hover('.tma-dash__sidebar');
 await page.waitForTimeout(700);
-check('hover style, hover-expanded', await shown(), true);
+checkMarkOnly('hover style, hover-expanded', await shown());
 if (SHOT) await page.locator('.tma-dash__sidebar').screenshot({ path: SHOT });
 
-// Standard style: click-to-collapse, no hover involvement.
 await page.mouse.move(1400, 500);
 await setStyle('standard-expanded');
 await page.waitForTimeout(400);
-check('standard style, expanded', await shown(), true);
+checkMarkOnly('standard style, expanded', await shown());
 
 await setStyle('standard');
 await page.waitForTimeout(400);
-check('standard style, collapsed rail', await shown(), false);
+checkMarkOnly('standard style, collapsed rail', await shown());
 
-// Mobile doesn't use either logo: the drawer swaps the whole logo block out
-// for .tma-dash__sidebar-mobile-head. Asserted so a future change to the
-// desktop rules can't quietly resurrect a logo above the mobile head.
 await setStyle('hover');
 await page.setViewportSize({ width: 420, height: 900 });
 await page.waitForTimeout(400);
@@ -90,4 +84,4 @@ if (failures.length) {
   console.error('\nFAIL:\n' + failures.map((f) => ' - ' + f).join('\n'));
   process.exit(1);
 }
-console.log('\nOK — the mark appears only in the collapsed rail.');
+console.log('\nOK — sidebar always shows the logo mark on desktop.');

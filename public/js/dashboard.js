@@ -733,12 +733,20 @@
       main.appendChild(avatar);
       main.appendChild(meta);
 
+      // One sign-out only: wrap the shell's existing [data-action="sign-out"]
+      // button. A second injected button caused duplicates when expanded and
+      // left the original visible (overlapping the avatar) when collapsed.
       var actions = document.createElement('div');
       actions.className = 'tma-dash__profile-actions';
       actions.setAttribute('data-sidebar-profile-actions', '');
-      actions.innerHTML =
-        '<button type="button" class="tma-dash__profile-action-btn" data-sidebar-profile-action="logout" aria-label="Log out">' +
-        '<img src="images/icons/phosphor/SignOut.svg" alt="" aria-hidden="true"></button>';
+      var existing = profile.querySelector('[data-action="sign-out"]');
+      if (existing) {
+        actions.appendChild(existing);
+      } else {
+        actions.innerHTML =
+          '<button type="button" class="tma-dash__profile-action-btn" data-action="sign-out" aria-label="Sign out" title="Sign out">' +
+          '<img src="images/icons/phosphor/SignOut.svg" alt="" aria-hidden="true"></button>';
+      }
       profile.appendChild(actions);
     }
 

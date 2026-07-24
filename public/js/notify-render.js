@@ -201,7 +201,9 @@
   function notificationItem(item, variant) {
     var cfg = VARIANTS[variant] || VARIANTS.popup;
     var cls = cfg.item;
-    if (!item.read) cls += ' ' + cfg.unread;
+    // Right-sidebar notices do not show unread state (no blue dot / unread tint).
+    var showUnread = variant !== 'sidebar' && !item.read;
+    if (showUnread) cls += ' ' + cfg.unread;
     if (item.requiresAction) cls += ' ' + cfg.item + '--action';
 
     var desc = item.message ? '<div class="' + cfg.desc + '">' + esc(item.message) + '</div>' : '';
@@ -219,7 +221,7 @@
         '<div class="' + cfg.meta + '">' + esc(timeLabel(item.createdAt)) + '</div>' +
         cta +
       '</div>' +
-      (item.read ? '' : '<span class="tma-dash__unread-dot" aria-label="Unread"></span>') +
+      (showUnread ? '<span class="tma-dash__unread-dot" aria-label="Unread"></span>' : '') +
       '<button type="button" class="tma-dash__notif-dismiss" data-notification-dismiss="' + esc(item.id) + '" aria-label="Dismiss notification" title="Dismiss">&times;</button>' +
     '</div>';
   }
