@@ -41,12 +41,12 @@ return [
         // equally restricted, so this widens what we can do without changing
         // the tier of review the app needs.
         //
-        // directory.readonly + contacts.other.readonly let compose suggestions
-        // and the inbox show real Google/Workspace profile photos for people
-        // in the firm or people you've emailed — without them every face is
-        // initials. Existing mail connections must reconnect once to pick
-        // these up.
-        'scope_email' => 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/directory.readonly https://www.googleapis.com/auth/contacts.other.readonly',
+        // directory.readonly + contacts.readonly + contacts.other.readonly let
+        // compose suggestions and the inbox show real Google/Workspace profile
+        // photos for people in the firm, saved contacts, or people you've
+        // emailed — without them every face is initials. Existing mail
+        // connections must reconnect once to pick these up.
+        'scope_email' => 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/directory.readonly https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly',
         // Two-way calendar sync. `calendar.events` is read+write on events and
         // is a SENSITIVE scope: production use by anyone outside the test-user
         // list needs Google's app-verification (not the heavier CASA the Gmail
@@ -73,9 +73,10 @@ return [
         // separate permission in Graph, so sending needs both.
         // User.ReadBasic.All lets the mailbox show colleagues' real profile
         // photos: Graph only returns /users/{id}/photo for people in the same
-        // tenant, and only with a directory read permission. Without it every
-        // sender simply falls back to initials.
-        'scope_email' => 'Mail.ReadWrite Mail.Send User.ReadBasic.All',
+        // tenant. Contacts.Read covers photos saved on Outlook contacts
+        // (still not Gmail account photos — Microsoft cannot read those).
+        // Without these every sender simply falls back to initials.
+        'scope_email' => 'Mail.ReadWrite Mail.Send User.ReadBasic.All Contacts.Read',
         // ReadWrite covers listing, creating, updating and deleting events —
         // the two-way sync needs it. Existing Calendars.Read connections must
         // reconnect once; canWriteCalendar() detects the narrower grant.

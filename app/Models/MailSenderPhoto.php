@@ -83,6 +83,25 @@ class MailSenderPhoto extends Model
     }
 
     /**
+     * Public URL for a cached sender photo, or null when we only have a miss /
+     * nothing yet. Safe for notification `image` fields and <img> src.
+     */
+    public static function urlFor(string $email): ?string
+    {
+        $email = mb_strtolower(trim($email));
+        if ($email === '' || ! str_contains($email, '@')) {
+            return null;
+        }
+
+        $row = self::where('hash', self::hashFor($email))->first();
+        if (! $row || ! $row->isFresh() || ! $row->has_photo) {
+            return null;
+        }
+
+        return route('mail.sender-photo', ['hash' => $row->hash]);
+    }
+
+    /**
      * True when nobody has asked the provider about this address recently -
      * i.e. a background resolve is worth queuing. Cheap: one indexed lookup,
      * no network.
@@ -114,10 +133,11 @@ class MailSenderPhoto extends Model
             return $row->has_photo ? $row->read() : null;
         }
 
-        // Directory first — a real face for a colleague — then Gravatar for
-        // personal addresses (Gmail/Yahoo/iCloud/…), then the sender domain's
-        // brand logo for company mail. Consumer domains never get a brand
-        // favicon — that would put the Gmail mark on every gmail.com contact.
+        // Directory / contacts first — a real face from the mailbox provider.
+        // When the primary mailbox is Microsoft, Gmail faces are unreachable
+        // via Graph; if this user also linked Google, try that next for the
+        // same address. Then Gravatar, then company-domain brand logos.
+        // Consumer domains never get a brand favicon.
         $photo = null;
         try {
             $bytes = Mailbox::provider($account)->photoFor($email);
@@ -126,6 +146,25 @@ class MailSenderPhoto extends Model
             }
         } catch (Throwable) {
             // A provider error is a miss for now; the TTL brings us back.
+        }
+
+        if ($photo === null && $account->provider === 'microsoft') {
+            $google = ConnectedAccount::query()
+                ->where('user_id', $account->user_id)
+                ->where('provider', 'google')
+                ->whereNotNull('token')
+                ->latest('updated_at')
+                ->first();
+            if ($google) {
+                try {
+                    $bytes = Mailbox::provider($google)->photoFor($email);
+                    if ($bytes !== null && $bytes !== '') {
+                        $photo = ['body' => $bytes, 'mime' => 'image/jpeg'];
+                    }
+                } catch (Throwable) {
+                    // Soft miss — fall through to Gravatar.
+                }
+            }
         }
 
         $photo ??= self::gravatarFor($email);

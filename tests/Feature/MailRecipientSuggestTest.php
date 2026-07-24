@@ -51,47 +51,8 @@ class MailRecipientSuggestTest extends TestCase
         $this->assertSame('dana@example.com', $items[0]['email']);
         $this->assertSame('staff', $items[0]['source']);
         $this->assertSame('Organization', $items[0]['sourceLabel']);
-        // No Microsoft/Google photo → fall back to their portal upload.
-        $this->assertSame('/images/avatars/Avatar3d01.png', $items[0]['avatarUrl']);
-    }
-
-    public function test_staff_gmail_addresses_use_portal_photo_when_directory_misses(): void
-    {
-        $me = $this->staff(['name' => 'Me', 'email' => 'me@example.com']);
-        $this->staff([
-            'name' => 'Vee',
-            'email' => 'vtfslu@gmail.com',
-            'avatar_url' => '/media/avatars/vee.jpg',
-        ]);
-
-        ConnectedAccount::create([
-            'user_id' => $me->id,
-            'provider' => 'microsoft',
-            'provider_id' => 'ms-'.$me->id,
-            'email' => 'me@example.com',
-            'name' => 'Me',
-            'token' => 'refresh',
-            'scopes' => ['Mail.ReadWrite'],
-            'sync_email' => true,
-        ]);
-
-        // Cached directory miss (Microsoft cannot read Gmail faces).
-        MailSenderPhoto::create([
-            'hash' => MailSenderPhoto::hashFor('vtfslu@gmail.com'),
-            'email' => 'vtfslu@gmail.com',
-            'connected_account_id' => ConnectedAccount::where('user_id', $me->id)->value('id'),
-            'has_photo' => false,
-            'checked_at' => now(),
-        ]);
-
-        $items = $this->actingAs($me)
-            ->getJson('/portal/mail/suggest?q=vtfslu')
-            ->assertOk()
-            ->json('suggestions');
-
-        $hit = collect($items)->firstWhere('email', 'vtfslu@gmail.com');
-        $this->assertNotNull($hit);
-        $this->assertSame('/media/avatars/vee.jpg', $hit['avatarUrl']);
+        // Portal uploads are never used — email-provider / Gravatar photos only.
+        $this->assertNull($items[0]['avatarUrl']);
     }
 
     public function test_suggests_clients_for_staff_and_hides_them_from_client_accounts(): void

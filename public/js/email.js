@@ -1257,6 +1257,7 @@
         if (next !== JSON.stringify(state.folderCounts || {})) {
           state.folderCounts = data.folders;
           state._mailCountsDirty = true;
+          announceInboxUnread(state);
           var dashRoot = getEmailDashRoot(root);
           if (dashRoot && typeof dashRoot._syncTabBarBadges === 'function') dashRoot._syncTabBarBadges();
         }
@@ -1331,6 +1332,7 @@
       state.account = (data && data.account) || null;
       state.folderCounts = (data && data.folders) || {};
       state.labels = (data && data.labels) || [];
+      announceInboxUnread(state);
 
       if (!state.connected) {
         state.loading = false;
@@ -2631,6 +2633,14 @@
   function getInboxUnreadCount(state) {
     var counts = state && state.folderCounts && state.folderCounts.inbox;
     return counts ? counts.unread : 0;
+  }
+
+  /** Keep home shortcuts + sidebar badges on the exact inbox unread total. */
+  function announceInboxUnread(state) {
+    var n = getInboxUnreadCount(state);
+    try {
+      document.dispatchEvent(new CustomEvent('tma-email-count', { detail: { count: n } }));
+    } catch (e) { /* ignore */ }
   }
 
   function folderCount(folder, state) {
@@ -7316,6 +7326,7 @@
       var dashRoot = getEmailDashRoot(root);
       if (dashRoot) ensureEmailToast(dashRoot);
       if (dashRoot && typeof dashRoot._syncTabBarBadges === 'function') dashRoot._syncTabBarBadges();
+      announceInboxUnread(state);
     }
 
     root._emailState = state;

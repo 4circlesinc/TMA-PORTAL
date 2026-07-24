@@ -2,9 +2,11 @@
 
 namespace App\Support\Mail;
 
+use App\Jobs\ResolveSenderPhoto;
 use App\Models\ConnectedAccount;
 use App\Models\MailLabel;
 use App\Models\MailMessage;
+use App\Models\MailSenderPhoto;
 use App\Models\MailSyncProgress;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Carbon;
@@ -503,12 +505,20 @@ class MailSynchronizer
                 ->unique()
                 ->take(3);
 
+            $first = $rows->first();
+            $this->queueSenderPhoto((string) ($first->from_email ?? ''));
+
             Notifier::send([
                 'user' => $this->account->user_id,
                 'type' => 'email.received',
                 'title' => $rows->count().' new emails',
                 'message' => $senders->isNotEmpty() ? 'From '.$senders->implode(', ').'…' : null,
                 'action_url' => '/email',
+                'image' => MailSenderPhoto::urlFor((string) ($first->from_email ?? '')),
+                'metadata' => [
+                    'from_email' => mb_strtolower((string) ($first->from_email ?? '')),
+                    'from_name' => (string) ($first->from_name ?: $first->from_email ?: 'Sender'),
+                ],
                 'dedupe_key' => 'email.received.batch:'.$this->account->id,
                 'dedupe_minutes' => 15,
             ]);
@@ -517,14 +527,35 @@ class MailSynchronizer
         }
 
         foreach ($rows as $m) {
+            $fromEmail = mb_strtolower((string) ($m->from_email ?? ''));
+            $this->queueSenderPhoto($fromEmail);
+
             Notifier::send([
                 'user' => $this->account->user_id,
                 'type' => 'email.received',
                 'title' => 'New email from '.($m->from_name ?: $m->from_email ?: 'an unknown sender'),
                 'message' => $m->subject ?: Str::limit((string) $m->snippet, 120),
                 'action_url' => '/email',
+                'subject' => $m,
+                'image' => MailSenderPhoto::urlFor($fromEmail),
+                'metadata' => [
+                    'from_email' => $fromEmail,
+                    'from_name' => (string) ($m->from_name ?: $m->from_email ?: 'Sender'),
+                ],
                 'dedupe_key' => 'email.received:'.$m->remote_id,
             ]);
+        }
+    }
+
+    /** Ask the photo queue about this sender so the next toast can show a face. */
+    private function queueSenderPhoto(string $email): void
+    {
+        $email = mb_strtolower(trim($email));
+        if ($email === '' || ! str_contains($email, '@')) {
+            return;
+        }
+        if (MailSenderPhoto::needsBackgroundResolve($email)) {
+            ResolveSenderPhoto::dispatch($this->account, $email);
         }
     }
 

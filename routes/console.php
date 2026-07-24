@@ -120,6 +120,11 @@ Artisan::command('mail:wake-snoozed', function () {
             // Deep-link so the toast / panel click opens this exact message.
             'action_url' => '/email?message='.$message->uuid,
             'subject' => $message,
+            'image' => \App\Models\MailSenderPhoto::urlFor((string) ($message->from_email ?? '')),
+            'metadata' => [
+                'from_email' => mb_strtolower((string) ($message->from_email ?? '')),
+                'from_name' => (string) ($message->from_name ?: $message->from_email ?: 'Sender'),
+            ],
             // One reminder per snooze; re-snoozing later makes a new key window.
             'dedupe_key' => 'email.snooze_due:'.$message->id,
             'dedupe_minutes' => 5,

@@ -632,12 +632,13 @@ class GmailProvider implements MailProvider
     }
 
     /**
-     * Look up a person's photo from Google's directory / other-contacts.
+     * Look up a person's photo from Google's directory / contacts / other-contacts.
      *
-     * Gmail itself has no photo API. Workspace tenants expose directory
-     * people; personal accounts expose "other contacts" (people you've
-     * emailed). Either needs the matching People scope on the token — when
-     * the scope is missing the call fails soft and the UI keeps initials.
+     * Gmail itself has no "get photo by email" public API. Workspace tenants
+     * expose directory people; personal accounts expose saved contacts and
+     * "other contacts" (people you've emailed) — and only when the matching
+     * People scopes are on the token. Arbitrary Gmail users you have never
+     * interacted with cannot be looked up (Google privacy).
      */
     public function photoFor(string $email): ?string
     {
@@ -669,21 +670,87 @@ class GmailProvider implements MailProvider
             }
         }
 
-        // Fall back to people the user has interacted with (other contacts).
+        // Saved contacts (needs contacts.readonly).
+        $contacts = Http::withToken($token)
+            ->acceptJson()
+            ->timeout(8)
+            ->get('https://people.googleapis.com/v1/people:searchContacts', [
+                'query' => $email,
+                'readMask' => 'emailAddresses,photos,names',
+                'pageSize' => 5,
+            ]);
+
+        if ($contacts->successful()) {
+            $bytes = $this->photoBytesFromPeople(
+                collect($contacts->json('results') ?? [])->pluck('person')->all(),
+                $email
+            );
+            if ($bytes !== null) {
+                return $bytes;
+            }
+        }
+
+        // People you've emailed ("other contacts"). Request PROFILE + CONTACT
+        // sources so we get the real Google account photo, not the stub.
         $others = Http::withToken($token)
             ->acceptJson()
             ->timeout(8)
             ->get('https://people.googleapis.com/v1/otherContacts:search', [
                 'query' => $email,
-                'readMask' => 'emailAddresses,photos',
+                'readMask' => 'emailAddresses,photos,names',
                 'pageSize' => 5,
             ]);
 
         if ($others->successful()) {
-            $bytes = $this->photoBytesFromPeople(
-                collect($others->json('results') ?? [])->pluck('person')->all(),
-                $email
-            );
+            $people = collect($others->json('results') ?? [])->pluck('person')->all();
+            $bytes = $this->photoBytesFromPeople($people, $email);
+            if ($bytes !== null) {
+                return $bytes;
+            }
+            // Search often returns only the stub; resolve PROFILE photo via people.get.
+            $bytes = $this->profilePhotoFromOtherContacts($token, $people, $email);
+            if ($bytes !== null) {
+                return $bytes;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $people
+     */
+    private function profilePhotoFromOtherContacts(string $token, array $people, string $email): ?string
+    {
+        foreach ($people as $person) {
+            if (! is_array($person)) {
+                continue;
+            }
+            $emails = collect($person['emailAddresses'] ?? [])
+                ->pluck('value')
+                ->map(fn ($v) => mb_strtolower((string) $v));
+            if ($emails->isNotEmpty() && ! $emails->contains($email)) {
+                continue;
+            }
+            $resource = $person['resourceName'] ?? null;
+            if (! is_string($resource) || $resource === '') {
+                continue;
+            }
+            // otherContacts/xxx → copy into people/me to get a people/* name, or
+            // use people.get with the otherContacts resource when supported.
+            $detail = Http::withToken($token)
+                ->acceptJson()
+                ->timeout(8)
+                ->get(
+                    'https://people.googleapis.com/v1/'.$resource
+                    .'?personFields=photos,emailAddresses'
+                    .'&sources=READ_SOURCE_TYPE_CONTACT'
+                    .'&sources=READ_SOURCE_TYPE_PROFILE'
+                );
+            if (! $detail->successful()) {
+                continue;
+            }
+            $bytes = $this->photoBytesFromPeople([$detail->json() ?? []], $email);
             if ($bytes !== null) {
                 return $bytes;
             }
@@ -707,7 +774,21 @@ class GmailProvider implements MailProvider
             if ($emails->isNotEmpty() && ! $emails->contains($email)) {
                 continue;
             }
-            foreach ($person['photos'] ?? [] as $photo) {
+            // Prefer a non-default PROFILE photo over CONTACT stubs.
+            $photos = collect($person['photos'] ?? [])
+                ->sortByDesc(function ($photo) {
+                    $type = data_get($photo, 'metadata.source.type');
+                    if ($type === 'PROFILE') {
+                        return 2;
+                    }
+                    if (empty($photo['default'])) {
+                        return 1;
+                    }
+
+                    return 0;
+                })
+                ->values();
+            foreach ($photos as $photo) {
                 if (! empty($photo['default'])) {
                     continue;
                 }

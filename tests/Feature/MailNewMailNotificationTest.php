@@ -105,6 +105,8 @@ class MailNewMailNotificationTest extends TestCase
         $this->assertNotNull($notification, 'A new unread inbox message must raise email.received.');
         $this->assertSame('New email from Dana Reed', $notification->title);
         $this->assertSame('Hello there', $notification->message);
+        $this->assertSame('dana@example.com', $notification->metadata['from_email'] ?? null);
+        $this->assertSame('Dana Reed', $notification->metadata['from_name'] ?? null);
     }
 
     public function test_the_same_arrival_never_notifies_twice(): void

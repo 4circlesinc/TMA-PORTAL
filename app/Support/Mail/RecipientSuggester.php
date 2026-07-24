@@ -83,11 +83,12 @@ final class RecipientSuggester
     }
 
     /**
-     * Prefer Microsoft / Google directory photos, then portal uploads.
+     * Prefer Microsoft / Google directory (or contact) photos — not portal uploads.
      *
-     * Directory first (real org faces + Gravatar). Portal avatar is the
-     * fallback — needed for personal Gmail/Yahoo addresses that Microsoft
-     * cannot look up, but who still have a face on their portal account.
+     * Portal avatars are ignored on purpose: compose should show the face from
+     * the mail provider (org directory, Google other-contacts, Gravatar), not
+     * whatever someone uploaded on this site. Uncached addresses are resolved
+     * inline (capped) so the first typeahead can show a real face.
      *
      * @param  list<array<string, mixed>>  $rows
      * @return list<array<string, mixed>>
@@ -155,23 +156,12 @@ final class RecipientSuggester
             }
         }
 
-        $portalPhotos = $emails === []
-            ? collect()
-            : User::query()
-                ->where(function ($q) use ($emails) {
-                    foreach ($emails as $email) {
-                        $q->orWhereRaw('lower(email) = ?', [$email]);
-                    }
-                })
-                ->get(['email', 'avatar_url', 'provider_avatar_url'])
-                ->keyBy(fn (User $u) => mb_strtolower((string) $u->email));
-
         foreach ($rows as &$row) {
             if (($row['source'] ?? null) === 'group' && is_array($row['emails'] ?? null)) {
                 $row['avatarUrl'] = null;
                 foreach ($row['emails'] as $member) {
                     $email = mb_strtolower((string) ($member['email'] ?? ''));
-                    if ($url = self::photoUrlFor($email, $cached, $portalPhotos)) {
+                    if ($url = self::directoryPhotoUrl($email, $cached)) {
                         $row['avatarUrl'] = $url;
                         break;
                     }
@@ -180,7 +170,7 @@ final class RecipientSuggester
             }
 
             $email = mb_strtolower((string) ($row['email'] ?? ''));
-            $row['avatarUrl'] = self::photoUrlFor($email, $cached, $portalPhotos);
+            $row['avatarUrl'] = self::directoryPhotoUrl($email, $cached);
         }
         unset($row);
 
@@ -189,9 +179,8 @@ final class RecipientSuggester
 
     /**
      * @param  \Illuminate\Support\Collection<string, MailSenderPhoto>  $cached
-     * @param  \Illuminate\Support\Collection<string, User>  $portalPhotos
      */
-    private static function photoUrlFor(string $email, $cached, $portalPhotos): ?string
+    private static function directoryPhotoUrl(string $email, $cached): ?string
     {
         if ($email === '') {
             return null;
@@ -199,11 +188,6 @@ final class RecipientSuggester
         $photo = $cached->get($email);
         if ($photo && $photo->isFresh() && $photo->has_photo) {
             return route('mail.sender-photo', ['hash' => $photo->hash]);
-        }
-
-        $portal = $portalPhotos->get($email);
-        if ($portal && ($url = $portal->photoUrl())) {
-            return $url;
         }
 
         return null;
@@ -233,7 +217,7 @@ final class RecipientSuggester
             'name' => $u->name,
             'source' => 'staff',
             'sourceLabel' => 'Organization',
-            'avatarUrl' => null, // filled below: directory, then portal photo
+            'avatarUrl' => null, // filled from Microsoft/Google directory below
             'initial' => mb_strtoupper(mb_substr($u->name ?: $u->email, 0, 1)),
             'initialColor' => null,
             'emails' => null,
@@ -272,7 +256,7 @@ final class RecipientSuggester
                 'name' => $client->name ?: ($client->company ?: null),
                 'source' => 'client',
                 'sourceLabel' => 'Client',
-                'avatarUrl' => null, // filled below: directory, then portal photo
+                'avatarUrl' => null, // Microsoft/Google directory photo, not portal
                 'initial' => $client->initial ?: mb_strtoupper(mb_substr($client->name ?: $email, 0, 1)),
                 'initialColor' => $client->initial_color,
                 'emails' => null,
@@ -323,7 +307,7 @@ final class RecipientSuggester
                 'name' => $group->name,
                 'source' => 'group',
                 'sourceLabel' => 'Group · '.$members->count().' '.($members->count() === 1 ? 'person' : 'people'),
-                'avatarUrl' => null, // filled below from a member's photo
+                'avatarUrl' => null, // Microsoft/Google directory photo for a member
                 'initial' => mb_strtoupper(mb_substr($group->name, 0, 1)),
                 'initialColor' => null,
                 'emails' => $emails,

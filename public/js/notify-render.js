@@ -44,7 +44,8 @@
   }
 
   function isRealPhoto(src) {
-    return !!src && /^(https?:|\/(storage|media)\/|data:)/.test(src);
+    // Portal-served sender photos live under /portal/mail/sender-photo/…
+    return !!src && /^(https?:|\/(storage|media|portal)\/|data:)/.test(src);
   }
 
   /* §14 level -> existing design-system tone. No new colours are invented;
@@ -78,7 +79,7 @@
      wrap the photo in a sized span (existing CSS); the sidebar uses a bare
      rb-avatar image — so the markup follows each surface's existing styles. */
   function personVisual(item, cfg) {
-    var name = (item.actor && item.actor.name) || '';
+    var name = (item.actor && item.actor.name) || (item.meta && item.meta.from_name) || '';
     var fallback = initialsUri(name);
     var src = item.image || (item.actor && item.actor.avatar) || '';
     var url = isRealPhoto(src) ? src : fallback;
@@ -96,9 +97,13 @@
   }
 
   /* A notification's leading element. A person is anyone with an actor (§3);
-     an explicit image (a client logo) also counts as a person-style avatar. */
+     an explicit image (sender photo / client logo) also counts; email rows
+     with a known sender show initials until their photo is cached. */
   function notificationLeading(item, cfg) {
-    if (item.actor || item.image) return personVisual(item, cfg);
+    var fromName = item.meta && item.meta.from_name;
+    if (item.actor || item.image || (item.module === 'email' && fromName)) {
+      return personVisual(item, cfg);
+    }
     return systemVisual(item, cfg);
   }
 

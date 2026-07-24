@@ -30,7 +30,7 @@ final class NotificationPresenter
             'title' => $n->title,
             'message' => $n->message,
             'icon' => $n->icon,          // Phosphor name — the system-icon fallback
-            'image' => $n->image,        // explicit avatar/logo override, if any
+            'image' => self::image($n),  // sender/client photo when available
             'isSystem' => $n->isSystem(),
             'actor' => self::actor($n->actor),
             'actionUrl' => $n->action_url,
@@ -91,5 +91,24 @@ final class NotificationPresenter
             // Real photo only; null tells the front-end to draw initials.
             'avatar' => $user->avatar_url ?: $user->provider_avatar_url,
         ];
+    }
+
+    /**
+     * Leading photo for the row/toast. Prefer the stored override; for email
+     * notifications also resolve a cached sender photo from metadata so a
+     * face shows even when the photo arrived after the notification was saved.
+     */
+    private static function image(Notification $n): ?string
+    {
+        if (is_string($n->image) && $n->image !== '') {
+            return $n->image;
+        }
+
+        $email = $n->metadata['from_email'] ?? null;
+        if (! is_string($email) || $email === '') {
+            return null;
+        }
+
+        return \App\Models\MailSenderPhoto::urlFor($email);
     }
 }

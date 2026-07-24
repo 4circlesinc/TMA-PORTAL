@@ -158,11 +158,13 @@
      borrowed from TMANotifyRender so a toast matches its panel row. */
   function notifyLeading(item) {
     const R = window.TMANotifyRender;
-    if (item.actor || item.image) {
-      const name = (item.actor && item.actor.name) || '';
+    const fromName = item.meta && item.meta.from_name;
+    const asPerson = !!(item.actor || item.image || (item.module === 'email' && fromName));
+    if (asPerson) {
+      const name = (item.actor && item.actor.name) || fromName || '';
       const fallback = R ? R.initialsUri(name) : '';
       const src = item.image || (item.actor && item.actor.avatar) || '';
-      const url = /^(https?:|\/(storage|media)\/|data:)/.test(src || '') ? src : fallback;
+      const url = /^(https?:|\/(storage|media|portal)\/|data:)/.test(src || '') ? src : fallback;
       return '<img class="tma-notify-toast__avatar" src="' + esc(url) + '" alt=""' +
         (fallback ? " onerror=\"this.onerror=null;this.src='" + fallback + "'\"" : '') + '>';
     }

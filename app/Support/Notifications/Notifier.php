@@ -228,6 +228,7 @@ final class Notifier
             'title' => $attrs['title'] ?? $existing->title,
             'message' => $attrs['message'] ?? $existing->message,
             'actor_id' => $actorId ?? $existing->actor_id,
+            'image' => array_key_exists('image', $attrs) ? $attrs['image'] : $existing->image,
             'metadata' => $metadata,
             'created_at' => Carbon::now(),
             'updated_at' => Carbon::now(),

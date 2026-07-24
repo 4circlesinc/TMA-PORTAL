@@ -779,21 +779,64 @@ class GraphProvider implements MailProvider
     }
 
     /**
-     * A colleague's profile photo from the directory. Only works for people in
-     * the same tenant and only with User.ReadBasic.All granted; anything else
-     * (404 no photo, 403 scope not consented) is reported as "no photo" so the
-     * caller quietly falls back to initials.
+     * A colleague's profile photo from the directory, or a contact photo.
+     *
+     * Graph `/users/{email}/photo` only works for people in the same tenant
+     * (and only with User.ReadBasic.All). Personal Gmail/Yahoo addresses will
+     * always 404 there — privacy. For those, we try Outlook contacts next
+     * (Contacts.Read): if you've saved them with a photo in Outlook, we can
+     * show it. Anything else is reported as "no photo" so the caller falls
+     * through to Gravatar / initials.
      */
     public function photoFor(string $email): ?string
     {
+        $email = mb_strtolower(trim($email));
+        if ($email === '' || ! str_contains($email, '@')) {
+            return null;
+        }
+
         $response = $this->request()
             ->withHeaders(['Accept' => 'image/jpeg'])
             ->get(self::BASE_USERS.'/'.rawurlencode($email).'/photo/$value');
 
-        if (! $response->successful() || $response->body() === '') {
+        if ($response->successful() && $response->body() !== '') {
+            return $response->body();
+        }
+
+        return $this->contactPhotoFor($email);
+    }
+
+    /**
+     * Outlook contact photo for an address you've saved (not the Gmail
+     * account photo — Microsoft cannot read that). Soft-fails when Contacts.Read
+     * isn't granted or the contact has no photo.
+     */
+    private function contactPhotoFor(string $email): ?string
+    {
+        $safe = str_replace("'", "''", $email);
+        $list = $this->request(8, 1)->get(self::BASE.'/contacts', [
+            '$top' => 5,
+            '$select' => 'id',
+            '$filter' => "emailAddresses/any(e:e/address eq '{$safe}')",
+        ]);
+
+        if (! $list->successful()) {
             return null;
         }
 
-        return $response->body();
+        foreach ($list->json('value') ?? [] as $contact) {
+            $id = $contact['id'] ?? null;
+            if (! is_string($id) || $id === '') {
+                continue;
+            }
+            $photo = $this->request(8, 1)
+                ->withHeaders(['Accept' => 'image/jpeg'])
+                ->get(self::BASE.'/contacts/'.rawurlencode($id).'/photo/$value');
+            if ($photo->successful() && $photo->body() !== '') {
+                return $photo->body();
+            }
+        }
+
+        return null;
     }
 }

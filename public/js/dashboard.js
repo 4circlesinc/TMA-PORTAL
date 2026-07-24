@@ -1323,12 +1323,21 @@
       return String(count);
     }
 
+    var cachedEmailUnread = null;
+
     function getEmailBadgeCount() {
+      if (cachedEmailUnread !== null) return cachedEmailUnread;
       if (!window.TMAEmail || !window.TMAEmail.getInboxUnreadCount) return 0;
       var emailMount = root.querySelector('[data-email]');
       var emailState = emailMount && emailMount._emailState;
       return window.TMAEmail.getInboxUnreadCount(emailState);
     }
+
+    document.addEventListener('tma-email-count', function (e) {
+      if (!e || !e.detail || e.detail.count == null) return;
+      cachedEmailUnread = Math.max(0, parseInt(e.detail.count, 10) || 0);
+      if (typeof syncNavBadges === 'function') syncNavBadges();
+    });
 
     function getMessagesBadgeCount() {
       if (!window.TMAMessages || !window.TMAMessages.getInboxUnreadCount) return 0;
@@ -1415,6 +1424,25 @@
     }
     root._syncPendingUsersBadge = syncPendingUsersBadge;
     syncPendingUsersBadge();
+
+    // Exact inbox unread for the Email nav badge — same source as home shortcuts.
+    // Without this the badge stays at 0 until the mailbox view opens.
+    fetch('/portal/mail', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var n = (j && j.connected && j.folders && j.folders.inbox)
+          ? (j.folders.inbox.unread || 0)
+          : 0;
+        cachedEmailUnread = n;
+        syncNavBadges();
+        try {
+          document.dispatchEvent(new CustomEvent('tma-email-count', { detail: { count: n } }));
+        } catch (e) { /* ignore */ }
+      })
+      .catch(function () {});
 
     function ensureTabBadge(btn, kind) {
       var host = btn.querySelector('.tma-dash__tab-btn-icon') || btn;

@@ -109,6 +109,13 @@
   // requested on every mount, including the two re-renders each load triggers.
   var pendingUsersCount = null;
 
+  // Inbox unread — same pattern as users. Never invent a number: hide the
+  // badge until the first real count arrives (from /portal/mail or the email
+  // module), then keep painting from cache so remounts do not flash.
+  var inboxUnreadCount = null;
+  var inboxUnreadInflight = null;
+  var shortcutCountListenersBound = false;
+
   // `path` from the API is the full ancestor chain ([{id,name}, ...], root
   // first) rather than just the immediate parent's name — join it into one
   // breadcrumb string. A file directly in the File Box (no folder) has an
@@ -514,7 +521,8 @@
       });
   }
 
-  // Email is still a placeholder count; Calendar and Users are real.
+  // Shortcut badges: Email = exact inbox unread, Calendar = today's events,
+  // Users = pending approvals. Never a placeholder number.
   function fillShortcutCounts(el) {
     function setCount(kind, n) {
       el.querySelectorAll('[data-home-shortcut-count="' + kind + '"]').forEach(function (b) {
@@ -522,9 +530,42 @@
         else { b.hidden = true; b.textContent = ''; }
       });
     }
-    var email = (window.TMAEmail && window.TMAEmail.getInboxUnreadCount) ? window.TMAEmail.getInboxUnreadCount(null) : 0;
+
+    function applyEmail(n) {
+      inboxUnreadCount = Math.max(0, parseInt(n, 10) || 0);
+      setCount('email', inboxUnreadCount);
+    }
+
+    // Prefer the live mailbox state when the email view has already bootstrapped.
+    var emailMount = document.querySelector('[data-email]');
+    var emailState = emailMount && emailMount._emailState;
+    if (emailState && window.TMAEmail && window.TMAEmail.getInboxUnreadCount) {
+      applyEmail(window.TMAEmail.getInboxUnreadCount(emailState));
+    } else if (inboxUnreadCount !== null) {
+      setCount('email', inboxUnreadCount);
+    }
+
+    if (!inboxUnreadInflight) {
+      inboxUnreadInflight = fetch('/portal/mail', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          // No mailbox → 0 (hide badge). Connected → exact inbox unread.
+          var n = (j && j.connected && j.folders && j.folders.inbox)
+            ? (j.folders.inbox.unread || 0)
+            : 0;
+          applyEmail(n);
+          try {
+            document.dispatchEvent(new CustomEvent('tma-email-count', { detail: { count: n } }));
+          } catch (e) { /* ignore */ }
+        })
+        .catch(function () {})
+        .then(function () { inboxUnreadInflight = null; });
+    }
+
     var cal = (window.TMACalendar && window.TMACalendar.getTodayEventCount) ? window.TMACalendar.getTodayEventCount() : 0;
-    setCount('email', email || 4);
     // Real count now. It answers 0 until the first fetch lands, which hides
     // the badge rather than showing an invented number; the calendar module
     // fires tma-calendar-count when the true value arrives.
@@ -532,15 +573,47 @@
 
     // Painted from cache when known, so the badge does not blink back to zero
     // and re-populate on every render.
-    if (pendingUsersCount !== null) { setCount('users', pendingUsersCount); return; }
+    if (pendingUsersCount !== null) { setCount('users', pendingUsersCount); }
+    else {
+      fetch('/admin/users/pending-count', { credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
+        .then(function (j) {
+          pendingUsersCount = (j && j.count) || 0;
+          setCount('users', pendingUsersCount);
+        })
+        .catch(function () {});
+    }
 
-    fetch('/admin/users/pending-count', { credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
-      .then(function (j) {
-        pendingUsersCount = (j && j.count) || 0;
-        setCount('users', pendingUsersCount);
-      })
-      .catch(function () {});
+    if (!shortcutCountListenersBound) {
+      shortcutCountListenersBound = true;
+      document.addEventListener('tma-email-count', function (e) {
+        var n = e && e.detail && e.detail.count;
+        if (n == null) return;
+        inboxUnreadCount = Math.max(0, parseInt(n, 10) || 0);
+        document.querySelectorAll('[data-home-shortcut-count="email"]').forEach(function (b) {
+          if (inboxUnreadCount > 0) {
+            b.textContent = inboxUnreadCount > 99 ? '99+' : String(inboxUnreadCount);
+            b.hidden = false;
+          } else {
+            b.hidden = true;
+            b.textContent = '';
+          }
+        });
+      });
+      document.addEventListener('tma-calendar-count', function (e) {
+        var n = e && e.detail && e.detail.count;
+        if (n == null) return;
+        document.querySelectorAll('[data-home-shortcut-count="calendar"]').forEach(function (b) {
+          if (n > 0) {
+            b.textContent = n > 99 ? '99+' : String(n);
+            b.hidden = false;
+          } else {
+            b.hidden = true;
+            b.textContent = '';
+          }
+        });
+      });
+    }
   }
 
   function mount(el, opts) {
