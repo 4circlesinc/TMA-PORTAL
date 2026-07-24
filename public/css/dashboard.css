@@ -35,15 +35,9 @@
   --dash-icon-lg: var(--icon-size-lg);
   --dash-icon-xl: var(--icon-size-xl);
 
-  /* .tma-dash__nav-item's icon doesn't actually sit at the item's own
-     padding-left: every item (including plain links) carries a hidden
-     caret placeholder before it, and visibility:hidden still reserves that
-     caret's box + the gap after it. This is that real inset, in the same
-     units nav-item uses (text-size-16, not 1em, so it's correct regardless
-     of the font-size of whatever element reads it) — the logo and the
-     Main Menu/Folder Shortcuts tabs read it too, so they land exactly
-     under the icon column instead of the item's bare padding. */
-  --dash-nav-icon-inset: calc(var(--space-4) + var(--text-size-16) + var(--space-8));
+  /* .tma-dash__nav-item's icon sits after padding-left + caret + gap.
+     Keep this inset modest so the rail icons sit nearer the left edge. */
+  --dash-nav-icon-inset: calc(var(--space-2) + var(--text-size-16) + var(--space-4));
   --dash-icon-text-gap: var(--space-12);
   --dash-surface-inset: var(--space-4);
   --dash-row-card-bg: var(--color-white);
@@ -120,7 +114,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: var(--space-12) var(--space-8) 0;
+  padding: var(--space-12) var(--space-4) 0;
   border-right: 0;
   overflow: hidden;
   min-height: 0;
@@ -311,7 +305,7 @@
      whole row by the gap between that and --dash-nav-icon-inset (the
      icon's real inset, padding + hidden caret + gap) — lines "Main Menu"
      up with the icon column instead of the item's bare padding. */
-  margin-left: calc(var(--dash-nav-icon-inset) - var(--space-8));
+  margin-left: calc(var(--dash-nav-icon-inset) - var(--space-6));
   transition: opacity var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open);
 }
 .tma-dash__tab {
@@ -353,8 +347,8 @@
 .tma-dash__nav-item {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-4);
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-4) var(--space-8) var(--space-2);
   border-radius: var(--radius-12);
   font-size: var(--text-size-16);
   line-height: var(--text-lh-16);
@@ -364,8 +358,7 @@
   position: relative;
   min-width: 0;
   /* Icon column padding never changes between collapsed/expanded — only the
-     sidebar width and label opacity do. Animating padding-left used to slide
-     every icon under the pointer on hover-expand. */
+     sidebar width and label opacity do. */
 }
 /* The label span. A <span> icon (a masked, tinted one) — or its badge-anchor
    wrapper — is not a label and must keep its own fixed box rather than
@@ -565,8 +558,8 @@
   mask-image: url('../images/icons/phosphor/GearSixFill.svg');
 }
 
-/* nested (no icon) items: indent text to align under parent label */
-.tma-dash__nav-item--nested { padding-left: calc(var(--space-4) + 1em + var(--space-8) + var(--dash-icon-md) + var(--space-8)); }
+/* nested (no icon) items: modest submenu indent past the parent icon */
+.tma-dash__nav-item--nested { padding-left: calc(var(--dash-nav-icon-inset) + var(--space-12)); }
 /* favorites items: dot bullet + label */
 .tma-dash__nav-item--fav { gap: var(--space-8); }
 
@@ -687,7 +680,7 @@
   height: calc(var(--space-10) + var(--dash-logo-mark-size) + var(--space-16));
   min-height: calc(var(--space-10) + var(--dash-logo-mark-size) + var(--space-16));
   max-height: calc(var(--space-10) + var(--dash-logo-mark-size) + var(--space-16));
-  padding: var(--space-10) var(--space-4) var(--space-16) var(--dash-nav-icon-inset);
+  padding: var(--space-10) var(--space-2) var(--space-16) var(--dash-nav-icon-inset);
   overflow: hidden;
   flex-shrink: 0;
   box-sizing: border-box;
@@ -709,11 +702,10 @@
   transform: translateY(-50%);
   max-width: calc(100% - var(--dash-nav-icon-inset) - var(--space-4));
 }
-/* Mark is centered on the icon column so it lines up with the rail icons
-   even when the mark is wider than --dash-icon-md. */
+/* Mark left-aligned with the icon column (same left edge as nav icons). */
 .tma-dash__logo-collapsed {
-  left: calc(var(--dash-nav-icon-inset) + (var(--dash-icon-md) / 2));
-  transform: translate(-50%, -50%);
+  left: var(--dash-nav-icon-inset);
+  transform: translateY(-50%);
   max-width: none;
 }
 /* Open or closed: sidebar always shows the mark (no wordmark swap on
@@ -3237,56 +3229,27 @@
   /* Logo mark stays visible in every desktop rail state (collapsed, hover-
      expanded, and standard). Wordmark is never shown in the sidebar. */
 
-  /* ── Labels / tabs / group titles: hide visually ──
-     Nav item labels/carets keep their flex slot so icons never reflow.
-     Group labels ("Pages") and the tab row shrink to a tight spacer in the
-     rail — full label height left an awkward empty band when closed. */
+  /* ── Labels / tabs: hide visually, NEVER change their layout size ──
+     Shrinking tabs/group rows on collapse was moving every icon under the
+     pointer when the rail expanded. Opacity/visibility only — same heights
+     closed and open. Carets stay in the flex flow (invisible) so icons do
+     not slide horizontally either. */
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile-meta,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__group-label,
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap):not(.tma-dash__nav-caret),
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-caret:not(.tma-dash__nav-caret--hidden),
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-remove,
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-note,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__profile-meta,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tabs,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__group-label,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap):not(.tma-dash__nav-caret),
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-caret:not(.tma-dash__nav-caret--hidden),
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-remove,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-note {
     opacity: 0;
     visibility: hidden;
-  }
-
-  /* "Pages" / tab chrome: hide the text, keep a small section gap only. */
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__group-label,
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__group-label {
-    opacity: 0;
-    visibility: hidden;
-    height: 8px;
-    min-height: 8px;
-    max-height: 8px;
-    padding: 0;
-    margin: 0;
-    font-size: 0;
-    line-height: 0;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tabs {
-    opacity: 0;
-    visibility: hidden;
-    height: 8px;
-    min-height: 8px;
-    max-height: 8px;
-    padding: 0;
-    margin: 0;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-section--tabs,
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-section--tabs {
-    gap: 0;
-    padding-bottom: 0;
-    min-height: 0;
   }
 
   /* Profile meta + sign-out release space in the rail: avatar only when
@@ -3315,6 +3278,11 @@
      not part of the stable icon column. Skeletons likewise. */
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-skeleton,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-skeleton { display: none; }
+
+  /* Expanded submenus are text-only (no rail icons). Hide them in the
+     collapsed rail so truncated labels like "All F" / "Pers" never leak. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__subnav,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__subnav { display: none; }
 
   /* Desktop profile: one horizontal row — avatar | name/email | logout.
      Avatar sized to fit the 72px rail beside --dash-nav-icon-inset (same
@@ -3936,7 +3904,7 @@
   }
 
   .tma-dash__sidebar .tma-dash__nav-item--nested {
-    padding-left: calc(var(--sidebar-mobile-nav-pad-x) + 1em + var(--space-12) + 24px + var(--space-8));
+    padding-left: calc(var(--sidebar-mobile-nav-pad-x) + 1em + var(--space-12) + var(--space-12));
     min-height: 48px;
   }
 

@@ -17,9 +17,9 @@
     --dash-tabbar-clearance: 72px;
 }
 
-/* nested (no icon) items: indent text to align under parent label */
+/* nested (no icon) items: modest submenu indent past the parent icon */
 .tma-dash__nav-item--nested {
-  padding-left: calc(var(--space-4) + 1em + var(--space-8) + var(--dash-icon-md) + var(--space-8));
+  padding-left: calc(var(--dash-nav-icon-inset) + var(--space-12));
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -636,7 +636,7 @@ a.tma-dash__tab-btn:visited {
   }
 
   .tma-dash__sidebar .tma-dash__nav-item--nested {
-    padding-left: calc(var(--sidebar-mobile-nav-pad-x) + 1em + var(--space-12) + 24px + var(--space-8));
+    padding-left: calc(var(--sidebar-mobile-nav-pad-x) + 1em + var(--space-12) + var(--space-12));
     min-height: 48px;
   }
 
