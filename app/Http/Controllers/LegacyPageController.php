@@ -99,6 +99,15 @@ class LegacyPageController extends Controller
 
         abort_unless(is_file($path), 404);
 
-        return response()->file($path);
+        $headers = [];
+        if (in_array($page, self::SPA_PAGES, true)) {
+            $headers = [
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+            ];
+        }
+
+        return response()->file($path, $headers);
     }
 }

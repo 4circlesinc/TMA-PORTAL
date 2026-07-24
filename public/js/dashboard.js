@@ -12,9 +12,43 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-07-24-menu-v2';
+  var NAV_SHELL_VERSION = '2026-07-24-menu-v3';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
+
+  /* Official order — stable data-nav / data-expand ids. Permissions may hide
+     items but must not change relative order. Enforced on every mount so a
+     stale cached shell cannot keep an old arrangement on screen. */
+  var APPROVED_PRIMARY_NAV = [
+    'dash-dashboard',
+    'dash-project-overview',
+    'clients',
+    'email',
+    'so-messages',
+    'so-feed',
+    'calendar',
+    'signatures',
+    'folders',
+  ];
+  var APPROVED_PAGES_NAV = [
+    'users',
+    'templates',
+    'projects',
+    'workflows',
+    'people',
+    'account-settings',
+  ];
+  var APPROVED_MOBILE_PRIMARY = APPROVED_PRIMARY_NAV.map(function (id) {
+    return id === 'folders' ? 'folders-personal' : id;
+  });
+  var APPROVED_MOBILE_PAGES = [
+    'users',
+    'templates',
+    'projects-all',
+    'workflows-automated',
+    'people-home',
+    'account-settings',
+  ];
 
   var store = {
     get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
@@ -30,6 +64,97 @@
       store.set('tma.navShellVersion', NAV_SHELL_VERSION);
     }
   } catch (e) { /* ignore */ }
+
+  function navKey(el) {
+    if (!el || !el.getAttribute) return '';
+    return el.getAttribute('data-nav') || el.getAttribute('data-expand') || '';
+  }
+
+  function takeNavBlock(map, id) {
+    var el = map[id];
+    if (!el) return null;
+    var nodes = [el];
+    // Expandable groups keep their subnav sibling immediately after.
+    if (el.getAttribute('data-expand') && el.nextElementSibling &&
+        el.nextElementSibling.getAttribute('data-subnav') === id) {
+      nodes.push(el.nextElementSibling);
+    }
+    return nodes;
+  }
+
+  function enforceApprovedSidebarOrder(root) {
+    var sections = Array.prototype.slice.call(root.querySelectorAll('.tma-dash__sidebar .tma-dash__nav-section[data-list="main"]'));
+    if (sections.length < 2) return;
+
+    var primarySection = sections[0];
+    var pagesSection = null;
+    for (var s = 0; s < sections.length; s++) {
+      if (sections[s].querySelector('.tma-dash__group-label')) {
+        pagesSection = sections[s];
+        break;
+      }
+    }
+    if (!pagesSection) pagesSection = sections[1];
+
+    var map = {};
+    root.querySelectorAll('.tma-dash__sidebar .tma-dash__nav-item[data-nav], .tma-dash__sidebar .tma-dash__nav-item[data-expand]').forEach(function (el) {
+      var key = navKey(el);
+      if (key) map[key] = el;
+    });
+
+    var label = pagesSection.querySelector('.tma-dash__group-label');
+
+    APPROVED_PRIMARY_NAV.forEach(function (id) {
+      var nodes = takeNavBlock(map, id);
+      if (!nodes) return;
+      nodes.forEach(function (n) { primarySection.appendChild(n); });
+    });
+
+    if (label) pagesSection.appendChild(label);
+    APPROVED_PAGES_NAV.forEach(function (id) {
+      var nodes = takeNavBlock(map, id);
+      if (!nodes) return;
+      nodes.forEach(function (n) { pagesSection.appendChild(n); });
+    });
+  }
+
+  function enforceApprovedMobileOrder(root) {
+    var cards = Array.prototype.slice.call(root.querySelectorAll('.tma-dash__mmenu-card'));
+    if (cards.length < 2) return;
+
+    // Favorites card (optional) then Dashboards then Pages then Account.
+    var dashCard = null;
+    var pagesCard = null;
+    cards.forEach(function (card) {
+      if (card.querySelector('[data-nav="dash-dashboard"]')) dashCard = card;
+      else if (card.querySelector('[data-nav="account-settings"]') && card.querySelector('[data-nav="users"], [data-nav="templates"], [data-nav="projects-all"]')) pagesCard = card;
+    });
+    if (!pagesCard) {
+      cards.forEach(function (card) {
+        if (card.querySelector('[data-nav="account-settings"]') && card !== dashCard) pagesCard = card;
+      });
+    }
+    if (!dashCard || !pagesCard) return;
+
+    var map = {};
+    root.querySelectorAll('.tma-dash__mmenu [data-mrow][data-nav]').forEach(function (el) {
+      map[el.getAttribute('data-nav')] = el;
+    });
+
+    APPROVED_MOBILE_PRIMARY.forEach(function (id) {
+      if (map[id]) dashCard.appendChild(map[id]);
+    });
+    APPROVED_MOBILE_PAGES.forEach(function (id) {
+      if (map[id]) pagesCard.appendChild(map[id]);
+    });
+  }
+
+  function enforceApprovedMenuOrder(root) {
+    try {
+      enforceApprovedSidebarOrder(root);
+      enforceApprovedMobileOrder(root);
+    } catch (e) { /* never block the app on menu repair */ }
+  }
 
   var ACCENT_COLORS = {
     indigo: '#136da0', /* TMA brand blue (accent id kept as "indigo" for stored prefs) */
@@ -71,6 +196,8 @@
 
   function mount(root) {
     if (!root) return;
+
+    enforceApprovedMenuOrder(root);
 
     var sidebar = root.querySelector('.tma-dash__sidebar');
     // Programmatically focusable (but not Tab-reachable) so toggleSidebar()

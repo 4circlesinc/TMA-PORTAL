@@ -400,6 +400,8 @@
   flex: 0 0 var(--dash-icon-md);
   width: var(--dash-icon-md);
   height: var(--dash-icon-md);
+  overflow: visible;
+  z-index: 1;
 }
 .tma-dash__nav-icon-wrap .tma-dash__nav-icon {
   /* A plain <span> is display:inline, which ignores width/height — it was
@@ -575,16 +577,12 @@
 
 .tma-dash__nav-count {
   /* Same visual treatment as the header's .tma-dash__icon-btn-badge
-     (notification count): 14px pill, 9px/500 text, no border. Sits on the
-     icon's top edge — .tma-dash__nav-icon-wrap gives it a tightly-fit,
-     unmasked positioning parent (see dashboard.js). Anchored by left (not
-     right), unlike the header badge, so a wider count (99+) grows further
-     right — away from the icon — instead of eating into it; the header
-     badge never has to handle more than ~2 digits so it can get away with
-     a right anchor. */
+     (notification count): 14px pill, 9px/500 text, no border. Anchored to
+     the icon wrap's top-right so wide counts (99+) never cover the label. */
   position: absolute;
-  top: -5px;
-  left: 55%;
+  top: -6px;
+  right: -8px;
+  left: auto;
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
@@ -601,7 +599,7 @@
   text-overflow: clip;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
 }
 
 .tma-dash__nav-count[hidden] { display: none; }
@@ -19597,7 +19595,7 @@ button.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread):not
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread {
-  background: rgba(0, 0, 0, 0.045);
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
@@ -19606,7 +19604,7 @@ button.tma-dash__header-popup-item:hover {
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread:hover {
-  background: rgba(0, 0, 0, 0.07);
+  background: rgba(0, 0, 0, 0.09) !important;
 }
 
 button.tma-dash__header-popup-item:focus-visible {
@@ -19615,7 +19613,7 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__header-popup-item--unread {
-  background: rgba(0, 0, 0, 0.045);
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 
 .tma-dash__header-popup-item--active,
@@ -19625,7 +19623,7 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash__header-popup-item--unread:hover,
 .tma-dash__header-popup-item--unread.tma-dash__header-popup-item--active {
-  background: rgba(0, 0, 0, 0.07);
+  background: rgba(0, 0, 0, 0.09) !important;
 }
 
 .tma-dash__header-popup--notifications {
@@ -28096,7 +28094,7 @@ span.tma-dash__messages-profile-avatar {
   pointer-events: none;
 }
 .tma-dash__notice--unread {
-  background: rgba(0, 0, 0, 0.045);
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 .tma-dash__notice--unread .tma-dash__notice-title {
   font-weight: 600;
@@ -28397,7 +28395,7 @@ span.tma-dash__messages-profile-avatar {
 /* Read vs unread: unread is bold + light gray with a primary dot;
    read is muted without the highlight. */
 .tma-dash__header-popup-item--unread {
-  background: rgba(0, 0, 0, 0.045);
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 .tma-dash__header-popup-item--unread .tma-dash__header-popup-title {
   font-weight: 600;
