@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ConnectedAccount;
 use App\Support\Mail\MailAuthException;
 use App\Support\Mail\MailSynchronizer;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -16,7 +17,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
  * server's view of the mailbox, so the UI never blocks on a provider round
  * trip it does not need.
  */
-class SyncMailbox implements ShouldQueue
+class SyncMailbox implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -24,9 +25,23 @@ class SyncMailbox implements ShouldQueue
 
     public int $timeout = 120;
 
+    /**
+     * The email page polls a full sync roughly every minute and the
+     * mail:sync-all scheduler dispatches one too — without this, each of those
+     * would enqueue a fresh copy that only gets dropped at run time. Uniqueness
+     * collapses them to one queued job per mailbox. Kept comfortably longer
+     * than a normal sync so a queued job is never deduped against a stale lock.
+     */
+    public int $uniqueFor = 180;
+
     public function __construct(
         public ConnectedAccount $account,
     ) {}
+
+    public function uniqueId(): string
+    {
+        return (string) $this->account->id;
+    }
 
     /**
      * Two syncs of the same mailbox would race on the cursor and duplicate

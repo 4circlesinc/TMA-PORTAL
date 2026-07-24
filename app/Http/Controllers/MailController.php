@@ -1048,34 +1048,20 @@ class MailController extends Controller
             return $this->quickSync($request, $account);
         }
 
-        // The email page polls this on a timer, so a transient provider problem
-        // (throttling, a slow token refresh, a network blip) must not turn into
-        // a 500 the browser logs on every poll. On failure the mirror still
-        // serves, the reason is recorded on the account for the settings panel,
-        // and the next poll retries. MailSynchronizer already bounds its own
-        // provider calls so this returns quickly rather than hanging.
-        try {
-            $written = new MailSynchronizer($account)->sync();
-        } catch (MailAuthException $e) {
-            // A dead grant is not transient and retrying cannot fix it. It has
-            // to reach the handler, which turns it into the 409 the email page
-            // shows its Reconnect prompt for — the catch-all below used to
-            // swallow this too, so a mailbox that needed reconnecting just
-            // reported "temporarily unavailable" on every poll, forever.
-            throw $e;
-        } catch (\Throwable $e) {
-            report($e);
-
-            return response()->json([
-                'synced' => 0,
-                'error' => $account->fresh()->mail_error ?? 'Mailbox sync is temporarily unavailable.',
-                'folders' => $this->folderCounts($request->user()->id),
-                'syncedAt' => $account->fresh()->mail_synced_at?->toIso8601String(),
-            ]);
-        }
+        // The full folder walk can outlast a web request: on a large mailbox it
+        // makes enough provider round trips to blow past the gateway timeout,
+        // which surfaced as a 504 on every poll. Hand it to the queue instead
+        // and answer immediately with the current mirror — SyncMailbox is
+        // unique per mailbox, so the ~1-minute poll, the mail:sync-all
+        // scheduler and the "Sync now" button all collapse into one queued run.
+        // The fast path above still pulls new inbox mail in live on every tick
+        // (and still surfaces a dead grant as the 409 reconnect prompt), so the
+        // page stays current without blocking on the heavy pass.
+        SyncMailbox::dispatch($account);
 
         return response()->json([
-            'synced' => $written,
+            'synced' => 0,
+            'queued' => true,
             'folders' => $this->folderCounts($request->user()->id),
             'syncedAt' => $account->fresh()->mail_synced_at?->toIso8601String(),
         ]);

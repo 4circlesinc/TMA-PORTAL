@@ -30,7 +30,10 @@ class MicrosoftCalendarProvider implements CalendarProvider
 
     public function listCalendars(): array
     {
-        $response = $this->request()->get(self::BASE.'/me/calendars');
+        // This runs inside the interactive "connect a calendar" request, so it
+        // must fail fast rather than let a slow provider push the whole request
+        // past the gateway timeout (a 504). Background sync keeps the full 30s.
+        $response = $this->request(timeout: 12)->get(self::BASE.'/me/calendars');
         $this->assertOk($response, 'list calendars');
 
         return collect($response->json('value', []))
@@ -269,11 +272,11 @@ class MicrosoftCalendarProvider implements CalendarProvider
         };
     }
 
-    private function request(): PendingRequest
+    private function request(int $timeout = 30): PendingRequest
     {
         return Http::withToken(MailTokens::accessToken($this->account))
             ->acceptJson()
-            ->timeout(30);
+            ->timeout($timeout);
     }
 
     private function assertOk($response, string $what): void
