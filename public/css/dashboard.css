@@ -3083,11 +3083,42 @@
   flex: 0 0 var(--dash-icon-lg);
   width: var(--dash-icon-lg);
   height: var(--dash-icon-lg);
-  border-radius: var(--radius-pill);
+  min-width: var(--dash-icon-lg);
+  min-height: var(--dash-icon-lg);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
   object-fit: cover;
+  object-position: center;
   background: var(--color-hover);
   position: relative;
   z-index: 1;
+}
+
+/* Fixed square clip for notification / activity person photos — prevents
+   portrait images from stretching into tall pills when height:auto wins. */
+.tma-dash__person-avatar {
+  flex: 0 0 var(--dash-icon-lg);
+  width: var(--dash-icon-lg);
+  height: var(--dash-icon-lg);
+  min-width: var(--dash-icon-lg);
+  min-height: var(--dash-icon-lg);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-hover);
+  position: relative;
+  z-index: 1;
+  display: block;
+}
+.tma-dash__person-avatar img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center;
+  border-radius: 0;
 }
 /* connector line behind activity avatars */
 .tma-dash__rb-section--activities .tma-dash__activity:not(:last-child)::before {
@@ -12862,9 +12893,14 @@
 .tma-dash__email-suggest-avatar {
   width: 28px;
   height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   object-fit: cover;
+  object-position: center;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .tma-dash__email-suggest-avatar--initial {
@@ -19651,19 +19687,27 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__header-popup-avatar {
-  flex: 0 0 var(--dash-icon-lg);
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-pill);
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.25);
   border: 0.5px solid rgba(255, 255, 255, 0.3);
 }
 
 .tma-dash__header-popup-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center;
+  border-radius: 0;
 }
 
 .tma-dash__header-popup-copy {

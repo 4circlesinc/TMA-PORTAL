@@ -36,7 +36,8 @@
     var n = 0, s = String(name || '');
     for (var i = 0; i < s.length; i++) n = (n + s.charCodeAt(i)) % 997;
     var bg = colors[n % colors.length];
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+    // Explicit width/height keep the SVG square when CSS height:auto fights us.
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">' +
       '<rect width="40" height="40" rx="20" fill="' + bg + '"/>' +
       '<text x="20" y="21" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600" ' +
       'fill="#ffffff" text-anchor="middle" dominant-baseline="central">' + esc(initials) + '</text></svg>';
@@ -97,11 +98,14 @@
     var fallback = initialsUri(name);
     var src = item.image || (item.actor && item.actor.avatar) || '';
     var url = isRealPhoto(src) ? src : fallback;
-    var img = '<img ' + (cfg.avatarImgClass ? 'class="' + cfg.avatarImgClass + '" ' : '') +
-      'src="' + esc(url) + '" alt="" ' +
+    var imgClass = cfg.avatarImgClass ? ' class="' + cfg.avatarImgClass + '"' : '';
+    var img = '<img' + imgClass +
+      ' src="' + esc(url) + '" alt="" width="40" height="40" ' +
       "onerror=\"this.onerror=null;this.src='" + fallback + "'\">";
-    if (cfg.avatarWrap) return '<span class="' + cfg.avatarWrap + '">' + img + '</span>';
-    return img;
+    // Always clip inside a fixed square — bare <img> tags were stretching into
+    // tall pills when height:auto won over the size rules.
+    var wrap = cfg.avatarWrap || 'tma-dash__person-avatar';
+    return '<span class="' + wrap + '">' + img + '</span>';
   }
 
   function systemVisual(item, cfg) {
@@ -151,8 +155,8 @@
       desc: 'tma-dash__notice-desc',
       meta: 'tma-dash__notice-meta',
       cta: 'tma-dash__notice-cta',
-      avatarWrap: null,
-      avatarImgClass: 'tma-dash__rb-avatar',
+      avatarWrap: 'tma-dash__person-avatar',
+      avatarImgClass: '',
       iconSpan: 'tma-dash__notice-icon',
       unread: 'tma-dash__notice--unread',
     },

@@ -178,8 +178,11 @@
         && !/\.(ico|gif)(\?|$)/i.test(src || '')
         ? src
         : fallback;
-      return '<img class="tma-notify-toast__avatar" src="' + esc(url || fallback) + '" alt=""' +
-        (fallback ? " onerror=\"this.onerror=null;this.src='" + fallback + "'\"" : '') + '>';
+      // Fixed square wrap — never let a portrait photo stretch into a tall pill.
+      return '<span class="tma-notify-toast__avatar-wrap">' +
+        '<img class="tma-notify-toast__avatar" src="' + esc(url || fallback) + '" alt="" width="36" height="36"' +
+        (fallback ? " onerror=\"this.onerror=null;this.src='" + fallback + "'\"" : '') + '>' +
+        '</span>';
     }
     const tone = R ? R.levelTone(item.level) : 'blue';
     const iconSrc = R ? R.iconUrl(item.icon) : 'images/icons/phosphor/' + (item.icon || 'Notification') + '.svg';

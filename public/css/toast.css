@@ -145,16 +145,27 @@
   transform: translateX(16px);
 }
 
-.tma-notify-toast__avatar {
-  display: block;
+.tma-notify-toast__avatar-wrap {
+  flex: 0 0 36px;
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
-  object-fit: cover;
-  object-position: center;
-  flex-shrink: 0;
-  background: #e8f1fb;
   overflow: hidden;
+  background: #e8f1fb;
+}
+
+.tma-notify-toast__avatar {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center;
+  border-radius: 0;
 }
 
 .tma-notify-toast__icon {
