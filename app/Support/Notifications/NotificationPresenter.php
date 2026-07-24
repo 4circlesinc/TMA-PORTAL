@@ -95,9 +95,11 @@ final class NotificationPresenter
     }
 
     /**
-     * Leading photo for the row/toast. For email notifications only a real
-     * face (portal user / directory / Gravatar) is used — never a company
-     * favicon. Missing faces fall through to initials on the front-end.
+     * Leading photo for the row/toast. Email notifications use the same
+     * sender image the inbox list would show (portal user → directory /
+     * Gravatar / brand logo via {@see MailSenderPhoto::urlFor}). Missing
+     * images fall through to initials on the front-end, seeded by email so
+     * colours match the mailbox.
      */
     private static function image(Notification $n): ?string
     {
@@ -113,10 +115,10 @@ final class NotificationPresenter
                     return $portal;
                 }
 
-                return MailSenderPhoto::faceUrlFor($email);
+                // Same source as MailController::avatarFor / inbox rows.
+                return MailSenderPhoto::urlFor($email);
             }
 
-            // Ignore a stored brand-favicon URL that was saved before faces-only.
             return null;
         }
 

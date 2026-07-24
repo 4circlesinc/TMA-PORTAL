@@ -206,10 +206,11 @@
   function notifyLeading(item) {
     const R = window.TMANotifyRender;
     const name = senderName(item);
+    const seed = (item.meta && item.meta.from_email) || (item.actor && item.actor.email) || name;
     const isEmail = item.module === 'email' || (item.type && String(item.type).indexOf('email.') === 0);
     const asPerson = !!(item.actor || item.image || (isEmail && name));
     if (asPerson) {
-      const fallback = R ? R.initialsUri(name) : '';
+      const fallback = R ? R.initialsUri(name, seed) : '';
       const src = item.image || (item.actor && item.actor.avatar) || '';
       const url = (R && R.isRealPhoto ? R.isRealPhoto(src) : /^(https?:|\/(storage|media|portal)\/|data:)/i.test(src || ''))
         ? src

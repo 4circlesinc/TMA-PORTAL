@@ -515,7 +515,7 @@ class MailSynchronizer
                 'message' => $senders->isNotEmpty() ? 'From '.$senders->implode(', ').'…' : null,
                 'action_url' => '/email?message='.$first->uuid,
                 'subject' => $first,
-                'image' => MailSenderPhoto::faceUrlFor((string) ($first->from_email ?? '')),
+                'image' => MailSenderPhoto::urlFor((string) ($first->from_email ?? '')),
                 'metadata' => [
                     'from_email' => mb_strtolower((string) ($first->from_email ?? '')),
                     'from_name' => (string) ($first->from_name ?: $first->from_email ?: 'Sender'),
@@ -539,7 +539,7 @@ class MailSynchronizer
                 'message' => $m->subject ?: Str::limit((string) $m->snippet, 120),
                 'action_url' => '/email?message='.$m->uuid,
                 'subject' => $m,
-                'image' => MailSenderPhoto::faceUrlFor($fromEmail),
+                'image' => MailSenderPhoto::urlFor($fromEmail),
                 'metadata' => [
                     'from_email' => $fromEmail,
                     'from_name' => (string) ($m->from_name ?: $m->from_email ?: 'Sender'),

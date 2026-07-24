@@ -27,13 +27,17 @@
     return ICON + (name || 'Notification') + '.svg';
   }
 
-  /* Initials tile as a data URI — same palette/algorithm as current-user.js so
-     a person looks the same everywhere, and with no dependency on load order. */
-  function initialsUri(name) {
+  /* Initials tile as a data URI — same palette/algorithm as current-user.js /
+     the email inbox (seed by email when available) so a person looks the same
+     in the mailbox, the bell, the sidebar, and toasts. */
+  function initialsUri(name, seed) {
+    if (window.TMACurrentUser && typeof window.TMACurrentUser.initialsFor === 'function') {
+      return window.TMACurrentUser.initialsFor(name, seed || name);
+    }
     var initials = String(name || '?').trim().split(/\s+/).slice(0, 2)
       .map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
     var colors = ['#136da0', '#03a5e9', '#0f9d8c', '#3f9142', '#c77d18', '#b5497e', '#3b6fb8'];
-    var n = 0, s = String(name || '');
+    var n = 0, s = String(seed || name || '');
     for (var i = 0; i < s.length; i++) n = (n + s.charCodeAt(i)) % 997;
     var bg = colors[n % colors.length];
     // Explicit width/height keep the SVG square when CSS height:auto fights us.
@@ -45,17 +49,15 @@
   }
 
   function isRealPhoto(src) {
-    // Portal-served sender photos live under /portal/mail/sender-photo/…
-    // Portal user photos under /media/avatars/… or /storage/…
-    // Brand favicons are never handed down for email notifications anymore;
-    // still reject obvious icon file URLs as a safety net.
+    // Portal-served sender photos (faces + brand marks) live under
+    // /portal/mail/sender-photo/… — same URLs the inbox list uses.
     if (!src) return false;
     var s = String(src).trim();
     if (!s) return false;
-    if (/\.(ico|gif)(\?|$)/i.test(s)) return false;
+    // Reject dead icon files that are not portal-served photos.
+    if (/\.(ico)(\?|$)/i.test(s) && s.indexOf('/portal/mail/sender-photo/') === -1) return false;
     if (/^(https?:|data:)/i.test(s)) return true;
     if (/^\/(storage|media|portal)\//i.test(s)) return true;
-    // Relative portal paths without a leading host (e.g. after <base href="/">)
     if (/^portal\/mail\/sender-photo\//i.test(s)) return true;
     if (/^media\/avatars\//i.test(s)) return true;
     return false;
@@ -107,6 +109,12 @@
   /* The leading visual: a person's photo/initials, or a system glyph. Popups
      wrap the photo in a sized span (existing CSS); the sidebar uses a bare
      rb-avatar image — so the markup follows each surface's existing styles. */
+  function senderEmail(item) {
+    if (item.meta && item.meta.from_email) return String(item.meta.from_email);
+    if (item.actor && item.actor.email) return String(item.actor.email);
+    return '';
+  }
+
   function senderName(item) {
     if (item.actor && item.actor.name) return item.actor.name;
     if (item.meta && item.meta.from_name) return item.meta.from_name;
@@ -119,7 +127,8 @@
 
   function personVisual(item, cfg) {
     var name = senderName(item);
-    var fallback = initialsUri(name);
+    var seed = senderEmail(item) || name;
+    var fallback = initialsUri(name, seed);
     var src = item.image || (item.actor && item.actor.avatar) || '';
     var size = cfg.avatarSize || 40;
     var img = personImg(src, fallback, size, cfg.avatarImgClass || '');

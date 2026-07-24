@@ -19595,7 +19595,7 @@ button.tma-dash__header-popup-item:not(.tma-dash__header-popup-item--unread):not
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--unread {
-  background: rgba(0, 0, 0, 0.06) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
 }
 
 button.tma-dash__header-popup-item.tma-dash__header-popup-item--active,
@@ -19613,7 +19613,7 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__header-popup-item--unread {
-  background: rgba(0, 0, 0, 0.06) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
 }
 
 .tma-dash__header-popup-item--active,
@@ -28094,7 +28094,7 @@ span.tma-dash__messages-profile-avatar {
   pointer-events: none;
 }
 .tma-dash__notice--unread {
-  background: rgba(0, 0, 0, 0.06) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
 }
 .tma-dash__notice--unread .tma-dash__notice-title {
   font-weight: 600;
@@ -28395,7 +28395,7 @@ span.tma-dash__messages-profile-avatar {
 /* Read vs unread: unread is bold + light gray with a primary dot;
    read is muted without the highlight. */
 .tma-dash__header-popup-item--unread {
-  background: rgba(0, 0, 0, 0.06) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
 }
 .tma-dash__header-popup-item--unread .tma-dash__header-popup-title {
   font-weight: 600;
