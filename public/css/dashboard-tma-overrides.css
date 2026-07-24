@@ -1005,8 +1005,8 @@ a.tma-dash__tab-btn:visited {
     display: none !important;
   }
 
-  /* Email keeps the right sidebar; ensure its header toggle stays visible. */
-  .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header-right [data-action="toggle-rightbar"] {
+  /* Right sidebar toggle on every desktop page. */
+  .tma-dash__header-right [data-action="toggle-rightbar"] {
     display: grid;
   }
 }
@@ -1020,7 +1020,8 @@ a.tma-dash__tab-btn:visited {
   display: none !important;
 }
 
-.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header-right [data-action="toggle-rightbar"] {
+/* Keep the rightbar toggle visible across all desktop shell views. */
+.tma-dash__header-right [data-action="toggle-rightbar"] {
   display: grid !important;
 }
 
