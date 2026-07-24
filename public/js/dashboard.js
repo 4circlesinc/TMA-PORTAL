@@ -1318,9 +1318,10 @@
     var tabBtns = Array.prototype.slice.call(root.querySelectorAll('.tma-dash__tab-btn'));
 
     function formatTabBadgeCount(count) {
-      if (!count || count <= 0) return '';
-      if (count > 99) return '99+';
-      return String(count);
+      count = Math.max(0, parseInt(count, 10) || 0);
+      if (count <= 0) return '';
+      // Exact total — never "99+". Large mailbox unread counts must stay honest.
+      try { return count.toLocaleString('en-US'); } catch (e) { return String(count); }
     }
 
     var cachedEmailUnread = null;

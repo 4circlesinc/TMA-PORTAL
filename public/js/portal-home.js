@@ -522,11 +522,18 @@
   }
 
   // Shortcut badges: Email = exact inbox unread, Calendar = today's events,
-  // Users = pending approvals. Never a placeholder number.
+  // Users = pending approvals. Never a placeholder number — and never "99+".
+  function formatShortcutCount(n) {
+    n = Math.max(0, parseInt(n, 10) || 0);
+    if (n <= 0) return '';
+    try { return n.toLocaleString('en-US'); } catch (e) { return String(n); }
+  }
+
   function fillShortcutCounts(el) {
     function setCount(kind, n) {
+      var text = formatShortcutCount(n);
       el.querySelectorAll('[data-home-shortcut-count="' + kind + '"]').forEach(function (b) {
-        if (n && n > 0) { b.textContent = n > 99 ? '99+' : String(n); b.hidden = false; }
+        if (text) { b.textContent = text; b.hidden = false; }
         else { b.hidden = true; b.textContent = ''; }
       });
     }
@@ -590,27 +597,19 @@
         var n = e && e.detail && e.detail.count;
         if (n == null) return;
         inboxUnreadCount = Math.max(0, parseInt(n, 10) || 0);
+        var text = formatShortcutCount(inboxUnreadCount);
         document.querySelectorAll('[data-home-shortcut-count="email"]').forEach(function (b) {
-          if (inboxUnreadCount > 0) {
-            b.textContent = inboxUnreadCount > 99 ? '99+' : String(inboxUnreadCount);
-            b.hidden = false;
-          } else {
-            b.hidden = true;
-            b.textContent = '';
-          }
+          if (text) { b.textContent = text; b.hidden = false; }
+          else { b.hidden = true; b.textContent = ''; }
         });
       });
       document.addEventListener('tma-calendar-count', function (e) {
         var n = e && e.detail && e.detail.count;
         if (n == null) return;
+        var text = formatShortcutCount(n);
         document.querySelectorAll('[data-home-shortcut-count="calendar"]').forEach(function (b) {
-          if (n > 0) {
-            b.textContent = n > 99 ? '99+' : String(n);
-            b.hidden = false;
-          } else {
-            b.hidden = true;
-            b.textContent = '';
-          }
+          if (text) { b.textContent = text; b.hidden = false; }
+          else { b.hidden = true; b.textContent = ''; }
         });
       });
     }
