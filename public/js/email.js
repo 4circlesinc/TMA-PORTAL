@@ -3860,15 +3860,22 @@
       var label = item.source === 'group'
         ? esc(item.name || 'Group')
         : esc(item.name ? item.name : item.email);
+      // Email only under the name — never "Previous email" / "Organization"
+      // source tags; those read as clutter next to a real face.
       var meta = item.source === 'group'
         ? esc(item.sourceLabel || 'Group')
-        : esc((item.email || '') + (item.sourceLabel ? ' · ' + item.sourceLabel : ''));
+        : esc(item.email || '');
       var initial = esc(item.initial || String(item.name || item.email || '?').charAt(0).toUpperCase());
       var colorStyle = item.initialColor ? ' style="background:' + esc(item.initialColor) + ';color:#fff"' : '';
+      // One circle only: a photo when we have one, otherwise initials.
+      // (A hidden sibling fallback was showing beside the photo because
+      // .tma-dash__email-suggest-avatar--initial { display:inline-flex }
+      // overrode the HTML hidden attribute.)
       var avatar = item.avatarUrl
         ? '<img class="tma-dash__email-suggest-avatar" src="' + esc(item.avatarUrl) + '" alt=""' +
-          ' onerror="this.onerror=null;this.hidden=true;var f=this.nextElementSibling;if(f)f.hidden=false">' +
-          '<span class="tma-dash__email-suggest-avatar tma-dash__email-suggest-avatar--initial" hidden aria-hidden="true"' + colorStyle + '>' + initial + '</span>'
+          ' data-email-suggest-initial="' + initial + '"' +
+          (item.initialColor ? ' data-email-suggest-color="' + esc(item.initialColor) + '"' : '') +
+          ' onerror="window.TMAEmail && window.TMAEmail._suggestPhotoFallback && window.TMAEmail._suggestPhotoFallback(this)">'
         : '<span class="tma-dash__email-suggest-avatar tma-dash__email-suggest-avatar--initial" aria-hidden="true"' + colorStyle + '>' +
           initial + '</span>';
       return (
@@ -7400,5 +7407,21 @@
     mount: mount,
     restoreHeaderSearch: restoreHeaderSearch,
     getInboxUnreadCount: getInboxUnreadCount,
+    /* Swap a broken directory photo for a single initials tile — never leave
+     * two circles side by side. */
+    _suggestPhotoFallback: function (img) {
+      if (!img || !img.parentNode) return;
+      img.onerror = null;
+      var span = document.createElement('span');
+      span.className = 'tma-dash__email-suggest-avatar tma-dash__email-suggest-avatar--initial';
+      span.setAttribute('aria-hidden', 'true');
+      span.textContent = img.getAttribute('data-email-suggest-initial') || '?';
+      var color = img.getAttribute('data-email-suggest-color');
+      if (color) {
+        span.style.background = color;
+        span.style.color = '#fff';
+      }
+      img.parentNode.replaceChild(span, img);
+    },
   };
 })();
