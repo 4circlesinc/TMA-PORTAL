@@ -37,6 +37,7 @@ class AdminUsersController extends Controller
 
         $lastSeen = DB::table('sessions')
             ->select('user_id', DB::raw('MAX(last_activity) as last_activity'))
+            ->whereNotNull('user_id')
             ->groupBy('user_id')
             ->pluck('last_activity', 'user_id');
 

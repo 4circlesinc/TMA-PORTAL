@@ -34,7 +34,10 @@
     ThreeDots: 'images/icons/tma/ThreeDots-16.svg',
   };
 
-  /* ── real user directory (database-backed, admin only) ── */
+  /* ── real user directory (database-backed, staff-readable) ── */
+  /* Filled/overwritten from GET /admin/users. Declared here so assigning
+     under 'use strict' does not throw ReferenceError and blank the table. */
+  var ACCOUNT_TYPES = ['Client', 'Employee', 'Administrator'];
   /* the design system's own avatar set - filled from the server */
   var SYSTEM_AVATARS = [];
 
@@ -694,7 +697,11 @@ if (state.filters.user) {
         state.rows = [];
         state.loadError = true;
         state.loadErrorStatus = 0;
-        state.loadErrorMessage = 'Could not reach the server to load users.';
+        // Distinguish network failures from parse/render bugs so Retry is useful.
+        var msg = (err && err.message) ? String(err.message) : '';
+        state.loadErrorMessage = /Failed to fetch|NetworkError|Load failed/i.test(msg)
+          ? 'Could not reach the server to load users.'
+          : (msg ? ('Could not load users: ' + msg) : 'Could not load users right now.');
         state.live = false;
         state.selected = {};
         if (window.console && console.warn) console.warn('Users: failed to load real accounts —', err);
