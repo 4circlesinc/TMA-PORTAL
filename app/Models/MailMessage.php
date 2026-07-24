@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'uuid', 'user_id', 'connected_account_id', 'remote_id', 'thread_id', 'folder',
     'subject', 'snippet', 'body_html', 'body_text', 'from_name', 'from_email',
     'to', 'cc', 'bcc', 'reply_to', 'is_read', 'is_starred', 'is_important',
-    'has_attachments', 'sent_at',
+    'is_pinned', 'snoozed_until', 'has_attachments', 'sent_at',
 ])]
 #[Hidden(['remote_id', 'connected_account_id'])]
 class MailMessage extends Model
@@ -34,6 +34,8 @@ class MailMessage extends Model
             'is_read' => 'boolean',
             'is_starred' => 'boolean',
             'is_important' => 'boolean',
+            'is_pinned' => 'boolean',
+            'snoozed_until' => 'datetime',
             'has_attachments' => 'boolean',
             'sent_at' => 'datetime',
         ];
@@ -79,6 +81,8 @@ class MailMessage extends Model
             'unread' => ! $this->is_read,
             'starred' => $this->is_starred,
             'important' => $this->is_important,
+            'pinned' => (bool) $this->is_pinned,
+            'snoozedUntil' => $this->snoozed_until?->toIso8601String(),
             'hasAttachments' => $this->has_attachments,
             'to' => $this->to ?? [],
             'labels' => $this->relationLoaded('labels')

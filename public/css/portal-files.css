@@ -541,3 +541,51 @@ body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
   font-weight: 600;
   color: var(--color-text-secondary);
 }
+
+/* ─────────────────────────────────────────
+ * Full-app views: no dashboard rail
+ *
+ * Email, Messages, Calendar, Feed and Settings are full-bleed apps, not
+ * dashboard pages. On wide screens (where the rightbar is an inline grid
+ * column rather than a drawer) the Notifications/Activities/Clients rail
+ * used to stay in the grid and squeeze these views into a narrow column.
+ * Give them the whole width instead. Lives here because every shell page
+ * loads portal-files.css, including the standalone /email, /calendar,
+ * /settings and /social pages a full page load (e.g. the OAuth return)
+ * lands on. Mirrors the is-user-info-docked pattern in user-info-panel.css;
+ * that mode keeps precedence via :not(.is-user-info-docked).
+ * ───────────────────────────────────────── */
+@media (min-width: 1281px) {
+  .tma-dash.tma-dash--email:not(.is-user-info-docked),
+  .tma-dash.tma-dash--messages:not(.is-user-info-docked),
+  .tma-dash.tma-dash--calendar:not(.is-user-info-docked),
+  .tma-dash.tma-dash--feed:not(.is-user-info-docked),
+  .tma-dash.tma-dash--settings:not(.is-user-info-docked) {
+    grid-template-columns: var(--dash-sidebar-w) minmax(0, 1fr) 0;
+  }
+
+  .tma-dash.is-sidebar-collapsed.tma-dash--email:not(.is-user-info-docked),
+  .tma-dash.is-sidebar-collapsed.tma-dash--messages:not(.is-user-info-docked),
+  .tma-dash.is-sidebar-collapsed.tma-dash--calendar:not(.is-user-info-docked),
+  .tma-dash.is-sidebar-collapsed.tma-dash--feed:not(.is-user-info-docked),
+  .tma-dash.is-sidebar-collapsed.tma-dash--settings:not(.is-user-info-docked) {
+    grid-template-columns: var(--dash-sidebar-collapsed-w) minmax(0, 1fr) 0;
+  }
+
+  .tma-dash--email .tma-dash__rightbar,
+  .tma-dash--messages .tma-dash__rightbar,
+  .tma-dash--calendar .tma-dash__rightbar,
+  .tma-dash--feed .tma-dash__rightbar,
+  .tma-dash--settings .tma-dash__rightbar {
+    display: none;
+  }
+
+  /* The header's rightbar toggle would be a dead button on these views. */
+  .tma-dash--email .tma-dash__header-right [data-action="toggle-rightbar"],
+  .tma-dash--messages .tma-dash__header-right [data-action="toggle-rightbar"],
+  .tma-dash--calendar .tma-dash__header-right [data-action="toggle-rightbar"],
+  .tma-dash--feed .tma-dash__header-right [data-action="toggle-rightbar"],
+  .tma-dash--settings .tma-dash__header-right [data-action="toggle-rightbar"] {
+    display: none;
+  }
+}

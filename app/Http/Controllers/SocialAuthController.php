@@ -319,6 +319,28 @@ class SocialAuthController extends Controller
             return;
         }
 
+        // Only an actual (re)connection lands in the audit trail — a plain
+        // social sign-in that happens to carry the same grant does not.
+        if ($account->wasRecentlyCreated || $account->wasChanged('sync_email') || $account->wasChanged('token')) {
+            $providerName = ucfirst($account->provider);
+
+            \App\Support\Activity\ActivityLogger::log([
+                'actor' => $account->user_id,
+                'type' => 'email.connected',
+                'description' => ($account->user?->name ?? 'A user').' connected their '.$providerName.' mailbox',
+                'subject' => $account,
+            ]);
+
+            \App\Support\Notifications\Notifier::send([
+                'user' => $account->user_id,
+                'type' => 'security.account_connected',
+                'title' => $providerName.' mailbox connected',
+                'message' => $account->email.' — import is starting in the background.',
+                'action_url' => '/email',
+                'dedupe_key' => 'mailbox.connected:'.$account->id,
+            ]);
+        }
+
         rescue(function () use ($account) {
             AnalyzeMailbox::start($account);
         }, report: false);

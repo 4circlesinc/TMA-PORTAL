@@ -69,6 +69,8 @@
     EnvelopeSimple: ICON + 'EnvelopeSimple.svg',
     Clock: ICON + 'Clock.svg',
     Tag: ICON + 'Tag.svg',
+    PushPin: ICON + 'PushPin.svg',
+    PushPinSlash: ICON + 'PushPinSlash.svg',
     // A proper flag, not a price-tag shape — TagChevron's notched silhouette
     // read as "two icons overlapping" at toolbar size, and a tag was never
     // the right shape for "mark as important" to begin with.
@@ -771,10 +773,22 @@
     return (row && row.labels) || [];
   }
 
+  /* The server counts the whole mailbox at bootstrap (label.count); counting
+   * loaded rows would only ever see the current page. Local toggles adjust
+   * the number optimistically via adjustLabelCount. */
   function labelMessageCount(labelId, state) {
+    var label = getEmailLabel(labelId, state);
+    if (label && typeof label.count === 'number') return label.count;
     return rowsOf(state).filter(function (row) {
       return rowHasLabel(row.id, labelId, state);
     }).length;
+  }
+
+  function adjustLabelCount(state, labelId, delta) {
+    var label = getEmailLabel(labelId, state);
+    if (label && typeof label.count === 'number') {
+      label.count = Math.max(0, label.count + delta);
+    }
   }
 
   function renderDetailLabelChip(name, tone, opts) {
@@ -906,14 +920,56 @@
         var cls = 'tma-dash__email-label-item';
         if (active) cls += ' tma-dash__email-label-item--active';
         return (
+          '<div class="tma-dash__email-label-row' + (active ? ' tma-dash__email-label-row--active' : '') + '">' +
           '<button type="button" class="' + cls + '" data-email-sidebar-label="' + esc(label.id) + '">' +
           renderLabelTag(label.tone) +
           '<span class="tma-dash__email-label-item-name">' + esc(label.name) + '</span>' +
           (count ? '<span class="tma-dash__email-label-item-count">' + count + '</span>' : '') +
-          '</button>'
+          '</button>' +
+          '<button type="button" class="tma-dash__email-label-edit" data-email-label-edit="' + esc(label.id) + '"' +
+          ' aria-label="Edit label ' + esc(label.name) + '" aria-haspopup="dialog">' +
+          '<img src="' + ICONS.PencilSimpleLine + '" alt="">' +
+          '</button>' +
+          '</div>'
         );
       }).join('') +
       '</nav>' +
+      renderEmailLabelEditor(state) +
+      '</div>'
+    );
+  }
+
+  /* The create/edit popup behind the sidebar's "+" and each label's pencil.
+   * Rendered once (hidden); openEmailLabelEditor fills and positions it, so
+   * a background repaint cannot wipe what the user is typing. */
+  function renderEmailLabelEditor(state) {
+    var tones = ['blue', 'green', 'purple', 'orange', 'red', 'indigo', 'gray'];
+    // data-morph-skip: the editor's fields are managed imperatively (open,
+    // tone selection, error text), and the background mail poll re-renders
+    // the app — without the skip, every poll would wipe what the user typed.
+    return (
+      '<div class="tma-dash__email-label-editor tma-dash__menu" data-email-label-editor data-morph-skip role="dialog"' +
+      ' aria-label="Label editor" hidden>' +
+      '<div class="tma-dash__email-label-editor-head" data-email-label-editor-title>New label</div>' +
+      '<input type="text" class="tma-dash__email-label-editor-name" data-email-label-editor-name' +
+      ' maxlength="100" placeholder="Label name" aria-label="Label name">' +
+      '<div class="tma-dash__email-label-editor-tones" role="radiogroup" aria-label="Label colour">' +
+      tones.map(function (tone) {
+        return (
+          '<button type="button" class="tma-dash__email-label-editor-tone" role="radio" aria-checked="false"' +
+          ' data-email-label-editor-tone="' + tone + '" aria-label="' + tone + '">' +
+          renderLabelTag(tone) +
+          '</button>'
+        );
+      }).join('') +
+      '</div>' +
+      '<div class="tma-dash__email-label-editor-error" data-email-label-editor-error hidden></div>' +
+      '<div class="tma-dash__email-label-editor-actions">' +
+      '<button type="button" class="tma-dash__email-label-editor-delete" data-email-label-editor-delete hidden>Delete</button>' +
+      '<span class="tma-dash__email-label-editor-spacer"></span>' +
+      '<button type="button" class="tma-dash__email-label-editor-cancel" data-email-label-editor-cancel>Cancel</button>' +
+      '<button type="button" class="tma-dash__email-label-editor-save" data-email-label-editor-save>Save</button>' +
+      '</div>' +
       '</div>'
     );
   }
@@ -964,6 +1020,11 @@
   var FOLDERS = [
     { id: 'compose', label: 'Compose', icon: 'PencilSimpleLine', compose: true },
     { id: 'inbox', label: 'Inbox', icon: 'Tray' },
+    // A virtual view rather than a real folder: the server filters by the
+    // important flag across inbox/sent/archive.
+    { id: 'important', label: 'Important', icon: 'Important' },
+    // Also virtual: everything with a snooze set, wherever it really lives.
+    { id: 'snoozed', label: 'Snoozed', icon: 'Clock' },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight' },
     { id: 'draft', label: 'Draft', icon: 'FileText' },
     { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
@@ -986,6 +1047,22 @@
 
   function findRow(state, id) {
     return rowsOf(state).filter(function (row) { return row.id === id; })[0] || null;
+  }
+
+  /* Mirror the server's folder ordering (pinned first, then newest) so a
+   * pin or unpin lands the row exactly where the next fetch would put it —
+   * no second shuffle when the poll comes back. */
+  function resortPinnedRows(state) {
+    var rows = rowsOf(state);
+    var order = new Map(rows.map(function (row, i) { return [row.id, i]; }));
+    rows.sort(function (a, b) {
+      var pin = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+      if (pin !== 0) return pin;
+      var at = a.sentAt || '';
+      var bt = b.sentAt || '';
+      if (at !== bt) return at < bt ? 1 : -1;
+      return order.get(a.id) - order.get(b.id);
+    });
   }
 
   function api() {
@@ -1020,7 +1097,7 @@
    * only the page already in memory. */
   function reloadMessages(root, state, render) {
     // Templates are portal-local and have no server listing.
-    if (state.folder === 'templates') return;
+    if (state.folder === 'templates') return Promise.resolve();
 
     // Changing folder, label or search starts a new listing — page 5 of the
     // inbox says nothing about page 5 of Sent.
@@ -1034,7 +1111,7 @@
     state.loading = true;
     render();
 
-    api().listMessages({
+    return api().listMessages({
       folder: state.folder,
       search: state.search,
       label: state.activeLabelId,
@@ -1117,6 +1194,8 @@
         a[i].id !== b[i].id ||
         a[i].unread !== b[i].unread ||
         a[i].starred !== b[i].starred ||
+        !a[i].pinned !== !b[i].pinned ||
+        (a[i].snoozedUntil || '') !== (b[i].snoozedUntil || '') ||
         (a[i].labels || []).join(',') !== (b[i].labels || []).join(',')
       ) {
         return false;
@@ -1160,10 +1239,24 @@
     state._mailPollTick = (state._mailPollTick || 0) + 1;
     var full = state._mailPollTick % MAIL_FULL_SYNC_EVERY === 0;
 
-    api().sync({ fast: !full }).then(function () {
+    api().sync({ fast: !full }).then(function (data) {
       // A sync that goes through means the grant is alive again — resume
       // polling without needing a reload.
       state.reconnectNeeded = false;
+
+      // The sync response carries fresh folder counts on every tick now.
+      // Apply them here — this is what keeps the sidebar badges and the
+      // dashboard's Email nav count live, including reads and moves made in
+      // Gmail/Outlook that never change this page's visible list.
+      if (data && data.folders) {
+        var next = JSON.stringify(data.folders);
+        if (next !== JSON.stringify(state.folderCounts || {})) {
+          state.folderCounts = data.folders;
+          state._mailCountsDirty = true;
+          var dashRoot = getEmailDashRoot(root);
+          if (dashRoot && typeof dashRoot._syncTabBarBadges === 'function') dashRoot._syncTabBarBadges();
+        }
+      }
     }).catch(function (err) {
       // A dead grant is terminal until the user reconnects, so record it and
       // let mailPollShouldWait stop the timer. Every other failure is
@@ -1193,7 +1286,17 @@
       if (token !== state.loadToken) return;
 
       var incoming = (data && data.messages) || [];
-      if (sameMessageList(state.rows, incoming)) return;
+      if (sameMessageList(state.rows, incoming)) {
+        // Nothing moved in the visible list, but the sidebar badges might
+        // have — a message read on the phone, mail landing in a folder that
+        // is not open. Repaint once so the counts stay honest.
+        if (state._mailCountsDirty) {
+          state._mailCountsDirty = false;
+          render();
+        }
+        return;
+      }
+      state._mailCountsDirty = false;
 
       state.rows = incoming;
       state.hasMore = !!(data && data.hasMore);
@@ -1232,6 +1335,13 @@
         return;
       }
 
+      // A reminder toast / notification deep-link lands here as ?message=.
+      if (state._pendingMessageId) {
+        openMailById(root, state, render, state._pendingMessageId);
+        state._pendingMessageId = null;
+        return;
+      }
+
       reloadMessages(root, state, render);
     }).catch(function (err) {
       state.loading = false;
@@ -1239,6 +1349,36 @@
       state.loadError = (err && err.message) || 'Could not reach the mailbox';
       reportMailError(state, err);
       render();
+    });
+  }
+
+  /* Open one message by id — used by snooze-reminder deep links. Switches to
+   * the folder the message lives in (or Snoozed while it is still resting),
+   * loads that list, then opens the reading pane on it. */
+  function openMailById(root, state, render, id) {
+    if (!id) return Promise.resolve();
+
+    return api().getMessage(id).then(function (data) {
+      var msg = data && data.message;
+      if (!msg || !msg.id) return;
+
+      var folder = msg.snoozedUntil ? 'snoozed' : (msg.folder || 'inbox');
+      state.folder = folder;
+      state.activeLabelId = null;
+      state.mobileNavOpen = false;
+
+      return reloadMessages(root, state, render).then(function () {
+        if (!findRow(state, msg.id)) {
+          // Off the first page — still open from the fetched record so the
+          // reminder never lands on an empty reading pane.
+          state.rows = [msg].concat(rowsOf(state).filter(function (r) { return r.id !== msg.id; }));
+        }
+        state.reading = true;
+        openMailMessage(root, state, render, msg.id);
+      });
+    }).catch(function () {
+      // Deep-link is best-effort; fall back to the ordinary inbox load.
+      reloadMessages(root, state, render);
     });
   }
 
@@ -1504,14 +1644,24 @@
       if (!row.labels) row.labels = [];
 
       var at = row.labels.indexOf(labelId);
-      if (applied && at === -1) row.labels.push(labelId);
-      else if (!applied && at !== -1) row.labels.splice(at, 1);
+      if (applied && at === -1) {
+        row.labels.push(labelId);
+        adjustLabelCount(state, labelId, 1);
+      } else if (!applied && at !== -1) {
+        row.labels.splice(at, 1);
+        adjustLabelCount(state, labelId, -1);
+      }
 
       api().setLabel(id, labelId, applied).catch(function (err) {
         // Put the label back the way it was; the popup re-reads from the row.
         var undo = row.labels.indexOf(labelId);
-        if (applied && undo !== -1) row.labels.splice(undo, 1);
-        else if (!applied && undo === -1) row.labels.push(labelId);
+        if (applied && undo !== -1) {
+          row.labels.splice(undo, 1);
+          adjustLabelCount(state, labelId, -1);
+        } else if (!applied && undo === -1) {
+          row.labels.push(labelId);
+          adjustLabelCount(state, labelId, 1);
+        }
         reportMailError(state, err);
       });
     });
@@ -1598,11 +1748,14 @@
 
   function renderEmailRowHoverActions(row, state) {
     var unread = isRowUnread(row, state);
+    var pinned = !!(row && row.pinned);
+    var snoozed = !!(row && row.snoozedUntil);
     var actions = [
+      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned },
       { id: 'archive', label: 'Archive', icon: 'Archive' },
       { id: 'delete', label: 'Delete', icon: 'Trash' },
       { id: 'read', label: unread ? 'Mark as read' : 'Mark as unread', icon: unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple' },
-      { id: 'snooze', label: 'Snooze', icon: 'Clock' },
+      { id: 'snooze', label: snoozed ? 'Unsnooze' : 'Snooze', icon: 'Clock', active: snoozed },
     ];
 
     return (
@@ -1612,13 +1765,28 @@
           return renderEmailIconTooltipBtn({
             tipId: 'email-row-tip-' + action.id + '-' + row.id,
             label: action.label,
-            className: 'tma-dash__email-row-action',
+            className:
+              'tma-dash__email-row-action' +
+              (action.active ? ' tma-dash__email-row-action--active' : ''),
             attrs:
-              ' data-email-row-hover="' + esc(action.id) + '" data-email-row-id="' + esc(row.id) + '"',
+              ' data-email-row-hover="' + esc(action.id) + '" data-email-row-id="' + esc(row.id) + '"' +
+              (action.active ? ' aria-pressed="true"' : ''),
             innerHtml: '<img src="' + esc(ICONS[action.icon]) + '" alt="">',
           });
         })
         .join('') +
+      // The label (tag) button: opens the same "Label as" picker the bulk bar
+      // uses, scoped to this one message.
+      renderEmailIconTooltipBtn({
+        tipId: 'email-row-tip-label-' + row.id,
+        label: 'Label',
+        className:
+          'tma-dash__email-row-action' +
+          (rowHasAnyLabel(row.id, state) ? ' tma-dash__email-row-action--active' : ''),
+        attrs:
+          ' data-email-label="' + esc(row.id) + '" aria-haspopup="menu" aria-expanded="false"',
+        innerHtml: '<img src="' + ICONS.Tag + '" alt="">',
+      }) +
       '</div>'
     );
   }
@@ -1802,6 +1970,69 @@
     toggle.setAttribute('aria-expanded', 'true');
     var menu = root.querySelector('[data-email-bulk-more-menu]');
     if (menu) positionEmailPopupMenu(toggle, menu);
+  }
+
+  function closeEmailLabelEditor(root, state) {
+    if (!state.labelEditorOpen) return;
+    state.labelEditorOpen = false;
+    state.labelEditorId = null;
+    var editor = root.querySelector('[data-email-label-editor]');
+    if (editor) editor.hidden = true;
+  }
+
+  function setEmailLabelEditorTone(editor, tone) {
+    editor.dataset.tone = tone;
+    editor.querySelectorAll('[data-email-label-editor-tone]').forEach(function (btn) {
+      var selected = btn.getAttribute('data-email-label-editor-tone') === tone;
+      btn.setAttribute('aria-checked', selected ? 'true' : 'false');
+      btn.classList.toggle('tma-dash__email-label-editor-tone--selected', selected);
+    });
+  }
+
+  function setEmailLabelEditorError(editor, message) {
+    var el = editor.querySelector('[data-email-label-editor-error]');
+    if (!el) return;
+    el.textContent = message || '';
+    el.hidden = !message;
+  }
+
+  /* Opens the editor for a new label (labelId null) or an existing one. The
+   * fields are filled imperatively rather than through render() so the popup
+   * survives the background mail poll untouched. */
+  function openEmailLabelEditor(root, state, anchor, labelId) {
+    if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
+    closeEmailLabelPopup(root, state);
+    closeEmailBulkMoreMenu(root, state);
+    closeEmailProfileMenu(root, state);
+
+    var editor = root.querySelector('[data-email-label-editor]');
+    if (!editor) return;
+
+    var label = labelId ? getEmailLabel(labelId, state) : null;
+    state.labelEditorOpen = true;
+    state.labelEditorId = label ? label.id : null;
+
+    var title = editor.querySelector('[data-email-label-editor-title]');
+    if (title) title.textContent = label ? 'Edit label' : 'New label';
+
+    var name = editor.querySelector('[data-email-label-editor-name]');
+    if (name) name.value = label ? label.name : '';
+
+    setEmailLabelEditorTone(editor, (label && label.tone) || 'blue');
+    setEmailLabelEditorError(editor, null);
+
+    var del = editor.querySelector('[data-email-label-editor-delete]');
+    if (del) {
+      del.hidden = !label;
+      del.textContent = 'Delete';
+      del.classList.remove('tma-dash__email-label-editor-delete--confirm');
+    }
+
+    var save = editor.querySelector('[data-email-label-editor-save]');
+    if (save) save.disabled = false;
+
+    positionEmailPopupMenu(anchor, editor);
+    if (name) name.focus();
   }
 
   function rowListLines(row) {
@@ -2410,9 +2641,9 @@
     var counts = state.folderCounts && state.folderCounts[folder.id];
     if (!counts) return null;
 
-    // Inbox and Spam badge what is unread; the rest badge what is there,
-    // which is how both Gmail and Outlook read.
-    if (folder.id === 'inbox' || folder.id === 'spam') {
+    // Inbox, Important and Spam badge what is unread; the rest badge what is
+    // there, which is how both Gmail and Outlook read.
+    if (folder.id === 'inbox' || folder.id === 'important' || folder.id === 'spam') {
       return counts.unread || null;
     }
 
@@ -4912,6 +5143,192 @@
     });
   }
 
+  /* ── Snooze ──────────────────────────────────────────────────────
+   * A snoozed message hides from its folder until the chosen time, when the
+   * server clears the snooze and sends a reminder notification (the
+   * mail:wake-snoozed schedule). Portal-local, like pinning: the provider
+   * mailbox is never touched, so it cannot fail on a dead token. */
+
+  function formatSnoozeInstant(value) {
+    var d = value instanceof Date ? value : new Date(value);
+    if (isNaN(d.getTime())) return '';
+    var now = new Date();
+    var time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    var startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var startTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var days = Math.round((startTarget - startToday) / 86400e3);
+    if (days === 0) return 'Today, ' + time;
+    if (days === 1) return 'Tomorrow, ' + time;
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ', ' + time;
+  }
+
+  function snoozePresets() {
+    var now = new Date();
+    var presets = [];
+
+    // Short reminders first — these are what make snooze feel like a
+    // reminder rather than "park it until tomorrow".
+    presets.push({ id: '15m', label: 'In 15 minutes', at: new Date(now.getTime() + 15 * 60e3) });
+    presets.push({ id: '1h', label: 'In 1 hour', at: new Date(now.getTime() + 3600e3) });
+
+    // Later today: three hours out, on the hour — but only while that is
+    // still today; at 11pm "later today" would be a lie.
+    var later = new Date(now.getTime() + 3 * 3600e3);
+    later.setMinutes(0, 0, 0);
+    if (later.getDate() === now.getDate() && later.getMonth() === now.getMonth()) {
+      presets.push({ id: 'later', label: 'Later today', at: later });
+    }
+
+    var tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 8, 0, 0, 0);
+    presets.push({ id: 'tomorrow', label: 'Tomorrow', at: tomorrow });
+
+    var daysToMonday = (8 - now.getDay()) % 7 || 7;
+    var nextWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToMonday, 8, 0, 0, 0);
+    presets.push({ id: 'nextweek', label: 'Next week', at: nextWeek });
+
+    return presets;
+  }
+
+  /* datetime-local wants "YYYY-MM-DDTHH:MM" in the user's own zone. */
+  function toDatetimeLocalValue(d) {
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function closeEmailSnoozeMenu(root) {
+    var menu = document.querySelector('[data-email-snooze-menu]');
+    if (menu) menu.remove();
+    if (root._snoozeMenuCleanup) {
+      root._snoozeMenuCleanup();
+      root._snoozeMenuCleanup = null;
+    }
+  }
+
+  /* The "Snooze until…" picker: presets plus a date-time field. Calls
+   * onPick(isoString, humanLabel) and closes itself. */
+  function openEmailSnoozeMenu(root, anchor, onPick) {
+    closeEmailSnoozeMenu(root);
+    if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
+
+    var presets = snoozePresets();
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__email-snooze-menu';
+    menu.setAttribute('data-email-snooze-menu', '');
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML =
+      '<div class="tma-dash__email-snooze-menu-title">Snooze until\u2026</div>' +
+      presets.map(function (p) {
+        return (
+          '<button type="button" class="tma-dash__email-snooze-menu-item" role="menuitem"' +
+          ' data-email-snooze-preset="' + p.at.toISOString() + '">' +
+          '<span>' + esc(p.label) + '</span>' +
+          '<span class="tma-dash__email-snooze-menu-when">' + esc(formatSnoozeInstant(p.at)) + '</span>' +
+          '</button>'
+        );
+      }).join('') +
+      '<div class="tma-dash__email-snooze-menu-divider" role="separator"></div>' +
+      '<div class="tma-dash__email-snooze-menu-custom">' +
+      '<input type="datetime-local" class="tma-dash__email-snooze-menu-input" data-email-snooze-custom' +
+      ' min="' + toDatetimeLocalValue(new Date(Date.now() + 60e3)) + '"' +
+      ' value="' + toDatetimeLocalValue(presets[0].at) + '">' +
+      '<button type="button" class="tma-dash__email-snooze-menu-save" data-email-snooze-save>Save</button>' +
+      '</div>';
+
+    document.body.appendChild(menu);
+    positionEmailPopupMenu(anchor, menu);
+
+    function pick(date) {
+      if (!date || isNaN(date.getTime())) return;
+      if (date.getTime() <= Date.now()) {
+        showEmailToast(root, 'Pick a time in the future');
+        return;
+      }
+      closeEmailSnoozeMenu(root);
+      onPick(date.toISOString(), formatSnoozeInstant(date));
+    }
+
+    menu.querySelectorAll('[data-email-snooze-preset]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        pick(new Date(btn.getAttribute('data-email-snooze-preset')));
+      });
+    });
+
+    menu.querySelector('[data-email-snooze-save]').addEventListener('click', function (e) {
+      e.stopPropagation();
+      var input = menu.querySelector('[data-email-snooze-custom]');
+      pick(input.value ? new Date(input.value) : null);
+    });
+
+    // Typing in the field must not bubble into row selection handlers.
+    menu.addEventListener('click', function (e) { e.stopPropagation(); });
+
+    function onDocClick(e) {
+      if (!menu.contains(e.target) && e.target !== anchor) closeEmailSnoozeMenu(root);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') closeEmailSnoozeMenu(root);
+    }
+    // Deferred so the click that opened the menu doesn't instantly close it.
+    setTimeout(function () {
+      document.addEventListener('click', onDocClick, true);
+      document.addEventListener('keydown', onKey, true);
+    }, 0);
+    root._snoozeMenuCleanup = function () {
+      document.removeEventListener('click', onDocClick, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }
+
+  /* Set or clear the snooze on one row, optimistically. Snoozing hides the
+   * row from the current view (except inside Snoozed itself, where clearing
+   * does the hiding); failure puts everything back. */
+  function applyEmailSnooze(root, state, render, id, iso, label) {
+    var rows = rowsOf(state);
+    var at = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].id === id) { at = i; break; }
+    }
+    if (at === -1) return;
+
+    var row = rows[at];
+    var previous = row.snoozedUntil || null;
+    row.snoozedUntil = iso;
+
+    // In every view the change removes the row: a snoozed row leaves its
+    // folder, an unsnoozed row leaves Snoozed. The one exception is
+    // unsnoozing while looking at the message's real folder, which cannot
+    // happen because snoozed rows are not listed there.
+    var removed = false;
+    if ((state.folder === 'snoozed') === !iso) {
+      rows.splice(at, 1);
+      delete state.checkedIds[id];
+      if (state.selectedId === id) {
+        state.selectedId = null;
+        state.reading = false;
+      }
+      removed = true;
+      if (iso) {
+        adjustFolderCount(state, state.folder, -1, row.unread);
+        adjustFolderCount(state, 'snoozed', 1, row.unread);
+      } else {
+        adjustFolderCount(state, 'snoozed', -1, row.unread);
+        adjustFolderCount(state, row.folder || 'inbox', 1, row.unread);
+      }
+    }
+
+    render();
+    showEmailToast(root, iso ? 'Snoozed until ' + label : 'Snooze removed');
+
+    api().setFlags(id, { snooze: iso }).catch(function (err) {
+      row.snoozedUntil = previous;
+      if (removed) rows.splice(at, 0, row);
+      reportMailError(state, err);
+      reloadMessages(root, state, render);
+    });
+  }
+
   /* One toolbar action across a selection.
    *
    * The mock only ever wired read/unread here; archive, spam and delete drew
@@ -5245,6 +5662,13 @@
       renderEmailRowHoverActions(row, state) +
       '</div>' +
       '<div class="tma-dash__email-row-side-top">' +
+      (row.pinned
+        ? '<img class="tma-dash__email-row-pinned" src="' + ICONS.PushPin + '" alt="Pinned" title="Pinned">'
+        : '') +
+      (row.snoozedUntil
+        ? '<img class="tma-dash__email-row-snoozed" src="' + ICONS.Clock + '" alt="Snoozed"' +
+          ' title="Snoozed until ' + esc(formatSnoozeInstant(row.snoozedUntil)) + '">'
+        : '') +
       '<span class="tma-dash__email-row-time">' + esc(row.time) + '</span>' +
       (unread ? '<span class="tma-dash__email-row-unread" aria-hidden="true"></span>' : '') +
       '</div>' +
@@ -5495,8 +5919,10 @@
           var at = labelRow && labelRow.labels ? labelRow.labels.indexOf(labelId) : -1;
           if (at !== -1) {
             labelRow.labels.splice(at, 1);
+            adjustLabelCount(state, labelId, -1);
             api().setLabel(rowId, labelId, false).catch(function (err) {
               labelRow.labels.push(labelId);
+              adjustLabelCount(state, labelId, 1);
               reportMailError(state, err);
               render();
             });
@@ -5542,6 +5968,139 @@
       });
     });
 
+    // "+" in the sidebar and "Create new" in the Label-as menu both open the
+    // editor blank; the pencil beside a sidebar label opens it filled in.
+    MORPH.unwired(root, '[data-email-label-create]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        openEmailLabelEditor(root, state, btn, null);
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-label-edit]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        openEmailLabelEditor(root, state, btn, btn.getAttribute('data-email-label-edit'));
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-label-editor]').forEach(function (editor) {
+      // Clicks inside must not bubble to the document handler that closes it.
+      editor.addEventListener('click', function (event) {
+        event.stopPropagation();
+      });
+
+      editor.querySelectorAll('[data-email-label-editor-tone]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          setEmailLabelEditorTone(editor, btn.getAttribute('data-email-label-editor-tone'));
+        });
+      });
+
+      var nameInput = editor.querySelector('[data-email-label-editor-name]');
+      if (nameInput) {
+        nameInput.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            saveLabelEditor();
+          }
+        });
+      }
+
+      function saveLabelEditor() {
+        var name = nameInput ? nameInput.value.trim() : '';
+        var tone = editor.dataset.tone || 'blue';
+        if (!name) {
+          setEmailLabelEditorError(editor, 'Give the label a name.');
+          if (nameInput) nameInput.focus();
+          return;
+        }
+
+        var saveBtn = editor.querySelector('[data-email-label-editor-save]');
+        if (saveBtn) saveBtn.disabled = true;
+        setEmailLabelEditorError(editor, null);
+
+        var editingId = state.labelEditorId;
+        var request = editingId
+          ? api().updateLabel(editingId, { name: name, tone: tone })
+          : api().createLabel(name, tone);
+
+        request.then(function (data) {
+          var saved = data && data.label;
+          if (saved) {
+            if (editingId) {
+              var existing = getEmailLabel(editingId, state);
+              if (existing) {
+                existing.name = saved.name;
+                existing.tone = saved.tone;
+                if (typeof saved.count === 'number') existing.count = saved.count;
+              }
+            } else {
+              state.labels.push(saved);
+              state.labels.sort(function (a, b) {
+                return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
+              });
+            }
+          }
+          closeEmailLabelEditor(root, state);
+          render();
+        }).catch(function (err) {
+          if (saveBtn) saveBtn.disabled = false;
+          setEmailLabelEditorError(editor, (err && err.message) || 'Could not save the label.');
+        });
+      }
+
+      var save = editor.querySelector('[data-email-label-editor-save]');
+      if (save) save.addEventListener('click', saveLabelEditor);
+
+      var cancel = editor.querySelector('[data-email-label-editor-cancel]');
+      if (cancel) {
+        cancel.addEventListener('click', function () {
+          closeEmailLabelEditor(root, state);
+        });
+      }
+
+      var del = editor.querySelector('[data-email-label-editor-delete]');
+      if (del) {
+        del.addEventListener('click', function () {
+          // Two-step confirm in place of a blocking dialog: the first click
+          // arms the button, the second actually deletes.
+          if (!del.classList.contains('tma-dash__email-label-editor-delete--confirm')) {
+            del.classList.add('tma-dash__email-label-editor-delete--confirm');
+            del.textContent = 'Really delete?';
+            return;
+          }
+
+          var labelId = state.labelEditorId;
+          if (!labelId) return;
+          del.disabled = true;
+
+          api().deleteLabel(labelId).then(function () {
+            state.labels = emailLabels(state).filter(function (label) {
+              return label.id !== labelId;
+            });
+            rowsOf(state).forEach(function (row) {
+              if (!row.labels) return;
+              var at = row.labels.indexOf(labelId);
+              if (at !== -1) row.labels.splice(at, 1);
+            });
+            if (state.activeLabelId === labelId) {
+              state.activeLabelId = null;
+              closeEmailLabelEditor(root, state);
+              reloadMessages(root, state, render);
+              return;
+            }
+            closeEmailLabelEditor(root, state);
+            render();
+          }).catch(function (err) {
+            del.disabled = false;
+            del.classList.remove('tma-dash__email-label-editor-delete--confirm');
+            del.textContent = 'Delete';
+            setEmailLabelEditorError(editor, (err && err.message) || 'Could not delete the label.');
+          });
+        });
+      }
+    });
+
     MORPH.unwired(root, '[data-email-row-hover]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
@@ -5549,6 +6108,43 @@
         var id = btn.getAttribute('data-email-row-id');
         var rowEl = root.querySelector('[data-email-row="' + id + '"]');
         if (!id || !rowEl) return;
+
+        if (action === 'pin') {
+          var pinRow = findRow(state, id);
+          if (!pinRow) return;
+          var nowPinned = !pinRow.pinned;
+          pinRow.pinned = nowPinned;
+          resortPinnedRows(state);
+          render();
+          showEmailToast(root, nowPinned ? 'Message pinned' : 'Message unpinned');
+          api().setFlags(id, { pinned: nowPinned }).catch(function (err) {
+            var revert = findRow(state, id);
+            if (revert) revert.pinned = !nowPinned;
+            resortPinnedRows(state);
+            reportMailError(state, err);
+            render();
+          });
+          return;
+        }
+
+        if (action === 'archive' || action === 'delete') {
+          var wrap = rowEl.closest('[data-email-row-swipe]');
+          applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : 'archive', wrap);
+          return;
+        }
+
+        if (action === 'snooze') {
+          var snoozeRow = findRow(state, id);
+          if (!snoozeRow) return;
+          if (snoozeRow.snoozedUntil) {
+            applyEmailSnooze(root, state, render, id, null, '');
+          } else {
+            openEmailSnoozeMenu(root, btn, function (iso, label) {
+              applyEmailSnooze(root, state, render, id, iso, label);
+            });
+          }
+          return;
+        }
 
         if (action === 'read') {
           if (isRowUnread(findRow(state, id), state)) {
@@ -5821,6 +6417,15 @@
           closeEmailLabelPopup(root, state);
         }
 
+        if (
+          state.labelEditorOpen &&
+          !event.target.closest('[data-email-label-editor]') &&
+          !event.target.closest('[data-email-label-create]') &&
+          !event.target.closest('[data-email-label-edit]')
+        ) {
+          closeEmailLabelEditor(root, state);
+        }
+
         if (!event.target.closest('[data-email-row-swipe]')) {
           closeEmailRowSwipes(root);
         }
@@ -5845,7 +6450,8 @@
           closeEmailHeaderDetails(root);
           return;
         }
-        if (state.labelPopupOpen) closeEmailLabelPopup(root, state);
+        if (state.labelEditorOpen) closeEmailLabelEditor(root, state);
+        else if (state.labelPopupOpen) closeEmailLabelPopup(root, state);
         else if (state.bulkMoreMenuOpen) closeEmailBulkMoreMenu(root, state);
         else if (state.profileMenuOpen) closeEmailProfileMenu(root, state);
         else if (state.profileSidebarOpen) {
@@ -5998,6 +6604,36 @@
         if (item === 'label') {
           closeEmailBulkMoreMenu(root, state);
           openEmailLabelPopup(root, state, btn, { bulk: true });
+          return;
+        }
+
+        if (item === 'snooze') {
+          closeEmailBulkMoreMenu(root, state);
+          openEmailSnoozeMenu(root, btn, function (iso, label) {
+            // Optimistic: every selected row leaves the current view (they
+            // are all now snoozed), then the flags are written one by one —
+            // snooze is a local flag, so there is no bulk provider call to
+            // batch behind.
+            var affected = ids.filter(function (rowId) { return !!findRow(state, rowId); });
+            state.rows = rowsOf(state).filter(function (row) {
+              if (ids.indexOf(row.id) === -1) return true;
+              row.snoozedUntil = iso;
+              if (state.folder !== 'snoozed') {
+                adjustFolderCount(state, state.folder, -1, row.unread);
+                adjustFolderCount(state, 'snoozed', 1, row.unread);
+              }
+              return state.folder === 'snoozed';
+            });
+            clearEmailSelection(state);
+            render();
+            showEmailToast(root, affected.length + ' snoozed until ' + label);
+            Promise.all(affected.map(function (rowId) {
+              return api().setFlags(rowId, { snooze: iso });
+            })).catch(function (err) {
+              reportMailError(state, err);
+              reloadMessages(root, state, render);
+            });
+          });
           return;
         }
 
@@ -6387,6 +7023,8 @@
       labelPopupOpen: false,
       labelPopupRowId: null,
       labelPopupBulk: false,
+      labelEditorOpen: false,
+      labelEditorId: null,
       layoutStyle: loadLayoutStyle(),
       splitListRatio: loadSplitListRatio(),
       reading: false,
@@ -6486,21 +7124,27 @@
 
     // Landing back from the OAuth connect flow: confirm the connection
     // immediately (the analysis is already running server-side) and strip
-    // the notice from the URL so a refresh doesn't repeat it.
+    // the notice from the URL so a refresh doesn't repeat it. Also captures
+    // a snooze-reminder deep link (?message=uuid) for bootstrap to open.
     try {
       var mailParams = new URLSearchParams(window.location.search);
       var mailNotice = mailParams.get('notice');
-      if (mailNotice === 'mail-connected' || mailNotice === 'mail-error') {
+      var mailMessage = mailParams.get('message');
+      if (mailMessage) state._pendingMessageId = mailMessage;
+      if (mailNotice === 'mail-connected' || mailNotice === 'mail-error' || mailMessage) {
         var mailReason = mailParams.get('reason');
         mailParams.delete('notice');
         mailParams.delete('reason');
+        mailParams.delete('message');
         var qs = mailParams.toString();
         window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
-        setTimeout(function () {
-          showEmailToast(root, mailNotice === 'mail-connected'
-            ? 'Mailbox connected successfully — analyzing your mailbox…'
-            : (mailReason || 'The mailbox could not be connected.'));
-        }, 300);
+        if (mailNotice === 'mail-connected' || mailNotice === 'mail-error') {
+          setTimeout(function () {
+            showEmailToast(root, mailNotice === 'mail-connected'
+              ? 'Mailbox connected successfully — analyzing your mailbox…'
+              : (mailReason || 'The mailbox could not be connected.'));
+          }, 300);
+        }
       }
     } catch (e) { /* URL handling is cosmetic; never block the page on it. */ }
 
@@ -6513,6 +7157,22 @@
         // Catch up immediately instead of waiting out whatever's left of
         // the interval from before the tab was hidden.
         if (!document.hidden) pollNewMail(root, state, render);
+      });
+    }
+
+    // When a snooze reminder fires, put the woken message back into the
+    // open list without waiting for the next poll tick.
+    if (!root._snoozeWakeBound) {
+      root._snoozeWakeBound = true;
+      window.addEventListener('tma:notification-arrived', function (event) {
+        var item = event && event.detail;
+        if (!item || item.type !== 'email.snooze_due') return;
+        if (!state.connected) return;
+        if (state.folder === 'snoozed' || state.folder === 'inbox' || state.folder === 'important') {
+          reloadMessages(root, state, render);
+        } else {
+          pollNewMail(root, state, render);
+        }
       });
     }
   }

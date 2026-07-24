@@ -89,6 +89,7 @@ class MailController extends Controller
             'folders' => $this->folderCounts($user->id),
             'labels' => MailLabel::where('user_id', $user->id)
                 ->where('is_system', false)
+                ->withCount('messages')
                 ->orderBy('name')
                 ->get()
                 ->map->toRecord()
@@ -100,7 +101,10 @@ class MailController extends Controller
     public function messages(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'folder' => ['sometimes', 'string', 'in:'.implode(',', Mailbox::FOLDERS)],
+            // `important` and `snoozed` are virtual views, not provider
+            // folders: they cut across the real folders by flag instead of
+            // by location.
+            'folder' => ['sometimes', 'string', 'in:'.implode(',', Mailbox::FOLDERS).',important,snoozed'],
             'q' => ['sometimes', 'nullable', 'string', 'max:200'],
             'label' => ['sometimes', 'nullable', 'string', 'uuid'],
             'page' => ['sometimes', 'integer', 'min:1'],
@@ -114,10 +118,28 @@ class MailController extends Controller
             return response()->json(['messages' => $this->search($request, $search)]);
         }
 
+        $folder = $data['folder'] ?? 'inbox';
+
         $query = MailMessage::query()
             ->with(['labels', 'attachments'])
-            ->where('user_id', $user->id)
-            ->where('folder', $data['folder'] ?? 'inbox');
+            ->where('user_id', $user->id);
+
+        if ($folder === 'important') {
+            // Spam, trash and drafts are excluded the way Gmail's Important
+            // view excludes them — flagged junk is still junk. Snoozed mail
+            // is resting: it shows up here again when it wakes.
+            $query->where('is_important', true)
+                ->whereNotIn('folder', ['trash', 'spam', 'draft'])
+                ->whereNull('snoozed_until');
+        } elseif ($folder === 'snoozed') {
+            $query->whereNotNull('snoozed_until')
+                ->orderBy('snoozed_until');
+        } else {
+            // A snoozed message hides from its real folder until it wakes —
+            // that is the whole point of snoozing it.
+            $query->where('folder', $folder)
+                ->whereNull('snoozed_until');
+        }
 
         if ($labelUuid = $data['label'] ?? null) {
             $query->whereHas('labels', fn ($q) => $q->where('uuid', $labelUuid));
@@ -125,7 +147,10 @@ class MailController extends Controller
 
         $perPage = (int) ($data['perPage'] ?? self::PER_PAGE);
 
+        // Pinned messages float above everything else in the folder, the way
+        // Outlook pins do; within each group newest comes first.
         $page = $query
+            ->orderByDesc('is_pinned')
             ->orderByDesc('sent_at')
             ->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
 
@@ -384,6 +409,13 @@ class MailController extends Controller
 
         $account->forceFill(['sync_email' => false])->save();
 
+        \App\Support\Activity\ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'email.disconnected',
+            'description' => $request->user()->name.' signed out of their '.ucfirst($account->provider).' mailbox',
+            'subject' => $account,
+        ]);
+
         return response()->json([
             'signedOut' => true,
             'provider' => $account->provider,
@@ -562,7 +594,11 @@ class MailController extends Controller
 
         $message->load('labels');
 
-        return response()->json(['message' => $message->toRecord()]);
+        // Same sender-photo resolution as the list and the thread, so a card
+        // expanded through this endpoint doesn't lose the picture it had.
+        $record = $this->withThreadAvatars(collect([$message]));
+
+        return response()->json(['message' => $record[0] ?? $message->toRecord()]);
     }
 
     /**
@@ -823,13 +859,16 @@ class MailController extends Controller
         }
     }
 
-    /** Read / starred / important flags. */
+    /** Read / starred / important / pinned / snooze flags. */
     public function update(Request $request, string $uuid): JsonResponse
     {
         $data = $request->validate([
             'read' => ['sometimes', 'boolean'],
             'starred' => ['sometimes', 'boolean'],
             'important' => ['sometimes', 'boolean'],
+            'pinned' => ['sometimes', 'boolean'],
+            // A future instant to wake the message, or null to unsnooze now.
+            'snooze' => ['sometimes', 'nullable', 'date', 'after:now'],
         ]);
 
         $message = $this->findMessage($request, $uuid);
@@ -850,6 +889,18 @@ class MailController extends Controller
         if (array_key_exists('important', $data) && $provider->supportsImportant()) {
             $provider->markImportant($message->remote_id, $data['important']);
             $message->is_important = $data['important'];
+        }
+
+        // Pins are portal-only (no provider API exposes them), so this never
+        // talks to Gmail or Graph and cannot fail on a dead token.
+        if (array_key_exists('pinned', $data)) {
+            $message->is_pinned = $data['pinned'];
+        }
+
+        // Snooze is portal-only too. The scheduled wake pass clears it when
+        // due and raises the reminder notification (mail:wake-snoozed).
+        if (array_key_exists('snooze', $data)) {
+            $message->snoozed_until = $data['snooze'] ? \Illuminate\Support\Carbon::parse($data['snooze']) : null;
         }
 
         $message->save();
@@ -896,7 +947,7 @@ class MailController extends Controller
         $data = $request->validate([
             'ids' => ['required', 'array', 'max:100'],
             'ids.*' => ['string', 'uuid'],
-            'action' => ['required', 'string', 'in:read,unread,star,unstar,archive,trash,spam,inbox,delete'],
+            'action' => ['required', 'string', 'in:read,unread,star,unstar,pin,unpin,archive,trash,spam,inbox,delete'],
         ]);
 
         $messages = MailMessage::query()
@@ -940,6 +991,12 @@ class MailController extends Controller
                 $message->forceFill(['is_starred' => $action === 'star'])->save();
                 break;
 
+            case 'pin':
+            case 'unpin':
+                // Portal-only; no provider call to make or fail on.
+                $message->forceFill(['is_pinned' => $action === 'pin'])->save();
+                break;
+
             case 'delete':
                 $provider->delete($message->remote_id);
                 $message->delete();
@@ -965,14 +1022,135 @@ class MailController extends Controller
             ->where('uuid', $data['label'])
             ->firstOrFail();
 
-        Mailbox::provider($message->account)
-            ->setLabel($message->remote_id, $label->remote_id, $data['applied']);
+        // Portal-only labels have nothing at the provider to write to.
+        if (! $label->isLocalOnly()) {
+            Mailbox::provider($message->account)
+                ->setLabel($message->remote_id, $label->remote_id, $data['applied']);
+        }
 
         $data['applied']
             ? $message->labels()->syncWithoutDetaching([$label->id])
             : $message->labels()->detach($label->id);
 
         return response()->json(['message' => $message->fresh('labels')->toRow()]);
+    }
+
+    /**
+     * Create a label. Written to the provider first (a Gmail label, an Outlook
+     * category) so the rest of the user's mail clients see it too; when the
+     * provider cannot hold it the label still exists in the portal, marked
+     * local-only so no message write ever calls the provider for it.
+     */
+    public function createLabel(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'tone' => ['required', 'string', 'in:'.implode(',', MailLabel::TONES)],
+        ]);
+
+        $user = $request->user();
+        $account = Mailbox::requireAccountFor($user);
+        $name = trim($data['name']);
+
+        $exists = MailLabel::where('user_id', $user->id)
+            ->where('is_system', false)
+            ->whereRaw('lower(name) = ?', [mb_strtolower($name)])
+            ->exists();
+        if ($exists) {
+            return response()->json(['message' => 'You already have a label with that name.'], 422);
+        }
+
+        $remoteId = rescue(
+            fn () => Mailbox::provider($account)->createLabel($name),
+            null,
+            report: false,
+        );
+
+        $label = MailLabel::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => $remoteId ?: MailLabel::LOCAL_PREFIX.Str::uuid(),
+            'name' => $name,
+            'tone' => $data['tone'],
+            'is_system' => false,
+        ]);
+
+        $label->messages_count = 0;
+
+        return response()->json(['label' => $label->toRecord()], 201);
+    }
+
+    /** Rename and/or recolour a label. The colour is a portal concept; the name is pushed to the provider where possible. */
+    public function updateLabel(Request $request, string $uuid): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:100'],
+            'tone' => ['sometimes', 'string', 'in:'.implode(',', MailLabel::TONES)],
+        ]);
+
+        $user = $request->user();
+
+        $label = MailLabel::where('user_id', $user->id)
+            ->where('is_system', false)
+            ->where('uuid', $uuid)
+            ->firstOrFail();
+
+        if (isset($data['name'])) {
+            $name = trim($data['name']);
+
+            $exists = MailLabel::where('user_id', $user->id)
+                ->where('is_system', false)
+                ->where('id', '!=', $label->id)
+                ->whereRaw('lower(name) = ?', [mb_strtolower($name)])
+                ->exists();
+            if ($exists) {
+                return response()->json(['message' => 'You already have a label with that name.'], 422);
+            }
+
+            if ($name !== $label->name && ! $label->isLocalOnly()) {
+                rescue(
+                    fn () => Mailbox::provider($label->account)->renameLabel($label->remote_id, $name),
+                    report: false,
+                );
+            }
+
+            $label->name = $name;
+        }
+
+        if (isset($data['tone'])) {
+            $label->tone = $data['tone'];
+        }
+
+        $label->save();
+        $label->loadCount('messages');
+
+        return response()->json(['label' => $label->toRecord()]);
+    }
+
+    /** Delete a label everywhere: pivot rows, the portal row, and (best effort) the provider. */
+    public function deleteLabel(Request $request, string $uuid): JsonResponse
+    {
+        $label = MailLabel::where('user_id', $request->user()->id)
+            ->where('is_system', false)
+            ->where('uuid', $uuid)
+            ->firstOrFail();
+
+        if (! $label->isLocalOnly()) {
+            // Best effort — a provider hiccup must not leave the label
+            // undeletable in the portal. Gmail removes a deleted label from
+            // its messages itself; Outlook keeps the category text on old
+            // messages, which is also what Outlook itself does.
+            rescue(
+                fn () => Mailbox::provider($label->account)->deleteLabel($label->remote_id),
+                report: false,
+            );
+        }
+
+        $label->messages()->detach();
+        $label->delete();
+
+        return response()->json(['deleted' => true]);
     }
 
     /** Send a message, optionally consuming a draft. */
@@ -1195,8 +1373,12 @@ class MailController extends Controller
         return response()->json([
             'synced' => $written,
             'fast' => true,
-            // Only worth the extra query when something actually landed.
-            'folders' => $written > 0 ? $this->folderCounts($request->user()->id) : null,
+            // Always included: two indexed local count queries, and the price
+            // of skipping them was sidebar badges that only refreshed on a
+            // full reload. Reads/moves made in Gmail or Outlook change counts
+            // without changing this page's list, so the poll is the only
+            // thing keeping the numbers honest.
+            'folders' => $this->folderCounts($request->user()->id),
         ]);
     }
 
@@ -1371,9 +1553,12 @@ class MailController extends Controller
      */
     private function folderCounts(int $userId): array
     {
+        // Snoozed mail is hidden from its real folder, so it must not badge
+        // it either — an Inbox count including invisible rows reads as a bug.
         $rows = MailMessage::query()
             ->selectRaw('folder, count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
             ->where('user_id', $userId)
+            ->whereNull('snoozed_until')
             ->groupBy('folder')
             ->get()
             ->keyBy('folder');
@@ -1388,6 +1573,32 @@ class MailController extends Controller
                 'unread' => (int) ($row->unread ?? 0),
             ];
         }
+
+        // The Important view is a flag, not a folder, so it needs its own
+        // pass; scope matches the listing (no trash / spam / drafts).
+        $important = MailMessage::query()
+            ->selectRaw('count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
+            ->where('user_id', $userId)
+            ->where('is_important', true)
+            ->whereNotIn('folder', ['trash', 'spam', 'draft'])
+            ->whereNull('snoozed_until')
+            ->first();
+
+        $counts['important'] = [
+            'total' => (int) ($important->total ?? 0),
+            'unread' => (int) ($important->unread ?? 0),
+        ];
+
+        $snoozed = MailMessage::query()
+            ->selectRaw('count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
+            ->where('user_id', $userId)
+            ->whereNotNull('snoozed_until')
+            ->first();
+
+        $counts['snoozed'] = [
+            'total' => (int) ($snoozed->total ?? 0),
+            'unread' => (int) ($snoozed->unread ?? 0),
+        ];
 
         return $counts;
     }

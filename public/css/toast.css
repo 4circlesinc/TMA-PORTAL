@@ -91,9 +91,145 @@
   transform: translateY(0);
 }
 
+/* Hovering the feedback toast holds it open (toast.js re-arms on leave). */
+.tma-toast-floating-host[data-visible] .tma-toast {
+  pointer-events: auto;
+}
+
 @media (max-width: 1024px) {
   .tma-toast-floating-host {
     bottom: calc(var(--dash-tabbar-clearance, 72px) + var(--space-16, 16px) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Notification toasts — the top-right stack for arriving notifications
+   (toast.js showNotificationToast). Cards match the notification panel rows:
+   person photo or level-toned system glyph, title + message, close. */
+
+.tma-notify-toast-host {
+  position: fixed;
+  top: calc(72px + env(safe-area-inset-top, 0px));
+  right: 20px;
+  z-index: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 344px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.tma-notify-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  background: var(--color-surface, #fff);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.tma-notify-toast--visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.tma-notify-toast--closing {
+  opacity: 0;
+  transform: translateX(16px);
+}
+
+.tma-notify-toast__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-notify-toast__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #e8f1fb;
+}
+
+.tma-notify-toast__icon img {
+  width: 18px;
+  height: 18px;
+}
+
+.tma-notify-toast__icon--blue { background: #e8f1fb; }
+.tma-notify-toast__icon--green { background: #e7f4e8; }
+.tma-notify-toast__icon--amber { background: #fdf2df; }
+.tma-notify-toast__icon--red { background: #fdeaea; }
+.tma-notify-toast__icon--purple { background: #f1ecfb; }
+
+.tma-notify-toast__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tma-notify-toast__title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text, #1a1d21);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tma-notify-toast__message {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-text-secondary, #5b616b);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.tma-notify-toast__close {
+  flex-shrink: 0;
+  margin: -4px -6px 0 0;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary, #5b616b);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-notify-toast__close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text, #1a1d21);
+}
+
+@media (max-width: 1024px) {
+  .tma-notify-toast-host {
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    right: 12px;
+    left: 12px;
+    width: auto;
   }
 }
 

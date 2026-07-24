@@ -280,6 +280,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/messages/{uuid}/move', [MailController::class, 'move'])->name('messages.move');
         Route::post('/messages/{uuid}/labels', [MailController::class, 'setLabel'])->name('messages.labels');
         Route::delete('/messages/{uuid}', [MailController::class, 'destroy'])->name('messages.destroy');
+
+        // Label management: create, rename/recolour, delete.
+        Route::post('/labels', [MailController::class, 'createLabel'])->name('labels.store');
+        Route::patch('/labels/{uuid}', [MailController::class, 'updateLabel'])->name('labels.update');
+        Route::delete('/labels/{uuid}', [MailController::class, 'deleteLabel'])->name('labels.destroy');
     });
 
     /*

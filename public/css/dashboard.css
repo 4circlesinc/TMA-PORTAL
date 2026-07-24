@@ -8801,6 +8801,185 @@
   gap: var(--space-2);
 }
 
+/* One sidebar label: the select button fills the row; the edit pencil only
+ * appears while the row is hovered or focused. */
+.tma-dash__email-label-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tma-dash__email-label-row .tma-dash__email-label-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.tma-dash__email-label-edit {
+  appearance: none;
+  position: absolute;
+  right: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.tma-dash__email-label-row:hover .tma-dash__email-label-edit,
+.tma-dash__email-label-edit:focus-visible {
+  opacity: 1;
+}
+
+.tma-dash__email-label-row:hover .tma-dash__email-label-item-count {
+  visibility: hidden;
+}
+
+.tma-dash__email-label-edit img {
+  width: 14px;
+  height: 14px;
+  opacity: 0.55;
+}
+
+.tma-dash__email-label-edit:hover {
+  background: var(--color-overlay-6, rgba(0, 0, 0, 0.06));
+}
+
+/* The create/edit label popup. */
+.tma-dash__email-label-editor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  width: 248px;
+  padding: var(--space-12);
+  box-shadow: var(--shadow-popup);
+}
+
+.tma-dash__email-label-editor-head {
+  margin-bottom: var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-label-editor-name {
+  width: 100%;
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--color-overlay-12, rgba(0, 0, 0, 0.12));
+  border-radius: var(--radius-8);
+  background: var(--color-bg-primary, #fff);
+  font: inherit;
+  font-size: var(--text-size-14);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-label-editor-name:focus {
+  outline: 2px solid var(--color-focus, #7bafbb);
+  outline-offset: -1px;
+}
+
+.tma-dash__email-label-editor-tones {
+  display: flex;
+  gap: var(--space-4);
+  margin: var(--space-10, 10px) 0;
+}
+
+.tma-dash__email-label-editor-tone {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__email-label-editor-tone:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__email-label-editor-tone--selected {
+  border-color: var(--color-text-primary);
+  background: var(--color-hover);
+}
+
+.tma-dash__email-label-editor-error {
+  margin-bottom: var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: #d95650;
+}
+
+.tma-dash__email-label-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-dash__email-label-editor-spacer {
+  flex: 1;
+}
+
+.tma-dash__email-label-editor-cancel,
+.tma-dash__email-label-editor-save,
+.tma-dash__email-label-editor-delete {
+  appearance: none;
+  padding: var(--space-6) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-8);
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tma-dash__email-label-editor-cancel {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-label-editor-cancel:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__email-label-editor-save {
+  background: var(--color-text-primary, #1c1c1c);
+  color: var(--color-bg-primary, #fff);
+}
+
+.tma-dash__email-label-editor-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tma-dash__email-label-editor-delete {
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+  color: #d95650;
+}
+
+.tma-dash__email-label-editor-delete--confirm {
+  color: #ffffff;
+  background: #d95650;
+  padding-left: var(--space-8);
+  padding-right: var(--space-8);
+}
+
 .tma-dash__email-label-item {
   appearance: none;
   display: flex;
@@ -8897,7 +9076,7 @@
 }
 
 .tma-dash__email-detail-label-chip--green {
-  background: #e5805c;
+  background: #7fb069;
   color: #ffffff;
 }
 
@@ -8912,11 +9091,15 @@
 }
 
 .tma-dash__email-detail-label-chip--gray {
-  background: #cfc6ec;
+  background: #d5d8dd;
   color: #3c4043;
 }
 
-.tma-dash__email-detail-label-chip--orange,
+.tma-dash__email-detail-label-chip--orange {
+  background: #e6a75a;
+  color: #3c4043;
+}
+
 .tma-dash__email-detail-label-chip--yellow {
   background: #ede4a8;
   color: #3c4043;
@@ -9711,11 +9894,11 @@
 }
 
 .tma-dash__email-label-tag--blue { --email-label-tag-color: #7bafbb; }
-.tma-dash__email-label-tag--green { --email-label-tag-color: #e5805c; }
+.tma-dash__email-label-tag--green { --email-label-tag-color: #7fb069; }
 .tma-dash__email-label-tag--red { --email-label-tag-color: #d95650; }
 .tma-dash__email-label-tag--purple { --email-label-tag-color: #cfc6ec; }
-.tma-dash__email-label-tag--gray { --email-label-tag-color: #cfc6ec; }
-.tma-dash__email-label-tag--orange { --email-label-tag-color: #ede4a8; }
+.tma-dash__email-label-tag--gray { --email-label-tag-color: #b8bdc4; }
+.tma-dash__email-label-tag--orange { --email-label-tag-color: #e6a75a; }
 .tma-dash__email-label-tag--indigo { --email-label-tag-color: #5e488e; }
 
 .tma-dash__email-label-name {
@@ -10171,6 +10354,124 @@
   line-height: 16px;
   color: var(--color-text-secondary);
   white-space: nowrap;
+}
+
+/* The always-visible pin marker beside the timestamp on pinned rows. It
+ * yields to the hover action bar the same way the timestamp does. */
+.tma-dash__email-row-pinned {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.tma-dash__email-row:hover .tma-dash__email-row-pinned,
+.tma-dash__email-row:focus-within .tma-dash__email-row-pinned {
+  visibility: hidden;
+}
+
+/* The snooze marker works exactly like the pin marker. */
+.tma-dash__email-row-snoozed {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.tma-dash__email-row:hover .tma-dash__email-row-snoozed,
+.tma-dash__email-row:focus-within .tma-dash__email-row-snoozed {
+  visibility: hidden;
+}
+
+/* "Snooze until…" picker (email.js openEmailSnoozeMenu). Appended to <body>
+ * and positioned with positionEmailPopupMenu, so it must be fixed and above
+ * the reading pane, popovers, and the bulk More menu. */
+.tma-dash__email-snooze-menu {
+  position: fixed;
+  z-index: 560;
+  min-width: 240px;
+  padding: 6px;
+  border-radius: var(--radius-12, 12px);
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  background: var(--color-surface, #fff);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.tma-dash__email-snooze-menu-title {
+  padding: 8px 10px 6px;
+  font-size: var(--text-size-12, 12px);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #5b616b);
+}
+
+.tma-dash__email-snooze-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-8, 8px);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-14, 14px);
+  line-height: 20px;
+  color: var(--color-text, #1a1d21);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tma-dash__email-snooze-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.tma-dash__email-snooze-menu-when {
+  font-size: var(--text-size-12, 12px);
+  color: var(--color-text-secondary, #5b616b);
+  white-space: nowrap;
+}
+
+.tma-dash__email-snooze-menu-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--color-border, rgba(0, 0, 0, 0.08));
+}
+
+.tma-dash__email-snooze-menu-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+}
+
+.tma-dash__email-snooze-menu-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+  border-radius: var(--radius-8, 8px);
+  font: inherit;
+  font-size: var(--text-size-12, 12px);
+  color: var(--color-text, #1a1d21);
+  background: var(--color-surface, #fff);
+}
+
+.tma-dash__email-snooze-menu-save {
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--radius-8, 8px);
+  background: var(--color-primary, #136da0);
+  color: #fff;
+  font: inherit;
+  font-size: var(--text-size-12, 12px);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tma-dash__email-snooze-menu-save:hover {
+  filter: brightness(1.05);
 }
 
 .tma-dash__email-row-action {

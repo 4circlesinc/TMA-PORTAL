@@ -6,6 +6,7 @@ use App\Models\ConnectedAccount;
 use App\Models\MailLabel;
 use App\Models\MailMessage;
 use App\Models\MailSyncProgress;
+use App\Support\Notifications\Notifier;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -112,7 +113,22 @@ class MailSynchronizer
             return 0;
         }
 
+        // Which of these are genuinely new, before the upsert makes them all
+        // look old. The overlap window re-reads known messages on purpose, so
+        // "returned by the provider" is not the same as "new".
+        $incoming = array_values(array_filter(array_map(
+            fn (array $m): ?string => $m['remote_id'] ?? null,
+            $messages,
+        )));
+        $known = MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->whereIn('remote_id', $incoming)
+            ->pluck('remote_id')
+            ->all();
+
         $written = $this->bulkUpsert($messages);
+
+        rescue(fn () => $this->notifyNewMail(array_values(array_diff($incoming, $known))), report: false);
 
         // Only the timestamp moves — not the cursor. The full pass still has
         // to cover this window for everything a listing cannot report.
@@ -233,11 +249,16 @@ class MailSynchronizer
         $changes = $provider->changesSince($this->account->mail_cursor);
 
         $written = 0;
+        $created = [];
 
         foreach ($changes['messages'] as $message) {
-            $this->upsert($message);
+            if ($this->upsert($message) && ! empty($message['remote_id'])) {
+                $created[] = (string) $message['remote_id'];
+            }
             $written++;
         }
+
+        rescue(fn () => $this->notifyNewMail($created), report: false);
 
         if ($changes['deleted'] !== []) {
             MailMessage::query()
@@ -362,19 +383,24 @@ class MailSynchronizer
         return count($rows);
     }
 
-    private function upsert(array $message): void
+    /** @return bool whether the message was new to the mirror */
+    private function upsert(array $message): bool
     {
         if (empty($message['remote_id'])) {
-            return;
+            return false;
         }
 
-        DB::transaction(function () use ($message) {
+        return DB::transaction(function () use ($message): bool {
             $row = MailMessage::firstOrNew([
                 'connected_account_id' => $this->account->id,
                 'remote_id' => $message['remote_id'],
             ]);
 
+            $isNew = ! $row->exists;
+
             $this->writeMessage($row, $message);
+
+            return $isNew;
         });
     }
 
@@ -422,7 +448,84 @@ class MailSynchronizer
             ->pluck('id')
             ->all();
 
-        $row->labels()->sync($ids);
+        // Portal-only labels exist nowhere in the provider's feed, so a plain
+        // sync() would silently strip them from the message on every pass.
+        $local = $row->labels()
+            ->where('remote_id', 'like', MailLabel::LOCAL_PREFIX.'%')
+            ->pluck('mail_labels.id')
+            ->all();
+
+        $row->labels()->sync(array_values(array_unique(array_merge($ids, $local))));
+    }
+
+    /**
+     * Raise portal notifications for mail that just arrived.
+     *
+     * Only ever called with messages the mirror had never seen (the seed and
+     * the backfill import history and deliberately never come through here),
+     * and filtered down further to what a person would call "new mail": in
+     * the inbox, unread, recent, and not something they sent themselves.
+     *
+     * A burst collapses into one summary row rather than one notification per
+     * message — reconnecting after a weekend must not ring the bell 40 times.
+     * The per-message dedupe key keeps the quick check and the full pass from
+     * double-announcing the same arrival.
+     *
+     * @param  array<int, string>  $remoteIds
+     */
+    private function notifyNewMail(array $remoteIds): void
+    {
+        if ($remoteIds === []) {
+            return;
+        }
+
+        $own = mb_strtolower((string) $this->account->email);
+
+        $rows = MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->whereIn('remote_id', $remoteIds)
+            ->where('folder', 'inbox')
+            ->where('is_read', false)
+            ->where('sent_at', '>=', now()->subDay())
+            ->orderByDesc('sent_at')
+            ->get()
+            ->reject(fn (MailMessage $m): bool => mb_strtolower((string) $m->from_email) === $own)
+            ->values();
+
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        if ($rows->count() > 3) {
+            $senders = $rows
+                ->map(fn (MailMessage $m): string => (string) ($m->from_name ?: $m->from_email))
+                ->filter()
+                ->unique()
+                ->take(3);
+
+            Notifier::send([
+                'user' => $this->account->user_id,
+                'type' => 'email.received',
+                'title' => $rows->count().' new emails',
+                'message' => $senders->isNotEmpty() ? 'From '.$senders->implode(', ').'…' : null,
+                'action_url' => '/email',
+                'dedupe_key' => 'email.received.batch:'.$this->account->id,
+                'dedupe_minutes' => 15,
+            ]);
+
+            return;
+        }
+
+        foreach ($rows as $m) {
+            Notifier::send([
+                'user' => $this->account->user_id,
+                'type' => 'email.received',
+                'title' => 'New email from '.($m->from_name ?: $m->from_email ?: 'an unknown sender'),
+                'message' => $m->subject ?: Str::limit((string) $m->snippet, 120),
+                'action_url' => '/email',
+                'dedupe_key' => 'email.received:'.$m->remote_id,
+            ]);
+        }
     }
 
     /** @param array<int, array<string, mixed>> $attachments */

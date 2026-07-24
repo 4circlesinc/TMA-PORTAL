@@ -255,6 +255,29 @@ class GmailProvider implements MailProvider
         $this->modify($remoteId, $applied ? [$labelId] : [], $applied ? [] : [$labelId]);
     }
 
+    public function createLabel(string $name): ?string
+    {
+        $data = $this->json($this->request()->post(self::BASE.'/labels', [
+            'name' => $name,
+            'labelListVisibility' => 'labelShow',
+            'messageListVisibility' => 'show',
+        ]));
+
+        return isset($data['id']) ? (string) $data['id'] : null;
+    }
+
+    public function renameLabel(string $remoteId, string $name): void
+    {
+        $this->json($this->request()->patch(self::BASE.'/labels/'.$remoteId, [
+            'name' => $name,
+        ]));
+    }
+
+    public function deleteLabel(string $remoteId): void
+    {
+        $this->json($this->request()->delete(self::BASE.'/labels/'.$remoteId));
+    }
+
     public function search(string $query, int $limit = 50): array
     {
         $data = $this->json($this->request()->get(self::BASE.'/messages', [

@@ -122,6 +122,20 @@
       });
     },
 
+    /* Label management. Create/rename push through to the provider (a Gmail
+     * label, an Outlook category) server-side; colour is a portal concept. */
+    createLabel: function (name, tone) {
+      return mailFetch(BASE + '/labels', { method: 'POST', json: { name: name, tone: tone } });
+    },
+
+    updateLabel: function (id, changes) {
+      return mailFetch(BASE + '/labels/' + encodeURIComponent(id), { method: 'PATCH', json: changes });
+    },
+
+    deleteLabel: function (id) {
+      return mailFetch(BASE + '/labels/' + encodeURIComponent(id), { method: 'DELETE' });
+    },
+
     bulk: function (ids, action) {
       return mailFetch(BASE + '/bulk', { method: 'POST', json: { ids: ids, action: action } });
     },

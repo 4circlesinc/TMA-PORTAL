@@ -249,6 +249,20 @@
       if (typeof unread === 'number') state.unread = unread;
       else if (added && item && !item.read) state.unread += 1;
       changed();
+
+      // A notification arriving while the user is here deserves to be seen,
+      // not just counted — surface it as a toast (dedupe lives in toast.js).
+      if (added && item && !item.read && window.TMAToast && window.TMAToast.showNotificationToast) {
+        window.TMAToast.showNotificationToast(item);
+      }
+
+      // Let open views (email, etc.) react to a specific arrival — e.g. a
+      // snooze reminder should put the woken message back into the list.
+      if (added && item) {
+        try {
+          window.dispatchEvent(new CustomEvent('tma:notification-arrived', { detail: item }));
+        } catch (e) { /* CustomEvent unavailable in ancient browsers — ignore. */ }
+      }
     }
 
     return {
@@ -391,4 +405,40 @@
 
   window.TMANotifications = notifications;
   window.TMAActivities = activities;
+
+  /*
+   * Fallback freshness: the badge normally updates over the websocket
+   * (notify-realtime.js), but when Reverb is down or the origin refuses the
+   * socket, nothing would move the count until the next full page load. A
+   * slow poll of the count endpoint keeps the bell honest in that case; it
+   * stands down whenever the realtime socket is actually connected, and
+   * while the tab is hidden.
+   */
+  var COUNT_POLL_MS = 60000;
+  window.setInterval(function () {
+    if (document.hidden) return;
+    var rt = window.TMAMessagingRealtime;
+    if (rt && rt.connected && rt.socketId) return;
+
+    var prevUnread = notifications.state.unread;
+    notifications.refreshCount().then(function () {
+      // More unread than before means something arrived while the socket was
+      // down. Pull the fresh page and toast the newcomers, so the fallback
+      // path surfaces notifications the same way realtime does. Only when the
+      // list has been loaded once — otherwise there is nothing to diff against
+      // and page load would toast old history.
+      if (!notifications.state.loaded || notifications.state.unread <= prevUnread) return;
+
+      var knownIds = {};
+      notifications.state.items.forEach(function (it) { knownIds[it.id] = true; });
+
+      notifications.load().then(function () {
+        if (!window.TMAToast || !window.TMAToast.showNotificationToast) return;
+        notifications.state.items
+          .filter(function (it) { return !knownIds[it.id] && !it.read; })
+          .slice(0, 3)
+          .forEach(function (it) { window.TMAToast.showNotificationToast(it); });
+      });
+    });
+  }, COUNT_POLL_MS);
 })();

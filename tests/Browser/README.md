@@ -120,6 +120,95 @@ TMA_E2E_DB="$DB" node tests/Browser/mail-sync-progress.mjs
   work. Re-seed between runs — the script ends signed out with the progress
   row completed.
 
+- **`mail-labels.mjs`** — label management and live counts. Every inbox row
+  carries a tag button that opens the "Label as" picker; the sidebar's `+` and
+  per-label pencil drive the create/rename/recolour/delete editor (deleting
+  takes a second, armed click); a portal-only label applies with no provider
+  round trip; an org-member sender shows their portal avatar; and the folder
+  badges — sidebar and dashboard nav — follow the poll's folder counts without
+  a reload (the poll is stubbed with fresh numbers to prove the wiring). Needs
+  the seed below: the mailbox fixture's messages plus a provider label, a
+  portal-only label, and a `dana@example.com` portal user with an avatar:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+  \$dana = App\Models\User::create(['name' => 'Dana Reed', 'email' => 'dana@example.com',
+    'password' => Hash::make('password12345')]);
+  \$dana->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(),
+    'onboarding_completed_at' => now(), 'status' => 'approved', 'account_type' => 'Employee',
+    'avatar_url' => '/images/avatars/Avatar3d01.png'])->save();
+  \$a = App\Models\ConnectedAccount::where('user_id', \$u->id)->first();
+  App\Models\MailLabel::create(['uuid' => (string) Str::uuid(), 'user_id' => \$u->id,
+    'connected_account_id' => \$a->id, 'remote_id' => 'local:'.Str::uuid(),
+    'name' => 'Personal', 'tone' => 'green']);
+"
+
+node tests/Browser/mail-labels.mjs
+```
+
+  It ends with labels renamed and one deleted — re-seed between runs.
+
+- **`mail-pins.mjs`** — pinning and the Important view. Every inbox row's
+  hover bar leads with a pin button (next to archive / delete, which used to
+  be dead chrome); pinning floats the row to the top of the folder, shows a
+  marker beside the timestamp, and *survives a reload* because the ordering
+  is the server's (`is_pinned` desc, then `sent_at`); unpinning drops it back
+  exactly where the next fetch would put it. The sidebar's Important item is
+  checked for position (under Inbox), its unread badge, and that the view
+  lists important mail only. The move route is stubbed (fake token), so the
+  archive check reads the immediate effect — the poll would put the row back.
+  Needs the mailbox fixture with one message seeded `is_important` — reset
+  pins between runs:
+
+```sh
+sqlite3 "$DB" "UPDATE mail_messages SET is_pinned = 0, folder = 'inbox' WHERE folder != 'sent';"
+
+node tests/Browser/mail-pins.mjs
+```
+
+- **`mail-snooze.mjs`** — snooze as a working reminder. The hover clock opens
+  a "Snooze until…" picker (In 15 minutes / In 1 hour / Later today /
+  Tomorrow / Next week + custom datetime); picking a preset hides the row
+  from Inbox into the Snoozed view with a clock marker; unsnoozing puts it
+  back. With `TMA_DB` set, the script forces the snooze due, runs
+  `php artisan mail:wake-snoozed`, and asserts the `email.snooze_due`
+  reminder notification (plus the toast that surfaces it). Needs the
+  mailbox fixture; reset snoozes between runs:
+
+```sh
+sqlite3 "$DB" "UPDATE mail_messages SET snoozed_until = NULL;"
+
+TMA_DB="$DB" node tests/Browser/mail-snooze.mjs
+```
+
+- **`notify-toasts.mjs`** — notification toasts and the live right-rail
+  panels. A notification arriving while the user is in the portal (realtime
+  or the poll fallback) pops a card top-right that carries the title and
+  message, closes on its own after 10 seconds, is held open for as long as
+  the pointer hovers it, and closes 5 seconds after the pointer leaves. The
+  X dismisses immediately, and a notification id never toasts twice even if
+  both delivery paths report it. Also pins that Activities lists the sign-in
+  the test itself just performed (the login listener writes the audit row)
+  and that Notifications shows a seeded server row. The run spends real
+  wall-clock time on the timers (~45s). Seed a fresh DB with the base user
+  plus one notification:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::create(['name' => 'Test User', 'email' => 'e2e@example.com',
+    'password' => Hash::make('password12345')]);
+  \$u->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(),
+    'onboarding_completed_at' => now(), 'status' => 'approved',
+    'account_type' => 'Administrator'])->save();
+  App\Support\Notifications\Notifier::send(['user' => \$u, 'type' => 'email.received',
+    'title' => 'New email from Dana Reed', 'message' => 'Quarterly review attached',
+    'action_url' => '/email']);
+"
+
+node tests/Browser/notify-toasts.mjs
+```
+
 - **`mail-thread.mjs`** — the reading pane as a *conversation*. It used to
   render only the message that was clicked, so a reply arrived with none of the
   thread it belonged to and the quoted history it carried was dumped inline

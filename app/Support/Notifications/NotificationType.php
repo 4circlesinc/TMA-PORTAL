@@ -30,6 +30,7 @@ final class NotificationType
         'email.sync_failed'        => ['module' => 'email', 'level' => Notification::LEVEL_ERROR,    'icon' => 'WarningCircle',   'priority' => 'high',   'pref' => 'email',     'action_label' => 'Retry synchronization'],
         'email.shared_activity'    => ['module' => 'email', 'level' => Notification::LEVEL_INFO,     'icon' => 'EnvelopeSimple',  'priority' => 'normal', 'pref' => 'email',     'action_label' => 'Open email'],
         'email.connection_expired' => ['module' => 'email', 'level' => Notification::LEVEL_WARNING,  'icon' => 'PlugsConnected',  'priority' => 'high',   'pref' => 'security',  'action_label' => 'Reconnect'],
+        'email.snooze_due'         => ['module' => 'email', 'level' => Notification::LEVEL_REMINDER, 'icon' => 'ClockCountdown',  'priority' => 'high',   'pref' => 'email',     'action_label' => 'Open email'],
 
         // ── Messages ───────────────────────────────────────────
         'message.received'      => ['module' => 'messages', 'level' => Notification::LEVEL_INFO, 'icon' => 'ChatCircle',  'priority' => 'normal', 'pref' => 'messages', 'action_label' => 'View message'],

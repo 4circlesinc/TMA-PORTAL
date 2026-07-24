@@ -481,6 +481,39 @@ class GraphProvider implements MailProvider
         ]));
     }
 
+    public function createLabel(string $name): ?string
+    {
+        $data = $this->json($this->request()->post(self::BASE.'/outlook/masterCategories', [
+            'displayName' => $name,
+        ]));
+
+        // Categories are applied to messages by name (see listLabels), so the
+        // name is the working id even though Graph also returns a GUID.
+        return isset($data['displayName']) ? (string) $data['displayName'] : $name;
+    }
+
+    public function renameLabel(string $remoteId, string $name): void
+    {
+        // Graph does not allow changing a masterCategory's displayName, and
+        // the name *is* how categories attach to messages. The portal keeps
+        // its own name; the Outlook category simply keeps the old one.
+    }
+
+    public function deleteLabel(string $remoteId): void
+    {
+        // masterCategories are deleted by GUID, but we store the display name
+        // (that is what messages carry), so look the GUID up first.
+        $data = $this->json($this->request()->get(self::BASE.'/outlook/masterCategories'));
+
+        $match = collect($data['value'] ?? [])
+            ->first(fn (array $category): bool => ($category['displayName'] ?? null) === $remoteId);
+        $id = $match['id'] ?? null;
+
+        if ($id) {
+            $this->json($this->request()->delete(self::BASE.'/outlook/masterCategories/'.$id));
+        }
+    }
+
     public function search(string $query, int $limit = 50): array
     {
         $response = $this->request()

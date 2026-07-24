@@ -97,6 +97,24 @@ interface MailProvider
     public function setLabel(string $remoteId, string $labelId, bool $applied): void;
 
     /**
+     * Create a label/category at the provider. Returns the provider's id for
+     * it, or null when this provider cannot create one (the label then lives
+     * only in the portal, which is fine — setLabel is skipped for it).
+     */
+    public function createLabel(string $name): ?string;
+
+    /**
+     * Rename at the provider, where renaming is a thing the provider can do.
+     * Outlook categories are keyed by their name and cannot be renamed via
+     * the API, so the Graph implementation is a no-op; the portal name is
+     * what the mail page shows either way.
+     */
+    public function renameLabel(string $remoteId, string $name): void;
+
+    /** Delete at the provider. Messages keep working if this fails. */
+    public function deleteLabel(string $remoteId): void;
+
+    /**
      * Provider-side search, so results cover the whole mailbox rather than
      * only what has been synced locally.
      *

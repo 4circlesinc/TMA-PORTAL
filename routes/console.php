@@ -95,6 +95,47 @@ Schedule::command('mail:sync-all')
     ->withoutOverlapping();
 
 /*
+ * Wake snoozed messages that are due: clear the snooze (which returns the
+ * message to its real folder — the listing hides rows with a snooze set) and
+ * raise the reminder notification. This is what makes snooze a *reminder*
+ * rather than just a hiding place; the toast/bell side is the ordinary
+ * notification pipeline.
+ */
+Artisan::command('mail:wake-snoozed', function () {
+    $due = \App\Models\MailMessage::query()
+        ->whereNotNull('snoozed_until')
+        ->where('snoozed_until', '<=', now())
+        ->orderBy('snoozed_until')
+        ->limit(200)
+        ->get();
+
+    foreach ($due as $message) {
+        $message->forceFill(['snoozed_until' => null])->save();
+
+        \App\Support\Notifications\Notifier::send([
+            'user' => $message->user_id,
+            'type' => 'email.snooze_due',
+            'title' => 'Reminder: '.($message->subject ?: 'a snoozed email'),
+            'message' => trim('From '.($message->from_name ?: $message->from_email ?: 'unknown sender').' — back in your '.$message->folder),
+            // Deep-link so the toast / panel click opens this exact message.
+            'action_url' => '/email?message='.$message->uuid,
+            'subject' => $message,
+            // One reminder per snooze; re-snoozing later makes a new key window.
+            'dedupe_key' => 'email.snooze_due:'.$message->id,
+            'dedupe_minutes' => 5,
+        ]);
+    }
+
+    $this->info("Woke {$due->count()} snoozed message(s).");
+})->purpose('Wake due snoozed messages and send their reminder notifications');
+
+// Minute granularity matches the snooze presets (the shortest is an hour) and
+// the picker's datetime input, which has minute resolution itself.
+Schedule::command('mail:wake-snoozed')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+/*
  * Re-fetch subscribed ICS calendars that are due.
  *
  * "Due" is per calendar: each carries its own refresh frequency, so an hourly

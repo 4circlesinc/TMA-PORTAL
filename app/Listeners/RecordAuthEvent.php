@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Models\AuthEvent;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\Messaging\PresenceService;
 use App\Support\Notifications\Notifier;
 use Illuminate\Auth\Events\Failed;
@@ -29,7 +30,7 @@ class RecordAuthEvent
         // needs review, and drop it into the audit trail (§16).
         $user = $event->user;
         if ($user instanceof User && $user->status === User::STATUS_PENDING) {
-            \App\Support\Activity\ActivityLogger::log([
+            ActivityLogger::log([
                 'actor' => $user,
                 'type' => 'account.registered',
                 'module' => 'account',
@@ -70,6 +71,17 @@ class RecordAuthEvent
 
         $this->record('login', $userId);
 
+        // Sign-ins feed the Activities panel too — without them a user who
+        // hasn't touched clients/files yet sees an empty audit trail.
+        if ($event->user instanceof User) {
+            ActivityLogger::log([
+                'actor' => $event->user,
+                'type' => 'security.login',
+                'description' => $event->user->name.' signed in',
+                'subject' => $event->user,
+            ]);
+        }
+
         if ($priorLogins > 0 && ! $knownDevice && $event->user instanceof User) {
             Notifier::send([
                 'user' => $event->user,
@@ -88,6 +100,15 @@ class RecordAuthEvent
         }
 
         $this->record('logout', $event->user->getAuthIdentifier());
+
+        if ($event->user instanceof User) {
+            ActivityLogger::log([
+                'actor' => $event->user,
+                'type' => 'security.logout',
+                'description' => $event->user->name.' signed out',
+                'subject' => $event->user,
+            ]);
+        }
 
         // Signing out is the one moment we *know* somebody is gone, rather
         // than inferring it from a heartbeat that stopped arriving. Without
