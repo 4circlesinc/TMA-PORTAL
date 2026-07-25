@@ -998,13 +998,14 @@
       var crumb = opts.crumb != null ? opts.crumb : (navEl && navEl.getAttribute('data-crumb'));
       if (title && pageTitleEl) pageTitleEl.textContent = title;
       if (crumb != null) renderBreadcrumb(crumb);
-      syncDocumentTitleBadge();
       var viewName = opts.view || (navEl && navEl.getAttribute('data-view')) || 'dashboard';
       if (viewName === 'add-data') {
         addDataSourceNav = 'users';
         root._addDataSourceNav = addDataSourceNav;
       }
       showView(viewName);
+      // After showView so Email can read tma-dash--email for its mailbox title.
+      syncDocumentTitleBadge();
       if (window.TMAPortalViews && window.TMAPortalViews.has(viewName)) {
         window.TMAPortalViews.activate(viewName, root, {
           navId: navId,
@@ -1495,6 +1496,7 @@
     }
 
     var cachedEmailUnread = null;
+    var cachedMailboxEmail = null;
 
     function getEmailBadgeCount() {
       if (cachedEmailUnread !== null) return cachedEmailUnread;
@@ -1504,10 +1506,19 @@
       return window.TMAEmail.getInboxUnreadCount(emailState);
     }
 
+    function getMailboxEmail() {
+      if (cachedMailboxEmail) return cachedMailboxEmail;
+      var emailMount = root.querySelector('[data-email]');
+      var emailState = emailMount && emailMount._emailState;
+      return (emailState && emailState.account && emailState.account.email) || '';
+    }
+
     document.addEventListener('tma-email-count', function (e) {
       if (!e || !e.detail || e.detail.count == null) return;
       cachedEmailUnread = Math.max(0, parseInt(e.detail.count, 10) || 0);
+      if (e.detail.email) cachedMailboxEmail = String(e.detail.email);
       if (typeof syncNavBadges === 'function') syncNavBadges();
+      syncDocumentTitleBadge();
     });
 
     function getMessagesBadgeCount() {
@@ -1608,10 +1619,16 @@
           ? (j.folders.inbox.unread || 0)
           : 0;
         cachedEmailUnread = n;
+        if (j && j.account && j.account.email) {
+          cachedMailboxEmail = String(j.account.email);
+        }
         syncNavBadges();
         try {
-          document.dispatchEvent(new CustomEvent('tma-email-count', { detail: { count: n } }));
+          document.dispatchEvent(new CustomEvent('tma-email-count', {
+            detail: { count: n, email: cachedMailboxEmail || '' },
+          }));
         } catch (e) { /* ignore */ }
+        syncDocumentTitleBadge();
       })
       .catch(function () {});
 
@@ -1691,10 +1708,31 @@
     }
 
     function syncDocumentTitleBadge() {
-      // Exact unread count in the browser tab title (never "99+").
+      // Email uses a mailbox-specific title: "Inbox 12 - you@firm.com".
+      // Elsewhere keep the exact notification count prefix (never "99+").
+      if (root.classList.contains('tma-dash--email')) {
+        var emailMount = root.querySelector('[data-email]');
+        var emailState = emailMount && emailMount._emailState;
+        var emailTitle = (window.TMAEmail && typeof window.TMAEmail.getPageTitle === 'function')
+          ? window.TMAEmail.getPageTitle(emailState)
+          : null;
+        if (!emailTitle) {
+          var unread = getEmailBadgeCount();
+          var addr = getMailboxEmail();
+          emailTitle = 'Inbox ' + String(unread || 0);
+          if (addr) emailTitle += ' - ' + addr;
+        }
+        root._titleBase = emailTitle;
+        document.title = emailTitle;
+        if (pageTitleEl) pageTitleEl.textContent = emailTitle;
+        return;
+      }
+
       var pageName = (pageTitleEl && pageTitleEl.textContent.trim())
         || document.title.replace(/^\(\d+\)\s+/, '').trim()
         || 'TMA Portal';
+      // Don't let a previous Email title leak onto other pages.
+      if (/^Inbox\s+\d+/.test(pageName)) pageName = 'TMA Portal';
       root._titleBase = pageName;
       var count = getNotificationBadgeCount();
       document.title = count > 0 ? '(' + String(count) + ') ' + pageName : pageName;

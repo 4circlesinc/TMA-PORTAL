@@ -2638,9 +2638,21 @@
   /** Keep home shortcuts + sidebar badges on the exact inbox unread total. */
   function announceInboxUnread(state) {
     var n = getInboxUnreadCount(state);
+    var email = (state && state.account && state.account.email) || '';
     try {
-      document.dispatchEvent(new CustomEvent('tma-email-count', { detail: { count: n } }));
+      document.dispatchEvent(new CustomEvent('tma-email-count', {
+        detail: { count: n, email: email },
+      }));
     } catch (e) { /* ignore */ }
+  }
+
+  /* Browser tab / page title while Email is open:
+   * "Inbox 12 - you@firm.com" */
+  function getPageTitle(state) {
+    var unread = getInboxUnreadCount(state);
+    var addr = (state && state.account && state.account.email) || '';
+    var title = 'Inbox ' + String(unread || 0);
+    return addr ? (title + ' - ' + addr) : title;
   }
 
   function folderCount(folder, state) {
@@ -7428,6 +7440,7 @@
     mount: mount,
     restoreHeaderSearch: restoreHeaderSearch,
     getInboxUnreadCount: getInboxUnreadCount,
+    getPageTitle: getPageTitle,
     /* Open a specific message from a notification / toast deep-link. */
     openMessage: function (rootOrId, maybeId) {
       var root = document.querySelector('[data-email]');
