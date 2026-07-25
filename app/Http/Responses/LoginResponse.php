@@ -15,17 +15,10 @@ class LoginResponse implements LoginResponseContract
             return new JsonResponse(['two_factor' => false]);
         }
 
-        if ($request->session()->pull('stay_signed_in.pending') && StaySignedIn::shouldAsk($request)) {
+        if (StaySignedIn::shouldAsk($request)) {
             return redirect()->route('stay-signed-in.show');
         }
 
-        $response = redirect()->intended(Fortify::redirects('login'));
-
-        // Email form always posts remember=0|1 — either way the device was asked.
-        if ($request->has('remember')) {
-            $response->withCookie(StaySignedIn::promptedCookie($request));
-        }
-
-        return $response;
+        return redirect()->intended(Fortify::redirects('login'));
     }
 }

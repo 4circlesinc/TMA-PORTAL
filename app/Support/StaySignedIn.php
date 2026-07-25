@@ -8,12 +8,13 @@ use Illuminate\Support\Facades\Cookie;
 use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 
 /**
- * "Stay signed in for 30 days" — separate from TrustedDevices (2FA skip).
+ * Post-login "Stay signed in?" prompt — separate from TrustedDevices (2FA skip).
  *
- * A long-lived cookie records that this browser was already asked, so OAuth
- * sign-ins don't re-prompt. Choosing yes issues Laravel's remember cookie
- * (duration set in AppServiceProvider); choosing no leaves the normal
- * SESSION_LIFETIME session alone.
+ * After Google, Microsoft, or email sign-in, users who have not answered yet
+ * are asked whether they trust this browser to keep them signed in. Choosing
+ * yes issues Laravel's remember cookie (duration set in AppServiceProvider);
+ * choosing no leaves the normal SESSION_LIFETIME session alone. A cookie
+ * records that this browser was already asked so we don't re-prompt.
  */
 class StaySignedIn
 {

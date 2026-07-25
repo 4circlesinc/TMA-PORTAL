@@ -530,8 +530,8 @@ Route::post('/auth/social/{provider}/disconnect', [SocialAuthController::class, 
     ->name('social.disconnect');
 
 /*
- * Stay signed in for 30 days — asked after OAuth when the login-page
- * checkbox did not already decide. Must be authenticated to choose.
+ * Post-login "Stay signed in?" — asked after Google, Microsoft, or email
+ * sign-in (and after 2FA when that applies). Must be authenticated to choose.
  */
 Route::middleware('auth')->group(function () {
     Route::get('/auth/stay-signed-in', [StaySignedInController::class, 'show'])

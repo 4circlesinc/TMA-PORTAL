@@ -41,8 +41,8 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(SocialiteWasCalled::class, MicrosoftExtendSocialite::class);
 
-        // "Stay signed in for 30 days" — Laravel's default remember cookie is
-        // much longer; keep the portal restore window aligned with the copy.
+        // Stay-signed-in remember cookie — Laravel's default is much longer;
+        // keep the portal restore window to StaySignedIn::DAYS.
         Auth::guard('web')->setRememberDuration(StaySignedIn::minutes());
 
         // Public signing links are the only unauthenticated write endpoints in

@@ -16,13 +16,13 @@
 
         <div class="tma-auth__intro">
           <h1 class="tma-auth__title" id="stay-title">Stay signed in?</h1>
-          <p class="tma-auth__subtitle">Stay signed in for 30 days on this device.</p>
+          <p class="tma-auth__subtitle">Do you trust this browser to keep you signed in? Only say yes on devices you use regularly.</p>
         </div>
 
         <form class="tma-auth__section" method="POST" action="{{ route('stay-signed-in.store') }}">
           @csrf
-          <button type="submit" class="tma-auth__submit" name="stay" value="yes">Yes</button>
-          <button type="submit" class="tma-auth__submit tma-auth__submit--ghost" name="stay" value="no">No</button>
+          <button type="submit" class="tma-auth__submit" name="stay" value="yes">Yes, stay signed in</button>
+          <button type="submit" class="tma-auth__submit tma-auth__submit--ghost" name="stay" value="no">No, sign me out when the session ends</button>
         </form>
       </section>
     </div>

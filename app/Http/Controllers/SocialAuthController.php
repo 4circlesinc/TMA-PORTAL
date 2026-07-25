@@ -63,14 +63,6 @@ class SocialAuthController extends Controller
             in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email'], true) ? $request->query('return') : 'security-settings',
         );
 
-        // Stay-signed-in preference from the login page checkbox (?remember=1|0).
-        // Absent means undecided — OAuth users will be asked after sign-in.
-        if ($request->has('remember')) {
-            $request->session()->put('social.remember', $request->boolean('remember'));
-        } else {
-            $request->session()->forget('social.remember');
-        }
-
         // Data sync opt-in (email, calendar, OneDrive, SharePoint). Only
         // requests extra scopes when the provider's sync is configured;
         // otherwise this is a normal sign-in.
@@ -300,42 +292,26 @@ class SocialAuthController extends Controller
 
     private function login(Request $request, User $user): RedirectResponse
     {
-        $rememberDecided = $request->session()->exists('social.remember');
-        $remember = (bool) $request->session()->pull('social.remember', false);
-        $shouldAsk = ! $rememberDecided && StaySignedIn::shouldAsk($request);
-
         // Respect two-factor authentication: hand off to Fortify's challenge,
-        // unless this is a device the user already trusted.
+        // unless this is a device the user already trusted. Remember-me is
+        // decided on the post-login stay-signed-in screen, not here.
         if ($user->hasTwoFactorEnabled() && ! TrustedDevices::trusts($user, $request)) {
             $request->session()->put([
                 'login.id' => $user->getKey(),
-                'login.remember' => $remember,
+                'login.remember' => false,
             ]);
-
-            if ($shouldAsk) {
-                $request->session()->put('stay_signed_in.pending', true);
-            } elseif ($rememberDecided) {
-                $request->session()->put('stay_signed_in.mark_prompted', true);
-            }
 
             return redirect()->route('two-factor.login');
         }
 
-        Auth::login($user, $remember);
+        Auth::login($user, false);
         $request->session()->regenerate();
 
-        if ($shouldAsk) {
+        if (StaySignedIn::shouldAsk($request)) {
             return redirect()->route('stay-signed-in.show');
         }
 
-        $response = redirect()->intended('/');
-
-        // Preference was chosen on the login page — don't ask again on this device.
-        if ($rememberDecided) {
-            $response->withCookie(StaySignedIn::promptedCookie($request));
-        }
-
-        return $response;
+        return redirect()->intended('/');
     }
 
     /**
