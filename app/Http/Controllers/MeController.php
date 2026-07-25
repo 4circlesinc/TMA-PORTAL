@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\WorkDay;
 use App\Support\AvatarService;
 use App\Support\Notifications\ToastSettings;
 use App\Support\RealtimeConfig;
@@ -36,6 +37,8 @@ class MeController extends Controller
             // Toast prefs load with identity so the first notification of the
             // session already lands in the right corner with the right hold.
             'toasts' => ToastSettings::for($user),
+            // Today's work plan (public fields only) for Messages / profiles.
+            'workStatus' => WorkDay::publicStatusFor($user),
         ]);
     }
 

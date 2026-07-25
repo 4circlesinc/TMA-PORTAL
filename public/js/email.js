@@ -3394,9 +3394,12 @@
       // :where() keeps these at zero specificity, so anything the sender
       // specified wins. Previously these overrode the message's own styling
       // and every email came out looking the same.
-      ':where(html,body){margin:0;padding:0;}' +
-      ':where(body){font-family:Inter,system-ui,sans-serif;font-size:14px;' +
-      'line-height:1.5;color:#1c1c1c;}' +
+      ':where(html){margin:0;padding:0;}' +
+      // Reading-pane gutter so plain HTML (no own margins) is not flush to
+      // the frame edges. Senders that set their own body padding still win.
+      ':where(body){margin:0;padding:20px 24px;box-sizing:border-box;' +
+      'font-family:Inter,system-ui,sans-serif;font-size:14px;' +
+      'line-height:1.5;color:#1c1c1c;word-wrap:break-word;overflow-wrap:anywhere;}' +
       // Pictures are held to the pane width so they cannot force the message
       // sideways; wide tables keep their real layout and scroll instead of
       // being squashed into something the sender never designed.

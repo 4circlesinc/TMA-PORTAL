@@ -16,6 +16,7 @@ use App\Models\LinkPreview;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Models\WorkDay;
 use App\Models\UserBlock;
 use App\Models\UserPresence;
 use App\Models\UserWorkStatus;
@@ -436,6 +437,11 @@ class MessagingController extends Controller
 
         $conversation->load(['messages' => fn ($q) => $q->latest('id')->limit(1)]);
 
+        $memberUsers = $conversation->isGroup()
+            ? $conversation->activeParticipants->map(fn (ConversationParticipant $p) => $p->user)->filter()
+            : collect($counterpart ? [$counterpart] : []);
+        $workStatuses = WorkDay::publicStatusesForUsers($memberUsers);
+
         return response()->json([
             'conversation' => MessagingPresenter::conversation($conversation, $user, $participant),
             'profile' => [
@@ -453,6 +459,9 @@ class MessagingController extends Controller
                 'presence' => $counterpart
                     ? PresenceService::forViewer($counterpart, $user)
                     : ['label' => 'Group chat'],
+                'workStatus' => $counterpart
+                    ? ($workStatuses[(int) $counterpart->id] ?? null)
+                    : null,
                 'memberCount' => $conversation->activeParticipants->count(),
                 'members' => $conversation->isGroup()
                     ? $conversation->activeParticipants->map(fn (ConversationParticipant $p) => [
@@ -460,6 +469,9 @@ class MessagingController extends Controller
                         'name' => $p->user?->name,
                         'photo' => $p->user?->avatar_url,
                         'role' => $p->role,
+                        'workStatus' => $p->user
+                            ? ($workStatuses[(int) $p->user->id] ?? null)
+                            : null,
                     ])->values()
                     : [],
             ],

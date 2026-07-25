@@ -91,6 +91,7 @@
       _twoFactor: u.twoFactor,
       _lastActive: u.lastActive,
       note: u.note || '',
+      workStatus: (u.workStatus && u.workStatus.label) || '',
     };
   }
 
@@ -404,7 +405,9 @@ if (state.filters.user) {
     var selected = checked ? ' tma-dash__ctr--selected' : '';
     return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-users-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + escapeHtml(row.user) + '"></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--user"><img src="' + escapeHtml(avatarUrl(row.avatar)) + '" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user"><img src="' + escapeHtml(avatarUrl(row.avatar)) + '" alt=""><span class="tma-dash__cc-user-stack"><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' +
+        (row.workStatus ? '<span class="tma-dash__cc-workstatus">' + escapeHtml(row.workStatus) + '</span>' : '') +
+        '</span>' + statusBadge(row) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--email"><span class="tma-dash__cc-truncate">' + escapeHtml(row.email) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--overview-date">' + escapeHtml(row.date) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--actions">' +
@@ -419,7 +422,9 @@ if (state.filters.user) {
     return '<div class="tma-dash__ctr tma-dash__ctr--body' + selected + active + '" data-row-index="' + index + '" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-users-check' + (checked ? ' checked' : '') + '></div>' +
       '<div class="tma-dash__cc tma-dash__cc--id">' + escapeHtml(row.serial) + '</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--user"><img src="' + escapeHtml(avatarUrl(row.avatar)) + '" alt=""><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' + statusBadge(row) + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user"><img src="' + escapeHtml(avatarUrl(row.avatar)) + '" alt=""><span class="tma-dash__cc-user-stack"><span class="tma-dash__cc-truncate">' + escapeHtml(row.user) + '</span>' +
+        (row.workStatus ? '<span class="tma-dash__cc-workstatus">' + escapeHtml(row.workStatus) + '</span>' : '') +
+        '</span>' + statusBadge(row) + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--email"><span class="tma-dash__cc-truncate">' + escapeHtml(row.email) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--address">' +
         '<span class="tma-dash__cc-truncate">' + escapeHtml(row.address) + '</span>' +
@@ -1578,5 +1583,9 @@ e.target.closest('[data-filter-user]') ||
     focusSearch: focusSearch,
     isUsersActive: isUsersActive,
     addRowFromForm: addRowFromForm,
+    openInvite: function () {
+      openInviteDialog();
+      return true;
+    },
   };
 })();

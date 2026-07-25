@@ -55,6 +55,48 @@ class CalendarProviderSyncTest extends TestCase
 
     /* ── pulling ─────────────────────────────────────────────── */
 
+    public function test_connect_all_adds_every_accessible_calendar_once(): void
+    {
+        Queue::fake();
+        $user = $this->user();
+        $account = $this->account($user, ['Calendars.ReadWrite']);
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$user->id,
+        ])->save();
+
+        $provider = new FakeCalendarProvider([]);
+        $provider->calendars = [
+            ['id' => 'cal-primary', 'name' => 'Calendar', 'primary' => true, 'canWrite' => true],
+            ['id' => 'cal-shared', 'name' => 'Team', 'primary' => false, 'canWrite' => false],
+            ['id' => 'cal-holidays', 'name' => 'Holidays', 'primary' => false, 'canWrite' => false],
+        ];
+        $this->fakeProvider($provider);
+
+        $this->actingAs($user)
+            ->postJson('/portal/calendar/sync/accounts/'.$account->id.'/connect-all')
+            ->assertOk()
+            ->assertJsonPath('calendarsFound', 3)
+            ->assertJsonPath('calendarsAdded', 3);
+
+        // Second connect-all must not duplicate.
+        $this->actingAs($user)
+            ->postJson('/portal/calendar/sync/accounts/'.$account->id.'/connect-all')
+            ->assertOk()
+            ->assertJsonPath('calendarsFound', 3)
+            ->assertJsonPath('calendarsAdded', 0)
+            ->assertJsonPath('calendarsSkipped', 3);
+
+        $this->assertSame(3, Calendar::where('connected_account_id', $account->id)->count());
+        Queue::assertPushed(SyncProviderCalendar::class, 3);
+
+        $this->actingAs($user)
+            ->getJson('/portal/calendar/sync/status')
+            ->assertOk()
+            ->assertJsonPath('calendarsFound', 3)
+            ->assertJsonPath('stage', 'importing');
+    }
+
     public function test_a_pull_imports_remote_events(): void
     {
         [$user, $calendar] = $this->connectedCalendar();
@@ -514,6 +556,11 @@ class FakeCalendarProvider implements CalendarProvider
 
     public ?string $failWith = null;
 
+    /** @var array<int, array<string, mixed>> */
+    public array $calendars = [
+        ['id' => 'primary', 'name' => 'Primary', 'colour' => null, 'primary' => true, 'canWrite' => true],
+    ];
+
     private int $counter = 0;
 
     /**
@@ -528,7 +575,7 @@ class FakeCalendarProvider implements CalendarProvider
 
     public function listCalendars(): array
     {
-        return [['id' => 'primary', 'name' => 'Primary', 'colour' => null, 'primary' => true, 'canWrite' => true]];
+        return $this->calendars;
     }
 
     public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart): array

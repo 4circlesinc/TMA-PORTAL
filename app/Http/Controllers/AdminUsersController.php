@@ -8,6 +8,7 @@ use App\Models\FileLibrarySetting;
 use App\Models\Folder;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\WorkDay;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\DeviceName;
@@ -41,7 +42,10 @@ class AdminUsersController extends Controller
             ->groupBy('user_id')
             ->pluck('last_activity', 'user_id');
 
-        $users = User::orderByDesc('created_at')->get()->map(fn (User $user) => [
+        $userModels = User::orderByDesc('created_at')->get();
+        $workStatuses = WorkDay::publicStatusesForUsers($userModels);
+
+        $users = $userModels->map(fn (User $user) => [
             'id' => $user->id,
             'name' => $user->name,
             'firstName' => $user->first_name,
@@ -64,6 +68,7 @@ class AdminUsersController extends Controller
             'lastActive' => isset($lastSeen[$user->id])
                 ? now()->setTimestamp($lastSeen[$user->id])->diffForHumans()
                 : null,
+            'workStatus' => $workStatuses[(int) $user->id] ?? null,
             'self' => $user->id === $viewer->id,
         ]);
 

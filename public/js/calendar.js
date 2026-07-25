@@ -198,6 +198,11 @@
     error: null,
 
     selectedEventId: null,
+    selectedDay: null,
+    quickAddFor: null,
+    workDays: {},         // dateKey -> work plan record
+    workStatuses: [],
+    syncPollTimer: null,
     panel: null,          // { mode:'view'|'create'|'edit'|'calendar', ... }
     menuFor: null,        // calendar uuid whose actions menu is open
     busy: {},             // uuid -> true while a write is in flight
@@ -267,6 +272,29 @@
     });
   }
 
+  function loadWorkPlan() {
+    // Keep this under the API's 62-day ceiling. Event fetches use a wider
+    // padded window; work-plan only needs the on-screen month (+ one week).
+    var anchor = state.view === 'month' ? state.monthDate : state.weekStart;
+    var fromDate = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    fromDate.setDate(fromDate.getDate() - 7);
+    var toDate = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 7);
+    var from = dateKeyOf(fromDate);
+    var to = dateKeyOf(toDate);
+    return net(BASE + '/work-plan?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to))
+      .then(function (data) {
+        var map = {};
+        ((data && data.days) || []).forEach(function (d) {
+          if (d && d.date) map[d.date] = d;
+        });
+        state.workDays = map;
+        state.workStatuses = (data && data.statuses) || state.workStatuses;
+      })
+      .catch(function () {
+        // Work plan is optional chrome — calendar still works without it.
+      });
+  }
+
   /*
    * A full reload. `background` keeps whatever is already rendered on screen
    * while it runs, which is what stops the grid flashing on every save.
@@ -280,7 +308,7 @@
     state.error = null;
     render();
 
-    return Promise.all([loadCalendars(), loadEvents()])
+    return Promise.all([loadCalendars(), loadEvents(), loadWorkPlan()])
       .then(function () {
         state.loading = false;
         state.refreshing = false;
@@ -298,7 +326,7 @@
   function refreshEvents() {
     state.refreshing = true;
     render();
-    return loadEvents()
+    return Promise.all([loadEvents(), loadWorkPlan()])
       .then(function () {
         state.refreshing = false;
         render();
@@ -596,6 +624,33 @@
     });
   }
 
+  function formatEventChipTime(event) {
+    if (event.allDay) return 'All day';
+    var d = toLocalDate(event.startsAt);
+    if (!d) return '';
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function renderMonthEventChip(event) {
+    var colour = eventColour(event);
+    var time = formatEventChipTime(event);
+    var title = event.title || 'Untitled';
+    return (
+      '<button type="button" class="tma-dash__calendar-month-event tma-dash__calendar-month-event--' +
+      esc(colour) + '" data-calendar-month-event="' + esc(event.id) + '" title="' +
+      esc(time + ' ' + title) + '">' +
+      '<span class="tma-dash__calendar-month-event-strip" aria-hidden="true"></span>' +
+      '<span class="tma-dash__calendar-month-event-time">' + esc(time) + '</span>' +
+      '<span class="tma-dash__calendar-month-event-title">' + esc(title) + '</span>' +
+      '</button>'
+    );
+  }
+
+  function workPlanFor(dateKey) {
+    var map = state.workDays || {};
+    return map[dateKey] || null;
+  }
+
   function renderMonthView() {
     var gridStart = SCHED.startOfWeek(startOfMonth(state.monthDate));
 
@@ -607,6 +662,11 @@
       var key = dateKeyOf(d);
       (byDate[key] = byDate[key] || []).push(event);
     });
+    Object.keys(byDate).forEach(function (k) {
+      byDate[k].sort(function (a, b) {
+        return new Date(a.startsAt) - new Date(b.startsAt);
+      });
+    });
 
     var cells = [];
     for (var i = 0; i < 42; i++) {
@@ -615,27 +675,43 @@
       var dayEvents = byDate[key] || [];
       var inMonth = date.getMonth() === state.monthDate.getMonth();
       var isToday = SCHED.sameDay(date, new Date());
+      var isSelected = state.selectedDay === key;
+      var visible = dayEvents.slice(0, 3);
+      var hidden = Math.max(0, dayEvents.length - 3);
+      var plan = workPlanFor(key);
+      var planLabel = plan && plan.status !== 'not_working'
+        ? (plan.statusLabel || 'Work plan')
+        : '';
 
       cells.push(
-        '<button type="button" class="tma-dash__calendar-month-day' +
+        '<div class="tma-dash__calendar-month-day' +
         (inMonth ? '' : ' tma-dash__calendar-month-day--muted') +
         (isToday ? ' tma-dash__calendar-month-day--today' : '') +
-        '" data-calendar-day="' + esc(key) + '">' +
+        (isSelected ? ' tma-dash__calendar-month-day--selected' : '') +
+        '" data-calendar-day="' + esc(key) + '" role="button" tabindex="0">' +
+        '<div class="tma-dash__calendar-month-day-top">' +
         '<span class="tma-dash__calendar-month-day-num">' + esc(date.getDate()) + '</span>' +
-        (dayEvents.length
-          ? '<span class="tma-dash__calendar-month-dots" aria-label="' + dayEvents.length + ' events">' +
-            dayEvents.slice(0, 3).map(function (e) {
-              return '<span class="tma-dash__calendar-month-dot tma-dash__calendar-month-dot--' +
-                esc(eventColour(e)) + '"></span>';
-            }).join('') +
-            '</span>'
+        '<button type="button" class="tma-dash__calendar-month-day-add" data-calendar-day-add="' +
+        esc(key) + '" aria-label="Quick add on ' + esc(key) + '">' +
+        '<img src="' + ICONS.Plus + '" alt=""></button>' +
+        '</div>' +
+        (planLabel
+          ? '<button type="button" class="tma-dash__calendar-month-workplan" data-calendar-workplan="' +
+            esc(key) + '" title="' + esc(planLabel) + '">' + esc(planLabel) + '</button>'
           : '') +
-        '</button>'
+        '<div class="tma-dash__calendar-month-events">' +
+        visible.map(renderMonthEventChip).join('') +
+        (hidden > 0
+          ? '<button type="button" class="tma-dash__calendar-month-more" data-calendar-day-more="' +
+            esc(key) + '">+' + hidden + ' more</button>'
+          : '') +
+        '</div>' +
+        '</div>'
       );
     }
 
     return (
-      '<div class="tma-dash__calendar-month" data-calendar-month-root>' +
+      '<div class="tma-dash__calendar-month" data-calendar-month-root style="position:relative">' +
       '<div class="tma-dash__calendar-month-head">' +
       '<button type="button" class="tma-dash__clients-icon-btn" data-calendar-month-prev aria-label="Previous month">' +
       '<img src="' + ICONS.ArrowLineLeft + '" alt=""></button>' +
@@ -650,6 +726,15 @@
       }).join('') +
       '</div>' +
       '<div class="tma-dash__calendar-month-grid">' + cells.join('') + '</div>' +
+      (state.quickAddFor
+        ? '<div class="tma-dash__calendar-quick-add" data-calendar-quick-add>' +
+          ['Event', 'Meeting', 'Reminder', 'Work status', 'Leave', 'Note'].map(function (label) {
+            var kind = label.toLowerCase().replace(/\s+/g, '-');
+            return '<button type="button" class="tma-dash__calendar-quick-add-item" data-quick-add-kind="' +
+              esc(kind) + '" data-quick-add-date="' + esc(state.quickAddFor) + '">' + esc(label) + '</button>';
+          }).join('') +
+          '</div>'
+        : '') +
       '</div>'
     );
   }
@@ -1687,34 +1772,15 @@
     } else if (panel.error) {
       body = '<p class="tma-dash__calendar-empty">' + esc(panel.error) + '</p>';
     } else if (!panel.accounts || !panel.accounts.length) {
-      // No connected Google/Microsoft account yet, or the feature is off.
       body = '<p class="tma-dash__calendar-empty">' +
         (panel.anyEnabled
-          ? 'Connect a Google or Microsoft account under Settings → Security first, then come back here.'
+          ? 'Connect a Google or Microsoft account under Settings → Security first (with calendar access), then come back here.'
           : 'Calendar sync isn’t switched on for this portal yet.') +
         '</p>';
-    } else if (panel.account && panel.providerCalendars) {
-      // Step two: pick which of the account's calendars to add.
-      if (!panel.account.canWrite) {
-        body = '<div class="tma-dash__calendar-sync-note">This connection can only read calendars. ' +
-          'Reconnect and allow calendar access to sync changes both ways.</div>';
-      } else { body = ''; }
-
-      body += (panel.providerCalendars.length
-        ? '<ul class="tma-dash__calendar-share-list">' +
-          panel.providerCalendars.map(function (c) {
-            return '<li class="tma-dash__calendar-share-row">' +
-              '<span class="tma-dash__calendar-share-who">' +
-              '<span class="tma-dash__calendar-share-name">' + esc(c.name) + '</span>' +
-              '<span class="tma-dash__calendar-share-meta">' + (c.primary ? 'Primary' : '') +
-              (c.canWrite ? '' : (c.primary ? ' · read-only' : 'read-only')) + '</span></span>' +
-              '<button type="button" class="tma-dash__calendar-panel-btn" data-connect-calendar="' + esc(c.id) +
-              '" data-connect-name="' + esc(c.name) + '">Add</button></li>';
-          }).join('') + '</ul>'
-        : '<p class="tma-dash__calendar-empty">Every calendar from this account is already added.</p>');
     } else {
-      // Step one: choose which connected account.
-      body = '<p class="tma-dash__clients-form-label">Choose an account</p>' +
+      // One-click: choose an account → discover & add every accessible calendar.
+      body = '<p class="tma-dash__clients-form-label">Connect every calendar from an account</p>' +
+        '<p class="tma-dash__calendar-share-meta">One authorisation discovers primary, shared, group and holiday calendars where the provider allows it. You can hide individual calendars afterwards.</p>' +
         '<ul class="tma-dash__calendar-share-list">' +
         panel.accounts.map(function (a) {
           return '<li class="tma-dash__calendar-share-row">' +
@@ -1724,14 +1790,159 @@
             (a.provider === 'google' ? 'Google' : 'Microsoft') +
             (a.canWrite ? '' : ' · read-only') + '</span></span>' +
             (a.canRead
-              ? '<button type="button" class="tma-dash__calendar-panel-btn" data-connect-account="' + esc(a.id) + '">Choose</button>'
+              ? '<button type="button" class="tma-dash__calendar-panel-btn tma-dash__calendar-panel-btn--primary" data-connect-all="' +
+                esc(a.id) + '">Connect all</button>'
               : '<span class="tma-dash__calendar-share-meta">Reconnect for calendar access</span>') +
             '</li>';
         }).join('') + '</ul>';
     }
 
-    return panelShell('Connect a calendar', body,
+    return panelShell('Connect calendars', body,
       '<button type="button" class="tma-dash__calendar-panel-btn" data-calendar-panel-close>Done</button>');
+  }
+
+  function renderSyncProgressPanel() {
+    var panel = state.panel || {};
+    var s = panel.status || {};
+    var body;
+
+    if (panel.loading && !s.stage) {
+      body = '<p class="tma-dash__calendar-share-meta">Starting sync… You can leave this page; import continues in the background.</p>';
+    } else {
+      var stageLabel = {
+        idle: 'Waiting',
+        importing: 'Importing events…',
+        complete: 'Sync complete',
+        partial: 'Sync finished with some errors',
+        failed: 'Sync failed',
+      }[s.stage] || 'Syncing…';
+
+      body =
+        '<p class="tma-dash__calendar-sync-status tma-dash__calendar-sync-status--' +
+        esc(s.stage === 'complete' ? 'ok' : (s.stage === 'failed' ? 'error' : 'syncing')) + '">' +
+        esc(stageLabel) + '</p>' +
+        '<ul class="tma-dash__calendar-sync-stats">' +
+        '<li><strong>' + esc(String(s.calendarsFound || 0)) + '</strong> calendars found</li>' +
+        '<li><strong>' + esc(String(s.calendarsAdded || 0)) + '</strong> calendars connected</li>' +
+        '<li><strong>' + esc(String(s.calendarsSyncing || 0)) + '</strong> still syncing</li>' +
+        '<li><strong>' + esc(String(s.eventsImported || 0)) + '</strong> events imported</li>' +
+        (s.lastSyncedAt ? '<li>Last successful sync · ' + esc(fmtWhen(s.lastSyncedAt)) + '</li>' : '') +
+        '</ul>' +
+        ((s.calendars || []).length
+          ? '<ul class="tma-dash__calendar-share-list">' +
+            s.calendars.map(function (c) {
+              var retry = c.status === 'error'
+                ? '<button type="button" class="tma-dash__calendar-panel-btn" data-sync-now="' + esc(c.id) + '">Retry</button>'
+                : '';
+              return '<li class="tma-dash__calendar-share-row">' +
+                '<span class="tma-dash__calendar-share-who">' +
+                '<span class="tma-dash__calendar-share-name">' + esc(c.name) + '</span>' +
+                '<span class="tma-dash__calendar-share-meta">' +
+                esc(SYNC_STATUS_LABELS[c.status] || c.status) +
+                (c.eventCount != null ? ' · ' + c.eventCount + ' events' : '') +
+                (c.error ? ' — ' + esc(c.error) : '') +
+                '</span></span>' + retry + '</li>';
+            }).join('') + '</ul>'
+          : '');
+    }
+
+    return panelShell('Calendar sync', body,
+      '<button type="button" class="tma-dash__calendar-panel-btn" data-calendar-panel-close>Close</button>');
+  }
+
+  function renderDayPanel() {
+    var panel = state.panel || {};
+    var key = panel.dateKey;
+    if (!key) return '';
+    var dayEvents = state.events.filter(function (event) {
+      var d = toLocalDate(event.startsAt);
+      return d && dateKeyOf(d) === key;
+    }).sort(function (a, b) { return new Date(a.startsAt) - new Date(b.startsAt); });
+    var plan = workPlanFor(key) || {};
+    var parts = key.split('-');
+    var labelDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    var heading = labelDate.toLocaleDateString(undefined, {
+      weekday: 'long', month: 'short', day: 'numeric', year: 'numeric',
+    });
+
+    var planBody =
+      '<div class="tma-dash__calendar-day-workplan">' +
+      '<div class="tma-dash__calendar-day-workplan-head">' +
+      '<strong>Your work plan</strong>' +
+      '<button type="button" class="tma-dash__clients-icon-btn" data-workplan-edit="' + esc(key) +
+      '" aria-label="Edit work plan"><img src="' + ICONS.PencilSimpleLine + '" alt=""></button></div>' +
+      '<p class="tma-dash__calendar-share-meta">' + esc(heading) + '</p>' +
+      '<p>' + esc(plan.statusLabel || 'Not set') + '</p>' +
+      (plan.startsAt || plan.endsAt
+        ? '<p>' + esc((plan.startsAt || '—') + ' – ' + (plan.endsAt || '—')) + '</p>'
+        : '') +
+      (plan.location ? '<p>' + esc(plan.location) + '</p>' : '') +
+      (plan.note ? '<p class="tma-dash__calendar-share-meta">' + esc(plan.note) + '</p>' : '') +
+      '</div>';
+
+    var eventsBody = dayEvents.length
+      ? '<ul class="tma-dash__calendar-share-list">' + dayEvents.map(function (e) {
+          var cal = getCalendar(e.calendarId);
+          return '<li class="tma-dash__calendar-share-row">' +
+            '<button type="button" class="tma-dash__calendar-day-event" data-calendar-event="' + esc(e.id) + '">' +
+            renderColourSwatch(eventColour(e)) +
+            '<span class="tma-dash__calendar-share-who">' +
+            '<span class="tma-dash__calendar-share-name">' + esc(e.title || 'Untitled') + '</span>' +
+            '<span class="tma-dash__calendar-share-meta">' +
+            esc(e.allDay ? 'All day' : formatEventChipTime(e)) +
+            (cal ? ' · ' + esc(cal.name) : '') +
+            (e.location ? ' · ' + esc(e.location) : '') +
+            (e.meetingUrl ? ' · Online meeting' : '') +
+            '</span></span></button></li>';
+        }).join('') + '</ul>'
+      : '<p class="tma-dash__calendar-empty">Nothing scheduled.</p>';
+
+    return panelShell(heading,
+      planBody + '<p class="tma-dash__clients-form-label">Events</p>' + eventsBody,
+      '<button type="button" class="tma-dash__calendar-panel-btn tma-dash__calendar-panel-btn--primary" data-calendar-day-create="' +
+      esc(key) + '">New event</button>' +
+      '<button type="button" class="tma-dash__calendar-panel-btn" data-calendar-panel-close>Close</button>');
+  }
+
+  function renderWorkPlanEditor() {
+    var panel = state.panel || {};
+    var draft = panel.draft || {};
+    var statuses = panel.statuses || [];
+    var body =
+      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
+      '<span class="tma-dash__clients-form-label">Status</span>' +
+      '<select class="tma-dash__clients-field-select" data-workplan-field="status">' +
+      statuses.map(function (s) {
+        return '<option value="' + esc(s.id) + '"' + (draft.status === s.id ? ' selected' : '') + '>' +
+          esc(s.label) + '</option>';
+      }).join('') +
+      '</select></label>' +
+      '<div class="tma-dash__clients-form-row">' +
+      '<label class="tma-dash__clients-form-field"><span class="tma-dash__clients-form-label">Start</span>' +
+      '<input type="time" class="tma-dash__clients-field-input" data-workplan-field="startsAt" value="' +
+      esc(draft.startsAt || '') + '"></label>' +
+      '<label class="tma-dash__clients-form-field"><span class="tma-dash__clients-form-label">End</span>' +
+      '<input type="time" class="tma-dash__clients-field-input" data-workplan-field="endsAt" value="' +
+      esc(draft.endsAt || '') + '"></label></div>' +
+      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
+      '<span class="tma-dash__clients-form-label">Location</span>' +
+      '<input type="text" class="tma-dash__clients-field-input" data-workplan-field="location" value="' +
+      esc(draft.location || '') + '"></label>' +
+      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
+      '<span class="tma-dash__clients-form-label">Note</span>' +
+      '<textarea class="tma-dash__clients-field-input" rows="3" data-workplan-field="note">' +
+      esc(draft.note || '') + '</textarea></label>' +
+      '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
+      '<span class="tma-dash__clients-form-label">Visibility</span>' +
+      '<select class="tma-dash__clients-field-select" data-workplan-field="visibility">' +
+      '<option value="colleagues"' + (draft.visibility !== 'private' ? ' selected' : '') + '>Visible to colleagues</option>' +
+      '<option value="private"' + (draft.visibility === 'private' ? ' selected' : '') + '>Private</option>' +
+      '</select></label>';
+
+    return panelShell('Edit work plan', body,
+      '<button type="button" class="tma-dash__calendar-panel-btn tma-dash__calendar-panel-btn--primary" data-workplan-save' +
+      (panel.busy ? ' disabled' : '') + '>' + (panel.busy ? 'Saving…' : 'Save') + '</button>' +
+      '<button type="button" class="tma-dash__calendar-panel-btn" data-calendar-panel-close>Cancel</button>');
   }
 
   var SYNC_STATUS_LABELS = {
@@ -1851,6 +2062,9 @@
     if (state.panel.mode === 'subscribe') return renderSubscribePanel();
     if (state.panel.mode === 'browse') return renderBrowsePanel();
     if (state.panel.mode === 'connect') return renderConnectPanel();
+    if (state.panel.mode === 'sync-progress') return renderSyncProgressPanel();
+    if (state.panel.mode === 'day') return renderDayPanel();
+    if (state.panel.mode === 'work-plan') return renderWorkPlanEditor();
     if (state.panel.mode === 'sync-settings') return renderSyncSettingsPanel();
     if (state.panel.mode === 'conflicts') return renderConflictsPanel();
     if (state.panel.mode === 'history') return renderHistoryPanel();
@@ -2811,43 +3025,145 @@
       });
   }
 
-  function chooseConnectAccount(accountId) {
+  function stopSyncPoll() {
+    if (state.syncPollTimer) {
+      clearInterval(state.syncPollTimer);
+      state.syncPollTimer = null;
+    }
+  }
+
+  function pollSyncStatus(accountId) {
+    stopSyncPoll();
+    var url = accountId
+      ? BASE + '/sync/accounts/' + encodeURIComponent(accountId) + '/status'
+      : BASE + '/sync/status';
+
+    function tick() {
+      net(url)
+        .then(function (data) {
+          if (!state.panel || state.panel.mode !== 'sync-progress') {
+            stopSyncPoll();
+            return;
+          }
+          state.panel.loading = false;
+          state.panel.status = data || {};
+          render();
+          load(true);
+          if (data && (data.stage === 'complete' || data.stage === 'failed' || data.stage === 'partial')) {
+            if (data.calendarsSyncing === 0) stopSyncPoll();
+          }
+        })
+        .catch(function () { /* keep polling */ });
+    }
+
+    tick();
+    state.syncPollTimer = setInterval(tick, 3000);
+  }
+
+  function connectAllCalendars(accountId) {
     var panel = state.panel;
-    if (!panel) return;
-    panel.account = (panel.accounts || []).filter(function (a) { return String(a.id) === String(accountId); })[0];
-    panel.loading = true;
+    var account = ((panel && panel.accounts) || []).filter(function (a) {
+      return String(a.id) === String(accountId);
+    })[0];
+    if (!account) return;
+
+    state.panel = {
+      mode: 'sync-progress',
+      loading: true,
+      accountId: accountId,
+      status: { stage: 'importing', calendarsFound: 0, calendarsAdded: 0, eventsImported: 0, calendars: [] },
+    };
     render();
 
-    net(BASE + '/sync/accounts/' + encodeURIComponent(accountId) + '/calendars')
+    net(BASE + '/sync/accounts/' + encodeURIComponent(accountId) + '/connect-all', {
+      method: 'POST',
+      json: { direction: account.canWrite ? 'two_way' : 'import' },
+    })
       .then(function (data) {
-        if (!state.panel || state.panel.mode !== 'connect') return;
-        state.panel.loading = false;
-        state.panel.providerCalendars = (data && data.calendars) || [];
-        render();
+        showToast(
+          (data && data.calendarsAdded
+            ? data.calendarsAdded + ' calendar' + (data.calendarsAdded === 1 ? '' : 's') + ' connected'
+            : 'Calendars connected') + ' — syncing in the background'
+        );
+        pollSyncStatus(accountId);
+        return load(true);
       })
       .catch(function (err) {
-        if (!state.panel || state.panel.mode !== 'connect') return;
-        state.panel.loading = false;
-        state.panel.error = errorMessage(err, 'Couldn’t list that account’s calendars.');
+        state.panel = {
+          mode: 'sync-progress',
+          loading: false,
+          status: { stage: 'failed', calendars: [], calendarsFound: 0, calendarsAdded: 0, eventsImported: 0 },
+          error: errorMessage(err, 'Couldn’t connect calendars'),
+        };
+        showToast(errorMessage(err, 'Couldn’t connect calendars'), { state: 'failure' });
         render();
       });
   }
 
-  function connectProviderCalendar(externalId, name) {
-    var panel = state.panel;
-    if (!panel || !panel.account) return;
+  function openDayPanel(dateKey) {
+    state.selectedDay = dateKey;
+    state.quickAddFor = null;
+    state.panel = { mode: 'day', dateKey: dateKey };
+    render();
+  }
 
-    net(BASE + '/sync/accounts/' + encodeURIComponent(panel.account.id) + '/connect', {
-      method: 'POST',
-      json: { externalId: externalId, name: name, direction: panel.account.canWrite ? 'two_way' : 'import' },
+  function openWorkPlanEditor(dateKey) {
+    var plan = workPlanFor(dateKey) || {};
+    state.panel = {
+      mode: 'work-plan',
+      dateKey: dateKey,
+      draft: {
+        date: dateKey,
+        status: plan.status || 'in_office',
+        startsAt: plan.startsAt || '08:00',
+        endsAt: plan.endsAt || '17:00',
+        location: plan.location || '',
+        note: plan.note || '',
+        visibility: plan.visibility || 'colleagues',
+      },
+      statuses: state.workStatuses.length
+        ? state.workStatuses
+        : [
+            { id: 'in_office', label: 'In office' },
+            { id: 'remote', label: 'Working remotely' },
+            { id: 'out_of_office', label: 'Out of office' },
+            { id: 'on_leave', label: 'On leave' },
+            { id: 'not_working', label: 'Not working' },
+          ],
+    };
+    render();
+  }
+
+  function saveWorkPlan() {
+    var panel = state.panel;
+    if (!panel || panel.mode !== 'work-plan' || !panel.draft) return;
+    panel.busy = true;
+    render();
+    var draft = panel.draft;
+    net(BASE + '/work-plan', {
+      method: 'PUT',
+      json: {
+        date: draft.date,
+        status: draft.status,
+        startsAt: draft.startsAt || null,
+        endsAt: draft.endsAt || null,
+        location: draft.location || null,
+        note: draft.note || null,
+        visibility: draft.visibility || 'colleagues',
+      },
     })
-      .then(function () {
-        state.panel = null;
-        showToast('Calendar connected — events will appear shortly');
-        return load(true);
+      .then(function (data) {
+        if (data && data.day && data.day.date) {
+          state.workDays[data.day.date] = data.day;
+        }
+        showToast('Work plan saved');
+        state.panel = { mode: 'day', dateKey: draft.date };
+        render();
       })
       .catch(function (err) {
-        showToast(errorMessage(err, 'Couldn’t connect that calendar'), { state: 'failure' });
+        panel.busy = false;
+        showToast(errorMessage(err, 'Couldn’t save work plan'), { state: 'failure' });
+        render();
       });
   }
 
@@ -3056,15 +3372,9 @@
 
     /* Provider connect flow. */
 
-    M.unwired(root, '[data-connect-account]').forEach(function (btn) {
+    M.unwired(root, '[data-connect-all]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        chooseConnectAccount(btn.getAttribute('data-connect-account'));
-      });
-    });
-
-    M.unwired(root, '[data-connect-calendar]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        connectProviderCalendar(btn.getAttribute('data-connect-calendar'), btn.getAttribute('data-connect-name'));
+        connectAllCalendars(btn.getAttribute('data-connect-all'));
       });
     });
 
@@ -3339,7 +3649,9 @@
 
     M.unwired(root, '[data-calendar-panel-close]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        stopSyncPoll();
         state.panel = null;
+        state.quickAddFor = null;
         render();
       });
     });
@@ -3681,21 +3993,102 @@
       });
     });
 
-    M.unwired(root, '[data-calendar-day]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var key = btn.getAttribute('data-calendar-day');
-        var parts = key.split('-');
-        state.weekStart = SCHED.startOfWeek(new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
-        setView('week');
+    M.unwired(root, '[data-calendar-day]').forEach(function (cell) {
+      cell.addEventListener('click', function (e) {
+        if (e.target.closest('[data-calendar-month-event], [data-calendar-day-more], [data-calendar-day-add], [data-calendar-workplan], [data-quick-add-kind]')) {
+          return;
+        }
+        openDayPanel(cell.getAttribute('data-calendar-day'));
+      });
+      cell.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openDayPanel(cell.getAttribute('data-calendar-day'));
+        }
       });
     });
 
-    M.unwired(root, '[data-calendar-day]', 'dbl').forEach(function (btn) {
-      btn.addEventListener('dblclick', function (e) {
-        e.preventDefault();
-        if (!writableCalendars().length) return;
-        state.panel = { mode: 'create', draft: defaultDraft(btn.getAttribute('data-calendar-day')) };
+    M.unwired(root, '[data-calendar-month-event]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = btn.getAttribute('data-calendar-month-event');
+        state.selectedEventId = id;
+        state.panel = { mode: 'view', eventId: id };
+        render();
+      });
+    });
+
+    M.unwired(root, '[data-calendar-day-more]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openDayPanel(btn.getAttribute('data-calendar-day-more'));
+      });
+    });
+
+    M.unwired(root, '[data-calendar-day-add]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        state.quickAddFor = btn.getAttribute('data-calendar-day-add');
+        render();
+      });
+    });
+
+    M.unwired(root, '[data-quick-add-kind]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var kind = btn.getAttribute('data-quick-add-kind');
+        var dateKey = btn.getAttribute('data-quick-add-date');
+        state.quickAddFor = null;
+        if (kind === 'work-status' || kind === 'leave') {
+          openWorkPlanEditor(dateKey);
+          if (kind === 'leave' && state.panel && state.panel.draft) {
+            state.panel.draft.status = 'on_leave';
+            render();
+          }
+          return;
+        }
+        if (!writableCalendars().length && kind !== 'note') {
+          showToast('No writable calendar to add to', { state: 'failure' });
+          return;
+        }
+        var draft = defaultDraft(dateKey);
+        if (kind === 'meeting') draft.title = 'Meeting';
+        if (kind === 'reminder') { draft.title = 'Reminder'; draft.end = draft.start + 0.25; }
+        if (kind === 'note') draft.title = 'Note';
+        state.panel = { mode: 'create', draft: draft };
         state.selectedEventId = null;
+        render();
+      });
+    });
+
+    M.unwired(root, '[data-calendar-workplan]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openDayPanel(btn.getAttribute('data-calendar-workplan'));
+      });
+    });
+
+    M.unwired(root, '[data-workplan-edit]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openWorkPlanEditor(btn.getAttribute('data-workplan-edit'));
+      });
+    });
+
+    M.unwired(root, '[data-workplan-save]').forEach(function (btn) {
+      btn.addEventListener('click', saveWorkPlan);
+    });
+
+    M.unwired(root, '[data-workplan-field]').forEach(function (field) {
+      var evName = field.tagName === 'SELECT' || field.type === 'time' ? 'change' : 'input';
+      field.addEventListener(evName, function () {
+        if (!state.panel || !state.panel.draft) return;
+        state.panel.draft[field.getAttribute('data-workplan-field')] = field.value;
+      });
+    });
+
+    M.unwired(root, '[data-calendar-day-create]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.panel = { mode: 'create', draft: defaultDraft(btn.getAttribute('data-calendar-day-create')) };
         render();
       });
     });
@@ -3773,6 +4166,15 @@
 
   /* ── mount ───────────────────────────────────────────────── */
 
+  function openWorkPlan(dateKey) {
+    var key = dateKey || dateKeyOf(new Date());
+    if (!state.el) {
+      window.__TMA_OPEN_WORKPLAN = key;
+      return;
+    }
+    openWorkPlanEditor(key);
+  }
+
   function mount(root) {
     if (!root || !SCHED) return;
 
@@ -3780,7 +4182,13 @@
     state.weekStart = SCHED.startOfWeek(new Date());
     state.monthDate = startOfMonth(new Date());
 
-    load(false);
+    load(false).then(function () {
+      if (window.__TMA_OPEN_WORKPLAN) {
+        var key = window.__TMA_OPEN_WORKPLAN;
+        window.__TMA_OPEN_WORKPLAN = null;
+        openWorkPlanEditor(key);
+      }
+    });
   }
 
   /* ── today's event count (nav + home shortcut badges) ─────── */
@@ -3848,5 +4256,6 @@
   window.TMACalendar = {
     mount: mount,
     getTodayEventCount: getTodayEventCount,
+    openWorkPlan: openWorkPlan,
   };
 })();

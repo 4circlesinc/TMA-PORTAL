@@ -8,6 +8,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
+use App\Http\Controllers\WorkPlanController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ConnectorsController;
@@ -361,11 +362,19 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/sync/accounts', [CalendarSyncController::class, 'accounts'])->name('sync.accounts');
         Route::get('/sync/accounts/{accountId}/calendars', [CalendarSyncController::class, 'providerCalendars'])->name('sync.provider-calendars');
         Route::post('/sync/accounts/{accountId}/connect', [CalendarSyncController::class, 'connect'])->name('sync.connect');
+        Route::post('/sync/accounts/{accountId}/connect-all', [CalendarSyncController::class, 'connectAll'])->name('sync.connect-all');
+        Route::get('/sync/status', [CalendarSyncController::class, 'syncStatus'])->name('sync.status');
+        Route::get('/sync/accounts/{accountId}/status', [CalendarSyncController::class, 'syncStatus'])->name('sync.account-status');
         Route::put('/sync/{uuid}', [CalendarSyncController::class, 'updateSync'])->name('sync.update');
         Route::post('/sync/{uuid}/run', [CalendarSyncController::class, 'sync'])->name('sync.run');
         Route::delete('/sync/{uuid}', [CalendarSyncController::class, 'disconnect'])->name('sync.disconnect');
         Route::get('/sync/{uuid}/conflicts', [CalendarSyncController::class, 'conflicts'])->name('sync.conflicts');
         Route::post('/events/{uuid}/resolve-conflict', [CalendarSyncController::class, 'resolveConflict'])->name('sync.resolve');
+
+        Route::get('/work-plan', [WorkPlanController::class, 'index'])->name('work-plan.index');
+        Route::get('/work-plan/{date}', [WorkPlanController::class, 'show'])->name('work-plan.show');
+        Route::put('/work-plan', [WorkPlanController::class, 'upsert'])->name('work-plan.upsert');
+        Route::delete('/work-plan/{date}', [WorkPlanController::class, 'destroy'])->name('work-plan.destroy');
 
         Route::get('/calendars/{uuid}/history', [CalendarController::class, 'history'])->name('calendars.history');
         Route::get('/calendars/{uuid}/members', [CalendarController::class, 'members'])->name('calendars.members');

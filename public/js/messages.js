@@ -168,8 +168,14 @@
     return isDirectThread(row) ? { lastSeen: 'Last seen recently' } : { label: 'Group chat' };
   }
 
+  function workStatusLabel(row) {
+    var ws = row && row.workStatus;
+    return (ws && ws.label) ? String(ws.label) : '';
+  }
+
   function renderPresence(row) {
     var presence = threadPresence(row);
+    var workLabel = workStatusLabel(row);
 
     // A live typing / recording indicator outranks online-or-last-seen.
     // Live typing is not part of `row.presence` — it is transient socket
@@ -189,8 +195,16 @@
       return (
         '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--online">' +
         '<span class="tma-dash__messages-chat-presence-dot" aria-hidden="true"></span>' +
-        '<span>Online</span></span>'
+        '<span>Online</span></span>' +
+        (workLabel
+          ? '<span class="tma-dash__messages-chat-workstatus">' + esc(workLabel) + '</span>'
+          : '')
       );
+    }
+    // Prefer a visible work status over a generic offline label when present.
+    if (workLabel) {
+      return '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-workstatus">' +
+        esc(workLabel) + '</span>';
     }
     var label = presence.label || presence.lastSeen || 'Offline';
     return '<span class="tma-dash__messages-chat-presence">' + esc(label) + '</span>';
@@ -3407,7 +3421,11 @@
             '<span class="tma-dash__messages-person-name">' +
             esc(member.name || 'Unknown') + (isMe ? ' (you)' : '') + '</span>' +
             '<span class="tma-dash__messages-person-meta">' +
-            (isAdmin ? 'Administrator' : 'Member') + '</span>' +
+            esc(
+              (member.workStatus && member.workStatus.label)
+                ? member.workStatus.label
+                : (isAdmin ? 'Administrator' : 'Member')
+            ) + '</span>' +
             '</span>' +
             // No management controls against yourself: leaving is its own
             // action, and self-demotion is the last-admin trap.
@@ -3483,6 +3501,9 @@
       '<h2 class="tma-dash__messages-profile-name">' + esc(p.name) + '</h2>' +
       (presence
         ? '<p class="tma-dash__messages-profile-presence">' + esc(presence) + '</p>'
+        : '') +
+      (p.workStatus && p.workStatus.label
+        ? '<p class="tma-dash__messages-profile-workstatus">' + esc(p.workStatus.label) + '</p>'
         : '') +
       '</div>' +
 

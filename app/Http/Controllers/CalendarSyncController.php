@@ -155,6 +155,176 @@ class CalendarSyncController extends Controller
         ]);
     }
 
+    /**
+     * One-click connect: discover every calendar the account can see, add each
+     * that is not already mirrored, and queue background sync for all of them.
+     * The user never authorises calendars one-by-one after the account OAuth.
+     */
+    public function connectAll(Request $request, int $accountId): JsonResponse
+    {
+        $user = $request->user();
+        $account = $this->account($user, $accountId);
+
+        abort_unless($account->canReadCalendar(), 422,
+            'This connection cannot read calendars — reconnect and allow calendar access.');
+
+        $data = $request->validate([
+            'direction' => ['sometimes', Rule::in(['two_way', 'import', 'export'])],
+            'monthsBack' => ['sometimes', 'integer', 'min:1', 'max:60'],
+        ]);
+
+        $direction = $data['direction'] ?? 'two_way';
+        if (in_array($direction, ['two_way', 'export'], true) && ! $account->canWriteCalendar()) {
+            $direction = 'import';
+        }
+
+        try {
+            $remote = ProviderFactory::for($account)->listCalendars();
+        } catch (CalendarSyncException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $already = Calendar::where('connected_account_id', $account->id)
+            ->pluck('external_id')
+            ->all();
+
+        $palette = CalendarColours::keys();
+        $added = [];
+        $skipped = 0;
+        $failed = [];
+        $colourIndex = 0;
+
+        foreach ($remote as $remoteCal) {
+            $externalId = (string) ($remoteCal['id'] ?? '');
+            if ($externalId === '') {
+                continue;
+            }
+            if (in_array($externalId, $already, true)) {
+                $skipped++;
+
+                continue;
+            }
+
+            try {
+                $calendar = Calendar::create([
+                    'uuid' => (string) Str::uuid(),
+                    'name' => $remoteCal['name'] ?? 'Calendar',
+                    'colour' => $palette[$colourIndex % count($palette)] ?? CalendarColours::DEFAULT,
+                    'calendar_type' => Calendar::TYPE_PERSONAL,
+                    'owner_id' => $user->id,
+                    'created_by' => $user->id,
+                    'timezone' => CalendarProvisioner::defaultTimezone($user),
+                    'visibility' => 'private',
+                    'source' => $account->provider,
+                    'connected_account_id' => $account->id,
+                    'external_id' => $externalId,
+                    'sync_direction' => (! empty($remoteCal['canWrite']) && $direction !== 'import')
+                        ? $direction
+                        : 'import',
+                    'sync_window_start' => now()->subMonths($data['monthsBack'] ?? 3),
+                    'subscription_status' => 'syncing',
+                ]);
+
+                CalendarProvisioner::subscribe($user, $calendar);
+                CalendarAudit::record(
+                    CalendarAudit::CALENDAR_CONNECTED,
+                    $user,
+                    $calendar,
+                    context: ['provider' => $account->provider, 'bulk' => true],
+                );
+                SyncProviderCalendar::dispatch($calendar->id);
+
+                $added[] = $calendar->fresh(['owner', 'connectedAccount'])
+                    ->toRecord($user, CalendarAccess::ROLE_OWNER, null);
+                $already[] = $externalId;
+                $colourIndex++;
+            } catch (\Throwable $e) {
+                $failed[] = [
+                    'externalId' => $externalId,
+                    'name' => $remoteCal['name'] ?? 'Calendar',
+                    'error' => mb_substr($e->getMessage(), 0, 200),
+                ];
+            }
+        }
+
+        return response()->json([
+            'calendarsFound' => count($remote),
+            'calendarsAdded' => count($added),
+            'calendarsSkipped' => $skipped,
+            'calendarsFailed' => $failed,
+            'calendars' => $added,
+            'account' => [
+                'id' => $account->id,
+                'provider' => $account->provider,
+                'email' => $account->email,
+            ],
+        ]);
+    }
+
+    /**
+     * Aggregate sync progress for one connected account (or every provider
+     * calendar the user owns). Safe to poll while the user leaves the page —
+     * sync jobs keep running on the queue.
+     */
+    public function syncStatus(Request $request, ?int $accountId = null): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CalendarAccess::isStaff($user), 403, 'You cannot view calendar sync status.');
+
+        $query = Calendar::query()
+            ->where('owner_id', $user->id)
+            ->whereIn('source', [Calendar::SOURCE_GOOGLE, Calendar::SOURCE_MICROSOFT])
+            ->whereNotNull('connected_account_id');
+
+        if ($accountId) {
+            $this->account($user, $accountId);
+            $query->where('connected_account_id', $accountId);
+        }
+
+        $calendars = $query->withCount('events')->get();
+
+        $rows = $calendars->map(function (Calendar $c) {
+            return [
+                'id' => $c->uuid,
+                'name' => $c->name,
+                'status' => $c->subscription_status ?: 'ok',
+                'error' => $c->subscription_error,
+                'eventCount' => (int) $c->events_count,
+                'syncedAt' => $c->subscription_synced_at?->toIso8601String(),
+                'attemptedAt' => $c->subscription_attempted_at?->toIso8601String(),
+            ];
+        })->values();
+
+        $syncing = $rows->where('status', 'syncing')->count();
+        $ok = $rows->where('status', 'ok')->count();
+        $error = $rows->where('status', 'error')->count();
+        $eventsImported = (int) $rows->sum('eventCount');
+        $lastSynced = $calendars->max('subscription_synced_at');
+
+        $stage = 'idle';
+        if ($syncing > 0) {
+            $stage = 'importing';
+        } elseif ($error > 0 && $ok > 0) {
+            $stage = 'partial';
+        } elseif ($error > 0 && $ok === 0) {
+            $stage = 'failed';
+        } elseif ($ok > 0) {
+            $stage = 'complete';
+        }
+
+        return response()->json([
+            'stage' => $stage,
+            'calendarsFound' => $rows->count(),
+            'calendarsAdded' => $rows->count(),
+            'calendarsSyncing' => $syncing,
+            'calendarsOk' => $ok,
+            'calendarsError' => $error,
+            'eventsImported' => $eventsImported,
+            'lastSyncedAt' => $lastSynced?->toIso8601String(),
+            'calendars' => $rows,
+        ]);
+    }
+
     /** Change how a connected calendar syncs, or force a sync now. */
     public function updateSync(Request $request, string $uuid): JsonResponse
     {

@@ -71,6 +71,7 @@
     return '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
       '<div class="tma-dash__toolbar-actions">' +
         '<button type="button" class="tma-dash__tool-btn" aria-label="Add file" data-files-add><img src="' + ICONS.Plus + '" alt=""></button>' +
+        '<input type="file" hidden multiple data-files-add-input>' +
         '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-files-filter aria-pressed="false"><img src="' + ICONS.FunnelSimple + '" alt=""></button>' +
         '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-files-sort aria-pressed="false"><img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
         '<div class="tma-dash__toolbar-bulk" data-files-bulk' + bulkHidden + '>' +
@@ -104,11 +105,19 @@
       '</nav></div>';
   }
 
+  function avatarSrc(avatar, name) {
+    if (window.TMACurrentUser && TMACurrentUser.avatarSrc) {
+      return TMACurrentUser.avatarSrc(avatar, name);
+    }
+    if (avatar && /^(https?:|\/(storage|media)\/|data:)/.test(avatar)) return avatar;
+    return AVATAR + 'Avatar3d01.png';
+  }
+
   function renderRow(row, index, checked) {
     var selected = checked ? ' tma-dash__ctr--selected' : '';
-    return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row">' +
+    return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row" data-files-row>' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-files-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + escapeHtml(row.name) + '"></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--activity">' +
+      '<div class="tma-dash__cc tma-dash__cc--activity" data-files-open>' +
         '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + escapeHtml(row.tone) + '">' +
           '<img src="' + fileIconSrc(row.icon, row.name) + '" alt="" width="16" height="16">' +
         '</span>' +
@@ -118,7 +127,9 @@
         '</span>' +
       '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--uploader">' +
-        '<img src="' + AVATAR + escapeHtml(row.avatar) + '.png" alt="">' +
+        '<button type="button" class="tma-dash__files-uploader-btn" data-files-uploader-photo aria-label="View ' + escapeHtml(row.uploader) + ' photo">' +
+          '<img src="' + escapeHtml(row.avatarUrl) + '" alt="">' +
+        '</button>' +
         '<span class="tma-dash__cc-truncate">' + escapeHtml(row.uploader) + '</span>' +
       '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--size"><span class="tma-dash__cc-truncate">' + escapeHtml(row.size) + '</span></div>' +
@@ -148,6 +159,7 @@
   function mapApiFile(f) {
     var name = f.name || 'File';
     var uploader = (f.uploadedBy && f.uploadedBy.name) || (f.owner && f.owner.name) || 'Someone';
+    var avatar = (f.uploadedBy && f.uploadedBy.avatar) || (f.owner && f.owner.avatar) || null;
     var ext = (f.extension || name.split('.').pop() || '').toLowerCase();
     var tone = 'grey';
     if (ext === 'pdf') tone = 'red';
@@ -155,13 +167,20 @@
     else if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') tone = 'green';
     else if (/png|jpe?g|gif|webp/.test(ext)) tone = 'purple';
     return {
+      id: f.id,
       name: name,
       size: f.sizeLabel || '—',
+      bytes: f.size || 0,
       time: formatWhen(f.uploadedAt || f.createdAt || f.updatedAt),
       uploader: uploader,
-      avatar: 'Avatar3d01',
+      avatarUrl: avatarSrc(avatar, uploader),
+      avatarRaw: avatar,
       tone: tone,
-      icon: f.icon || 'File',
+      icon: f.icon || ((window.TMAFileIcons && TMAFileIcons.iconKeyFor) ? TMAFileIcons.iconKeyFor(name) : 'File'),
+      mime: f.mime || '',
+      previewUrl: f.previewUrl || null,
+      downloadUrl: f.downloadUrl || null,
+      folder: (f.folder && f.folder.name) || '',
     };
   }
 
@@ -342,25 +361,86 @@
         });
         syncSelectAll();
       }
+
+      var addBtn = container.querySelector('[data-files-add]');
+      var addInput = container.querySelector('[data-files-add-input]');
+      if (addBtn && addInput) {
+        addBtn.addEventListener('click', function () { addInput.click(); });
+        addInput.addEventListener('change', function () {
+          if (addInput.files && addInput.files.length && window.TMAUpload) {
+            window.TMAUpload.add(addInput.files, { folderId: null });
+          }
+          addInput.value = '';
+        });
+      }
+
+      container.querySelectorAll('[data-files-open]').forEach(function (cell) {
+        cell.addEventListener('click', function () {
+          var rowEl = cell.closest('[data-row-index]');
+          var idx = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : -1;
+          var row = filtered[idx];
+          if (!row) return;
+          openFilePreview(row);
+        });
+      });
+
+      container.querySelectorAll('[data-files-uploader-photo]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var rowEl = btn.closest('[data-row-index]');
+          var idx = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : -1;
+          var row = filtered[idx];
+          if (!row || !row.avatarRaw || !window.TMAPortalLightbox) return;
+          TMAPortalLightbox.open([{
+            name: row.uploader || 'Profile photo',
+            mime: 'image/jpeg',
+            size: 0,
+            url: row.avatarRaw,
+            canDownload: false,
+          }], 0);
+        });
+      });
+    }
+
+    function openFilePreview(row) {
+      var url = row.previewUrl || row.downloadUrl;
+      if (!url) return;
+      if (window.TMAPortalLightbox) {
+        TMAPortalLightbox.open([{
+          name: row.name,
+          mime: row.mime || '',
+          size: row.bytes || 0,
+          url: url,
+          downloadUrl: row.downloadUrl || url,
+        }], 0);
+        return;
+      }
+      window.open(url, '_blank', 'noopener');
+    }
+
+    function reloadFiles() {
+      var siteRoot = window.__TMA_SITE_ROOT || '';
+      fetch(siteRoot + '/portal/files?section=recent&perPage=50', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j) return;
+          state.rows = (j.files || []).map(mapApiFile);
+          state.page = 1;
+          render();
+        })
+        .catch(function () { /* keep current rows */ });
     }
 
     render();
+    reloadFiles();
 
-    // Live recent files for the Overview → Files tab.
-    var root = window.__TMA_SITE_ROOT || '';
-    fetch(root + '/portal/files?section=recent&perPage=50', {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (!j) return;
-        var files = j.files || [];
-        state.rows = files.map(mapApiFile);
-        state.page = 1;
-        render();
-      })
-      .catch(function () { /* keep empty state */ });
+    document.addEventListener('tma:upload-complete', function () {
+      if (!container.isConnected) return;
+      reloadFiles();
+    });
   }
 
   window.TMAOverviewFiles = { mount: mount };

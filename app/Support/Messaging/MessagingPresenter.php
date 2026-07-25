@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\MessageReaction;
 use App\Models\User;
+use App\Models\WorkDay;
 use App\Models\UserBlock;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -97,6 +98,9 @@ class MessagingPresenter
             'presence' => $counterpart
                 ? PresenceService::forViewer($counterpart, $viewer)
                 : ['label' => 'Group chat'],
+            'workStatus' => $counterpart
+                ? WorkDay::publicStatusFor($counterpart)
+                : null,
             'counterpartId' => $counterpart?->id,
             'description' => $conversation->description,
             // The firm's own chat: managed by administrators, and nobody

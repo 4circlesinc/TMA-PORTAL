@@ -30,21 +30,63 @@ class MicrosoftCalendarProvider implements CalendarProvider
 
     public function listCalendars(): array
     {
-        // This runs inside the interactive "connect a calendar" request, so it
-        // must fail fast rather than let a slow provider push the whole request
-        // past the gateway timeout (a 504). Background sync keeps the full 30s.
+        // Interactive connect must fail fast (gateway 504). Pull every calendar
+        // the mailbox can see: the flat list plus each calendar group (shared /
+        // group / department calendars Graph surfaces that way).
+        $byId = [];
+
         $response = $this->request(timeout: 12)->get(self::BASE.'/me/calendars');
         $this->assertOk($response, 'list calendars');
+        foreach ($response->json('value', []) as $c) {
+            $mapped = $this->mapCalendar($c);
+            if ($mapped) {
+                $byId[$mapped['id']] = $mapped;
+            }
+        }
 
-        return collect($response->json('value', []))
-            ->map(fn (array $c) => [
-                'id' => $c['id'],
-                'name' => $c['name'] ?? 'Calendar',
-                'colour' => $c['hexColor'] ?? null,
-                'primary' => (bool) ($c['isDefaultCalendar'] ?? false),
-                'canWrite' => (bool) ($c['canEdit'] ?? false),
-            ])
-            ->all();
+        try {
+            $groups = $this->request(timeout: 12)->get(self::BASE.'/me/calendarGroups');
+            if ($groups->successful()) {
+                foreach ($groups->json('value', []) as $group) {
+                    $gid = $group['id'] ?? null;
+                    if (! $gid) {
+                        continue;
+                    }
+                    $page = $this->request(timeout: 12)->get(
+                        self::BASE.'/me/calendarGroups/'.rawurlencode($gid).'/calendars'
+                    );
+                    if (! $page->successful()) {
+                        continue;
+                    }
+                    foreach ($page->json('value', []) as $c) {
+                        $mapped = $this->mapCalendar($c);
+                        if ($mapped) {
+                            $byId[$mapped['id']] = $mapped;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Flat /me/calendars is enough; group expansion is best-effort.
+        }
+
+        return array_values($byId);
+    }
+
+    /** @param  array<string, mixed>  $c */
+    private function mapCalendar(array $c): ?array
+    {
+        if (empty($c['id'])) {
+            return null;
+        }
+
+        return [
+            'id' => $c['id'],
+            'name' => $c['name'] ?? 'Calendar',
+            'colour' => $c['hexColor'] ?? null,
+            'primary' => (bool) ($c['isDefaultCalendar'] ?? false),
+            'canWrite' => (bool) ($c['canEdit'] ?? false),
+        ];
     }
 
     public function changedEvents(string $externalCalendarId, ?string $cursor, string $windowStart): array
