@@ -31,6 +31,12 @@ class RedirectIfTwoFactorAuthenticatable extends FortifyAction
             return $next($request);
         }
 
+        // Email (and any form) login already offered "stay signed in" — don't
+        // ask again on this device after the challenge succeeds.
+        if ($request->has('remember')) {
+            $request->session()->put('stay_signed_in.mark_prompted', true);
+        }
+
         return $this->twoFactorChallengeResponse($request, $user);
     }
 }

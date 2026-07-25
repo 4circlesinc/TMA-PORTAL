@@ -90,6 +90,16 @@ class CalendarProviderSyncTest extends TestCase
         $this->assertSame(3, Calendar::where('connected_account_id', $account->id)->count());
         Queue::assertPushed(SyncProviderCalendar::class, 3);
 
+        $holidays = Calendar::where('external_id', 'cal-holidays')->first();
+        $this->assertNotNull($holidays);
+        $this->assertSame('import', $holidays->sync_direction);
+        $this->assertFalse($holidays->remote_can_write);
+        $this->assertFalse($holidays->toRecord($user, 'owner')['sync']['canWrite']);
+
+        $primary = Calendar::where('external_id', 'cal-primary')->first();
+        $this->assertTrue($primary->remote_can_write);
+        $this->assertTrue($primary->toRecord($user, 'owner')['sync']['canWrite']);
+
         $this->actingAs($user)
             ->getJson('/portal/calendar/sync/status')
             ->assertOk()
@@ -181,6 +191,43 @@ class CalendarProviderSyncTest extends TestCase
 
         $this->assertSame(0, $stats['pushed']);
         $this->assertSame([], $provider->created);
+    }
+
+    public function test_a_read_only_remote_calendar_never_pushes(): void
+    {
+        [$user, $calendar] = $this->connectedCalendar([
+            'sync_direction' => 'two_way',
+            'remote_can_write' => false,
+        ]);
+        $this->localEvent($calendar, 'Should not push');
+
+        $provider = new FakeCalendarProvider([]);
+        $this->fakeProvider($provider);
+
+        $stats = (new CalendarSynchronizer($calendar))->run();
+
+        $this->assertSame(0, $stats['pushed']);
+        $this->assertSame([], $provider->created);
+        $calendar->refresh();
+        $this->assertSame('ok', $calendar->subscription_status);
+    }
+
+    public function test_a_single_push_failure_marks_the_calendar_partial(): void
+    {
+        [$user, $calendar] = $this->connectedCalendar(['sync_direction' => 'two_way']);
+        $this->localEvent($calendar, 'Bad event');
+
+        $provider = new FakeCalendarProvider([]);
+        $provider->failCreateWith = 'Remote rejected write';
+        $this->fakeProvider($provider);
+
+        $stats = (new CalendarSynchronizer($calendar))->run();
+
+        $this->assertSame(0, $stats['pushed']);
+        $this->assertSame(1, $stats['failed']);
+        $calendar->refresh();
+        $this->assertSame('partial', $calendar->subscription_status);
+        $this->assertStringContainsString('1 event could not be synchronized', $calendar->subscription_error);
     }
 
     /* ── pushing ─────────────────────────────────────────────── */
@@ -556,6 +603,8 @@ class FakeCalendarProvider implements CalendarProvider
 
     public ?string $failWith = null;
 
+    public ?string $failCreateWith = null;
+
     /** @var array<int, array<string, mixed>> */
     public array $calendars = [
         ['id' => 'primary', 'name' => 'Primary', 'colour' => null, 'primary' => true, 'canWrite' => true],
@@ -594,6 +643,10 @@ class FakeCalendarProvider implements CalendarProvider
 
     public function createEvent(string $externalCalendarId, array $event): array
     {
+        if ($this->failCreateWith) {
+            throw new CalendarSyncException($this->failCreateWith);
+        }
+
         $id = 'created-'.(++$this->counter);
         $this->created[] = ['externalId' => $id, 'event' => $event];
 

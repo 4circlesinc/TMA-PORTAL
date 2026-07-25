@@ -119,7 +119,9 @@
     if (item.actor && item.actor.name) return item.actor.name;
     if (item.meta && item.meta.from_name) return item.meta.from_name;
     var title = String(item.title || '');
-    var m = title.match(/^New email from\s+(.+)$/i);
+    var m = title.match(/^New email from\s+(.+)$/i)
+      || title.match(/^(.+?)\s+sent you an email$/i)
+      || title.match(/^(.+?)\s+replied to your email$/i);
     if (m) return m[1];
     m = String(item.message || '').match(/^From\s+(.+?)\s+[—-]/);
     return m ? m[1] : '';

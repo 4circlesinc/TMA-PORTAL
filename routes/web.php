@@ -8,7 +8,6 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
-use App\Http\Controllers\WorkPlanController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ConnectorsController;
@@ -33,9 +32,9 @@ use App\Http\Controllers\LegacyPageController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\MessagingAttachmentController;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingGroupController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
@@ -44,6 +43,8 @@ use App\Http\Controllers\Signatures\PublicSigningController;
 use App\Http\Controllers\Signatures\SignatureFieldController;
 use App\Http\Controllers\Signatures\SignatureRequestController;
 use App\Http\Controllers\SocialAuthController;
+use App\Http\Controllers\StaySignedInController;
+use App\Http\Controllers\WorkPlanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -527,6 +528,17 @@ Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'ca
 Route::post('/auth/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])
     ->middleware(['auth', 'verified'])
     ->name('social.disconnect');
+
+/*
+ * Stay signed in for 30 days — asked after OAuth when the login-page
+ * checkbox did not already decide. Must be authenticated to choose.
+ */
+Route::middleware('auth')->group(function () {
+    Route::get('/auth/stay-signed-in', [StaySignedInController::class, 'show'])
+        ->name('stay-signed-in.show');
+    Route::post('/auth/stay-signed-in', [StaySignedInController::class, 'store'])
+        ->name('stay-signed-in.store');
+});
 
 /*
  * Public signing links (no login, no portal). The token is the only

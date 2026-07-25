@@ -46,12 +46,17 @@
           </div>
         @endif
 
+        <label class="tma-auth__check" data-stay-signed-in-wrap>
+          <input type="checkbox" value="1" data-stay-signed-in>
+          <span>Stay signed in for 30 days</span>
+        </label>
+
         <div class="tma-auth__social" data-auth-providers>
-          <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'google') }}">
+          <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'google') }}" data-social-remember>
             <img src="/images/icons/brands/Google16.svg" alt="" width="16" height="16" aria-hidden="true">
             <span>Sign in with Google</span>
           </a>
-          <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'microsoft') }}">
+          <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'microsoft') }}" data-social-remember>
             <img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16" aria-hidden="true">
             <span>Sign in with Microsoft</span>
           </a>
@@ -63,6 +68,7 @@
 
         <form class="tma-auth__form" method="POST" action="{{ route('login') }}" hidden data-auth-email>
           @csrf
+          <input type="hidden" name="remember" value="0" data-stay-signed-in-field>
           <button type="button" class="tma-auth__back" data-show-providers>
             <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"/></svg>
             <span>All sign in options</span>
@@ -78,10 +84,7 @@
           </label>
 
           <div class="tma-auth__row-split">
-            <label class="tma-auth__check">
-              <input type="checkbox" name="remember" value="1">
-              <span>Stay signed in</span>
-            </label>
+            <span></span>
             <a class="tma-auth__forgot" href="{{ route('password.request') }}">Forgot password?</a>
           </div>
 
@@ -103,7 +106,28 @@
     var emailForm = document.querySelector("[data-auth-email]");
     var showEmail = document.querySelector("[data-show-email]");
     var showProviders = document.querySelector("[data-show-providers]");
+    var stay = document.querySelector("[data-stay-signed-in]");
+    var stayField = document.querySelector("[data-stay-signed-in-field]");
+    var socialLinks = document.querySelectorAll("[data-social-remember]");
     if (!providers || !emailForm || !showEmail || !showProviders) return;
+
+    function syncStaySignedIn() {
+      var on = !!(stay && stay.checked);
+      if (stayField) stayField.value = on ? "1" : "0";
+      socialLinks.forEach(function (link) {
+        try {
+          var url = new URL(link.href, location.origin);
+          if (on) url.searchParams.set("remember", "1");
+          else url.searchParams.set("remember", "0");
+          link.href = url.pathname + url.search;
+        } catch (e) {}
+      });
+    }
+
+    if (stay) {
+      stay.addEventListener("change", syncStaySignedIn);
+      syncStaySignedIn();
+    }
 
     function toEmail(focus) {
       providers.hidden = true;
@@ -126,6 +150,7 @@
     /* remember the choice so the fields are visible on the next visit -
        password managers can only autofill what they can see at load */
     emailForm.addEventListener("submit", function () {
+      syncStaySignedIn();
       try { localStorage.setItem("tma.authMethod", "email"); } catch (e) {}
     });
     var prefersEmail = false;

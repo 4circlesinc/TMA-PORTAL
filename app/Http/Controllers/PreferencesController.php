@@ -23,7 +23,7 @@ class PreferencesController extends Controller
         // Calendar page chrome, remembered per user so the page reopens the
         // way it was left. Which calendars are ticked is not here — that is
         // server state on calendar_subscriptions.
-        'calendarView' => 'week',
+        'calendarView' => 'month',
         'calendarSidebarOpen' => true,
     ];
 
@@ -33,7 +33,7 @@ class PreferencesController extends Controller
         'language' => ['string', 'max:16', 'regex:/^[a-z]{2}(-[a-z]{2,7})?$/i'],
         'voice' => ['string', 'max:32'],
         'sidebarStyle' => ['string', 'in:standard,hover'],
-        'calendarView' => ['string', 'in:week,month,agenda'],
+        'calendarView' => ['string', 'in:week,month,agenda,day,work_week'],
         'calendarSidebarOpen' => ['boolean'],
         // Nested toast prefs — validated + cleaned by ToastSettings.
         'toasts' => ['array'],

@@ -14821,7 +14821,7 @@
 
 .tma-dash__clients-schedule-days {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--schedule-day-count, 7), minmax(0, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-8);
   padding-inline: 2px;
@@ -15081,6 +15081,14 @@
 
 .tma-dash__calendar-toolbar .tma-dash__calendar-view-tabs {
   flex-shrink: 0;
+  --tab-track-padding: 2px;
+  --tab-track-gap: 2px;
+  --tab-track-radius: 10px;
+  --tab-min-height: 24px;
+  --tab-padding-y: 2px;
+  --tab-padding-x: 8px;
+  --tab-radius: 8px;
+  font-size: 12px;
 }
 
 .tma-dash__calendar-toolbar .tma-dash__clients-add-btn--toolbar {

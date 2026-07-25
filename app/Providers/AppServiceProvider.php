@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Support\StaySignedIn;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
@@ -38,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
         // auth event gets recorded twice.
 
         Event::listen(SocialiteWasCalled::class, MicrosoftExtendSocialite::class);
+
+        // "Stay signed in for 30 days" — Laravel's default remember cookie is
+        // much longer; keep the portal restore window aligned with the copy.
+        Auth::guard('web')->setRememberDuration(StaySignedIn::minutes());
 
         // Public signing links are the only unauthenticated write endpoints in
         // the app. Keyed by IP: a signer legitimately saves progress often, so

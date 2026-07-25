@@ -695,14 +695,12 @@
       ? window.TMAMorph.on
       : function (node, type, fn) { if (node) node.addEventListener(type, fn); };
 
-    pick('.tma-dash__overview-day').forEach(function (day) {
-      day.addEventListener('click', function () {
-        el.querySelectorAll('.tma-dash__overview-day').forEach(function (d) {
-          d.classList.remove('tma-dash__overview-day--active');
-        });
-        day.classList.add('tma-dash__overview-day--active');
-      });
-    });
+    if (window.TMAOverview && typeof window.TMAOverview.bindRoadActions === 'function') {
+      window.TMAOverview.bindRoadActions(el);
+    }
+    if (window.TMAOverview && typeof window.TMAOverview.refreshRoad === 'function') {
+      window.TMAOverview.refreshRoad(el);
+    }
 
     pick('[data-home-shortcut]').forEach(function (b) {
       b.addEventListener('click', function () {

@@ -176,7 +176,9 @@ final class NotificationPresenter
 
         if ($isEmail && empty($meta['from_name'])) {
             $title = (string) $n->title;
-            if (preg_match('/^New email from\s+(.+)$/u', $title, $m)) {
+            if (preg_match('/^New email from\s+(.+)$/u', $title, $m)
+                || preg_match('/^(.+?)\s+sent you an email$/u', $title, $m)
+                || preg_match('/^(.+?)\s+replied to your email$/u', $title, $m)) {
                 $meta['from_name'] = trim($m[1]);
             } elseif (preg_match('/^From\s+(.+?)\s+[—-]/u', (string) $n->message, $m)) {
                 $meta['from_name'] = trim($m[1]);

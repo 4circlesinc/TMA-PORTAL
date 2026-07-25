@@ -809,6 +809,9 @@
       root.classList.toggle('tma-dash--messages', name === 'messages');
       root.classList.toggle('tma-dash--feed', name === 'feed');
       root.classList.toggle('tma-dash--calendar', name === 'calendar');
+      if (name === 'calendar' && window.TMACalendar && typeof window.TMACalendar.activate === 'function') {
+        window.TMACalendar.activate();
+      }
       root.classList.toggle('tma-dash--clients', name === 'clients');
       /* Always clear signature-wizard scroll lock when leaving that flow.
          A stuck tma-dash--signatures-wizard class kills content scrolling. */

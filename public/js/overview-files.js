@@ -46,6 +46,11 @@
     return String(index);
   }
 
+  function cap(s) {
+    s = String(s || '');
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '—';
+  }
+
   function renderSearchBar(state) {
     var classes = ['tma-dash__toolbar-search'];
     if (state.searchFocused || state.search) classes.push('tma-dash__toolbar-search--focused');
@@ -63,17 +68,50 @@
     '</div>';
   }
 
+  function menuItems(items, current) {
+    return items.map(function (it) {
+      var active = String(it.value) === String(current) ? ' tma-dash__menu-item--active' : '';
+      return '<button type="button" class="tma-dash__menu-item' + active + '" role="menuitem" data-head-dropdown-item="' +
+        escapeHtml(it.value) + '">' + escapeHtml(it.label) + '</button>';
+    }).join('');
+  }
+
+  function toolMenu(btnAttr, aria, iconSrc, items, current, menuLabel) {
+    return '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap ' + btnAttr + '>' +
+      '<button type="button" class="tma-dash__tool-btn" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false" aria-label="' + escapeHtml(aria) + '">' +
+      '<img src="' + iconSrc + '" alt=""></button>' +
+      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--start" data-head-dropdown-menu hidden role="menu" aria-label="' + escapeHtml(menuLabel) + '">' +
+      menuItems(items, current) +
+      '</div></div>';
+  }
+
   function renderToolbar(state) {
     var count = Object.keys(state.selected).length;
     var bulkHidden = count === 0 ? ' hidden' : '';
     var selectionLabel = count === 1 ? '1 Selected' : count + ' Selected';
 
+    var filterItems = [
+      { value: '', label: 'All types' },
+      { value: 'document', label: 'Documents' },
+      { value: 'spreadsheet', label: 'Spreadsheets' },
+      { value: 'image', label: 'Images' },
+      { value: 'pdf', label: 'PDF' },
+      { value: 'other', label: 'Other' },
+    ];
+    var sortItems = [
+      { value: 'name', label: 'File name' },
+      { value: 'uploaded', label: 'Uploaded' },
+      { value: 'modified', label: 'Modified' },
+      { value: 'size', label: 'Size' },
+      { value: 'uploader', label: 'Uploader' },
+    ];
+
     return '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
       '<div class="tma-dash__toolbar-actions">' +
         '<button type="button" class="tma-dash__tool-btn" aria-label="Add file" data-files-add><img src="' + ICONS.Plus + '" alt=""></button>' +
         '<input type="file" hidden multiple data-files-add-input>' +
-        '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-files-filter aria-pressed="false"><img src="' + ICONS.FunnelSimple + '" alt=""></button>' +
-        '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-files-sort aria-pressed="false"><img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
+        toolMenu('data-files-filter-menu', 'Filter', ICONS.FunnelSimple, filterItems, state.filterType, 'Filter by type') +
+        toolMenu('data-files-sort-menu', 'Sort', ICONS.ArrowsDownUp, sortItems, state.sort, 'Sort by') +
         '<div class="tma-dash__toolbar-bulk" data-files-bulk' + bulkHidden + '>' +
           '<img class="tma-dash__toolbar-divider" src="' + TMA + 'Line-16.svg" alt="" aria-hidden="true">' +
           '<span class="tma-dash__toolbar-selection" data-files-selection-count aria-live="polite">' + selectionLabel + '</span>' +
@@ -115,37 +153,67 @@
 
   function renderRow(row, index, checked) {
     var selected = checked ? ' tma-dash__ctr--selected' : '';
+    var sharedLabel = row.shared ? 'Shared' : 'Private';
     return '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + selected + '" data-row-index="' + index + '" role="row" data-files-row>' +
       '<div class="tma-dash__cc tma-dash__cc--check"><input type="checkbox" class="tma-dash__check" data-files-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + escapeHtml(row.name) + '"></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--activity" data-files-open>' +
+      '<div class="tma-dash__cc tma-dash__cc--filename" data-files-open>' +
         '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + escapeHtml(row.tone) + '">' +
           '<img src="' + fileIconSrc(row.icon, row.name) + '" alt="" width="16" height="16">' +
         '</span>' +
-        '<span class="tma-dash__files-library-copy">' +
-          '<span class="tma-dash__cc-truncate">' + escapeHtml(row.name) + '</span>' +
-          '<span class="tma-dash__files-library-meta">' + escapeHtml(row.size) + ' · ' + escapeHtml(row.time) + ' · ' + escapeHtml(row.uploader) + '</span>' +
-        '</span>' +
+        '<span class="tma-dash__cc-truncate">' + escapeHtml(row.name) + '</span>' +
       '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' + escapeHtml(row.typeLabel) + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--folder" data-files-open-folder="' + escapeHtml(row.folderId || '') + '">' +
+        '<span class="tma-dash__cc-truncate">' + escapeHtml(row.folder || '—') + '</span>' +
+      '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--size"><span class="tma-dash__cc-truncate">' + escapeHtml(row.size) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--uploader">' +
         '<button type="button" class="tma-dash__files-uploader-btn" data-files-uploader-photo aria-label="View ' + escapeHtml(row.uploader) + ' photo">' +
           '<img src="' + escapeHtml(row.avatarUrl) + '" alt="">' +
         '</button>' +
         '<span class="tma-dash__cc-truncate">' + escapeHtml(row.uploader) + '</span>' +
       '</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--size"><span class="tma-dash__cc-truncate">' + escapeHtml(row.size) + '</span></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--file-time"><img src="' + ICONS.CalendarBlank + '" alt="">' + escapeHtml(row.time) + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--file-time"><img src="' + ICONS.CalendarBlank + '" alt="">' + escapeHtml(row.uploaded) + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--file-modified"><span class="tma-dash__cc-truncate">' + escapeHtml(row.modified) + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--shared"><span class="tma-dash__cc-truncate">' + escapeHtml(sharedLabel) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--actions">' +
         '<button type="button" class="tma-dash__row-more" aria-label="More actions for ' + escapeHtml(row.name) + '" data-files-row-more><img src="' + ICONS.ThreeDots + '" alt="" width="16" height="16"></button>' +
       '</div>' +
     '</div>';
   }
 
-  function applySearch(rows, query) {
-    if (!query) return rows;
-    var q = normalize(query);
-    return rows.filter(function (row) {
-      return [row.name, row.uploader, row.size, row.time].join(' ').toLowerCase().includes(q);
+  function applyFilters(rows, state) {
+    var list = rows;
+    if (state.filterType) {
+      list = list.filter(function (row) {
+        if (state.filterType === 'pdf') return row.extension === 'pdf';
+        if (state.filterType === 'other') {
+          return ['document', 'spreadsheet', 'image', 'pdf'].indexOf(row.category) === -1 && row.extension !== 'pdf';
+        }
+        return row.category === state.filterType || (state.filterType === 'document' && row.extension === 'pdf');
+      });
+    }
+    if (state.search) {
+      var q = normalize(state.search);
+      list = list.filter(function (row) {
+        return [row.name, row.uploader, row.folder, row.typeLabel, row.size].join(' ').toLowerCase().includes(q);
+      });
+    }
+    return list;
+  }
+
+  function sortRows(rows, sort) {
+    var list = rows.slice();
+    list.sort(function (a, b) {
+      switch (sort) {
+        case 'size': return (a.bytes || 0) - (b.bytes || 0);
+        case 'uploaded': return String(a.uploadedAt || '').localeCompare(String(b.uploadedAt || ''));
+        case 'modified': return String(a.modifiedAt || '').localeCompare(String(b.modifiedAt || ''));
+        case 'uploader': return String(a.uploader || '').localeCompare(String(b.uploader || ''));
+        default: return String(a.name || '').localeCompare(String(b.name || ''));
+      }
     });
+    return list;
   }
 
   function formatWhen(iso) {
@@ -161,17 +229,25 @@
     var uploader = (f.uploadedBy && f.uploadedBy.name) || (f.owner && f.owner.name) || 'Someone';
     var avatar = (f.uploadedBy && f.uploadedBy.avatar) || (f.owner && f.owner.avatar) || null;
     var ext = (f.extension || name.split('.').pop() || '').toLowerCase();
+    var category = f.category || '';
     var tone = 'grey';
     if (ext === 'pdf') tone = 'red';
     else if (ext === 'doc' || ext === 'docx') tone = 'blue';
     else if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') tone = 'green';
     else if (/png|jpe?g|gif|webp/.test(ext)) tone = 'purple';
+    var typeLabel = ext === 'pdf' ? 'PDF' : (category ? cap(category) : (ext ? ext.toUpperCase() : 'File'));
     return {
       id: f.id,
       name: name,
+      extension: ext,
+      category: category,
+      typeLabel: typeLabel,
       size: f.sizeLabel || '—',
       bytes: f.size || 0,
-      time: formatWhen(f.uploadedAt || f.createdAt || f.updatedAt),
+      uploaded: formatWhen(f.uploadedAt || f.createdAt),
+      modified: formatWhen(f.modifiedAt || f.updatedAt || f.uploadedAt),
+      uploadedAt: f.uploadedAt || f.createdAt || '',
+      modifiedAt: f.modifiedAt || f.updatedAt || '',
       uploader: uploader,
       avatarUrl: avatarSrc(avatar, uploader),
       avatarRaw: avatar,
@@ -181,7 +257,99 @@
       previewUrl: f.previewUrl || null,
       downloadUrl: f.downloadUrl || null,
       folder: (f.folder && f.folder.name) || '',
+      folderId: (f.folder && f.folder.id) || null,
+      shared: !!f.shared,
+      raw: f,
     };
+  }
+
+  function closeRowMenu() {
+    var open = document.querySelector('[data-overview-files-menu]');
+    if (open) open.remove();
+  }
+
+  function openRowMenu(btn, row) {
+    closeRowMenu();
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__menu tma-dash__overview-files-menu';
+    menu.setAttribute('data-overview-files-menu', '');
+    menu.setAttribute('role', 'menu');
+    var items = [
+      { label: 'Preview', action: 'preview' },
+      { label: 'Download', action: 'download', disabled: !row.downloadUrl },
+      { label: 'Open folder', action: 'folder', disabled: !row.folderId },
+    ];
+    menu.innerHTML = items.map(function (it) {
+      return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-files-menu-action="' +
+        escapeHtml(it.action) + '"' + (it.disabled ? ' disabled' : '') + '>' + escapeHtml(it.label) + '</button>';
+    }).join('');
+    document.body.appendChild(menu);
+    var rect = btn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = Math.min(window.innerHeight - menu.offsetHeight - 8, rect.bottom + 4) + 'px';
+    menu.style.left = Math.max(8, rect.right - menu.offsetWidth) + 'px';
+    menu.style.zIndex = '1200';
+
+    menu.addEventListener('click', function (e) {
+      var actionBtn = e.target.closest('[data-files-menu-action]');
+      if (!actionBtn || actionBtn.disabled) return;
+      var action = actionBtn.getAttribute('data-files-menu-action');
+      closeRowMenu();
+      if (action === 'preview') openFilePreview(row);
+      else if (action === 'download') downloadFile(row);
+      else if (action === 'folder') openFolder(row.folderId);
+    });
+
+    setTimeout(function () {
+      function onDoc(ev) {
+        if (menu.contains(ev.target) || btn.contains(ev.target)) return;
+        closeRowMenu();
+        document.removeEventListener('mousedown', onDoc);
+      }
+      document.addEventListener('mousedown', onDoc);
+    }, 0);
+  }
+
+  function downloadFile(row) {
+    if (!row || !row.downloadUrl) return;
+    var a = document.createElement('a');
+    a.href = row.downloadUrl;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function openFolder(folderId) {
+    if (!folderId) return;
+    if (window.TMADashboard && typeof window.TMADashboard.navigate === 'function') {
+      window.TMADashboard.navigate({
+        navId: 'folders-all',
+        view: 'folders',
+        title: 'Folders',
+        crumb: 'Folders',
+        folderId: folderId,
+      });
+      return;
+    }
+    var root = window.__TMA_SITE_ROOT || '';
+    window.location.assign(root + '/folders?folder=' + encodeURIComponent(folderId));
+  }
+
+  function openFilePreview(row) {
+    var url = row.previewUrl || row.downloadUrl;
+    if (!url) return;
+    if (window.TMAPortalLightbox) {
+      TMAPortalLightbox.open([{
+        name: row.name,
+        mime: row.mime || '',
+        size: row.bytes || 0,
+        url: url,
+        downloadUrl: row.downloadUrl || url,
+      }], 0);
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
   }
 
   function mount(container) {
@@ -195,6 +363,8 @@
       page: 1,
       pageSize: 10,
       selected: {},
+      filterType: '',
+      sort: 'uploaded',
     };
 
     container.setAttribute('data-files-mounted', '');
@@ -213,14 +383,14 @@
     function render() {
       container.className = 'tma-dash__files tma-dash__files--overview';
 
-      var filtered = applySearch(state.rows, state.search);
+      var filtered = sortRows(applyFilters(state.rows, state), state.sort);
       var totalPages = Math.max(1, Math.ceil(filtered.length / state.pageSize));
       if (state.page > totalPages) state.page = totalPages;
       var start = (state.page - 1) * state.pageSize;
       var pageRows = filtered.slice(start, start + state.pageSize);
 
-      var emptyMsg = state.search
-        ? 'No files match your search.'
+      var emptyMsg = state.search || state.filterType
+        ? 'No files match your filters.'
         : 'No files have been uploaded yet.';
       var bodyHtml = pageRows.length
         ? pageRows.map(function (row, i) {
@@ -229,7 +399,7 @@
           }).join('')
         : (window.TMANoData
           ? window.TMANoData.render({
-              title: state.search ? 'No matching files' : 'No files yet',
+              title: state.search || state.filterType ? 'No matching files' : 'No files yet',
               subtitle: emptyMsg,
               showButton: false,
               compact: true,
@@ -241,10 +411,14 @@
         '<div class="tma-dash__ctable tma-dash__ctable--overview" role="table" aria-label="Files">' +
           '<div class="tma-dash__ctr tma-dash__ctr--head tma-dash__ctr--overview">' +
             '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head"><input type="checkbox" class="tma-dash__check" data-files-selectall aria-label="Select all"></div>' +
-            '<div class="tma-dash__cc tma-dash__cc--activity tma-dash__cc--head">Activity</div>' +
+            '<div class="tma-dash__cc tma-dash__cc--filename tma-dash__cc--head">File name</div>' +
+            '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head">Type</div>' +
+            '<div class="tma-dash__cc tma-dash__cc--folder tma-dash__cc--head">Folder</div>' +
+            '<div class="tma-dash__cc tma-dash__cc--size tma-dash__cc--head">Size</div>' +
             '<div class="tma-dash__cc tma-dash__cc--uploader tma-dash__cc--head">Uploader</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--size tma-dash__cc--head">File Size</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Upload Time</div>' +
+            '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Uploaded</div>' +
+            '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Modified</div>' +
+            '<div class="tma-dash__cc tma-dash__cc--shared tma-dash__cc--head">Shared</div>' +
             '<div class="tma-dash__cc tma-dash__cc--actions tma-dash__cc--head" aria-hidden="true"></div>' +
           '</div>' +
           '<div data-files-body>' + bodyHtml + '</div>' +
@@ -306,6 +480,19 @@
         state.searchFocused = true;
         render();
       });
+
+      if (window.TMAPortalUI && window.TMAPortalUI.wireHeadDropdownAll) {
+        window.TMAPortalUI.wireHeadDropdownAll(container, '[data-files-filter-menu]', function (sel) {
+          state.filterType = sel.action || '';
+          state.page = 1;
+          render();
+        });
+        window.TMAPortalUI.wireHeadDropdownAll(container, '[data-files-sort-menu]', function (sel) {
+          state.sort = sel.action || 'uploaded';
+          state.page = 1;
+          render();
+        });
+      }
 
       var pagination = container.querySelector('[data-files-pagination]');
       pagination?.querySelectorAll('[data-page]').forEach(function (btn) {
@@ -384,6 +571,27 @@
         });
       });
 
+      container.querySelectorAll('[data-files-open-folder]').forEach(function (cell) {
+        cell.addEventListener('click', function (e) {
+          var folderId = cell.getAttribute('data-files-open-folder');
+          if (!folderId) return;
+          e.preventDefault();
+          e.stopPropagation();
+          openFolder(folderId);
+        });
+      });
+
+      container.querySelectorAll('[data-files-row-more]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var rowEl = btn.closest('[data-row-index]');
+          var idx = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : -1;
+          var row = filtered[idx];
+          if (row) openRowMenu(btn, row);
+        });
+      });
+
       container.querySelectorAll('[data-files-uploader-photo]').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
           e.stopPropagation();
@@ -400,22 +608,6 @@
           }], 0);
         });
       });
-    }
-
-    function openFilePreview(row) {
-      var url = row.previewUrl || row.downloadUrl;
-      if (!url) return;
-      if (window.TMAPortalLightbox) {
-        TMAPortalLightbox.open([{
-          name: row.name,
-          mime: row.mime || '',
-          size: row.bytes || 0,
-          url: url,
-          downloadUrl: row.downloadUrl || url,
-        }], 0);
-        return;
-      }
-      window.open(url, '_blank', 'noopener');
     }
 
     function reloadFiles() {

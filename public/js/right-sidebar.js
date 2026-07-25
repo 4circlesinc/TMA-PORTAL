@@ -18,8 +18,8 @@
 
   var R = function () { return window.TMANotifyRender; };
   var ROOT = window.__TMA_SITE_ROOT || '';
-  var SIDEBAR_LIMIT = 6;
-  var CLIENTS_LIMIT = 8;
+  var CLIENTS_MIN = 6;
+  var CLIENTS_MAX = 10;
 
   function mount(root) {
     var rightbar = root.querySelector('.tma-dash__rightbar');
@@ -32,6 +32,16 @@
     if (host) {
       Array.prototype.slice.call(host.querySelectorAll('[data-rb-body]')).forEach(function (body) {
         body.innerHTML = '';
+      });
+      ['notifications', 'activities'].forEach(function (kind) {
+        var sec = host.querySelector('[data-rb-section="' + kind + '"]');
+        if (sec && !sec.querySelector('[data-rb-footer="' + kind + '"]')) {
+          var foot = document.createElement('div');
+          foot.className = 'tma-dash__rb-footer';
+          foot.setAttribute('data-rb-footer', kind);
+          foot.hidden = true;
+          sec.appendChild(foot);
+        }
       });
     } else {
       Array.prototype.slice.call(rightbar.querySelectorAll('.tma-dash__rb-section')).forEach(function (n) { n.remove(); });
@@ -46,12 +56,34 @@
     }
 
     var clients = { items: [], loaded: false, loading: false, error: false, forbidden: false };
-    // "See all notifications" expands the section from the compact 6 to the full
-    // paginated list, in place (§6) — no separate page needed.
+    // "See all" expands the section from the compact preview to the fuller
+    // paginated list, in place — no separate page needed.
     var expanded = { notifications: false, activities: false };
+
+    /* Adaptive preview counts: keep ≥6 clients visible; trim notif/activity
+       previews when the sidebar is short so nested scrollbars are avoided. */
+    function previewLimits() {
+      var h = rightbar.clientHeight || window.innerHeight || 800;
+      var clientsLimit = CLIENTS_MIN;
+      if (h >= 900) clientsLimit = CLIENTS_MAX;
+      else if (h >= 780) clientsLimit = 8;
+
+      var notifLimit = 6;
+      var actLimit = 6;
+      if (h < 720) { notifLimit = 4; actLimit = 3; }
+      else if (h < 820) { notifLimit = 5; actLimit = 4; }
+      if (h < 640) { notifLimit = 3; actLimit = 2; }
+
+      return {
+        clients: clientsLimit,
+        notifications: notifLimit,
+        activities: actLimit,
+      };
+    }
 
     /* ── renderers ─────────────────────────────────────────────── */
     function bodyEl(kind) { return host.querySelector('[data-rb-body="' + kind + '"]'); }
+    function footerEl(kind) { return host.querySelector('[data-rb-footer="' + kind + '"]'); }
 
     function withScroll(fn) {
       var top = rightbar.scrollTop;
@@ -64,17 +96,34 @@
       return '<button type="button" class="tma-dash__rb-more" data-rb-more="' + kind + '">Load more</button>';
     }
 
+    function seeAllControl(kind, total, previewCount) {
+      if (expanded[kind]) return '';
+      if (total <= previewCount) return '';
+      var label = kind === 'notifications' ? 'See all notifications' : 'See all activities';
+      return '<button type="button" class="tma-dash__rb-see-all" data-rb-see-all="' + kind + '">' + label + '</button>';
+    }
+
+    function syncFooter(kind, total, previewCount, hasMore) {
+      var foot = footerEl(kind);
+      if (!foot) return;
+      var html = seeAllControl(kind, total, previewCount) + moreControl(kind, hasMore);
+      foot.innerHTML = html;
+      foot.hidden = !html;
+    }
+
     function renderNotifications() {
       var el = bodyEl('notifications');
       if (!el) return;
       var s = window.TMANotifications.state;
+      var limits = previewLimits();
       withScroll(function () {
-        if (!s.loaded && s.loading) { el.innerHTML = R().skeleton(3); return; }
-        if (s.error && !s.items.length) { el.innerHTML = R().errorState('Could not load notifications.'); return; }
-        if (!s.items.length) { el.innerHTML = R().emptyState('You are all caught up.', 'Bell'); return; }
-        var rows = expanded.notifications ? s.items : s.items.slice(0, SIDEBAR_LIMIT);
-        el.innerHTML = rows.map(function (it) { return R().notificationItem(it, 'sidebar'); }).join('') +
-          moreControl('notifications', s.hasMore);
+        if (!s.loaded && s.loading) { el.innerHTML = R().skeleton(3); syncFooter('notifications', 0, limits.notifications, false); return; }
+        if (s.error && !s.items.length) { el.innerHTML = R().errorState('Could not load notifications.'); syncFooter('notifications', 0, limits.notifications, false); return; }
+        if (!s.items.length) { el.innerHTML = R().emptyState('You are all caught up.', 'Bell'); syncFooter('notifications', 0, limits.notifications, false); return; }
+        var preview = limits.notifications;
+        var rows = expanded.notifications ? s.items : s.items.slice(0, preview);
+        el.innerHTML = rows.map(function (it) { return R().notificationItem(it, 'sidebar'); }).join('');
+        syncFooter('notifications', s.items.length, preview, !!s.hasMore);
       });
     }
 
@@ -82,19 +131,24 @@
       var el = bodyEl('activities');
       if (!el) return;
       var s = window.TMAActivities.state;
+      var limits = previewLimits();
       withScroll(function () {
-        if (!s.loaded && s.loading) { el.innerHTML = R().skeleton(3); return; }
-        if (s.error && !s.items.length) { el.innerHTML = R().errorState('Could not load activity.'); return; }
-        if (!s.items.length) { el.innerHTML = R().emptyState('No recent activity.', 'ClockCounterClockwise'); return; }
-        el.innerHTML = s.items.slice(0, SIDEBAR_LIMIT).map(function (it) {
+        if (!s.loaded && s.loading) { el.innerHTML = R().skeleton(3); syncFooter('activities', 0, limits.activities, false); return; }
+        if (s.error && !s.items.length) { el.innerHTML = R().errorState('Could not load activity.'); syncFooter('activities', 0, limits.activities, false); return; }
+        if (!s.items.length) { el.innerHTML = R().emptyState('No recent activity.', 'ClockCounterClockwise'); syncFooter('activities', 0, limits.activities, false); return; }
+        var preview = limits.activities;
+        var rows = expanded.activities ? s.items : s.items.slice(0, preview);
+        el.innerHTML = rows.map(function (it) {
           return R().activityItem(it, 'sidebar');
         }).join('');
+        syncFooter('activities', s.items.length, preview, !!s.hasMore);
       });
     }
 
     function renderClients() {
       var el = bodyEl('clients');
       if (!el) return;
+      var limits = previewLimits();
       withScroll(function () {
         if (clients.loading && !clients.loaded) { el.innerHTML = R().skeleton(3); return; }
         if (clients.forbidden) {
@@ -105,7 +159,7 @@
         }
         if (clients.error && !clients.items.length) { el.innerHTML = R().errorState('Could not load clients.'); return; }
         if (!clients.items.length) { el.innerHTML = R().emptyState('No clients yet.', 'AddressBook'); return; }
-        el.innerHTML = clients.items.slice(0, CLIENTS_LIMIT).map(clientItem).join('');
+        el.innerHTML = clients.items.slice(0, limits.clients).map(clientItem).join('');
       });
     }
 
@@ -159,6 +213,16 @@
     renderClients();
     loadAll();
 
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        if (!expanded.notifications) renderNotifications();
+        if (!expanded.activities) renderActivities();
+        renderClients();
+      }, 120);
+    });
+
     /* ── clicks: open the record in place ──────────────────────── */
     host.addEventListener('click', function (e) {
       var retry = e.target.closest('[data-rb-retry]');
@@ -169,6 +233,13 @@
         if (kind === 'notifications') window.TMANotifications.load({ limit: 20 });
         else if (kind === 'activities') window.TMAActivities.load({ limit: 20 });
         else if (kind === 'clients') { clients.loaded = false; clients.error = false; loadClients(); }
+        return;
+      }
+
+      var seeAll = e.target.closest('[data-rb-see-all]');
+      if (seeAll) {
+        e.preventDefault();
+        expand(seeAll.getAttribute('data-rb-see-all'));
         return;
       }
 
@@ -220,8 +291,10 @@
       if (kind !== 'notifications' && kind !== 'activities') return;
       expanded[kind] = true;
       var store = kind === 'notifications' ? window.TMANotifications : window.TMAActivities;
+      var limits = previewLimits();
+      var preview = kind === 'notifications' ? limits.notifications : limits.activities;
       // Pull a fuller page if we only have the compact set so far.
-      if (store.state.items.length <= SIDEBAR_LIMIT && store.state.hasMore) store.loadMore();
+      if (store.state.items.length <= preview && store.state.hasMore) store.loadMore();
       if (kind === 'notifications') renderNotifications(); else renderActivities();
       var sec = host.querySelector('[data-rb-section="' + kind + '"]');
       if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -247,6 +320,9 @@
     return '<section class="' + cls + '" data-rb-section="' + kind + '">' +
       '<div class="tma-dash__rb-title">' + title + '</div>' +
       '<div class="tma-dash__rb-body" data-rb-body="' + kind + '"></div>' +
+      ((kind === 'notifications' || kind === 'activities')
+        ? '<div class="tma-dash__rb-footer" data-rb-footer="' + kind + '" hidden></div>'
+        : '') +
     '</section>';
   }
 

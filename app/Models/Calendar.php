@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'subscription_synced_at', 'subscription_attempted_at',
     'subscription_etag', 'subscription_failures',
     'sync_direction', 'sync_cursor', 'sync_window_start', 'sync_cancelled',
+    'remote_can_write',
     'is_system', 'is_archived', 'created_by',
 ])]
 class Calendar extends Model
@@ -69,6 +70,7 @@ class Calendar extends Model
             'subscription_attempted_at' => 'datetime',
             'sync_window_start' => 'datetime',
             'sync_cancelled' => 'boolean',
+            'remote_can_write' => 'boolean',
         ];
     }
 
@@ -128,8 +130,29 @@ class Calendar extends Model
     /** Whether local changes are pushed out to the provider. */
     public function pushesOut(): bool
     {
+        // A read-only remote calendar (holidays, subscribed) never accepts pushes,
+        // regardless of the account's scopes or the stored direction.
+        if ($this->remote_can_write === false) {
+            return false;
+        }
+
         return $this->isProviderSynced()
             && in_array($this->sync_direction, ['two_way', 'export'], true);
+    }
+
+    /**
+     * Whether the remote calendar itself can accept writes.
+     * Null (legacy rows) falls back to import-only safety until healed.
+     */
+    public function remoteCanWrite(): bool
+    {
+        if ($this->remote_can_write !== null) {
+            return (bool) $this->remote_can_write;
+        }
+
+        // Until refreshRemoteWriteability runs, treat import-only as read-only
+        // and other directions as writable.
+        return in_array($this->sync_direction, ['two_way', 'export'], true);
     }
 
     /** Whether provider changes are pulled in. */
@@ -213,8 +236,10 @@ class Calendar extends Model
                 'url' => $this->source === self::SOURCE_ICS_SUBSCRIPTION ? $this->subscription_url : null,
                 'provider' => $this->source,
                 'direction' => $this->sync_direction,
-                // A provider calendar can be pushed to; an ICS feed cannot.
-                'canWrite' => $this->isProviderSynced(),
+                // Remote writeability — not merely "is a provider calendar".
+                // ICS feeds and holiday calendars are read-only.
+                'canWrite' => $this->isProviderSynced() ? $this->remoteCanWrite() : false,
+                'readOnly' => $this->isProviderSynced() ? ! $this->remoteCanWrite() : true,
                 'accountEmail' => $this->connectedAccount?->email,
             ] : null,
         ];

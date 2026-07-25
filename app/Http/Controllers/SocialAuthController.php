@@ -6,7 +6,10 @@ use App\Jobs\AnalyzeMailbox;
 use App\Models\AuthEvent;
 use App\Models\ConnectedAccount;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
+use App\Support\Notifications\Notifier;
+use App\Support\StaySignedIn;
 use App\Support\TrustedDevices;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -59,6 +62,14 @@ class SocialAuthController extends Controller
             'social.return',
             in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email'], true) ? $request->query('return') : 'security-settings',
         );
+
+        // Stay-signed-in preference from the login page checkbox (?remember=1|0).
+        // Absent means undecided — OAuth users will be asked after sign-in.
+        if ($request->has('remember')) {
+            $request->session()->put('social.remember', $request->boolean('remember'));
+        } else {
+            $request->session()->forget('social.remember');
+        }
 
         // Data sync opt-in (email, calendar, OneDrive, SharePoint). Only
         // requests extra scopes when the provider's sync is configured;
@@ -199,7 +210,7 @@ class SocialAuthController extends Controller
         }
 
         if (! $verified || ! Str::of($oauth->getEmail())->lower()->exactly(Str::lower($user->email))) {
-            return $this->fail($request, "That ".ucfirst($provider)." account's email doesn't match your portal email.");
+            return $this->fail($request, 'That '.ucfirst($provider)." account's email doesn't match your portal email.");
         }
 
         $account = $user->connectedAccounts()->updateOrCreate(
@@ -289,21 +300,42 @@ class SocialAuthController extends Controller
 
     private function login(Request $request, User $user): RedirectResponse
     {
+        $rememberDecided = $request->session()->exists('social.remember');
+        $remember = (bool) $request->session()->pull('social.remember', false);
+        $shouldAsk = ! $rememberDecided && StaySignedIn::shouldAsk($request);
+
         // Respect two-factor authentication: hand off to Fortify's challenge,
         // unless this is a device the user already trusted.
         if ($user->hasTwoFactorEnabled() && ! TrustedDevices::trusts($user, $request)) {
             $request->session()->put([
                 'login.id' => $user->getKey(),
-                'login.remember' => false,
+                'login.remember' => $remember,
             ]);
+
+            if ($shouldAsk) {
+                $request->session()->put('stay_signed_in.pending', true);
+            } elseif ($rememberDecided) {
+                $request->session()->put('stay_signed_in.mark_prompted', true);
+            }
 
             return redirect()->route('two-factor.login');
         }
 
-        Auth::login($user);
+        Auth::login($user, $remember);
         $request->session()->regenerate();
 
-        return redirect()->intended('/');
+        if ($shouldAsk) {
+            return redirect()->route('stay-signed-in.show');
+        }
+
+        $response = redirect()->intended('/');
+
+        // Preference was chosen on the login page — don't ask again on this device.
+        if ($rememberDecided) {
+            $response->withCookie(StaySignedIn::promptedCookie($request));
+        }
+
+        return $response;
     }
 
     /**
@@ -324,14 +356,14 @@ class SocialAuthController extends Controller
         if ($account->wasRecentlyCreated || $account->wasChanged('sync_email') || $account->wasChanged('token')) {
             $providerName = ucfirst($account->provider);
 
-            \App\Support\Activity\ActivityLogger::log([
+            ActivityLogger::log([
                 'actor' => $account->user_id,
                 'type' => 'email.connected',
                 'description' => ($account->user?->name ?? 'A user').' connected their '.$providerName.' mailbox',
                 'subject' => $account,
             ]);
 
-            \App\Support\Notifications\Notifier::send([
+            Notifier::send([
                 'user' => $account->user_id,
                 'type' => 'security.account_connected',
                 'title' => $providerName.' mailbox connected',

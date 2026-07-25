@@ -34,6 +34,8 @@ class ResetUserPassword implements ResetsUserPasswords
         // "Sign out of all other devices" checkbox on the reset form.
         if (! empty($input['logout_others'])) {
             DB::table('sessions')->where('user_id', $user->id)->delete();
+            $user->forceFill(['remember_token' => null])->save();
+            $user->trustedDevices()->delete();
         }
     }
 }

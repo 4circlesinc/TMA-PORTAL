@@ -127,6 +127,12 @@ class CalendarSyncController extends Controller
             return response()->json(['message' => 'That calendar is already connected.'], 422);
         }
 
+        // Resolve remote writeability (holidays / subscribed calendars).
+        $remoteCanWrite = $this->remoteCanWrite($account, $data['externalId']);
+        if (! $remoteCanWrite) {
+            $direction = 'import';
+        }
+
         $calendar = Calendar::create([
             'uuid' => (string) Str::uuid(),
             'name' => $data['name'],
@@ -140,6 +146,7 @@ class CalendarSyncController extends Controller
             'connected_account_id' => $account->id,
             'external_id' => $data['externalId'],
             'sync_direction' => $direction,
+            'remote_can_write' => $remoteCanWrite,
             'sync_window_start' => now()->subMonths($data['monthsBack'] ?? 3),
             'subscription_status' => 'syncing',
         ]);
@@ -206,6 +213,7 @@ class CalendarSyncController extends Controller
             }
 
             try {
+                $remoteCanWrite = ! empty($remoteCal['canWrite']);
                 $calendar = Calendar::create([
                     'uuid' => (string) Str::uuid(),
                     'name' => $remoteCal['name'] ?? 'Calendar',
@@ -218,9 +226,10 @@ class CalendarSyncController extends Controller
                     'source' => $account->provider,
                     'connected_account_id' => $account->id,
                     'external_id' => $externalId,
-                    'sync_direction' => (! empty($remoteCal['canWrite']) && $direction !== 'import')
+                    'sync_direction' => ($remoteCanWrite && $direction !== 'import')
                         ? $direction
                         : 'import',
+                    'remote_can_write' => $remoteCanWrite,
                     'sync_window_start' => now()->subMonths($data['monthsBack'] ?? 3),
                     'subscription_status' => 'syncing',
                 ]);
@@ -297,6 +306,7 @@ class CalendarSyncController extends Controller
 
         $syncing = $rows->where('status', 'syncing')->count();
         $ok = $rows->where('status', 'ok')->count();
+        $partial = $rows->where('status', 'partial')->count();
         $error = $rows->where('status', 'error')->count();
         $eventsImported = (int) $rows->sum('eventCount');
         $lastSynced = $calendars->max('subscription_synced_at');
@@ -304,11 +314,13 @@ class CalendarSyncController extends Controller
         $stage = 'idle';
         if ($syncing > 0) {
             $stage = 'importing';
-        } elseif ($error > 0 && $ok > 0) {
+        } elseif ($error > 0 && ($ok > 0 || $partial > 0)) {
             $stage = 'partial';
-        } elseif ($error > 0 && $ok === 0) {
+        } elseif ($error > 0 && $ok === 0 && $partial === 0) {
             $stage = 'failed';
-        } elseif ($ok > 0) {
+        } elseif ($partial > 0 && $error === 0) {
+            $stage = 'partial';
+        } elseif ($ok > 0 || $partial > 0) {
             $stage = 'complete';
         }
 
@@ -318,6 +330,7 @@ class CalendarSyncController extends Controller
             'calendarsAdded' => $rows->count(),
             'calendarsSyncing' => $syncing,
             'calendarsOk' => $ok,
+            'calendarsPartial' => $partial,
             'calendarsError' => $error,
             'eventsImported' => $eventsImported,
             'lastSyncedAt' => $lastSynced?->toIso8601String(),
@@ -345,6 +358,11 @@ class CalendarSyncController extends Controller
                 $wantsWrite && ! $calendar->connectedAccount?->canWriteCalendar(),
                 422,
                 'Reconnect with calendar write access to push events out.',
+            );
+            abort_if(
+                $wantsWrite && $calendar->remote_can_write === false,
+                422,
+                'This calendar is read-only on the provider and can only import.',
             );
             $calendar->sync_direction = $data['direction'];
         }
@@ -492,6 +510,24 @@ class CalendarSyncController extends Controller
         return ConnectedAccount::where('user_id', $user->id)
             ->whereIn('provider', ['google', 'microsoft'])
             ->findOrFail($accountId);
+    }
+
+    /** Look up whether a remote calendar accepts writes; defaults true if unknown. */
+    private function remoteCanWrite(ConnectedAccount $account, string $externalId): bool
+    {
+        try {
+            $remote = collect(ProviderFactory::for($account)->listCalendars())
+                ->first(fn (array $c) => ($c['id'] ?? null) === $externalId);
+
+            if ($remote === null) {
+                return true;
+            }
+
+            return ! empty($remote['canWrite']);
+        } catch (\Throwable) {
+            // Provider lookup is best-effort at connect time; don't block connect.
+            return true;
+        }
     }
 
     private function find(string $uuid): Calendar

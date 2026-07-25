@@ -530,24 +530,57 @@ class MailSynchronizer
 
         foreach ($rows as $m) {
             $fromEmail = mb_strtolower((string) ($m->from_email ?? ''));
+            $fromName = (string) ($m->from_name ?: $m->from_email ?: 'Someone');
             $this->queueSenderPhoto($fromEmail);
 
             Notifier::send([
                 'user' => $this->account->user_id,
                 'type' => 'email.received',
-                'title' => 'New email from '.($m->from_name ?: $m->from_email ?: 'an unknown sender'),
+                'title' => $this->emailNotificationTitle($m, $fromName),
                 'message' => $m->subject ?: Str::limit((string) $m->snippet, 120),
                 'action_url' => '/email?message='.$m->uuid,
                 'subject' => $m,
                 'image' => MailSenderPhoto::urlFor($fromEmail),
                 'metadata' => [
                     'from_email' => $fromEmail,
-                    'from_name' => (string) ($m->from_name ?: $m->from_email ?: 'Sender'),
+                    'from_name' => $fromName === 'Someone'
+                        ? (string) ($m->from_name ?: $m->from_email ?: 'Sender')
+                        : $fromName,
                     'message_uuid' => $m->uuid,
                 ],
                 'dedupe_key' => 'email.received:'.$m->remote_id,
             ]);
         }
+    }
+
+    /** Short sidebar-friendly title for an inbound message. */
+    private function emailNotificationTitle(MailMessage $m, string $fromName): string
+    {
+        if ($this->looksLikeReply($m)) {
+            return $fromName.' replied to your email';
+        }
+
+        return $fromName.' sent you an email';
+    }
+
+    /** Reply when the subject says Re:, or the thread already has mail. */
+    private function looksLikeReply(MailMessage $m): bool
+    {
+        $subject = (string) ($m->subject ?? '');
+        if (preg_match('/^\s*re\s*:/iu', $subject) === 1) {
+            return true;
+        }
+
+        $threadId = trim((string) ($m->thread_id ?? ''));
+        if ($threadId === '') {
+            return false;
+        }
+
+        return MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->where('thread_id', $threadId)
+            ->where('id', '!=', $m->id)
+            ->exists();
     }
 
     /** Ask the photo queue about this sender so the next toast can show a face. */

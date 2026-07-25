@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Calendar;
+use App\Models\CalendarAuditEvent;
 use App\Models\CalendarMember;
 use App\Models\CalendarSubscription;
 use App\Models\Group;
@@ -89,9 +90,9 @@ class CalendarController extends Controller
              * the wrong view before correcting itself.
              */
             'preferences' => [
-                'view' => in_array($prefs['calendarView'] ?? null, ['week', 'month', 'agenda'], true)
+                'view' => in_array($prefs['calendarView'] ?? null, ['week', 'month', 'agenda', 'day', 'work_week'], true)
                     ? $prefs['calendarView']
-                    : 'week',
+                    : 'month',
                 'sidebarOpen' => (bool) ($prefs['calendarSidebarOpen'] ?? true),
             ],
         ]);
@@ -514,7 +515,7 @@ class CalendarController extends Controller
         abort_unless(CalendarAccess::can($user, $calendar, 'manage_sharing'), 403,
             'You cannot view this calendar’s history.');
 
-        $rows = \App\Models\CalendarAuditEvent::where('calendar_id', $calendar->id)
+        $rows = CalendarAuditEvent::where('calendar_id', $calendar->id)
             ->with('actor:id,name')
             ->orderByDesc('created_at')
             ->limit(100)

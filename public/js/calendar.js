@@ -35,7 +35,14 @@
 
   var ROOT = window.__TMA_SITE_ROOT || '';
   var BASE = ROOT + '/portal/calendar';
-  var VIEWS = ['week', 'month', 'agenda'];
+  var VIEWS = ['month', 'week', 'work_week', 'day', 'agenda'];
+  var VIEW_LABELS = {
+    month: 'Month',
+    week: 'Week',
+    work_week: 'Work Week',
+    day: 'Day',
+    agenda: 'Agenda',
+  };
 
   var SCHED = window.TMASchedule;
 
@@ -179,8 +186,9 @@
 
   var state = {
     el: null,
-    view: 'week',
+    view: 'month',
     weekStart: SCHED ? SCHED.startOfWeek(new Date()) : new Date(),
+    dayDate: new Date(),
     monthDate: startOfMonth(new Date()),
     sidebarOpen: true,
 
@@ -199,6 +207,7 @@
 
     selectedEventId: null,
     selectedDay: null,
+    // { date: 'YYYY-MM-DD', rect: DOMRect-like } when the quick-add menu is open
     quickAddFor: null,
     workDays: {},         // dateKey -> work plan record
     workStatuses: [],
@@ -214,6 +223,48 @@
     morph().patch(state.el, renderPage());
     wire();
     syncPanelShell();
+    positionQuickAdd();
+  }
+
+  function scheduleDayCount() {
+    if (state.view === 'day') return 1;
+    if (state.view === 'work_week') return 5;
+    return 7;
+  }
+
+  function scheduleViewStart() {
+    if (state.view === 'day') {
+      var d = state.dayDate || new Date();
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+    return state.weekStart;
+  }
+
+  function positionQuickAdd() {
+    var menu = state.el && state.el.querySelector('[data-calendar-quick-add]');
+    if (!menu || !state.quickAddFor || !state.quickAddFor.rect) return;
+
+    var r = state.quickAddFor.rect;
+    var mw = menu.offsetWidth || 160;
+    var mh = menu.offsetHeight || 200;
+    var pad = 8;
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+
+    var left = r.right + 4;
+    var top = r.top;
+
+    if (left + mw > vw - pad) left = r.left - mw - 4;
+    if (left < pad) left = pad;
+
+    if (top + mh > vh - pad) top = Math.max(pad, r.bottom - mh);
+    if (top < pad) top = pad;
+
+    menu.style.position = 'fixed';
+    menu.style.left = Math.round(left) + 'px';
+    menu.style.top = Math.round(top) + 'px';
+    menu.style.right = 'auto';
+    menu.style.bottom = 'auto';
   }
 
   function syncPanelShell() {
@@ -375,7 +426,10 @@
   /* Calendars the user may actually add an event to. */
   function writableCalendars() {
     return state.calendars.filter(function (c) {
-      return ['contributor', 'editor', 'manager', 'owner'].indexOf(c.role) !== -1;
+      if (['contributor', 'editor', 'manager', 'owner'].indexOf(c.role) === -1) return false;
+      // Provider holiday / subscribed calendars are import-only.
+      if (c.sync && (c.sync.readOnly || c.sync.canWrite === false)) return false;
+      return true;
     });
   }
 
@@ -422,12 +476,24 @@
      */
     var sync = cal.sync;
     if (sync) {
-      if (sync.status === 'syncing') badge = 'Syncing…';
-      else if (sync.status === 'error') badge = 'Sync failed';
+      if (sync.status === 'syncing') badge = 'Syncing';
+      else if (sync.status === 'ok') badge = sync.syncedAt ? 'Up to date' : 'Connected';
+      else if (sync.status === 'partial') badge = 'Partially synchronized';
+      else if (sync.status === 'error') badge = 'Failed';
       else if (sync.status === 'disabled') badge = 'Paused';
     }
 
     var owner = !cal.isOwner && cal.ownerName ? cal.ownerName : '';
+    var readOnly = !!(sync && (sync.readOnly || sync.canWrite === false));
+    var metaParts = [];
+    if (owner) metaParts.push(owner);
+    if (badge) metaParts.push(badge);
+    if (readOnly) metaParts.push('Read only');
+    var metaText = metaParts.join(' · ');
+    var metaError = sync && sync.status === 'error';
+    var metaTitle = sync && sync.error && (sync.status === 'error' || sync.status === 'partial')
+      ? sync.error
+      : '';
 
     return (
       '<li class="tma-dash__calendar-item' + (busy ? ' is-busy' : '') + '" data-calendar-id="' + esc(cal.id) + '">' +
@@ -438,11 +504,11 @@
       renderColourSwatch(cal.colour) +
       '<span class="tma-dash__calendar-item-text">' +
       '<span class="tma-dash__calendar-item-name">' + esc(cal.name) + '</span>' +
-      (owner || badge
+      (metaText
         ? '<span class="tma-dash__calendar-item-meta' +
-          (sync && sync.status === 'error' ? ' tma-dash__calendar-item-meta--error' : '') + '"' +
-          (sync && sync.error ? ' title="' + esc(sync.error) + '"' : '') + '>' +
-          esc(owner) + (owner && badge ? ' · ' : '') + esc(badge) +
+          (metaError ? ' tma-dash__calendar-item-meta--error' : '') + '"' +
+          (metaTitle ? ' title="' + esc(metaTitle) + '"' : '') + '>' +
+          esc(metaText) +
           '</span>'
         : '') +
       '</span></label>' +
@@ -586,10 +652,18 @@
     var ends = toLocalDate(event.endsAt);
     if (!starts || !ends) return null;
 
-    var day = SCHED.dayIndexInWeek(
-      new Date(starts.getFullYear(), starts.getMonth(), starts.getDate()),
-      state.weekStart
-    );
+    var viewStart = scheduleViewStart();
+    var dayCount = scheduleDayCount();
+    var day = SCHED.dayIndexInRange
+      ? SCHED.dayIndexInRange(
+        new Date(starts.getFullYear(), starts.getMonth(), starts.getDate()),
+        viewStart,
+        dayCount
+      )
+      : SCHED.dayIndexInWeek(
+        new Date(starts.getFullYear(), starts.getMonth(), starts.getDate()),
+        viewStart
+      );
     if (day < 0) return null;
 
     var start = event.allDay ? SCHED.SCHEDULE_START : decimalHour(starts);
@@ -611,14 +685,29 @@
   }
 
   function renderWeekView() {
+    var viewStart = scheduleViewStart();
+    var dayCount = scheduleDayCount();
     var events = state.events.map(toScheduleEvent).filter(Boolean).sort(function (a, b) {
       return a.day !== b.day ? a.day - b.day : a.start - b.start;
     });
 
+    var dayLabels = [];
+    var i;
+    for (i = 0; i < dayCount; i++) {
+      dayLabels.push(SCHED.formatDayLabel(SCHED.addDays(viewStart, i)));
+    }
+
+    var weekDate = dayCount === 1
+      ? formatLongDate(viewStart)
+      : SCHED.formatWeekLabel(viewStart);
+
     return SCHED.render({
       title: 'My schedule',
       standalone: true,
-      weekStart: state.weekStart,
+      weekStart: viewStart,
+      dayCount: dayCount,
+      days: dayLabels,
+      weekDate: weekDate,
       events: events,
       selectedEventId: state.selectedEventId,
     });
@@ -726,12 +815,12 @@
       }).join('') +
       '</div>' +
       '<div class="tma-dash__calendar-month-grid">' + cells.join('') + '</div>' +
-      (state.quickAddFor
+      (state.quickAddFor && state.quickAddFor.date
         ? '<div class="tma-dash__calendar-quick-add" data-calendar-quick-add>' +
           ['Event', 'Meeting', 'Reminder', 'Work status', 'Leave', 'Note'].map(function (label) {
             var kind = label.toLowerCase().replace(/\s+/g, '-');
             return '<button type="button" class="tma-dash__calendar-quick-add-item" data-quick-add-kind="' +
-              esc(kind) + '" data-quick-add-date="' + esc(state.quickAddFor) + '">' + esc(label) + '</button>';
+              esc(kind) + '" data-quick-add-date="' + esc(state.quickAddFor.date) + '">' + esc(label) + '</button>';
           }).join('') +
           '</div>'
         : '') +
@@ -826,6 +915,7 @@
 
     if (state.view === 'month') return renderMonthView();
     if (state.view === 'agenda') return renderAgendaView();
+    // week, work_week, and day all share the schedule grid.
     return renderWeekView();
   }
 
@@ -2094,7 +2184,7 @@
       VIEWS.map(function (v, index) {
         return '<button type="button" class="tma-tab' + (state.view === v ? ' is-active' : '') +
           '" data-tab-index="' + index + '" data-tab-key="' + esc(v) + '">' +
-          '<span class="tma-tab__label">' + esc(v.charAt(0).toUpperCase() + v.slice(1)) + '</span>' +
+          '<span class="tma-tab__label">' + esc(VIEW_LABELS[v] || v) + '</span>' +
           '<span class="tma-tab__indicator" aria-hidden="true"></span></button>';
       }).join('') +
       '</div>'
@@ -3300,6 +3390,12 @@
     if (VIEWS.indexOf(view) === -1 || view === state.view) return;
     state.view = view;
     if (view === 'month') state.monthDate = startOfMonth(state.weekStart);
+    if (view === 'day') {
+      state.dayDate = new Date(state.dayDate.getFullYear(), state.dayDate.getMonth(), state.dayDate.getDate());
+    }
+    if (view === 'week' || view === 'work_week' || view === 'agenda') {
+      state.weekStart = SCHED.startOfWeek(state.dayDate || state.weekStart);
+    }
     savePreference('calendarView', view);
     render();
     refreshEvents();
@@ -3998,12 +4094,40 @@
         if (e.target.closest('[data-calendar-month-event], [data-calendar-day-more], [data-calendar-day-add], [data-calendar-workplan], [data-quick-add-kind]')) {
           return;
         }
-        openDayPanel(cell.getAttribute('data-calendar-day'));
+        var dateKey = cell.getAttribute('data-calendar-day');
+        var rect = cell.getBoundingClientRect();
+        state.selectedDay = dateKey;
+        state.quickAddFor = {
+          date: dateKey,
+          rect: {
+            top: rect.top,
+            left: rect.left,
+            bottom: rect.bottom,
+            right: rect.right,
+            width: rect.width,
+            height: rect.height,
+          },
+        };
+        render();
       });
       cell.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          openDayPanel(cell.getAttribute('data-calendar-day'));
+          var dateKey = cell.getAttribute('data-calendar-day');
+          var rect = cell.getBoundingClientRect();
+          state.selectedDay = dateKey;
+          state.quickAddFor = {
+            date: dateKey,
+            rect: {
+              top: rect.top,
+              left: rect.left,
+              bottom: rect.bottom,
+              right: rect.right,
+              width: rect.width,
+              height: rect.height,
+            },
+          };
+          render();
         }
       });
     });
@@ -4028,7 +4152,18 @@
     M.unwired(root, '[data-calendar-day-add]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
-        state.quickAddFor = btn.getAttribute('data-calendar-day-add');
+        var rect = btn.getBoundingClientRect();
+        state.quickAddFor = {
+          date: btn.getAttribute('data-calendar-day-add'),
+          rect: {
+            top: rect.top,
+            left: rect.left,
+            bottom: rect.bottom,
+            right: rect.right,
+            width: rect.width,
+            height: rect.height,
+          },
+        };
         render();
       });
     });
@@ -4118,8 +4253,8 @@
       var next = M.unwiredOne(scheduleRoot, '[data-schedule-next]');
       var today = M.unwiredOne(scheduleRoot, '[data-schedule-today]');
 
-      if (prev) prev.addEventListener('click', function () { stepWeek(-7); });
-      if (next) next.addEventListener('click', function () { stepWeek(7); });
+      if (prev) prev.addEventListener('click', function () { stepSchedule(-1); });
+      if (next) next.addEventListener('click', function () { stepSchedule(1); });
       if (today) today.addEventListener('click', goToday);
 
       M.unwired(scheduleRoot, '[data-schedule-event]').forEach(function (btn) {
@@ -4133,61 +4268,140 @@
       });
     }
 
-    /* An outside click closes any open menu. */
+    /* An outside click closes any open menu / quick-add. */
     if (!wire.documentBound) {
       wire.documentBound = true;
       document.addEventListener('click', function (e) {
         var inside = e.target.closest && e.target.closest(
           '[data-calendar-menu-panel], [data-calendar-menu],' +
-          '[data-calendar-add-panel], [data-calendar-add-menu]'
+          '[data-calendar-add-panel], [data-calendar-add-menu],' +
+          '[data-calendar-quick-add], [data-calendar-day-add]'
         );
         if (inside) return;
-        if (!state.menuFor && !state.addMenuOpen) return;
-        state.menuFor = null;
-        state.addMenuOpen = false;
-        render();
+        var changed = false;
+        if (state.menuFor || state.addMenuOpen) {
+          state.menuFor = null;
+          state.addMenuOpen = false;
+          changed = true;
+        }
+        if (state.quickAddFor) {
+          state.quickAddFor = null;
+          changed = true;
+        }
+        if (changed) render();
       });
+      window.addEventListener('resize', positionQuickAdd);
+      window.addEventListener('scroll', positionQuickAdd, true);
     }
   }
 
   function stepWeek(days) {
     state.weekStart = SCHED.addDays(state.weekStart, days);
+    state.dayDate = SCHED.addDays(state.dayDate || state.weekStart, days);
     state.monthDate = startOfMonth(state.weekStart);
     render();
     refreshEvents();
   }
 
+  function stepSchedule(direction) {
+    if (state.view === 'day') {
+      state.dayDate = SCHED.addDays(state.dayDate || new Date(), direction);
+      state.weekStart = SCHED.startOfWeek(state.dayDate);
+      state.monthDate = startOfMonth(state.dayDate);
+      render();
+      refreshEvents();
+      return;
+    }
+    stepWeek(direction * 7);
+  }
+
   function goToday() {
-    state.weekStart = SCHED.startOfWeek(new Date());
-    state.monthDate = startOfMonth(new Date());
+    var now = new Date();
+    state.weekStart = SCHED.startOfWeek(now);
+    state.dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    state.monthDate = startOfMonth(now);
     render();
     refreshEvents();
   }
 
   /* ── mount ───────────────────────────────────────────────── */
 
+  function consumePendingOpens() {
+    if (!state.el) return false;
+    if (window.__TMA_OPEN_WORKPLAN) {
+      var planKey = window.__TMA_OPEN_WORKPLAN;
+      window.__TMA_OPEN_WORKPLAN = null;
+      openWorkPlanEditor(planKey);
+      return true;
+    }
+    if (window.__TMA_OPEN_EVENT) {
+      var eventId = window.__TMA_OPEN_EVENT;
+      window.__TMA_OPEN_EVENT = null;
+      state.selectedEventId = eventId;
+      state.panel = { mode: 'view', eventId: eventId };
+      render();
+      return true;
+    }
+    if (window.__TMA_OPEN_DAY) {
+      var dayKey = window.__TMA_OPEN_DAY;
+      window.__TMA_OPEN_DAY = null;
+      openDayPanel(dayKey);
+      return true;
+    }
+    return false;
+  }
+
   function openWorkPlan(dateKey) {
-    var key = dateKey || dateKeyOf(new Date());
+    var key = dateKey || dateKeyOf(new Date()) || window.__TMA_OPEN_WORKPLAN;
+    if (!key) return;
     if (!state.el) {
       window.__TMA_OPEN_WORKPLAN = key;
       return;
     }
+    window.__TMA_OPEN_WORKPLAN = null;
     openWorkPlanEditor(key);
+  }
+
+  function openEvent(eventId) {
+    if (!eventId) return;
+    if (!state.el) {
+      window.__TMA_OPEN_EVENT = eventId;
+      return;
+    }
+    window.__TMA_OPEN_EVENT = null;
+    state.selectedEventId = eventId;
+    state.panel = { mode: 'view', eventId: eventId };
+    render();
+  }
+
+  function openDay(dateKey) {
+    var key = dateKey || dateKeyOf(new Date());
+    if (!state.el) {
+      window.__TMA_OPEN_DAY = key;
+      return;
+    }
+    window.__TMA_OPEN_DAY = null;
+    openDayPanel(key);
+  }
+
+  /* Called when the calendar view becomes visible (SPA nav). Mount only
+     runs once; pending opens from Overview/Dashboard land here too. */
+  function activate() {
+    if (!state.el) return;
+    consumePendingOpens();
   }
 
   function mount(root) {
     if (!root || !SCHED) return;
 
     state.el = root;
-    state.weekStart = SCHED.startOfWeek(new Date());
-    state.monthDate = startOfMonth(new Date());
+    var now = new Date();
+    state.weekStart = SCHED.startOfWeek(now);
+    state.dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    state.monthDate = startOfMonth(now);
 
     load(false).then(function () {
-      if (window.__TMA_OPEN_WORKPLAN) {
-        var key = window.__TMA_OPEN_WORKPLAN;
-        window.__TMA_OPEN_WORKPLAN = null;
-        openWorkPlanEditor(key);
-      }
+      consumePendingOpens();
     });
   }
 
@@ -4255,7 +4469,10 @@
 
   window.TMACalendar = {
     mount: mount,
+    activate: activate,
     getTodayEventCount: getTodayEventCount,
     openWorkPlan: openWorkPlan,
+    openEvent: openEvent,
+    openDay: openDay,
   };
 })();

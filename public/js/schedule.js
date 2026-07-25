@@ -114,12 +114,13 @@
     return html;
   }
 
-  function eventStyle(event) {
+  function eventStyle(event, dayCount) {
+    var cols = dayCount > 0 ? dayCount : 7;
     var span = SCHEDULE_END - SCHEDULE_START;
     var top = ((event.start - SCHEDULE_START) / span) * 100;
     var height = ((event.end - event.start) / span) * 100;
-    var colPct = 100 / 7;
-    var inset = 2;
+    var colPct = 100 / cols;
+    var inset = cols === 1 ? 1 : 2;
     var left = event.day * colPct + inset;
     var width = colPct - inset * 2;
     var compact = event.end - event.start < 1.25;
@@ -137,22 +138,36 @@
     );
   }
 
+  function dayIndexInRange(date, rangeStart, dayCount) {
+    for (var i = 0; i < dayCount; i++) {
+      if (sameDay(addDays(rangeStart, i), date)) return i;
+    }
+    return -1;
+  }
+
   function render(opts) {
     opts = opts || {};
     var title = opts.title || 'Schedule';
     var weekStart = opts.weekStart ? new Date(opts.weekStart.getTime()) : startOfWeek(new Date());
+    var dayCount = opts.dayCount > 0 ? opts.dayCount : 7;
     var events = opts.events || [];
     var selectedEventId = opts.selectedEventId || null;
     var today = opts.today || new Date();
-    var todayIndex = dayIndexInWeek(today, weekStart);
+    var todayIndex = dayIndexInRange(today, weekStart, dayCount);
     var showNow = opts.showNow !== false && todayIndex >= 0;
     var weekDate = opts.weekDate || formatWeekLabel(weekStart);
     var extraClass = opts.standalone ? ' tma-dash__clients-schedule--standalone' : '';
-    var dayLabels = [];
+    var dayLabels = opts.days && opts.days.length
+      ? opts.days.slice(0, dayCount)
+      : [];
     var i;
+    var navPrevLabel = dayCount === 1 ? 'Previous day' : 'Previous week';
+    var navNextLabel = dayCount === 1 ? 'Next day' : 'Next week';
 
-    for (i = 0; i < 7; i++) {
-      dayLabels.push(formatDayLabel(addDays(weekStart, i)));
+    if (!dayLabels.length) {
+      for (i = 0; i < dayCount; i++) {
+        dayLabels.push(formatDayLabel(addDays(weekStart, i)));
+      }
     }
 
     var nowHour = today.getHours() + today.getMinutes() / 60;
@@ -164,13 +179,17 @@
     return (
       '<div class="tma-dash__clients-schedule' +
       extraClass +
-      '" data-schedule-root>' +
+      '" data-schedule-root style="--schedule-day-count:' +
+      dayCount +
+      '">' +
       '<div class="tma-dash__clients-schedule-head">' +
       '<span class="tma-dash__clients-schedule-title">' +
       esc(title) +
       '</span>' +
       '<div class="tma-dash__clients-schedule-nav">' +
-      '<button type="button" class="tma-dash__clients-icon-btn" data-schedule-prev aria-label="Previous week">' +
+      '<button type="button" class="tma-dash__clients-icon-btn" data-schedule-prev aria-label="' +
+      esc(navPrevLabel) +
+      '">' +
       '<img src="' +
       ICONS.ArrowLineLeft +
       '" alt="">' +
@@ -178,7 +197,9 @@
       '<span class="tma-dash__clients-schedule-date">' +
       esc(weekDate) +
       '</span>' +
-      '<button type="button" class="tma-dash__clients-icon-btn" data-schedule-next aria-label="Next week">' +
+      '<button type="button" class="tma-dash__clients-icon-btn" data-schedule-next aria-label="' +
+      esc(navNextLabel) +
+      '">' +
       '<img src="' +
       ICONS.ArrowLineRight +
       '" alt="">' +
@@ -218,7 +239,7 @@
         .map(function (_, index) {
           return (
             '<span class="tma-dash__clients-schedule-vline" style="left:' +
-            (((index + 0.5) / 7) * 100).toFixed(2) +
+            (((index + 0.5) / dayCount) * 100).toFixed(2) +
             '%"></span>'
           );
         })
@@ -245,7 +266,7 @@
             compactCls +
             (selected ? ' tma-dash__clients-event--selected' : '') +
             '" style="' +
-            eventStyle(event) +
+            eventStyle(event, dayCount) +
             '" data-schedule-event="' +
             esc(event.id) +
             '" aria-pressed="' +
@@ -303,6 +324,7 @@
     formatTimeLabel: formatTimeLabel,
     formatTimeRange: formatTimeRange,
     dayIndexInWeek: dayIndexInWeek,
+    dayIndexInRange: dayIndexInRange,
     SCHEDULE_START: SCHEDULE_START,
     SCHEDULE_END: SCHEDULE_END,
   };

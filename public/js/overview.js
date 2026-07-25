@@ -22,25 +22,45 @@
      nobody entered are worse than absent sections. */
   var TABS = ['Overview', 'Users', 'Files', 'Activity'];
 
+  function dateKeyOf(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+
+  function startOfWeek(d) {
+    var day = d.getDay(); // 0 = Sunday
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
+  }
+
+  function parseDateKey(key) {
+    var parts = String(key || '').split('-');
+    if (parts.length !== 3) return new Date();
+    return new Date(+parts[0], (+parts[1]) - 1, +parts[2]);
+  }
+
   /* Real calendar week chrome — never hardcode sample day numbers. */
-  function currentWeekDays() {
-    var now = new Date();
-    var day = now.getDay(); // 0 = Sunday
-    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+  function weekDaysFor(selectedKey, weekStartDate) {
     var labels = ['SU', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+    var start = weekStartDate || startOfWeek(parseDateKey(selectedKey));
     var days = [];
     for (var i = 0; i < 7; i++) {
       var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      var key = dateKeyOf(d);
       days.push({
         label: labels[i],
         day: String(d.getDate()),
-        active: d.toDateString() === now.toDateString(),
+        key: key,
+        active: key === selectedKey,
       });
     }
     return days;
   }
 
   var ROAD = [];
+  var ROAD_EVENTS = [];
+  var SELECTED_ROAD_DATE = dateKeyOf(new Date());
+  var ROAD_WEEK_START = startOfWeek(new Date());
   var FILES = [];
   var METRICS = null;
   var WORK_PLAN = null;
@@ -61,12 +81,11 @@
     } catch (e) { return ''; }
   }
 
-  function weekRangeIso() {
-    var now = new Date();
-    var day = now.getDay();
-    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day, 0, 0, 0, 0);
-    var end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7, 0, 0, 0, 0);
-    return { from: start.toISOString(), to: end.toISOString() };
+  function weekRangeIso(weekStart) {
+    var start = weekStart || ROAD_WEEK_START || startOfWeek(new Date());
+    var from = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+    var to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 7, 0, 0, 0, 0);
+    return { from: from.toISOString(), to: to.toISOString() };
   }
 
   function avatarSrc(avatar, name) {
@@ -77,19 +96,73 @@
     return AVATAR + 'Avatar3d01.png';
   }
 
-  function loadRoadFromCalendar() {
-    var range = weekRangeIso();
-    return apiGet('/portal/calendar/events?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to))
-      .then(function (j) {
-        var events = (j && j.events) || [];
-        ROAD = events.slice(0, 8).map(function (ev) {
-          return {
-            text: ev.title || 'Untitled event',
-            time: formatRoadTime(ev.startsAt || ev.starts_at),
-            avatarUrl: avatarSrc(null, ev.organizerName || ev.title),
-          };
-        });
+  function eventDateKey(ev) {
+    var iso = ev.startsAt || ev.starts_at || '';
+    try {
+      var d = new Date(iso);
+      if (!isNaN(d.getTime())) return dateKeyOf(d);
+    } catch (e) {}
+    return String(iso).slice(0, 10);
+  }
+
+  function buildRoadItems(events, workDay) {
+    var items = [];
+    if (workDay && workDay.status && workDay.status !== 'not_working') {
+      items.push({
+        kind: 'workplan',
+        id: 'workplan:' + (workDay.date || SELECTED_ROAD_DATE),
+        text: workDay.statusLabel || 'Work plan',
+        time: formatPlanHours(workDay) || formatRoadTime(SELECTED_ROAD_DATE + 'T09:00:00'),
+        avatarUrl: avatarSrc(null, 'Work plan'),
+        dateKey: workDay.date || SELECTED_ROAD_DATE,
       });
+    }
+    (events || []).forEach(function (ev) {
+      items.push({
+        kind: 'event',
+        id: ev.id || ev.uuid,
+        text: ev.title || 'Untitled event',
+        time: formatRoadTime(ev.startsAt || ev.starts_at),
+        avatarUrl: avatarSrc(null, ev.organizerName || ev.title),
+        dateKey: eventDateKey(ev),
+      });
+    });
+    return items.slice(0, 8);
+  }
+
+  function loadRoadFromCalendar() {
+    var range = weekRangeIso(ROAD_WEEK_START);
+    var dayKey = SELECTED_ROAD_DATE;
+    return Promise.all([
+      apiGet('/portal/calendar/events?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to)),
+      apiGet('/portal/calendar/work-plan/' + encodeURIComponent(dayKey)),
+    ]).then(function (results) {
+      var j = results[0];
+      var plan = results[1];
+      ROAD_EVENTS = (j && j.events) || [];
+      var dayEvents = ROAD_EVENTS.filter(function (ev) {
+        return eventDateKey(ev) === dayKey;
+      });
+      var workDay = (plan && plan.day) || null;
+      ROAD = buildRoadItems(dayEvents, workDay);
+    });
+  }
+
+  function setSelectedRoadDate(key) {
+    SELECTED_ROAD_DATE = key || dateKeyOf(new Date());
+    ROAD_WEEK_START = startOfWeek(parseDateKey(SELECTED_ROAD_DATE));
+  }
+
+  function shiftRoadWeek(deltaWeeks) {
+    var start = ROAD_WEEK_START || startOfWeek(parseDateKey(SELECTED_ROAD_DATE));
+    ROAD_WEEK_START = new Date(start.getFullYear(), start.getMonth(), start.getDate() + (deltaWeeks * 7));
+    var selected = parseDateKey(SELECTED_ROAD_DATE);
+    var offset = selected.getDay();
+    SELECTED_ROAD_DATE = dateKeyOf(new Date(
+      ROAD_WEEK_START.getFullYear(),
+      ROAD_WEEK_START.getMonth(),
+      ROAD_WEEK_START.getDate() + offset
+    ));
   }
 
   function fileTone(name) {
@@ -278,8 +351,9 @@
   }
 
   function renderWeek() {
-    return currentWeekDays().map(function (d) {
-      return '<button type="button" class="tma-dash__overview-day' + (d.active ? ' tma-dash__overview-day--active' : '') + '">' +
+    return weekDaysFor(SELECTED_ROAD_DATE, ROAD_WEEK_START).map(function (d) {
+      return '<button type="button" class="tma-dash__overview-day' + (d.active ? ' tma-dash__overview-day--active' : '') +
+        '" data-overview-day="' + esc(d.key) + '" aria-pressed="' + (d.active ? 'true' : 'false') + '">' +
         '<span class="tma-dash__overview-day-label">' + esc(d.label) + '</span>' +
         '<span class="tma-dash__overview-day-num">' + esc(d.day) + '</span></button>';
     }).join('');
@@ -288,16 +362,24 @@
   function renderRoad() {
     var items = ROAD.length
       ? ROAD.map(function (item) {
-          return '<div class="tma-dash__overview-road-item">' +
+          return '<button type="button" class="tma-dash__overview-road-item" data-overview-road-item="' +
+            esc(item.id || '') + '" data-overview-road-kind="' + esc(item.kind || 'event') + '"' +
+            (item.dateKey ? ' data-overview-road-date="' + esc(item.dateKey) + '"' : '') + '>' +
             '<img class="tma-dash__overview-road-avatar" src="' + esc(item.avatarUrl || AVATAR + 'Avatar3d01.png') + '" alt="">' +
             '<div class="tma-dash__overview-road-body">' +
             '<span class="tma-dash__overview-road-text">' + esc(item.text) + '</span>' +
-            '<span class="tma-dash__overview-road-time">' + esc(item.time) + '</span></div></div>';
+            '<span class="tma-dash__overview-road-time">' + esc(item.time) + '</span></div></button>';
         }).join('')
-      : '<p class="tma-dash__overview-empty">No upcoming items yet.</p>';
-    return '<section class="tma-dash__overview-block tma-dash__overview-block--road" data-node-id="32546:46995">' +
+      : '<p class="tma-dash__overview-empty">Nothing on the road for this day.</p>';
+    return '<section class="tma-dash__overview-block tma-dash__overview-block--road" data-node-id="32546:46995" data-overview-road>' +
       '<h3 class="tma-dash__overview-block-title">What\'s on the road?</h3>' +
-      '<div class="tma-dash__overview-week">' + renderWeek() + '</div>' +
+      '<div class="tma-dash__overview-week-wrap">' +
+      '<button type="button" class="tma-dash__overview-week-nav" data-overview-week-nav="-1" aria-label="Previous week">' +
+      '<img src="' + ICON + 'CaretLeft.svg" alt=""></button>' +
+      '<div class="tma-dash__overview-week" data-overview-week>' + renderWeek() + '</div>' +
+      '<button type="button" class="tma-dash__overview-week-nav" data-overview-week-nav="1" aria-label="Next week">' +
+      '<img src="' + ICON + 'CaretRight.svg" alt=""></button>' +
+      '</div>' +
       '<div class="tma-dash__overview-road">' +
       '<div class="tma-dash__overview-road-line" aria-hidden="true"></div>' +
       '<div class="tma-dash__overview-road-list">' + items + '</div></div></section>';
@@ -322,7 +404,10 @@
         }).join('')
       : '<p class="tma-dash__overview-empty">No files yet.</p>';
     return '<section class="tma-dash__overview-block tma-dash__overview-block--files" data-node-id="32546:47005">' +
+      '<div class="tma-dash__overview-block-head">' +
       '<h3 class="tma-dash__overview-block-title">Latest Files</h3>' +
+      '<button type="button" class="tma-dash__overview-link" data-overview-view-all-files>View all files</button>' +
+      '</div>' +
       '<div class="tma-dash__overview-files-body">' +
       '<div class="tma-dash__overview-files">' + rows + '</div>' +
       '<div class="tma-dash__overview-upload" data-overview-upload-zone>' +
@@ -446,6 +531,69 @@
     var scrollY = window.scrollY || 0;
     grid.innerHTML = renderHero() + renderRoad() + renderFiles();
     try { window.scrollTo(0, scrollY); } catch (e) {}
+    bindRoadWheel(container);
+  }
+
+  function remountRoadSection(container) {
+    var host = container || document;
+    var section = host.querySelector('[data-overview-road]');
+    if (!section) return;
+    var html = renderRoad();
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var next = tmp.firstElementChild;
+    if (!next) return;
+    section.replaceWith(next);
+    bindRoadWheel(host);
+  }
+
+  function navigateToCalendar() {
+    var calNav = document.querySelector('.tma-dash__nav-item[data-nav="calendar"], .tma-dash__mrow[data-nav="calendar"]');
+    if (calNav) calNav.click();
+    else if (window.TMACalendar && typeof TMACalendar.activate === 'function') {
+      TMACalendar.activate();
+    }
+  }
+
+  function openCalendarWorkPlan(key) {
+    window.__TMA_OPEN_WORKPLAN = key;
+    navigateToCalendar();
+    if (window.TMACalendar && typeof TMACalendar.openWorkPlan === 'function') {
+      TMACalendar.openWorkPlan(key);
+    }
+  }
+
+  function openCalendarEvent(eventId, dateKey) {
+    if (eventId) window.__TMA_OPEN_EVENT = eventId;
+    else if (dateKey) window.__TMA_OPEN_DAY = dateKey;
+    navigateToCalendar();
+    if (eventId && window.TMACalendar && typeof TMACalendar.openEvent === 'function') {
+      TMACalendar.openEvent(eventId);
+    } else if (dateKey && window.TMACalendar && typeof TMACalendar.openDay === 'function') {
+      TMACalendar.openDay(dateKey);
+    }
+  }
+
+  function refreshRoadForSelection(container) {
+    return loadRoadFromCalendar().then(function () {
+      remountRoadSection(container);
+    });
+  }
+
+  function bindRoadWheel(root) {
+    var hosts = root.querySelectorAll
+      ? root.querySelectorAll('[data-overview-week]')
+      : [];
+    Array.prototype.forEach.call(hosts, function (week) {
+      if (week.dataset.roadWheelBound) return;
+      week.dataset.roadWheelBound = '1';
+      week.addEventListener('wheel', function (e) {
+        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+        if (week.scrollWidth <= week.clientWidth + 1) return;
+        e.preventDefault();
+        week.scrollLeft += e.deltaY;
+      }, { passive: false });
+    });
   }
 
   function openFilePreview(file) {
@@ -507,16 +655,41 @@
       var workEdit = e.target.closest('[data-overview-workplan-edit]');
       if (workEdit && container.contains(workEdit)) {
         e.preventDefault();
-        var today = new Date();
-        var key = today.getFullYear() + '-' +
-          String(today.getMonth() + 1).padStart(2, '0') + '-' +
-          String(today.getDate()).padStart(2, '0');
-        window.__TMA_OPEN_WORKPLAN = key;
-        var calNav = document.querySelector('.tma-dash__nav-item[data-nav="calendar"], .tma-dash__mrow[data-nav="calendar"]');
-        if (calNav) calNav.click();
-        else if (window.TMACalendar && typeof TMACalendar.openWorkPlan === 'function') {
-          TMACalendar.openWorkPlan(key);
-        }
+        openCalendarWorkPlan(dateKeyOf(new Date()));
+        return;
+      }
+
+      var weekNav = e.target.closest('[data-overview-week-nav]');
+      if (weekNav && container.contains(weekNav)) {
+        e.preventDefault();
+        shiftRoadWeek(parseInt(weekNav.getAttribute('data-overview-week-nav'), 10) || 0);
+        refreshRoadForSelection(container);
+        return;
+      }
+
+      var dayBtn = e.target.closest('[data-overview-day]');
+      if (dayBtn && container.contains(dayBtn)) {
+        e.preventDefault();
+        setSelectedRoadDate(dayBtn.getAttribute('data-overview-day'));
+        refreshRoadForSelection(container);
+        return;
+      }
+
+      var roadItem = e.target.closest('[data-overview-road-item]');
+      if (roadItem && container.contains(roadItem)) {
+        e.preventDefault();
+        var kind = roadItem.getAttribute('data-overview-road-kind');
+        var rid = roadItem.getAttribute('data-overview-road-item');
+        var rdate = roadItem.getAttribute('data-overview-road-date') || SELECTED_ROAD_DATE;
+        if (kind === 'workplan') openCalendarWorkPlan(rdate);
+        else openCalendarEvent(rid, rdate);
+        return;
+      }
+
+      var viewAllFiles = e.target.closest('[data-overview-view-all-files]');
+      if (viewAllFiles && container.contains(viewAllFiles)) {
+        e.preventDefault();
+        setActiveTab(container, 'Files');
         return;
       }
 
@@ -596,6 +769,39 @@
     });
   }
 
+  /* Bind day / week / item clicks for any host that embeds renderRoad
+     (Overview tab and Dashboard home). Idempotent per root. */
+  function bindRoadActions(root) {
+    if (!root || root.dataset.overviewRoadBound) return;
+    root.dataset.overviewRoadBound = '1';
+    root.addEventListener('click', function (e) {
+      var weekNav = e.target.closest('[data-overview-week-nav]');
+      if (weekNav && root.contains(weekNav)) {
+        e.preventDefault();
+        shiftRoadWeek(parseInt(weekNav.getAttribute('data-overview-week-nav'), 10) || 0);
+        refreshRoadForSelection(root);
+        return;
+      }
+      var dayBtn = e.target.closest('[data-overview-day]');
+      if (dayBtn && root.contains(dayBtn)) {
+        e.preventDefault();
+        setSelectedRoadDate(dayBtn.getAttribute('data-overview-day'));
+        refreshRoadForSelection(root);
+        return;
+      }
+      var roadItem = e.target.closest('[data-overview-road-item]');
+      if (roadItem && root.contains(roadItem)) {
+        e.preventDefault();
+        var kind = roadItem.getAttribute('data-overview-road-kind');
+        var rid = roadItem.getAttribute('data-overview-road-item');
+        var rdate = roadItem.getAttribute('data-overview-road-date') || SELECTED_ROAD_DATE;
+        if (kind === 'workplan') openCalendarWorkPlan(rdate);
+        else openCalendarEvent(rid, rdate);
+      }
+    });
+    bindRoadWheel(root);
+  }
+
   function mount(container, opts) {
     if (!container) return;
     var pending = (typeof document !== 'undefined' && document.querySelector('.tma-dash'))
@@ -605,6 +811,7 @@
     container.innerHTML = render(activeTab);
     bindTabs(container);
     bindOverviewActions(container);
+    bindRoadWheel(container);
     if (activeTab === 'Users') mountUsersTab(container);
     if (activeTab === 'Files') mountFilesTab(container);
     if (activeTab === 'Activity') mountActivityTab(container);
@@ -633,6 +840,12 @@
     setActiveTab: setActiveTab,
     selectTab: selectTab,
     renderRoad: renderRoad,
+    bindRoadActions: bindRoadActions,
+    refreshRoad: function (root) {
+      return loadRoadFromCalendar().then(function () {
+        remountRoadSection(root || document);
+      });
+    },
     refresh: function () {
       var container = document.querySelector('[data-overview]');
       if (container) refreshOverviewData(container);

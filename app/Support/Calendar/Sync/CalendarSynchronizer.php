@@ -33,7 +33,7 @@ class CalendarSynchronizer
     /**
      * Run a full sync cycle: pull remote changes, then push local ones.
      *
-     * @return array{pulled: int, pushed: int, deleted: int, conflicts: int}
+     * @return array{pulled: int, pushed: int, deleted: int, conflicts: int, failed: int}
      */
     public function run(): array
     {
@@ -49,31 +49,101 @@ class CalendarSynchronizer
             'subscription_attempted_at' => now(),
         ])->save();
 
-        $stats = ['pulled' => 0, 'pushed' => 0, 'deleted' => 0, 'conflicts' => 0];
+        $stats = ['pulled' => 0, 'pushed' => 0, 'deleted' => 0, 'conflicts' => 0, 'failed' => 0];
 
         try {
+            // One-time heal for calendars connected before remote_can_write existed.
+            $this->refreshRemoteWriteability($provider);
+
             if ($this->calendar->pullsIn()) {
                 $this->pull($provider, $stats);
             }
 
+            // Read-only remotes (holidays etc.) never push — pushesOut() already
+            // gates on remote_can_write === false.
             if ($this->calendar->pushesOut()) {
                 $this->push($provider, $stats);
             }
 
-            $this->calendar->forceFill([
-                'subscription_status' => 'ok',
-                'subscription_error' => null,
-                'subscription_synced_at' => now(),
-                'subscription_failures' => 0,
-            ])->save();
-
-            CalendarAudit::record(CalendarAudit::SYNC_COMPLETED, null, $this->calendar, context: $stats);
+            $this->finishRun($stats);
         } catch (CalendarSyncException $e) {
             $this->recordFailure($e->getMessage());
             throw $e;
         }
 
         return $stats;
+    }
+
+    /**
+     * Fill remote_can_write for legacy rows and force import-only when the
+     * provider reports the calendar as read-only (holiday calendars, etc.).
+     */
+    private function refreshRemoteWriteability(CalendarProvider $provider): void
+    {
+        if ($this->calendar->remote_can_write !== null) {
+            return;
+        }
+
+        try {
+            foreach ($provider->listCalendars() as $remote) {
+                if ((string) ($remote['id'] ?? '') !== (string) $this->calendar->external_id) {
+                    continue;
+                }
+
+                $canWrite = ! empty($remote['canWrite']);
+                $updates = ['remote_can_write' => $canWrite];
+                if (! $canWrite) {
+                    $updates['sync_direction'] = 'import';
+                }
+                $this->calendar->forceFill($updates)->save();
+
+                return;
+            }
+        } catch (CalendarSyncException) {
+            // Discovery failed — leave null and continue the sync; a later
+            // run can heal once the provider is reachable again.
+        }
+    }
+
+    /**
+     * Mark the calendar ok or partially synchronized after a completed run.
+     *
+     * @param  array<string, int>  $stats
+     */
+    private function finishRun(array $stats): void
+    {
+        $failed = (int) ($stats['failed'] ?? 0);
+        $conflicts = (int) ($stats['conflicts'] ?? 0);
+
+        if ($failed > 0 || $conflicts > 0) {
+            $parts = [];
+            if ($failed > 0) {
+                $parts[] = $failed === 1
+                    ? '1 event could not be synchronized'
+                    : $failed.' events could not be synchronized';
+            }
+            if ($conflicts > 0) {
+                $parts[] = $conflicts === 1
+                    ? '1 conflict needs review'
+                    : $conflicts.' conflicts need review';
+            }
+
+            $this->calendar->forceFill([
+                'subscription_status' => 'partial',
+                'subscription_error' => implode('. ', $parts),
+                'subscription_synced_at' => now(),
+                'subscription_failures' => 0,
+            ])->save();
+        } else {
+            $this->calendar->forceFill([
+                'subscription_status' => 'ok',
+                'subscription_error' => null,
+                'subscription_synced_at' => now(),
+                'subscription_failures' => 0,
+            ])->save();
+        }
+
+        CalendarAudit::record(CalendarAudit::SYNC_COMPLETED, null, $this->calendar, context: $stats);
     }
 
     /* ── pull ────────────────────────────────────────────────── */
@@ -292,31 +362,37 @@ class CalendarSynchronizer
 
             $payload = RemoteEvent::fromEvent($event);
 
-            if ($event->external_event_id) {
-                $result = $provider->updateEvent(
-                    $this->calendar->external_id,
-                    $event->external_event_id,
-                    $payload,
-                    $event->external_etag,
-                );
-            } else {
-                $created = $provider->createEvent($this->calendar->external_id, $payload);
-                $event->external_provider = $this->calendar->source;
-                $event->external_calendar_id = $this->calendar->external_id;
-                $event->external_event_id = $created['externalId'];
-                $result = ['etag' => $created['etag']];
+            try {
+                if ($event->external_event_id) {
+                    $result = $provider->updateEvent(
+                        $this->calendar->external_id,
+                        $event->external_event_id,
+                        $payload,
+                        $event->external_etag,
+                    );
+                } else {
+                    $created = $provider->createEvent($this->calendar->external_id, $payload);
+                    $event->external_provider = $this->calendar->source;
+                    $event->external_calendar_id = $this->calendar->external_id;
+                    $event->external_event_id = $created['externalId'];
+                    $result = ['etag' => $created['etag']];
+                }
+
+                // saveQuietly so bumping the sync markers doesn't tick updated_at
+                // and make the event look changed-again on the next push. The
+                // fingerprint we just pushed becomes the agreed baseline.
+                $event->external_etag = $result['etag'] ?? null;
+                $event->external_synced_at = now();
+                $event->external_synced_local_at = now();
+                $event->external_local_fingerprint = $fingerprint;
+                $event->saveQuietly();
+
+                $stats['pushed']++;
+            } catch (CalendarSyncException $e) {
+                // One event must not fail the whole calendar (e.g. a single
+                // rejected write on an otherwise healthy sync).
+                $stats['failed'] = ($stats['failed'] ?? 0) + 1;
             }
-
-            // saveQuietly so bumping the sync markers doesn't tick updated_at
-            // and make the event look changed-again on the next push. The
-            // fingerprint we just pushed becomes the agreed baseline.
-            $event->external_etag = $result['etag'] ?? null;
-            $event->external_synced_at = now();
-            $event->external_synced_local_at = now();
-            $event->external_local_fingerprint = $fingerprint;
-            $event->saveQuietly();
-
-            $stats['pushed']++;
         }
     }
 

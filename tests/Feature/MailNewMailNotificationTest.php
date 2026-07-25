@@ -103,7 +103,7 @@ class MailNewMailNotificationTest extends TestCase
         $notification = Notification::where('user_id', $user->id)->where('type', 'email.received')->first();
 
         $this->assertNotNull($notification, 'A new unread inbox message must raise email.received.');
-        $this->assertSame('New email from Dana Reed', $notification->title);
+        $this->assertSame('Dana Reed sent you an email', $notification->title);
         $this->assertSame('Hello there', $notification->message);
         $this->assertSame('dana@example.com', $notification->metadata['from_email'] ?? null);
         $this->assertSame('Dana Reed', $notification->metadata['from_name'] ?? null);
