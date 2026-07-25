@@ -467,9 +467,9 @@
   -webkit-mask-image: url('../images/icons/phosphor/ChatsTeardrop.svg');
   mask-image: url('../images/icons/phosphor/ChatsTeardrop.svg');
 }
-.tma-dash__nav-icon--rsssimple {
-  -webkit-mask-image: url('../images/icons/phosphor/RssSimple.svg');
-  mask-image: url('../images/icons/phosphor/RssSimple.svg');
+.tma-dash__nav-icon--newspaper {
+  -webkit-mask-image: url('../images/icons/phosphor/Newspaper.svg');
+  mask-image: url('../images/icons/phosphor/Newspaper.svg');
 }
 .tma-dash__nav-icon--calendarblank {
   -webkit-mask-image: url('../images/icons/phosphor/CalendarBlank.svg');
@@ -529,9 +529,9 @@
   -webkit-mask-image: url('../images/icons/phosphor/ChatsTeardropFill.svg');
   mask-image: url('../images/icons/phosphor/ChatsTeardropFill.svg');
 }
-.tma-dash__nav-item--active .tma-dash__nav-icon--rsssimple {
-  -webkit-mask-image: url('../images/icons/phosphor/RssSimple.svg');
-  mask-image: url('../images/icons/phosphor/RssSimple.svg');
+.tma-dash__nav-item--active .tma-dash__nav-icon--newspaper {
+  -webkit-mask-image: url('../images/icons/phosphor/Newspaper.svg');
+  mask-image: url('../images/icons/phosphor/Newspaper.svg');
 }
 .tma-dash__nav-item--active .tma-dash__nav-icon--calendarblank {
   -webkit-mask-image: url('../images/icons/phosphor/CalendarBlankFill.svg');
