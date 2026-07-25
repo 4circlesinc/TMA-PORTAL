@@ -11,7 +11,7 @@ class StaySignedInController extends Controller
 {
     public function show(Request $request): View|RedirectResponse
     {
-        if (! StaySignedIn::shouldAsk($request)) {
+        if (! StaySignedIn::isNeeded($request)) {
             return redirect()->intended('/');
         }
 
@@ -28,8 +28,14 @@ class StaySignedInController extends Controller
             StaySignedIn::applyRemember($request);
         }
 
-        return redirect()
-            ->intended('/')
-            ->withCookie(StaySignedIn::promptedCookie($request));
+        StaySignedIn::clearNeeded($request);
+
+        $response = redirect()->intended('/');
+
+        foreach (StaySignedIn::answerCookies($request, $data['stay']) as $cookie) {
+            $response->withCookie($cookie);
+        }
+
+        return $response;
     }
 }

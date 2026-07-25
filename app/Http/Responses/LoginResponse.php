@@ -16,6 +16,8 @@ class LoginResponse implements LoginResponseContract
         }
 
         if (StaySignedIn::shouldAsk($request)) {
+            StaySignedIn::markNeeded($request);
+
             return redirect()->route('stay-signed-in.show');
         }
 

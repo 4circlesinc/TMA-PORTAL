@@ -4,6 +4,7 @@ use App\Http\Middleware\ApplySecurityPolicyHeaders;
 use App\Http\Middleware\EnforceTwoFactor;
 use App\Http\Middleware\EnsureAccountApproved;
 use App\Http\Middleware\EnsureOnboarded;
+use App\Http\Middleware\EnsureStaySignedInChoice;
 use App\Http\Middleware\IssueTrustedDeviceCookie;
 use App\Http\Middleware\EnsureProfileComplete;
 use App\Support\Files\FileValidationException;
@@ -38,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->appendToGroup('web', ApplySecurityPolicyHeaders::class);
         $middleware->appendToGroup('web', IssueTrustedDeviceCookie::class);
+        $middleware->appendToGroup('web', EnsureStaySignedInChoice::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

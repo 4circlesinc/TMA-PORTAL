@@ -308,6 +308,8 @@ class SocialAuthController extends Controller
         $request->session()->regenerate();
 
         if (StaySignedIn::shouldAsk($request)) {
+            StaySignedIn::markNeeded($request);
+
             return redirect()->route('stay-signed-in.show');
         }
 
