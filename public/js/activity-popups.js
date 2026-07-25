@@ -156,15 +156,12 @@
     }
 
     function seeAllNotifications() {
-      closeAll();
-      openRightbar();
-      if (window.TMARightSidebar && window.TMARightSidebar.expand) {
-        window.TMARightSidebar.expand(root, 'notifications');
-      }
+      // Full inbox lives in Overview → Notifications.
+      navigate('/overview?tab=notifications');
     }
 
     function seeAllActivities() {
-      // The complete activity log lives in Overview → Activity (§7).
+      // The complete activity log lives in Overview → Activity.
       navigate('/overview?tab=activity');
     }
 

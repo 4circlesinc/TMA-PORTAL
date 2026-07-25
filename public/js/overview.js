@@ -20,7 +20,7 @@
      Project Spendings table and the Add Target action — none of them were
      backed by anything, and the page reads as a real dashboard, so figures
      nobody entered are worse than absent sections. */
-  var TABS = ['Overview', 'Users', 'Files', 'Activity'];
+  var TABS = ['Overview', 'Users', 'Files', 'Notifications', 'Activity'];
 
   function dateKeyOf(d) {
     return d.getFullYear() + '-' +
@@ -226,6 +226,7 @@
     Overview: '.tma-dash__overview-grid',
     Users: '.tma-dash__overview-users',
     Files: '.tma-dash__overview-files-tab',
+    Notifications: '.tma-dash__overview-notifications-tab',
     Activity: '.tma-dash__overview-activity-tab',
   };
 
@@ -427,6 +428,11 @@
       '<div class="tma-dash__files" data-files-overview></div></div>';
   }
 
+  function renderNotificationsTab(activeTab) {
+    return '<div class="tma-dash__overview-notifications-tab"' + (activeTab !== 'Notifications' ? ' hidden' : '') + '>' +
+      '<div class="tma-dash__notifications" data-notifications-overview></div></div>';
+  }
+
   function renderActivityTab(activeTab) {
     return '<div class="tma-dash__overview-activity-tab" data-node-id="32546:96119"' + (activeTab !== 'Activity' ? ' hidden' : '') + '>' +
       '<div class="tma-dash__activity" data-activity-overview></div></div>';
@@ -442,6 +448,12 @@
     var mountEl = container.querySelector('[data-files-overview]');
     if (!mountEl || !window.TMAOverviewFiles || typeof window.TMAOverviewFiles.mount !== 'function') return;
     window.TMAOverviewFiles.mount(mountEl);
+  }
+
+  function mountNotificationsTab(container) {
+    var mountEl = container.querySelector('[data-notifications-overview]');
+    if (!mountEl || !window.TMAOverviewNotifications || typeof window.TMAOverviewNotifications.mount !== 'function') return;
+    window.TMAOverviewNotifications.mount(mountEl);
   }
 
   function mountActivityTab(container) {
@@ -474,6 +486,7 @@
       '</div>' +
       renderUsers(tab) +
       renderFilesTab(tab) +
+      renderNotificationsTab(tab) +
       renderActivityTab(tab) +
       '</div>';
   }
@@ -496,8 +509,18 @@
 
     if (tab === 'Users') mountUsersTab(container);
     if (tab === 'Files') mountFilesTab(container);
+    if (tab === 'Notifications') mountNotificationsTab(container);
     if (tab === 'Activity') mountActivityTab(container);
     syncOverviewChrome(tab);
+
+    // Keep the URL in sync so See all / refresh / share land on the same tab.
+    try {
+      var key = String(tab || 'Overview').toLowerCase();
+      var url = new URL(window.location.href);
+      if (key === 'overview') url.searchParams.delete('tab');
+      else url.searchParams.set('tab', key);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    } catch (e) {}
   }
 
   function bindTabs(container) {
@@ -513,7 +536,15 @@
   /* Map a deep-link tab token (?tab=activity, or the pending value the shell
      stored) to a real tab label, so "See all activities" lands on Activity. */
   function normalizeTab(token) {
-    var map = { overview: 'Overview', users: 'Users', files: 'Files', activity: 'Activity' };
+    var map = {
+      overview: 'Overview',
+      users: 'Users',
+      files: 'Files',
+      notifications: 'Notifications',
+      notification: 'Notifications',
+      activity: 'Activity',
+      activities: 'Activity',
+    };
     return map[String(token || '').toLowerCase()] || null;
   }
 
@@ -814,6 +845,7 @@
     bindRoadWheel(container);
     if (activeTab === 'Users') mountUsersTab(container);
     if (activeTab === 'Files') mountFilesTab(container);
+    if (activeTab === 'Notifications') mountNotificationsTab(container);
     if (activeTab === 'Activity') mountActivityTab(container);
     setActiveTab(container, activeTab);
 

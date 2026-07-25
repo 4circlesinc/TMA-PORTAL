@@ -56,8 +56,8 @@
     }
 
     var clients = { items: [], loaded: false, loading: false, error: false, forbidden: false };
-    // "See all" expands the section from the compact preview to the fuller
-    // paginated list, in place — no separate page needed.
+    // Kept for load-more while a section is temporarily expanded; "See all"
+    // navigates to the full Overview tabs instead of expanding in place.
     var expanded = { notifications: false, activities: false };
 
     /* Adaptive preview counts: keep ≥6 clients visible; trim notif/activity
@@ -96,9 +96,7 @@
       return '<button type="button" class="tma-dash__rb-more" data-rb-more="' + kind + '">Load more</button>';
     }
 
-    function seeAllControl(kind, total, previewCount) {
-      if (expanded[kind]) return '';
-      if (total <= previewCount) return '';
+    function seeAllControl(kind) {
       var label = kind === 'notifications' ? 'See all notifications' : 'See all activities';
       return '<button type="button" class="tma-dash__rb-see-all" data-rb-see-all="' + kind + '">' + label + '</button>';
     }
@@ -106,7 +104,8 @@
     function syncFooter(kind, total, previewCount, hasMore) {
       var foot = footerEl(kind);
       if (!foot) return;
-      var html = seeAllControl(kind, total, previewCount) + moreControl(kind, hasMore);
+      // Always offer See all so users can open the full page even with few items.
+      var html = seeAllControl(kind) + moreControl(kind, hasMore);
       foot.innerHTML = html;
       foot.hidden = !html;
     }
@@ -239,7 +238,9 @@
       var seeAll = e.target.closest('[data-rb-see-all]');
       if (seeAll) {
         e.preventDefault();
-        expand(seeAll.getAttribute('data-rb-see-all'));
+        var seeKind = seeAll.getAttribute('data-rb-see-all');
+        if (seeKind === 'notifications') navigate('/overview?tab=notifications');
+        else if (seeKind === 'activities') navigate('/overview?tab=activity');
         return;
       }
 
