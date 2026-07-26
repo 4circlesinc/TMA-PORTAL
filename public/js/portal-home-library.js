@@ -153,7 +153,9 @@
   }
 
   function renderDefaultFolders() {
-    if (isStaffUser() === false) return '';
+    // Clients never see Default Folders. Hide until identity is known so they
+    // don't flash a skeleton, then only render for staff/admin.
+    if (isStaffUser() !== true) return '';
     if (!state.loaded && !state.defaults.length) {
       return '<section class="tma-portal-home-defaults" data-key="home-defaults" aria-busy="true">' +
         '<div class="tma-portal-home-defaults__head">' +
@@ -285,6 +287,18 @@
     if (!host.dataset.homeLibWired) {
       host.dataset.homeLibWired = '1';
       host.addEventListener('click', function (e) {
+        // Tabs: delegate so morph can replace tab buttons without losing the
+        // handler (PortalTabGroup binds per-button and breaks after patch).
+        var tabBtn = e.target.closest('[data-tab-key]');
+        if (tabBtn && host.contains(tabBtn)) {
+          var key = tabBtn.getAttribute('data-tab-key');
+          if ((key === 'recent' || key === 'shared') && state.tab !== key) {
+            state.tab = key;
+            rerenderHome();
+          }
+          return;
+        }
+
         var more = e.target.closest('[data-home-lib-defaults-more]');
         if (more && host.contains(more)) {
           state.showAllDefaults = !state.showAllDefaults;
@@ -306,15 +320,12 @@
       });
     }
 
+    // Keep underline chrome in sync for a11y; switching itself is delegated above.
     if (ui() && ui().wireTabs) {
       var tabHost = host.querySelector('.tma-tab-group');
       if (tabHost && !tabHost.dataset.homeLibTabs) {
         tabHost.dataset.homeLibTabs = '1';
-        ui().wireTabs(tabHost, function (key) {
-          if (key !== 'recent' && key !== 'shared') return;
-          state.tab = key;
-          rerenderHome();
-        });
+        if (window.PortalTabGroup) window.PortalTabGroup.init(tabHost);
       }
     }
   }
@@ -348,9 +359,8 @@
       var recent = res[1];
       var shared = res[2];
 
-      var org = (shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
-      // Only staff see organization default folders.
-      if (isStaffUser() === false) org = [];
+      // Only staff/admin see organization default folders — never clients.
+      var org = (isStaffUser() === true && shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
 
       var defaults = org.map(function (f) {
         return {

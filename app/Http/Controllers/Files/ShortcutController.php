@@ -45,6 +45,18 @@ class ShortcutController extends BaseFilesController
      */
     private function autoGroups(User $user): array
     {
+        // Default / organization / assigned-client / staff folders are staff
+        // tooling only. Clients never receive those auto groups — they reach
+        // files through shares and their own pins.
+        if (! FileAccess::isStaff($user)) {
+            return [
+                'libraries' => [],
+                'assignedClients' => [],
+                'organization' => [],
+                'staff' => [],
+            ];
+        }
+
         $assignedClients = Folder::where('folder_type', Folder::TYPE_CLIENT)
             ->whereIn('client_id', ClientAssignment::where('user_id', $user->id)->pluck('client_id'))
             ->orderBy('name')->get();

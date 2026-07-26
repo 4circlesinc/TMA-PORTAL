@@ -65,7 +65,14 @@
 
   function initAll(scope) {
     const root = scope || document;
-    root.querySelectorAll(GROUP_SELECTOR).forEach(initGroup);
+    // Allow init(groupEl) — querySelectorAll only finds descendants, so a
+    // tab group passed as the root would otherwise never be wired.
+    if (root && root.nodeType === 1 && root.matches && root.matches(GROUP_SELECTOR)) {
+      initGroup(root);
+    }
+    if (root && root.querySelectorAll) {
+      root.querySelectorAll(GROUP_SELECTOR).forEach(initGroup);
+    }
   }
 
   window.PortalTabGroup = { init: initAll, activate: activateTab };

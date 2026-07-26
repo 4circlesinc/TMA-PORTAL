@@ -377,7 +377,8 @@
       tabs.map(function (it, i) {
         var on = it.key === section;
         return '<button type="button" class="tma-tab' + (on ? ' is-active' : '') + '" role="tab"' +
-          ' data-tab-index="' + i + '" data-overview-files-section="' + escapeHtml(it.key) + '"' +
+          ' data-tab-index="' + i + '" data-tab-key="' + escapeHtml(it.key) + '"' +
+          ' data-overview-files-section="' + escapeHtml(it.key) + '"' +
           ' aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '">' +
           '<span class="tma-tab__label">' + escapeHtml(it.label) + '</span>' +
           '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
@@ -404,6 +405,30 @@
     };
 
     container.setAttribute('data-files-mounted', '');
+
+    // Delegate section tabs so clicks still work after full re-renders.
+    if (!container.dataset.overviewFilesTabsWired) {
+      container.dataset.overviewFilesTabsWired = '1';
+      container.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-overview-files-section]');
+        if (!btn || !container.contains(btn)) return;
+        var next = btn.getAttribute('data-overview-files-section');
+        if (!next || next === state.section) return;
+        state.section = next;
+        state.page = 1;
+        state.selected = {};
+        state.search = '';
+        state.filterType = '';
+        if (state.cache[next]) {
+          state.rows = state.cache[next];
+          render();
+        } else {
+          state.rows = [];
+          render();
+          reloadFiles();
+        }
+      });
+    }
 
     function updateToolbarSelection() {
       var count = Object.keys(state.selected).length;
@@ -478,26 +503,6 @@
     }
 
     function wireEvents(filtered, pageRows, start) {
-      container.querySelectorAll('[data-overview-files-section]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var next = btn.getAttribute('data-overview-files-section');
-          if (!next || next === state.section) return;
-          state.section = next;
-          state.page = 1;
-          state.selected = {};
-          state.search = '';
-          state.filterType = '';
-          if (state.cache[next]) {
-            state.rows = state.cache[next];
-            render();
-          } else {
-            state.rows = [];
-            render();
-            reloadFiles();
-          }
-        });
-      });
-
       var searchInput = container.querySelector('[data-files-search]');
       var searchTimer = null;
 
