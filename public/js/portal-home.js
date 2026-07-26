@@ -157,8 +157,8 @@
     // hidden neighbour would shift the others along and this panel's contents —
     // thumbnails included — would be rewritten onto a different node.
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" data-key="panel-recent" aria-label="Recent files" aria-busy="true">' +
-        '<h2 class="tma-portal-panel__title">Recent Files</h2>' + skeletonFileRows(3) + '</section>';
+      return '<section class="tma-portal-panel" data-tile-id="recentFiles" data-key="panel-recent" aria-label="Recent files" aria-busy="true">' +
+        panelHead('Recent Files') + skeletonFileRows(3) + '</section>';
     }
     var rows = s.recentFiles.map(function (f) {
       // Keyed by kind+id: a folder and a file can share a numeric id, and
@@ -174,8 +174,8 @@
         (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
         '</span></button>';
     }).join('');
-    return '<section class="tma-portal-panel" data-key="panel-recent" aria-label="Recent files">' +
-      '<h2 class="tma-portal-panel__title">Recent Files</h2>' +
+    return '<section class="tma-portal-panel" data-tile-id="recentFiles" data-key="panel-recent" aria-label="Recent files">' +
+      panelHead('Recent Files') +
       (rows || '<p class="tma-portal-panel__note">No recent files yet.</p>') +
       '</section>';
   }
@@ -185,12 +185,12 @@
       var tile = '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
         '<span class="tma-skeleton" style="width:44px;height:44px;border-radius:var(--radius-12)"></span>' +
         '<span class="tma-skeleton tma-skeleton--text" style="width:70%;height:11px"></span></div>';
-      return '<section class="tma-portal-panel" data-key="panel-shortcuts" aria-label="Shortcuts" aria-busy="true">' +
-        '<h2 class="tma-portal-panel__title">Shortcuts</h2>' +
+      return '<section class="tma-portal-panel" data-tile-id="shortcuts" data-key="panel-shortcuts" aria-label="Shortcuts" aria-busy="true">' +
+        panelHead('Shortcuts') +
         '<div class="tma-portal-shortcuts">' + new Array(8).fill(tile).join('') + '</div></section>';
     }
-    return '<section class="tma-portal-panel" data-key="panel-shortcuts" aria-label="Shortcuts">' +
-      '<h2 class="tma-portal-panel__title">Shortcuts</h2>' +
+    return '<section class="tma-portal-panel" data-tile-id="shortcuts" data-key="panel-shortcuts" aria-label="Shortcuts">' +
+      panelHead('Shortcuts') +
       '<div class="tma-portal-shortcuts">' +
       SHORTCUTS.map(function (sc) {
         return '<button type="button" class="tma-portal-shortcut" data-home-shortcut="' + sc.id + '">' +
@@ -204,14 +204,17 @@
 
   function renderTutorials(s) {
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" data-key="panel-tutorials" aria-label="Tutorials" aria-busy="true">' +
-        '<h2 class="tma-portal-panel__title">Tutorials</h2>' + skeletonFileRows(4) + '</section>';
+      return '<section class="tma-portal-panel" data-tile-id="tutorials" data-key="panel-tutorials" aria-label="Tutorials" aria-busy="true">' +
+        panelHead('Tutorials') + skeletonFileRows(4) + '</section>';
     }
     var done = s.tutorials.filter(function (t) { return t.done; }).length;
-    return '<section class="tma-portal-panel" data-key="panel-tutorials" aria-label="Tutorials">' +
-      '<div class="tma-portal-head" style="gap:var(--space-8)">' +
+    return '<section class="tma-portal-panel" data-tile-id="tutorials" data-key="panel-tutorials" aria-label="Tutorials">' +
+      '<div class="tma-portal-panel__head">' +
+      '<div class="tma-portal-head" style="gap:var(--space-8);flex:1;min-width:0">' +
       '<h2 class="tma-portal-panel__title">Tutorials</h2>' +
       ui().select(['Getting Started'], 'Getting Started', 'data-home-tutorial-set', 'Tutorial set') +
+      '</div>' +
+      dragHandleHtml() +
       '</div>' +
       '<p class="tma-portal-panel__note">' + done + ' of ' + s.tutorials.length + ' completed</p>' +
       '<div class="tma-portal-tutorials">' +
@@ -222,6 +225,196 @@
           '</button>';
       }).join('') +
       '</div></section>';
+  }
+
+  /* Staff team board — online / offline + today's work-plan status. */
+  var homeStaffLoaded = false;
+  var homeStaff = null;
+  var homeStaffInflight = null;
+  var homeStaffTimer = null;
+
+  function avatarSrcFor(person) {
+    if (window.TMACurrentUser && window.TMACurrentUser.avatarSrc) {
+      return window.TMACurrentUser.avatarSrc(person.avatar, person.name);
+    }
+    return person.avatar || 'images/avatars/Avatar3d01.png';
+  }
+
+  function workStatusTone(status) {
+    if (!status) return 'neutral';
+    if (status === 'in_office' || status === 'field_work') return 'office';
+    if (status === 'remote' || status === 'flexible') return 'remote';
+    if (status === 'sick_leave' || status === 'on_leave' || status === 'personal_leave') return 'leave';
+    if (status === 'out_of_office' || status === 'travelling' || status === 'not_working') return 'away';
+    return 'neutral';
+  }
+
+  function renderEmployees() {
+    if (!isStaffUser()) return '';
+
+    if (!homeStaffLoaded) {
+      return '<section class="tma-portal-panel tma-portal-panel--employees" data-tile-id="employees" data-key="panel-employees" aria-label="Employees" aria-busy="true">' +
+        panelHead('Employees') +
+        '<div class="tma-portal-employees" aria-hidden="true">' +
+        new Array(5).fill(
+          '<div class="tma-portal-employee tma-portal-employee--skeleton">' +
+          '<span class="tma-skeleton tma-skeleton--avatar" style="width:36px;height:36px;border-radius:50%"></span>' +
+          '<span class="tma-portal-employee__meta" style="flex:1">' +
+          '<span class="tma-skeleton tma-skeleton--text" style="width:48%"></span>' +
+          '<span class="tma-skeleton tma-skeleton--text" style="width:32%;margin-top:6px"></span>' +
+          '</span></div>'
+        ).join('') +
+        '</div></section>';
+    }
+
+    if (homeStaff && homeStaff.staff === false) return '';
+
+    var people = (homeStaff && homeStaff.employees) || [];
+    var onlineCount = people.filter(function (p) { return p.online; }).length;
+    var rows = people.map(function (p) {
+      var work = p.workStatus || null;
+      var tone = work ? workStatusTone(work.status) : (p.online ? 'online' : 'away');
+      var sub;
+      if (p.online && work && work.label) sub = work.label;
+      else if (!p.online && work && work.label) sub = work.label + ' · ' + (p.lastSeen || 'Offline');
+      else if (p.online) sub = 'Online';
+      else sub = p.lastSeen || 'Offline';
+
+      return '<div class="tma-portal-employee" data-key="employee-' + ui().esc(p.id) + '">' +
+        '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : '') + '">' +
+        '<img src="' + ui().esc(avatarSrcFor(p)) + '" alt="" width="36" height="36" loading="lazy">' +
+        '</span>' +
+        '<span class="tma-portal-employee__meta">' +
+        '<span class="tma-portal-employee__name">' + ui().esc(p.name) + (p.self ? ' (you)' : '') + '</span>' +
+        '<span class="tma-portal-employee__sub">' + ui().esc(sub) + '</span>' +
+        '</span>' +
+        '<span class="tma-portal-employee__badge tma-portal-employee__badge--' + tone + '">' +
+        ui().esc(p.online ? 'Online' : 'Offline') +
+        '</span></div>';
+    }).join('');
+
+    return '<section class="tma-portal-panel tma-portal-panel--employees" data-tile-id="employees" data-key="panel-employees" aria-label="Employees">' +
+      panelHead('Employees') +
+      '<p class="tma-portal-panel__note">' + onlineCount + ' of ' + people.length + ' online</p>' +
+      '<div class="tma-portal-employees">' +
+      (rows || '<p class="tma-portal-panel__note">No employees to show.</p>') +
+      '</div></section>';
+  }
+
+  function renderRoadPanel() {
+    if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
+    return '<div class="tma-portal-tile tma-portal-tile--road" data-tile-id="road" data-key="panel-road">' +
+      dragHandleHtml() +
+      window.TMAOverview.renderRoad() +
+      '</div>';
+  }
+
+  function renderHomeGrid(s, show) {
+    var renderers = {
+      recentFiles: function () { return show.recentFiles ? renderRecentFiles(s) : ''; },
+      shortcuts: function () { return show.shortcuts ? renderShortcuts() : ''; },
+      employees: function () { return show.employees !== false ? renderEmployees() : ''; },
+      favorites: function () { return show.favorites ? renderFavorites(s) : ''; },
+      tutorials: function () { return show.tutorials ? renderTutorials(s) : ''; },
+      road: function () { return show.road !== false ? renderRoadPanel() : ''; },
+    };
+    return tileOrder().map(function (id) {
+      return renderers[id] ? renderers[id]() : '';
+    }).join('');
+  }
+
+  function loadHomeStaff(el, opts) {
+    opts = opts || {};
+    if (!isStaffUser()) {
+      homeStaffLoaded = true;
+      homeStaff = { staff: false, employees: [] };
+      return;
+    }
+    if (homeStaffInflight) return;
+
+    homeStaffInflight = fetch('/portal/dashboard/staff', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (json) {
+        homeStaffInflight = null;
+        homeStaffLoaded = true;
+        homeStaff = json || { staff: false, employees: [] };
+        if (el && el.isConnected) mount(el, { fromLoad: true });
+      });
+
+    // Keep presence fresh while the home view is open.
+    if (!homeStaffTimer && !opts.skipTimer) {
+      homeStaffTimer = setInterval(function () {
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        if (homeStaffInflight) return;
+        homeStaffInflight = fetch('/portal/dashboard/staff', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; })
+          .then(function (json) {
+            homeStaffInflight = null;
+            if (!json) return;
+            homeStaff = json;
+            if (mountEl.isConnected) mount(mountEl, { fromLoad: true });
+          });
+      }, 30000);
+    }
+  }
+
+  function bindTileDrag(root) {
+    var grid = root.querySelector('.tma-portal-home-grid');
+    if (!grid || grid.dataset.tileDragBound) return;
+    grid.dataset.tileDragBound = '1';
+
+    var dragged = null;
+
+    function tileFrom(target) {
+      var handle = target && target.closest ? target.closest('[data-tile-drag]') : null;
+      if (!handle || !grid.contains(handle)) return null;
+      return handle.closest('[data-tile-id]');
+    }
+
+    grid.addEventListener('dragstart', function (e) {
+      var tile = tileFrom(e.target);
+      if (!tile) return;
+      dragged = tile;
+      tile.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', tile.getAttribute('data-tile-id') || ''); } catch (err) {}
+      try { e.dataTransfer.setDragImage(tile, 24, 24); } catch (err2) {}
+    });
+
+    grid.addEventListener('dragover', function (e) {
+      if (!dragged) return;
+      var over = e.target.closest('[data-tile-id]');
+      if (!over || !grid.contains(over) || over === dragged) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var box = over.getBoundingClientRect();
+      var after = e.clientY > box.top + box.height / 2;
+      grid.insertBefore(dragged, after ? over.nextSibling : over);
+    });
+
+    grid.addEventListener('drop', function (e) {
+      if (dragged) e.preventDefault();
+    });
+
+    grid.addEventListener('dragend', function () {
+      if (!dragged) return;
+      dragged.classList.remove('is-dragging');
+      dragged = null;
+      var order = Array.prototype.map.call(
+        grid.querySelectorAll('[data-tile-id]'),
+        function (node) { return node.getAttribute('data-tile-id'); }
+      ).filter(Boolean);
+      // Keep hidden tiles in their relative place after the visible ones' new order.
+      var hidden = tileOrder().filter(function (id) { return order.indexOf(id) === -1; });
+      saveTileOrder(order.concat(hidden));
+    });
   }
 
   function shareFilesModal(kind) {
@@ -295,17 +488,70 @@
   var DASH_TILES = [
     { id: 'recentFiles', label: 'Recent Files', desc: 'Files you last accessed across all of your devices.', preview: 'files' },
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
-    { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
+    { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
     { id: 'favorites', label: 'Favorites', desc: 'Mark certain files or folders as Favorite and have a shortcut to them.', preview: 'favorites' },
+    { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
+    { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
+
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'];
+
+  function isStaffUser() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    if (!me) return false;
+    if (me.isAdmin) return true;
+    var type = String(me.accountType || '');
+    return type === 'Administrator' || type === 'Employee';
+  }
+
+  function dragHandleHtml() {
+    return '<button type="button" class="tma-portal-panel__drag" draggable="true" data-tile-drag' +
+      ' aria-label="Drag to reorder" title="Drag to reorder">' +
+      '<img src="images/icons/phosphor/DotsSixVertical.svg" alt="" width="16" height="16">' +
+      '</button>';
+  }
+
+  function panelHead(title) {
+    return '<div class="tma-portal-panel__head">' +
+      '<h2 class="tma-portal-panel__title">' + ui().esc(title) + '</h2>' +
+      dragHandleHtml() +
+      '</div>';
+  }
 
   function tiles() {
     var s = data().state();
     if (!s.dashboardTiles) {
-      s.dashboardTiles = { recentFiles: true, shortcuts: true, tutorials: false, favorites: true };
+      s.dashboardTiles = {
+        recentFiles: true, shortcuts: true, tutorials: false, favorites: true,
+        employees: true, road: true,
+      };
       data().save();
     }
+    if (s.dashboardTiles.employees == null) s.dashboardTiles.employees = true;
+    if (s.dashboardTiles.road == null) s.dashboardTiles.road = true;
     return s.dashboardTiles;
+  }
+
+  function tileOrder() {
+    var s = data().state();
+    var order = Array.isArray(s.dashboardTileOrder) ? s.dashboardTileOrder.slice() : [];
+    DEFAULT_TILE_ORDER.forEach(function (id) {
+      if (order.indexOf(id) === -1) order.push(id);
+    });
+    return order.filter(function (id) {
+      return DEFAULT_TILE_ORDER.indexOf(id) !== -1;
+    });
+  }
+
+  function saveTileOrder(order) {
+    var s = data().state();
+    s.dashboardTileOrder = order.slice();
+    data().save();
+  }
+
+  function availableTiles() {
+    var staff = isStaffUser();
+    return DASH_TILES.filter(function (t) { return !t.staffOnly || staff; });
   }
 
   function tilePreview(kind) {
@@ -322,6 +568,13 @@
         '<span class="tma-portal-tilerow__preview-grid">' +
         new Array(8 + 1).join('<span class="tma-portal-tilerow__preview-circle"></span>') +
         '</span>';
+    } else if (kind === 'employees') {
+      inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>';
+      for (var e = 0; e < 3; e++) {
+        inner += '<span class="tma-portal-tilerow__preview-line">' +
+          '<span class="tma-portal-tilerow__preview-dot"></span>' +
+          '<span class="tma-portal-tilerow__preview-bar"></span></span>';
+      }
     } else {
       inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>' +
         '<span class="tma-portal-tilerow__preview-grid tma-portal-tilerow__preview-grid--wide">' +
@@ -334,14 +587,14 @@
   function editDashboardModal(rerender) {
     var current = tiles();
     var draft = {};
-    Object.keys(current).forEach(function (k) { draft[k] = !!current[k]; });
+    availableTiles().forEach(function (t) { draft[t.id] = !!current[t.id]; });
 
     ui().openModal({
       title: 'Edit Dashboard',
       body:
-        '<p>Choose the tiles that you would like to display on your dashboard.</p>' +
+        '<p>Choose the tiles to show. On the dashboard, drag the grip on any tile to change their order.</p>' +
         '<div class="tma-portal-tilerows">' +
-        DASH_TILES.map(function (t) {
+        availableTiles().map(function (t) {
           return '<div class="tma-portal-tilerow">' +
             tilePreview(t.preview) +
             '<div class="tma-portal-tilerow__meta">' +
@@ -360,7 +613,7 @@
         var saveBtn = host.querySelector('[data-home-tiles-save]');
 
         function dirty() {
-          return Object.keys(draft).some(function (k) { return !!draft[k] !== !!current[k]; });
+          return availableTiles().some(function (t) { return !!draft[t.id] !== !!current[t.id]; });
         }
 
         host.querySelectorAll('[data-home-tile]').forEach(function (input) {
@@ -372,7 +625,8 @@
 
         saveBtn.addEventListener('click', function () {
           var s = data().state();
-          s.dashboardTiles = draft;
+          var next = Object.assign({}, s.dashboardTiles || {}, draft);
+          s.dashboardTiles = next;
           data().save();
           ui().closeModal();
           ui().toast('Dashboard updated');
@@ -384,8 +638,8 @@
 
   function renderFavorites(s) {
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" data-key="panel-favorites" aria-label="Favorites" aria-busy="true">' +
-        '<h2 class="tma-portal-panel__title">Favorites</h2>' +
+      return '<section class="tma-portal-panel" data-tile-id="favorites" data-key="panel-favorites" aria-label="Favorites" aria-busy="true">' +
+        panelHead('Favorites') +
         '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
         skeletonFileRows(2) + '</section>';
     }
@@ -402,8 +656,8 @@
         (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
         '</span></button>';
     }).join('');
-    return '<section class="tma-portal-panel" data-key="panel-favorites" aria-label="Favorites">' +
-      '<h2 class="tma-portal-panel__title">Favorites</h2>' +
+    return '<section class="tma-portal-panel" data-tile-id="favorites" data-key="panel-favorites" aria-label="Favorites">' +
+      panelHead('Favorites') +
       '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
       (rows || '<p class="tma-portal-panel__note">No favorites yet.</p>') +
       '</section>';
@@ -662,13 +916,10 @@
       '</div></div>' +
       renderKpis() +
       // Everything below the KPI row lives in one 2-column grid so no panel
-      // (including "What's on the road?") ever spans the full width.
+      // (including "What's on the road?") ever spans the full width. Order is
+      // user-controlled via drag-and-drop on each tile's grip.
       '<div class="tma-portal-home-grid">' +
-      (show.recentFiles ? renderRecentFiles(s) : '') +
-      (show.shortcuts ? renderShortcuts() : '') +
-      (show.favorites ? renderFavorites(s) : '') +
-      (show.tutorials ? renderTutorials(s) : '') +
-      (window.TMAOverview && window.TMAOverview.renderRoad ? window.TMAOverview.renderRoad() : '') +
+      renderHomeGrid(s, show) +
       '</div>' +
       '</div>';
 
@@ -701,6 +952,8 @@
     if (window.TMAOverview && typeof window.TMAOverview.refreshRoad === 'function') {
       window.TMAOverview.refreshRoad(el);
     }
+
+    bindTileDrag(el);
 
     pick('[data-home-shortcut]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -768,6 +1021,10 @@
     if (!opts.fromLoad) {
       loadHomeFiles(el);
       loadHomeMetrics(el);
+      loadHomeStaff(el);
+    } else if (isStaffUser() && !homeStaffLoaded && !homeStaffInflight) {
+      // Staff identity may arrive after the first mount (TMACurrentUser async).
+      loadHomeStaff(el);
     }
   }
 

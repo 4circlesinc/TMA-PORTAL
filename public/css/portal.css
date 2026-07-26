@@ -1189,12 +1189,73 @@
   min-width: 0;
 }
 
+.tma-portal-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
 .tma-portal-panel__title {
   margin: 0;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
   font-weight: 600;
   color: var(--color-black);
+  min-width: 0;
+}
+
+.tma-portal-panel__drag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-8, 8px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: grab;
+  opacity: 0.55;
+}
+
+.tma-portal-panel__drag:hover,
+.tma-portal-panel__drag:focus-visible {
+  opacity: 1;
+  background: var(--color-hover);
+  outline: none;
+}
+
+.tma-portal-panel__drag:active { cursor: grabbing; }
+
+.tma-portal-panel__drag img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  filter: none;
+  opacity: 0.85;
+}
+
+.tma-portal-panel.is-dragging,
+.tma-portal-tile.is-dragging {
+  opacity: 0.55;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.tma-portal-tile {
+  position: relative;
+  min-width: 0;
+}
+
+.tma-portal-tile--road > .tma-portal-panel__drag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
 }
 
 .tma-portal-panel__note {
@@ -1202,6 +1263,138 @@
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
+}
+
+/* Employees / team presence board */
+.tma-portal-panel--employees {
+  min-height: 0;
+}
+
+.tma-portal-employees {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+  overscroll-behavior: contain;
+}
+
+.tma-portal-employee {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: 8px 6px;
+  border-radius: var(--radius-12);
+  min-width: 0;
+}
+
+.tma-portal-employee:hover { background: var(--color-hover); }
+
+.tma-portal-employee__avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+
+.tma-portal-employee__avatar img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
+}
+
+.tma-portal-employee__avatar.is-online::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22a06b;
+  box-shadow: 0 0 0 2px var(--color-bg-card, #fff);
+}
+
+.tma-portal-employee__meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-portal-employee__name {
+  font-size: var(--text-size-13, 13px);
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--color-black);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-employee__sub {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-employee__badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-employee__badge--online,
+.tma-portal-employee__badge--office {
+  background: rgba(34, 160, 107, 0.12);
+  color: #1b7a52;
+}
+
+.tma-portal-employee__badge--remote {
+  background: rgba(47, 111, 237, 0.12);
+  color: #1f4fbf;
+}
+
+.tma-portal-employee__badge--leave {
+  background: rgba(201, 92, 46, 0.14);
+  color: #9a451f;
+}
+
+.tma-portal-employee__badge--away,
+.tma-portal-employee__badge--neutral {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text-secondary);
+}
+
+:root[data-theme="dark"] .tma-portal-employee__avatar.is-online::after {
+  box-shadow: 0 0 0 2px var(--color-bg-card, #1a1a1a);
+}
+:root[data-theme="dark"] .tma-portal-employee__badge--online,
+:root[data-theme="dark"] .tma-portal-employee__badge--office {
+  background: rgba(34, 160, 107, 0.22);
+  color: #7dcea0;
+}
+:root[data-theme="dark"] .tma-portal-employee__badge--remote {
+  background: rgba(47, 111, 237, 0.22);
+  color: #9db7f5;
+}
+:root[data-theme="dark"] .tma-portal-employee__badge--leave {
+  background: rgba(201, 92, 46, 0.22);
+  color: #e0a07a;
 }
 
 .tma-portal-file-row {

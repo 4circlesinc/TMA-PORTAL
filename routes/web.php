@@ -13,6 +13,7 @@ use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
+use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\FileLibraryController;
 use App\Http\Controllers\Files\BrowserController;
@@ -57,6 +58,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     // KPI cards on the portal home. Staff-facing: see DashboardMetricsController.
     Route::get('/portal/dashboard/metrics', DashboardMetricsController::class)
         ->name('dashboard.metrics');
+
+    // Team presence board on the portal home (online + work-plan status).
+    Route::get('/portal/dashboard/staff', StaffPresenceController::class)
+        ->name('dashboard.staff');
 
     // All settings now live in Account settings; this preserved URL (and
     // the flashes Fortify/social redirects attach to it) forwards there.

@@ -79,7 +79,11 @@
         shortcuts: true,
         tutorials: false,
         favorites: true,
+        employees: true,
+        road: true,
       },
+      // Order of home widgets (drag-and-drop). Unknown ids are appended.
+      dashboardTileOrder: ['recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'],
       // Populated from the File Library (section=recent) on the dashboard mount;
       // starts empty so no placeholder filenames flash before the real data.
       recentFiles: [],
