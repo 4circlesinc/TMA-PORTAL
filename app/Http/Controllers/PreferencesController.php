@@ -54,7 +54,7 @@ class PreferencesController extends Controller
         'email', 'tutorials', 'road',
     ];
 
-    /** Compact cards first (3-up); Road is full-width on the client. */
+    /** Equal 3-up cards — mirrors the client board order. */
     private const DEFAULT_DASHBOARD_ORDER = [
         'recentFiles', 'favorites', 'employees', 'shortcuts', 'email', 'tutorials', 'road',
     ];

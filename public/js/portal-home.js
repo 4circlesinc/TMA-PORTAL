@@ -28,7 +28,7 @@
     { id: 'users', label: 'Users', icon: 'Users', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
     { id: 'share-files', label: 'Share Files', icon: 'Share' },
     { id: 'request-files', label: 'Request Files', icon: 'DownloadSimple' },
-    { id: 'new-user-folders', label: 'Create New User Personal Folders', icon: 'UserPlus' },
+    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlus' },
     { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'Folders / Shared Folders' } },
     { id: 'favorites', label: 'Favorites', icon: 'Star', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'Folders / Favorites' } },
     { id: 'feedback-approval', label: 'Feedback and Approval', icon: 'Checks', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Approval', crumb: 'Workflows / Feedback and Approval' } },
@@ -448,8 +448,8 @@
 
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
-    return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road tma-portal-tile--full"' +
-      ' data-tile-id="road" data-tile-span="full" data-key="panel-road" aria-label="What\'s on the road?">' +
+    return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road tma-portal-tile--third"' +
+      ' data-tile-id="road" data-tile-span="third" data-key="panel-road" aria-label="What\'s on the road?">' +
       window.TMAOverview.renderRoad() +
       '</div>';
   }
@@ -621,10 +621,10 @@
     { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
 
-  // Compact cards sit 3-across; only Road stays full-width.
+  // All widgets are equal 1/3 cards in the masonry board.
   var DEFAULT_TILE_ORDER = ['recentFiles', 'favorites', 'employees', 'shortcuts', 'email', 'tutorials', 'road'];
 
-  // "third" = fits a 3-up row; "full" = needs the whole board width.
+  // Every tile is one column of the 3-up board — nothing spans full width.
   var TILE_SPAN = {
     recentFiles: 'third',
     favorites: 'third',
@@ -632,7 +632,7 @@
     email: 'third',
     tutorials: 'third',
     shortcuts: 'third',
-    road: 'full',
+    road: 'third',
   };
 
   var TILE_GAP = 20;
