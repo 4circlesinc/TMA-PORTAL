@@ -24,6 +24,8 @@
 
   var SHORTCUTS = [
     { id: 'email', label: 'Email', icon: 'EnvelopeSimple', count: 'email', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
+    { id: 'messages', label: 'Messages', icon: 'ChatsCircle', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
+    { id: 'feed', label: 'Feed', icon: 'Newspaper', count: 'feed', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
     { id: 'calendar', label: 'Calendar', icon: 'CalendarBlank', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
     { id: 'users', label: 'Users', icon: 'Users', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
     { id: 'share-files', label: 'Share Files', icon: 'Share' },
@@ -357,7 +359,9 @@
 
     return tileShell(
       'email', 'panel-email', 'Recent email', panelHead('Recent Email'),
-      rows || '<p class="tma-portal-panel__note">No recent messages.</p>',
+      rows
+        ? '<div class="tma-portal-email-list">' + rows + '</div>'
+        : '<p class="tma-portal-panel__note">No recent messages.</p>',
       'tma-portal-panel--email'
     );
   }
@@ -622,7 +626,7 @@
   ];
 
   // All widgets are equal 1/3 cards in the masonry board.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'favorites', 'employees', 'shortcuts', 'email', 'tutorials', 'road'];
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'road', 'shortcuts', 'employees', 'email', 'tutorials', 'favorites'];
 
   // Every tile is one column of the 3-up board — nothing spans full width.
   var TILE_SPAN = {
@@ -887,7 +891,7 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  var DASHBOARD_LAYOUT_GEN = 4;
+  var DASHBOARD_LAYOUT_GEN = 6;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
@@ -1347,6 +1351,16 @@
     // the badge rather than showing an invented number; the calendar module
     // fires tma-calendar-count when the true value arrives.
     setCount('calendar', cal);
+
+    if (window.TMAMessages && window.TMAMessages.getInboxUnreadCount) {
+      var messagesMount = document.querySelector('[data-messages]');
+      var messagesState = messagesMount && messagesMount._messagesState;
+      setCount('messages', window.TMAMessages.getInboxUnreadCount(messagesState));
+    }
+
+    if (window.TMAFeed && window.TMAFeed.getUnreadCount) {
+      setCount('feed', window.TMAFeed.getUnreadCount());
+    }
 
     // Painted from cache when known, so the badge does not blink back to zero
     // and re-populate on every render.
