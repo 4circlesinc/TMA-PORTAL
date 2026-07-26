@@ -1207,16 +1207,53 @@
   }
 }
 
-/* Home widget board — classic equal 2-column CSS grid. */
+/*
+ * Home widget board — masonry packer (JS).
+ * Unpacked: CSS grid fallback for first paint / no-JS measure.
+ * Packed: absolute children so short cards don't leave empty column space.
+ */
 .tma-portal-home-grid {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-20);
-  align-items: stretch;
+  align-items: start;
+  width: 100%;
+  min-height: 120px;
 }
 
-@media (max-width: 900px) {
-  .tma-portal-home-grid { grid-template-columns: 1fr; }
+.tma-portal-home-grid > [data-tile-span="full"],
+.tma-portal-home-grid > .tma-portal-tile--full {
+  grid-column: 1 / -1;
+}
+
+.tma-portal-home-grid > [data-tile-span="third"],
+.tma-portal-home-grid > .tma-portal-tile--third {
+  grid-column: span 1;
+}
+
+.tma-portal-home-grid:not(.is-packed) > [data-tile-id] {
+  /* Keep natural height in the CSS-grid fallback. */
+  height: auto;
+}
+
+.tma-portal-home-grid.is-packed {
+  display: block;
+  gap: 0;
+}
+
+.tma-portal-home-grid.is-packed > [data-tile-id] {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .tma-portal-home-grid:not(.is-packed) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .tma-portal-home-grid:not(.is-packed) { grid-template-columns: 1fr; }
 }
 
 .tma-portal-panel {
@@ -1578,9 +1615,9 @@
 
 .tma-portal-shortcuts {
   display: grid;
-  /* Full-width Shortcuts tile fits a full row of icons without clipping. */
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: var(--space-12);
+  /* 5-across inside the tile; shrinks cleanly when Shortcuts is 1/3 width. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-8);
   width: 100%;
   min-width: 0;
 }

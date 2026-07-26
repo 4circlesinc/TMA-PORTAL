@@ -50,13 +50,13 @@ class PreferencesController extends Controller
     ];
 
     private const TILE_IDS = [
-        'recentFiles', 'shortcuts', 'employees', 'favorites',
+        'recentFiles', 'favorites', 'employees', 'shortcuts',
         'email', 'tutorials', 'road',
     ];
 
-    /** Classic 2-column board — mirrors the client defaults. */
+    /** Compact cards first (3-up); Road is full-width on the client. */
     private const DEFAULT_DASHBOARD_ORDER = [
-        'recentFiles', 'shortcuts', 'employees', 'favorites', 'email', 'tutorials', 'road',
+        'recentFiles', 'favorites', 'employees', 'shortcuts', 'email', 'tutorials', 'road',
     ];
 
     /** @var array<string, bool> */
@@ -80,7 +80,7 @@ class PreferencesController extends Controller
     }
 
     /** Layout generation — bump when the shipped default board changes. */
-    private const DASHBOARD_LAYOUT_VERSION = 3;
+    private const DASHBOARD_LAYOUT_VERSION = 4;
 
     /** Persist the default home board so every browser starts the same. */
     private function seedDashboardLayoutIfMissing(User $user): void
