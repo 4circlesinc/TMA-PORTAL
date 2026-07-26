@@ -1167,17 +1167,41 @@
   }
 }
 
-/* always two equal columns - a lone tile stays half width, never full width */
+/*
+ * Home widget grid — up to 3 equal columns, fixed gap.
+ * align-items:start keeps different tile heights from stretching neighbours
+ * (which would invent uneven internal spacing). Width is column-span only;
+ * height is --tile-h. Gap never changes during resize.
+ */
 .tma-portal-home-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-20);
-  align-items: stretch;
+  align-items: start;
 }
 
-@media (max-width: 900px) {
-  .tma-portal-home-grid { grid-template-columns: 1fr; }
+@media (max-width: 1100px) {
+  .tma-portal-home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tma-portal-home-grid > [data-cols="3"] { grid-column: span 2; }
 }
+
+@media (max-width: 720px) {
+  .tma-portal-home-grid { grid-template-columns: 1fr; }
+  .tma-portal-home-grid > [data-cols] { grid-column: 1 / -1; }
+}
+
+.tma-portal-home-grid > [data-tile-id] {
+  grid-column: span 1;
+  height: var(--tile-h, auto);
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.tma-portal-home-grid > [data-cols="1"] { grid-column: span 1; }
+.tma-portal-home-grid > [data-cols="2"] { grid-column: span 2; }
+.tma-portal-home-grid > [data-cols="3"] { grid-column: span 3; }
 
 .tma-portal-panel {
   display: flex;
@@ -1187,6 +1211,66 @@
   border-radius: var(--radius-16);
   background: var(--color-bg-card);
   min-width: 0;
+  box-sizing: border-box;
+}
+
+.tma-portal-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+/* Curved SE resize grip — only appears when the pointer is near the bottom. */
+.tma-portal-panel__resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 2px;
+  color: var(--color-text-secondary);
+  cursor: nwse-resize;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  touch-action: none;
+  user-select: none;
+}
+
+.tma-portal-panel__resize svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.tma-portal-home-grid > [data-tile-id].is-resize-hot > .tma-portal-panel__resize,
+.tma-portal-home-grid > [data-tile-id].is-resizing > .tma-portal-panel__resize {
+  opacity: 0.75;
+  pointer-events: auto;
+}
+
+.tma-portal-home-grid > [data-tile-id].is-resize-hot > .tma-portal-panel__resize:hover,
+.tma-portal-home-grid > [data-tile-id].is-resizing > .tma-portal-panel__resize {
+  opacity: 1;
+  color: var(--color-black);
+}
+
+.tma-portal-home-grid > [data-tile-id].is-resizing {
+  z-index: 4;
+  user-select: none;
+}
+
+body.tma-tile-resizing {
+  cursor: nwse-resize !important;
+  user-select: none !important;
 }
 
 .tma-portal-panel__head {
@@ -1251,6 +1335,20 @@
   min-width: 0;
 }
 
+.tma-portal-tile--road {
+  padding: 0;
+  gap: 0;
+  background: transparent;
+}
+
+.tma-portal-tile--road > .tma-dash__overview-block--road {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
 .tma-portal-tile--road > .tma-portal-panel__drag {
   position: absolute;
   top: 12px;
@@ -1274,12 +1372,85 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 320px;
-  overflow-y: auto;
   margin: 0 -4px;
   padding: 0 4px;
-  overscroll-behavior: contain;
 }
+
+/* Recent email rows on the home dashboard */
+.tma-portal-email-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  padding: 8px 6px;
+  border-radius: var(--radius-12);
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+  color: inherit;
+}
+
+.tma-portal-email-row:hover { background: var(--color-hover); }
+
+.tma-portal-email-row.is-unread .tma-portal-email-row__subject {
+  font-weight: 700;
+}
+
+.tma-portal-email-row__avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
+}
+
+.tma-portal-email-row__meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-portal-email-row__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-portal-email-row__sender {
+  font-size: var(--text-size-13, 13px);
+  font-weight: 600;
+  color: var(--color-black);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tma-portal-email-row__time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-email-row__subject,
+.tma-portal-email-row__snippet {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-portal-email-row__subject { color: var(--color-black); }
+.tma-portal-email-row__snippet { color: var(--color-text-secondary); }
 
 .tma-portal-employee {
   display: flex;

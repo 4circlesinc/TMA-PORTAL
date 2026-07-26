@@ -7201,7 +7201,8 @@
     opts = opts || {};
     var path = window.location.pathname.replace(/\/$/, '');
     var initialFolder = opts.folder || (path === '/email/templates' ? 'templates' : 'inbox');
-    var pendingMessageId = opts.messageId || null;
+    var pendingMessageId = opts.messageId || window.__TMA_OPEN_MAIL || null;
+    if (window.__TMA_OPEN_MAIL) window.__TMA_OPEN_MAIL = null;
 
     if (root._emailState && root._emailRender) {
       if (opts.folder) root._emailState.folder = opts.folder;

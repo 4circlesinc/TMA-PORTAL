@@ -157,8 +157,7 @@
     // hidden neighbour would shift the others along and this panel's contents —
     // thumbnails included — would be rewritten onto a different node.
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" data-tile-id="recentFiles" data-key="panel-recent" aria-label="Recent files" aria-busy="true">' +
-        panelHead('Recent Files') + skeletonFileRows(3) + '</section>';
+      return tileShell('recentFiles', 'panel-recent', 'Recent files', panelHead('Recent Files'), skeletonFileRows(3), '', true);
     }
     var rows = s.recentFiles.map(function (f) {
       // Keyed by kind+id: a folder and a file can share a numeric id, and
@@ -174,10 +173,10 @@
         (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
         '</span></button>';
     }).join('');
-    return '<section class="tma-portal-panel" data-tile-id="recentFiles" data-key="panel-recent" aria-label="Recent files">' +
-      panelHead('Recent Files') +
-      (rows || '<p class="tma-portal-panel__note">No recent files yet.</p>') +
-      '</section>';
+    return tileShell(
+      'recentFiles', 'panel-recent', 'Recent files', panelHead('Recent Files'),
+      rows || '<p class="tma-portal-panel__note">No recent files yet.</p>'
+    );
   }
 
   function renderShortcuts() {
@@ -185,12 +184,14 @@
       var tile = '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
         '<span class="tma-skeleton" style="width:44px;height:44px;border-radius:var(--radius-12)"></span>' +
         '<span class="tma-skeleton tma-skeleton--text" style="width:70%;height:11px"></span></div>';
-      return '<section class="tma-portal-panel" data-tile-id="shortcuts" data-key="panel-shortcuts" aria-label="Shortcuts" aria-busy="true">' +
-        panelHead('Shortcuts') +
-        '<div class="tma-portal-shortcuts">' + new Array(8).fill(tile).join('') + '</div></section>';
+      return tileShell(
+        'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
+        '<div class="tma-portal-shortcuts">' + new Array(8).fill(tile).join('') + '</div>',
+        '', true
+      );
     }
-    return '<section class="tma-portal-panel" data-tile-id="shortcuts" data-key="panel-shortcuts" aria-label="Shortcuts">' +
-      panelHead('Shortcuts') +
+    return tileShell(
+      'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
       '<div class="tma-portal-shortcuts">' +
       SHORTCUTS.map(function (sc) {
         return '<button type="button" class="tma-portal-shortcut" data-home-shortcut="' + sc.id + '">' +
@@ -199,23 +200,24 @@
           '</span>' +
           '<span>' + ui().esc(sc.label) + '</span></button>';
       }).join('') +
-      '</div></section>';
+      '</div>'
+    );
   }
 
   function renderTutorials(s) {
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" data-tile-id="tutorials" data-key="panel-tutorials" aria-label="Tutorials" aria-busy="true">' +
-        panelHead('Tutorials') + skeletonFileRows(4) + '</section>';
+      return tileShell('tutorials', 'panel-tutorials', 'Tutorials', panelHead('Tutorials'), skeletonFileRows(4), '', true);
     }
     var done = s.tutorials.filter(function (t) { return t.done; }).length;
-    return '<section class="tma-portal-panel" data-tile-id="tutorials" data-key="panel-tutorials" aria-label="Tutorials">' +
+    var head =
       '<div class="tma-portal-panel__head">' +
       '<div class="tma-portal-head" style="gap:var(--space-8);flex:1;min-width:0">' +
       '<h2 class="tma-portal-panel__title">Tutorials</h2>' +
       ui().select(['Getting Started'], 'Getting Started', 'data-home-tutorial-set', 'Tutorial set') +
       '</div>' +
       dragHandleHtml() +
-      '</div>' +
+      '</div>';
+    var body =
       '<p class="tma-portal-panel__note">' + done + ' of ' + s.tutorials.length + ' completed</p>' +
       '<div class="tma-portal-tutorials">' +
       s.tutorials.map(function (t) {
@@ -224,7 +226,8 @@
           '<span class="tma-portal-tutorial__label">' + ui().esc(t.label) + '</span>' +
           '</button>';
       }).join('') +
-      '</div></section>';
+      '</div>';
+    return tileShell('tutorials', 'panel-tutorials', 'Tutorials', head, body);
   }
 
   /* Staff team board — online / offline + today's work-plan status. */
@@ -251,8 +254,8 @@
   }
 
   function employeesSkeleton() {
-    return '<section class="tma-portal-panel tma-portal-panel--employees" data-tile-id="employees" data-key="panel-employees" aria-label="Employees" aria-busy="true">' +
-      panelHead('Employees') +
+    return tileShell(
+      'employees', 'panel-employees', 'Employees', panelHead('Employees'),
       '<div class="tma-portal-employees" aria-hidden="true">' +
       new Array(5).fill(
         '<div class="tma-portal-employee tma-portal-employee--skeleton">' +
@@ -262,7 +265,10 @@
         '<span class="tma-skeleton tma-skeleton--text" style="width:32%;margin-top:6px"></span>' +
         '</span></div>'
       ).join('') +
-      '</div></section>';
+      '</div>',
+      'tma-portal-panel--employees',
+      true
+    );
   }
 
   function renderEmployees() {
@@ -296,24 +302,124 @@
         '</span></div>';
     }).join('');
 
-    return '<section class="tma-portal-panel tma-portal-panel--employees" data-tile-id="employees" data-key="panel-employees" aria-label="Employees">' +
-      panelHead('Employees') +
+    return tileShell(
+      'employees', 'panel-employees', 'Employees', panelHead('Employees'),
       '<p class="tma-portal-panel__note">' + onlineCount + ' of ' + people.length + ' online</p>' +
       '<div class="tma-portal-employees">' +
       (rows || '<p class="tma-portal-panel__note">No employees to show.</p>') +
-      '</div></section>';
+      '</div>',
+      'tma-portal-panel--employees'
+    );
+  }
+
+  /* Recent inbox messages for the home dashboard. */
+  var homeEmailLoaded = false;
+  var homeEmail = null;
+  var homeEmailInflight = null;
+
+  function emailAvatarSrc(msg) {
+    if (msg.avatarUrl) return msg.avatarUrl;
+    if (window.TMACurrentUser && window.TMACurrentUser.initialsFor) {
+      return window.TMACurrentUser.initialsFor(msg.sender || msg.email || '?', msg.email || msg.sender || '?');
+    }
+    return 'images/avatars/Avatar3d01.png';
+  }
+
+  function renderEmail() {
+    if (!homeEmailLoaded) {
+      return tileShell(
+        'email', 'panel-email', 'Recent email', panelHead('Recent Email'),
+        skeletonFileRows(4), 'tma-portal-panel--email', true
+      );
+    }
+
+    if (homeEmail && homeEmail.connected === false) {
+      return tileShell(
+        'email', 'panel-email', 'Recent email', panelHead('Recent Email'),
+        '<p class="tma-portal-panel__note">Connect a mailbox to see recent email here.</p>' +
+        '<button type="button" class="tma-portal-link" data-home-email-open>Open Email</button>',
+        'tma-portal-panel--email'
+      );
+    }
+
+    var messages = (homeEmail && homeEmail.messages) || [];
+    var rows = messages.map(function (m) {
+      return '<button type="button" class="tma-portal-email-row' + (m.unread ? ' is-unread' : '') + '"' +
+        ' data-key="email-' + ui().esc(m.id) + '"' +
+        ' data-home-email="' + ui().esc(m.id) + '">' +
+        '<img class="tma-portal-email-row__avatar" src="' + ui().esc(emailAvatarSrc(m)) + '" alt="" width="32" height="32" loading="lazy">' +
+        '<span class="tma-portal-email-row__meta">' +
+        '<span class="tma-portal-email-row__top">' +
+        '<span class="tma-portal-email-row__sender">' + ui().esc(m.sender || m.email || 'Unknown') + '</span>' +
+        '<span class="tma-portal-email-row__time">' + ui().esc(m.time || '') + '</span>' +
+        '</span>' +
+        '<span class="tma-portal-email-row__subject">' + ui().esc(m.subject || '(no subject)') + '</span>' +
+        (m.body ? '<span class="tma-portal-email-row__snippet">' + ui().esc(m.body) + '</span>' : '') +
+        '</span></button>';
+    }).join('');
+
+    return tileShell(
+      'email', 'panel-email', 'Recent email', panelHead('Recent Email'),
+      rows || '<p class="tma-portal-panel__note">No recent messages.</p>',
+      'tma-portal-panel--email'
+    );
+  }
+
+  function loadHomeEmail(el) {
+    if (homeEmailInflight) return;
+
+    function finish(payload) {
+      homeEmailInflight = null;
+      homeEmailLoaded = true;
+      homeEmail = payload;
+      if (el && el.isConnected) mount(el, { fromLoad: true });
+    }
+
+    homeEmailInflight = fetch('/portal/mail', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (index) {
+        if (!index) {
+          finish({ connected: true, messages: [] });
+          return null;
+        }
+        if (index.connected === false) {
+          finish({ connected: false, messages: [] });
+          return null;
+        }
+        return fetch('/portal/mail/messages?folder=inbox&perPage=25&page=1', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; });
+      })
+      .then(function (json) {
+        // Disconnected / bootstrap-failure paths already called finish().
+        if (homeEmailLoaded) return;
+        finish({
+          connected: true,
+          messages: json && Array.isArray(json.messages) ? json.messages.slice(0, 8) : [],
+        });
+      });
   }
 
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
-    return '<div class="tma-portal-tile tma-portal-tile--road" data-tile-id="road" data-key="panel-road">' +
+    var size = sizeFor('road');
+    return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road"' +
+      ' data-tile-id="road" data-key="panel-road" data-cols="' + size.cols + '"' +
+      ' style="--tile-h:' + size.height + 'px" aria-label="What\'s on the road?">' +
       dragHandleHtml() +
       window.TMAOverview.renderRoad() +
+      resizeHandleHtml() +
       '</div>';
   }
 
   function renderHomeGrid(s, show) {
     var renderers = {
+      email: function () { return show.email !== false ? renderEmail() : ''; },
       recentFiles: function () { return show.recentFiles ? renderRecentFiles(s) : ''; },
       shortcuts: function () { return show.shortcuts ? renderShortcuts() : ''; },
       employees: function () { return show.employees !== false ? renderEmployees() : ''; },
@@ -414,6 +520,10 @@
     }
 
     grid.addEventListener('dragstart', function (e) {
+      if (grid.classList.contains('is-tile-resizing')) {
+        e.preventDefault();
+        return;
+      }
       var tile = tileFrom(e.target);
       if (!tile) return;
       dragged = tile;
@@ -449,6 +559,118 @@
       // Keep hidden tiles in their relative place after the visible ones' new order.
       var hidden = tileOrder().filter(function (id) { return order.indexOf(id) === -1; });
       saveTileOrder(order.concat(hidden));
+    });
+  }
+
+  function gridColumnCount(grid) {
+    var tpl = getComputedStyle(grid).gridTemplateColumns || '';
+    var parts = tpl.split(/\s+/).filter(Boolean);
+    return Math.max(1, parts.length);
+  }
+
+  var tileResizeActive = null;
+  var tileResizeWindowBound = false;
+
+  function endTileResize() {
+    if (!tileResizeActive) return;
+    var state = tileResizeActive;
+    tileResizeActive = null;
+    var cols = state.cols || state.startCols;
+    var height = state.height || state.startHeight;
+    if (state.tile) state.tile.classList.remove('is-resizing');
+    if (state.grid) state.grid.classList.remove('is-tile-resizing');
+    document.body.classList.remove('tma-tile-resizing');
+    saveTileSize(state.id, cols, height);
+  }
+
+  function bindTileResize(root) {
+    if (root.dataset.tileResizeBound) return;
+    root.dataset.tileResizeBound = '1';
+
+    function gridOf(node) {
+      return node && node.closest ? node.closest('.tma-portal-home-grid') : null;
+    }
+
+    root.addEventListener('mousemove', function (e) {
+      if (tileResizeActive) return;
+      var grid = gridOf(e.target);
+      if (!grid || !root.contains(grid)) {
+        root.querySelectorAll('.is-resize-hot').forEach(function (n) { n.classList.remove('is-resize-hot'); });
+        return;
+      }
+      var tile = e.target.closest('[data-tile-id]');
+      root.querySelectorAll('.is-resize-hot').forEach(function (n) {
+        if (n !== tile) n.classList.remove('is-resize-hot');
+      });
+      if (!tile || !grid.contains(tile)) return;
+      var rect = tile.getBoundingClientRect();
+      tile.classList.toggle('is-resize-hot', (rect.bottom - e.clientY) <= 40);
+    });
+
+    root.addEventListener('pointerdown', function (e) {
+      var handle = e.target.closest('[data-tile-resize]');
+      if (!handle || !root.contains(handle)) return;
+      var tile = handle.closest('[data-tile-id]');
+      var grid = gridOf(handle);
+      if (!tile || !grid) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      var id = tile.getAttribute('data-tile-id');
+      var start = sizeFor(id);
+      tileResizeActive = {
+        tile: tile,
+        grid: grid,
+        id: id,
+        pointerId: e.pointerId,
+        startCols: start.cols,
+        startHeight: start.height,
+        startRect: tile.getBoundingClientRect(),
+        colCount: gridColumnCount(grid),
+      };
+
+      tile.classList.add('is-resizing', 'is-resize-hot');
+      grid.classList.add('is-tile-resizing');
+      document.body.classList.add('tma-tile-resizing');
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    if (tileResizeWindowBound) return;
+    tileResizeWindowBound = true;
+
+    window.addEventListener('pointermove', function (e) {
+      var active = tileResizeActive;
+      if (!active || e.pointerId !== active.pointerId) return;
+      e.preventDefault();
+
+      var grid = active.grid;
+      var colCount = active.colCount || gridColumnCount(grid);
+      var gap = parseFloat(getComputedStyle(grid).columnGap || getComputedStyle(grid).gap) || 20;
+      var colW = (grid.clientWidth - gap * (colCount - 1)) / colCount;
+      if (colW < 1) colW = 1;
+
+      // Snap width to whole columns; CSS gap stays constant.
+      var widthPx = e.clientX - active.startRect.left;
+      var cols = Math.round((widthPx + gap) / (colW + gap));
+      cols = Math.min(colCount, Math.max(1, cols));
+
+      var height = Math.round(e.clientY - active.startRect.top);
+      height = Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, height));
+
+      active.tile.setAttribute('data-cols', String(cols));
+      active.tile.style.setProperty('--tile-h', height + 'px');
+      active.cols = cols;
+      active.height = height;
+    });
+
+    window.addEventListener('pointerup', function (e) {
+      if (!tileResizeActive || e.pointerId !== tileResizeActive.pointerId) return;
+      endTileResize();
+    });
+
+    window.addEventListener('pointercancel', function (e) {
+      if (!tileResizeActive || e.pointerId !== tileResizeActive.pointerId) return;
+      endTileResize();
     });
   }
 
@@ -521,6 +743,7 @@
   }
 
   var DASH_TILES = [
+    { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email' },
     { id: 'recentFiles', label: 'Recent Files', desc: 'Files you last accessed across all of your devices.', preview: 'files' },
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
@@ -529,7 +752,7 @@
     { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
 
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'];
+  var DEFAULT_TILE_ORDER = ['email', 'recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'];
 
   // true = staff, false = client, null = /me not loaded yet
   function isStaffUser() {
@@ -540,11 +763,32 @@
     return type === 'Administrator' || type === 'Employee';
   }
 
+  var TILE_COLS_MAX = 3;
+  var TILE_H_MIN = 200;
+  var TILE_H_MAX = 640;
+  var DEFAULT_TILE_SIZES = {
+    recentFiles: { cols: 1, height: 280 },
+    shortcuts: { cols: 2, height: 300 },
+    email: { cols: 2, height: 320 },
+    employees: { cols: 1, height: 360 },
+    favorites: { cols: 1, height: 260 },
+    tutorials: { cols: 1, height: 280 },
+    road: { cols: 1, height: 360 },
+  };
+
   function dragHandleHtml() {
     return '<button type="button" class="tma-portal-panel__drag" draggable="true" data-tile-drag' +
       ' aria-label="Drag to reorder" title="Drag to reorder">' +
       '<img src="images/icons/phosphor/DotsSixVertical.svg" alt="" width="16" height="16">' +
       '</button>';
+  }
+
+  function resizeHandleHtml() {
+    return '<span class="tma-portal-panel__resize" data-tile-resize title="Drag to resize" aria-hidden="true">' +
+      '<svg viewBox="0 0 16 16" width="14" height="14" focusable="false">' +
+      '<path d="M4 14c7 0 10-3 10-10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<path d="M8 14c4 0 6-2 6-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+      '</svg></span>';
   }
 
   function panelHead(title) {
@@ -554,16 +798,60 @@
       '</div>';
   }
 
+  function sizeFor(id) {
+    var s = data().state();
+    var stored = (s.dashboardTileSizes && s.dashboardTileSizes[id]) || {};
+    var defaults = DEFAULT_TILE_SIZES[id] || { cols: 1, height: 300 };
+    var cols = parseInt(stored.cols, 10);
+    var height = parseInt(stored.height, 10);
+    if (!cols || cols < 1) cols = defaults.cols;
+    if (cols > TILE_COLS_MAX) cols = TILE_COLS_MAX;
+    if (!height || height < TILE_H_MIN) height = defaults.height;
+    if (height > TILE_H_MAX) height = TILE_H_MAX;
+    return { cols: cols, height: height };
+  }
+
+  function saveTileSize(id, cols, height) {
+    var s = data().state();
+    if (!s.dashboardTileSizes || typeof s.dashboardTileSizes !== 'object') {
+      s.dashboardTileSizes = {};
+    }
+    s.dashboardTileSizes[id] = {
+      cols: Math.min(TILE_COLS_MAX, Math.max(1, cols)),
+      height: Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, height)),
+    };
+    data().save();
+  }
+
+  function tileAttrs(id) {
+    var size = sizeFor(id);
+    return ' data-tile-id="' + id + '" data-cols="' + size.cols + '"' +
+      ' style="--tile-h:' + size.height + 'px"';
+  }
+
+  function tileShell(id, key, aria, headHtml, bodyHtml, extraClass, busy) {
+    return '<section class="tma-portal-panel' + (extraClass ? ' ' + extraClass : '') + '"' +
+      tileAttrs(id) +
+      ' data-key="' + key + '"' +
+      ' aria-label="' + ui().esc(aria) + '"' +
+      (busy ? ' aria-busy="true"' : '') + '>' +
+      headHtml +
+      '<div class="tma-portal-panel__body">' + bodyHtml + '</div>' +
+      resizeHandleHtml() +
+      '</section>';
+  }
+
   function tiles() {
     var s = data().state();
     if (!s.dashboardTiles) {
       s.dashboardTiles = {
         recentFiles: true, shortcuts: true, tutorials: false, favorites: true,
-        employees: true, road: true,
+        employees: true, email: true, road: true,
       };
       data().save();
     }
     if (s.dashboardTiles.employees == null) s.dashboardTiles.employees = true;
+    if (s.dashboardTiles.email == null) s.dashboardTiles.email = true;
     if (s.dashboardTiles.road == null) s.dashboardTiles.road = true;
     return s.dashboardTiles;
   }
@@ -606,7 +894,7 @@
         '<span class="tma-portal-tilerow__preview-grid">' +
         new Array(8 + 1).join('<span class="tma-portal-tilerow__preview-circle"></span>') +
         '</span>';
-    } else if (kind === 'employees') {
+    } else if (kind === 'employees' || kind === 'email') {
       inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>';
       for (var e = 0; e < 3; e++) {
         inner += '<span class="tma-portal-tilerow__preview-line">' +
@@ -630,7 +918,7 @@
     ui().openModal({
       title: 'Edit Dashboard',
       body:
-        '<p>Choose the tiles to show. On the dashboard, drag the grip on any tile to change their order.</p>' +
+        '<p>Choose the tiles to show. Drag the grip to reorder, and drag the bottom-right corner to resize (up to three across a row).</p>' +
         '<div class="tma-portal-tilerows">' +
         availableTiles().map(function (t) {
           return '<div class="tma-portal-tilerow">' +
@@ -676,10 +964,12 @@
 
   function renderFavorites(s) {
     if (!homeFilesLoaded) {
-      return '<section class="tma-portal-panel" data-tile-id="favorites" data-key="panel-favorites" aria-label="Favorites" aria-busy="true">' +
-        panelHead('Favorites') +
+      return tileShell(
+        'favorites', 'panel-favorites', 'Favorites', panelHead('Favorites'),
         '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
-        skeletonFileRows(2) + '</section>';
+        skeletonFileRows(2),
+        '', true
+      );
     }
     var favs = (s.folders && s.folders.favorites) || [];
     var rows = favs.map(function (f) {
@@ -694,11 +984,11 @@
         (f.path ? '<span class="tma-portal-file-row__path">' + ui().esc(f.path) + '</span>' : '') +
         '</span></button>';
     }).join('');
-    return '<section class="tma-portal-panel" data-tile-id="favorites" data-key="panel-favorites" aria-label="Favorites">' +
-      panelHead('Favorites') +
+    return tileShell(
+      'favorites', 'panel-favorites', 'Favorites', panelHead('Favorites'),
       '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
-      (rows || '<p class="tma-portal-panel__note">No favorites yet.</p>') +
-      '</section>';
+      (rows || '<p class="tma-portal-panel__note">No favorites yet.</p>')
+    );
   }
 
   /* Real data for the Recent Files + Favorites widgets, from the File Library
@@ -992,6 +1282,7 @@
     }
 
     bindTileDrag(el);
+    bindTileResize(el);
 
     pick('[data-home-shortcut]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -1045,6 +1336,25 @@
       });
     });
 
+    pick('[data-home-email]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-home-email');
+        navigate({
+          navId: 'email',
+          view: 'email',
+          title: 'Email',
+          crumb: 'Email',
+          emailMessageId: id || null,
+        });
+      });
+    });
+
+    pick('[data-home-email-open]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        navigate({ navId: 'email', view: 'email', title: 'Email', crumb: 'Email' });
+      });
+    });
+
     /* The greeting and avatar are rendered directly in the markup above when
      * TMACurrentUser is ready. When it isn't yet, the skeleton stands until
      * current-user.js's own listener fires and re-renders this view — no
@@ -1060,6 +1370,7 @@
       loadHomeFiles(el);
       loadHomeMetrics(el);
       loadHomeStaff(el);
+      loadHomeEmail(el);
     } else if (!homeStaffInflight && (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
       // Retry when identity arrives after an early "not staff" guess.
       loadHomeStaff(el);

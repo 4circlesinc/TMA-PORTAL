@@ -80,10 +80,13 @@
         tutorials: false,
         favorites: true,
         employees: true,
+        email: true,
         road: true,
       },
       // Order of home widgets (drag-and-drop). Unknown ids are appended.
-      dashboardTileOrder: ['recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'],
+      dashboardTileOrder: ['email', 'recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'],
+      // Per-widget size: cols (1–3) + height in px. Missing keys use defaults.
+      dashboardTileSizes: {},
       // Populated from the File Library (section=recent) on the dashboard mount;
       // starts empty so no placeholder filenames flash before the real data.
       recentFiles: [],
