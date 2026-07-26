@@ -407,10 +407,8 @@
 
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
-    var size = sizeFor('road');
     return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road"' +
-      ' data-tile-id="road" data-key="panel-road" data-cols="' + size.cols + '"' +
-      ' style="--tile-h:' + size.height + 'px" aria-label="What\'s on the road?">' +
+      ' data-tile-id="road" data-key="panel-road" aria-label="What\'s on the road?">' +
       dragHandleHtml() +
       window.TMAOverview.renderRoad() +
       resizeHandleHtml() +
@@ -519,8 +517,26 @@
       return handle.closest('[data-tile-id]');
     }
 
+    function orderSignature() {
+      return Array.prototype.map.call(
+        grid.querySelectorAll('[data-tile-id]'),
+        function (node) { return node.getAttribute('data-tile-id'); }
+      ).join('|');
+    }
+
+    function commitOrderFromDom() {
+      var order = Array.prototype.map.call(
+        grid.querySelectorAll('[data-tile-id]'),
+        function (node) { return node.getAttribute('data-tile-id'); }
+      ).filter(Boolean);
+      var hidden = tileOrder().filter(function (id) { return order.indexOf(id) === -1; });
+      saveTileOrder(order.concat(hidden));
+      layoutHomeGrid(grid, { animate: true });
+      flushLayoutServerSave();
+    }
+
     grid.addEventListener('dragstart', function (e) {
-      if (grid.classList.contains('is-tile-resizing')) {
+      if (grid.classList.contains('is-tile-resizing') || tileResizeActive) {
         e.preventDefault();
         return;
       }
@@ -528,20 +544,37 @@
       if (!tile) return;
       dragged = tile;
       tile.classList.add('is-dragging');
+      grid.classList.add('is-tile-dragging');
       e.dataTransfer.effectAllowed = 'move';
       try { e.dataTransfer.setData('text/plain', tile.getAttribute('data-tile-id') || ''); } catch (err) {}
-      try { e.dataTransfer.setDragImage(tile, 24, 24); } catch (err2) {}
+      try {
+        e.dataTransfer.setDragImage(tile, Math.min(40, tile.offsetWidth / 4), 24);
+      } catch (err2) {}
     });
 
     grid.addEventListener('dragover', function (e) {
       if (!dragged) return;
-      var over = e.target.closest('[data-tile-id]');
-      if (!over || !grid.contains(over) || over === dragged) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
+
+      var over = e.target.closest('[data-tile-id]');
+      if (!over || !grid.contains(over) || over === dragged) return;
+
+      var before = orderSignature();
       var box = over.getBoundingClientRect();
-      var after = e.clientY > box.top + box.height / 2;
-      grid.insertBefore(dragged, after ? over.nextSibling : over);
+      // Prefer vertical half for stacking, but also allow left/right for side-by-side boards.
+      var after = (e.clientY - box.top) > box.height / 2;
+      if (Math.abs(e.clientX - (box.left + box.width / 2)) > box.width * 0.28) {
+        after = e.clientX > (box.left + box.width / 2);
+      }
+      var ref = after ? over.nextSibling : over;
+      if (ref === dragged) return;
+      grid.insertBefore(dragged, ref);
+
+      // Only reflow when order actually changed — avoids restarting transitions every pixel.
+      if (orderSignature() !== before) {
+        layoutHomeGrid(grid, { animate: true, floatingId: dragged.getAttribute('data-tile-id') });
+      }
     });
 
     grid.addEventListener('drop', function (e) {
@@ -552,20 +585,10 @@
       if (!dragged) return;
       dragged.classList.remove('is-dragging');
       dragged = null;
-      var order = Array.prototype.map.call(
-        grid.querySelectorAll('[data-tile-id]'),
-        function (node) { return node.getAttribute('data-tile-id'); }
-      ).filter(Boolean);
-      // Keep hidden tiles in their relative place after the visible ones' new order.
-      var hidden = tileOrder().filter(function (id) { return order.indexOf(id) === -1; });
-      saveTileOrder(order.concat(hidden));
+      grid.classList.remove('is-tile-dragging');
+      grid.classList.remove('is-live-pack');
+      commitOrderFromDom();
     });
-  }
-
-  function gridColumnCount(grid) {
-    var tpl = getComputedStyle(grid).gridTemplateColumns || '';
-    var parts = tpl.split(/\s+/).filter(Boolean);
-    return Math.max(1, parts.length);
   }
 
   var tileResizeActive = null;
@@ -575,12 +598,18 @@
     if (!tileResizeActive) return;
     var state = tileResizeActive;
     tileResizeActive = null;
-    var cols = state.cols || state.startCols;
-    var height = state.height || state.startHeight;
+    var w = state.w != null ? state.w : state.startW;
+    var height = state.height != null ? state.height : state.startHeight;
     if (state.tile) state.tile.classList.remove('is-resizing');
-    if (state.grid) state.grid.classList.remove('is-tile-resizing');
+    if (state.grid) {
+      state.grid.classList.remove('is-tile-resizing');
+      state.grid.classList.remove('is-live-pack');
+    }
     document.body.classList.remove('tma-tile-resizing');
-    saveTileSize(state.id, cols, height);
+    saveTileSize(state.id, w, height);
+    // Settle with a soft FLIP in case a neighbour just wrapped to a new slot.
+    layoutHomeGrid(state.grid, { animate: true });
+    flushLayoutServerSave();
   }
 
   function bindTileResize(root) {
@@ -623,14 +652,14 @@
         grid: grid,
         id: id,
         pointerId: e.pointerId,
-        startCols: start.cols,
-        startHeight: start.height,
+        startW: start.w,
+        startHeight: start.h,
         startRect: tile.getBoundingClientRect(),
-        colCount: gridColumnCount(grid),
+        boardWidth: grid.clientWidth || grid.offsetWidth,
       };
 
       tile.classList.add('is-resizing', 'is-resize-hot');
-      grid.classList.add('is-tile-resizing');
+      grid.classList.add('is-tile-resizing', 'is-live-pack');
       document.body.classList.add('tma-tile-resizing');
       try { handle.setPointerCapture(e.pointerId); } catch (err) {}
     });
@@ -643,24 +672,27 @@
       if (!active || e.pointerId !== active.pointerId) return;
       e.preventDefault();
 
-      var grid = active.grid;
-      var colCount = active.colCount || gridColumnCount(grid);
-      var gap = parseFloat(getComputedStyle(grid).columnGap || getComputedStyle(grid).gap) || 20;
-      var colW = (grid.clientWidth - gap * (colCount - 1)) / colCount;
-      if (colW < 1) colW = 1;
-
-      // Snap width to whole columns; CSS gap stays constant.
+      var board = active.boardWidth || active.grid.clientWidth || 1;
       var widthPx = e.clientX - active.startRect.left;
-      var cols = Math.round((widthPx + gap) / (colW + gap));
-      cols = Math.min(colCount, Math.max(1, cols));
+      var w = widthPx / board;
+      w = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, w));
 
       var height = Math.round(e.clientY - active.startRect.top);
       height = Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, height));
 
-      active.tile.setAttribute('data-cols', String(cols));
-      active.tile.style.setProperty('--tile-h', height + 'px');
-      active.cols = cols;
+      active.w = w;
       active.height = height;
+
+      // Persist into state so the packer reads the live size, then reflow.
+      var s = data().state();
+      if (!s.dashboardTileSizes) s.dashboardTileSizes = {};
+      s.dashboardTileSizes[active.id] = { w: w, h: height };
+
+      if (layoutResizeTimer) cancelAnimationFrame(layoutResizeTimer);
+      layoutResizeTimer = requestAnimationFrame(function () {
+        layoutResizeTimer = null;
+        layoutHomeGrid(active.grid, { live: true });
+      });
     });
 
     window.addEventListener('pointerup', function (e) {
@@ -671,6 +703,11 @@
     window.addEventListener('pointercancel', function (e) {
       if (!tileResizeActive || e.pointerId !== tileResizeActive.pointerId) return;
       endTileResize();
+    });
+
+    window.addEventListener('resize', function () {
+      var grid = document.querySelector('[data-view="dashboard"] .tma-portal-home-grid');
+      if (grid) layoutHomeGrid(grid, { animate: false });
     });
   }
 
@@ -763,18 +800,24 @@
     return type === 'Administrator' || type === 'Employee';
   }
 
-  var TILE_COLS_MAX = 3;
+  var TILE_GAP = 20;
+  var TILE_W_MIN = 0.22;   // ~3 across a row with gaps
+  var TILE_W_MAX = 1;
   var TILE_H_MIN = 200;
-  var TILE_H_MAX = 640;
+  var TILE_H_MAX = 720;
   var DEFAULT_TILE_SIZES = {
-    recentFiles: { cols: 1, height: 280 },
-    shortcuts: { cols: 2, height: 300 },
-    email: { cols: 2, height: 320 },
-    employees: { cols: 1, height: 360 },
-    favorites: { cols: 1, height: 260 },
-    tutorials: { cols: 1, height: 280 },
-    road: { cols: 1, height: 360 },
+    recentFiles: { w: 0.32, h: 280 },
+    shortcuts: { w: 0.66, h: 300 },
+    email: { w: 0.66, h: 320 },
+    employees: { w: 0.32, h: 360 },
+    favorites: { w: 0.32, h: 260 },
+    tutorials: { w: 0.32, h: 280 },
+    road: { w: 0.32, h: 360 },
   };
+
+  var layoutHydrated = false;
+  var layoutSaveTimer = null;
+  var layoutResizeTimer = null;
 
   function dragHandleHtml() {
     return '<button type="button" class="tma-portal-panel__drag" draggable="true" data-tile-drag' +
@@ -801,32 +844,32 @@
   function sizeFor(id) {
     var s = data().state();
     var stored = (s.dashboardTileSizes && s.dashboardTileSizes[id]) || {};
-    var defaults = DEFAULT_TILE_SIZES[id] || { cols: 1, height: 300 };
-    var cols = parseInt(stored.cols, 10);
-    var height = parseInt(stored.height, 10);
-    if (!cols || cols < 1) cols = defaults.cols;
-    if (cols > TILE_COLS_MAX) cols = TILE_COLS_MAX;
-    if (!height || height < TILE_H_MIN) height = defaults.height;
-    if (height > TILE_H_MAX) height = TILE_H_MAX;
-    return { cols: cols, height: height };
+    var defaults = DEFAULT_TILE_SIZES[id] || { w: 0.32, h: 300 };
+    var w = parseFloat(stored.w);
+    if ((!w || w <= 0) && stored.cols) w = Number(stored.cols) / 3;
+    if (!w || w <= 0) w = defaults.w;
+    w = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, w));
+    var h = parseInt(stored.h != null ? stored.h : stored.height, 10);
+    if (!h || h < TILE_H_MIN) h = defaults.h;
+    if (h > TILE_H_MAX) h = TILE_H_MAX;
+    return { w: w, h: h };
   }
 
-  function saveTileSize(id, cols, height) {
+  function saveTileSize(id, w, h) {
     var s = data().state();
     if (!s.dashboardTileSizes || typeof s.dashboardTileSizes !== 'object') {
       s.dashboardTileSizes = {};
     }
     s.dashboardTileSizes[id] = {
-      cols: Math.min(TILE_COLS_MAX, Math.max(1, cols)),
-      height: Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, height)),
+      w: Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, Number(w) || TILE_W_MIN)),
+      h: Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, parseInt(h, 10) || TILE_H_MIN)),
     };
     data().save();
+    queueLayoutServerSave();
   }
 
   function tileAttrs(id) {
-    var size = sizeFor(id);
-    return ' data-tile-id="' + id + '" data-cols="' + size.cols + '"' +
-      ' style="--tile-h:' + size.height + 'px"';
+    return ' data-tile-id="' + id + '"';
   }
 
   function tileShell(id, key, aria, headHtml, bodyHtml, extraClass, busy) {
@@ -839,6 +882,301 @@
       '<div class="tma-portal-panel__body">' + bodyHtml + '</div>' +
       resizeHandleHtml() +
       '</section>';
+  }
+
+  function prefXsrf() {
+    var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function layoutPayload() {
+    var s = data().state();
+    var tiles = {};
+    DEFAULT_TILE_ORDER.forEach(function (id) {
+      var size = sizeFor(id);
+      tiles[id] = { w: size.w, h: size.h };
+    });
+    return {
+      dashboardTiles: tilesVisibilityPayload(),
+      dashboardLayout: {
+        order: tileOrder(),
+        tiles: tiles,
+      },
+    };
+  }
+
+  function tilesVisibilityPayload() {
+    var show = tiles();
+    var out = {};
+    DEFAULT_TILE_ORDER.forEach(function (id) {
+      if (show[id] == null) out[id] = id !== 'tutorials';
+      else out[id] = !!show[id];
+    });
+    return out;
+  }
+
+  function queueLayoutServerSave() {
+    if (layoutSaveTimer) clearTimeout(layoutSaveTimer);
+    layoutSaveTimer = setTimeout(flushLayoutServerSave, 350);
+  }
+
+  function flushLayoutServerSave() {
+    layoutSaveTimer = null;
+    fetch('/me/preferences', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': prefXsrf(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify(layoutPayload()),
+    }).catch(function () {});
+  }
+
+  function layoutSnapshot(s) {
+    return JSON.stringify({
+      tiles: s.dashboardTiles || {},
+      order: s.dashboardTileOrder || [],
+      sizes: s.dashboardTileSizes || {},
+    });
+  }
+
+  function hydrateLayoutFromServer(done) {
+    if (layoutHydrated) {
+      if (done) done(false);
+      return;
+    }
+    fetch('/me/preferences', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (prefs) {
+        layoutHydrated = true;
+        if (!prefs) {
+          if (done) done(false);
+          return;
+        }
+        var s = data().state();
+        var before = layoutSnapshot(s);
+        if (prefs.dashboardTiles && typeof prefs.dashboardTiles === 'object') {
+          s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, prefs.dashboardTiles);
+        }
+        if (prefs.dashboardLayout && typeof prefs.dashboardLayout === 'object') {
+          if (Array.isArray(prefs.dashboardLayout.order)) {
+            s.dashboardTileOrder = prefs.dashboardLayout.order.slice();
+          }
+          if (prefs.dashboardLayout.tiles && typeof prefs.dashboardLayout.tiles === 'object') {
+            s.dashboardTileSizes = Object.assign({}, s.dashboardTileSizes || {}, prefs.dashboardLayout.tiles);
+          }
+        }
+        var changed = layoutSnapshot(s) !== before;
+        if (changed) data().save();
+        if (done) done(changed);
+      });
+  }
+
+  function rectsOverlap(a, b, gap) {
+    return !(
+      a.x + a.w + gap <= b.x ||
+      b.x + b.w + gap <= a.x ||
+      a.y + a.h + gap <= b.y ||
+      b.y + b.h + gap <= a.y
+    );
+  }
+
+  /* Skyline packer: place each tile at the highest (lowest y) leftmost slot
+   * that fits, so tall tiles never invent empty row gaps in the other column. */
+  function packTiles(items, containerWidth, gap) {
+    var placed = [];
+    items.forEach(function (item) {
+      // Fraction of board width; gap is enforced by the packer, not baked into w.
+      var w = Math.max(140, Math.min(containerWidth, Math.round(item.w * containerWidth)));
+      if (item.w >= 0.999) w = containerWidth;
+      var h = item.h;
+      var candidates = [0];
+      placed.forEach(function (p) {
+        candidates.push(p.x + p.w + gap);
+      });
+      candidates = candidates.filter(function (x, i, arr) {
+        return arr.indexOf(x) === i && x >= 0 && x + w <= containerWidth + 0.5;
+      }).sort(function (a, b) { return a - b; });
+      if (!candidates.length) {
+        // Too wide for any side slot — use full width at the next free row.
+        w = containerWidth;
+        candidates = [0];
+      }
+
+      var best = null;
+      candidates.forEach(function (x) {
+        var y = 0;
+        var guard = 0;
+        while (guard++ < 200) {
+          var hit = null;
+          for (var i = 0; i < placed.length; i++) {
+            var p = placed[i];
+            if (rectsOverlap({ x: x, y: y, w: w, h: h }, p, gap)) {
+              hit = p;
+              break;
+            }
+          }
+          if (!hit) break;
+          y = hit.y + hit.h + gap;
+        }
+        if (!best || y < best.y || (y === best.y && x < best.x)) {
+          best = { id: item.id, x: x, y: y, w: w, h: h };
+        }
+      });
+      placed.push(best);
+    });
+    return placed;
+  }
+
+  function readPackBox(node) {
+    return {
+      x: parseFloat(node.style.left) || 0,
+      y: parseFloat(node.style.top) || 0,
+      w: parseFloat(node.style.width) || node.offsetWidth || 0,
+      h: parseFloat(node.style.height) || node.offsetHeight || 0,
+    };
+  }
+
+  function clearPackMotion(node) {
+    node.classList.remove('is-pack-moving');
+    node.style.transition = '';
+    node.style.transform = '';
+    if (node.style.opacity === '0.72' || node.style.opacity === '0.75') {
+      node.style.opacity = '';
+    }
+  }
+
+  function flipTileTo(node, from, to) {
+    var dx = from.x - to.x;
+    var dy = from.y - to.y;
+    var dw = from.w - to.w;
+    var dh = from.h - to.h;
+    if (!dx && !dy && !dw && !dh) {
+      clearPackMotion(node);
+      return false;
+    }
+    node.classList.add('is-pack-moving');
+    node.style.transition = 'none';
+    node.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    node.style.opacity = '0.72';
+    // Force invert style to commit before playing the flip.
+    void node.offsetWidth;
+    node.style.transition =
+      'transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease';
+    node.style.transform = 'translate(0,0)';
+    node.style.opacity = '1';
+    return true;
+  }
+
+  function layoutHomeGrid(grid, opts) {
+    opts = opts || {};
+    if (!grid) return;
+    var width = grid.clientWidth || grid.offsetWidth;
+    if (width < 40) return;
+
+    var nodes = Array.prototype.slice.call(grid.querySelectorAll('[data-tile-id]'));
+    if (!nodes.length) {
+      grid.style.height = '0px';
+      return;
+    }
+
+    var prev = {};
+    nodes.forEach(function (node) {
+      prev[node.getAttribute('data-tile-id')] = readPackBox(node);
+    });
+
+    var orderIds = nodes.map(function (n) { return n.getAttribute('data-tile-id'); });
+    var items = orderIds.map(function (id) {
+      var size = sizeFor(id);
+      // On narrow boards, force full width so nothing overflows.
+      var w = width < 720 ? 1 : size.w;
+      return { id: id, w: w, h: size.h };
+    });
+
+    var packed = packTiles(items, width, TILE_GAP);
+    var byId = {};
+    packed.forEach(function (p) { byId[p.id] = p; });
+
+    var maxBottom = 0;
+    var live = !!opts.live;
+    var animate = !!opts.animate;
+    var floatingId = opts.floatingId || null;
+
+    if (live) {
+      grid.classList.add('is-live-pack');
+      grid.classList.remove('is-animating');
+    } else if (animate) {
+      grid.classList.add('is-animating');
+      grid.classList.remove('is-live-pack');
+    } else {
+      grid.classList.remove('is-animating');
+      grid.classList.remove('is-live-pack');
+    }
+
+    var anyFlip = false;
+    nodes.forEach(function (node) {
+      var id = node.getAttribute('data-tile-id');
+      var p = byId[id];
+      if (!p) return;
+      var from = prev[id] || p;
+      var active = node.classList.contains('is-resizing') ||
+        node.classList.contains('is-dragging') ||
+        id === floatingId;
+
+      node.style.left = p.x + 'px';
+      node.style.top = p.y + 'px';
+      node.style.width = p.w + 'px';
+      node.style.height = p.h + 'px';
+      if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;
+
+      if (active) {
+        clearPackMotion(node);
+        return;
+      }
+
+      // Live resize: keep continuous vertical pushes snappy (no rubber-band),
+      // but FLIP when a tile jumps columns / wraps — that was the rough snap.
+      if (live) {
+        var slotJump = from.x !== p.x || (Math.abs(from.y - p.y) > 8 && from.w !== p.w);
+        if (slotJump) anyFlip = flipTileTo(node, from, p) || anyFlip;
+        else clearPackMotion(node);
+        return;
+      }
+
+      if (animate && (from.w || from.h || from.x || from.y)) {
+        anyFlip = flipTileTo(node, from, p) || anyFlip;
+      } else {
+        clearPackMotion(node);
+      }
+    });
+    grid.style.height = maxBottom + 'px';
+    grid.classList.add('is-packed');
+
+    window.clearTimeout(grid._animTimer);
+    if (animate || anyFlip) {
+      grid._animTimer = window.setTimeout(function () {
+        grid.classList.remove('is-animating');
+        nodes.forEach(clearPackMotion);
+      }, 400);
+    }
+  }
+
+  // Persist layout immediately when leaving the page / tab so another browser
+  // never races an in-flight debounced save.
+  if (!window.__tmaHomeLayoutFlushBound) {
+    window.__tmaHomeLayoutFlushBound = true;
+    window.addEventListener('pagehide', function () {
+      if (layoutSaveTimer) flushLayoutServerSave();
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden' && layoutSaveTimer) flushLayoutServerSave();
+    });
   }
 
   function tiles() {
@@ -871,6 +1209,7 @@
     var s = data().state();
     s.dashboardTileOrder = order.slice();
     data().save();
+    queueLayoutServerSave();
   }
 
   function availableTiles() {
@@ -918,7 +1257,7 @@
     ui().openModal({
       title: 'Edit Dashboard',
       body:
-        '<p>Choose the tiles to show. Drag the grip to reorder, and drag the bottom-right corner to resize (up to three across a row).</p>' +
+        '<p>Choose the tiles to show. Drag the grip to reorder, and drag the bottom-right corner to resize. Layout syncs to your account.</p>' +
         '<div class="tma-portal-tilerows">' +
         availableTiles().map(function (t) {
           return '<div class="tma-portal-tilerow">' +
@@ -954,6 +1293,7 @@
           var next = Object.assign({}, s.dashboardTiles || {}, draft);
           s.dashboardTiles = next;
           data().save();
+          queueLayoutServerSave();
           ui().closeModal();
           ui().toast('Dashboard updated');
           rerender();
@@ -1243,9 +1583,7 @@
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
       '</div></div>' +
       renderKpis() +
-      // Everything below the KPI row lives in one 2-column grid so no panel
-      // (including "What's on the road?") ever spans the full width. Order is
-      // user-controlled via drag-and-drop on each tile's grip.
+      // Masonry board: free widths/heights, fixed gaps, drag to reorder.
       '<div class="tma-portal-home-grid">' +
       renderHomeGrid(s, show) +
       '</div>' +
@@ -1283,6 +1621,14 @@
 
     bindTileDrag(el);
     bindTileResize(el);
+
+    // Masonry pack after paint so measurements use real widths.
+    var homeGrid = el.querySelector('.tma-portal-home-grid');
+    if (homeGrid) {
+      requestAnimationFrame(function () {
+        layoutHomeGrid(homeGrid, { animate: !!opts.fromLoad });
+      });
+    }
 
     pick('[data-home-shortcut]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -1367,6 +1713,10 @@
     // Fetch real Recent Files + Favorites, and the KPI metrics, once per
     // genuine mount (not on the re-render the fetches themselves trigger).
     if (!opts.fromLoad) {
+      hydrateLayoutFromServer(function (changed) {
+        // Re-render once when the account layout differs from local cache.
+        if (changed && el.isConnected) mount(el, { fromLoad: true, fromHydrate: true });
+      });
       loadHomeFiles(el);
       loadHomeMetrics(el);
       loadHomeStaff(el);
