@@ -50,13 +50,13 @@ class PreferencesController extends Controller
     ];
 
     private const TILE_IDS = [
-        'recentFiles', 'road', 'shortcuts', 'employees',
-        'email', 'tutorials', 'favorites',
+        'recentFiles', 'favorites', 'road', 'shortcuts',
+        'employees', 'email', 'tutorials',
     ];
 
     /** Equal 3-up cards — mirrors the client board order. */
     private const DEFAULT_DASHBOARD_ORDER = [
-        'recentFiles', 'road', 'shortcuts', 'employees', 'email', 'tutorials', 'favorites',
+        'recentFiles', 'favorites', 'road', 'shortcuts', 'employees', 'email', 'tutorials',
     ];
 
     /** @var array<string, bool> */
@@ -80,7 +80,7 @@ class PreferencesController extends Controller
     }
 
     /** Layout generation — bump when the shipped default board changes. */
-    private const DASHBOARD_LAYOUT_VERSION = 6;
+    private const DASHBOARD_LAYOUT_VERSION = 8;
 
     /** Persist the default home board so every browser starts the same. */
     private function seedDashboardLayoutIfMissing(User $user): void

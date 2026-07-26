@@ -625,8 +625,8 @@
     { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
 
-  // All widgets are equal 1/3 cards in the masonry board.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'road', 'shortcuts', 'employees', 'email', 'tutorials', 'favorites'];
+  // Favorites stacks under Recent Files; then Road / Shortcuts fill the top row.
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'favorites', 'road', 'shortcuts', 'employees', 'email', 'tutorials'];
 
   // Every tile is one column of the 3-up board — nothing spans full width.
   var TILE_SPAN = {
@@ -668,7 +668,14 @@
     );
   }
 
-  /* Skyline masonry: place each tile at the highest (lowest y) leftmost slot. */
+  /* Skyline masonry: place each tile at the highest (lowest y) leftmost slot.
+   * Stacked pairs prefer the same column: Favorites under Recent Files,
+   * Employees under Shortcuts. */
+  var TILE_STACK_UNDER = {
+    favorites: 'recentFiles',
+    employees: 'shortcuts',
+  };
+
   function packHomeTiles(items, containerWidth, gap) {
     var placed = [];
     items.forEach(function (item) {
@@ -684,6 +691,18 @@
       if (!candidates.length) {
         w = Math.min(w, containerWidth);
         candidates = [0];
+      }
+
+      var preferX = null;
+      var stackUnder = TILE_STACK_UNDER[item.id];
+      if (stackUnder) {
+        for (var r = 0; r < placed.length; r++) {
+          if (placed[r].id === stackUnder) {
+            preferX = placed[r].x;
+            if (candidates.indexOf(preferX) === -1) candidates.unshift(preferX);
+            break;
+          }
+        }
       }
 
       var best = null;
@@ -702,7 +721,13 @@
           if (!hit) break;
           y = hit.y + hit.h + gap;
         }
-        if (!best || y < best.y || (y === best.y && x < best.x)) {
+        var prefer = preferX != null && Math.abs(x - preferX) < 1;
+        if (
+          !best ||
+          (prefer && !(preferX != null && Math.abs(best.x - preferX) < 1)) ||
+          (prefer === (preferX != null && Math.abs(best.x - preferX) < 1) &&
+            (y < best.y || (y === best.y && x < best.x)))
+        ) {
           best = { id: item.id, x: x, y: y, w: w, h: h };
         }
       });
@@ -891,7 +916,7 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  var DASHBOARD_LAYOUT_GEN = 6;
+  var DASHBOARD_LAYOUT_GEN = 8;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
