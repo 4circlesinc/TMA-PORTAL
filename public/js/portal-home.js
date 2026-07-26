@@ -778,10 +778,28 @@
     });
 
     var packed = packHomeTiles(items, width, gap);
+
+    // Stretch the bottom card in each column so column bottoms line up
+    // (Favorites / Employees meet What's on the road?).
+    var maxBottom = 0;
+    packed.forEach(function (p) {
+      if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;
+    });
+    var bottomByCol = {};
+    packed.forEach(function (p) {
+      var key = String(Math.round(p.x));
+      var prev = bottomByCol[key];
+      if (!prev || p.y + p.h > prev.y + prev.h) bottomByCol[key] = p;
+    });
+    Object.keys(bottomByCol).forEach(function (key) {
+      var p = bottomByCol[key];
+      var nextH = Math.max(p.h, maxBottom - p.y);
+      if (nextH > p.h) p.h = nextH;
+    });
+
     var byId = {};
     packed.forEach(function (p) { byId[p.id] = p; });
 
-    var maxBottom = 0;
     nodes.forEach(function (node) {
       var id = node.getAttribute('data-tile-id');
       var p = byId[id];
@@ -790,7 +808,6 @@
       node.style.top = p.y + 'px';
       node.style.width = p.w + 'px';
       node.style.height = p.h + 'px';
-      if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;
     });
 
     grid.style.height = maxBottom + 'px';
@@ -1031,13 +1048,6 @@
     return DASH_TILES.filter(function (t) { return !t.staffOnly || staff !== false; });
   }
 
-  function tileById(id) {
-    for (var i = 0; i < DASH_TILES.length; i++) {
-      if (DASH_TILES[i].id === id) return DASH_TILES[i];
-    }
-    return null;
-  }
-
   function tilePreview(kind) {
     var inner = '';
     if (kind === 'files' || kind === 'favorites') {
@@ -1070,51 +1080,25 @@
 
   function editDashboardModal(rerender) {
     var current = tiles();
-    var currentOrder = tileOrder();
     var available = availableTiles();
-    var availableIds = available.map(function (t) { return t.id; });
     var draft = {};
     available.forEach(function (t) { draft[t.id] = !!current[t.id]; });
-    var draftOrder = currentOrder.filter(function (id) { return availableIds.indexOf(id) !== -1; });
-    availableIds.forEach(function (id) {
-      if (draftOrder.indexOf(id) === -1) draftOrder.push(id);
-    });
-
-    function orderControls(id, index, total) {
-      return '<span class="tma-portal-tilerow__order">' +
-        '<button type="button" class="tma-portal-tilerow__shift" data-home-tile-up="' + id + '"' +
-        (index === 0 ? ' disabled' : '') + ' aria-label="Move ' + ui().esc((tileById(id) || {}).label || id) + ' up">' +
-        '<img src="images/icons/phosphor/CaretUp.svg" alt="" width="14" height="14">' +
-        '</button>' +
-        '<button type="button" class="tma-portal-tilerow__shift" data-home-tile-down="' + id + '"' +
-        (index >= total - 1 ? ' disabled' : '') + ' aria-label="Move ' + ui().esc((tileById(id) || {}).label || id) + ' down">' +
-        '<img src="images/icons/phosphor/CaretDown.svg" alt="" width="14" height="14">' +
-        '</button>' +
-        '</span>';
-    }
-
-    function rowsHtml() {
-      return draftOrder.map(function (id, index) {
-        var t = tileById(id);
-        if (!t) return '';
-        return '<div class="tma-portal-tilerow" data-home-tile-row="' + id + '">' +
-          orderControls(id, index, draftOrder.length) +
-          tilePreview(t.preview) +
-          '<div class="tma-portal-tilerow__meta">' +
-          '<span class="tma-portal-tilerow__label">' + ui().esc(t.label) + '</span>' +
-          '<span class="tma-portal-tilerow__desc">' + ui().esc(t.desc) + '</span>' +
-          '</div>' +
-          ui().toggle(!!draft[t.id], 'data-home-tile="' + t.id + '"', 'Show ' + t.label) +
-          '</div>';
-      }).join('');
-    }
 
     ui().openModal({
       title: 'Edit Dashboard',
       body:
-        '<p>Choose which tiles to show, and use the arrows to set their order. Layout syncs to your account.</p>' +
-        '<div class="tma-portal-tilerows" data-home-tilerows>' +
-        rowsHtml() +
+        '<p>Choose which tiles to show on your dashboard.</p>' +
+        '<div class="tma-portal-tilerows">' +
+        available.map(function (t) {
+          return '<div class="tma-portal-tilerow">' +
+            tilePreview(t.preview) +
+            '<div class="tma-portal-tilerow__meta">' +
+            '<span class="tma-portal-tilerow__label">' + ui().esc(t.label) + '</span>' +
+            '<span class="tma-portal-tilerow__desc">' + ui().esc(t.desc) + '</span>' +
+            '</div>' +
+            ui().toggle(!!draft[t.id], 'data-home-tile="' + t.id + '"', 'Show ' + t.label) +
+            '</div>';
+        }).join('') +
         '</div>' +
         '<div class="tma-portal-form-actions tma-portal-form-actions--start">' +
         ui().btn({ label: 'Save', attrs: ' data-home-tiles-save', disabled: true }) +
@@ -1122,59 +1106,21 @@
         '</div>',
       onMount: function (host) {
         var saveBtn = host.querySelector('[data-home-tiles-save]');
-        var rowsHost = host.querySelector('[data-home-tilerows]');
 
         function dirty() {
-          var visDirty = available.some(function (t) { return !!draft[t.id] !== !!current[t.id]; });
-          var orderDirty = draftOrder.join('|') !== currentOrder.filter(function (id) {
-            return availableIds.indexOf(id) !== -1;
-          }).join('|');
-          return visDirty || orderDirty;
+          return available.some(function (t) { return !!draft[t.id] !== !!current[t.id]; });
         }
 
-        function bindRow() {
-          saveBtn.disabled = !dirty();
-          host.querySelectorAll('[data-home-tile]').forEach(function (input) {
-            input.addEventListener('change', function () {
-              draft[input.getAttribute('data-home-tile')] = input.checked;
-              saveBtn.disabled = !dirty();
-            });
+        host.querySelectorAll('[data-home-tile]').forEach(function (input) {
+          input.addEventListener('change', function () {
+            draft[input.getAttribute('data-home-tile')] = input.checked;
+            saveBtn.disabled = !dirty();
           });
-          host.querySelectorAll('[data-home-tile-up]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              var id = btn.getAttribute('data-home-tile-up');
-              var i = draftOrder.indexOf(id);
-              if (i <= 0) return;
-              var tmp = draftOrder[i - 1];
-              draftOrder[i - 1] = draftOrder[i];
-              draftOrder[i] = tmp;
-              rowsHost.innerHTML = rowsHtml();
-              bindRow();
-            });
-          });
-          host.querySelectorAll('[data-home-tile-down]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              var id = btn.getAttribute('data-home-tile-down');
-              var i = draftOrder.indexOf(id);
-              if (i < 0 || i >= draftOrder.length - 1) return;
-              var tmp = draftOrder[i + 1];
-              draftOrder[i + 1] = draftOrder[i];
-              draftOrder[i] = tmp;
-              rowsHost.innerHTML = rowsHtml();
-              bindRow();
-            });
-          });
-        }
-
-        bindRow();
+        });
 
         saveBtn.addEventListener('click', function () {
           var s = data().state();
-          var next = Object.assign({}, s.dashboardTiles || {}, draft);
-          s.dashboardTiles = next;
-          // Keep any unavailable (staff-only) ids in a stable trailing position.
-          var hidden = tileOrder().filter(function (id) { return availableIds.indexOf(id) === -1; });
-          s.dashboardTileOrder = draftOrder.concat(hidden);
+          s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, draft);
           data().save();
           queueLayoutServerSave();
           ui().closeModal();
@@ -1477,6 +1423,7 @@
       '<div class="tma-portal-home-grid">' +
       renderHomeGrid(s, show) +
       '</div>' +
+      (window.TMAPortalHomeLibrary ? window.TMAPortalHomeLibrary.render() : '') +
       '</div>';
 
     /*
@@ -1510,6 +1457,11 @@
     }
 
     bindHomeMasonry(el);
+
+    el._homeLibRerender = function () { mount(el, { fromLoad: true }); };
+    if (window.TMAPortalHomeLibrary) {
+      window.TMAPortalHomeLibrary.wire(el);
+    }
 
     pick('[data-home-shortcut]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -1602,6 +1554,11 @@
       loadHomeMetrics(el);
       loadHomeStaff(el);
       loadHomeEmail(el);
+      if (window.TMAPortalHomeLibrary) {
+        window.TMAPortalHomeLibrary.load(function () {
+          if (el.isConnected) mount(el, { fromLoad: true });
+        });
+      }
     } else if (!homeStaffInflight && (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
       // Retry when identity arrives after an early "not staff" guess.
       loadHomeStaff(el);

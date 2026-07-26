@@ -5947,6 +5947,10 @@
   min-width: 0;
 }
 
+.tma-dash__overview-files-tabs {
+  margin-bottom: var(--space-4);
+}
+
 .tma-dash__files--overview .tma-dash__toolbar {
   background: var(--dash-panel-bg);
   border-radius: var(--radius-16);

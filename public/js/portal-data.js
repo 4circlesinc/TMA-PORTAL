@@ -83,7 +83,7 @@
         email: true,
         road: true,
       },
-      // Default admin home board order (Edit Dashboard arrows). Unknown ids are appended.
+      // Default admin home board order. Unknown ids are appended.
       dashboardTileOrder: ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees', 'tutorials'],
       // Legacy size map — unused after the fixed 2-column grid; kept empty for older caches.
       dashboardTileSizes: {},

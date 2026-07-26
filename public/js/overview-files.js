@@ -92,8 +92,9 @@
 
     var filterItems = [
       { value: '', label: 'All types' },
-      { value: 'document', label: 'Documents' },
-      { value: 'spreadsheet', label: 'Spreadsheets' },
+      { value: 'word', label: 'Documents' },
+      { value: 'excel', label: 'Spreadsheets' },
+      { value: 'powerpoint', label: 'Presentations' },
       { value: 'image', label: 'Images' },
       { value: 'pdf', label: 'PDF' },
       { value: 'other', label: 'Other' },
@@ -186,11 +187,26 @@
     var list = rows;
     if (state.filterType) {
       list = list.filter(function (row) {
-        if (state.filterType === 'pdf') return row.extension === 'pdf';
-        if (state.filterType === 'other') {
-          return ['document', 'spreadsheet', 'image', 'pdf'].indexOf(row.category) === -1 && row.extension !== 'pdf';
+        var cat = row.category || '';
+        var ext = row.extension || '';
+        if (state.filterType === 'pdf') return ext === 'pdf' || cat === 'pdf';
+        if (state.filterType === 'word') {
+          return cat === 'word' || cat === 'document' || /^(doc|docx|rtf|txt)$/.test(ext);
         }
-        return row.category === state.filterType || (state.filterType === 'document' && row.extension === 'pdf');
+        if (state.filterType === 'excel') {
+          return cat === 'excel' || cat === 'spreadsheet' || /^(xls|xlsx|csv)$/.test(ext);
+        }
+        if (state.filterType === 'powerpoint') {
+          return cat === 'powerpoint' || /^(ppt|pptx)$/.test(ext);
+        }
+        if (state.filterType === 'image') {
+          return cat === 'image' || /^(png|jpe?g|gif|webp|svg)$/.test(ext);
+        }
+        if (state.filterType === 'other') {
+          return !/^(word|excel|powerpoint|pdf|image|document|spreadsheet)$/.test(cat)
+            && !/^(pdf|doc|docx|xls|xlsx|csv|ppt|pptx|png|jpe?g|gif|webp|svg)$/.test(ext);
+        }
+        return cat === state.filterType;
       });
     }
     if (state.search) {
@@ -352,11 +368,31 @@
     window.open(url, '_blank', 'noopener');
   }
 
+  function renderSectionTabs(section) {
+    var tabs = [
+      { key: 'recent', label: 'Recent Files' },
+      { key: 'shared', label: 'Shared with me' },
+    ];
+    return '<div class="tma-tab-group tma-tab-group--underline tma-dash__overview-files-tabs" role="tablist" data-overview-files-tabs>' +
+      tabs.map(function (it, i) {
+        var on = it.key === section;
+        return '<button type="button" class="tma-tab' + (on ? ' is-active' : '') + '" role="tab"' +
+          ' data-tab-index="' + i + '" data-overview-files-section="' + escapeHtml(it.key) + '"' +
+          ' aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '">' +
+          '<span class="tma-tab__label">' + escapeHtml(it.label) + '</span>' +
+          '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
+          '</button>';
+      }).join('') +
+      '</div>';
+  }
+
   function mount(container) {
     if (!container || container.hasAttribute('data-files-mounted')) return;
 
     var state = {
       rows: DEFAULT_ROWS.map(function (r) { return Object.assign({}, r); }),
+      section: 'recent',
+      cache: { recent: null, shared: null },
       search: '',
       searchFocused: false,
       searchLoading: false,
@@ -391,7 +427,9 @@
 
       var emptyMsg = state.search || state.filterType
         ? 'No files match your filters.'
-        : 'No files have been uploaded yet.';
+        : (state.section === 'shared'
+          ? 'Nothing has been shared with you yet.'
+          : 'No recent files yet.');
       var bodyHtml = pageRows.length
         ? pageRows.map(function (row, i) {
             var globalIndex = start + i;
@@ -399,7 +437,9 @@
           }).join('')
         : (window.TMANoData
           ? window.TMANoData.render({
-              title: state.search || state.filterType ? 'No matching files' : 'No files yet',
+              title: state.search || state.filterType
+                ? 'No matching files'
+                : (state.section === 'shared' ? 'Nothing shared with you' : 'No recent files'),
               subtitle: emptyMsg,
               showButton: false,
               compact: true,
@@ -407,6 +447,7 @@
           : '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">' + escapeHtml(emptyMsg) + '</div></div>');
 
       container.innerHTML =
+        renderSectionTabs(state.section) +
         renderToolbar(state) +
         '<div class="tma-dash__ctable tma-dash__ctable--overview" role="table" aria-label="Files">' +
           '<div class="tma-dash__ctr tma-dash__ctr--head tma-dash__ctr--overview">' +
@@ -437,6 +478,26 @@
     }
 
     function wireEvents(filtered, pageRows, start) {
+      container.querySelectorAll('[data-overview-files-section]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var next = btn.getAttribute('data-overview-files-section');
+          if (!next || next === state.section) return;
+          state.section = next;
+          state.page = 1;
+          state.selected = {};
+          state.search = '';
+          state.filterType = '';
+          if (state.cache[next]) {
+            state.rows = state.cache[next];
+            render();
+          } else {
+            state.rows = [];
+            render();
+            reloadFiles();
+          }
+        });
+      });
+
       var searchInput = container.querySelector('[data-files-search]');
       var searchTimer = null;
 
@@ -612,16 +673,42 @@
 
     function reloadFiles() {
       var siteRoot = window.__TMA_SITE_ROOT || '';
-      fetch(siteRoot + '/portal/files?section=recent&perPage=50', {
+      var section = state.section === 'shared' ? 'shared' : 'recent';
+      fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=50', {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           if (!j) return;
-          state.rows = (j.files || []).map(mapApiFile);
-          state.page = 1;
-          render();
+          // Shared with me can include folders; keep both, files first for this table.
+          var mappedFiles = (j.files || []).map(mapApiFile);
+          var mappedFolders = (j.folders || []).map(function (f) {
+            return mapApiFile({
+              id: f.id,
+              name: f.name,
+              type: 'folder',
+              category: 'folder',
+              extension: '',
+              sizeLabel: f.sizeLabel || ((f.fileCount != null ? f.fileCount : 0) + ' items'),
+              size: f.size || 0,
+              uploadedAt: f.createdAt,
+              createdAt: f.createdAt,
+              modifiedAt: f.modifiedAt,
+              uploadedBy: f.owner,
+              owner: f.owner,
+              shared: !!f.shared,
+              folder: null,
+              icon: 'FolderFilled',
+            });
+          });
+          var rows = mappedFolders.concat(mappedFiles);
+          state.cache[section] = rows;
+          if (state.section === section) {
+            state.rows = rows;
+            state.page = 1;
+            render();
+          }
         })
         .catch(function () { /* keep current rows */ });
     }
