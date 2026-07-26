@@ -301,8 +301,8 @@
     }).join('');
 
     return tileShell(
-      'employees', 'panel-employees', 'Employees', panelHead('Employees'),
-      '<p class="tma-portal-panel__note">' + onlineCount + ' of ' + people.length + ' online</p>' +
+      'employees', 'panel-employees', 'Employees',
+      panelHead('Employees', onlineCount + ' of ' + people.length + ' online'),
       '<div class="tma-portal-employees">' +
       (rows || '<p class="tma-portal-panel__note">No employees to show.</p>') +
       '</div>',
@@ -620,13 +620,17 @@
     { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email' },
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
-    { id: 'favorites', label: 'Favorites', desc: 'Mark certain files or folders as Favorite and have a shortcut to them.', preview: 'favorites' },
+    { id: 'favorites', label: 'Favorites', desc: 'Files and folders you marked as favorite.', preview: 'favorites' },
     { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
     { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
 
-  // Favorites stacks under Recent Files; then Road / Shortcuts fill the top row.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'favorites', 'road', 'shortcuts', 'employees', 'email', 'tutorials'];
+  // Shipped default board (3 equal columns, masonry):
+  //   Recent Files → Favorites
+  //   Recent Email → What's on the road?
+  //   Shortcuts → Employees
+  // Tutorials stays off by default.
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees', 'tutorials'];
 
   // Every tile is one column of the 3-up board — nothing spans full width.
   var TILE_SPAN = {
@@ -669,10 +673,11 @@
   }
 
   /* Skyline masonry: place each tile at the highest (lowest y) leftmost slot.
-   * Stacked pairs prefer the same column: Favorites under Recent Files,
-   * Employees under Shortcuts. */
+   * Column stacks for the default board:
+   *   favorites → recentFiles, road → email, employees → shortcuts. */
   var TILE_STACK_UNDER = {
     favorites: 'recentFiles',
+    road: 'email',
     employees: 'shortcuts',
   };
 
@@ -839,9 +844,10 @@
   var layoutHydrated = false;
   var layoutSaveTimer = null;
 
-  function panelHead(title) {
+  function panelHead(title, meta) {
     return '<div class="tma-portal-panel__head">' +
       '<h2 class="tma-portal-panel__title">' + ui().esc(title) + '</h2>' +
+      (meta ? '<span class="tma-portal-panel__meta">' + ui().esc(meta) + '</span>' : '') +
       '</div>';
   }
 
@@ -916,7 +922,7 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  var DASHBOARD_LAYOUT_GEN = 8;
+  var DASHBOARD_LAYOUT_GEN = 10;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
@@ -1183,7 +1189,6 @@
     if (!homeFilesLoaded) {
       return tileShell(
         'favorites', 'panel-favorites', 'Favorites', panelHead('Favorites'),
-        '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
         skeletonFileRows(2),
         '', true
       );
@@ -1203,8 +1208,7 @@
     }).join('');
     return tileShell(
       'favorites', 'panel-favorites', 'Favorites', panelHead('Favorites'),
-      '<p class="tma-portal-panel__note">Mark certain files or folders as Favorite and have a shortcut to them.</p>' +
-      (rows || '<p class="tma-portal-panel__note">No favorites yet.</p>')
+      rows || '<p class="tma-portal-panel__note">No favorites yet.</p>'
     );
   }
 

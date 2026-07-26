@@ -1277,8 +1277,9 @@
 
 .tma-portal-panel__head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: var(--space-8);
   min-width: 0;
 }
@@ -1290,6 +1291,14 @@
   font-weight: 600;
   color: var(--color-black);
   min-width: 0;
+}
+
+.tma-portal-panel__meta {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .tma-portal-tile {
