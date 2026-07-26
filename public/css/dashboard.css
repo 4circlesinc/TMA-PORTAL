@@ -114,7 +114,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: var(--space-12) var(--space-4) 0;
+  padding: var(--space-12) var(--space-4) var(--space-16);
   border-right: 0;
   overflow: hidden;
   min-height: 0;
@@ -3338,6 +3338,7 @@
     gap: var(--space-8);
     min-height: 52px;
     height: 52px;
+    margin-top: var(--space-8);
     padding: var(--space-8) var(--space-4) var(--space-8) var(--dash-nav-icon-inset);
     box-sizing: border-box;
     overflow: hidden;
@@ -3962,8 +3963,8 @@
   }
 
   .tma-dash__sidebar .tma-dash__profile {
-    margin: var(--space-8) var(--space-8) var(--space-12);
-    padding: var(--space-12);
+    margin: var(--space-8) var(--space-8) var(--space-20);
+    padding: var(--space-12) var(--space-12) var(--space-16);
     border-radius: var(--radius-12);
     border: 0.5px solid var(--dash-border);
     border-top: none;
@@ -6349,6 +6350,18 @@
 .tma-dash__activity--overview .tma-dash__cc--activity {
   flex: 1 1 0;
   min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--dash-icon-text-gap);
+}
+
+.tma-dash__activity--overview .tma-dash__ctr--body.tma-dash__actlog-row {
+  cursor: default;
+}
+
+.tma-dash__activity--overview .tma-dash__ctr--head .tma-dash__cc {
+  pointer-events: none;
+  cursor: default;
 }
 
 .tma-dash__activity--overview .tma-dash__cc--user {
@@ -6485,7 +6498,13 @@
   .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--head,
   .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body {
     display: grid;
-    grid-template-columns: 40px minmax(220px, 1.5fr) minmax(160px, 1fr) 150px 40px;
+    /* activity | user | module | date | actions — no checkbox column */
+    grid-template-columns:
+      minmax(220px, 1.8fr)
+      minmax(140px, 1fr)
+      120px
+      150px
+      40px;
     align-items: center;
     width: 100%;
   }
@@ -6528,12 +6547,39 @@
     flex: 0 0 24px;
   }
 
+  /* Align “Activity” / file-name headers with the text after the leading icon. */
   .tma-dash__activity--overview .tma-dash__cc--activity.tma-dash__cc--head::before,
   .tma-dash__files--overview .tma-dash__cc--activity.tma-dash__cc--head::before {
     content: '';
     width: 20px;
     height: 20px;
     flex: 0 0 20px;
+  }
+
+  .tma-dash__activity--overview .tma-dash__cc--activity.tma-dash__cc--head,
+  .tma-dash__activity--overview .tma-dash__cc--user.tma-dash__cc--head,
+  .tma-dash__activity--overview .tma-dash__cc--module.tma-dash__cc--head,
+  .tma-dash__activity--overview .tma-dash__cc--date.tma-dash__cc--head {
+    pointer-events: none;
+    cursor: default;
+  }
+
+  .tma-dash__activity--overview .tma-dash__ctr--body.tma-dash__actlog-row {
+    cursor: default;
+  }
+
+  .tma-dash__activity--overview .tma-dash__cc--activity {
+    display: flex;
+    align-items: center;
+    gap: var(--dash-icon-text-gap);
+    min-width: 0;
+  }
+
+  .tma-dash__activity--overview .tma-dash__cc--activity .tma-dash__cc-truncate {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .tma-dash__activity--overview .tma-dash__cc--user .tma-dash__cc-truncate,

@@ -200,20 +200,20 @@
     function row(item) {
       var tone = toneFor(item);
       var icon = MODULE_ICON[item.module] || 'Notification';
-      var url = R() ? R().actionUrlForActivity(item) : '';
       var canExpand = state.isAdmin && (item.ip || item.device || (item.oldValues) || (item.newValues) || item.status !== 'success');
       var open = !!state.expanded[item.id];
       var statusDot = item.status && item.status !== 'success'
         ? '<span class="tma-dash__actlog-status tma-dash__actlog-status--' + esc(item.status) + '">' + esc(item.status) + '</span>' : '';
 
-      var main = '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview tma-dash__actlog-row" data-actlog-row="' + esc(item.id) + '" data-action-url="' + esc(url) + '" role="row">' +
+      var desc = item.description || item.title || item.type || 'Activity';
+      var main = '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview tma-dash__actlog-row" data-actlog-row="' + esc(item.id) + '" role="row">' +
         '<div class="tma-dash__cc tma-dash__cc--activity">' +
-          '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + tone + '"><img src="' + ICON + esc(icon) + '.svg" alt="" width="16" height="16"></span>' +
-          '<span class="tma-dash__cc-truncate">' + esc(item.description) + '</span>' + statusDot +
+          '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + tone + '" aria-hidden="true"><img src="' + ICON + esc(icon) + '.svg" alt="" width="16" height="16"></span>' +
+          '<span class="tma-dash__cc-truncate" title="' + esc(desc) + '">' + esc(desc) + '</span>' + statusDot +
         '</div>' +
         userCell(item) +
         '<div class="tma-dash__cc tma-dash__cc--module"><span class="tma-dash__actlog-tag">' + esc(MODULE_LABEL[item.module] || item.module) + '</span></div>' +
-        '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--activity-date"><img src="' + ICON + 'CalendarBlank.svg" alt="">' + esc(R() ? R().timeLabel(item.createdAt) : '') + '</div>' +
+        '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--activity-date"><img src="' + ICON + 'CalendarBlank.svg" alt="" aria-hidden="true">' + esc(R() ? R().timeLabel(item.createdAt) : '') + '</div>' +
         '<div class="tma-dash__cc tma-dash__cc--actions">' +
           (canExpand ? '<button type="button" class="tma-dash__row-more" aria-label="Details" data-actlog-expand="' + esc(item.id) + '" aria-expanded="' + open + '"><img src="' + TMA + 'ThreeDots-16.svg" alt="" width="16" height="16"></button>' : '') +
         '</div>' +
@@ -337,17 +337,13 @@
       if (e.target.closest('[data-actlog-filter-clear]')) { clearFilters(); return; }
 
       var expand = e.target.closest('[data-actlog-expand]');
-      if (expand) { e.stopPropagation(); var id = expand.getAttribute('data-actlog-expand'); state.expanded[id] = !state.expanded[id]; renderBody(); return; }
-
-      var rowEl = e.target.closest('[data-actlog-row]');
-      if (rowEl) {
-        var url = rowEl.getAttribute('data-action-url');
-        if (url) {
-          var root = document.querySelector('.tma-dash');
-          if (root && root._portalNavigate) root._portalNavigate(url);
-          else if (url) window.location.assign((window.__TMA_SITE_ROOT || '') + url);
-        }
+      if (expand) {
+        e.stopPropagation();
+        var id = expand.getAttribute('data-actlog-expand');
+        state.expanded[id] = !state.expanded[id];
+        renderBody();
       }
+      // Activity rows are informational only — not navigational links.
     });
 
     container.addEventListener('focusin', function (e) { if (e.target.closest('[data-actlog-search]')) state.searchFocused = true; });

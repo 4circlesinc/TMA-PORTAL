@@ -1335,12 +1335,24 @@
     root._getUserPreferences = getUserPreferences;
 
     /* ── sidebar / rightbar toggles ────────────── */
+    /* Icon-only rail: native title tooltips use the visible nav label
+       ("Signatures"), never data-title ("Signature requests") — that longer
+       string is the page heading and looked like a stuck gray chip over the
+       Folders submenu when the rail hover-expanded. Titles are cleared as
+       soon as labels are visible (hover / focus / standard expand). */
     function applyRailTitles(on) {
       root.querySelectorAll('.tma-dash__sidebar .tma-dash__nav-item').forEach(function (item) {
         if (on) {
-          var title = item.getAttribute('data-title') || '';
-          var label = item.querySelector(':scope > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count)');
-          if (!title && label) title = label.textContent.trim();
+          // Nested submenu rows are hidden in the collapsed rail — skip them.
+          if (item.classList.contains('tma-dash__nav-item--nested')) {
+            item.removeAttribute('title');
+            return;
+          }
+          var label = item.querySelector(':scope > span:not(.tma-dash__nav-caret):not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap)');
+          var title = label ? label.textContent.trim() : '';
+          if (!title && item.classList.contains('tma-dash__nav-item--expand')) {
+            title = (item.textContent || '').trim();
+          }
           var badge = item.querySelector('.tma-dash__nav-count');
           if (badge && !badge.hidden && badge.textContent) {
             title = title ? title + ' (' + badge.textContent + ')' : badge.textContent;
@@ -1350,6 +1362,28 @@
         } else {
           item.removeAttribute('title');
         }
+      });
+    }
+
+    function syncRailTitlesForSidebarState() {
+      if (isMobileSidebar() || !sidebar) {
+        applyRailTitles(false);
+        return;
+      }
+      var collapsed = root.classList.contains('is-sidebar-collapsed');
+      var hoverStyle = !root.classList.contains('tma-dash--sidebar-standard');
+      var railOpen = !collapsed ||
+        (hoverStyle && (sidebar.matches(':hover') || sidebar.contains(document.activeElement)));
+      applyRailTitles(collapsed && !railOpen);
+    }
+
+    if (sidebar && !sidebar._railTitleBound) {
+      sidebar._railTitleBound = true;
+      sidebar.addEventListener('mouseenter', syncRailTitlesForSidebarState);
+      sidebar.addEventListener('mouseleave', syncRailTitlesForSidebarState);
+      sidebar.addEventListener('focusin', syncRailTitlesForSidebarState);
+      sidebar.addEventListener('focusout', function () {
+        setTimeout(syncRailTitlesForSidebarState, 0);
       });
     }
     function closeSidebarHoverPin() {
@@ -1374,11 +1408,11 @@
         // Standard style: a plain click-to-collapse rail, content shifts
         // beside it — no hover/focus overlay involved.
         var collapsed = root.classList.toggle('is-sidebar-collapsed');
-        applyRailTitles(collapsed);
         store.set('tma.sidebarCollapsed', collapsed ? '1' : '0');
         // The icon-only rail has no room for the tabs, so it always shows the
         // main menu — leaving the shortcuts tab active would empty the rail.
         if (collapsed) showList('main');
+        syncRailTitlesForSidebarState();
         syncSidebarToggleIcon();
       } else if (sidebar) {
         // Desktop hover style: the rail is always collapsed at rest and
@@ -1431,12 +1465,11 @@
       if (style === 'standard') {
         var collapsed = store.get('tma.sidebarCollapsed', '0') === '1';
         root.classList.toggle('is-sidebar-collapsed', collapsed);
-        applyRailTitles(collapsed);
         if (collapsed) showList('main');
       } else {
         root.classList.add('is-sidebar-collapsed');
-        applyRailTitles(true);
       }
+      syncRailTitlesForSidebarState();
       syncSidebarToggleIcon();
     }
 
@@ -1589,7 +1622,7 @@
       setNavCount(root.querySelector('.tma-dash__mrow[data-nav="so-messages"]'), getMessagesBadgeCount());
       setNavCount(root.querySelector('.tma-dash__mrow[data-nav="calendar"]'), getCalendarBadgeCount());
       setNavCount(root.querySelector('.tma-dash__mrow[data-nav="so-feed"]'), getSocialBadgeCount());
-      if (root.classList.contains('is-sidebar-collapsed')) applyRailTitles(true);
+      syncRailTitlesForSidebarState();
     }
 
     root._syncNavBadges = syncNavBadges;
