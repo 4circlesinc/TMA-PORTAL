@@ -1381,9 +1381,16 @@ body.tma-tile-resizing {
   color: var(--color-text-secondary);
 }
 
-/* Employees / team presence board */
+/* Employees / team presence board — vertical list only, never sideways. */
 .tma-portal-panel--employees {
   min-height: 0;
+  overflow: hidden;
+}
+
+.tma-portal-panel--employees > .tma-portal-panel__body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .tma-portal-employees {
@@ -1392,6 +1399,11 @@ body.tma-tile-resizing {
   gap: 2px;
   margin: 0 -4px;
   padding: 0 4px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* Recent email rows on the home dashboard */
@@ -1477,6 +1489,10 @@ body.tma-tile-resizing {
   padding: 8px 6px;
   border-radius: var(--radius-12);
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .tma-portal-employee:hover { background: var(--color-hover); }
@@ -1664,8 +1680,11 @@ body.tma-tile-resizing {
 
 .tma-portal-shortcuts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  /* Full-width Shortcuts tile fits a full row of icons without clipping. */
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: var(--space-12);
+  width: 100%;
+  min-width: 0;
 }
 
 .tma-portal-shortcut {

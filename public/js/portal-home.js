@@ -531,7 +531,7 @@
       ).filter(Boolean);
       var hidden = tileOrder().filter(function (id) { return order.indexOf(id) === -1; });
       saveTileOrder(order.concat(hidden));
-      layoutHomeGrid(grid, { animate: true });
+      layoutHomeGrid(grid, { animate: true, repack: true });
       flushLayoutServerSave();
     }
 
@@ -573,7 +573,11 @@
 
       // Only reflow when order actually changed — avoids restarting transitions every pixel.
       if (orderSignature() !== before) {
-        layoutHomeGrid(grid, { animate: true, floatingId: dragged.getAttribute('data-tile-id') });
+        layoutHomeGrid(grid, {
+          animate: true,
+          repack: true,
+          floatingId: dragged.getAttribute('data-tile-id'),
+        });
       }
     });
 
@@ -607,8 +611,8 @@
     }
     document.body.classList.remove('tma-tile-resizing');
     saveTileSize(state.id, w, height);
-    // Settle with a soft FLIP in case a neighbour just wrapped to a new slot.
-    layoutHomeGrid(state.grid, { animate: true });
+    // Keep columns; only ease vertical pushes into place.
+    layoutHomeGrid(state.grid, { animate: true, settle: true });
     flushLayoutServerSave();
   }
 
@@ -691,7 +695,7 @@
       if (layoutResizeTimer) cancelAnimationFrame(layoutResizeTimer);
       layoutResizeTimer = requestAnimationFrame(function () {
         layoutResizeTimer = null;
-        layoutHomeGrid(active.grid, { live: true });
+        layoutHomeGrid(active.grid, { live: true, settle: true });
       });
     });
 
@@ -707,7 +711,10 @@
 
     window.addEventListener('resize', function () {
       var grid = document.querySelector('[data-view="dashboard"] .tma-portal-home-grid');
-      if (grid) layoutHomeGrid(grid, { animate: false });
+      if (grid) {
+        grid._packKey = '';
+        layoutHomeGrid(grid, { animate: false, repack: true });
+      }
     });
   }
 
@@ -789,7 +796,8 @@
     { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
 
-  var DEFAULT_TILE_ORDER = ['email', 'recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'];
+  // Default admin board: Recent | Email, full-width Shortcuts, then Employees | Favorites | Road.
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'employees', 'favorites', 'road', 'tutorials'];
 
   // true = staff, false = client, null = /me not loaded yet
   function isStaffUser() {
@@ -806,13 +814,13 @@
   var TILE_H_MIN = 200;
   var TILE_H_MAX = 720;
   var DEFAULT_TILE_SIZES = {
-    recentFiles: { w: 0.32, h: 280 },
-    shortcuts: { w: 0.66, h: 300 },
-    email: { w: 0.66, h: 320 },
-    employees: { w: 0.32, h: 360 },
-    favorites: { w: 0.32, h: 260 },
-    tutorials: { w: 0.32, h: 280 },
-    road: { w: 0.32, h: 360 },
+    recentFiles: { w: 0.34, h: 300 },
+    email: { w: 0.66, h: 300 },
+    shortcuts: { w: 1, h: 320 },
+    employees: { w: 0.34, h: 380 },
+    favorites: { w: 0.33, h: 280 },
+    road: { w: 0.33, h: 360 },
+    tutorials: { w: 0.33, h: 280 },
   };
 
   var layoutHydrated = false;
@@ -943,11 +951,37 @@
     });
   }
 
+  // Bump when the shipped default board changes. Applies once per browser, then
+  // the account save keeps every other browser in sync.
+  var DASHBOARD_LAYOUT_GEN = 2;
+
+  function ensureLocalDefaultLayout() {
+    var s = data().state();
+    var sizes = s.dashboardTileSizes;
+    var hasSizes = sizes && typeof sizes === 'object' && Object.keys(sizes).length > 0;
+    if (hasSizes && s.dashboardLayoutGen === DASHBOARD_LAYOUT_GEN) return false;
+
+    s.dashboardTileSizes = {};
+    DEFAULT_TILE_ORDER.forEach(function (id) {
+      var d = DEFAULT_TILE_SIZES[id];
+      if (d) s.dashboardTileSizes[id] = { w: d.w, h: d.h };
+    });
+    s.dashboardTileOrder = DEFAULT_TILE_ORDER.slice();
+    s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, {
+      recentFiles: true, email: true, shortcuts: true, employees: true,
+      favorites: true, road: true, tutorials: false,
+    });
+    s.dashboardLayoutGen = DASHBOARD_LAYOUT_GEN;
+    data().save();
+    return true;
+  }
+
   function hydrateLayoutFromServer(done) {
     if (layoutHydrated) {
       if (done) done(false);
       return;
     }
+    var forcedDefault = ensureLocalDefaultLayout();
     fetch('/me/preferences', {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -956,23 +990,34 @@
       .then(function (prefs) {
         layoutHydrated = true;
         if (!prefs) {
-          if (done) done(false);
+          if (forcedDefault) queueLayoutServerSave();
+          if (done) done(forcedDefault);
           return;
         }
         var s = data().state();
         var before = layoutSnapshot(s);
+        var serverHasLayout = prefs.dashboardLayout &&
+          typeof prefs.dashboardLayout === 'object' &&
+          prefs.dashboardLayout.tiles &&
+          typeof prefs.dashboardLayout.tiles === 'object' &&
+          Object.keys(prefs.dashboardLayout.tiles).length > 0;
+
         if (prefs.dashboardTiles && typeof prefs.dashboardTiles === 'object') {
           s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, prefs.dashboardTiles);
         }
-        if (prefs.dashboardLayout && typeof prefs.dashboardLayout === 'object') {
-          if (Array.isArray(prefs.dashboardLayout.order)) {
+
+        // After a layout-gen bump, keep the new defaults and push them to the account.
+        // Otherwise the server layout is the cross-browser source of truth.
+        if (forcedDefault) {
+          queueLayoutServerSave();
+        } else if (serverHasLayout) {
+          if (Array.isArray(prefs.dashboardLayout.order) && prefs.dashboardLayout.order.length) {
             s.dashboardTileOrder = prefs.dashboardLayout.order.slice();
           }
-          if (prefs.dashboardLayout.tiles && typeof prefs.dashboardLayout.tiles === 'object') {
-            s.dashboardTileSizes = Object.assign({}, s.dashboardTileSizes || {}, prefs.dashboardLayout.tiles);
-          }
+          s.dashboardTileSizes = Object.assign({}, prefs.dashboardLayout.tiles);
         }
-        var changed = layoutSnapshot(s) !== before;
+
+        var changed = forcedDefault || layoutSnapshot(s) !== before;
         if (changed) data().save();
         if (done) done(changed);
       });
@@ -987,14 +1032,19 @@
     );
   }
 
+  /** Convert a board-fraction width to pixels, baking gap in so 0.34+0.66 always fit. */
+  function fractionToPx(frac, containerWidth, gap) {
+    if (frac >= 0.999) return containerWidth;
+    var w = Math.round(frac * (containerWidth + gap) - gap);
+    return Math.max(140, Math.min(containerWidth, w));
+  }
+
   /* Skyline packer: place each tile at the highest (lowest y) leftmost slot
    * that fits, so tall tiles never invent empty row gaps in the other column. */
   function packTiles(items, containerWidth, gap) {
     var placed = [];
     items.forEach(function (item) {
-      // Fraction of board width; gap is enforced by the packer, not baked into w.
-      var w = Math.max(140, Math.min(containerWidth, Math.round(item.w * containerWidth)));
-      if (item.w >= 0.999) w = containerWidth;
+      var w = fractionToPx(item.w, containerWidth, gap);
       var h = item.h;
       var candidates = [0];
       placed.forEach(function (p) {
@@ -1004,8 +1054,8 @@
         return arr.indexOf(x) === i && x >= 0 && x + w <= containerWidth + 0.5;
       }).sort(function (a, b) { return a - b; });
       if (!candidates.length) {
-        // Too wide for any side slot — use full width at the next free row.
-        w = containerWidth;
+        // Keep the chosen width — never snap a tile to full-board width.
+        w = Math.min(w, containerWidth);
         candidates = [0];
       }
 
@@ -1032,6 +1082,53 @@
       placed.push(best);
     });
     return placed;
+  }
+
+  /* Keep each tile's column (x) during resize — only push others down when
+   * they collide. Stops widgets teleporting to a new slot mid-drag. */
+  function settleTiles(items, prev, containerWidth, gap) {
+    var placed = items.map(function (item, index) {
+      var w = fractionToPx(item.w, containerWidth, gap);
+      var h = item.h;
+      var prior = prev[item.id];
+      var x = prior && prior.w ? prior.x : 0;
+      var y = prior && prior.w ? prior.y : 0;
+      if (x + w > containerWidth) x = Math.max(0, containerWidth - w);
+      if (x < 0) x = 0;
+      return { id: item.id, x: x, y: y, w: w, h: h, order: index };
+    });
+
+    // Stable overlap resolve: later tiles in board order move down only.
+    var guard = 0;
+    var moved = true;
+    while (moved && guard++ < 80) {
+      moved = false;
+      placed.sort(function (a, b) {
+        if (a.y !== b.y) return a.y - b.y;
+        if (a.x !== b.x) return a.x - b.x;
+        return a.order - b.order;
+      });
+      for (var i = 0; i < placed.length; i++) {
+        for (var j = i + 1; j < placed.length; j++) {
+          var a = placed[i];
+          var b = placed[j];
+          if (!rectsOverlap(a, b, gap)) continue;
+          var push = a.order < b.order ? b : a;
+          var hold = push === b ? a : b;
+          var nextY = hold.y + hold.h + gap;
+          if (push.y < nextY) {
+            push.y = nextY;
+            moved = true;
+          }
+        }
+      }
+    }
+
+    // Restore DOM order for consumers.
+    placed.sort(function (a, b) { return a.order - b.order; });
+    return placed.map(function (p) {
+      return { id: p.id, x: p.x, y: p.y, w: p.w, h: p.h };
+    });
   }
 
   function readPackBox(node) {
@@ -1092,6 +1189,7 @@
     });
 
     var orderIds = nodes.map(function (n) { return n.getAttribute('data-tile-id'); });
+    var packKey = orderIds.join('|') + '@' + Math.round(width);
     var items = orderIds.map(function (id) {
       var size = sizeFor(id);
       // On narrow boards, force full width so nothing overflows.
@@ -1099,7 +1197,21 @@
       return { id: id, w: w, h: size.h };
     });
 
-    var packed = packTiles(items, width, TILE_GAP);
+    var hasPrev = nodes.some(function (n) {
+      var b = prev[n.getAttribute('data-tile-id')];
+      return b && b.w > 0 && (b.x > 0 || b.y > 0 || grid.classList.contains('is-packed'));
+    });
+    // Full skyline pack on reorder / first paint / board-width change.
+    // Resize uses settle so tiles keep their column instead of teleporting.
+    var repack = !!opts.repack || !hasPrev || grid._packKey !== packKey;
+    if (opts.live || opts.settle) repack = false;
+    if (!hasPrev) repack = true;
+
+    var packed = repack
+      ? packTiles(items, width, TILE_GAP)
+      : settleTiles(items, prev, width, TILE_GAP);
+    grid._packKey = packKey;
+
     var byId = {};
     packed.forEach(function (p) { byId[p.id] = p; });
 
@@ -1140,17 +1252,12 @@
         return;
       }
 
-      // Live resize: keep continuous vertical pushes snappy (no rubber-band),
-      // but FLIP when a tile jumps columns / wraps — that was the rough snap.
-      if (live) {
-        var slotJump = from.x !== p.x || (Math.abs(from.y - p.y) > 8 && from.w !== p.w);
-        if (slotJump) anyFlip = flipTileTo(node, from, p) || anyFlip;
-        else clearPackMotion(node);
-        return;
-      }
-
+      // Only FLIP on intentional user actions — never on data remounts (that was the shuffle glitch).
       if (animate && (from.w || from.h || from.x || from.y)) {
-        anyFlip = flipTileTo(node, from, p) || anyFlip;
+        var dx = Math.abs(from.x - p.x);
+        var dy = Math.abs(from.y - p.y);
+        if (dx > 1 || dy > 1) anyFlip = flipTileTo(node, from, p) || anyFlip;
+        else clearPackMotion(node);
       } else {
         clearPackMotion(node);
       }
@@ -1183,8 +1290,8 @@
     var s = data().state();
     if (!s.dashboardTiles) {
       s.dashboardTiles = {
-        recentFiles: true, shortcuts: true, tutorials: false, favorites: true,
-        employees: true, email: true, road: true,
+        recentFiles: true, email: true, shortcuts: true, employees: true,
+        favorites: true, road: true, tutorials: false,
       };
       data().save();
     }
@@ -1622,11 +1729,21 @@
     bindTileDrag(el);
     bindTileResize(el);
 
-    // Masonry pack after paint so measurements use real widths.
+    // Pack after paint. Never animate on data remounts — that caused the shuffle glitch.
     var homeGrid = el.querySelector('.tma-portal-home-grid');
     if (homeGrid) {
       requestAnimationFrame(function () {
-        layoutHomeGrid(homeGrid, { animate: !!opts.fromLoad });
+        var ids = Array.prototype.map.call(
+          homeGrid.querySelectorAll('[data-tile-id]'),
+          function (n) { return n.getAttribute('data-tile-id'); }
+        ).join('|');
+        var tileSetChanged = homeGrid._tileSet !== ids;
+        homeGrid._tileSet = ids;
+        layoutHomeGrid(homeGrid, {
+          animate: false,
+          repack: tileSetChanged || !homeGrid.classList.contains('is-packed'),
+          settle: !tileSetChanged && homeGrid.classList.contains('is-packed'),
+        });
       });
     }
 

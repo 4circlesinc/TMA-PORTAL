@@ -54,10 +54,68 @@ class PreferencesController extends Controller
         'favorites', 'tutorials', 'road',
     ];
 
+    /** First-login admin/staff home board — mirrors the client defaults. */
+    private const DEFAULT_DASHBOARD_ORDER = [
+        'recentFiles', 'email', 'shortcuts', 'employees', 'favorites', 'road', 'tutorials',
+    ];
+
+    /** @var array<string, array{w: float, h: int}> */
+    private const DEFAULT_DASHBOARD_SIZES = [
+        'recentFiles' => ['w' => 0.34, 'h' => 300],
+        'email' => ['w' => 0.66, 'h' => 300],
+        'shortcuts' => ['w' => 1.0, 'h' => 320],
+        'employees' => ['w' => 0.34, 'h' => 380],
+        'favorites' => ['w' => 0.33, 'h' => 280],
+        'road' => ['w' => 0.33, 'h' => 360],
+        'tutorials' => ['w' => 0.33, 'h' => 280],
+    ];
+
+    /** @var array<string, bool> */
+    private const DEFAULT_DASHBOARD_TILES = [
+        'recentFiles' => true,
+        'email' => true,
+        'shortcuts' => true,
+        'employees' => true,
+        'favorites' => true,
+        'road' => true,
+        'tutorials' => false,
+    ];
+
     /** The signed-in user's preferences, filled in with defaults. */
     public function show(Request $request): JsonResponse
     {
-        return response()->json($this->payload($request->user()));
+        $user = $request->user();
+        $this->seedDashboardLayoutIfMissing($user);
+
+        return response()->json($this->payload($user->fresh()));
+    }
+
+    /** Layout generation — bump when the shipped default board changes. */
+    private const DASHBOARD_LAYOUT_VERSION = 2;
+
+    /** Persist the default home board so every browser starts the same. */
+    private function seedDashboardLayoutIfMissing(User $user): void
+    {
+        $current = $user->preferences ?? [];
+        $version = (int) ($current['dashboardLayoutVersion'] ?? 0);
+
+        if ($version >= self::DASHBOARD_LAYOUT_VERSION
+            && isset($current['dashboardLayout'])
+            && is_array($current['dashboardLayout'])) {
+            return;
+        }
+
+        $current['dashboardLayout'] = [
+            'order' => self::DEFAULT_DASHBOARD_ORDER,
+            'tiles' => self::DEFAULT_DASHBOARD_SIZES,
+        ];
+        $current['dashboardTiles'] = array_merge(
+            self::DEFAULT_DASHBOARD_TILES,
+            is_array($current['dashboardTiles'] ?? null) ? $current['dashboardTiles'] : []
+        );
+        $current['dashboardLayoutVersion'] = self::DASHBOARD_LAYOUT_VERSION;
+
+        $user->forceFill(['preferences' => $current])->save();
     }
 
     /** Merge-save any of the whitelisted preference keys. */
@@ -109,11 +167,22 @@ class PreferencesController extends Controller
         );
 
         if (isset($stored['dashboardTiles']) && is_array($stored['dashboardTiles'])) {
-            $payload['dashboardTiles'] = $this->sanitizeDashboardTiles($stored['dashboardTiles']);
+            $payload['dashboardTiles'] = array_merge(
+                self::DEFAULT_DASHBOARD_TILES,
+                $this->sanitizeDashboardTiles($stored['dashboardTiles'])
+            );
+        } else {
+            $payload['dashboardTiles'] = self::DEFAULT_DASHBOARD_TILES;
         }
 
         if (isset($stored['dashboardLayout']) && is_array($stored['dashboardLayout'])) {
             $payload['dashboardLayout'] = $this->sanitizeDashboardLayout($stored['dashboardLayout']);
+        } else {
+            // First login (or never customized): stable default board.
+            $payload['dashboardLayout'] = [
+                'order' => self::DEFAULT_DASHBOARD_ORDER,
+                'tiles' => self::DEFAULT_DASHBOARD_SIZES,
+            ];
         }
 
         return $payload;

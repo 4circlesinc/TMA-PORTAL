@@ -83,9 +83,9 @@
         email: true,
         road: true,
       },
-      // Order of home widgets (drag-and-drop). Unknown ids are appended.
-      dashboardTileOrder: ['email', 'recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'],
-      // Per-widget size: cols (1–3) + height in px. Missing keys use defaults.
+      // Default admin home board (drag-and-drop). Unknown ids are appended.
+      dashboardTileOrder: ['recentFiles', 'email', 'shortcuts', 'employees', 'favorites', 'road', 'tutorials'],
+      // Per-widget size: w (0–1 board fraction) + h (px). Empty → seeded from defaults on first visit.
       dashboardTileSizes: {},
       // Populated from the File Library (section=recent) on the dashboard mount;
       // starts empty so no placeholder filenames flash before the real data.
