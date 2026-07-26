@@ -68,11 +68,11 @@
 
 .tma-no-data__subtitle {
   margin: 0;
-  font-size: 24px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 32px;
+  line-height: 20px;
   text-align: center;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary, rgba(0, 0, 0, 0.55));
 }
 
 .tma-no-data__btn {

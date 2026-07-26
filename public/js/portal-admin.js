@@ -2276,7 +2276,14 @@
           var roleSel = host.querySelector('[data-of-role]');
           var role = roleSel && roleSel.value === 'Can edit' ? 'editor' : 'viewer';
           filelibJson('POST', '/portal/file-library/organization-folders', { name: name, audience: aud, role: role })
-            .then(function (d) { mergeOrg(d.folder); ui().closeModal(); ui().toast('Folder created'); render(); })
+            .then(function (d) {
+              mergeOrg(d.folder);
+              ui().closeModal();
+              ui().toast('Folder created');
+              if (window.TMASidebarShortcuts && window.TMASidebarShortcuts.refresh) window.TMASidebarShortcuts.refresh();
+              if (window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.refresh) window.TMAPortalHomeLibrary.refresh();
+              render();
+            })
             .catch(function (e) { ui().toast(e.message); });
         });
       },

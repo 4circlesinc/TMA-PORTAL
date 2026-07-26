@@ -27,6 +27,9 @@
       .then(function () {
         ui().toast('“' + item.name + '” is now a default folder for all staff');
         if (window.TMASidebarShortcuts && window.TMASidebarShortcuts.refresh) window.TMASidebarShortcuts.refresh();
+        if (window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.refresh) {
+          window.TMAPortalHomeLibrary.refresh();
+        }
         load();
       })
       .catch(function (e) { ui().toast((e && e.message) || 'Couldn’t make this a default folder'); });

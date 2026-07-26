@@ -486,6 +486,11 @@
         homeStaffLoaded = false;
         homeStaff = null;
       }
+      // Re-fetch default folders once identity is known (first load may have
+      // raced ahead of /me and skipped staff-only chrome).
+      if (isStaffUser() && window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.refresh) {
+        window.TMAPortalHomeLibrary.refresh();
+      }
       if (!homeStaffLoaded || (isStaffUser() && (!homeStaff || !homeStaff.staff))) {
         loadHomeStaff(mountEl);
       } else {

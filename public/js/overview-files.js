@@ -451,15 +451,13 @@
       var pageRows = filtered.slice(start, start + state.pageSize);
 
       var emptyMsg = state.search || state.filterType
-        ? 'No files match your filters.'
+        ? 'Try a different search or filter.'
         : (state.section === 'shared'
-          ? 'Nothing has been shared with you yet.'
-          : 'No recent files yet.');
+          ? 'Items other people share with you will show up here.'
+          : 'Files you open or upload will show up here.');
       var emptyHtml = window.TMANoData
         ? window.TMANoData.render({
-            illustrationName: state.search || state.filterType
-              ? 'Illustration07'
-              : (state.section === 'shared' ? 'Illustration03' : 'Illustration07'),
+            illustrationName: 'Illustration07',
             title: state.search || state.filterType
               ? 'No matching files'
               : (state.section === 'shared' ? 'Nothing shared with you' : 'No recent files'),

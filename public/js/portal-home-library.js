@@ -153,9 +153,9 @@
   }
 
   function renderDefaultFolders() {
-    // Clients never see Default Folders. Hide until identity is known so they
-    // don't flash a skeleton, then only render for staff/admin.
-    if (isStaffUser() !== true) return '';
+    // Clients never see Default Folders. While /me is still loading, show
+    // folders if the API already returned them (server already staff-gated).
+    if (isStaffUser() === false) return '';
     if (!state.loaded && !state.defaults.length) {
       return '<section class="tma-portal-home-defaults" data-key="home-defaults" aria-busy="true">' +
         '<div class="tma-portal-home-defaults__head">' +
@@ -228,7 +228,7 @@
     var empty = !all.length
       ? (ui() && ui().emptyState
         ? ui().emptyState({
-            illustration: state.tab === 'shared' ? 'Illustration03' : 'Illustration07',
+            illustration: 'Illustration07',
             title: state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files',
             subtitle: state.tab === 'shared'
               ? 'Items other people share with you will show up here.'
@@ -236,7 +236,7 @@
           })
         : (window.TMANoData
           ? window.TMANoData.render({
-              illustrationName: state.tab === 'shared' ? 'Illustration03' : 'Illustration07',
+              illustrationName: 'Illustration07',
               title: state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files',
               subtitle: state.tab === 'shared'
                 ? 'Items other people share with you will show up here.'
@@ -349,13 +349,46 @@
       .catch(function () { folder.files = folder.files || []; return folder; });
   }
 
-  function load(remount) {
+  function applyDefaults(org) {
+    var list = Array.isArray(org) ? org : [];
+    // Confirmed clients never keep defaults, even if a stale response arrives.
+    if (isStaffUser() === false) list = [];
+    return list.map(function (f) {
+      return {
+        id: f.id,
+        name: f.name,
+        colour: f.colour,
+        iconName: f.iconName,
+        fileCount: f.fileCount != null ? f.fileCount : 1,
+        files: [],
+      };
+    });
+  }
+
+  function remountHome() {
+    var dash = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+    if (dash && typeof dash._homeLibRerender === 'function') dash._homeLibRerender();
+  }
+
+  /**
+   * Load defaults + recent/shared. Pass true as 2nd arg (or { force: true })
+   * to refetch after creating/adopting a default folder.
+   */
+  function load(remount, force) {
+    if (force && typeof force === 'object') force = !!force.force;
     if (!net()) {
       state.loaded = true;
-      if (remount) remount();
-      return;
+      if (typeof remount === 'function') remount();
+      else if (remount) remountHome();
+      return Promise.resolve();
     }
-    if (state.inflight) return state.inflight;
+    if (state.inflight) {
+      if (!force) return state.inflight;
+      // Let the in-flight request finish, then refresh again.
+      return state.inflight.then(function () { return load(remount, true); });
+    }
+
+    var done = typeof remount === 'function' ? remount : (remount ? remountHome : null);
 
     state.inflight = Promise.all([
       net().fetchJSON(net().url('/shortcuts')).catch(function () { return null; }),
@@ -367,19 +400,10 @@
       var recent = res[1];
       var shared = res[2];
 
-      // Only staff/admin see organization default folders — never clients.
-      var org = (isStaffUser() === true && shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
-
-      var defaults = org.map(function (f) {
-        return {
-          id: f.id,
-          name: f.name,
-          colour: f.colour,
-          iconName: f.iconName,
-          fileCount: f.fileCount != null ? f.fileCount : 1,
-          files: [],
-        };
-      });
+      // Trust the API for organization groups (empty for clients). Do not gate
+      // on isStaffUser() here — /me often arrives after this first fetch.
+      var org = (shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
+      var defaults = applyDefaults(org);
 
       if (recent) {
         state.recent = {
@@ -397,21 +421,26 @@
       return Promise.all(defaults.map(loadFolderPreview)).then(function (folders) {
         state.defaults = folders;
         state.loaded = true;
-        if (remount) remount();
+        if (done) done();
       });
     }).catch(function () {
       state.inflight = null;
       state.loaded = true;
-      if (remount) remount();
+      if (done) done();
     });
 
     return state.inflight;
+  }
+
+  function refresh() {
+    return load(true, true);
   }
 
   window.TMAPortalHomeLibrary = {
     render: render,
     wire: wire,
     load: load,
+    refresh: refresh,
     state: state,
   };
 })();
