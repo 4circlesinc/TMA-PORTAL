@@ -602,8 +602,12 @@
     if (!tileResizeActive) return;
     var state = tileResizeActive;
     tileResizeActive = null;
-    var w = state.w != null ? state.w : state.startW;
-    var height = state.height != null ? state.height : state.startHeight;
+    var w = softSnapWidth(state.w != null ? state.w : state.startW, state.grid, state.id);
+    var height = softSnapHeight(
+      state.height != null ? state.height : state.startHeight,
+      state.grid,
+      state.id
+    );
     if (state.tile) state.tile.classList.remove('is-resizing');
     if (state.grid) {
       state.grid.classList.remove('is-tile-resizing');
@@ -611,8 +615,8 @@
     }
     document.body.classList.remove('tma-tile-resizing');
     saveTileSize(state.id, w, height);
-    // Keep columns; only ease vertical pushes into place.
-    layoutHomeGrid(state.grid, { animate: true, settle: true });
+    // Soft snap + light repack so neighbours line up without fighting the drag.
+    layoutHomeGrid(state.grid, { animate: true, repack: true });
     flushLayoutServerSave();
   }
 
@@ -678,16 +682,21 @@
 
       var board = active.boardWidth || active.grid.clientWidth || 1;
       var widthPx = e.clientX - active.startRect.left;
-      var w = widthPx / board;
-      w = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, w));
+      var rawW = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, widthPx / board));
+      var rawH = Math.min(
+        TILE_H_MAX,
+        Math.max(TILE_H_MIN, Math.round(e.clientY - active.startRect.top))
+      );
 
-      var height = Math.round(e.clientY - active.startRect.top);
-      height = Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, height));
+      // Magnetic soft snap while dragging — catches near ⅓ / ½ / ⅔ / full, easy to leave.
+      var w = softSnapWidth(rawW, active.grid, active.id);
+      var height = softSnapHeight(rawH, active.grid, active.id);
 
       active.w = w;
       active.height = height;
+      active.rawW = rawW;
+      active.rawH = rawH;
 
-      // Persist into state so the packer reads the live size, then reflow.
       var s = data().state();
       if (!s.dashboardTileSizes) s.dashboardTileSizes = {};
       s.dashboardTileSizes[active.id] = { w: w, h: height };
@@ -813,6 +822,11 @@
   var TILE_W_MAX = 1;
   var TILE_H_MIN = 200;
   var TILE_H_MAX = 720;
+  // Soft snap targets — loose pull, not a hard grid.
+  var WIDTH_SNAPS = [0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1];
+  var WIDTH_SNAP_THRESH = 0.05;   // ~5% of board — easy to slip past
+  var HEIGHT_SNAP_STEP = 20;
+  var HEIGHT_SNAP_THRESH = 18;
   var DEFAULT_TILE_SIZES = {
     recentFiles: { w: 0.34, h: 300 },
     email: { w: 0.66, h: 300 },
@@ -822,6 +836,60 @@
     road: { w: 0.33, h: 360 },
     tutorials: { w: 0.33, h: 280 },
   };
+
+  function softSnapWidth(w, grid, activeId) {
+    w = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, w));
+    var targets = WIDTH_SNAPS.slice();
+    // Also gently snap to “rest of the row” beside a neighbour.
+    if (grid) {
+      Array.prototype.forEach.call(grid.querySelectorAll('[data-tile-id]'), function (node) {
+        var id = node.getAttribute('data-tile-id');
+        if (!id || id === activeId) return;
+        var other = sizeFor(id);
+        if (!other || !(other.w > 0)) return;
+        var rest = 1 - other.w;
+        if (rest >= TILE_W_MIN && rest <= TILE_W_MAX) targets.push(rest);
+      });
+    }
+    var best = w;
+    var bestDist = WIDTH_SNAP_THRESH;
+    targets.forEach(function (t) {
+      var d = Math.abs(w - t);
+      if (d < bestDist) {
+        bestDist = d;
+        best = t;
+      }
+    });
+    return Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, best));
+  }
+
+  function softSnapHeight(h, grid, activeId) {
+    h = Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, Math.round(h)));
+    var best = h;
+    var bestDist = HEIGHT_SNAP_THRESH;
+
+    var stepped = Math.round(h / HEIGHT_SNAP_STEP) * HEIGHT_SNAP_STEP;
+    stepped = Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, stepped));
+    var stepDist = Math.abs(h - stepped);
+    if (stepDist < bestDist) {
+      bestDist = stepDist;
+      best = stepped;
+    }
+
+    if (grid) {
+      Array.prototype.forEach.call(grid.querySelectorAll('[data-tile-id]'), function (node) {
+        var id = node.getAttribute('data-tile-id');
+        if (!id || id === activeId) return;
+        var otherH = sizeFor(id).h;
+        var d = Math.abs(h - otherH);
+        if (d < bestDist) {
+          bestDist = d;
+          best = otherH;
+        }
+      });
+    }
+    return best;
+  }
 
   var layoutHydrated = false;
   var layoutSaveTimer = null;
