@@ -66,10 +66,15 @@
   }
 
   function folderIconHtml(item, size) {
+    var px = size || 28;
     var base = (item.fileCount === 0) ? 'FolderEmpty' : 'FolderFilled';
-    return window.TMAFolderIcons
-      ? window.TMAFolderIcons.html(base, item.colour, item.iconName, size)
-      : '<img src="' + esc(fileIconSrc(item)) + '" alt="" width="' + size + '" height="' + size + '">';
+    // Always wrap at a fixed size — bare .tma-folder-icon__base is styled
+    // width/height:100% in portal-files.css and balloons inside these cards.
+    var inner = window.TMAFolderIcons
+      ? window.TMAFolderIcons.html(base, item.colour, item.iconName, px)
+      : '<img src="' + esc(fileIconSrc(item)) + '" alt="" width="' + px + '" height="' + px + '">';
+    return '<span class="tma-portal-default-folder__icon" style="width:' + px + 'px;height:' + px + 'px">' +
+      inner + '</span>';
   }
 
   function thumbOrIcon(item, size) {

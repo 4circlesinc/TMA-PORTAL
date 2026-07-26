@@ -3638,39 +3638,70 @@ html.tma-dash--signatures-wizard body {
 .tma-portal-default-folder {
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-20);
+  gap: var(--space-8);
+  padding: var(--space-16);
   border-radius: var(--radius-16);
   background: var(--color-bg-card);
   min-width: 0;
-  min-height: 220px;
+  min-height: 0;
   box-sizing: border-box;
 }
 
 .tma-portal-default-folder--skeleton {
   background: color-mix(in srgb, var(--color-bg-card) 70%, var(--color-hover));
-  min-height: 220px;
+  min-height: 160px;
 }
 
 .tma-portal-default-folder__head {
   display: flex;
   align-items: center;
   gap: var(--space-10, 10px);
-  padding: 0;
+  width: 100%;
+  padding: var(--space-4) var(--space-8);
   border: 0;
+  border-radius: var(--radius-12);
   background: none;
   font: inherit;
   text-align: left;
   cursor: pointer;
   color: var(--color-black);
   min-width: 0;
+  box-sizing: border-box;
+}
+
+.tma-portal-default-folder__head:hover {
+  background: var(--color-hover);
 }
 
 .tma-portal-default-folder__head:hover .tma-portal-default-folder__name {
   text-decoration: underline;
 }
 
+/* Pin the folder glyph to 28px — do not let portal-files' 100% icon rule win. */
+.tma-portal-default-folder__icon {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.tma-portal-default-folder__icon .tma-folder-icon,
+.tma-portal-default-folder__icon .tma-folder-icon__base,
+.tma-portal-default-folder__icon img {
+  width: 28px !important;
+  height: 28px !important;
+  max-width: 28px;
+  max-height: 28px;
+  flex: 0 0 28px;
+  object-fit: contain;
+}
+
 .tma-portal-default-folder__name {
+  flex: 1 1 auto;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
   font-weight: 600;
@@ -3683,9 +3714,8 @@ html.tma-dash--signatures-wizard body {
 .tma-portal-default-folder__body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
 .tma-portal-home-library {
