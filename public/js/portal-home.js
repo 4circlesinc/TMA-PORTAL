@@ -232,6 +232,7 @@
   var homeStaff = null;
   var homeStaffInflight = null;
   var homeStaffTimer = null;
+  var homeStaffUserBound = false;
 
   function avatarSrcFor(person) {
     if (window.TMACurrentUser && window.TMACurrentUser.avatarSrc) {
@@ -249,27 +250,29 @@
     return 'neutral';
   }
 
+  function employeesSkeleton() {
+    return '<section class="tma-portal-panel tma-portal-panel--employees" data-tile-id="employees" data-key="panel-employees" aria-label="Employees" aria-busy="true">' +
+      panelHead('Employees') +
+      '<div class="tma-portal-employees" aria-hidden="true">' +
+      new Array(5).fill(
+        '<div class="tma-portal-employee tma-portal-employee--skeleton">' +
+        '<span class="tma-skeleton tma-skeleton--avatar" style="width:36px;height:36px;border-radius:50%"></span>' +
+        '<span class="tma-portal-employee__meta" style="flex:1">' +
+        '<span class="tma-skeleton tma-skeleton--text" style="width:48%"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text" style="width:32%;margin-top:6px"></span>' +
+        '</span></div>'
+      ).join('') +
+      '</div></section>';
+  }
+
   function renderEmployees() {
-    if (!isStaffUser()) return '';
+    // Identity/API may still be loading — show a skeleton rather than vanishing.
+    // The server is the source of truth for staff vs client (`staff: false`).
+    if (!homeStaffLoaded) return employeesSkeleton();
 
-    if (!homeStaffLoaded) {
-      return '<section class="tma-portal-panel tma-portal-panel--employees" data-tile-id="employees" data-key="panel-employees" aria-label="Employees" aria-busy="true">' +
-        panelHead('Employees') +
-        '<div class="tma-portal-employees" aria-hidden="true">' +
-        new Array(5).fill(
-          '<div class="tma-portal-employee tma-portal-employee--skeleton">' +
-          '<span class="tma-skeleton tma-skeleton--avatar" style="width:36px;height:36px;border-radius:50%"></span>' +
-          '<span class="tma-portal-employee__meta" style="flex:1">' +
-          '<span class="tma-skeleton tma-skeleton--text" style="width:48%"></span>' +
-          '<span class="tma-skeleton tma-skeleton--text" style="width:32%;margin-top:6px"></span>' +
-          '</span></div>'
-        ).join('') +
-        '</div></section>';
-    }
+    if (!homeStaff || homeStaff.staff === false) return '';
 
-    if (homeStaff && homeStaff.staff === false) return '';
-
-    var people = (homeStaff && homeStaff.employees) || [];
+    var people = homeStaff.employees || [];
     var onlineCount = people.filter(function (p) { return p.online; }).length;
     var rows = people.map(function (p) {
       var work = p.workStatus || null;
@@ -323,9 +326,34 @@
     }).join('');
   }
 
+  function bindStaffUserListener() {
+    if (homeStaffUserBound) return;
+    if (!window.TMACurrentUser || !window.TMACurrentUser.onChange) return;
+    homeStaffUserBound = true;
+    window.TMACurrentUser.onChange(function () {
+      var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+      if (!mountEl || !mountEl.isConnected) return;
+      // /me often arrives after the first dashboard mount. If we previously
+      // concluded "not staff" before identity was known, retry.
+      if (homeStaff && homeStaff.staff === false && isStaffUser()) {
+        homeStaffLoaded = false;
+        homeStaff = null;
+      }
+      if (!homeStaffLoaded || (isStaffUser() && (!homeStaff || !homeStaff.staff))) {
+        loadHomeStaff(mountEl);
+      } else {
+        mount(mountEl, { fromLoad: true });
+      }
+    });
+  }
+
   function loadHomeStaff(el, opts) {
     opts = opts || {};
-    if (!isStaffUser()) {
+    bindStaffUserListener();
+
+    // Only skip the network call when we already know this account is a client.
+    // If /me has not loaded yet, still ask the server — the session knows.
+    if (isStaffUser() === false) {
       homeStaffLoaded = true;
       homeStaff = { staff: false, employees: [] };
       return;
@@ -340,7 +368,12 @@
       .then(function (json) {
         homeStaffInflight = null;
         homeStaffLoaded = true;
-        homeStaff = json || { staff: false, employees: [] };
+        // A failed request must not permanently hide the widget for staff.
+        if (json) {
+          homeStaff = json;
+        } else if (!homeStaff) {
+          homeStaff = { staff: true, employees: [], error: true };
+        }
         if (el && el.isConnected) mount(el, { fromLoad: true });
       });
 
@@ -350,6 +383,7 @@
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
         if (homeStaffInflight) return;
+        if (homeStaff && homeStaff.staff === false) return;
         homeStaffInflight = fetch('/portal/dashboard/staff', {
           credentials: 'same-origin',
           headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -359,6 +393,7 @@
             homeStaffInflight = null;
             if (!json) return;
             homeStaff = json;
+            homeStaffLoaded = true;
             if (mountEl.isConnected) mount(mountEl, { fromLoad: true });
           });
       }, 30000);
@@ -496,9 +531,10 @@
 
   var DEFAULT_TILE_ORDER = ['recentFiles', 'shortcuts', 'employees', 'favorites', 'tutorials', 'road'];
 
+  // true = staff, false = client, null = /me not loaded yet
   function isStaffUser() {
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
-    if (!me) return false;
+    if (!me) return null;
     if (me.isAdmin) return true;
     var type = String(me.accountType || '');
     return type === 'Administrator' || type === 'Employee';
@@ -550,8 +586,10 @@
   }
 
   function availableTiles() {
+    // While /me is loading, keep staff-only tiles visible in the editor so an
+    // admin does not see them disappear and reappear.
     var staff = isStaffUser();
-    return DASH_TILES.filter(function (t) { return !t.staffOnly || staff; });
+    return DASH_TILES.filter(function (t) { return !t.staffOnly || staff !== false; });
   }
 
   function tilePreview(kind) {
@@ -1022,9 +1060,11 @@
       loadHomeFiles(el);
       loadHomeMetrics(el);
       loadHomeStaff(el);
-    } else if (isStaffUser() && !homeStaffLoaded && !homeStaffInflight) {
-      // Staff identity may arrive after the first mount (TMACurrentUser async).
+    } else if (!homeStaffInflight && (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
+      // Retry when identity arrives after an early "not staff" guess.
       loadHomeStaff(el);
+    } else {
+      bindStaffUserListener();
     }
   }
 
