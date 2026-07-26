@@ -49,9 +49,7 @@
     if (compact) {
       return (
         '<div class="tma-no-data tma-no-data--compact" data-no-data role="status">' +
-          (icon
-            ? '<span class="tma-no-data__icon" aria-hidden="true"><img src="' + escapeHtml(icon) + '" alt="" width="20" height="20"></span>'
-            : '') +
+          '<img class="tma-no-data__illustration tma-no-data__illustration--compact" src="' + escapeHtml(illustration) + '" alt="" width="72" height="72" decoding="async">' +
           '<div class="tma-no-data__compact-copy">' +
             '<p class="tma-no-data__title">' + escapeHtml(title) + '</p>' +
             (subtitle ? '<p class="tma-no-data__subtitle">' + escapeHtml(subtitle) + '</p>' : '') +
@@ -59,6 +57,9 @@
           (showButton
             ? '<button type="button" class="tma-no-data__btn tma-no-data__btn--compact" data-no-data-action="add">' +
                 '<span>' + escapeHtml(buttonLabel) + '</span></button>'
+            : '') +
+          (icon
+            ? '<span class="tma-no-data__icon" aria-hidden="true"><img src="' + escapeHtml(icon) + '" alt="" width="20" height="20"></span>'
             : '') +
         '</div>'
       );

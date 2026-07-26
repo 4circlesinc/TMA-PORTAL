@@ -455,41 +455,49 @@
         : (state.section === 'shared'
           ? 'Nothing has been shared with you yet.'
           : 'No recent files yet.');
-      var bodyHtml = pageRows.length
-        ? pageRows.map(function (row, i) {
-            var globalIndex = start + i;
-            return renderRow(row, globalIndex, !!state.selected[rowKey(globalIndex)]);
-          }).join('')
-        : (window.TMANoData
-          ? window.TMANoData.render({
-              title: state.search || state.filterType
-                ? 'No matching files'
-                : (state.section === 'shared' ? 'Nothing shared with you' : 'No recent files'),
-              subtitle: emptyMsg,
-              showButton: false,
-              compact: true,
-            })
-          : '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">' + escapeHtml(emptyMsg) + '</div></div>');
+      var emptyHtml = window.TMANoData
+        ? window.TMANoData.render({
+            illustrationName: state.search || state.filterType
+              ? 'Illustration07'
+              : (state.section === 'shared' ? 'Illustration03' : 'Illustration07'),
+            title: state.search || state.filterType
+              ? 'No matching files'
+              : (state.section === 'shared' ? 'Nothing shared with you' : 'No recent files'),
+            subtitle: emptyMsg,
+            showButton: false,
+          })
+        : '<p class="tma-dash__overview-empty">' + escapeHtml(emptyMsg) + '</p>';
+
+      var listHtml = pageRows.length
+        ? (
+          '<div class="tma-dash__ctable tma-dash__ctable--overview" role="table" aria-label="Files">' +
+            '<div class="tma-dash__ctr tma-dash__ctr--head tma-dash__ctr--overview">' +
+              '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head"><input type="checkbox" class="tma-dash__check" data-files-selectall aria-label="Select all"></div>' +
+              '<div class="tma-dash__cc tma-dash__cc--filename tma-dash__cc--head">File name</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head">Type</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--folder tma-dash__cc--head">Folder</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--size tma-dash__cc--head">Size</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--uploader tma-dash__cc--head">Uploader</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Uploaded</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Modified</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--shared tma-dash__cc--head">Shared</div>' +
+              '<div class="tma-dash__cc tma-dash__cc--actions tma-dash__cc--head" aria-hidden="true"></div>' +
+            '</div>' +
+            '<div data-files-body>' +
+              pageRows.map(function (row, i) {
+                var globalIndex = start + i;
+                return renderRow(row, globalIndex, !!state.selected[rowKey(globalIndex)]);
+              }).join('') +
+            '</div>' +
+          '</div>' +
+          renderPagination(state, filtered.length)
+        )
+        : ('<div class="tma-dash__files-empty" data-files-body>' + emptyHtml + '</div>');
 
       container.innerHTML =
         renderSectionTabs(state.section) +
         renderToolbar(state) +
-        '<div class="tma-dash__ctable tma-dash__ctable--overview" role="table" aria-label="Files">' +
-          '<div class="tma-dash__ctr tma-dash__ctr--head tma-dash__ctr--overview">' +
-            '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head"><input type="checkbox" class="tma-dash__check" data-files-selectall aria-label="Select all"></div>' +
-            '<div class="tma-dash__cc tma-dash__cc--filename tma-dash__cc--head">File name</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head">Type</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--folder tma-dash__cc--head">Folder</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--size tma-dash__cc--head">Size</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--uploader tma-dash__cc--head">Uploader</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Uploaded</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Modified</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--shared tma-dash__cc--head">Shared</div>' +
-            '<div class="tma-dash__cc tma-dash__cc--actions tma-dash__cc--head" aria-hidden="true"></div>' +
-          '</div>' +
-          '<div data-files-body>' + bodyHtml + '</div>' +
-        '</div>' +
-        renderPagination(state, filtered.length);
+        listHtml;
 
       wireEvents(filtered, pageRows, start);
       if (state.searchFocused) {

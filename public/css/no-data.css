@@ -112,13 +112,20 @@
 /* Compact inline empty state for tables / section panels */
 .tma-no-data--compact {
   flex-direction: row;
-  align-items: flex-start;
-  gap: var(--space-12);
+  align-items: center;
+  gap: var(--space-16);
   max-width: none;
   margin: var(--space-16) 0;
-  padding: var(--space-16);
+  padding: var(--space-16) var(--space-20);
   border-radius: 12px;
   background: var(--color-bg-secondary, rgba(0, 0, 0, 0.03));
+}
+
+.tma-no-data__illustration--compact {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .tma-no-data--compact .tma-no-data__title {

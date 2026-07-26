@@ -226,16 +226,24 @@
     }).join('');
 
     var empty = !all.length
-      ? (window.TMANoData
-        ? window.TMANoData.render({
+      ? (ui() && ui().emptyState
+        ? ui().emptyState({
+            illustration: state.tab === 'shared' ? 'Illustration03' : 'Illustration07',
             title: state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files',
             subtitle: state.tab === 'shared'
               ? 'Items other people share with you will show up here.'
               : 'Files you open or upload will show up here.',
-            showButton: false,
-            compact: true,
           })
-        : '<p class="tma-portal-panel__note">No items yet.</p>')
+        : (window.TMANoData
+          ? window.TMANoData.render({
+              illustrationName: state.tab === 'shared' ? 'Illustration03' : 'Illustration07',
+              title: state.tab === 'shared' ? 'Nothing shared with you' : 'No recent files',
+              subtitle: state.tab === 'shared'
+                ? 'Items other people share with you will show up here.'
+                : 'Files you open or upload will show up here.',
+              showButton: false,
+            })
+          : '<p class="tma-portal-panel__note">No items yet.</p>'))
       : '';
 
     var tableHtml = ui() && ui().table
