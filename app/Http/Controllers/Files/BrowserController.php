@@ -43,6 +43,16 @@ class BrowserController extends BaseFilesController
 
         [$folderQuery, $fileQuery] = $this->queriesFor($section, $user, $current, $request);
 
+        // Optional: return only files or only folders. Used by Overview
+        // "Latest Files" so a flood of recent folders can't starve the file list
+        // (folder-first windowing below would otherwise return 0 files).
+        $only = strtolower((string) $request->query('only', ''));
+        if ($only === 'files') {
+            $folderQuery = null;
+        } elseif ($only === 'folders') {
+            $fileQuery = null;
+        }
+
         if ($folderQuery) {
             $this->applyFolderFilters($folderQuery, $request, $search);
         }

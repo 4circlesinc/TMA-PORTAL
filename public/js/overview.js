@@ -20,7 +20,7 @@
      Project Spendings table and the Add Target action — none of them were
      backed by anything, and the page reads as a real dashboard, so figures
      nobody entered are worse than absent sections. */
-  var TABS = ['Overview', 'Users', 'Files', 'Notifications', 'Activity'];
+  var TABS = ['Overview', 'Employees', 'Users', 'Files', 'Notifications', 'Activity'];
 
   function dateKeyOf(d) {
     return d.getFullYear() + '-' +
@@ -174,26 +174,40 @@
     return 'grey';
   }
 
+  function formatFileWhen(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   function loadLatestFiles() {
-    return apiGet('/portal/files?section=recent&perPage=6')
+    // only=files — Recent is folder-first, so a busy org folder list would
+    // otherwise return zero files for a small perPage window.
+    return apiGet('/portal/files?section=recent&perPage=8&only=files')
       .then(function (j) {
         var files = (j && j.files) || [];
         FILES = files.slice(0, 6).map(function (f) {
           var name = f.name || f.filename || 'File';
           var uploader = (f.uploadedBy && f.uploadedBy.name) || (f.owner && f.owner.name) || '';
+          var when = formatFileWhen(f.modifiedAt || f.uploadedAt || f.updatedAt || f.createdAt);
           var meta = [
-            f.sizeLabel || f.size || '',
-            f.uploadedAtLabel || f.updatedAtLabel || f.uploadedAt || '',
+            f.sizeLabel || '',
+            when,
             uploader,
           ].filter(Boolean).join(' · ');
           return {
             id: f.id || f.uuid,
             name: name,
             meta: meta || 'Recent file',
-            icon: (window.TMAFileIcons && TMAFileIcons.iconKeyFor) ? TMAFileIcons.iconKeyFor(name) : 'File',
+            icon: f.icon || ((window.TMAFileIcons && TMAFileIcons.iconKeyFor) ? TMAFileIcons.iconKeyFor(name) : 'File'),
             tone: fileTone(name),
             downloadUrl: f.downloadUrl || null,
-            previewUrl: f.previewUrl || null,
+            previewUrl: f.previewUrl || f.thumbUrl || null,
             mime: f.mime || f.mimeType || '',
             uploader: uploader,
             uploaderAvatar: avatarSrc(
@@ -224,6 +238,7 @@
 
   var TAB_PANELS = {
     Overview: '.tma-dash__overview-grid',
+    Employees: '.tma-dash__overview-employees-tab',
     Users: '.tma-dash__overview-users',
     Files: '.tma-dash__overview-files-tab',
     Notifications: '.tma-dash__overview-notifications-tab',
@@ -418,6 +433,11 @@
       '</div></div></section>';
   }
 
+  function renderEmployeesTab(activeTab) {
+    return '<div class="tma-dash__overview-employees-tab"' + (activeTab !== 'Employees' ? ' hidden' : '') + '>' +
+      '<div class="tma-dash__overview-employees-mount" data-employees-overview></div></div>';
+  }
+
   function renderUsers(activeTab) {
     return '<div class="tma-dash__overview-users" data-node-id="32546:96120"' + (activeTab !== 'Users' ? ' hidden' : '') + '>' +
       '<div class="tma-dash__users" data-users-overview></div></div>';
@@ -426,6 +446,12 @@
   function renderFilesTab(activeTab) {
     return '<div class="tma-dash__overview-files-tab" data-node-id="32546:96116"' + (activeTab !== 'Files' ? ' hidden' : '') + '>' +
       '<div class="tma-dash__files" data-files-overview></div></div>';
+  }
+
+  function mountEmployeesTab(container) {
+    var mountEl = container.querySelector('[data-employees-overview]');
+    if (!mountEl || !window.TMAOverviewEmployees || typeof window.TMAOverviewEmployees.mount !== 'function') return;
+    window.TMAOverviewEmployees.mount(mountEl);
   }
 
   function renderNotificationsTab(activeTab) {
@@ -484,6 +510,7 @@
       '<div class="tma-dash__overview-grid"' + (tab !== 'Overview' ? ' hidden' : '') + '>' +
       renderHero() + renderRoad() + renderFiles() +
       '</div>' +
+      renderEmployeesTab(tab) +
       renderUsers(tab) +
       renderFilesTab(tab) +
       renderNotificationsTab(tab) +
@@ -507,6 +534,7 @@
       if (panel) panel.hidden = tab !== key;
     });
 
+    if (tab === 'Employees') mountEmployeesTab(container);
     if (tab === 'Users') mountUsersTab(container);
     if (tab === 'Files') mountFilesTab(container);
     if (tab === 'Notifications') mountNotificationsTab(container);
@@ -538,6 +566,10 @@
   function normalizeTab(token) {
     var map = {
       overview: 'Overview',
+      employees: 'Employees',
+      employee: 'Employees',
+      staff: 'Employees',
+      team: 'Employees',
       users: 'Users',
       files: 'Files',
       notifications: 'Notifications',
@@ -843,6 +875,7 @@
     bindTabs(container);
     bindOverviewActions(container);
     bindRoadWheel(container);
+    if (activeTab === 'Employees') mountEmployeesTab(container);
     if (activeTab === 'Users') mountUsersTab(container);
     if (activeTab === 'Files') mountFilesTab(container);
     if (activeTab === 'Notifications') mountNotificationsTab(container);

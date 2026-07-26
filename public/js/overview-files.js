@@ -685,7 +685,8 @@
     function reloadFiles() {
       var siteRoot = window.__TMA_SITE_ROOT || '';
       var section = state.section === 'shared' ? 'shared' : 'recent';
-      fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=50', {
+      var only = section === 'recent' ? '&only=files' : '';
+      fetch(siteRoot + '/portal/files?section=' + encodeURIComponent(section) + '&perPage=50' + only, {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       })

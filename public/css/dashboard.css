@@ -636,6 +636,19 @@
 .tma-dash__subnav[hidden] { display: none; }
 .tma-dash__subnav { display: flex; flex-direction: column; gap: var(--space-4); }
 
+/* Sidebar submenus need more air between nested rows. */
+.tma-dash__sidebar-nav .tma-dash__subnav,
+.tma-dash__sidebar-nav .tma-dash__list {
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
+.tma-dash__sidebar-nav .tma-dash__nav-item--nested {
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-6);
+}
+
 /* Folder Shortcuts tab - the user's pinned folders */
 .tma-dash__shortcuts { display: flex; flex-direction: column; gap: var(--space-4); }
 
@@ -2442,6 +2455,7 @@
     display: none;
   }
 
+  .tma-dash__overview-employees-tab,
   .tma-dash__overview-users,
   .tma-dash__overview-files-tab,
   .tma-dash__overview-activity-tab {
@@ -4758,9 +4772,11 @@
 .tma-dash__overview-grid[hidden],
 .tma-dash__overview-targets[hidden],
 .tma-dash__overview-budget[hidden],
+.tma-dash__overview-employees-tab[hidden],
 .tma-dash__overview-users[hidden],
 .tma-dash__overview-files-tab[hidden],
 .tma-dash__overview-activity-tab[hidden],
+.tma-dash__overview-notifications-tab[hidden],
 .tma-dash__overview-settings[hidden] {
   display: none;
 }
@@ -5775,6 +5791,116 @@
   .tma-dash__overview-budget .tma-strip {
     padding-right: 0;
   }
+}
+
+/* ── Overview Employees tab ─────────────────────────────────────── */
+
+.tma-dash__overview-employees-tab {
+  min-width: 0;
+  width: 100%;
+}
+
+.tma-dash__overview-employees-mount {
+  width: 100%;
+  min-width: 0;
+}
+
+.tma-dash__overview-employees {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-20);
+  border-radius: var(--radius-20);
+  background: var(--dash-panel-bg, #f9f9fa);
+  min-width: 0;
+}
+
+.tma-dash__overview-employees__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.tma-dash__overview-employees__title {
+  margin: 0;
+  font-size: var(--text-size-16, 16px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__overview-employees__meta {
+  font-size: var(--text-size-12, 12px);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__overview-employees__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tma-dash__overview-employee {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-8);
+  border-radius: var(--radius-12);
+  min-width: 0;
+}
+
+.tma-dash__overview-employee:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__overview-employee__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-dash__overview-employee__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-dash__overview-employee__sub,
+.tma-dash__overview-employee__role {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-dash__overview-employee__status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tma-dash__overview-employee__work {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  max-width: 140px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-dash__overview-employee--skeleton {
+  pointer-events: none;
 }
 
 /* ── Overview Users tab (Figma 32546:96120) ─────────────────────── */
