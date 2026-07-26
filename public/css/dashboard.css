@@ -192,17 +192,20 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-4);
   scrollbar-width: none;
   padding-bottom: var(--space-4);
+  /* Compact rail: slightly smaller icons than the rest of the dashboard. */
+  --dash-icon-md: 18px;
+  --dash-nav-icon-inset: calc(var(--space-2) + 14px + var(--space-2));
 }
 .tma-dash__sidebar-nav::-webkit-scrollbar { display: none; }
 
 .tma-dash__nav-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  padding-bottom: var(--space-4);
+  gap: 2px;
+  padding-bottom: var(--space-2);
   width: 100%;
   flex-shrink: 0;
 }
@@ -359,6 +362,15 @@
   min-width: 0;
   /* Icon column padding never changes between collapsed/expanded — only the
      sidebar width and label opacity do. */
+}
+
+/* Sidebar rail: denser rows than the generic nav-item recipe. */
+.tma-dash__sidebar-nav .tma-dash__nav-item {
+  gap: var(--space-2);
+  padding: 5px var(--space-4) 5px var(--space-2);
+  border-radius: var(--radius-8);
+  font-size: 13px;
+  line-height: 18px;
 }
 /* The label span. A <span> icon (a masked, tinted one) — or its badge-anchor
    wrapper — is not a label and must keep its own fixed box rather than
