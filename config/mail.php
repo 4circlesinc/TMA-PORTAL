@@ -65,6 +65,15 @@ return [
             'transport' => 'resend',
         ],
 
+        /*
+         * App-only Microsoft Graph send (no SMTP / MFA). Uses client
+         * credentials against MICROSOFT_GRAPH_TENANT_ID and sends as
+         * MICROSOFT_GRAPH_MAILBOX (defaults to MAIL_FROM_ADDRESS).
+         */
+        'microsoft-graph' => [
+            'transport' => 'microsoft-graph',
+        ],
+
         'sendmail' => [
             'transport' => 'sendmail',
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),

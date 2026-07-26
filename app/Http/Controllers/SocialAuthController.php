@@ -294,11 +294,12 @@ class SocialAuthController extends Controller
     {
         // Respect two-factor authentication: hand off to Fortify's challenge,
         // unless this is a device the user already trusted. Remember-me is
-        // decided on the post-login stay-signed-in screen, not here.
+        // applied in StaySignedIn::afterAuthenticated when the browser already
+        // chose to stay signed in (or on the stay-signed-in prompt).
         if ($user->hasTwoFactorEnabled() && ! TrustedDevices::trusts($user, $request)) {
             $request->session()->put([
                 'login.id' => $user->getKey(),
-                'login.remember' => false,
+                'login.remember' => StaySignedIn::wantsRemember($request),
             ]);
 
             return redirect()->route('two-factor.login');
@@ -307,10 +308,8 @@ class SocialAuthController extends Controller
         Auth::login($user, false);
         $request->session()->regenerate();
 
-        if (StaySignedIn::shouldAsk($request)) {
-            StaySignedIn::markNeeded($request);
-
-            return redirect()->route('stay-signed-in.show');
+        if ($redirect = StaySignedIn::afterAuthenticated($request)) {
+            return $redirect;
         }
 
         return redirect()->intended('/');

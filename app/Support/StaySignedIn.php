@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
@@ -42,6 +43,12 @@ class StaySignedIn
         return $value !== 'yes' && $value !== 'no';
     }
 
+    /** Did this browser previously choose to stay signed in? */
+    public static function wantsRemember(Request $request): bool
+    {
+        return (string) $request->cookie(self::COOKIE) === 'yes';
+    }
+
     public static function markNeeded(Request $request): void
     {
         $request->session()->put(self::SESSION_KEY, true);
@@ -70,6 +77,26 @@ class StaySignedIn
 
         Auth::login($user, true);
         $request->session()->regenerate();
+    }
+
+    /**
+     * After login: show the trust prompt when unanswered, otherwise re-apply
+     * remember-me when this browser already said yes (so later logins stay
+     * durable — the preference cookie alone does not keep you signed in).
+     */
+    public static function afterAuthenticated(Request $request): ?RedirectResponse
+    {
+        if (self::shouldAsk($request)) {
+            self::markNeeded($request);
+
+            return redirect()->route('stay-signed-in.show');
+        }
+
+        if (self::wantsRemember($request)) {
+            self::applyRemember($request);
+        }
+
+        return null;
     }
 
     /**

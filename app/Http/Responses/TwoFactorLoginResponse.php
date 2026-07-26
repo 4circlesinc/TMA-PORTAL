@@ -15,10 +15,8 @@ class TwoFactorLoginResponse implements TwoFactorLoginResponseContract
             return new JsonResponse('', 204);
         }
 
-        if (StaySignedIn::shouldAsk($request)) {
-            StaySignedIn::markNeeded($request);
-
-            return redirect()->route('stay-signed-in.show');
+        if ($redirect = StaySignedIn::afterAuthenticated($request)) {
+            return $redirect;
         }
 
         return redirect()->intended(Fortify::redirects('login'));

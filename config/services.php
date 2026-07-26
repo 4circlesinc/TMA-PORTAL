@@ -83,6 +83,10 @@ return [
         'scope_calendar' => 'Calendars.ReadWrite',
         'scope_onedrive' => 'Files.Read',
         'scope_sharepoint' => 'Sites.Read.All',
+        // App-only Graph send for portal system mail (password resets, etc.).
+        // Separate from MICROSOFT_TENANT=common used by interactive OAuth login.
+        'graph_tenant_id' => env('MICROSOFT_GRAPH_TENANT_ID'),
+        'graph_mailbox' => env('MICROSOFT_GRAPH_MAILBOX', env('MAIL_FROM_ADDRESS')),
     ],
 
     'slack' => [

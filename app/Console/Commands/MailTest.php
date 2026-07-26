@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Mail;
 class MailTest extends Command
 {
     protected $signature = 'mail:test {to : Address to send the test message to}
-                            {--mailer= : Override the configured mailer (smtp, resend, log)}';
+                            {--mailer= : Override the configured mailer (smtp, resend, microsoft-graph, log)}';
 
     protected $description = 'Send a test email through the configured mailer';
 
@@ -29,6 +29,11 @@ class MailTest extends Command
         if ($mailer === 'smtp') {
             $this->line('  host    '.config('mail.mailers.smtp.host').':'.config('mail.mailers.smtp.port'));
             $this->line('  user    '.(config('mail.mailers.smtp.username') ?: '<empty>'));
+        }
+
+        if ($mailer === 'microsoft-graph') {
+            $this->line('  tenant  '.(config('services.microsoft.graph_tenant_id') ?: '<empty>'));
+            $this->line('  mailbox '.(config('services.microsoft.graph_mailbox') ?: '<empty>'));
         }
 
         $this->line('  from    '.config('mail.from.address'));
