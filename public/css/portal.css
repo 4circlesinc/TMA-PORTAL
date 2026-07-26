@@ -1307,6 +1307,24 @@
   flex: 1 1 auto;
   min-height: 0;
   box-sizing: border-box;
+  height: 100%;
+}
+
+/* Show room for ~5 road items upfront; scroll when there are more. */
+.tma-portal-tile--road .tma-dash__overview-road {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.tma-portal-tile--road .tma-dash__overview-road-list {
+  --tma-road-item-row: calc(var(--dash-avatar-size, 24px) + var(--space-8));
+  justify-content: flex-start;
+  flex: 0 1 auto;
+  min-height: calc(5 * var(--tma-road-item-row) + 4 * var(--space-8));
+  max-height: calc(5 * var(--tma-road-item-row) + 4 * var(--space-8));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .tma-portal-panel__note {
