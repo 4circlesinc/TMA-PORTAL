@@ -44,30 +44,19 @@ class PreferencesController extends Controller
         'toasts.sound' => ['boolean'],
         'toasts.previewText' => ['boolean'],
         'toasts.groupSimilar' => ['boolean'],
-        // Portal home dashboard layout (order, sizes, visibility).
+        // Portal home dashboard layout (order + visibility).
         'dashboardTiles' => ['array'],
         'dashboardLayout' => ['array'],
     ];
 
     private const TILE_IDS = [
-        'email', 'recentFiles', 'shortcuts', 'employees',
-        'favorites', 'tutorials', 'road',
+        'recentFiles', 'shortcuts', 'employees', 'favorites',
+        'email', 'tutorials', 'road',
     ];
 
-    /** First-login admin/staff home board — mirrors the client defaults. */
+    /** Classic 2-column board — mirrors the client defaults. */
     private const DEFAULT_DASHBOARD_ORDER = [
-        'recentFiles', 'email', 'shortcuts', 'employees', 'favorites', 'road', 'tutorials',
-    ];
-
-    /** @var array<string, array{w: float, h: int}> */
-    private const DEFAULT_DASHBOARD_SIZES = [
-        'recentFiles' => ['w' => 0.34, 'h' => 300],
-        'email' => ['w' => 0.66, 'h' => 300],
-        'shortcuts' => ['w' => 1.0, 'h' => 320],
-        'employees' => ['w' => 0.34, 'h' => 380],
-        'favorites' => ['w' => 0.33, 'h' => 280],
-        'road' => ['w' => 0.33, 'h' => 360],
-        'tutorials' => ['w' => 0.33, 'h' => 280],
+        'recentFiles', 'shortcuts', 'employees', 'favorites', 'email', 'tutorials', 'road',
     ];
 
     /** @var array<string, bool> */
@@ -91,7 +80,7 @@ class PreferencesController extends Controller
     }
 
     /** Layout generation — bump when the shipped default board changes. */
-    private const DASHBOARD_LAYOUT_VERSION = 2;
+    private const DASHBOARD_LAYOUT_VERSION = 3;
 
     /** Persist the default home board so every browser starts the same. */
     private function seedDashboardLayoutIfMissing(User $user): void
@@ -107,7 +96,6 @@ class PreferencesController extends Controller
 
         $current['dashboardLayout'] = [
             'order' => self::DEFAULT_DASHBOARD_ORDER,
-            'tiles' => self::DEFAULT_DASHBOARD_SIZES,
         ];
         $current['dashboardTiles'] = array_merge(
             self::DEFAULT_DASHBOARD_TILES,
@@ -141,6 +129,7 @@ class PreferencesController extends Controller
             }
             if ($key === 'dashboardLayout') {
                 $current[$key] = $this->sanitizeDashboardLayout(is_array($value) ? $value : []);
+                $current['dashboardLayoutVersion'] = self::DASHBOARD_LAYOUT_VERSION;
 
                 continue;
             }
@@ -181,7 +170,6 @@ class PreferencesController extends Controller
             // First login (or never customized): stable default board.
             $payload['dashboardLayout'] = [
                 'order' => self::DEFAULT_DASHBOARD_ORDER,
-                'tiles' => self::DEFAULT_DASHBOARD_SIZES,
             ];
         }
 
@@ -206,7 +194,7 @@ class PreferencesController extends Controller
 
     /**
      * @param  array<string, mixed>  $layout
-     * @return array{order: list<string>, tiles: array<string, array{w: float, h: int}>}
+     * @return array{order: list<string>}
      */
     private function sanitizeDashboardLayout(array $layout): array
     {
@@ -226,34 +214,8 @@ class PreferencesController extends Controller
             }
         }
 
-        $tilesIn = is_array($layout['tiles'] ?? null) ? $layout['tiles'] : [];
-        $tiles = [];
-        foreach (self::TILE_IDS as $id) {
-            if (! isset($tilesIn[$id]) || ! is_array($tilesIn[$id])) {
-                continue;
-            }
-            $row = $tilesIn[$id];
-            $w = isset($row['w']) ? (float) $row['w'] : null;
-            // Legacy col spans (1–3) from the first resize iteration.
-            if (($w === null || $w <= 0) && isset($row['cols'])) {
-                $w = ((float) $row['cols']) / 3;
-            }
-            if ($w === null || $w <= 0) {
-                continue;
-            }
-            $h = isset($row['h']) ? (int) $row['h'] : (isset($row['height']) ? (int) $row['height'] : 0);
-            if ($h < 200) {
-                continue;
-            }
-            $tiles[$id] = [
-                'w' => round(min(1, max(0.2, $w)), 4),
-                'h' => min(720, max(200, $h)),
-            ];
-        }
-
         return [
             'order' => $order,
-            'tiles' => $tiles,
         ];
     }
 }

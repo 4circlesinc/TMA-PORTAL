@@ -214,9 +214,7 @@
       '<div class="tma-portal-head" style="gap:var(--space-8);flex:1;min-width:0">' +
       '<h2 class="tma-portal-panel__title">Tutorials</h2>' +
       ui().select(['Getting Started'], 'Getting Started', 'data-home-tutorial-set', 'Tutorial set') +
-      '</div>' +
-      dragHandleHtml() +
-      '</div>';
+      '</div></div>';
     var body =
       '<p class="tma-portal-panel__note">' + done + ' of ' + s.tutorials.length + ' completed</p>' +
       '<div class="tma-portal-tutorials">' +
@@ -316,6 +314,7 @@
   var homeEmailLoaded = false;
   var homeEmail = null;
   var homeEmailInflight = null;
+  var homeEmailTimer = null;
 
   function emailAvatarSrc(msg) {
     if (msg.avatarUrl) return msg.avatarUrl;
@@ -365,14 +364,26 @@
     );
   }
 
-  function loadHomeEmail(el) {
+  function emailPayloadSignature(payload) {
+    if (!payload) return '';
+    if (payload.connected === false) return 'disconnected';
+    var msgs = payload.messages || [];
+    return msgs.map(function (m) {
+      return [m.id, m.unread ? 1 : 0, m.time || '', m.subject || ''].join(':');
+    }).join('|');
+  }
+
+  function loadHomeEmail(el, opts) {
+    opts = opts || {};
     if (homeEmailInflight) return;
 
     function finish(payload) {
       homeEmailInflight = null;
+      var changed = !homeEmailLoaded ||
+        emailPayloadSignature(payload) !== emailPayloadSignature(homeEmail);
       homeEmailLoaded = true;
       homeEmail = payload;
-      if (el && el.isConnected) mount(el, { fromLoad: true });
+      if (changed && el && el.isConnected) mount(el, { fromLoad: true });
     }
 
     homeEmailInflight = fetch('/portal/mail', {
@@ -382,7 +393,7 @@
       .catch(function () { return null; })
       .then(function (index) {
         if (!index) {
-          finish({ connected: true, messages: [] });
+          finish({ connected: true, messages: (homeEmail && homeEmail.messages) || [] });
           return null;
         }
         if (index.connected === false) {
@@ -393,25 +404,55 @@
           credentials: 'same-origin',
           headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         }).then(function (r) { return r.ok ? r.json() : null; })
-          .catch(function () { return null; });
+          .catch(function () { return null; })
+          .then(function (json) {
+            finish({
+              connected: true,
+              messages: json && Array.isArray(json.messages) ? json.messages.slice(0, 8) : [],
+            });
+          });
       })
-      .then(function (json) {
-        // Disconnected / bootstrap-failure paths already called finish().
-        if (homeEmailLoaded) return;
-        finish({
-          connected: true,
-          messages: json && Array.isArray(json.messages) ? json.messages.slice(0, 8) : [],
-        });
+      .catch(function () {
+        homeEmailInflight = null;
+        if (!homeEmailLoaded) {
+          homeEmailLoaded = true;
+          homeEmail = { connected: true, messages: [] };
+          if (el && el.isConnected) mount(el, { fromLoad: true });
+        }
       });
+
+    // Keep inbox fresh while the home view is open (same cadence as Employees).
+    if (!homeEmailTimer && !opts.skipTimer) {
+      homeEmailTimer = setInterval(function () {
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        if (homeEmailInflight) return;
+        if (homeEmail && homeEmail.connected === false) return;
+        loadHomeEmail(mountEl, { skipTimer: true });
+      }, 30000);
+    }
+
+    if (!window.__tmaHomeEmailLiveBound) {
+      window.__tmaHomeEmailLiveBound = true;
+      document.addEventListener('tma-email-count', function () {
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        loadHomeEmail(mountEl, { skipTimer: true });
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return;
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        loadHomeEmail(mountEl, { skipTimer: true });
+      });
+    }
   }
 
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
     return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road"' +
       ' data-tile-id="road" data-key="panel-road" aria-label="What\'s on the road?">' +
-      dragHandleHtml() +
       window.TMAOverview.renderRoad() +
-      resizeHandleHtml() +
       '</div>';
   }
 
@@ -504,229 +545,6 @@
     }
   }
 
-  function bindTileDrag(root) {
-    var grid = root.querySelector('.tma-portal-home-grid');
-    if (!grid || grid.dataset.tileDragBound) return;
-    grid.dataset.tileDragBound = '1';
-
-    var dragged = null;
-
-    function tileFrom(target) {
-      var handle = target && target.closest ? target.closest('[data-tile-drag]') : null;
-      if (!handle || !grid.contains(handle)) return null;
-      return handle.closest('[data-tile-id]');
-    }
-
-    function orderSignature() {
-      return Array.prototype.map.call(
-        grid.querySelectorAll('[data-tile-id]'),
-        function (node) { return node.getAttribute('data-tile-id'); }
-      ).join('|');
-    }
-
-    function commitOrderFromDom() {
-      var order = Array.prototype.map.call(
-        grid.querySelectorAll('[data-tile-id]'),
-        function (node) { return node.getAttribute('data-tile-id'); }
-      ).filter(Boolean);
-      var hidden = tileOrder().filter(function (id) { return order.indexOf(id) === -1; });
-      saveTileOrder(order.concat(hidden));
-      layoutHomeGrid(grid, { animate: true, repack: true });
-      flushLayoutServerSave();
-    }
-
-    grid.addEventListener('dragstart', function (e) {
-      if (grid.classList.contains('is-tile-resizing') || tileResizeActive) {
-        e.preventDefault();
-        return;
-      }
-      var tile = tileFrom(e.target);
-      if (!tile) return;
-      dragged = tile;
-      tile.classList.add('is-dragging');
-      grid.classList.add('is-tile-dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      try { e.dataTransfer.setData('text/plain', tile.getAttribute('data-tile-id') || ''); } catch (err) {}
-      try {
-        e.dataTransfer.setDragImage(tile, Math.min(40, tile.offsetWidth / 4), 24);
-      } catch (err2) {}
-    });
-
-    grid.addEventListener('dragover', function (e) {
-      if (!dragged) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-
-      var over = e.target.closest('[data-tile-id]');
-      if (!over || !grid.contains(over) || over === dragged) return;
-
-      var before = orderSignature();
-      var box = over.getBoundingClientRect();
-      // Prefer vertical half for stacking, but also allow left/right for side-by-side boards.
-      var after = (e.clientY - box.top) > box.height / 2;
-      if (Math.abs(e.clientX - (box.left + box.width / 2)) > box.width * 0.28) {
-        after = e.clientX > (box.left + box.width / 2);
-      }
-      var ref = after ? over.nextSibling : over;
-      if (ref === dragged) return;
-      grid.insertBefore(dragged, ref);
-
-      // Only reflow when order actually changed — avoids restarting transitions every pixel.
-      if (orderSignature() !== before) {
-        layoutHomeGrid(grid, {
-          animate: true,
-          repack: true,
-          floatingId: dragged.getAttribute('data-tile-id'),
-        });
-      }
-    });
-
-    grid.addEventListener('drop', function (e) {
-      if (dragged) e.preventDefault();
-    });
-
-    grid.addEventListener('dragend', function () {
-      if (!dragged) return;
-      dragged.classList.remove('is-dragging');
-      dragged = null;
-      grid.classList.remove('is-tile-dragging');
-      grid.classList.remove('is-live-pack');
-      commitOrderFromDom();
-    });
-  }
-
-  var tileResizeActive = null;
-  var tileResizeWindowBound = false;
-
-  function endTileResize() {
-    if (!tileResizeActive) return;
-    var state = tileResizeActive;
-    tileResizeActive = null;
-    var w = softSnapWidth(state.w != null ? state.w : state.startW, state.grid, state.id);
-    var height = softSnapHeight(
-      state.height != null ? state.height : state.startHeight,
-      state.grid,
-      state.id
-    );
-    if (state.tile) state.tile.classList.remove('is-resizing');
-    if (state.grid) {
-      state.grid.classList.remove('is-tile-resizing');
-      state.grid.classList.remove('is-live-pack');
-    }
-    document.body.classList.remove('tma-tile-resizing');
-    saveTileSize(state.id, w, height);
-    // Soft snap + light repack so neighbours line up without fighting the drag.
-    layoutHomeGrid(state.grid, { animate: true, repack: true });
-    flushLayoutServerSave();
-  }
-
-  function bindTileResize(root) {
-    if (root.dataset.tileResizeBound) return;
-    root.dataset.tileResizeBound = '1';
-
-    function gridOf(node) {
-      return node && node.closest ? node.closest('.tma-portal-home-grid') : null;
-    }
-
-    root.addEventListener('mousemove', function (e) {
-      if (tileResizeActive) return;
-      var grid = gridOf(e.target);
-      if (!grid || !root.contains(grid)) {
-        root.querySelectorAll('.is-resize-hot').forEach(function (n) { n.classList.remove('is-resize-hot'); });
-        return;
-      }
-      var tile = e.target.closest('[data-tile-id]');
-      root.querySelectorAll('.is-resize-hot').forEach(function (n) {
-        if (n !== tile) n.classList.remove('is-resize-hot');
-      });
-      if (!tile || !grid.contains(tile)) return;
-      var rect = tile.getBoundingClientRect();
-      tile.classList.toggle('is-resize-hot', (rect.bottom - e.clientY) <= 40);
-    });
-
-    root.addEventListener('pointerdown', function (e) {
-      var handle = e.target.closest('[data-tile-resize]');
-      if (!handle || !root.contains(handle)) return;
-      var tile = handle.closest('[data-tile-id]');
-      var grid = gridOf(handle);
-      if (!tile || !grid) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      var id = tile.getAttribute('data-tile-id');
-      var start = sizeFor(id);
-      tileResizeActive = {
-        tile: tile,
-        grid: grid,
-        id: id,
-        pointerId: e.pointerId,
-        startW: start.w,
-        startHeight: start.h,
-        startRect: tile.getBoundingClientRect(),
-        boardWidth: grid.clientWidth || grid.offsetWidth,
-      };
-
-      tile.classList.add('is-resizing', 'is-resize-hot');
-      grid.classList.add('is-tile-resizing', 'is-live-pack');
-      document.body.classList.add('tma-tile-resizing');
-      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
-    });
-
-    if (tileResizeWindowBound) return;
-    tileResizeWindowBound = true;
-
-    window.addEventListener('pointermove', function (e) {
-      var active = tileResizeActive;
-      if (!active || e.pointerId !== active.pointerId) return;
-      e.preventDefault();
-
-      var board = active.boardWidth || active.grid.clientWidth || 1;
-      var widthPx = e.clientX - active.startRect.left;
-      var rawW = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, widthPx / board));
-      var rawH = Math.min(
-        TILE_H_MAX,
-        Math.max(TILE_H_MIN, Math.round(e.clientY - active.startRect.top))
-      );
-
-      // Magnetic soft snap while dragging — catches near ⅓ / ½ / ⅔ / full, easy to leave.
-      var w = softSnapWidth(rawW, active.grid, active.id);
-      var height = softSnapHeight(rawH, active.grid, active.id);
-
-      active.w = w;
-      active.height = height;
-      active.rawW = rawW;
-      active.rawH = rawH;
-
-      var s = data().state();
-      if (!s.dashboardTileSizes) s.dashboardTileSizes = {};
-      s.dashboardTileSizes[active.id] = { w: w, h: height };
-
-      if (layoutResizeTimer) cancelAnimationFrame(layoutResizeTimer);
-      layoutResizeTimer = requestAnimationFrame(function () {
-        layoutResizeTimer = null;
-        layoutHomeGrid(active.grid, { live: true, settle: true });
-      });
-    });
-
-    window.addEventListener('pointerup', function (e) {
-      if (!tileResizeActive || e.pointerId !== tileResizeActive.pointerId) return;
-      endTileResize();
-    });
-
-    window.addEventListener('pointercancel', function (e) {
-      if (!tileResizeActive || e.pointerId !== tileResizeActive.pointerId) return;
-      endTileResize();
-    });
-
-    window.addEventListener('resize', function () {
-      var grid = document.querySelector('[data-view="dashboard"] .tma-portal-home-grid');
-      if (grid) {
-        grid._packKey = '';
-        layoutHomeGrid(grid, { animate: false, repack: true });
-      }
-    });
-  }
-
   function shareFilesModal(kind) {
     var s = data().state();
     var isShare = kind === 'share';
@@ -796,8 +614,8 @@
   }
 
   var DASH_TILES = [
-    { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email' },
     { id: 'recentFiles', label: 'Recent Files', desc: 'Files you last accessed across all of your devices.', preview: 'files' },
+    { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email' },
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
     { id: 'favorites', label: 'Favorites', desc: 'Mark certain files or folders as Favorite and have a shortcut to them.', preview: 'favorites' },
@@ -805,8 +623,8 @@
     { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
 
-  // Default admin board: Recent | Email, full-width Shortcuts, then Employees | Favorites | Road.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'employees', 'favorites', 'road', 'tutorials'];
+  // Classic 2-column board order (pre drag/resize), with Recent Email after Favorites.
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'shortcuts', 'employees', 'favorites', 'email', 'tutorials', 'road'];
 
   // true = staff, false = client, null = /me not loaded yet
   function isStaffUser() {
@@ -817,131 +635,13 @@
     return type === 'Administrator' || type === 'Employee';
   }
 
-  var TILE_GAP = 20;
-  var TILE_W_MIN = 0.22;   // ~3 across a row with gaps
-  var TILE_W_MAX = 1;
-  var TILE_H_MIN = 200;
-  var TILE_H_MAX = 720;
-  // Soft snap targets — loose pull, not a hard grid.
-  var WIDTH_SNAPS = [0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1];
-  var WIDTH_SNAP_THRESH = 0.05;   // ~5% of board — easy to slip past
-  var HEIGHT_SNAP_STEP = 20;
-  var HEIGHT_SNAP_THRESH = 18;
-  var DEFAULT_TILE_SIZES = {
-    recentFiles: { w: 0.34, h: 300 },
-    email: { w: 0.66, h: 300 },
-    shortcuts: { w: 1, h: 320 },
-    employees: { w: 0.34, h: 380 },
-    favorites: { w: 0.33, h: 280 },
-    road: { w: 0.33, h: 360 },
-    tutorials: { w: 0.33, h: 280 },
-  };
-
-  function softSnapWidth(w, grid, activeId) {
-    w = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, w));
-    var targets = WIDTH_SNAPS.slice();
-    // Also gently snap to “rest of the row” beside a neighbour.
-    if (grid) {
-      Array.prototype.forEach.call(grid.querySelectorAll('[data-tile-id]'), function (node) {
-        var id = node.getAttribute('data-tile-id');
-        if (!id || id === activeId) return;
-        var other = sizeFor(id);
-        if (!other || !(other.w > 0)) return;
-        var rest = 1 - other.w;
-        if (rest >= TILE_W_MIN && rest <= TILE_W_MAX) targets.push(rest);
-      });
-    }
-    var best = w;
-    var bestDist = WIDTH_SNAP_THRESH;
-    targets.forEach(function (t) {
-      var d = Math.abs(w - t);
-      if (d < bestDist) {
-        bestDist = d;
-        best = t;
-      }
-    });
-    return Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, best));
-  }
-
-  function softSnapHeight(h, grid, activeId) {
-    h = Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, Math.round(h)));
-    var best = h;
-    var bestDist = HEIGHT_SNAP_THRESH;
-
-    var stepped = Math.round(h / HEIGHT_SNAP_STEP) * HEIGHT_SNAP_STEP;
-    stepped = Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, stepped));
-    var stepDist = Math.abs(h - stepped);
-    if (stepDist < bestDist) {
-      bestDist = stepDist;
-      best = stepped;
-    }
-
-    if (grid) {
-      Array.prototype.forEach.call(grid.querySelectorAll('[data-tile-id]'), function (node) {
-        var id = node.getAttribute('data-tile-id');
-        if (!id || id === activeId) return;
-        var otherH = sizeFor(id).h;
-        var d = Math.abs(h - otherH);
-        if (d < bestDist) {
-          bestDist = d;
-          best = otherH;
-        }
-      });
-    }
-    return best;
-  }
-
   var layoutHydrated = false;
   var layoutSaveTimer = null;
-  var layoutResizeTimer = null;
-
-  function dragHandleHtml() {
-    return '<button type="button" class="tma-portal-panel__drag" draggable="true" data-tile-drag' +
-      ' aria-label="Drag to reorder" title="Drag to reorder">' +
-      '<img src="images/icons/phosphor/DotsSixVertical.svg" alt="" width="16" height="16">' +
-      '</button>';
-  }
-
-  function resizeHandleHtml() {
-    return '<span class="tma-portal-panel__resize" data-tile-resize title="Drag to resize" aria-hidden="true">' +
-      '<svg viewBox="0 0 16 16" width="14" height="14" focusable="false">' +
-      '<path d="M4 14c7 0 10-3 10-10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
-      '<path d="M8 14c4 0 6-2 6-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
-      '</svg></span>';
-  }
 
   function panelHead(title) {
     return '<div class="tma-portal-panel__head">' +
       '<h2 class="tma-portal-panel__title">' + ui().esc(title) + '</h2>' +
-      dragHandleHtml() +
       '</div>';
-  }
-
-  function sizeFor(id) {
-    var s = data().state();
-    var stored = (s.dashboardTileSizes && s.dashboardTileSizes[id]) || {};
-    var defaults = DEFAULT_TILE_SIZES[id] || { w: 0.32, h: 300 };
-    var w = parseFloat(stored.w);
-    if ((!w || w <= 0) && stored.cols) w = Number(stored.cols) / 3;
-    if (!w || w <= 0) w = defaults.w;
-    w = Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, w));
-    var h = parseInt(stored.h != null ? stored.h : stored.height, 10);
-    if (!h || h < TILE_H_MIN) h = defaults.h;
-    if (h > TILE_H_MAX) h = TILE_H_MAX;
-    return { w: w, h: h };
-  }
-
-  function saveTileSize(id, w, h) {
-    var s = data().state();
-    if (!s.dashboardTileSizes || typeof s.dashboardTileSizes !== 'object') {
-      s.dashboardTileSizes = {};
-    }
-    s.dashboardTileSizes[id] = {
-      w: Math.min(TILE_W_MAX, Math.max(TILE_W_MIN, Number(w) || TILE_W_MIN)),
-      h: Math.min(TILE_H_MAX, Math.max(TILE_H_MIN, parseInt(h, 10) || TILE_H_MIN)),
-    };
-    data().save();
-    queueLayoutServerSave();
   }
 
   function tileAttrs(id) {
@@ -956,7 +656,6 @@
       (busy ? ' aria-busy="true"' : '') + '>' +
       headHtml +
       '<div class="tma-portal-panel__body">' + bodyHtml + '</div>' +
-      resizeHandleHtml() +
       '</section>';
   }
 
@@ -966,17 +665,10 @@
   }
 
   function layoutPayload() {
-    var s = data().state();
-    var tiles = {};
-    DEFAULT_TILE_ORDER.forEach(function (id) {
-      var size = sizeFor(id);
-      tiles[id] = { w: size.w, h: size.h };
-    });
     return {
       dashboardTiles: tilesVisibilityPayload(),
       dashboardLayout: {
         order: tileOrder(),
-        tiles: tiles,
       },
     };
   }
@@ -1015,25 +707,18 @@
     return JSON.stringify({
       tiles: s.dashboardTiles || {},
       order: s.dashboardTileOrder || [],
-      sizes: s.dashboardTileSizes || {},
     });
   }
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  var DASHBOARD_LAYOUT_GEN = 2;
+  var DASHBOARD_LAYOUT_GEN = 3;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
-    var sizes = s.dashboardTileSizes;
-    var hasSizes = sizes && typeof sizes === 'object' && Object.keys(sizes).length > 0;
-    if (hasSizes && s.dashboardLayoutGen === DASHBOARD_LAYOUT_GEN) return false;
+    if (s.dashboardLayoutGen === DASHBOARD_LAYOUT_GEN) return false;
 
     s.dashboardTileSizes = {};
-    DEFAULT_TILE_ORDER.forEach(function (id) {
-      var d = DEFAULT_TILE_SIZES[id];
-      if (d) s.dashboardTileSizes[id] = { w: d.w, h: d.h };
-    });
     s.dashboardTileOrder = DEFAULT_TILE_ORDER.slice();
     s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, {
       recentFiles: true, email: true, shortcuts: true, employees: true,
@@ -1064,282 +749,31 @@
         }
         var s = data().state();
         var before = layoutSnapshot(s);
-        var serverHasLayout = prefs.dashboardLayout &&
-          typeof prefs.dashboardLayout === 'object' &&
-          prefs.dashboardLayout.tiles &&
-          typeof prefs.dashboardLayout.tiles === 'object' &&
-          Object.keys(prefs.dashboardLayout.tiles).length > 0;
+        var serverOrder = prefs.dashboardLayout &&
+          Array.isArray(prefs.dashboardLayout.order) &&
+          prefs.dashboardLayout.order.length
+          ? prefs.dashboardLayout.order
+          : null;
 
         if (prefs.dashboardTiles && typeof prefs.dashboardTiles === 'object') {
           s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, prefs.dashboardTiles);
         }
 
         // After a layout-gen bump, keep the new defaults and push them to the account.
-        // Otherwise the server layout is the cross-browser source of truth.
+        // Otherwise the server order is the cross-browser source of truth.
         if (forcedDefault) {
           queueLayoutServerSave();
-        } else if (serverHasLayout) {
-          if (Array.isArray(prefs.dashboardLayout.order) && prefs.dashboardLayout.order.length) {
-            s.dashboardTileOrder = prefs.dashboardLayout.order.slice();
-          }
-          s.dashboardTileSizes = Object.assign({}, prefs.dashboardLayout.tiles);
+        } else if (serverOrder) {
+          s.dashboardTileOrder = serverOrder.slice();
         }
+
+        // Sizes are no longer used (fixed 2-column grid).
+        s.dashboardTileSizes = {};
 
         var changed = forcedDefault || layoutSnapshot(s) !== before;
         if (changed) data().save();
         if (done) done(changed);
       });
-  }
-
-  function rectsOverlap(a, b, gap) {
-    return !(
-      a.x + a.w + gap <= b.x ||
-      b.x + b.w + gap <= a.x ||
-      a.y + a.h + gap <= b.y ||
-      b.y + b.h + gap <= a.y
-    );
-  }
-
-  /** Convert a board-fraction width to pixels, baking gap in so 0.34+0.66 always fit. */
-  function fractionToPx(frac, containerWidth, gap) {
-    if (frac >= 0.999) return containerWidth;
-    var w = Math.round(frac * (containerWidth + gap) - gap);
-    return Math.max(140, Math.min(containerWidth, w));
-  }
-
-  /* Skyline packer: place each tile at the highest (lowest y) leftmost slot
-   * that fits, so tall tiles never invent empty row gaps in the other column. */
-  function packTiles(items, containerWidth, gap) {
-    var placed = [];
-    items.forEach(function (item) {
-      var w = fractionToPx(item.w, containerWidth, gap);
-      var h = item.h;
-      var candidates = [0];
-      placed.forEach(function (p) {
-        candidates.push(p.x + p.w + gap);
-      });
-      candidates = candidates.filter(function (x, i, arr) {
-        return arr.indexOf(x) === i && x >= 0 && x + w <= containerWidth + 0.5;
-      }).sort(function (a, b) { return a - b; });
-      if (!candidates.length) {
-        // Keep the chosen width — never snap a tile to full-board width.
-        w = Math.min(w, containerWidth);
-        candidates = [0];
-      }
-
-      var best = null;
-      candidates.forEach(function (x) {
-        var y = 0;
-        var guard = 0;
-        while (guard++ < 200) {
-          var hit = null;
-          for (var i = 0; i < placed.length; i++) {
-            var p = placed[i];
-            if (rectsOverlap({ x: x, y: y, w: w, h: h }, p, gap)) {
-              hit = p;
-              break;
-            }
-          }
-          if (!hit) break;
-          y = hit.y + hit.h + gap;
-        }
-        if (!best || y < best.y || (y === best.y && x < best.x)) {
-          best = { id: item.id, x: x, y: y, w: w, h: h };
-        }
-      });
-      placed.push(best);
-    });
-    return placed;
-  }
-
-  /* Keep each tile's column (x) during resize — only push others down when
-   * they collide. Stops widgets teleporting to a new slot mid-drag. */
-  function settleTiles(items, prev, containerWidth, gap) {
-    var placed = items.map(function (item, index) {
-      var w = fractionToPx(item.w, containerWidth, gap);
-      var h = item.h;
-      var prior = prev[item.id];
-      var x = prior && prior.w ? prior.x : 0;
-      var y = prior && prior.w ? prior.y : 0;
-      if (x + w > containerWidth) x = Math.max(0, containerWidth - w);
-      if (x < 0) x = 0;
-      return { id: item.id, x: x, y: y, w: w, h: h, order: index };
-    });
-
-    // Stable overlap resolve: later tiles in board order move down only.
-    var guard = 0;
-    var moved = true;
-    while (moved && guard++ < 80) {
-      moved = false;
-      placed.sort(function (a, b) {
-        if (a.y !== b.y) return a.y - b.y;
-        if (a.x !== b.x) return a.x - b.x;
-        return a.order - b.order;
-      });
-      for (var i = 0; i < placed.length; i++) {
-        for (var j = i + 1; j < placed.length; j++) {
-          var a = placed[i];
-          var b = placed[j];
-          if (!rectsOverlap(a, b, gap)) continue;
-          var push = a.order < b.order ? b : a;
-          var hold = push === b ? a : b;
-          var nextY = hold.y + hold.h + gap;
-          if (push.y < nextY) {
-            push.y = nextY;
-            moved = true;
-          }
-        }
-      }
-    }
-
-    // Restore DOM order for consumers.
-    placed.sort(function (a, b) { return a.order - b.order; });
-    return placed.map(function (p) {
-      return { id: p.id, x: p.x, y: p.y, w: p.w, h: p.h };
-    });
-  }
-
-  function readPackBox(node) {
-    return {
-      x: parseFloat(node.style.left) || 0,
-      y: parseFloat(node.style.top) || 0,
-      w: parseFloat(node.style.width) || node.offsetWidth || 0,
-      h: parseFloat(node.style.height) || node.offsetHeight || 0,
-    };
-  }
-
-  function clearPackMotion(node) {
-    node.classList.remove('is-pack-moving');
-    node.style.transition = '';
-    node.style.transform = '';
-    if (node.style.opacity === '0.72' || node.style.opacity === '0.75') {
-      node.style.opacity = '';
-    }
-  }
-
-  function flipTileTo(node, from, to) {
-    var dx = from.x - to.x;
-    var dy = from.y - to.y;
-    var dw = from.w - to.w;
-    var dh = from.h - to.h;
-    if (!dx && !dy && !dw && !dh) {
-      clearPackMotion(node);
-      return false;
-    }
-    node.classList.add('is-pack-moving');
-    node.style.transition = 'none';
-    node.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-    node.style.opacity = '0.72';
-    // Force invert style to commit before playing the flip.
-    void node.offsetWidth;
-    node.style.transition =
-      'transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease';
-    node.style.transform = 'translate(0,0)';
-    node.style.opacity = '1';
-    return true;
-  }
-
-  function layoutHomeGrid(grid, opts) {
-    opts = opts || {};
-    if (!grid) return;
-    var width = grid.clientWidth || grid.offsetWidth;
-    if (width < 40) return;
-
-    var nodes = Array.prototype.slice.call(grid.querySelectorAll('[data-tile-id]'));
-    if (!nodes.length) {
-      grid.style.height = '0px';
-      return;
-    }
-
-    var prev = {};
-    nodes.forEach(function (node) {
-      prev[node.getAttribute('data-tile-id')] = readPackBox(node);
-    });
-
-    var orderIds = nodes.map(function (n) { return n.getAttribute('data-tile-id'); });
-    var packKey = orderIds.join('|') + '@' + Math.round(width);
-    var items = orderIds.map(function (id) {
-      var size = sizeFor(id);
-      // On narrow boards, force full width so nothing overflows.
-      var w = width < 720 ? 1 : size.w;
-      return { id: id, w: w, h: size.h };
-    });
-
-    var hasPrev = nodes.some(function (n) {
-      var b = prev[n.getAttribute('data-tile-id')];
-      return b && b.w > 0 && (b.x > 0 || b.y > 0 || grid.classList.contains('is-packed'));
-    });
-    // Full skyline pack on reorder / first paint / board-width change.
-    // Resize uses settle so tiles keep their column instead of teleporting.
-    var repack = !!opts.repack || !hasPrev || grid._packKey !== packKey;
-    if (opts.live || opts.settle) repack = false;
-    if (!hasPrev) repack = true;
-
-    var packed = repack
-      ? packTiles(items, width, TILE_GAP)
-      : settleTiles(items, prev, width, TILE_GAP);
-    grid._packKey = packKey;
-
-    var byId = {};
-    packed.forEach(function (p) { byId[p.id] = p; });
-
-    var maxBottom = 0;
-    var live = !!opts.live;
-    var animate = !!opts.animate;
-    var floatingId = opts.floatingId || null;
-
-    if (live) {
-      grid.classList.add('is-live-pack');
-      grid.classList.remove('is-animating');
-    } else if (animate) {
-      grid.classList.add('is-animating');
-      grid.classList.remove('is-live-pack');
-    } else {
-      grid.classList.remove('is-animating');
-      grid.classList.remove('is-live-pack');
-    }
-
-    var anyFlip = false;
-    nodes.forEach(function (node) {
-      var id = node.getAttribute('data-tile-id');
-      var p = byId[id];
-      if (!p) return;
-      var from = prev[id] || p;
-      var active = node.classList.contains('is-resizing') ||
-        node.classList.contains('is-dragging') ||
-        id === floatingId;
-
-      node.style.left = p.x + 'px';
-      node.style.top = p.y + 'px';
-      node.style.width = p.w + 'px';
-      node.style.height = p.h + 'px';
-      if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;
-
-      if (active) {
-        clearPackMotion(node);
-        return;
-      }
-
-      // Only FLIP on intentional user actions — never on data remounts (that was the shuffle glitch).
-      if (animate && (from.w || from.h || from.x || from.y)) {
-        var dx = Math.abs(from.x - p.x);
-        var dy = Math.abs(from.y - p.y);
-        if (dx > 1 || dy > 1) anyFlip = flipTileTo(node, from, p) || anyFlip;
-        else clearPackMotion(node);
-      } else {
-        clearPackMotion(node);
-      }
-    });
-    grid.style.height = maxBottom + 'px';
-    grid.classList.add('is-packed');
-
-    window.clearTimeout(grid._animTimer);
-    if (animate || anyFlip) {
-      grid._animTimer = window.setTimeout(function () {
-        grid.classList.remove('is-animating');
-        nodes.forEach(clearPackMotion);
-      }, 400);
-    }
   }
 
   // Persist layout immediately when leaving the page / tab so another browser
@@ -1380,18 +814,18 @@
     });
   }
 
-  function saveTileOrder(order) {
-    var s = data().state();
-    s.dashboardTileOrder = order.slice();
-    data().save();
-    queueLayoutServerSave();
-  }
-
   function availableTiles() {
     // While /me is loading, keep staff-only tiles visible in the editor so an
     // admin does not see them disappear and reappear.
     var staff = isStaffUser();
     return DASH_TILES.filter(function (t) { return !t.staffOnly || staff !== false; });
+  }
+
+  function tileById(id) {
+    for (var i = 0; i < DASH_TILES.length; i++) {
+      if (DASH_TILES[i].id === id) return DASH_TILES[i];
+    }
+    return null;
   }
 
   function tilePreview(kind) {
@@ -1426,24 +860,51 @@
 
   function editDashboardModal(rerender) {
     var current = tiles();
+    var currentOrder = tileOrder();
+    var available = availableTiles();
+    var availableIds = available.map(function (t) { return t.id; });
     var draft = {};
-    availableTiles().forEach(function (t) { draft[t.id] = !!current[t.id]; });
+    available.forEach(function (t) { draft[t.id] = !!current[t.id]; });
+    var draftOrder = currentOrder.filter(function (id) { return availableIds.indexOf(id) !== -1; });
+    availableIds.forEach(function (id) {
+      if (draftOrder.indexOf(id) === -1) draftOrder.push(id);
+    });
+
+    function orderControls(id, index, total) {
+      return '<span class="tma-portal-tilerow__order">' +
+        '<button type="button" class="tma-portal-tilerow__shift" data-home-tile-up="' + id + '"' +
+        (index === 0 ? ' disabled' : '') + ' aria-label="Move ' + ui().esc((tileById(id) || {}).label || id) + ' up">' +
+        '<img src="images/icons/phosphor/CaretUp.svg" alt="" width="14" height="14">' +
+        '</button>' +
+        '<button type="button" class="tma-portal-tilerow__shift" data-home-tile-down="' + id + '"' +
+        (index >= total - 1 ? ' disabled' : '') + ' aria-label="Move ' + ui().esc((tileById(id) || {}).label || id) + ' down">' +
+        '<img src="images/icons/phosphor/CaretDown.svg" alt="" width="14" height="14">' +
+        '</button>' +
+        '</span>';
+    }
+
+    function rowsHtml() {
+      return draftOrder.map(function (id, index) {
+        var t = tileById(id);
+        if (!t) return '';
+        return '<div class="tma-portal-tilerow" data-home-tile-row="' + id + '">' +
+          orderControls(id, index, draftOrder.length) +
+          tilePreview(t.preview) +
+          '<div class="tma-portal-tilerow__meta">' +
+          '<span class="tma-portal-tilerow__label">' + ui().esc(t.label) + '</span>' +
+          '<span class="tma-portal-tilerow__desc">' + ui().esc(t.desc) + '</span>' +
+          '</div>' +
+          ui().toggle(!!draft[t.id], 'data-home-tile="' + t.id + '"', 'Show ' + t.label) +
+          '</div>';
+      }).join('');
+    }
 
     ui().openModal({
       title: 'Edit Dashboard',
       body:
-        '<p>Choose the tiles to show. Drag the grip to reorder, and drag the bottom-right corner to resize. Layout syncs to your account.</p>' +
-        '<div class="tma-portal-tilerows">' +
-        availableTiles().map(function (t) {
-          return '<div class="tma-portal-tilerow">' +
-            tilePreview(t.preview) +
-            '<div class="tma-portal-tilerow__meta">' +
-            '<span class="tma-portal-tilerow__label">' + ui().esc(t.label) + '</span>' +
-            '<span class="tma-portal-tilerow__desc">' + ui().esc(t.desc) + '</span>' +
-            '</div>' +
-            ui().toggle(!!draft[t.id], 'data-home-tile="' + t.id + '"', 'Show ' + t.label) +
-            '</div>';
-        }).join('') +
+        '<p>Choose which tiles to show, and use the arrows to set their order. Layout syncs to your account.</p>' +
+        '<div class="tma-portal-tilerows" data-home-tilerows>' +
+        rowsHtml() +
         '</div>' +
         '<div class="tma-portal-form-actions tma-portal-form-actions--start">' +
         ui().btn({ label: 'Save', attrs: ' data-home-tiles-save', disabled: true }) +
@@ -1451,22 +912,59 @@
         '</div>',
       onMount: function (host) {
         var saveBtn = host.querySelector('[data-home-tiles-save]');
+        var rowsHost = host.querySelector('[data-home-tilerows]');
 
         function dirty() {
-          return availableTiles().some(function (t) { return !!draft[t.id] !== !!current[t.id]; });
+          var visDirty = available.some(function (t) { return !!draft[t.id] !== !!current[t.id]; });
+          var orderDirty = draftOrder.join('|') !== currentOrder.filter(function (id) {
+            return availableIds.indexOf(id) !== -1;
+          }).join('|');
+          return visDirty || orderDirty;
         }
 
-        host.querySelectorAll('[data-home-tile]').forEach(function (input) {
-          input.addEventListener('change', function () {
-            draft[input.getAttribute('data-home-tile')] = input.checked;
-            saveBtn.disabled = !dirty();
+        function bindRow() {
+          saveBtn.disabled = !dirty();
+          host.querySelectorAll('[data-home-tile]').forEach(function (input) {
+            input.addEventListener('change', function () {
+              draft[input.getAttribute('data-home-tile')] = input.checked;
+              saveBtn.disabled = !dirty();
+            });
           });
-        });
+          host.querySelectorAll('[data-home-tile-up]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var id = btn.getAttribute('data-home-tile-up');
+              var i = draftOrder.indexOf(id);
+              if (i <= 0) return;
+              var tmp = draftOrder[i - 1];
+              draftOrder[i - 1] = draftOrder[i];
+              draftOrder[i] = tmp;
+              rowsHost.innerHTML = rowsHtml();
+              bindRow();
+            });
+          });
+          host.querySelectorAll('[data-home-tile-down]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var id = btn.getAttribute('data-home-tile-down');
+              var i = draftOrder.indexOf(id);
+              if (i < 0 || i >= draftOrder.length - 1) return;
+              var tmp = draftOrder[i + 1];
+              draftOrder[i + 1] = draftOrder[i];
+              draftOrder[i] = tmp;
+              rowsHost.innerHTML = rowsHtml();
+              bindRow();
+            });
+          });
+        }
+
+        bindRow();
 
         saveBtn.addEventListener('click', function () {
           var s = data().state();
           var next = Object.assign({}, s.dashboardTiles || {}, draft);
           s.dashboardTiles = next;
+          // Keep any unavailable (staff-only) ids in a stable trailing position.
+          var hidden = tileOrder().filter(function (id) { return availableIds.indexOf(id) === -1; });
+          s.dashboardTileOrder = draftOrder.concat(hidden);
           data().save();
           queueLayoutServerSave();
           ui().closeModal();
@@ -1758,7 +1256,6 @@
       ui().btn({ label: 'Edit Dashboard', icon: 'SquaresFour', variant: 'ghost', small: true, attrs: 'data-home-edit' }) +
       '</div></div>' +
       renderKpis() +
-      // Masonry board: free widths/heights, fixed gaps, drag to reorder.
       '<div class="tma-portal-home-grid">' +
       renderHomeGrid(s, show) +
       '</div>' +
@@ -1792,27 +1289,6 @@
     }
     if (window.TMAOverview && typeof window.TMAOverview.refreshRoad === 'function') {
       window.TMAOverview.refreshRoad(el);
-    }
-
-    bindTileDrag(el);
-    bindTileResize(el);
-
-    // Pack after paint. Never animate on data remounts — that caused the shuffle glitch.
-    var homeGrid = el.querySelector('.tma-portal-home-grid');
-    if (homeGrid) {
-      requestAnimationFrame(function () {
-        var ids = Array.prototype.map.call(
-          homeGrid.querySelectorAll('[data-tile-id]'),
-          function (n) { return n.getAttribute('data-tile-id'); }
-        ).join('|');
-        var tileSetChanged = homeGrid._tileSet !== ids;
-        homeGrid._tileSet = ids;
-        layoutHomeGrid(homeGrid, {
-          animate: false,
-          repack: tileSetChanged || !homeGrid.classList.contains('is-packed'),
-          settle: !tileSetChanged && homeGrid.classList.contains('is-packed'),
-        });
-      });
     }
 
     pick('[data-home-shortcut]').forEach(function (b) {

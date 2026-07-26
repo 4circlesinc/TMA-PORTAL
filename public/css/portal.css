@@ -959,6 +959,46 @@
   gap: var(--space-16);
 }
 
+.tma-portal-tilerow__order {
+  flex-shrink: 0;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.tma-portal-tilerow__shift {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-8, 8px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-portal-tilerow__shift:hover:not(:disabled),
+.tma-portal-tilerow__shift:focus-visible:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-black);
+  outline: none;
+}
+
+.tma-portal-tilerow__shift:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.tma-portal-tilerow__shift img {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
 .tma-portal-tilerow__meta {
   flex: 1;
   min-width: 0;
@@ -1167,55 +1207,16 @@
   }
 }
 
-/*
- * Home widget board — JS masonry packer (not CSS Grid rows).
- * Absolute children + fixed gap means a tall tile only pushes widgets below
- * it in the packing sense; the other column never inherits empty row space.
- */
+/* Home widget board — classic equal 2-column CSS grid. */
 .tma-portal-home-grid {
-  position: relative;
-  display: block;
-  width: 100%;
-  min-height: 120px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-20);
+  align-items: stretch;
 }
 
-/* Avoid a one-frame stack at 0,0 before the packer runs. */
-.tma-portal-home-grid:not(.is-packed) > [data-tile-id] {
-  visibility: hidden;
-}
-
-.tma-portal-home-grid > [data-tile-id] {
-  position: absolute;
-  left: 0;
-  top: 0;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  box-sizing: border-box;
-  z-index: 1;
-}
-
-/* Live resize stays instant (no transition thrash). FLIP uses transform/opacity
- * on .is-pack-moving when a tile wraps or the board settles after drag. */
-.tma-portal-home-grid.is-live-pack > [data-tile-id]:not(.is-resizing):not(.is-dragging):not(.is-pack-moving) {
-  transition: none;
-}
-
-.tma-portal-home-grid > [data-tile-id].is-pack-moving {
-  z-index: 3;
-  will-change: transform, opacity;
-  pointer-events: none;
-}
-
-.tma-portal-home-grid > [data-tile-id].is-dragging {
-  z-index: 6;
-  opacity: 0.55;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
-  transition: none !important;
-}
-
-.tma-portal-home-grid.is-tile-dragging > [data-tile-id]:not(.is-dragging).is-pack-moving {
-  opacity: 0.85;
+@media (max-width: 900px) {
+  .tma-portal-home-grid { grid-template-columns: 1fr; }
 }
 
 .tma-portal-panel {
@@ -1227,68 +1228,14 @@
   background: var(--color-bg-card);
   min-width: 0;
   box-sizing: border-box;
-  width: 100%;
-  height: 100%;
 }
 
 .tma-portal-panel__body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
-}
-
-/* Curved SE resize grip — only appears when the pointer is near the bottom. */
-.tma-portal-panel__resize {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  z-index: 3;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  padding: 2px;
-  color: var(--color-text-secondary);
-  cursor: nwse-resize;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-  touch-action: none;
-  user-select: none;
-}
-
-.tma-portal-panel__resize svg {
-  display: block;
-  width: 14px;
-  height: 14px;
-}
-
-.tma-portal-home-grid > [data-tile-id].is-resize-hot > .tma-portal-panel__resize,
-.tma-portal-home-grid > [data-tile-id].is-resizing > .tma-portal-panel__resize {
-  opacity: 0.75;
-  pointer-events: auto;
-}
-
-.tma-portal-home-grid > [data-tile-id].is-resize-hot > .tma-portal-panel__resize:hover,
-.tma-portal-home-grid > [data-tile-id].is-resizing > .tma-portal-panel__resize {
-  opacity: 1;
-  color: var(--color-black);
-}
-
-.tma-portal-home-grid > [data-tile-id].is-resizing {
-  z-index: 5;
-  user-select: none;
-  transition: none !important;
-}
-
-body.tma-tile-resizing {
-  cursor: nwse-resize !important;
-  user-select: none !important;
 }
 
 .tma-portal-panel__head {
@@ -1308,46 +1255,6 @@ body.tma-tile-resizing {
   min-width: 0;
 }
 
-.tma-portal-panel__drag {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin: -4px -6px -4px 0;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-8, 8px);
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: grab;
-  opacity: 0.55;
-}
-
-.tma-portal-panel__drag:hover,
-.tma-portal-panel__drag:focus-visible {
-  opacity: 1;
-  background: var(--color-hover);
-  outline: none;
-}
-
-.tma-portal-panel__drag:active { cursor: grabbing; }
-
-.tma-portal-panel__drag img {
-  width: 16px;
-  height: 16px;
-  display: block;
-  filter: none;
-  opacity: 0.85;
-}
-
-.tma-portal-panel.is-dragging,
-.tma-portal-tile.is-dragging {
-  opacity: 0.55;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
 .tma-portal-tile {
   position: relative;
   min-width: 0;
@@ -1362,16 +1269,7 @@ body.tma-tile-resizing {
 .tma-portal-tile--road > .tma-dash__overview-block--road {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
-  height: 100%;
   box-sizing: border-box;
-}
-
-.tma-portal-tile--road > .tma-portal-panel__drag {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
 }
 
 .tma-portal-panel__note {
