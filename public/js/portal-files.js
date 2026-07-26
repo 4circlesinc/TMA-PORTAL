@@ -1971,8 +1971,8 @@
       });
     }
     // Admins can promote a top-level folder to a shared organization default,
-    // which then appears in every staff member's Folder Shortcuts automatically.
-    if (isFolder && !item.parent && isAdminUser()) {
+    // which then appears on the Dashboard and in every staff member's shortcuts.
+    if (isFolder && !(item.parent && item.parent.id) && isAdminUser()) {
       list.push({ label: 'Make default folder', icon: 'Buildings', fn: function () { makeDefaultFolder(item); } });
     }
     list.push({ sep: true });

@@ -1560,9 +1560,11 @@
       loadHomeStaff(el);
       loadHomeEmail(el);
       if (window.TMAPortalHomeLibrary) {
+        // Always force-refresh defaults when the dashboard is (re)opened so
+        // newly adopted organization folders show up immediately.
         window.TMAPortalHomeLibrary.load(function () {
           if (el.isConnected) mount(el, { fromLoad: true });
-        });
+        }, true);
       }
     } else if (!homeStaffInflight && (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
       // Retry when identity arrives after an early "not staff" guess.

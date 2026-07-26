@@ -153,9 +153,10 @@
   }
 
   function renderDefaultFolders() {
-    // Clients never see Default Folders. While /me is still loading, show
-    // folders if the API already returned them (server already staff-gated).
+    // Clients never see Default Folders. Staff always see the section (even
+    // empty) so it’s obvious the feature is there.
     if (isStaffUser() === false) return '';
+
     if (!state.loaded && !state.defaults.length) {
       return '<section class="tma-portal-home-defaults" data-key="home-defaults" aria-busy="true">' +
         '<div class="tma-portal-home-defaults__head">' +
@@ -165,7 +166,6 @@
         new Array(3).fill('<div class="tma-portal-default-folder tma-portal-default-folder--skeleton" aria-hidden="true"></div>').join('') +
         '</div></section>';
     }
-    if (!state.defaults.length) return '';
 
     var list = state.showAllDefaults ? state.defaults : state.defaults.slice(0, DEFAULT_VISIBLE);
     var moreCount = Math.max(0, state.defaults.length - DEFAULT_VISIBLE);
@@ -175,14 +175,23 @@
         '</button>'
       : '';
 
+    var body = state.defaults.length
+      ? ('<div class="tma-portal-home-defaults__grid">' + list.map(renderDefaultFolderCard).join('') + '</div>')
+      : (ui() && ui().emptyState
+        ? ui().emptyState({
+            illustration: 'Illustration07',
+            title: 'No default folders yet',
+            subtitle: 'Admins can open Folders, right‑click a top-level folder, and choose “Make default folder”.',
+          })
+        : '<p class="tma-portal-panel__note">No default folders yet.</p>');
+
     return '<section class="tma-portal-home-defaults" data-key="home-defaults">' +
       '<div class="tma-portal-home-defaults__head">' +
       '<h2 class="tma-portal-home-defaults__title">Default Folders</h2>' +
       moreBtn +
       '</div>' +
-      '<div class="tma-portal-home-defaults__grid">' +
-      list.map(renderDefaultFolderCard).join('') +
-      '</div></section>';
+      body +
+      '</section>';
   }
 
   /* ── files table (same columns/markup as Folders → All Files) ── */
@@ -265,7 +274,9 @@
   }
 
   function render() {
-    return '<div class="tma-portal-home-below" data-key="home-below">' +
+    // Replace the whole strip on each remount so morph never keeps a stale
+    // empty defaults block after folders are adopted.
+    return '<div class="tma-portal-home-below" data-key="home-below" data-morph-replace>' +
       renderDefaultFolders() +
       renderFilesTable() +
       '</div>';
@@ -349,25 +360,47 @@
       .catch(function () { folder.files = folder.files || []; return folder; });
   }
 
-  function applyDefaults(org) {
-    var list = Array.isArray(org) ? org : [];
-    // Confirmed clients never keep defaults, even if a stale response arrives.
-    if (isStaffUser() === false) list = [];
-    return list.map(function (f) {
-      return {
+  function normalizeOrgList(list) {
+    var out = [];
+    var seen = {};
+    (Array.isArray(list) ? list : []).forEach(function (f) {
+      if (!f || !f.id || seen[f.id]) return;
+      if (f.archived) return;
+      seen[f.id] = true;
+      out.push({
         id: f.id,
         name: f.name,
         colour: f.colour,
         iconName: f.iconName,
         fileCount: f.fileCount != null ? f.fileCount : 1,
         files: [],
-      };
+      });
     });
+    out.sort(function (a, b) {
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+    return out;
+  }
+
+  function fetchAdminOrgFolders() {
+    var root = window.__TMA_SITE_ROOT || '';
+    return fetch(root + '/portal/file-library/settings', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        return (j && j.organizationFolders) || [];
+      })
+      .catch(function () { return []; });
   }
 
   function remountHome() {
     var dash = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-    if (dash && typeof dash._homeLibRerender === 'function') dash._homeLibRerender();
+    if (dash && typeof dash._homeLibRerender === 'function') {
+      dash._homeLibRerender();
+      return;
+    }
+    // Dashboard not mounted yet — next visit will render from state.
   }
 
   /**
@@ -384,7 +417,6 @@
     }
     if (state.inflight) {
       if (!force) return state.inflight;
-      // Let the in-flight request finish, then refresh again.
       return state.inflight.then(function () { return load(remount, true); });
     }
 
@@ -394,16 +426,21 @@
       net().fetchJSON(net().url('/shortcuts')).catch(function () { return null; }),
       net().fetchJSON(net().url('/?section=recent&perPage=40')).catch(function () { return null; }),
       net().fetchJSON(net().url('/?section=shared&perPage=40')).catch(function () { return null; }),
+      // Admin File Library list — backup if shortcuts race or cache is stale.
+      fetchAdminOrgFolders(),
     ]).then(function (res) {
       state.inflight = null;
       var shortcuts = res[0];
       var recent = res[1];
       var shared = res[2];
+      var adminOrg = res[3] || [];
 
-      // Trust the API for organization groups (empty for clients). Do not gate
-      // on isStaffUser() here — /me often arrives after this first fetch.
-      var org = (shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
-      var defaults = applyDefaults(org);
+      if (isStaffUser() === false) {
+        state.defaults = [];
+      } else {
+        var fromShortcuts = (shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
+        state.defaults = normalizeOrgList(fromShortcuts.concat(adminOrg));
+      }
 
       if (recent) {
         state.recent = {
@@ -418,7 +455,7 @@
         };
       }
 
-      return Promise.all(defaults.map(loadFolderPreview)).then(function (folders) {
+      return Promise.all(state.defaults.map(loadFolderPreview)).then(function (folders) {
         state.defaults = folders;
         state.loaded = true;
         if (done) done();
