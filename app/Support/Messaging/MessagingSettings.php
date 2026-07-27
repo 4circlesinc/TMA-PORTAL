@@ -42,7 +42,22 @@ class MessagingSettings
         // Media
         'mediaAutoDownload' => true,
         'voicePlaybackSpeed' => 1.0,
+
+        // Calls. How an *answered* call is presented; an incoming call always
+        // uses the answer pop-up first, whatever this says. Devices are
+        // deliberately not stored here — a camera id means nothing on another
+        // machine, so those stay in localStorage on the device they describe.
+        'callDisplay' => self::CALL_ISLAND,
     ];
+
+    /** Where a live call sits once it is answered. */
+    public const CALL_ISLAND = 'island';
+
+    public const CALL_COMPACT = 'compact';
+
+    public const CALL_MODAL = 'modal';
+
+    public const CALL_DISPLAYS = [self::CALL_ISLAND, self::CALL_COMPACT, self::CALL_MODAL];
 
     /** This user's settings, with any missing key filled from the defaults. */
     public static function for(User $user): array
@@ -72,6 +87,9 @@ class MessagingSettings
                 in_array($key, ['onlineStatus', 'lastSeen'], true) => in_array(
                     $value, [self::EVERYONE, self::CONTACTS, self::NOBODY], true
                 ) ? $value : self::DEFAULTS[$key],
+                $key === 'callDisplay' => in_array($value, self::CALL_DISPLAYS, true)
+                    ? $value
+                    : self::DEFAULTS[$key],
                 default => $value,
             };
         }

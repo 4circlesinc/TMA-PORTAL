@@ -30431,6 +30431,54 @@ span.tma-dash__messages-profile-avatar {
 }
 
 /* ── Messages: chat backgrounds ───────────────────────────────────── */
+
+/*
+ * The default wallpaper: the TMA pattern (leaf mark, columns, scales, gavel)
+ * over a light blue tint.
+ *
+ * The artwork is a single fixed ink — #94bacb — so the tint underneath is what
+ * decides whether it reads. It sits lighter *and* bluer than the ink, which
+ * keeps the pattern legible as a wallpaper without letting it drift into the
+ * same tone and disappear. Anything much darker camouflages the pattern;
+ * plain white makes it shout.
+ *
+ * `background-attachment` is left at its default, so the wallpaper stays put
+ * while the thread scrolls over it.
+ */
+.tma-dash__messages-chat-body--bg-tma {
+  background-color: #e3eef8;
+  background-image: url("../images/brand/tma/chat-wallpaper-pattern.png");
+  background-repeat: repeat;
+  background-size: 380px auto;
+  background-position: center top;
+}
+
+/* On a dark thread the ink would glare, and it cannot be recoloured from CSS,
+ * so a veil is painted over the pattern instead. */
+.tma-dash[data-theme="dark"] .tma-dash__messages-chat-body--bg-tma {
+  background-color: #1a1d20;
+  background-image:
+    linear-gradient(rgb(26 29 32 / 0.80), rgb(26 29 32 / 0.80)),
+    url("../images/brand/tma/chat-wallpaper-pattern.png");
+  background-size: auto, 380px auto;
+}
+
+/* Day separators need a surface of their own once there is a pattern behind
+ * them. System messages already carry one, so they keep theirs. */
+.tma-dash__messages-chat-body--bg-tma
+  .tma-dash__messages-divider:not(.tma-dash__messages-divider--system) {
+  padding: 2px var(--space-12);
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.72);
+  font-size: var(--text-size-12);
+  line-height: 18px;
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__messages-chat-body--bg-tma
+  .tma-dash__messages-divider:not(.tma-dash__messages-divider--system) {
+  background: rgb(255 255 255 / 0.10);
+}
+
 .tma-dash__messages-chat-body--bg-soft {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 6%, transparent), transparent 40%),
@@ -30449,6 +30497,79 @@ span.tma-dash__messages-profile-avatar {
   background-color: var(--color-white);
   background-image: radial-gradient(var(--color-overlay-8, var(--color-overlay-4)) 1px, transparent 1px);
   background-size: 14px 14px;
+}
+
+/* ── Messages: bubble colours ─────────────────────────────────────── */
+
+/*
+ * Their message is white, yours is brand blue. Both were tints of the same
+ * blue before (--color-1 / --color-2), which was fine on a white thread but
+ * indistinguishable from each other — and from the wallpaper — once there was
+ * a pattern behind them. The pairing here separates the two sides and keeps
+ * each bubble sitting clearly on top of the background.
+ */
+.tma-dash__messages-bubble--in {
+  background: var(--color-white);
+  box-shadow: 0 1px 1px rgb(16 24 40 / 0.10);
+}
+
+.tma-dash__messages-bubble--out {
+  /*
+   * Everything inside a bubble — timestamps, ticks, quoted replies, file
+   * names, voice-note times — reads the text tokens. Re-pointing the two
+   * tokens here recolours the whole subtree for white-on-blue rather than
+   * listing every descendant one by one.
+   */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: rgb(255 255 255 / 0.72);
+  background: var(--color-primary-dark);
+  color: #ffffff;
+  box-shadow: 0 1px 1px rgb(16 24 40 / 0.14);
+}
+
+/* Inset surfaces inside your own bubble: the black washes they use on a light
+ * bubble vanish on blue, so they become white washes. */
+.tma-dash__messages-bubble--out .tma-dash__messages-bubble-quote,
+.tma-dash__messages-bubble--out .tma-dash__messages-attachment--file,
+.tma-dash__messages-bubble--out .tma-dash__messages-link-card,
+.tma-dash__messages-bubble--out .tma-dash__messages-voice-speed {
+  background: rgb(255 255 255 / 0.16);
+  border-color: rgb(255 255 255 / 0.24);
+}
+
+.tma-dash__messages-bubble--out .tma-dash__messages-attachment--file:hover,
+.tma-dash__messages-bubble--out .tma-dash__messages-link-card:hover {
+  background: rgb(255 255 255 / 0.24);
+}
+
+.tma-dash__messages-bubble--out .tma-dash__messages-voice-play {
+  background: #ffffff;
+  color: var(--color-primary-dark);
+}
+
+/* The read and failed tick tones are picked for a light bubble; on blue they
+ * need lighter equivalents. */
+.tma-dash__messages-bubble--out .tma-dash__messages-bubble-status--read {
+  color: #8fdcff;
+}
+
+.tma-dash__messages-bubble--out .tma-dash__messages-bubble-status--failed {
+  color: #ffb4ab;
+}
+
+/* In dark mode --color-white resolves to the near-black panel tone, which is
+ * the wallpaper's own tone: the incoming bubble would lose its edges entirely.
+ * It gets a raised slate surface instead. */
+.tma-dash[data-theme="dark"] .tma-dash__messages-bubble--in {
+  background: #2b3138;
+  box-shadow: none;
+}
+
+/* Same reason for the system pill: --color-1 is a pale blue that leaves it
+ * white-on-white once the thread is dark. */
+.tma-dash[data-theme="dark"] .tma-dash__messages-divider--system {
+  background: rgb(255 255 255 / 0.10);
+  color: var(--color-text-primary);
 }
 
 .tma-dash__messages-bubble-row.is-highlighted .tma-dash__messages-bubble {
@@ -30557,93 +30678,70 @@ span.tma-dash__messages-profile-avatar {
   color: #fff !important;
 }
 
-/* ── Messages: calls (incoming toast · full-screen stage · minimized pill) ── */
+/* ── Messages: calls ──────────────────────────────────────────────────────
+ *
+ * Four presentations of one call: the answer pop-up, the large modal, the
+ * bottom-left compact window, and the Dynamic Island. They share one dark
+ * surface family (#0b0f19 / #101828), one control shape (round, translucent
+ * white, inverted when off) and one accent pair (#12b76a answer, #f04438 end)
+ * — the same language the island has always used, extended rather than
+ * replaced.
+ *
+ * The media layer moves between these shells at runtime, so anything that
+ * positions or sizes video is expressed on `.tma-call__media` and its frames,
+ * never on the shell around it.
+ * ------------------------------------------------------------------------ */
 .tma-call {
   font-family: inherit;
 }
 
-.tma-call__btn svg,
-.tma-call__ctrl svg,
-.tma-call__pill-end svg,
-.tma-call__pill-mic svg,
-.tma-call__pill-move svg,
-.tma-call__minimize svg { display: block; }
+.tma-call svg { display: block; }
 
-/* Shared avatar treatment */
-.tma-call__toast-avatar,
+/* Screen-reader announcements: present, never seen. */
+.tma-call__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Shared avatar treatment. */
 .tma-call__avatar-big,
-.tma-call__pill-avatar {
+.tma-call__incoming-avatar,
+.tma-call__compact-avatar,
+.tma-call__pill-avatar,
+.tma-call__off-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  flex-shrink: 0;
   border-radius: var(--radius-pill);
   background: var(--color-primary-dark);
   color: #fff;
   font-weight: 600;
-  flex-shrink: 0;
 }
-.tma-call__toast-avatar img,
 .tma-call__avatar-big img,
-.tma-call__pill-avatar img {
+.tma-call__incoming-avatar img,
+.tma-call__compact-avatar img,
+.tma-call__pill-avatar img,
+.tma-call__off-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* ── Incoming toast ─────────────────────────────────────────────── */
-.tma-call__toast {
-  position: fixed;
-  left: var(--space-24);
-  bottom: var(--space-24);
-  z-index: 1250;
-  width: min(340px, calc(100vw - 32px));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-16);
-  padding: var(--space-16);
-  border-radius: var(--radius-16);
-  background: #101828;
-  color: #fff;
-  box-shadow: 0 18px 48px rgb(8 12 20 / 0.45);
-  animation: tma-call-rise 220ms ease;
-}
-
-@keyframes tma-call-rise {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.tma-call__toast-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  min-width: 0;
-}
-
-.tma-call__toast-avatar {
-  width: 44px;
-  height: 44px;
-  font-size: var(--text-size-16);
-}
-
-.tma-call__toast-meta { min-width: 0; }
-
-.tma-call__toast-name {
-  font-size: var(--text-size-16);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tma-call__toast-kind {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  margin-top: 2px;
-  font-size: var(--text-size-13, 13px);
-  color: rgb(255 255 255 / 0.72);
+.tma-call__avatar-big {
+  width: 128px;
+  height: 128px;
+  font-size: 44px;
+  box-shadow: 0 0 0 8px rgb(255 255 255 / 0.06);
 }
 
 .tma-call__pulse {
@@ -30659,148 +30757,381 @@ span.tma-dash__messages-profile-avatar {
   50%      { opacity: 0.4; transform: scale(0.7); }
 }
 
-.tma-call__toast-actions {
-  display: flex;
-  gap: var(--space-8);
+/* ── Scrim + dialog shell ───────────────────────────────────────── */
+.tma-call__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1290;
+  background: rgb(8 12 20 / 0.55);
+  backdrop-filter: blur(2px);
+  animation: tma-call-fade 160ms ease;
 }
 
+.tma-call__dialog {
+  position: fixed;
+  z-index: 1300;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-24);
+  background: radial-gradient(circle at 50% 0%, #1b2436, #0a0e17 72%);
+  color: #fff;
+  box-shadow: 0 24px 70px rgb(4 8 16 / 0.55);
+  /* "Most of the available screen without covering the full browser window." */
+  animation: tma-call-dialog-in 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.tma-call__dialog--stage {
+  width: min(1040px, 92vw);
+  height: min(720px, 88vh);
+}
+
+.tma-call__dialog--incoming {
+  width: min(560px, 92vw);
+  max-height: 92vh;
+  padding-bottom: var(--space-20);
+}
+
+@keyframes tma-call-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes tma-call-dialog-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ── The media layer ────────────────────────────────────────────── */
+.tma-call__media-slot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/* Where the media layer waits while a mode shows no picture. It must stay in
+ * the document — it carries the remote audio element — so it is shrunk out of
+ * sight rather than removed or display:none'd. */
+.tma-call__media-park {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tma-call__media {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-16);
+  background: #05070c;
+}
+
+.tma-call__media audio { display: none; }
+
+.tma-call__frame {
+  position: absolute;
+  overflow: hidden;
+  background: #05070c;
+  /* One transition covers both jobs: growing into the main view when the
+   * videos are swapped, and settling after a drag. */
+  transition: inset 260ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    width 260ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    height 260ms cubic-bezier(0.2, 0.8, 0.3, 1),
+    border-radius 220ms ease,
+    box-shadow 200ms ease;
+}
+
+.tma-call__frame.is-big {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-16);
+  z-index: 1;
+}
+
+.tma-call__frame.is-pip {
+  z-index: 2;
+  right: var(--space-16);
+  bottom: 104px;
+  width: clamp(120px, 24%, 232px);
+  aspect-ratio: 4 / 3;
+  height: auto;
+  border-radius: var(--radius-12);
+  border: 2px solid rgb(255 255 255 / 0.35);
+  box-shadow: 0 10px 30px rgb(4 8 16 / 0.5);
+  cursor: grab;
+  touch-action: none;
+}
+
+.tma-call__frame.is-dragging {
+  transition: none;
+  cursor: grabbing;
+  box-shadow: 0 16px 40px rgb(4 8 16 / 0.6);
+}
+
+.tma-call__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #05070c;
+  transition: opacity 180ms ease;
+}
+
+/* Mirrored, because a self-view that moves the wrong way reads as broken. */
+.tma-call__video--mirror { transform: scaleX(-1); }
+
+/* No picture → no video element showing. The element itself stays put so the
+ * stream is never re-attached. */
+.tma-call__media:not(.has-remote-video) .tma-call__frame--remote .tma-call__video,
+.tma-call__media:not(.has-local-video) .tma-call__frame--local .tma-call__video {
+  opacity: 0;
+}
+
+/* ── Camera-off face (§4) ───────────────────────────────────────── */
+.tma-call__off {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-10);
+  padding: var(--space-12);
+  text-align: center;
+  background: radial-gradient(circle at 50% 35%, #1b2436, #0a0e17 75%);
+  animation: tma-call-fade 180ms ease;
+}
+
+.tma-call__media.has-remote-video .tma-call__frame--remote .tma-call__off,
+.tma-call__media.has-local-video .tma-call__frame--local .tma-call__off {
+  display: none;
+}
+
+.tma-call__off-avatar {
+  width: 96px;
+  height: 96px;
+  font-size: 32px;
+}
+.tma-call__off-avatar--me {
+  width: 44px;
+  height: 44px;
+  font-size: var(--text-size-13, 13px);
+  background: rgb(255 255 255 / 0.16);
+}
+
+.tma-call__off-name {
+  font-size: var(--text-size-16);
+  font-weight: 600;
+}
+
+.tma-call__off-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.12);
+  color: rgb(255 255 255 / 0.82);
+  font-size: var(--text-size-12);
+}
+.tma-call__off-badge svg { width: 14px; height: 14px; }
+
+/* The pip is small: its face keeps only what still reads at that size. */
+.tma-call__frame.is-pip .tma-call__off { gap: var(--space-6); }
+.tma-call__frame.is-pip .tma-call__off-avatar { width: 44px; height: 44px; font-size: var(--text-size-14); }
+.tma-call__frame.is-pip .tma-call__off-name,
+.tma-call__frame.is-pip .tma-call__off-badge span { display: none; }
+.tma-call__frame.is-pip .tma-call__off-badge { padding: 4px; }
+
+.tma-call__frame-tag {
+  position: absolute;
+  left: var(--space-10);
+  bottom: var(--space-8);
+  max-width: calc(100% - 20px);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: rgb(5 7 12 / 0.55);
+  font-size: var(--text-size-12);
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tma-call__frame.is-big .tma-call__frame-tag { font-size: var(--text-size-13, 13px); }
+
+.tma-call__frame-swap {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgb(5 7 12 / 0.55);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, background 120ms ease;
+}
+.tma-call__frame-swap svg { width: 16px; height: 16px; }
+.tma-call__frame:hover .tma-call__frame-swap,
+.tma-call__frame-swap:focus-visible { opacity: 1; }
+.tma-call__frame-swap:hover { background: rgb(5 7 12 / 0.8); }
+/* The swap control belongs to whichever frame is small. */
+.tma-call__frame.is-big .tma-call__frame-swap { display: none; }
+
+/* A voice call has no pictures at all; the layer parks itself. */
+.tma-call--audio .tma-call__media { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* ── Incoming pop-up (§1, §2, §14) ──────────────────────────────── */
+.tma-call__incoming-preview {
+  position: relative;
+  height: min(320px, 42vh);
+  margin: var(--space-16) var(--space-16) 0;
+  border-radius: var(--radius-16);
+  overflow: hidden;
+  background: #05070c;
+  display: flex;
+}
+.tma-call--audio .tma-call__incoming-preview { height: auto; padding: var(--space-24) 0; }
+
+/* Before answering there is nothing from the caller to show — and nothing of
+ * the callee has been sent. The main frame is the self-view. */
+.tma-call--incoming .tma-call__frame--remote { display: none; }
+
+.tma-call__incoming-fallback {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+}
+
+.tma-call__notice {
+  max-width: 320px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-size-13, 13px);
+  color: rgb(255 255 255 / 0.72);
+}
+.tma-call__notice strong { color: #fff; font-size: var(--text-size-14); }
+
+.tma-call__ringing {
+  position: absolute;
+  left: var(--space-12);
+  top: var(--space-12);
+  /* Above the video frames, which carry their own stacking order. */
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: rgb(5 7 12 / 0.6);
+  font-size: var(--text-size-12);
+  color: rgb(255 255 255 / 0.85);
+}
+
+.tma-call__incoming-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20) 0;
+}
+
+.tma-call__incoming-avatar { width: 52px; height: 52px; font-size: var(--text-size-18, 18px); }
+.tma-call__incoming-meta { flex: 1; min-width: 0; }
+.tma-call__incoming-name {
+  font-size: var(--text-size-18, 18px);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tma-call__incoming-kind {
+  margin-top: 2px;
+  font-size: var(--text-size-13, 13px);
+  color: rgb(255 255 255 / 0.7);
+}
+
+.tma-call__incoming-states { display: flex; gap: var(--space-6); flex-wrap: wrap; justify-content: flex-end; }
+
+/* State is carried by icon + word, never by colour alone (§21). */
+.tma-call__status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.12);
+  font-size: var(--text-size-12);
+  color: rgb(255 255 255 / 0.82);
+  white-space: nowrap;
+}
+.tma-call__status-pill svg { width: 14px; height: 14px; }
+.tma-call__status-pill.is-off { background: rgb(240 68 56 / 0.22); color: #ffd7d3; }
+
+.tma-call__incoming-tools {
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-20) 0;
+}
+
+.tma-call__incoming-actions {
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-20) 0;
+}
+
+/* ── Buttons and controls ───────────────────────────────────────── */
 .tma-call__btn {
   flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-6);
-  padding: 10px 12px;
+  padding: 11px 14px;
   border: none;
   border-radius: var(--radius-pill);
   font: inherit;
   font-weight: 600;
   color: #fff;
   cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
 }
 .tma-call__btn svg { width: 18px; height: 18px; }
+.tma-call__btn:active { transform: scale(0.98); }
 .tma-call__btn--accept { background: #12b76a; }
 .tma-call__btn--accept:hover { background: #0ea15c; }
 .tma-call__btn--decline { background: #f04438; }
 .tma-call__btn--decline:hover { background: #d92d20; }
-
-/* ── Full-screen stage ──────────────────────────────────────────── */
-.tma-call__stage {
-  position: fixed;
-  inset: 0;
-  z-index: 1300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-24);
-  background: radial-gradient(circle at 50% 30%, #1b2436, #0a0e17 70%);
-  color: #fff;
+.tma-call__btn--audio { background: rgb(255 255 255 / 0.16); }
+.tma-call__btn--audio:hover { background: rgb(255 255 255 / 0.24); }
+.tma-call__btn--ghost {
+  flex: 0 0 auto;
+  background: rgb(255 255 255 / 0.14);
+  font-weight: 500;
 }
-
-/* The stage is only visible for an active, non-minimized call. The pill/island
- * is visible for an incoming call (answerable there) and for an active call
- * once minimized. */
-.tma-call__stage { display: none; }
-.tma-call--active:not(.is-minimized) .tma-call__stage { display: flex; }
-
-.tma-call__pill { display: none; }
-.tma-call--incoming .tma-call__pill,
-.tma-call--active.is-minimized .tma-call__pill { display: flex; }
-
-.tma-call__minimize {
-  position: absolute;
-  top: var(--space-20);
-  right: var(--space-20);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: rgb(255 255 255 / 0.12);
-  color: #fff;
-  cursor: pointer;
-}
-.tma-call__minimize:hover { background: rgb(255 255 255 / 0.2); }
-
-.tma-call__stage-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-24);
-  width: min(560px, 100%);
-}
-
-.tma-call__videos {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  max-height: 60vh;
-  border-radius: var(--radius-24);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Audio call: no video frame, just the big avatar. */
-.tma-call--audio .tma-call__videos {
-  aspect-ratio: auto;
-  overflow: visible;
-}
-.tma-call--audio .tma-call__remote,
-.tma-call--audio .tma-call__local { display: none; }
-
-.tma-call--video .tma-call__videos { background: #000; }
-.tma-call--video .tma-call__avatar-wrap { display: none; }
-
-.tma-call__remote {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  background: #000;
-}
-
-.tma-call__local {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  width: 30%;
-  max-width: 130px;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-  border-radius: var(--radius-12);
-  border: 2px solid rgb(255 255 255 / 0.4);
-  background: #000;
-}
-
-.tma-call__avatar-big {
-  width: 128px;
-  height: 128px;
-  font-size: 44px;
-  box-shadow: 0 0 0 8px rgb(255 255 255 / 0.06);
-}
-
-.tma-call__peer {
-  text-align: center;
-}
-.tma-call__peer-name {
-  font-size: var(--text-size-24, 22px);
-  font-weight: 600;
-}
-.tma-call__peer-status {
-  margin-top: var(--space-4);
-  font-size: var(--text-size-14);
-  color: rgb(255 255 255 / 0.7);
-  font-variant-numeric: tabular-nums;
-}
-
-.tma-call__controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-16);
-}
+.tma-call__btn--ghost:hover { background: rgb(255 255 255 / 0.22); }
 
 .tma-call__ctrl {
   display: inline-flex;
@@ -30808,27 +31139,398 @@ span.tma-dash__messages-profile-avatar {
   justify-content: center;
   width: 58px;
   height: 58px;
+  flex: none;
+  padding: 0;
   border: none;
   border-radius: var(--radius-pill);
   background: rgb(255 255 255 / 0.14);
   color: #fff;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background 120ms ease, transform 120ms ease;
 }
 .tma-call__ctrl:hover { background: rgb(255 255 255 / 0.22); }
-.tma-call__ctrl.is-off {
-  background: #fff;
-  color: #101828;
-}
-.tma-call__ctrl--end {
-  background: #f04438;
-}
+.tma-call__ctrl:active { transform: scale(0.95); }
+/* Off is inverted; open is merely brighter. Two different states must not
+ * share one appearance. */
+.tma-call__ctrl.is-off { background: #fff; color: #101828; }
+.tma-call__ctrl.is-active { background: rgb(255 255 255 / 0.32); }
+.tma-call__ctrl--sm { width: 42px; height: 42px; }
+.tma-call__ctrl--sm svg { width: 18px; height: 18px; }
+.tma-call__ctrl--end { background: #f04438; }
 .tma-call__ctrl--end:hover { background: #d92d20; }
 
-/* ── Minimized pill (bottom-left) ───────────────────────────────── */
-/* Dynamic-Island-style capsule. Position-agnostic base; a modifier class
- * anchors it to one of six spots (top/bottom × left/centre/right). Compact by
- * default; extends from its anchored edge on hover to reveal move + mic. */
+.tma-call__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.tma-call__icon-btn:hover { background: rgb(255 255 255 / 0.2); }
+.tma-call__icon-btn svg { width: 18px; height: 18px; }
+
+.tma-call :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ── Large modal (§3) ───────────────────────────────────────────── */
+.tma-call__stage-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-16) var(--space-12);
+}
+.tma-call__stage-who { flex: 1; min-width: 0; }
+.tma-call__stage-name {
+  display: block;
+  font-size: var(--text-size-18, 18px);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tma-call__stage-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: 2px;
+  font-size: var(--text-size-13, 13px);
+  color: rgb(255 255 255 / 0.7);
+}
+.tma-call__stage-head-actions { display: flex; gap: var(--space-6); }
+
+.tma-call__duration {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.tma-call__quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.1);
+  font-size: var(--text-size-12);
+}
+.tma-call__quality svg { width: 13px; height: 13px; }
+.tma-call__quality--good { color: #6ce9a6; }
+.tma-call__quality--fair { color: #fdd58a; }
+.tma-call__quality--poor { color: #fda29b; }
+/* The word is the signal; the colour only agrees with it (§21). */
+.tma-call__quality-label { color: rgb(255 255 255 / 0.72); }
+
+.tma-call__stage-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  margin: 0 var(--space-16) var(--space-16);
+}
+
+.tma-call__audio-face {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-16);
+}
+.tma-call__audio-name { font-size: var(--text-size-24, 22px); font-weight: 600; }
+
+.tma-call__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  padding: var(--space-16);
+}
+
+/* On a video call the controls float over the picture rather than pushing it
+ * up — the remote person is the content, the controls are on top of it. */
+.tma-call--video.tma-call--modal .tma-call__controls {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-24);
+  transform: translateX(-50%);
+  padding: var(--space-10) var(--space-16);
+  border-radius: var(--radius-pill);
+  background: rgb(5 7 12 / 0.55);
+  backdrop-filter: blur(8px);
+  z-index: 3;
+}
+
+/* ── Sheets, prompts and errors ─────────────────────────────────── */
+.tma-call__sheet {
+  position: absolute;
+  right: var(--space-16);
+  bottom: 92px;
+  z-index: 5;
+  width: min(320px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border-radius: var(--radius-16);
+  background: #101828;
+  box-shadow: 0 18px 48px rgb(4 8 16 / 0.55);
+  animation: tma-call-rise 160ms ease;
+}
+
+@keyframes tma-call-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tma-call__sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.tma-call__sheet-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding: var(--space-8) var(--space-10);
+  border: none;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tma-call__sheet-item:hover { background: rgb(255 255 255 / 0.1); }
+.tma-call__sheet-item svg { width: 18px; height: 18px; flex: none; }
+
+.tma-call__sheet-note {
+  margin: 0;
+  font-size: var(--text-size-12);
+  color: rgb(255 255 255 / 0.6);
+}
+
+.tma-call__sheet-actions { display: flex; align-items: center; gap: var(--space-8); }
+
+.tma-call__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-size-12);
+  color: rgb(255 255 255 / 0.7);
+}
+.tma-call__field select {
+  padding: 8px 10px;
+  border-radius: var(--radius-8);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+}
+.tma-call__field select:disabled { opacity: 0.5; }
+
+.tma-call__prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-pill);
+  background: #101828;
+  color: #fff;
+  font-size: var(--text-size-13, 13px);
+  box-shadow: 0 14px 36px rgb(4 8 16 / 0.5);
+  animation: tma-call-rise 180ms ease;
+}
+.tma-call__prompt .tma-call__btn { padding: 7px 12px; font-size: var(--text-size-13, 13px); }
+
+/* Outside the modal, the prompt has no dialog to sit in — pin it to the
+ * viewport so island and compact calls can still answer it. */
+.tma-call--island .tma-call__prompt,
+.tma-call--compact .tma-call__prompt {
+  position: fixed;
+  bottom: var(--space-24);
+  z-index: 1310;
+}
+
+.tma-call__error {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 7;
+  width: min(400px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-16);
+  border-radius: var(--radius-16);
+  background: #101828;
+  color: #fff;
+  box-shadow: 0 20px 56px rgb(4 8 16 / 0.6);
+  animation: tma-call-rise 180ms ease;
+}
+.tma-call--island .tma-call__error,
+.tma-call--compact .tma-call__error {
+  position: fixed;
+  z-index: 1310;
+}
+.tma-call__error-title { font-size: var(--text-size-16); font-weight: 600; }
+.tma-call__error-msg { font-size: var(--text-size-13, 13px); color: rgb(255 255 255 / 0.75); }
+.tma-call__error-actions { display: flex; flex-wrap: wrap; gap: var(--space-8); margin-top: var(--space-4); }
+.tma-call__error-actions .tma-call__btn { flex: 1 1 auto; padding: 9px 12px; font-size: var(--text-size-13, 13px); }
+
+.tma-call__meter {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.14);
+  overflow: hidden;
+}
+.tma-call__meter i { display: block; height: 100%; width: 0; background: #12b76a; transition: width 120ms linear; }
+
+/* ── Bottom-left compact window (§7, §8, §19) ───────────────────── */
+.tma-call__compact {
+  position: fixed;
+  z-index: 1250;
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-16);
+  background: #0b0f19;
+  color: #fff;
+  box-shadow: 0 18px 44px rgb(4 8 16 / 0.5);
+  animation: tma-call-compact-in 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes tma-call-compact-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.tma-call__compact.is-dragging { animation: none; transition: none; user-select: none; }
+
+/* Controls at the top, where they cannot cover the face or the video. */
+.tma-call__compact-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-6);
+}
+
+.tma-call__compact-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: rgb(255 255 255 / 0.8);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.tma-call__compact-btn:hover { background: rgb(255 255 255 / 0.14); color: #fff; }
+.tma-call__compact-btn svg { width: 15px; height: 15px; }
+.tma-call__compact-btn--end { background: #f04438; color: #fff; margin-left: auto; }
+.tma-call__compact-btn--end:hover { background: #d92d20; }
+
+.tma-call__compact-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  color: rgb(255 255 255 / 0.45);
+  cursor: grab;
+  touch-action: none;
+}
+.tma-call__compact-grip svg { width: 14px; height: 14px; }
+.tma-call__compact.is-dragging .tma-call__compact-grip { cursor: grabbing; }
+
+.tma-call__compact-body {
+  position: relative;
+  height: 132px;
+  margin: 0 var(--space-8);
+  border-radius: var(--radius-12);
+  overflow: hidden;
+  background: #05070c;
+  display: flex;
+}
+.tma-call__compact-face {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 40%, #1b2436, #0a0e17 75%);
+}
+.tma-call__compact-avatar { width: 76px; height: 76px; font-size: 26px; }
+
+/* The compact window is a single face, not a two-up: the small video would be
+ * unreadable at this size, and so would a name plate over it. */
+.tma-call--compact .tma-call__frame.is-pip { display: none; }
+.tma-call--compact .tma-call__frame-tag,
+.tma-call--compact .tma-call__frame-swap { display: none; }
+.tma-call--compact .tma-call__off-avatar { width: 56px; height: 56px; font-size: var(--text-size-16); }
+.tma-call--compact .tma-call__off-name { font-size: var(--text-size-12); }
+
+.tma-call__compact-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-8) var(--space-12) 0;
+  min-width: 0;
+}
+.tma-call__compact-name {
+  font-size: var(--text-size-13, 13px);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tma-call__compact-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-size-12);
+  color: rgb(255 255 255 / 0.62);
+}
+.tma-call__compact-kind { white-space: nowrap; }
+
+.tma-call__compact-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12) var(--space-12);
+}
+.tma-call__compact-controls .tma-call__ctrl { width: 38px; height: 38px; }
+.tma-call__compact-controls .tma-call__ctrl svg { width: 17px; height: 17px; }
+
+/* ── Dynamic Island (§9) — unchanged capsule ────────────────────── */
 .tma-call__pill {
   position: fixed;
   z-index: 1250;
@@ -30839,21 +31541,6 @@ span.tma-dash__messages-profile-avatar {
   border-radius: var(--radius-pill);
   background: #0b0f19;
   color: #fff;
-  /* No drop shadow — the capsule sits flat. It never repositions on hover;
-   * only its revealed children add width, so it grows from a fixed anchor. */
-}
-
-/* Six anchors. Centre anchors keep the horizontal-centre transform. */
-.tma-call__pill--tc { top: var(--space-16); left: 50%; transform: translateX(-50%); }
-.tma-call__pill--tr { top: var(--space-16); right: var(--space-16); }
-.tma-call__pill--tl { top: var(--space-16); left: var(--space-16); }
-.tma-call__pill--bc { bottom: var(--space-16); left: 50%; transform: translateX(-50%); }
-.tma-call__pill--br { bottom: var(--space-16); right: var(--space-16); }
-.tma-call__pill--bl { bottom: var(--space-16); left: var(--space-16); }
-
-/* Opacity-only entrance so it works from any anchor without fighting the
- * centring transform. */
-.tma-call.is-minimized .tma-call__pill {
   animation: tma-call-pill-in 240ms ease;
 }
 
@@ -30861,6 +31548,13 @@ span.tma-dash__messages-profile-avatar {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+.tma-call__pill--tc { top: var(--space-16); left: 50%; transform: translateX(-50%); }
+.tma-call__pill--tr { top: var(--space-16); right: var(--space-16); }
+.tma-call__pill--tl { top: var(--space-16); left: var(--space-16); }
+.tma-call__pill--bc { bottom: var(--space-16); left: 50%; transform: translateX(-50%); }
+.tma-call__pill--br { bottom: var(--space-16); right: var(--space-16); }
+.tma-call__pill--bl { bottom: var(--space-16); left: var(--space-16); }
 
 .tma-call__pill-body {
   display: flex;
@@ -30876,11 +31570,7 @@ span.tma-dash__messages-profile-avatar {
   max-width: 200px;
 }
 
-.tma-call__pill-avatar {
-  width: 38px;
-  height: 38px;
-  font-size: var(--text-size-14);
-}
+.tma-call__pill-avatar { width: 38px; height: 38px; font-size: var(--text-size-14); }
 
 .tma-call__pill-meta {
   display: flex;
@@ -30897,16 +31587,15 @@ span.tma-dash__messages-profile-avatar {
   max-width: 140px;
 }
 .tma-call__pill-status {
+  display: flex;
+  gap: 4px;
   font-size: var(--text-size-12);
   color: #12b76a;
   font-variant-numeric: tabular-nums;
 }
 
-/* Mic and move share the round control look. The mic is shown upfront; the
- * move button stays collapsed and slides open only while the island is
- * hovered, so the capsule extends by exactly that control on hover. */
-.tma-call__pill-move,
-.tma-call__pill-mic {
+.tma-call__pill-btn,
+.tma-call__pill-move {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -30923,38 +31612,34 @@ span.tma-dash__messages-profile-avatar {
     opacity 150ms ease, background 120ms ease;
 }
 
-/* Mic: always visible on the island. */
-.tma-call__pill-mic {
+/* Mic, camera and mode controls stay visible — a control you have to hover to
+ * discover is a control most people never find (§12). */
+.tma-call__pill-btn {
   width: 38px;
   margin-left: var(--space-8);
   opacity: 1;
 }
 
-/* Move: hidden when compact, revealed on hover. */
-.tma-call__pill-move {
-  width: 0;
-  margin-left: 0;
-  opacity: 0;
-}
+/* Move stays collapsed until the island is hovered; it is the one control
+ * that is about the island rather than about the call. */
+.tma-call__pill-move { width: 0; margin-left: 0; opacity: 0; }
 .tma-call__pill:hover .tma-call__pill-move,
-.tma-call__pill:focus-within .tma-call__pill-move {
+.tma-call__pill:focus-within .tma-call__pill-move,
+.tma-call__pill.is-dragging .tma-call__pill-move {
   width: 38px;
   margin-left: var(--space-8);
   opacity: 1;
 }
 
-.tma-call__pill-move:hover,
-.tma-call__pill-mic:hover { background: rgb(255 255 255 / 0.24); }
-.tma-call__pill-mic.is-off { background: #fff; color: #0b0f19; }
-.tma-call__pill-move svg,
-.tma-call__pill-mic svg { width: 18px; height: 18px; }
+.tma-call__pill-btn:hover,
+.tma-call__pill-move:hover { background: rgb(255 255 255 / 0.24); }
+.tma-call__pill-btn.is-off { background: #fff; color: #0b0f19; }
+.tma-call__pill-btn svg,
+.tma-call__pill-move svg { width: 18px; height: 18px; }
 
-/* Drag handle: grab cursor, and never let a touch-drag scroll the page. */
 .tma-call__pill-move { cursor: grab; touch-action: none; }
-.tma-call__pill.is-dragging { transition: none; user-select: none; }
+.tma-call__pill.is-dragging { animation: none; transition: none; user-select: none; }
 .tma-call__pill.is-dragging .tma-call__pill-move { cursor: grabbing; }
-/* Keep the move handle open while dragging even if the pointer leaves it. */
-.tma-call__pill.is-dragging .tma-call__pill-move { width: 38px; margin-left: var(--space-8); opacity: 1; }
 
 .tma-call__pill-end {
   display: inline-flex;
@@ -30973,39 +31658,57 @@ span.tma-dash__messages-profile-avatar {
 .tma-call__pill-end:hover { background: #d92d20; }
 .tma-call__pill-end svg { width: 18px; height: 18px; }
 
-/* Incoming island: static (non-tappable) body + always-visible answer/decline. */
-.tma-call__pill-body--static { cursor: default; }
+/* ── Mobile (§20) ───────────────────────────────────────────────────
+ * A floating window in a 380px-wide viewport is a joke; every mode that would
+ * float becomes a sheet that uses the width it actually has. */
+@media (max-width: 640px) {
+  .tma-call__dialog {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    width: 100vw;
+    max-width: none;
+    border-radius: var(--radius-24) var(--radius-24) 0 0;
+    animation: tma-call-sheet-in 220ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  .tma-call__dialog--stage { height: 92vh; }
+  .tma-call__dialog--incoming { max-height: 88vh; }
 
-.tma-call__pill-incoming-kind {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  font-size: var(--text-size-12);
-  color: rgb(255 255 255 / 0.72);
-  white-space: nowrap;
+  @keyframes tma-call-sheet-in {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .tma-call__ctrl { width: 52px; height: 52px; }
+  .tma-call__frame.is-pip { width: 34%; bottom: 96px; }
+
+  .tma-call__compact {
+    left: var(--space-12) !important;
+    right: var(--space-12);
+    top: auto !important;
+    bottom: var(--space-12);
+    width: auto;
+  }
+  .tma-call__compact-body { height: 108px; }
+
+  .tma-call__pill { max-width: calc(100vw - 24px); }
+  .tma-call__pill-name { max-width: 84px; }
+
+  .tma-call__prompt { width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center; }
 }
 
-.tma-call__pill-accept,
-.tma-call__pill-decline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  margin-left: var(--space-8);
-  flex-shrink: 0;
-  border: none;
-  border-radius: var(--radius-pill);
-  color: #fff;
-  cursor: pointer;
+/* Respect a reduced-motion preference: the call still moves between modes,
+ * it just stops animating on the way (§11 is about polish, not about
+ * overriding an accessibility setting). */
+@media (prefers-reduced-motion: reduce) {
+  .tma-call *,
+  .tma-call__dialog,
+  .tma-call__compact,
+  .tma-call__pill,
+  .tma-call__frame {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }
-.tma-call__pill-accept svg,
-.tma-call__pill-decline svg { display: block; width: 18px; height: 18px; }
-.tma-call__pill-accept { background: #12b76a; }
-.tma-call__pill-accept:hover { background: #0ea15c; }
-.tma-call__pill-decline { background: #f04438; }
-.tma-call__pill-decline:hover { background: #d92d20; }
-
-/* Incoming island just fades in — the pulsing green dot carries the "ringing"
- * cue, no shadow/glow. */
-.tma-call__pill--incoming { animation: tma-call-pill-in 240ms ease; }

@@ -866,3 +866,56 @@ TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/notifications-bulk-calls.m
 
   It asserts absolute counts, so re-seed a fresh database between runs — it
   reads, unreads and deletes rows as it goes.
+
+## Calls
+
+- **`calls.mjs`** — the whole calling experience, driven between two real
+  users: one places a WebRTC call, the other answers it, and every check after
+  that runs against a **live peer connection**. That is the point. Most of what
+  this feature promises is only true or false against a real connection —
+  that changing layout does not restart the call, that mute survives a mode
+  change, that voice→video does not renegotiate — and a mocked call would
+  report all three as working no matter what the code did.
+
+  It covers, in order: the incoming video pop-up and its pre-answer self-view;
+  the pre-answer camera/microphone toggles and device pickers; answering; the
+  large modal and its controls; camera-off showing a face on **both** ends;
+  swapping and dragging the small video; compact and Dynamic Island modes;
+  minimize returning to the previous mode; Escape minimizing rather than
+  hanging up; video→voice and the confirmed voice→video upgrade; ending; an
+  incoming voice call and declining it; and the call log the whole run wrote.
+
+  Three things it is built around:
+
+  - **Chromium needs fake devices.** `--use-fake-device-for-media-stream` gives
+    a synthetic camera and microphone, and `--use-fake-ui-for-media-stream`
+    auto-answers the permission prompt. Without both, `getUserMedia` rejects
+    and there is no call to test. (To test the *denied* path instead, drop the
+    fake-ui flag, or stub `navigator.mediaDevices.getUserMedia` to reject with
+    a `NotAllowedError` via `addInitScript` — a headless browser cannot show
+    the real prompt.)
+  - **Reverb has to be running**, and the app has to point at it. Signalling is
+    the whole call; with no socket the ring never arrives and every check below
+    it fails for one reason.
+  - **It pins the callee's `callDisplay` preference before calling.** Where an
+    answered call lands is a per-account setting, so leaving it to whatever the
+    account happens to hold makes the run pass or fail on unrelated state.
+
+  Scope the selectors. Several actions (`swap`, `minimize`, `mute`, `camera`)
+  exist in more than one place at once — the scrim carries `minimize`, the small
+  video carries its own `swap` — so click `.tma-call__controls [data-call-action="…"]`
+  rather than the bare attribute.
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= \
+  REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http \
+  php artisan reverb:start --host=127.0.0.1 --port=8080 &
+
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log \
+  BROADCAST_CONNECTION=reverb REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http \
+  php artisan serve --host=127.0.0.1 --port=8899 &
+
+# Two users with one conversation between them — the notifications seed above
+# provides exactly that.
+TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/calls.mjs
+```

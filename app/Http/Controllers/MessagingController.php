@@ -1122,7 +1122,15 @@ class MessagingController extends Controller
         ]);
     }
 
-    /** Relay a WebRTC call signalling payload to the conversation channel. */
+    /**
+     * Relay a WebRTC call signalling payload to the call's other participants.
+     *
+     * `state`, `upgrade`, `upgrade-accept`, `upgrade-decline` and `downgrade`
+     * are not part of the WebRTC handshake — they are how the two ends agree on
+     * what the call currently *is*, so each side can show the other's camera as
+     * off rather than as a black rectangle, and neither can start sending video
+     * into a call the other has not agreed to make a video call.
+     */
     public function callSignal(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -1130,7 +1138,7 @@ class MessagingController extends Controller
         $this->assertNotBlocked($conversation, $user);
 
         $data = $request->validate([
-            'type' => ['required', 'string', 'in:ring,offer,answer,ice,hangup,reject,accept'],
+            'type' => ['required', 'string', 'in:ring,offer,answer,ice,hangup,reject,accept,state,upgrade,upgrade-accept,upgrade-decline,downgrade'],
             'payload' => ['nullable', 'array'],
             'media' => ['nullable', 'string', 'in:audio,video'],
             // Who placed the call, and whether it ever connected — recorded on
@@ -1145,12 +1153,22 @@ class MessagingController extends Controller
             $payload['media'] = $data['media'];
         }
         $payload['fromName'] = $user->name;
+        $payload['fromPhoto'] = $user->avatar_url;
+
+        // Fanned out to each participant's own channel as well as the
+        // conversation's — see CallSignal for why an incoming call would
+        // otherwise only reach someone already looking at that thread.
+        $recipients = $conversation->activeParticipants()
+            ->where('user_id', '!=', $user->id)
+            ->pluck('user_id')
+            ->all();
 
         Broadcaster::toOthers(new CallSignal(
             $conversation->uuid,
             $user->id,
             $data['type'],
             $payload,
+            $recipients,
         ));
 
         // Persist a brief history line when a call ends or is missed.

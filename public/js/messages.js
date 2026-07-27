@@ -1190,6 +1190,26 @@
     );
   }
 
+  /* Like renderSettingsChoice, but for a setting with its own option list. */
+  function renderSettingsSelect(key, label, hint, options) {
+    var value = STORE.settings[key] || options[0].value;
+    return (
+      '<label class="tma-dash__messages-setting">' +
+      '<span class="tma-dash__messages-setting-text">' +
+      '<span class="tma-dash__messages-setting-label">' + esc(label) + '</span>' +
+      (hint ? '<span class="tma-dash__messages-setting-hint">' + esc(hint) + '</span>' : '') +
+      '</span>' +
+      '<select class="tma-dash__messages-setting-select" data-messages-setting="' + key + '">' +
+      options
+        .map(function (o) {
+          return '<option value="' + esc(o.value) + '"' + (value === o.value ? ' selected' : '') + '>' +
+            esc(o.label) + '</option>';
+        })
+        .join('') +
+      '</select></label>'
+    );
+  }
+
   function renderSettingsPanel(state) {
     if (!state.settingsOpen) return '';
 
@@ -1217,6 +1237,14 @@
 
       '<div class="tma-dash__messages-setting-group">Media</div>' +
       renderSettingsToggle('mediaAutoDownload', 'Download media automatically') +
+
+      '<div class="tma-dash__messages-setting-group">Calls</div>' +
+      renderSettingsSelect('callDisplay', 'Active call display',
+        'Where a call goes once it is answered. Incoming calls always ask first.', [
+          { value: 'island', label: 'Dynamic Island' },
+          { value: 'compact', label: 'Compact window' },
+          { value: 'modal', label: 'Large window' },
+        ]) +
       '</div>' +
       '<p class="tma-dash__messages-panel-note">These settings apply to your account only.</p>' +
       '</div>'
@@ -2715,10 +2743,18 @@
     );
   }
 
-  function chatBackgroundClass() {
+  /* The stored key, with the branded wallpaper standing in for "not chosen
+   * yet" — which is every existing reader, since the setting predates it. */
+  function chatBackgroundKey() {
     var key = '';
     try { key = localStorage.getItem('tma.messages.chatBg') || ''; } catch (e) { /* ignore */ }
-    return key ? ' tma-dash__messages-chat-body--bg-' + key : '';
+    return key || 'tma';
+  }
+
+  function chatBackgroundClass() {
+    var key = chatBackgroundKey();
+    /* "Plain" is the absence of a background class, not a class of its own. */
+    return key === 'plain' ? '' : ' tma-dash__messages-chat-body--bg-' + key;
   }
 
   function getInboxUnreadCount(state) {
@@ -3778,13 +3814,14 @@
       '<span class="tma-dash__messages-setting-label">Chat background</span></span>' +
       '<select class="tma-dash__messages-setting-input" data-messages-chat-bg>' +
       [
-        { value: '', label: 'Default' },
+        { value: 'tma', label: 'TMA pattern' },
+        { value: 'plain', label: 'Plain' },
         { value: 'soft', label: 'Soft wash' },
         { value: 'grid', label: 'Light grid' },
         { value: 'dots', label: 'Dots' },
       ]
         .map(function (opt) {
-          var current = localStorage.getItem('tma.messages.chatBg') || '';
+          var current = chatBackgroundKey();
           return (
             '<option value="' + opt.value + '"' +
             (current === opt.value ? ' selected' : '') +
@@ -4990,6 +5027,7 @@
         STORE.threads = data.conversations || [];
         STORE.me = data.me || null;
         STORE.settings = data.settings || {};
+        publishCallSettings();
         STORE.realtime = data.realtime || null;
         STORE.limits = data.limits || {};
         STORE.loaded = true;
@@ -5570,6 +5608,25 @@
     subscribedSelf = true;
     var channel = 'private-messaging.user.' + STORE.me.id;
 
+    /*
+     * Call signalling on this user's *own* channel.
+     *
+     * The conversation channel carries it too, but a client only subscribes to
+     * the thread it currently has open — so a call rung into any other
+     * conversation used to reach nobody. This is the subscription that makes an
+     * incoming call actually arrive. Duplicates across the two channels are
+     * settled by the signal id (see App\Events\CallSignal).
+     */
+    window.TMAMessagingRealtime.listen(channel, 'call.signal', function (payload) {
+      if (!window.TMAMessagingCalls) return;
+      var row = payload && findThread(payload.conversationId);
+      if (row) {
+        payload._peerName = row.name;
+        payload._peerPhoto = row.photo || null;
+      }
+      window.TMAMessagingCalls.onSignal(payload, (STORE.me || {}).id);
+    });
+
     window.TMAMessagingRealtime.listen(channel, 'messaging.inbox', function (payload) {
       // payload.totalUnread is deliberately not stored. The badge is summed
       // from the visible rows, which excludes archived threads; the server
@@ -6031,6 +6088,20 @@
       });
   }
 
+  /*
+   * The calls module lives outside this file and has no store of its own, so
+   * the one call-related setting is handed to it whenever settings load or
+   * change. Devices are deliberately not here — those are per-machine and the
+   * calls module keeps them in localStorage.
+   */
+  function publishCallSettings() {
+    window.TMAMessagingSettings = window.TMAMessagingSettings || {};
+    window.TMAMessagingSettings.callDisplay = STORE.settings.callDisplay || 'island';
+    if (window.TMAMessagingCalls && window.TMAMessagingCalls.setDisplayPreference) {
+      window.TMAMessagingCalls.setDisplayPreference(window.TMAMessagingSettings.callDisplay);
+    }
+  }
+
   /* Persist one messaging setting. Optimistic; reverted if the write fails. */
   function updateSetting(root, state, render, key, value) {
     var previous = STORE.settings[key];
@@ -6057,12 +6128,15 @@
       }
     }
 
+    publishCallSettings();
+
     var payload = {};
     payload[key] = STORE.settings[key];
 
     window.TMAMessagingAPI.updateSettings(payload)
       .then(function (data) {
         STORE.settings = data.settings || STORE.settings;
+        publishCallSettings();
       })
       .catch(function () {
         STORE.settings[key] = previous;
