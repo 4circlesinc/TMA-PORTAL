@@ -71,6 +71,8 @@
     Tag: ICON + 'Tag.svg',
     PushPin: ICON + 'PushPin.svg',
     PushPinSlash: ICON + 'PushPinSlash.svg',
+    ArchiveTray: ICON + 'ArchiveTray.svg',
+    Sidebar: ICON + 'SidebarSimple.svg',
     // A proper flag, not a price-tag shape — TagChevron's notched silhouette
     // read as "two icons overlapping" at toolbar size, and a tag was never
     // the right shape for "mark as important" to begin with.
@@ -97,9 +99,27 @@
 
   var LAYOUT_STORE_KEY = 'tma.email.layoutStyle';
   var SPLIT_RATIO_STORE_KEY = 'tma.email.splitListRatio';
+  var SIDEBAR_COLLAPSE_KEY = 'tma.email.sidebarCollapsed';
   var SPLIT_RATIO_MIN = 0.22;
   var SPLIT_RATIO_MAX = 0.78;
-  var SPLIT_RATIO_DEFAULT = 0.5;
+  // Inbox list narrower than the reading pane by default.
+  var SPLIT_RATIO_DEFAULT = 0.38;
+
+  function loadSidebarCollapsed() {
+    try {
+      var saved = localStorage.getItem(SIDEBAR_COLLAPSE_KEY);
+      if (saved === '0') return false;
+      if (saved === '1') return true;
+    } catch (e) { /* ignore */ }
+    // Closed (icon rail) by default — matches the main menu collapsed rail.
+    return true;
+  }
+
+  function saveSidebarCollapsed(collapsed) {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, collapsed ? '1' : '0');
+    } catch (e) { /* ignore */ }
+  }
 
   function clampSplitRatio(ratio) {
     return Math.max(SPLIT_RATIO_MIN, Math.min(SPLIT_RATIO_MAX, ratio));
@@ -243,13 +263,18 @@
     );
   }
 
-  var DETAIL_TOPBAR_ACTIONS = [
-    { id: 'archive', icon: 'Archive', label: 'Archive' },
-    { id: 'spam', icon: 'WarningOctagon', label: 'Report spam' },
-    { id: 'delete', icon: 'Trash', label: 'Delete' },
-    { id: 'unread', icon: 'EnvelopeSimple', label: 'Mark as unread' },
-    { id: 'more', icon: 'DotsThree', label: 'More' },
-  ];
+  function detailTopbarActions(state) {
+    var archive = state.folder === 'archive'
+      ? { id: 'inbox', icon: 'ArchiveTray', label: 'Move to inbox' }
+      : { id: 'archive', icon: 'Archive', label: 'Archive' };
+    return [
+      archive,
+      { id: 'spam', icon: 'WarningOctagon', label: 'Report spam' },
+      { id: 'delete', icon: 'Trash', label: 'Delete' },
+      { id: 'unread', icon: 'EnvelopeSimple', label: 'Mark as unread' },
+      { id: 'more', icon: 'DotsThree', label: 'More' },
+    ];
+  }
 
   var DETAIL_MESSAGE_ACTIONS = [
     { id: 'star', icon: 'Star', label: 'Star' },
@@ -585,7 +610,7 @@
   }
 
   function renderEmailHeaderReadingTools(state) {
-    var topbarActions = DETAIL_TOPBAR_ACTIONS.filter(function (action) { return action.id !== 'spam'; });
+    var topbarActions = detailTopbarActions(state).filter(function (action) { return action.id !== 'spam'; });
     var actions = topbarActions.map(renderDetailTopbarBtn).join('');
     if (!actions) return '';
     return (
@@ -628,7 +653,7 @@
     return (
       '<div class="tma-dash__email-header-bulk-tools">' +
       '<div class="tma-dash__email-header-reading-tools-group" role="toolbar" aria-label="Bulk actions">' +
-      BULK_ACTIONS.map(function (action) { return renderEmailHeaderBulkBtn(action, state); }).join('') +
+      bulkActionsForFolder(state.folder).map(function (action) { return renderEmailHeaderBulkBtn(action, state); }).join('') +
       '</div>' +
       '</div>'
     );
@@ -642,7 +667,7 @@
     if (isEmailMobile()) return '';
     var back = renderDetailBack(state, true);
     var nav = renderDetailNav(state);
-    var topbarActions = DETAIL_TOPBAR_ACTIONS;
+    var topbarActions = detailTopbarActions(state);
     var actions = topbarActions.map(renderDetailTopbarBtn).join('');
     if (!back && !nav && !actions) return '';
     return (
@@ -707,13 +732,34 @@
   function renderEmailListFilterBtn(state) {
     var bulkCount = selectedEmailCount(state);
     if (bulkCount > 0) return '';
-    return renderEmailIconTooltipBtn({
-      tipId: 'email-filter-tip',
-      label: 'Filter',
-      className: 'tma-dash__email-filter',
-      attrs: ' data-email-filter',
-      innerHtml: '<img src="' + ICONS.FunnelSimple + '" alt="">',
-    });
+    var active = state.listFilter && state.listFilter !== 'all';
+    var filterItems = [
+      { id: 'all', label: 'All' },
+      { id: 'unread', label: 'Unread' },
+      { id: 'starred', label: 'Starred' },
+      { id: 'attachments', label: 'Has attachments' },
+      { id: 'pinned', label: 'Pinned' },
+    ];
+    return (
+      '<div class="tma-dash__email-filter-wrap" data-email-filter-wrap>' +
+      renderEmailIconTooltipBtn({
+        tipId: 'email-filter-tip',
+        label: active ? 'Filter: ' + (state.listFilter || 'all') : 'Filter',
+        className: 'tma-dash__email-filter' + (active ? ' is-active' : ''),
+        attrs: ' data-email-filter aria-haspopup="menu" aria-expanded="' + (state.filterMenuOpen ? 'true' : 'false') + '"',
+        innerHtml: '<img src="' + ICONS.FunnelSimple + '" alt="">',
+      }) +
+      '<div class="tma-dash__menu tma-dash__email-filter-menu" data-email-filter-menu role="menu" aria-label="Filter messages"' +
+      (state.filterMenuOpen ? '' : ' hidden') + '>' +
+      filterItems.map(function (item) {
+        var on = (state.listFilter || 'all') === item.id;
+        return (
+          '<button type="button" class="tma-dash__menu-item' + (on ? ' tma-dash__menu-item--active' : '') +
+          '" role="menuitem" data-email-filter-item="' + esc(item.id) + '">' + esc(item.label) + '</button>'
+        );
+      }).join('') +
+      '</div></div>'
+    );
   }
 
   function renderEmailListRefreshBtn(state) {
@@ -755,7 +801,11 @@
   }
 
   function emailLabels(state) {
-    return (state && state.labels) || [];
+    // Only user-created portal labels — provider-synced defaults are excluded
+    // server-side and again here as a safety net.
+    return ((state && state.labels) || []).filter(function (label) {
+      return !!(label && label.localOnly);
+    });
   }
 
   function renderLabelTag(tone, sizeCls) {
@@ -925,7 +975,8 @@
         if (active) cls += ' tma-dash__email-label-item--active';
         return (
           '<div class="tma-dash__email-label-row' + (active ? ' tma-dash__email-label-row--active' : '') + '">' +
-          '<button type="button" class="' + cls + '" data-email-sidebar-label="' + esc(label.id) + '">' +
+          '<button type="button" class="' + cls + '" data-email-sidebar-label="' + esc(label.id) + '"' +
+          ' title="' + esc(label.name) + '" aria-label="' + esc(label.name) + '">' +
           renderLabelTag(label.tone) +
           '<span class="tma-dash__email-label-item-name">' + esc(label.name) + '</span>' +
           (count ? '<span class="tma-dash__email-label-item-count">' + count + '</span>' : '') +
@@ -978,14 +1029,19 @@
     );
   }
 
-  var BULK_ACTIONS = [
-    { id: 'archive', label: 'Archive', icon: 'Archive' },
-    { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
-    { id: 'delete', label: 'Delete', icon: 'Trash' },
-    { id: 'read', label: 'Mark as read', icon: 'EnvelopeSimpleOpen' },
-    { id: 'move', label: 'Move to', icon: 'FolderSimple' },
-    { id: 'more', label: 'More', icon: 'DotsThree' },
-  ];
+  function bulkActionsForFolder(folder) {
+    var archiveAction = folder === 'archive'
+      ? { id: 'inbox', label: 'Move to inbox', icon: 'ArchiveTray' }
+      : { id: 'archive', label: 'Archive', icon: 'Archive' };
+    return [
+      archiveAction,
+      { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
+      { id: 'delete', label: 'Delete', icon: 'Trash' },
+      { id: 'read', label: 'Mark as read', icon: 'EnvelopeSimpleOpen' },
+      { id: 'move', label: 'Label as', icon: 'Tag' },
+      { id: 'more', label: 'More', icon: 'DotsThree' },
+    ];
+  }
 
   var BULK_MORE_SECTIONS = [
     {
@@ -1022,7 +1078,7 @@
   /* Folder ids match the server's; counts arrive with the bootstrap payload
    * rather than being baked in here. */
   var FOLDERS = [
-    { id: 'compose', label: 'Compose', icon: 'PencilSimpleLine', compose: true },
+    { id: 'compose', label: 'New Email', icon: 'PencilSimpleLine', compose: true },
     { id: 'inbox', label: 'Inbox', icon: 'Tray' },
     // A virtual view rather than a real folder: the server filters by the
     // important flag across inbox/sent/archive.
@@ -1141,6 +1197,7 @@
       }
 
       render();
+      hydrateListAttachments(root, state, render, token);
     }).catch(function (err) {
       if (token !== state.loadToken) return;
       state.loading = false;
@@ -1149,6 +1206,36 @@
       reportMailError(state, err);
       render();
     });
+  }
+
+  /* Fill attachment chips for listed mail without opening each message.
+   * Runs after the list paints so the inbox never waits on provider fetches. */
+  function hydrateListAttachments(root, state, render, token) {
+    if (!api() || typeof api().hydrateAttachments !== 'function') return;
+    var ids = rowsOf(state).filter(function (row) {
+      return row && row.hasAttachments && !(row.attachmentsPreview && row.attachmentsPreview.length);
+    }).map(function (row) { return row.id; });
+    if (!ids.length) return;
+
+    api().hydrateAttachments(ids).then(function (data) {
+      if (token && token !== state.loadToken) return;
+      var updates = (data && data.messages) || [];
+      if (!updates.length) return;
+      var changed = false;
+      updates.forEach(function (item) {
+        var row = findRow(state, item.id);
+        if (!row) return;
+        if (item.attachmentsPreview) {
+          row.attachmentsPreview = item.attachmentsPreview;
+          changed = true;
+        }
+        if (typeof item.attachmentCount === 'number') {
+          row.attachmentCount = item.attachmentCount;
+          changed = true;
+        }
+      });
+      if (changed) updateInboxList(root, state, render);
+    }).catch(function () { /* best-effort */ });
   }
 
   /* How often the page asks the provider whether anything has arrived. A
@@ -1315,6 +1402,7 @@
       }
 
       render();
+      hydrateListAttachments(root, state, render, token);
     }).catch(function () {
       // Silent — this is a background refresh, not a user action.
     }).then(function () {
@@ -1331,7 +1419,9 @@
       state.connected = !!(data && data.connected);
       state.account = (data && data.account) || null;
       state.folderCounts = (data && data.folders) || {};
-      state.labels = (data && data.labels) || [];
+      state.labels = ((data && data.labels) || []).filter(function (label) {
+        return !!(label && label.localOnly);
+      });
       announceInboxUnread(state);
 
       if (!state.connected) {
@@ -1756,9 +1846,14 @@
     var unread = isRowUnread(row, state);
     var pinned = !!(row && row.pinned);
     var snoozed = !!(row && row.snoozedUntil);
+    var inArchive = state.folder === 'archive' || (row && row.folder === 'archive');
     var actions = [
-      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned },
-      { id: 'archive', label: 'Archive', icon: 'Archive' },
+      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: pinned ? 'PushPin' : 'PushPin', active: pinned, pin: true },
+      {
+        id: inArchive ? 'inbox' : 'archive',
+        label: inArchive ? 'Move to inbox' : 'Archive',
+        icon: inArchive ? 'ArchiveTray' : 'Archive',
+      },
       { id: 'delete', label: 'Delete', icon: 'Trash' },
       { id: 'read', label: unread ? 'Mark as read' : 'Mark as unread', icon: unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple' },
       { id: 'snooze', label: snoozed ? 'Unsnooze' : 'Snooze', icon: 'Clock', active: snoozed },
@@ -1773,7 +1868,8 @@
             label: action.label,
             className:
               'tma-dash__email-row-action' +
-              (action.active ? ' tma-dash__email-row-action--active' : ''),
+              (action.active ? ' tma-dash__email-row-action--active' : '') +
+              (action.pin && action.active ? ' tma-dash__email-row-action--pinned' : ''),
             attrs:
               ' data-email-row-hover="' + esc(action.id) + '" data-email-row-id="' + esc(row.id) + '"' +
               (action.active ? ' aria-pressed="true"' : ''),
@@ -1859,7 +1955,7 @@
     var count = selectedEmailCount(state);
     return (
       '<div class="tma-dash__email-list-bulk" data-email-bulk' + (count === 0 ? ' hidden' : '') + '>' +
-      BULK_ACTIONS.map(function (action) { return renderEmailBulkBtn(action, state); }).join('') +
+      bulkActionsForFolder(state.folder).map(function (action) { return renderEmailBulkBtn(action, state); }).join('') +
       '</div>'
     );
   }
@@ -2621,11 +2717,19 @@
     );
   }
 
-  /* The server already applied folder, label, and search when it built
-   * state.rows, so there is nothing left to filter here. Kept as a function
-   * because every render site calls it. */
+  /* Folder/label/search come from the server; `listFilter` is a local view
+   * over the current page (Unread / Starred / Attachments / Pinned). */
   function filteredInbox(state) {
-    return rowsOf(state);
+    var rows = rowsOf(state);
+    var filter = state.listFilter || 'all';
+    if (filter === 'all') return rows;
+    return rows.filter(function (row) {
+      if (filter === 'unread') return !!row.unread;
+      if (filter === 'starred') return !!row.starred;
+      if (filter === 'attachments') return !!row.hasAttachments;
+      if (filter === 'pinned') return !!row.pinned;
+      return true;
+    });
   }
 
   /* Counts come from the server, which sees the whole mailbox — counting
@@ -2677,11 +2781,21 @@
   }
 
   function renderEmailSidebar(state) {
+    var collapsed = !isEmailMobile() && !!state.sidebarCollapsed;
     var sidebarCls = 'tma-dash__email-sidebar';
     if (state.mobileNavOpen) sidebarCls += ' tma-dash__email-sidebar--open';
+    if (collapsed) sidebarCls += ' tma-dash__email-sidebar--collapsed';
+    var toggleLabel = collapsed ? 'Expand mail folders' : 'Collapse mail folders';
     return (
       '<div class="' + sidebarCls + '">' +
-      (isEmailMobile() ? '' : renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false)) +
+      (isEmailMobile()
+        ? ''
+        : '<div class="tma-dash__email-sidebar-top">' +
+          renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false) +
+          '<button type="button" class="tma-dash__email-sidebar-toggle" data-email-sidebar-toggle' +
+          ' aria-label="' + esc(toggleLabel) + '" aria-pressed="' + (collapsed ? 'true' : 'false') + '" title="' + esc(toggleLabel) + '">' +
+          '<img src="' + ICONS.SidebarSimple + '" alt="">' +
+          '</button></div>') +
       '<div class="tma-dash__email-sidebar-nav">' +
       renderFolders(state) +
       renderEmailLabelsSection(state) +
@@ -2740,7 +2854,8 @@
             ? ''
             : '<span class="tma-dash__email-folder-count">' + count + '</span>';
         return (
-          '<button type="button" class="' + cls + '" data-email-folder="' + esc(folder.id) + '">' +
+          '<button type="button" class="' + cls + '" data-email-folder="' + esc(folder.id) + '"' +
+          ' title="' + esc(folder.label) + '" aria-label="' + esc(folder.label) + '">' +
           '<img src="' + esc(ICONS[folder.icon]) + '" alt="">' +
           '<span class="tma-dash__email-folder-label">' + esc(folder.label) + '</span>' +
           countHtml +
@@ -3105,6 +3220,12 @@
       // enough to inspect detail on a scanned document or photo.
       var zoomImg = e.target.closest('[data-email-lightbox-zoom]');
       if (zoomImg) { zoomImg.classList.toggle('is-zoomed'); return; }
+      // Clicking the dim stage around the attachment (not the media itself)
+      // closes the lightbox — same expectation as clicking the backdrop.
+      var stage = e.target.closest('[data-lb-stage]');
+      if (stage && !e.target.closest('img, iframe, video, audio, .tma-portal-lightbox__nopreview, .tma-portal-lightbox__audio, a, button')) {
+        closeAttachmentLightbox();
+      }
     });
 
     lb._key = function (e) {
@@ -3792,7 +3913,9 @@
       bodyHtml: opts.bodyHtml || '',
       showCc: false,
       minimized: false,
-      expanded: false,
+      // Large compose is the default; expand toggles almost-fullscreen.
+      expanded: true,
+      fullscreen: false,
       sending: false,
       // Set once the draft has been saved server-side, so autosave updates
       // the same record instead of creating a new one each keystroke.
@@ -4069,21 +4192,26 @@
 
   function toggleComposeExpand(state, id) {
     state.composeDrafts.forEach(function (draft) {
-      if (draft.id === id) draft.expanded = !draft.expanded;
+      if (draft.id !== id) return;
+      // Large is the resting size; the button steps up to almost-fullscreen
+      // and back down again.
+      draft.expanded = true;
+      draft.fullscreen = !draft.fullscreen;
     });
     state.focusedComposeId = id;
   }
 
   function renderComposeWindowHead(draft) {
-    var title = getComposeSubject(draft);
+    var title = getComposeSubject(draft) || 'New Email';
+    var expandLabel = draft.fullscreen ? 'Exit full screen' : 'Full screen';
     return (
       '<div class="tma-dash__email-compose-window-head">' +
       '<span class="tma-dash__email-compose-window-title">' + esc(title) + '</span>' +
       '<div class="tma-dash__email-compose-window-actions">' +
       '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-minimize="' + esc(draft.id) + '" aria-label="Minimize">' +
       '<img src="' + ICONS.Minus + '" alt=""></button>' +
-      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-expand="' + esc(draft.id) + '" aria-label="' + (draft.expanded ? 'Restore size' : 'Expand') + '">' +
-      '<img src="' + (draft.expanded ? ICONS.CornersIn : ICONS.ArrowsOutSimple) + '" alt=""></button>' +
+      '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-expand="' + esc(draft.id) + '" aria-label="' + esc(expandLabel) + '">' +
+      '<img src="' + (draft.fullscreen ? ICONS.CornersIn : ICONS.ArrowsOutSimple) + '" alt=""></button>' +
       '<button type="button" class="tma-dash__email-compose-window-btn" data-email-compose-close="' + esc(draft.id) + '" aria-label="Close">' +
       '<img src="' + ICONS.X + '" alt=""></button>' +
       '</div></div>'
@@ -4098,8 +4226,9 @@
       '<div class="tma-dash__email-compose-stack">' +
       open
         .map(function (draft, index) {
-          var cls = 'tma-dash__email-compose-window';
-          if (draft.expanded) cls += ' tma-dash__email-compose-window--expanded';
+          var cls = 'tma-dash__email-compose-window tma-dash__email-compose-window--large';
+          if (draft.fullscreen) cls += ' tma-dash__email-compose-window--fullscreen';
+          else if (draft.expanded) cls += ' tma-dash__email-compose-window--expanded';
           if (draft.id === state.focusedComposeId) cls += ' tma-dash__email-compose-window--focused';
           var stackIndex = open.length - 1 - index;
           return (
@@ -5152,9 +5281,9 @@
     }
     if (isEmailMobile() && !isSingleReading(state)) {
       html +=
-        '<button type="button" class="tma-dash__email-mobile-fab" data-email-mobile-compose aria-label="Compose">' +
+        '<button type="button" class="tma-dash__email-mobile-fab" data-email-mobile-compose aria-label="New Email">' +
         '<img src="' + ICONS.PencilSimpleLine + '" alt="">' +
-        '<span>Compose</span>' +
+        '<span>New Email</span>' +
         '</button>';
     }
     return html;
@@ -5338,20 +5467,26 @@
   }
 
   function commitEmailRowAction(root, state, render, id, destination) {
+    var wasSelected = state.selectedId === id;
     dismissEmailRow(state, id, destination);
     if (destination === 'trash') showEmailToast(root, 'Message deleted');
     else if (destination === 'archive') showEmailToast(root, 'Message archived');
-    if (state.folder === 'inbox') updateInboxList(root, state, render);
-    else render();
+    else if (destination === 'inbox') showEmailToast(root, 'Moved to inbox');
+    else if (destination === 'spam') showEmailToast(root, 'Marked as spam');
+    // Patch the list in place when the reading pane can stay put; full render
+    // when the open message left so the detail pane clears immediately.
+    if (wasSelected) render();
+    else updateInboxList(root, state, render);
     var dashRoot = getEmailDashRoot(root);
     if (dashRoot && typeof dashRoot._syncTabBarBadges === 'function') dashRoot._syncTabBarBadges();
+    announceInboxUnread(state);
   }
 
   function applyEmailRowAction(root, state, render, id, destination, wrap) {
     if (!id || (wrap && (wrap.classList.contains('is-deleting') || wrap.classList.contains('is-archiving')))) return;
     closeEmailRowSwipes(root);
-    if ((destination === 'trash' || destination === 'archive') && wrap) {
-      animateEmailRowDismiss(wrap, destination, function () {
+    if ((destination === 'trash' || destination === 'archive' || destination === 'inbox' || destination === 'spam') && wrap) {
+      animateEmailRowDismiss(wrap, destination === 'trash' ? 'trash' : 'archive', function () {
         commitEmailRowAction(root, state, render, id, destination);
       });
       return;
@@ -5588,7 +5723,7 @@
   function applyBulkAction(root, state, render, ids, action) {
     if (!ids.length) return;
 
-    var removes = ['archive', 'spam', 'trash', 'delete'].indexOf(action) !== -1;
+    var removes = ['archive', 'spam', 'trash', 'delete', 'inbox'].indexOf(action) !== -1;
 
     // Snapshot enough to restore the list if the call fails.
     var before = rowsOf(state).slice();
@@ -5598,16 +5733,25 @@
         return ids.indexOf(row.id) === -1;
       });
       clearEmailSelection(state);
+      if (state.selectedId && ids.indexOf(state.selectedId) !== -1) {
+        state.selectedId = null;
+        state.reading = false;
+      }
     } else {
       ids.forEach(function (id) {
         var row = findRow(state, id);
         if (!row) return;
         if (action === 'read' || action === 'unread') row.unread = action === 'unread';
         if (action === 'star' || action === 'unstar') row.starred = action === 'star';
+        if (action === 'pin' || action === 'unpin') row.pinned = action === 'pin';
       });
+      if (action === 'pin' || action === 'unpin') resortPinnedRows(state);
     }
 
-    render();
+    // Keep the list head height stable: patch rows in place for moves;
+    // flag toggles still need a light chrome refresh.
+    if (removes) updateInboxList(root, state, render);
+    else render();
 
     api().bulk(ids, action).then(function (data) {
       if (data && data.folders) state.folderCounts = data.folders;
@@ -5618,7 +5762,15 @@
         return;
       }
 
-      render();
+      if (removes) {
+        var toast =
+          action === 'archive' ? 'Archived' :
+          action === 'inbox' ? 'Moved to inbox' :
+          action === 'delete' || action === 'trash' ? 'Deleted' :
+          action === 'spam' ? 'Marked as spam' : 'Updated';
+        showEmailToast(root, toast);
+        announceInboxUnread(state);
+      }
     }).catch(function (err) {
       state.rows = before;
       reportMailError(state, err);
@@ -5934,11 +6086,6 @@
   }
 
   function updateInboxList(root, state, render) {
-    if (state.folder !== 'inbox') {
-      render();
-      return;
-    }
-
     var listBody = root.querySelector('.tma-dash__email-list-body');
     if (!listBody) {
       render();
@@ -5946,9 +6093,12 @@
     }
 
     var rows = filteredInbox(state);
-    MORPH.patch(listBody, rows.map(function (row) {
-      return buildInboxRowHtml(row, state);
-    }).join(''));
+    // Keep the list-head chrome (checkbox / bulk / filter) at a fixed height
+    // while only the body patch changes — avoids the header "bulge" on pin /
+    // archive updates.
+    MORPH.patch(listBody, rows.length
+      ? rows.map(function (row) { return buildInboxRowHtml(row, state); }).join('')
+      : '<div class="tma-dash__email-list-empty">No messages</div>');
 
     var selectAll = root.querySelector('[data-email-selectall]');
     if (selectAll) {
@@ -5957,6 +6107,7 @@
       selectAll.indeterminate = false;
     }
 
+    updateEmailListBulk(root, state);
     wireListRows(root, state, render);
   }
 
@@ -6286,6 +6437,7 @@
                 if (typeof saved.count === 'number') existing.count = saved.count;
               }
             } else {
+              if (saved.localOnly === undefined) saved.localOnly = true;
               state.labels.push(saved);
               state.labels.sort(function (a, b) {
                 return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
@@ -6366,21 +6518,23 @@
           var nowPinned = !pinRow.pinned;
           pinRow.pinned = nowPinned;
           resortPinnedRows(state);
-          render();
+          // Patch the list only — a full render grows/shrinks the list head.
+          updateInboxList(root, state, render);
           showEmailToast(root, nowPinned ? 'Message pinned' : 'Message unpinned');
           api().setFlags(id, { pinned: nowPinned }).catch(function (err) {
             var revert = findRow(state, id);
             if (revert) revert.pinned = !nowPinned;
             resortPinnedRows(state);
             reportMailError(state, err);
-            render();
+            updateInboxList(root, state, render);
           });
           return;
         }
 
-        if (action === 'archive' || action === 'delete') {
+        if (action === 'archive' || action === 'inbox' || action === 'delete') {
           var wrap = rowEl.closest('[data-email-row-swipe]');
-          applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : 'archive', wrap);
+          var destination = action === 'delete' ? 'trash' : action;
+          applyEmailRowAction(root, state, render, id, destination, wrap);
           return;
         }
 
@@ -6826,6 +6980,65 @@
       }
     }
 
+    MORPH.unwired(root, '[data-email-sidebar-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.sidebarCollapsed = !state.sidebarCollapsed;
+        saveSidebarCollapsed(state.sidebarCollapsed);
+        render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-filter]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        state.filterMenuOpen = !state.filterMenuOpen;
+        render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-filter-item]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        state.listFilter = btn.getAttribute('data-email-filter-item') || 'all';
+        state.filterMenuOpen = false;
+        clearEmailSelection(state);
+        render();
+      });
+    });
+
+    if (!root._emailFilterOutsideBound) {
+      root._emailFilterOutsideBound = true;
+      root.addEventListener('click', function (event) {
+        if (!state.filterMenuOpen) return;
+        if (event.target.closest('[data-email-filter-wrap]')) return;
+        state.filterMenuOpen = false;
+        var menu = root.querySelector('[data-email-filter-menu]');
+        var toggle = root.querySelector('[data-email-filter]');
+        if (menu) menu.hidden = true;
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    MORPH.unwired(root, '[data-email-detail-topbar]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var action = btn.getAttribute('data-email-detail-topbar');
+        var id = state.selectedId;
+        if (!id || !action || action === 'more') return;
+        if (action === 'archive' || action === 'inbox' || action === 'delete') {
+          applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : action, null);
+          return;
+        }
+        if (action === 'unread') {
+          markRowUnread(state, id);
+          render();
+          return;
+        }
+        if (action === 'spam') {
+          applyEmailRowAction(root, state, render, id, 'spam', null);
+        }
+      });
+    });
+
     MORPH.unwired(root, '[data-email-folder]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var folder = btn.getAttribute('data-email-folder');
@@ -6836,12 +7049,42 @@
         }
         state.folder = folder;
         state.activeLabelId = null;
+        state.listFilter = 'all';
+        state.filterMenuOpen = false;
         state.reading = false;
         state.mobileNavOpen = false;
         state.selectedId = null;
         clearEmailSelection(state);
         if (folder === 'templates' || folder === 'inbox') syncEmailUrl(folder);
         reloadMessages(root, state, render);
+      });
+    });
+
+    // List bulk toolbar lives inside the email root (split + single). Wire it
+    // directly so split-mode clicks are never lost to shell event quirks.
+    MORPH.unwired(root, '[data-email-bulk-action]').forEach(function (bulkBtn) {
+      bulkBtn.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        var action = bulkBtn.getAttribute('data-email-bulk-action');
+        var ids = Object.keys(state.checkedIds);
+        if (!ids.length) return;
+
+        if (action === 'more') {
+          if (state.bulkMoreMenuOpen) closeEmailBulkMoreMenu(root, state);
+          else openEmailBulkMoreMenu(root, state, bulkBtn);
+          ensureEmailMobileHeader(root, state);
+          return;
+        }
+
+        closeEmailBulkMoreMenu(root, state);
+
+        if (action === 'move') {
+          openEmailLabelPopup(root, state, bulkBtn, { bulk: true });
+          return;
+        }
+
+        applyBulkAction(root, state, render, ids, action);
       });
     });
 
@@ -7284,6 +7527,9 @@
       labelEditorId: null,
       layoutStyle: loadLayoutStyle(),
       splitListRatio: loadSplitListRatio(),
+      sidebarCollapsed: loadSidebarCollapsed(),
+      listFilter: 'all',
+      filterMenuOpen: false,
       reading: false,
       inlineCompose: null,
       mobileNavOpen: false,

@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * denormalised copies kept for listing and search. `toRecord()` is the single
  * shape the clients UI consumes.
  */
-#[Fillable(['uid', 'user_id', 'folder_id', 'name', 'company', 'email', 'phone', 'initial', 'initial_color', 'data', 'created_by'])]
+#[Fillable(['uid', 'user_id', 'folder_id', 'company_id', 'name', 'company', 'email', 'phone', 'initial', 'initial_color', 'data', 'created_by'])]
 class Client extends Model
 {
     use SoftDeletes;
@@ -45,6 +45,12 @@ class Client extends Model
         return $this->belongsTo(Folder::class, 'folder_id');
     }
 
+    /** Optional company this person belongs to. */
+    public function companyRecord(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'company_id');
+    }
+
     public function assignments(): HasMany
     {
         return $this->hasMany(ClientAssignment::class);
@@ -58,6 +64,10 @@ class Client extends Model
      */
     public function toRecord(): array
     {
+        $company = $this->relationLoaded('companyRecord')
+            ? $this->companyRecord
+            : $this->companyRecord()->first();
+
         return [
             'id' => $this->uid,
             'name' => $this->name,
@@ -66,6 +76,9 @@ class Client extends Model
             'profile' => $this->data ?? [],
             'folderUuid' => $this->folder?->uuid,
             'hasLogin' => $this->user_id !== null,
+            'userId' => $this->user_id,
+            'companyId' => $company?->uid,
+            'companyName' => $company?->name ?? $this->company,
         ];
     }
 }

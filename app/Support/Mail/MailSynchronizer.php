@@ -274,35 +274,14 @@ class MailSynchronizer
         return $written;
     }
 
-    /** Pulls the user's labels/categories so the chips render real names. */
+    /**
+     * Labels in the portal are user-created only. Provider categories/labels
+     * are intentionally not imported as sidebar defaults — the user adds what
+     * they want via New label.
+     */
     public function syncLabels(): void
     {
-        $labels = Mailbox::provider($this->account)->listLabels();
-
-        // Rotate through the tones the email UI already ships, so labels get
-        // stable, distinguishable colours without the user picking any.
-        $tones = ['blue', 'green', 'purple', 'orange', 'red', 'gray'];
-        $index = 0;
-
-        foreach ($labels as $label) {
-            if ($label['system']) {
-                continue;
-            }
-
-            MailLabel::updateOrCreate(
-                [
-                    'connected_account_id' => $this->account->id,
-                    'remote_id' => $label['id'],
-                ],
-                [
-                    'uuid' => (string) Str::uuid(),
-                    'user_id' => $this->account->user_id,
-                    'name' => $label['name'],
-                    'tone' => $tones[$index++ % count($tones)],
-                    'is_system' => false,
-                ]
-            );
-        }
+        // no-op
     }
 
     /**

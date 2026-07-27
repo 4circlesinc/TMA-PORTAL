@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\Company;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Files\FolderProvisioner;
@@ -25,7 +26,11 @@ class ClientsController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $clients = Client::orderBy('name')->get()->map->toRecord()->values();
+        $clients = Client::with(['folder', 'companyRecord'])
+            ->orderBy('name')
+            ->get()
+            ->map->toRecord()
+            ->values();
 
         return response()->json(['clients' => $clients]);
     }
@@ -63,14 +68,14 @@ class ClientsController extends Controller
             'action_url' => '/clients?client='.$client->uid,
         ]);
 
-        return response()->json(['client' => $client->fresh()->toRecord()]);
+        return response()->json(['client' => $client->fresh(['folder', 'companyRecord'])->toRecord()]);
     }
 
     public function show(Request $request, string $uid): JsonResponse
     {
         $this->authorizeStaff($request);
 
-        $client = Client::where('uid', $uid)->firstOrFail();
+        $client = Client::with(['folder', 'companyRecord'])->where('uid', $uid)->firstOrFail();
 
         return response()->json(['client' => $client->toRecord()]);
     }
@@ -98,7 +103,7 @@ class ClientsController extends Controller
             'client' => $client,
         ]);
 
-        return response()->json(['client' => $client->fresh()->toRecord()]);
+        return response()->json(['client' => $client->fresh(['folder', 'companyRecord'])->toRecord()]);
     }
 
     public function destroy(Request $request, string $uid): JsonResponse
@@ -161,6 +166,7 @@ class ClientsController extends Controller
             'name' => ['nullable', 'string', 'max:255'],
             'initial' => ['nullable', 'string', 'max:4'],
             'initialColor' => ['nullable', 'string', 'max:24'],
+            'companyId' => ['nullable', 'string', 'max:96'],
             'profile' => ['required', 'array'],
             'profile.phones' => ['nullable', 'array'],
             'profile.emails' => ['nullable', 'array'],
@@ -186,11 +192,19 @@ class ClientsController extends Controller
     private function columns(string $uid, array $data, ?User $creator): array
     {
         $profile = $data['profile'];
+        $company = $this->resolveCompany($data['companyId'] ?? null, $profile['work']['company'] ?? null);
+
+        if ($company) {
+            $profile['work'] = array_merge($profile['work'] ?? [], [
+                'company' => $company->name,
+            ]);
+        }
 
         return [
             'uid' => $uid,
             'name' => $this->deriveName($data, $profile),
-            'company' => $profile['work']['company'] ?? null,
+            'company_id' => $company?->id,
+            'company' => $company?->name ?? ($profile['work']['company'] ?? null),
             'email' => $this->firstValue($profile['emails'] ?? []),
             'phone' => $this->firstValue($profile['phones'] ?? []),
             'initial' => $data['initial'] ?? null,
@@ -198,6 +212,21 @@ class ClientsController extends Controller
             'data' => $profile,
             'created_by' => $creator?->id,
         ];
+    }
+
+    private function resolveCompany(?string $companyUid, ?string $companyName): ?Company
+    {
+        if ($companyUid) {
+            return Company::where('uid', $companyUid)->first();
+        }
+
+        $name = trim((string) $companyName);
+        if ($name === '') {
+            return null;
+        }
+
+        // Legacy free-text company: attach to an existing match when possible.
+        return Company::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
     }
 
     /**

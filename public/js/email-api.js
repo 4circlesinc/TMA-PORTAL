@@ -146,6 +146,14 @@
       return mailFetch(BASE + '/bulk', { method: 'POST', json: { ids: ids, action: action } });
     },
 
+    /* Fill attachment chips for listed mail without opening each message. */
+    hydrateAttachments: function (ids) {
+      return mailFetch(BASE + '/hydrate-attachments', {
+        method: 'POST',
+        json: { ids: ids || [] },
+      });
+    },
+
     send: function (payload) {
       return mailFetch(BASE + '/send', { method: 'POST', json: payload });
     },

@@ -119,6 +119,7 @@ class ClientAssignmentController extends Controller
             'userId' => $a->user_id,
             'name' => $a->user?->name,
             'email' => $a->user?->email,
+            'avatar' => $a->user?->photoUrl(),
             'level' => $a->permission_level,
             'primary' => $a->is_primary,
         ])->values()->all();
@@ -130,11 +131,12 @@ class ClientAssignmentController extends Controller
         return User::whereIn('account_type', self::STAFF)
             ->where('status', 'approved')
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'account_type'])
+            ->get()
             ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
+                'avatar' => $u->photoUrl(),
                 'accountType' => $u->account_type,
             ])->values()->all();
     }

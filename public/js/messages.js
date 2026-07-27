@@ -7535,7 +7535,8 @@
    * Mount
    * ---------------------------------------------------------------- */
 
-  function mount(root) {
+  function mount(root, opts) {
+    opts = opts || {};
     // messages.js is loaded from every portal shell; the API client has to be
     // loaded alongside it. Fail loudly here rather than part-way through a
     // render, which is how a missing shell script used to surface.
@@ -7634,6 +7635,9 @@
 
     if (root._messagesMounted) {
       render();
+      if (opts.openDirectUserId) {
+        startConversationWith(root, state, render, opts.openDirectUserId);
+      }
       return;
     }
     root._messagesMounted = true;
@@ -7779,12 +7783,22 @@
     });
 
     render();
-    loadConversations(root, state, render);
+    loadConversations(root, state, render).then(function () {
+      if (opts.openDirectUserId) {
+        startConversationWith(root, state, render, opts.openDirectUserId);
+      }
+    });
   }
 
   window.TMAMessages = {
     mount: mount,
     clearMobileHeader: clearMessagesMobileHeader,
     getInboxUnreadCount: getInboxUnreadCount,
+    openDirect: function (userId) {
+      var mountEl = document.querySelector('[data-messages]');
+      if (!mountEl || !mountEl._messagesState) return;
+      // Re-enter via mount so wiring/state stay consistent.
+      mount(mountEl, { openDirectUserId: userId });
+    },
   };
 })();

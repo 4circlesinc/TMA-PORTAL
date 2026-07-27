@@ -88,8 +88,11 @@ class MailController extends Controller
                 'syncedAt' => $account->mail_synced_at?->toIso8601String(),
             ],
             'folders' => $this->folderCounts($user->id),
+            // Only user-created portal labels — do not surface provider-synced
+            // defaults (Gmail categories, etc.) in the Labels section.
             'labels' => MailLabel::where('user_id', $user->id)
                 ->where('is_system', false)
+                ->where('remote_id', 'like', MailLabel::LOCAL_PREFIX.'%')
                 ->withCount('messages')
                 ->orderBy('name')
                 ->get()
@@ -942,6 +945,50 @@ class MailController extends Controller
     }
 
     /**
+     * Hydrate attachment metadata for inbox chips without opening each
+     * message in the reading pane. Limited and best-effort so a slow provider
+     * cannot stall the list itself.
+     */
+    public function hydrateAttachments(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'max:40'],
+            'ids.*' => ['string', 'uuid'],
+        ]);
+
+        $messages = MailMessage::query()
+            ->where('user_id', $request->user()->id)
+            ->whereIn('uuid', $data['ids'])
+            ->where('has_attachments', true)
+            ->with('attachments')
+            ->get();
+
+        $out = [];
+
+        foreach ($messages as $message) {
+            if ($message->attachments->isEmpty()) {
+                // Prefer a light attachment refresh; fall back to full hydrate
+                // when the provider only returns attachments with the body.
+                $this->refreshAttachments($message);
+                $message->load('attachments');
+
+                if ($message->attachments->isEmpty()) {
+                    $this->hydrate($message);
+                    $message->load('attachments');
+                }
+            }
+
+            $out[] = [
+                'id' => $message->uuid,
+                'attachmentsPreview' => $message->attachments->take(8)->map->toRecord()->values()->all(),
+                'attachmentCount' => $message->attachments->count(),
+            ];
+        }
+
+        return response()->json(['messages' => $out]);
+    }
+
+    /**
      * The toolbar's multi-select actions. Applied one at a time because
      * neither provider offers a batch endpoint covering all of them; failures
      * are collected rather than aborting the rest.
@@ -1040,10 +1087,8 @@ class MailController extends Controller
     }
 
     /**
-     * Create a label. Written to the provider first (a Gmail label, an Outlook
-     * category) so the rest of the user's mail clients see it too; when the
-     * provider cannot hold it the label still exists in the portal, marked
-     * local-only so no message write ever calls the provider for it.
+     * Create a portal-owned label for the Labels section. Provider defaults
+     * are not mirrored here — users only see labels they create themselves.
      */
     public function createLabel(Request $request): JsonResponse
     {
@@ -1064,17 +1109,13 @@ class MailController extends Controller
             return response()->json(['message' => 'You already have a label with that name.'], 422);
         }
 
-        $remoteId = rescue(
-            fn () => Mailbox::provider($account)->createLabel($name),
-            null,
-            report: false,
-        );
-
+        // Portal-owned labels only — the Labels section is for user-created
+        // chips, not a mirror of the provider's default categories.
         $label = MailLabel::create([
             'uuid' => (string) Str::uuid(),
             'user_id' => $user->id,
             'connected_account_id' => $account->id,
-            'remote_id' => $remoteId ?: MailLabel::LOCAL_PREFIX.Str::uuid(),
+            'remote_id' => MailLabel::LOCAL_PREFIX.Str::uuid(),
             'name' => $name,
             'tone' => $data['tone'],
             'is_system' => false,

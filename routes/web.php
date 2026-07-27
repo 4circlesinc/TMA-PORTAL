@@ -11,6 +11,7 @@ use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientsController;
+use App\Http\Controllers\CompaniesController;
 use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
@@ -257,6 +258,14 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/{uid}/duplicate', [ClientsController::class, 'duplicate'])->name('duplicate');
     });
 
+    Route::prefix('portal/companies')->name('companies.')->group(function () {
+        Route::get('/', [CompaniesController::class, 'index'])->name('index');
+        Route::post('/', [CompaniesController::class, 'store'])->name('store');
+        Route::get('/{uid}', [CompaniesController::class, 'show'])->name('show');
+        Route::patch('/{uid}', [CompaniesController::class, 'update'])->name('update');
+        Route::delete('/{uid}', [CompaniesController::class, 'destroy'])->name('destroy');
+    });
+
     /*
      * Mailbox API. Backed by the user's connected Google or Microsoft account
      * (see App\Support\Mail). Messages are addressed by uuid; every write hits
@@ -286,6 +295,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
 
         Route::post('/send', [MailController::class, 'send'])->name('send');
         Route::post('/bulk', [MailController::class, 'bulk'])->name('bulk');
+        Route::post('/hydrate-attachments', [MailController::class, 'hydrateAttachments'])->name('hydrate-attachments');
         Route::get('/attachments/{uuid}', [MailController::class, 'attachment'])->name('attachment');
 
         Route::get('/messages', [MailController::class, 'messages'])->name('messages');

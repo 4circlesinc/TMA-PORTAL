@@ -1033,7 +1033,11 @@
       }
       if (viewName === 'messages' && window.TMAMessages) {
         var messagesMount = root.querySelector('[data-messages]');
-        if (messagesMount) window.TMAMessages.mount(messagesMount);
+        if (messagesMount) {
+          window.TMAMessages.mount(messagesMount, {
+            openDirectUserId: opts.openDirectUserId || null,
+          });
+        }
       }
       if (viewName === 'feed' && window.TMAFeed) {
         var feedMount = root.querySelector('[data-feed]');

@@ -86,34 +86,25 @@ class MailLabelsTest extends TestCase
         ], $extra));
     }
 
-    public function test_creating_a_label_writes_it_to_the_provider_and_the_portal(): void
+    public function test_creating_a_label_stores_it_as_a_portal_only_label(): void
     {
         $user = $this->user();
         $this->account($user);
 
-        $this->fakeToken([
-            'gmail.googleapis.com/gmail/v1/users/me/labels' => Http::response(['id' => 'Label_77', 'name' => 'Invoices']),
-        ]);
+        $this->fakeToken();
 
         $this->actingAs($user)
             ->postJson('/portal/mail/labels', ['name' => 'Invoices', 'tone' => 'green'])
             ->assertCreated()
             ->assertJsonPath('label.name', 'Invoices')
             ->assertJsonPath('label.tone', 'green')
-            ->assertJsonPath('label.count', 0);
+            ->assertJsonPath('label.count', 0)
+            ->assertJsonPath('label.localOnly', true);
 
-        $this->assertDatabaseHas('mail_labels', [
-            'user_id' => $user->id,
-            'name' => 'Invoices',
-            'tone' => 'green',
-            'remote_id' => 'Label_77',
-        ]);
-
-        Http::assertSent(function ($request) {
-            return str_contains($request->url(), '/labels')
-                && $request->method() === 'POST'
-                && ($request->data()['name'] ?? null) === 'Invoices';
-        });
+        $label = MailLabel::where('name', 'Invoices')->firstOrFail();
+        $this->assertTrue($label->isLocalOnly());
+        $this->assertSame('green', $label->tone);
+        $this->assertSame($user->id, $label->user_id);
     }
 
     public function test_a_label_the_provider_refuses_still_exists_as_a_portal_only_label(): void
@@ -273,7 +264,10 @@ class MailLabelsTest extends TestCase
     {
         $user = $this->user();
         $account = $this->account($user);
-        $label = $this->label($user, $account);
+        $label = $this->label($user, $account, [
+            'remote_id' => MailLabel::LOCAL_PREFIX.Str::uuid(),
+            'name' => 'Clients',
+        ]);
         $message = $this->message($user, $account);
         $message->labels()->attach($label->id);
 
@@ -283,6 +277,24 @@ class MailLabelsTest extends TestCase
             ->getJson('/portal/mail')
             ->assertOk()
             ->assertJsonPath('labels.0.name', 'Clients')
-            ->assertJsonPath('labels.0.count', 1);
+            ->assertJsonPath('labels.0.count', 1)
+            ->assertJsonPath('labels.0.localOnly', true);
+    }
+
+    public function test_the_bootstrap_hides_provider_synced_labels(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $this->label($user, $account, [
+            'remote_id' => 'Label_1',
+            'name' => 'CATEGORY_PERSONAL',
+        ]);
+
+        $this->fakeToken(['gmail.googleapis.com/*' => Http::response(['labels' => []])]);
+
+        $this->actingAs($user)
+            ->getJson('/portal/mail')
+            ->assertOk()
+            ->assertJsonPath('labels', []);
     }
 }

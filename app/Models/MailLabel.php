@@ -53,6 +53,8 @@ class MailLabel extends Model
             'tone' => $this->tone,
             // Present when the query loaded it (withCount); the sidebar badge.
             'count' => $this->messages_count !== null ? (int) $this->messages_count : null,
+            // Portal Labels section only lists user-created (local) labels.
+            'localOnly' => $this->isLocalOnly(),
         ];
     }
 }
