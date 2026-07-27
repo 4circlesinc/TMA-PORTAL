@@ -12,8 +12,13 @@ class ThumbnailController extends BaseFilesController
     /** A small cached image thumbnail; 404 when the file can't be thumbnailed. */
     public function show(Request $request, string $uuid): BinaryFileResponse
     {
-        $file = $this->findFile($uuid);
-        FileAccess::authorize($this->user($request), 'view', $file);
+        $user = $this->user($request);
+        $file = $this->findFile($uuid, withTrashed: true);
+        if ($file->trashed()) {
+            abort_unless(FileAccess::isAdmin($user), 403, 'Permission denied.');
+        } else {
+            FileAccess::authorize($user, 'view', $file);
+        }
 
         if (Thumbnail::isSvg($file)) {
             $path = Thumbnail::ensureSvg($file);

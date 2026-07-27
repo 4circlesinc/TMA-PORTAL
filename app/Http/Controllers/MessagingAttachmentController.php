@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\MessageAttachment;
+use App\Support\Files\FileAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -72,8 +73,25 @@ class MessagingAttachmentController extends Controller
      */
     private function attachmentFor(Request $request, string $uuid): MessageAttachment
     {
+        $user = $request->user();
+
+        // Administrators may resolve soft-deleted attachments for Recycle Bin previews.
+        if (FileAccess::isAdmin($user)) {
+            $trashed = MessageAttachment::onlyTrashed()->where('uuid', $uuid)->first();
+            if ($trashed) {
+                return $trashed;
+            }
+        }
+
         return MessageAttachment::query()
-            ->whereHas('message.conversation', fn ($q) => $q->forUser($request->user()))
+            ->where(function ($q) use ($user) {
+                $q->whereHas('message.conversation', fn ($c) => $c->forUser($user))
+                    ->orWhere(function ($staged) use ($user) {
+                        $staged->whereNull('message_id')
+                            ->where('uploaded_by', $user->id)
+                            ->whereHas('conversation', fn ($c) => $c->forUser($user));
+                    });
+            })
             ->where('uuid', $uuid)
             ->firstOrFail();
     }

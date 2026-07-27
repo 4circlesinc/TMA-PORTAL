@@ -6505,6 +6505,22 @@
     width: 100%;
   }
 
+  .tma-dash__recycle--overview .tma-dash__ctable--overview .tma-dash__ctr--head,
+  .tma-dash__recycle--overview .tma-dash__ctable--overview .tma-dash__ctr--body {
+    display: grid;
+    /* check | name | type | size | deleted by | deleted | actions */
+    grid-template-columns:
+      40px
+      minmax(160px, 1.6fr)
+      110px
+      80px
+      minmax(120px, 1fr)
+      150px
+      72px;
+    align-items: center;
+    width: 100%;
+  }
+
   .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--head,
   .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body {
     display: grid;
@@ -29396,4 +29412,66 @@ span.tma-dash__messages-profile-avatar {
     justify-content: flex-start;
     padding-left: 4px;
   }
+}
+
+/* Overview Recycle Bin visuals */
+.tma-dash__overview-recycle-tab {
+  width: 100%;
+  min-width: 0;
+}
+
+.tma-dash__recycle--overview {
+  width: 100%;
+}
+
+.tma-dash__overview-recycle-visual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
+.tma-dash__overview-recycle-avatar,
+.tma-dash__overview-recycle-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.tma-dash__overview-recycle-thumb {
+  border-radius: 6px;
+}
+
+.tma-dash__recycle--overview .tma-dash__cc--filename {
+  display: flex;
+  align-items: center;
+  gap: var(--dash-icon-text-gap, 8px);
+  min-width: 0;
+}
+
+.tma-dash__recycle--overview .tma-dash__cc--actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.tma-dash__overview-recycle-select {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-8, 8px);
+  background: var(--color-white);
+  font-size: 13px;
+}
+
+.tma-dash__recycle--overview .tma-dash__cc--date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }

@@ -10,7 +10,10 @@ use App\Models\Group;
 use App\Models\MessageAttachment;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Files\FileType;
 use App\Support\Files\FolderTree;
+use App\Support\Files\Presenter;
+use App\Support\Files\Thumbnail;
 use App\Support\Files\Vault;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -168,7 +171,7 @@ class AdminRecycleBin
         $trashedFolders = self::trashedFolderIds();
 
         return FileItem::onlyTrashed()
-            ->with(['owner:id,name', 'deletedBy:id,name'])
+            ->with(['owner', 'deletedBy'])
             ->where(fn ($q) => $q->whereNull('folder_id')->orWhereNotIn('folder_id', $trashedFolders ?: [0]))
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.mb_strtolower($search).'%';
@@ -177,15 +180,28 @@ class AdminRecycleBin
             ->orderByDesc('deleted_at')
             ->limit(self::PER_KIND)
             ->get()
-            ->map(fn (FileItem $f) => self::row(
-                kind: 'file',
-                id: $f->uuid,
-                name: $f->name,
-                subtitle: 'File'.($f->owner?->name ? ' · '.$f->owner->name : ''),
-                deletedAt: $f->deleted_at,
-                deletedBy: $f->deletedBy,
-                meta: ['extension' => $f->extension, 'size' => (int) $f->size],
-            ));
+            ->map(function (FileItem $f) {
+                $ext = (string) $f->extension;
+
+                return self::row(
+                    kind: 'file',
+                    id: $f->uuid,
+                    name: $f->name,
+                    subtitle: 'File'.($f->owner?->name ? ' · '.$f->owner->name : ''),
+                    deletedAt: $f->deleted_at,
+                    deletedBy: $f->deletedBy,
+                    meta: [
+                        'extension' => $ext,
+                        'mime' => $f->mime_type,
+                        'size' => (int) $f->size,
+                        'sizeLabel' => Presenter::humanSize((int) $f->size),
+                        'icon' => FileType::icon($ext),
+                        'category' => FileType::category($ext),
+                        'thumbUrl' => Thumbnail::supportsExt($ext) ? route('files.thumb', $f->uuid) : null,
+                        'previewUrl' => FileType::isPreviewable($ext) ? route('files.preview', $f->uuid) : null,
+                    ],
+                );
+            });
     }
 
     /** @return Collection<int, array<string, mixed>> */
@@ -194,7 +210,7 @@ class AdminRecycleBin
         $trashedFolders = self::trashedFolderIds();
 
         return Folder::onlyTrashed()
-            ->with(['owner:id,name', 'deletedBy:id,name'])
+            ->with(['owner', 'deletedBy'])
             ->where(fn ($q) => $q->whereNull('parent_id')->orWhereNotIn('parent_id', $trashedFolders ?: [0]))
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.mb_strtolower($search).'%';
@@ -210,6 +226,12 @@ class AdminRecycleBin
                 subtitle: 'Folder'.($f->owner?->name ? ' · '.$f->owner->name : ''),
                 deletedAt: $f->deleted_at,
                 deletedBy: $f->deletedBy,
+                meta: [
+                    'colour' => $f->colour,
+                    'iconName' => $f->icon_name,
+                    'folderType' => $f->folder_type,
+                    'fileCount' => null,
+                ],
             ));
     }
 
@@ -217,7 +239,7 @@ class AdminRecycleBin
     private static function clients(?string $search): Collection
     {
         return Client::onlyTrashed()
-            ->with(['creator:id,name'])
+            ->with(['creator', 'user'])
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.mb_strtolower($search).'%';
                 $q->where(function ($w) use ($like) {
@@ -229,14 +251,27 @@ class AdminRecycleBin
             ->orderByDesc('deleted_at')
             ->limit(self::PER_KIND)
             ->get()
-            ->map(fn (Client $c) => self::row(
-                kind: 'client',
-                id: $c->uid,
-                name: $c->name ?: 'Client',
-                subtitle: 'Client'.($c->company ? ' · '.$c->company : ''),
-                deletedAt: $c->deleted_at,
-                deletedBy: $c->creator,
-            ));
+            ->map(function (Client $c) {
+                $data = is_array($c->data) ? $c->data : [];
+                $photo = data_get($data, 'photo')
+                    ?: data_get($data, 'profile.photo')
+                    ?: $c->user?->photoUrl();
+
+                return self::row(
+                    kind: 'client',
+                    id: $c->uid,
+                    name: $c->name ?: 'Client',
+                    subtitle: 'Client'.($c->company ? ' · '.$c->company : ''),
+                    deletedAt: $c->deleted_at,
+                    deletedBy: $c->creator,
+                    meta: [
+                        'avatarUrl' => $photo,
+                        'initial' => $c->initial,
+                        'initialColor' => $c->initial_color,
+                        'company' => $c->company,
+                    ],
+                );
+            });
     }
 
     /** @return Collection<int, array<string, mixed>> */
@@ -258,6 +293,7 @@ class AdminRecycleBin
                 subtitle: 'Signature',
                 deletedAt: $s->deleted_at,
                 deletedBy: $s->creator,
+                meta: ['icon' => 'PenNib'],
             ));
     }
 
@@ -280,6 +316,7 @@ class AdminRecycleBin
                 subtitle: 'Group',
                 deletedAt: $g->deleted_at,
                 deletedBy: $g->creator,
+                meta: ['icon' => 'UsersThree'],
             ));
     }
 
@@ -302,6 +339,7 @@ class AdminRecycleBin
                 subtitle: 'Calendar',
                 deletedAt: $e->deleted_at,
                 deletedBy: $e->organizer,
+                meta: ['icon' => 'CalendarBlank'],
             ));
     }
 
@@ -309,7 +347,7 @@ class AdminRecycleBin
     private static function messageAttachments(?string $search): Collection
     {
         return MessageAttachment::onlyTrashed()
-            ->with(['uploader:id,name'])
+            ->with(['uploader', 'deletedBy'])
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.mb_strtolower($search).'%';
                 $q->whereRaw('LOWER(name) like ?', [$like]);
@@ -317,15 +355,30 @@ class AdminRecycleBin
             ->orderByDesc('deleted_at')
             ->limit(self::PER_KIND)
             ->get()
-            ->map(fn (MessageAttachment $a) => self::row(
-                kind: 'message_attachment',
-                id: $a->uuid,
-                name: $a->name,
-                subtitle: 'Message file',
-                deletedAt: $a->deleted_at,
-                deletedBy: $a->deletedBy ?: $a->uploader,
-                meta: ['mime' => $a->mime, 'size' => (int) $a->size],
-            ));
+            ->map(function (MessageAttachment $a) {
+                $ext = strtolower((string) ($a->extension ?: pathinfo((string) $a->name, PATHINFO_EXTENSION)));
+
+                return self::row(
+                    kind: 'message_attachment',
+                    id: $a->uuid,
+                    name: $a->name,
+                    subtitle: 'Message file',
+                    deletedAt: $a->deleted_at,
+                    deletedBy: $a->deletedBy ?: $a->uploader,
+                    meta: [
+                        'mime' => $a->mime,
+                        'extension' => $ext,
+                        'size' => (int) $a->size,
+                        'sizeLabel' => Presenter::humanSize((int) $a->size),
+                        'icon' => FileType::icon($ext),
+                        'category' => FileType::category($ext),
+                        'thumbUrl' => $a->thumb_path
+                            ? route('messaging.attachments.thumb', $a->uuid)
+                            : null,
+                        'isImage' => $a->isImage(),
+                    ],
+                );
+            });
     }
 
     /** @param  array<string, mixed>  $meta */
@@ -347,6 +400,7 @@ class AdminRecycleBin
             'deletedBy' => $deletedBy ? [
                 'id' => $deletedBy->id,
                 'name' => $deletedBy->name,
+                'avatar' => $deletedBy->photoUrl(),
             ] : null,
             'meta' => $meta,
             'canRestore' => true,
