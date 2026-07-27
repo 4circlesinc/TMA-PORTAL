@@ -15,6 +15,7 @@ use App\Http\Controllers\CompaniesController;
 use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
+use App\Http\Controllers\Design\MailPreviewController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\FileLibraryController;
@@ -592,6 +593,22 @@ Route::post('/s/{token}/unlock', [PublicShareController::class, 'unlock'])->name
 Route::get('/s/{token}/preview', [PublicShareController::class, 'preview'])->name('share.preview');
 Route::get('/s/{token}/download', [PublicShareController::class, 'download'])->name('share.download');
 Route::get('/s/{token}/file/{fileUuid}', [PublicShareController::class, 'file'])->name('share.file');
+
+/*
+ * Email postcard gallery. A staff-only documentation site that renders every
+ * transactional email from sample data for review and approval, before any of
+ * them are wired to real events. Available on the live portal (unlike the
+ * local-only /design previews below) so it can actually be signed off on.
+ */
+Route::middleware(['auth', 'verified', 'account.approved'])
+    ->prefix('design/mail')->name('design.mail.')
+    ->group(function () {
+        Route::get('/', [MailPreviewController::class, 'index'])->name('index');
+        Route::get('/{slug}/raw', [MailPreviewController::class, 'show'])
+            ->where('slug', '[a-z0-9\-]+')->name('raw');
+        Route::get('/{slug}', [MailPreviewController::class, 'index'])
+            ->where('slug', '[a-z0-9\-]+')->name('show');
+    });
 
 /*
  * Friendly aliases from the design-phase URLs.

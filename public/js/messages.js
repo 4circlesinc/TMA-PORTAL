@@ -76,6 +76,37 @@
   }
 
   /*
+   * One draggable divider sets the inbox column's width; the chat takes the
+   * rest, so a single handle resizes both. Because the settings and new-message
+   * panels live inside the inbox column, they follow the same width for free.
+   * Default is the original 320px, so an untouched page looks exactly as before.
+   */
+  var INBOX_WIDTH_KEY = 'tma.messages.inboxWidth';
+  var INBOX_WIDTH_DEFAULT = 320;
+  var INBOX_WIDTH_MIN = 260;
+  var INBOX_WIDTH_MAX = 600;
+
+  function clampInboxWidth(px, layoutWidth) {
+    var max = INBOX_WIDTH_MAX;
+    // Never let the inbox crowd the chat below a readable width.
+    if (layoutWidth) max = Math.min(max, layoutWidth - 380);
+    if (max < INBOX_WIDTH_MIN) max = INBOX_WIDTH_MIN;
+    return Math.max(INBOX_WIDTH_MIN, Math.min(px, max));
+  }
+
+  function loadInboxWidth() {
+    try {
+      var v = parseInt(localStorage.getItem(INBOX_WIDTH_KEY), 10);
+      if (!isNaN(v)) return v;
+    } catch (e) {}
+    return INBOX_WIDTH_DEFAULT;
+  }
+
+  function saveInboxWidth(px) {
+    try { localStorage.setItem(INBOX_WIDTH_KEY, String(Math.round(px))); } catch (e) {}
+  }
+
+  /*
    * Live state. Conversations and messages come from /portal/messaging; there
    * is no local seed data. Until the first load resolves the page shows its
    * loading state rather than stand-in content.
@@ -199,13 +230,12 @@
     }
 
     if (presence.online) {
+      // Office/Teams style: a green dot + "Online" sitting right under the
+      // name. Kept to a single line — the subtitle carries any extra detail.
       return (
         '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-presence--online">' +
         '<span class="tma-dash__messages-chat-presence-dot" aria-hidden="true"></span>' +
-        '<span>Online</span></span>' +
-        (workLabel
-          ? '<span class="tma-dash__messages-chat-workstatus">' + esc(workLabel) + '</span>'
-          : '')
+        '<span>Online</span></span>'
       );
     }
     // Prefer a visible work status over a generic offline label when present.
@@ -369,12 +399,13 @@
 
   function renderChatContactText(row) {
     row = resolveThread(row);
+    // Name, then presence right beneath it (Office/Teams placement), then the
+    // subtitle as the optional third line.
     var html = renderContactName(row);
+    html += renderPresence(row);
     if (row.subtitle) {
       html += '<span class="tma-dash__messages-chat-subtitle">' + esc(row.subtitle) + '</span>';
     }
-
-    html += renderPresence(row);
     return html;
   }
 
@@ -1484,6 +1515,37 @@
     });
   }
 
+  /* Group conversations, surfaced under Updates as "Team channels" — the
+   * shared/organization threads, separated from one-to-one chats. Sorted so the
+   * organization channel leads, then whatever is unread. */
+  function getTeamChannels() {
+    return getThreads()
+      .filter(function (row) {
+        return row && row.type === 'group' && !row.archived;
+      })
+      .sort(function (a, b) {
+        if (!!b.isDefault !== !!a.isDefault) return b.isDefault ? 1 : -1;
+        return (b.unread || 0) - (a.unread || 0);
+      });
+  }
+
+  /* A channel row reuses the inbox row's inner markup for a consistent look,
+   * but carries data-messages-channel so opening it also returns the column to
+   * the chats list rather than leaving it stranded on Updates. */
+  function buildChannelRowHtml(row, state) {
+    var active = state.selectedId === row.id;
+    var rowCls =
+      'tma-dash__messages-row' +
+      (active ? ' tma-dash__messages-row--active' : '') +
+      (row.muted ? ' tma-dash__messages-row--muted' : '');
+    return (
+      '<div class="' + rowCls + '" data-messages-channel="' + esc(row.id) +
+      '" role="button" tabindex="0">' +
+      buildMessagesRowInner(row, state) +
+      '</div>'
+    );
+  }
+
   function renderUpdatesPanel(state) {
     var mine = state.myUpdate;
 
@@ -1536,8 +1598,21 @@
       }).join('');
     }
 
+    // Team channels: the group/organization threads, as their own category.
+    var channels = getTeamChannels();
+    var channelsSection = '';
+    if (channels.length) {
+      channelsSection =
+        '<div class="tma-dash__messages-list-group">Team channels</div>' +
+        '<div class="tma-dash__messages-channel-list">' +
+        channels.map(function (row) { return buildChannelRowHtml(row, state); }).join('') +
+        '</div>';
+    }
+
     return (
       '<div class="tma-dash__messages-updates">' + self +
+      channelsSection +
+      '<div class="tma-dash__messages-list-group">Team status</div>' +
       '<div class="tma-dash__messages-update-list">' + body + '</div>' +
       '</div>'
     );
@@ -1574,6 +1649,9 @@
             event: event,
             time: msg.time || '',
             media: (msg.systemEvent && msg.systemEvent.media) || 'audio',
+            answered: !!(msg.systemEvent && msg.systemEvent.answered),
+            // Who placed the call; lets each side show incoming vs outgoing.
+            initiatorId: (msg.systemEvent && msg.systemEvent.initiatorId) || null,
           });
         }
       });
@@ -1596,21 +1674,35 @@
       '<div class="tma-dash__messages-media">' +
       calls
         .map(function (call) {
+          // A naked, colour-coded phone icon carries the call's outcome:
+          // green in/out arrows for answered calls, red for missed / no-answer.
+          var outgoing = call.initiatorId != null && STORE.me && call.initiatorId === STORE.me.id;
+          var kind = call.media === 'video' ? 'Video' : 'Voice';
+          var iconMod, stateLabel, missed = false;
+
+          if (call.event === 'call_missed') {
+            missed = true;
+            iconMod = outgoing ? 'out-noanswer' : 'missed';
+            stateLabel = outgoing ? 'No answer' : 'Missed';
+          } else if (call.event === 'call_started') {
+            iconMod = outgoing ? 'out-answered' : 'in-answered';
+            stateLabel = 'Ongoing';
+          } else {
+            iconMod = outgoing ? 'out-answered' : 'in-answered';
+            stateLabel = outgoing ? 'Outgoing' : 'Incoming';
+          }
+
           return (
             '<button type="button" class="tma-dash__messages-person" data-messages-row="' +
             esc(call.conversationId) +
             '">' +
-            '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--initial">' +
-            '<img src="' +
-            (call.media === 'video' ? ICONS.VideoCamera : ICONS.Phone) +
-            '" alt="" width="18" height="18"></span>' +
+            '<span class="tma-dash__call-icon tma-dash__call-icon--' + iconMod + '" aria-hidden="true"></span>' +
             '<span class="tma-dash__messages-person-text">' +
             '<span class="tma-dash__messages-person-name">' +
             esc(call.name) +
             '</span>' +
-            '<span class="tma-dash__messages-person-meta">' +
-            esc(call.label) +
-            (call.event === 'call_missed' ? ' · Missed' : '') +
+            '<span class="tma-dash__messages-person-meta' + (missed ? ' is-missed' : '') + '">' +
+            stateLabel + ' · ' + kind + ' call' +
             (call.time ? ' · ' + esc(call.time) : '') +
             '</span></span></button>'
           );
@@ -3766,18 +3858,124 @@
     );
   }
 
+  function renderMessagesResizer(state) {
+    if (isMessagesMobile()) return '';
+    var w = typeof state.inboxWidth === 'number' ? state.inboxWidth : INBOX_WIDTH_DEFAULT;
+    return (
+      '<div class="tma-dash__messages-resizer" data-messages-resizer role="separator"' +
+      ' aria-orientation="vertical" aria-label="Resize inbox and chat" tabindex="0"' +
+      ' aria-valuemin="' + INBOX_WIDTH_MIN + '" aria-valuemax="' + INBOX_WIDTH_MAX + '"' +
+      ' aria-valuenow="' + Math.round(w) + '"></div>'
+    );
+  }
+
   function renderLayout(state, render) {
     var layoutCls = 'tma-dash__messages-layout';
+    var layoutStyle = '';
     if (isMessagesMobile()) {
       layoutCls += ' tma-dash__messages-layout--mobile';
       if (isMessagesReading(state)) layoutCls += ' tma-dash__messages-layout--mobile-reading';
+    } else {
+      if (typeof state.inboxWidth !== 'number') state.inboxWidth = loadInboxWidth();
+      layoutStyle = ' style="--messages-inbox-w:' + Math.round(state.inboxWidth) + 'px"';
     }
     var html =
-      '<div class="' + layoutCls + '">' +
+      '<div class="' + layoutCls + '"' + layoutStyle + '>' +
       renderList(state) +
+      renderMessagesResizer(state) +
       (state.profileOpen && state.selectedId ? renderProfile(state) : renderChat(state, render)) +
       '</div>';
     return html;
+  }
+
+  /* Drag/keyboard wiring for the inbox↔chat divider. Mirrors the mailbox split
+   * resizer: it sets the width CSS variable live during a drag rather than
+   * re-rendering, and only persists on release. Re-run after each render; the
+   * stored cleanup prevents listeners from stacking. */
+  function attachMessagesResizer(root, state) {
+    if (root._messagesResizeCleanup) {
+      root._messagesResizeCleanup();
+      root._messagesResizeCleanup = null;
+    }
+    if (isMessagesMobile()) return;
+
+    var layout = root.querySelector('.tma-dash__messages-layout');
+    var resizer = root.querySelector('[data-messages-resizer]');
+    if (!layout || !resizer) return;
+
+    if (typeof state.inboxWidth !== 'number') state.inboxWidth = loadInboxWidth();
+
+    function apply(px) {
+      layout.style.setProperty('--messages-inbox-w', Math.round(px) + 'px');
+      resizer.setAttribute('aria-valuenow', String(Math.round(px)));
+    }
+
+    function widthFrom(clientX) {
+      var rect = layout.getBoundingClientRect();
+      if (rect.width <= 0) return state.inboxWidth;
+      return clampInboxWidth(clientX - rect.left, rect.width);
+    }
+
+    var dragging = false;
+
+    function onPointerDown(e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      resizer.classList.add('tma-dash__messages-resizer--dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      if (typeof resizer.setPointerCapture === 'function') resizer.setPointerCapture(e.pointerId);
+      state.inboxWidth = widthFrom(e.clientX);
+      apply(state.inboxWidth);
+    }
+
+    function onPointerMove(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      state.inboxWidth = widthFrom(e.clientX);
+      apply(state.inboxWidth);
+    }
+
+    function onPointerUp(e) {
+      if (!dragging) return;
+      dragging = false;
+      resizer.classList.remove('tma-dash__messages-resizer--dragging');
+      document.body.style.removeProperty('cursor');
+      document.body.style.removeProperty('user-select');
+      if (typeof resizer.releasePointerCapture === 'function' &&
+          resizer.hasPointerCapture && resizer.hasPointerCapture(e.pointerId)) {
+        resizer.releasePointerCapture(e.pointerId);
+      }
+      saveInboxWidth(state.inboxWidth);
+    }
+
+    function onKeyDown(e) {
+      var step = 24;
+      var w = layout.getBoundingClientRect().width;
+      if (e.key === 'ArrowLeft') state.inboxWidth = clampInboxWidth((state.inboxWidth || INBOX_WIDTH_DEFAULT) - step, w);
+      else if (e.key === 'ArrowRight') state.inboxWidth = clampInboxWidth((state.inboxWidth || INBOX_WIDTH_DEFAULT) + step, w);
+      else if (e.key === 'Home') state.inboxWidth = INBOX_WIDTH_MIN;
+      else if (e.key === 'End') state.inboxWidth = clampInboxWidth(INBOX_WIDTH_MAX, w);
+      else return;
+      e.preventDefault();
+      apply(state.inboxWidth);
+      saveInboxWidth(state.inboxWidth);
+    }
+
+    resizer.addEventListener('pointerdown', onPointerDown);
+    resizer.addEventListener('pointermove', onPointerMove);
+    resizer.addEventListener('pointerup', onPointerUp);
+    resizer.addEventListener('pointercancel', onPointerUp);
+    resizer.addEventListener('keydown', onKeyDown);
+
+    root._messagesResizeCleanup = function () {
+      resizer.removeEventListener('pointerdown', onPointerDown);
+      resizer.removeEventListener('pointermove', onPointerMove);
+      resizer.removeEventListener('pointerup', onPointerUp);
+      resizer.removeEventListener('pointercancel', onPointerUp);
+      resizer.removeEventListener('keydown', onKeyDown);
+    };
   }
 
   function getMessagesDashRoot() {
@@ -4651,6 +4849,42 @@
     };
   }
 
+  /*
+   * Jump to the newest message and *stay* there. Setting scrollTop once is not
+   * enough: opening a conversation, the bubbles' images and link previews are
+   * still loading, so the scroll height keeps growing after the first paint and
+   * the view drifts up off the last message. So we pin now, again next frame,
+   * and once more each time an image inside the thread finishes loading.
+   */
+  function pinChatToBottom(chat) {
+    if (!chat) return;
+
+    function pin() {
+      chat.scrollTop = chat.scrollHeight;
+    }
+    pin();
+    requestAnimationFrame(pin);
+
+    // Re-pin as late-loading media changes the content height. Listeners are
+    // one-shot and only bound to images not already complete, so this stays
+    // cheap and never fights the user once everything has settled.
+    var media = chat.querySelectorAll('img, video');
+    media.forEach(function (el) {
+      var done = el.tagName === 'IMG' ? el.complete : el.readyState >= 1;
+      if (done) return;
+      var evt = el.tagName === 'IMG' ? 'load' : 'loadedmetadata';
+      var onReady = function () {
+        el.removeEventListener(evt, onReady);
+        el.removeEventListener('error', onReady);
+        // Only chase the bottom while the reader is still near it — if they
+        // scrolled up to read history, leave them be.
+        if (chat.scrollHeight - chat.scrollTop - chat.clientHeight <= 240) pin();
+      };
+      el.addEventListener(evt, onReady);
+      el.addEventListener('error', onReady);
+    });
+  }
+
   function restoreScroll(root, snapshot, intent) {
     intent = intent || {};
 
@@ -4666,7 +4900,7 @@
 
     // Opening a conversation starts at the newest message.
     if (intent.chatToBottom) {
-      chat.scrollTop = chat.scrollHeight;
+      pinChatToBottom(chat);
       return;
     }
 
@@ -6908,6 +7142,8 @@
    * ---------------------------------------------------------------- */
 
   function wireEvents(root, state, render) {
+    attachMessagesResizer(root, state);
+
     if (!isMessagesMobile()) {
       MORPH.unwired(root, '[data-messages-row]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -6962,7 +7198,8 @@
         window.TMAMessagingCalls.start(
           state.selectedId,
           btn.getAttribute('data-messages-call') || 'audio',
-          row.name || 'Contact'
+          row.name || 'Contact',
+          row.photo || null
         );
       });
     });
@@ -7509,6 +7746,17 @@
       });
     });
 
+    // Opening a team channel from the Updates category returns the column to
+    // the chats list, so the conversation opens in its normal context.
+    MORPH.unwired(root, '[data-messages-channel]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-messages-channel');
+        showListView('chats');
+        if (id && id !== state.selectedId) openConversation(root, state, render, id);
+        else render();
+      });
+    });
+
     MORPH.unwired(root, '[data-messages-update-input]').forEach(function (input) {
       input.addEventListener('input', function () { state.updateDraft = input.value; });
       input.addEventListener('keydown', function (e) {
@@ -7899,6 +8147,7 @@
       /* Calls has no backing feature yet — the view says so rather than
        * showing an empty history. */
       callsMode: false,
+      inboxWidth: loadInboxWidth(),
       profileOpen: false,
       profile: null,
       profileShelf: 'media',

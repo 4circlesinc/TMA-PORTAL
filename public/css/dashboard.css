@@ -9362,7 +9362,6 @@
  * fade out, width clips to 72px. Do not recenter or shrink the row boxes.
  */
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder-label,
-.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-labels-title,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-item-name,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-item-count,
@@ -9375,7 +9374,6 @@
 }
 
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder-label,
-.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-item-name,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-item-count,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-profile-meta,
@@ -9387,6 +9385,44 @@
   margin: 0;
   padding: 0;
   overflow: hidden;
+}
+
+/*
+ * Closed rail keeps its unread counts — the whole point of a collapsed inbox
+ * is to still see what needs attention. The count detaches from the row flow
+ * and rides the top-right of each icon as a small badge.
+ */
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder {
+  justify-content: center;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+}
+
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count {
+  position: absolute;
+  top: 3px;
+  right: 10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-primary, #03a5e9);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--color-white, #fff);
+  pointer-events: none;
+}
+
+/* The blue compose button keeps its white "+" centered with no badge slot. */
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder--compose {
+  padding-top: var(--space-8, 8px);
+  padding-bottom: var(--space-8, 8px);
+  margin-bottom: var(--space-8, 8px);
 }
 
 .tma-dash__email-sidebar--collapsed .tma-dash__email-labels-title,
@@ -10026,6 +10062,7 @@
   cursor: pointer;
   position: relative;
   box-sizing: border-box;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .tma-dash__email-folder-label {
@@ -10041,15 +10078,21 @@
   font-size: var(--text-size-12);
   line-height: 16px;
   color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .tma-dash__email-folder--active {
-  background: var(--color-hover);
+  background: var(--color-accent-bg, var(--color-hover));
+  color: var(--color-primary-dark, var(--color-text-primary));
   font-weight: 600;
 }
 
 .tma-dash__email-folder--active .tma-dash__email-folder-count {
-  color: var(--color-text-primary);
+  color: var(--color-primary-dark, var(--color-text-primary));
+}
+
+.tma-dash__email-folder--active img {
+  opacity: 1;
 }
 
 .tma-dash__email-folder img {
@@ -10064,16 +10107,39 @@
   background: var(--color-hover);
 }
 
+/* New Email is the sidebar's primary action: a prominent, darker-blue button
+ * with a white "+" glyph, not another quiet folder row. */
 .tma-dash__email-folder--compose {
-  background: var(--color-bg-tag);
+  justify-content: center;
+  gap: var(--space-6, 6px);
+  margin-bottom: var(--space-8, 8px);
+  padding-top: var(--space-10, 10px);
+  padding-bottom: var(--space-10, 10px);
+  background: var(--color-primary-dark, #136da0);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(3, 62, 96, 0.28);
+  transition: background 140ms ease, box-shadow 140ms ease, transform 60ms ease;
 }
 
+.tma-dash__email-folder--compose:hover,
 .tma-dash__email-folder--compose.tma-dash__email-folder--active {
-  background: var(--color-bg-tag);
+  background: var(--color-primary, #03a5e9);
+  box-shadow: 0 2px 6px rgba(3, 62, 96, 0.32);
+}
+
+.tma-dash__email-folder--compose:active {
+  transform: translateY(0.5px);
+}
+
+.tma-dash__email-folder--compose .tma-dash__email-folder-label {
+  flex: 0 0 auto;
 }
 
 .tma-dash__email-folder--compose img {
   opacity: 1;
+  /* Phosphor glyphs ship dark; force it white to read on the blue fill. */
+  filter: brightness(0) invert(1);
 }
 
 .tma-dash__email-panel {
@@ -14113,14 +14179,17 @@
 .tma-dash__messages-layout {
   display: flex;
   align-items: stretch;
-  gap: var(--space-24);
+  /* The gap now lives in the draggable resizer between the columns, so the two
+   * cards keep the same 24px separation while the handle sits in it. */
+  gap: 0;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
 .tma-dash__messages-list {
-  flex: 0 0 320px;
+  /* Width is driven by the inbox↔chat resizer; default matches the old 320px. */
+  flex: 0 0 var(--messages-inbox-w, 320px);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -14128,6 +14197,47 @@
   min-height: 0;
   overflow: hidden;
   align-self: stretch;
+}
+
+/* The single divider that sizes both columns. It occupies the space the layout
+ * gap used to, so nothing shifts at the default width. */
+.tma-dash__messages-resizer {
+  flex: 0 0 var(--space-24, 24px);
+  align-self: stretch;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tma-dash__messages-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-overlay-8, var(--color-overlay-4));
+  transition: background 120ms ease, height 120ms ease;
+}
+
+.tma-dash__messages-resizer:hover::before,
+.tma-dash__messages-resizer:focus-visible::before,
+.tma-dash__messages-resizer--dragging::before {
+  background: var(--color-primary, #03a5e9);
+  height: 64px;
+}
+
+.tma-dash__messages-resizer:focus-visible {
+  outline: none;
+}
+
+@media (max-width: 1024px) {
+  /* Columns stack below this width, so the vertical divider has no meaning. */
+  .tma-dash__messages-resizer { display: none; }
 }
 
 .tma-dash__messages-list-head {
@@ -14402,10 +14512,17 @@
   min-width: 20px;
   padding: 1px 6px;
   border-radius: 50%;
-  background: var(--color-indigo);
+  background: var(--color-primary-dark);
   color: var(--color-text-white);
   font-size: var(--text-size-12);
   line-height: 16px;
+}
+
+/* Inbox unread counts use the darker brand blue (not the light secondary
+ * blue the shared badge component defaults to). Scoped to the message list so
+ * the design-system badge elsewhere is untouched. */
+.tma-dash__messages-row-meta .tma-badge--blue.tma-badge--number {
+  background: var(--color-primary-dark);
 }
 
 .tma-dash__messages-chat {
@@ -14627,9 +14744,9 @@
 .tma-dash__messages-bubble {
   width: fit-content;
   max-width: 100%;
-  padding: var(--space-16) var(--space-20);
+  padding: var(--space-8) var(--space-12);
   font-size: var(--text-size-14);
-  line-height: 20px;
+  line-height: 19px;
   color: var(--color-text-primary);
 }
 
@@ -14638,12 +14755,12 @@
  * bottom-right for your own on the right. */
 .tma-dash__messages-bubble--in {
   background: var(--color-1);
-  border-radius: var(--radius-24) var(--radius-16) var(--radius-16) var(--radius-4);
+  border-radius: var(--radius-16) var(--radius-16) var(--radius-16) var(--radius-4);
 }
 
 .tma-dash__messages-bubble--out {
   background: var(--color-2);
-  border-radius: var(--radius-16) var(--radius-24) var(--radius-4) var(--radius-16);
+  border-radius: var(--radius-16) var(--radius-16) var(--radius-4) var(--radius-16);
 }
 
 .tma-dash__messages-bubble-text p {
@@ -14877,14 +14994,7 @@
   padding: var(--space-16) var(--space-20);
   background: var(--color-bg-input);
   border: 0.5px solid var(--color-border-medium);
-  border-bottom: 2px solid transparent;
   border-radius: var(--radius-16);
-  transition: border-color 120ms ease, border-bottom-color 120ms ease;
-}
-
-.tma-dash__messages-composer:focus-within {
-  border-color: var(--color-border-medium);
-  border-bottom-color: var(--color-primary);
 }
 
 .tma-dash__messages-composer--reply {
@@ -15643,9 +15753,38 @@
   flex-shrink: 0;
 }
 
-/* Back bar already labels the destination — hide the duplicate page title. */
+/* Detail chrome lives in the main-head title row (back + identity + actions). */
 .tma-dash--clients-detail .tma-dash__page-title {
   display: none;
+}
+
+.tma-dash__main-head-left--clients-detail {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+
+.tma-dash__clients-detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.tma-dash__clients-detail-head .tma-dash__clients-profile-toolbar {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+
+.tma-dash__clients-detail-head .tma-dash__clients-back-btn {
+  flex-shrink: 0;
+}
+
+.tma-dash__clients-profile--elevated {
+  gap: var(--space-16);
 }
 
 .tma-dash__ctable--clients .tma-dash__ctr--head,
@@ -26631,6 +26770,258 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------
+ * Shared media viewer — WhatsApp-style (.tma-lightbox, from portal-lightbox.js)
+ *
+ * A dark, full-screen viewer with a slim bar, big centered media, edge nav and
+ * a thumbnail filmstrip. Deliberately its own namespace so it does not touch
+ * the older .tma-portal-lightbox chrome used elsewhere.
+ * ------------------------------------------------------------------------- */
+.tma-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  color: #f4f5f7;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.tma-lightbox.is-open { opacity: 1; }
+
+.tma-lightbox__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 10, 12, 0.94);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.tma-lightbox__bar,
+.tma-lightbox__stage,
+.tma-lightbox__filmstrip,
+.tma-lightbox__nav {
+  position: relative;
+  z-index: 1;
+}
+
+.tma-lightbox__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12, 12px);
+  padding: var(--space-12, 12px) var(--space-16, 16px);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+
+.tma-lightbox__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tma-lightbox__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-lightbox__subtitle {
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.tma-lightbox__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4, 4px);
+  flex-shrink: 0;
+}
+
+.tma-lightbox__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.tma-lightbox__icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.tma-lightbox__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: var(--space-8, 8px) var(--space-24, 24px);
+  overflow: hidden;
+}
+
+.tma-lightbox__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-8, 8px);
+  cursor: zoom-in;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  transform: scale(0.98);
+  opacity: 0;
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+
+.tma-lightbox.is-open .tma-lightbox__img {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.tma-lightbox__img.is-zoomed {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  cursor: zoom-out;
+}
+
+.tma-lightbox__stage:has(.tma-lightbox__img.is-zoomed) {
+  overflow: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.tma-lightbox__media,
+.tma-lightbox__frame {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-8, 8px);
+  background: #000;
+}
+
+.tma-lightbox__frame { background: #fff; }
+
+.tma-lightbox__audio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16, 16px);
+}
+
+.tma-lightbox__audio img { opacity: 0.9; }
+
+.tma-lightbox__nopreview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8, 8px);
+  text-align: center;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.tma-lightbox__nopreview-title { font-size: 15px; font-weight: 600; color: #fff; }
+.tma-lightbox__nopreview-text { font-size: 13px; color: rgba(255, 255, 255, 0.6); }
+
+/* Edge navigation. */
+.tma-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+
+.tma-lightbox__nav:hover { background: rgba(0, 0, 0, 0.62); }
+.tma-lightbox__nav[disabled] { opacity: 0.28; cursor: default; }
+.tma-lightbox__nav--prev { left: var(--space-16, 16px); }
+.tma-lightbox__nav--next { right: var(--space-16, 16px); }
+
+/* Filmstrip. */
+.tma-lightbox__filmstrip {
+  display: flex;
+  gap: var(--space-8, 8px);
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  padding: var(--space-12, 12px) var(--space-16, 16px) calc(var(--space-16, 16px) + env(safe-area-inset-bottom, 0px));
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+
+.tma-lightbox__filmstrip::-webkit-scrollbar { display: none; }
+
+.tma-lightbox__thumb {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-8, 8px);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.tma-lightbox__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tma-lightbox__thumb-icon { width: 26px !important; height: 26px !important; object-fit: contain !important; opacity: 0.85; }
+
+.tma-lightbox__thumb-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.tma-lightbox__thumb:hover { opacity: 0.9; }
+
+.tma-lightbox__thumb.is-active {
+  opacity: 1;
+  border-color: var(--color-primary, #03a5e9);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 640px) {
+  .tma-lightbox__nav { display: none; }
+  .tma-lightbox__stage { padding-left: var(--space-8, 8px); padding-right: var(--space-8, 8px); }
+  .tma-lightbox__thumb { width: 44px; height: 44px; }
+}
+
+/* ---------------------------------------------------------------------------
  * Messages — states and message affordances added when the page was wired to
  * the real messaging API. Uses the existing tokens and bubble geometry; no
  * layout, colour or spacing decisions from the original design are changed.
@@ -27108,6 +27499,47 @@ button.tma-dash__header-popup-item:focus-visible {
   white-space: nowrap;
 }
 
+/* A missed call reads red in the log's subtitle, matching its icon. */
+.tma-dash__messages-person-meta.is-missed {
+  color: #c0392b;
+}
+
+/* Call-log outcome icon: a real phone-family glyph, tinted by state and left
+ * naked — no avatar circle. Masked so a single-colour SVG can carry the tint. */
+.tma-dash__call-icon {
+  display: inline-block;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 22px 22px;
+  mask-size: 22px 22px;
+}
+.tma-dash__call-icon--in-answered {
+  color: #1e874b;
+  -webkit-mask-image: url(../images/icons/phosphor/PhoneIncoming.svg);
+  mask-image: url(../images/icons/phosphor/PhoneIncoming.svg);
+}
+.tma-dash__call-icon--out-answered {
+  color: #1e874b;
+  -webkit-mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
+  mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
+}
+.tma-dash__call-icon--missed {
+  color: #c0392b;
+  -webkit-mask-image: url(../images/icons/phosphor/PhoneX.svg);
+  mask-image: url(../images/icons/phosphor/PhoneX.svg);
+}
+.tma-dash__call-icon--out-noanswer {
+  color: #c0392b;
+  -webkit-mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
+  mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
+}
+
 /* New-message and settings panels: they cover the chat list rather than
  * opening a separate window, so the conversation stays where it is. */
 .tma-dash__messages-panel {
@@ -27464,6 +27896,14 @@ button.tma-dash__header-popup-item:focus-visible {
   display: flex;
   flex-direction: column;
   padding: var(--space-4) var(--space-8) var(--space-12);
+}
+
+/* Team channels category — reuses the inbox row, so only the container needs
+ * placing. */
+.tma-dash__messages-channel-list {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-8) var(--space-8);
 }
 
 .tma-dash__messages-update-row {
@@ -29311,6 +29751,38 @@ span.tma-dash__messages-profile-avatar {
 
 /* ── Overview → Notifications: full inbox ── */
 .tma-dash__notifpage { position: relative; }
+/* A plain, legible count summary at the top of the page — the unread total was
+ * only ever a cramped badge on the filter icon before. */
+.tma-dash__notifpage-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-10, 10px);
+  margin-bottom: var(--space-12, 12px);
+}
+.tma-dash__notifpage-title {
+  margin: 0;
+  font-size: var(--text-size-18, 18px);
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.tma-dash__notifpage-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-accent-bg, var(--color-1));
+  color: var(--color-primary-dark, var(--color-primary));
+  font-size: var(--text-size-12, 12px);
+  line-height: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tma-dash__notifpage-count.is-empty {
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
 .tma-dash__notifpage-list {
   display: flex;
   flex-direction: column;
@@ -29331,9 +29803,12 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__tool-btn.is-active { background: var(--color-hover); }
 .tma-dash__actlog-filter-count {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 15px; height: 15px; margin-left: 4px; padding: 0 4px;
-  border-radius: 999px; background: var(--color-1); color: #fff;
-  font-size: 10px; line-height: 15px;
+  min-width: 16px; height: 16px; margin-left: 6px; padding: 0 5px;
+  /* Was var(--color-1) (#e6f6fd, a near-white tint) under white text — the
+   * number was invisible. Brand blue gives the white glyph real contrast. */
+  border-radius: 999px; background: var(--color-primary, #03a5e9); color: #fff;
+  font-size: 10px; line-height: 1; font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .tma-dash__cc--module { flex: 0 0 120px; min-width: 0; }
 .tma-dash__actlog-tag {
@@ -29969,87 +30444,338 @@ span.tma-dash__messages-profile-avatar {
   color: #fff !important;
 }
 
-/* ── Messages: call overlay ───────────────────────────────────────── */
-.tma-msg-call {
-  position: fixed;
-  inset: 0;
-  z-index: 420;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgb(8 12 20 / 0.72);
-  padding: var(--space-16);
+/* ── Messages: calls (incoming toast · full-screen stage · minimized pill) ── */
+.tma-call {
+  font-family: inherit;
 }
 
-.tma-msg-call__panel {
-  width: min(480px, 100%);
+.tma-call__btn svg,
+.tma-call__ctrl svg,
+.tma-call__pill-end svg,
+.tma-call__minimize svg { display: block; }
+
+/* Shared avatar treatment */
+.tma-call__toast-avatar,
+.tma-call__avatar-big,
+.tma-call__pill-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-dark);
+  color: #fff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.tma-call__toast-avatar img,
+.tma-call__avatar-big img,
+.tma-call__pill-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Incoming toast ─────────────────────────────────────────────── */
+.tma-call__toast {
+  position: fixed;
+  left: var(--space-24);
+  bottom: var(--space-24);
+  z-index: 1250;
+  width: min(340px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
-  padding: var(--space-20);
+  gap: var(--space-16);
+  padding: var(--space-16);
   border-radius: var(--radius-16);
   background: #101828;
   color: #fff;
+  box-shadow: 0 18px 48px rgb(8 12 20 / 0.45);
+  animation: tma-call-rise 220ms ease;
 }
 
-.tma-msg-call__title {
+@keyframes tma-call-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tma-call__toast-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.tma-call__toast-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: var(--text-size-16);
+}
+
+.tma-call__toast-meta { min-width: 0; }
+
+.tma-call__toast-name {
   font-size: var(--text-size-16);
   font-weight: 600;
-}
-
-.tma-msg-call__status {
-  font-size: var(--text-size-13, 13px);
-  opacity: 0.75;
-}
-
-.tma-msg-call__videos {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  background: #000;
-  border-radius: var(--radius-12);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.tma-msg-call__remote,
-.tma-msg-call__local {
+.tma-call__toast-kind {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-top: 2px;
+  font-size: var(--text-size-13, 13px);
+  color: rgb(255 255 255 / 0.72);
+}
+
+.tma-call__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: #12b76a;
+  animation: tma-call-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes tma-call-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
+.tma-call__toast-actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.tma-call__btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+.tma-call__btn svg { width: 18px; height: 18px; }
+.tma-call__btn--accept { background: #12b76a; }
+.tma-call__btn--accept:hover { background: #0ea15c; }
+.tma-call__btn--decline { background: #f04438; }
+.tma-call__btn--decline:hover { background: #d92d20; }
+
+/* ── Full-screen stage ──────────────────────────────────────────── */
+.tma-call__stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+  background: radial-gradient(circle at 50% 30%, #1b2436, #0a0e17 70%);
+  color: #fff;
+}
+
+.tma-call--incoming .tma-call__stage,
+.tma-call--incoming .tma-call__pill { display: none; }
+.tma-call--active .tma-call__toast { display: none; }
+.tma-call.is-minimized .tma-call__stage { display: none; }
+.tma-call:not(.is-minimized) .tma-call__pill { display: none; }
+
+.tma-call__minimize {
+  position: absolute;
+  top: var(--space-20);
+  right: var(--space-20);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  cursor: pointer;
+}
+.tma-call__minimize:hover { background: rgb(255 255 255 / 0.2); }
+
+.tma-call__stage-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-24);
+  width: min(560px, 100%);
+}
+
+.tma-call__videos {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  max-height: 60vh;
+  border-radius: var(--radius-24);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Audio call: no video frame, just the big avatar. */
+.tma-call--audio .tma-call__videos {
+  aspect-ratio: auto;
+  overflow: visible;
+}
+.tma-call--audio .tma-call__remote,
+.tma-call--audio .tma-call__local { display: none; }
+
+.tma-call--video .tma-call__videos { background: #000; }
+.tma-call--video .tma-call__avatar-wrap { display: none; }
+
+.tma-call__remote {
   width: 100%;
   height: 100%;
   object-fit: cover;
   background: #000;
 }
 
-.tma-msg-call__local {
+.tma-call__local {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 28%;
-  height: auto;
+  right: 12px;
+  bottom: 12px;
+  width: 30%;
+  max-width: 130px;
   aspect-ratio: 3 / 4;
-  border-radius: var(--radius-8);
-  border: 1px solid rgb(255 255 255 / 0.35);
+  object-fit: cover;
+  border-radius: var(--radius-12);
+  border: 2px solid rgb(255 255 255 / 0.4);
+  background: #000;
 }
 
-.tma-msg-call__actions {
+.tma-call__avatar-big {
+  width: 128px;
+  height: 128px;
+  font-size: 44px;
+  box-shadow: 0 0 0 8px rgb(255 255 255 / 0.06);
+}
+
+.tma-call__peer {
+  text-align: center;
+}
+.tma-call__peer-name {
+  font-size: var(--text-size-24, 22px);
+  font-weight: 600;
+}
+.tma-call__peer-status {
+  margin-top: var(--space-4);
+  font-size: var(--text-size-14);
+  color: rgb(255 255 255 / 0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-call__controls {
   display: flex;
-  gap: 8px;
-  justify-content: center;
+  align-items: center;
+  gap: var(--space-16);
 }
 
-.tma-msg-call__actions button {
+.tma-call__ctrl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
   border: none;
   border-radius: var(--radius-pill);
-  padding: 10px 18px;
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.tma-call__ctrl:hover { background: rgb(255 255 255 / 0.22); }
+.tma-call__ctrl.is-off {
+  background: #fff;
+  color: #101828;
+}
+.tma-call__ctrl--end {
+  background: #f04438;
+}
+.tma-call__ctrl--end:hover { background: #d92d20; }
+
+/* ── Minimized pill (bottom-left) ───────────────────────────────── */
+.tma-call__pill {
+  position: fixed;
+  left: var(--space-24);
+  bottom: var(--space-24);
+  z-index: 1250;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  padding-right: var(--space-12);
+  border-radius: var(--radius-pill);
+  background: #101828;
+  color: #fff;
+  box-shadow: 0 12px 32px rgb(8 12 20 / 0.4);
+  animation: tma-call-rise 200ms ease;
+}
+
+.tma-call__pill-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
   font: inherit;
   cursor: pointer;
+  min-width: 0;
+  max-width: 180px;
 }
 
-.tma-msg-call__hangup,
-.tma-msg-call__reject {
-  background: #d92d20;
-  color: #fff;
+.tma-call__pill-avatar {
+  width: 36px;
+  height: 36px;
+  font-size: var(--text-size-14);
 }
 
-.tma-msg-call__accept {
-  background: #12b76a;
-  color: #fff;
+.tma-call__pill-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
+.tma-call__pill-name {
+  font-size: var(--text-size-13, 13px);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+.tma-call__pill-status {
+  font-size: var(--text-size-12);
+  color: #12b76a;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-call__pill-end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: #f04438;
+  color: #fff;
+  cursor: pointer;
+}
+.tma-call__pill-end:hover { background: #d92d20; }
+.tma-call__pill-end svg { width: 18px; height: 18px; }

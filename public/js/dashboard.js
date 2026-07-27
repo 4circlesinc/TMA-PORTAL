@@ -832,6 +832,18 @@
       }
       if (name !== 'clients') {
         root.classList.remove('tma-dash--clients-detail');
+        var clientsDetailHead = root.querySelector('[data-clients-detail-head]');
+        if (clientsDetailHead) {
+          clientsDetailHead.hidden = true;
+          clientsDetailHead.innerHTML = '';
+        }
+        var clientsHeadLeft = root.querySelector('.tma-dash__main-head-left');
+        if (clientsHeadLeft) clientsHeadLeft.classList.remove('tma-dash__main-head-left--clients-detail');
+        var clientsPageTitle = root.querySelector('[data-page-title]');
+        if (clientsPageTitle) {
+          clientsPageTitle.hidden = false;
+          clientsPageTitle.style.removeProperty('display');
+        }
       }
       if (name !== 'calendar') {
         root.classList.remove('tma-dash--calendar-panel-open');

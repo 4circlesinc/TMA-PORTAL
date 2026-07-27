@@ -1046,20 +1046,21 @@
     );
   }
 
-  function renderDetailContent(state) {
+  function renderDetailContent(state, opts) {
+    opts = opts || {};
     if (state.screen === 'add-company' || state.screen === 'edit-company') {
-      return renderCompanyFormPanel(state);
+      return renderCompanyFormPanel(state, opts);
     }
     if (state.screen === 'company') {
-      return renderCompanyProfile(state);
+      return renderCompanyProfile(state, opts);
     }
     if (state.adding || state.editing) {
-      return renderContactFormPanel(state);
+      return renderContactFormPanel(state, opts);
     }
     if (!state.selectedId) {
       return '<div class="tma-dash__clients-detail"><div class="tma-dash__clients-assigned-empty">Select a client to view details.</div></div>';
     }
-    return renderProfile(state);
+    return renderProfile(state, opts);
   }
 
   function renderDesktopPage(state) {
@@ -1071,21 +1072,176 @@
     );
   }
 
-  function renderDetailBackBar() {
+  function renderClientsBackBtn() {
     return (
-      '<div class="tma-dash__clients-page-head">' +
       '<button type="button" class="tma-dash__clients-back-btn" data-clients-back aria-label="Back to clients">' +
       '<img src="' + ICONS.CaretLeft + '" alt="" aria-hidden="true">' +
       '<span>Clients</span>' +
-      '</button></div>'
+      '</button>'
     );
+  }
+
+  function contactProfileSubtitle(c) {
+    if (!c) return '';
+    return [c.nickname ? '"' + c.nickname + '"' : '', c.work && c.work.jobTitle, c.work && c.work.company]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  function renderContactProfileToolbar(c) {
+    if (!c) return '';
+    var subtitle = contactProfileSubtitle(c);
+    return (
+      '<div class="tma-dash__clients-profile-toolbar">' +
+      '<div class="tma-dash__clients-profile-head">' + renderAvatar(c, 40) +
+      '<div class="tma-dash__clients-profile-ident">' +
+      '<span class="tma-dash__clients-profile-name">' + esc(c.name) + '</span>' +
+      (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + esc(subtitle) + '</span>' : '') +
+      '</div></div>' +
+      '<div class="tma-dash__clients-profile-actions">' +
+      (clientFolderUuid(c.id)
+        ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
+          '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
+        : '') +
+      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
+      '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
+      '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
+      '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span></button>' +
+      '</div></div>'
+    );
+  }
+
+  function renderCompanyProfileToolbar(company) {
+    if (!company) return '';
+    var peopleCount = (company.people || []).length;
+    return (
+      '<div class="tma-dash__clients-profile-toolbar">' +
+      '<div class="tma-dash__clients-profile-head">' +
+      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
+      '<img src="' + ICONS.Buildings + '" alt="" width="20" height="20"></span>' +
+      '<div class="tma-dash__clients-profile-ident">' +
+      '<span class="tma-dash__clients-profile-name">' + esc(company.name) + '</span>' +
+      '<span class="tma-dash__clients-profile-subtitle">' +
+      esc(peopleCount + (peopleCount === 1 ? ' person' : ' people')) +
+      '</span></div></div>' +
+      '<div class="tma-dash__clients-profile-actions">' +
+      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
+      '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
+      '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-person>' +
+      '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>' +
+      '</div></div>'
+    );
+  }
+
+  function renderContactFormToolbar(state) {
+    var draft = state.draft || emptyDraft({ companyId: state.prefillCompanyId || '' });
+    var isNew = !!state.adding;
+    var contact = isNew ? null : contactFor(state.selectedId);
+    var title = isNew ? 'New person' : 'Edit person';
+    return (
+      '<div class="tma-dash__clients-profile-toolbar">' +
+      '<div class="tma-dash__clients-profile-head">' + renderFormHeadAvatar(draft, contact, isNew) +
+      '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
+      '<div class="tma-dash__clients-profile-actions">' +
+      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
+      '<button type="button" class="tma-dash__clients-message-btn" data-clients-save>' + (isNew ? 'Add' : 'Save') + '</button>' +
+      '</div></div>'
+    );
+  }
+
+  function renderCompanyFormToolbar(state) {
+    var isNew = state.screen === 'add-company';
+    var title = isNew ? 'New company' : 'Edit company';
+    return (
+      '<div class="tma-dash__clients-profile-toolbar">' +
+      '<div class="tma-dash__clients-profile-head">' +
+      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
+      '<img src="' + ICONS.Buildings + '" alt="" width="20" height="20">' +
+      '</span>' +
+      '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
+      '<div class="tma-dash__clients-profile-actions">' +
+      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
+      '<button type="button" class="tma-dash__clients-message-btn" data-clients-save-company>' + (isNew ? 'Create' : 'Save') + '</button>' +
+      '</div></div>'
+    );
+  }
+
+  function renderElevatedDetailChrome(state) {
+    var toolbar = '';
+    if (state.screen === 'detail' && state.selectedId) {
+      toolbar = renderContactProfileToolbar(contactFor(state.selectedId));
+    } else if (state.screen === 'company' && state.companyId) {
+      toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
+    } else if (state.screen === 'add' || state.screen === 'edit') {
+      toolbar = renderContactFormToolbar(state);
+    } else if (state.screen === 'add-company' || state.screen === 'edit-company') {
+      toolbar = renderCompanyFormToolbar(state);
+    }
+    return renderClientsBackBtn() + (toolbar || '');
+  }
+
+  /* Full-page detail: put identity + actions in the global page-title row. */
+  function syncClientsDetailHead(state) {
+    var left = document.querySelector('.tma-dash__main-head-left');
+    if (!left) return;
+    var titleEl = left.querySelector('[data-page-title]');
+    var host = left.querySelector('[data-clients-detail-head]');
+    var show = usesPagedClientsFlow(state) && state.screen !== 'list';
+
+    if (!show) {
+      if (host) {
+        host.hidden = true;
+        host.innerHTML = '';
+      }
+      if (titleEl) {
+        titleEl.hidden = false;
+        titleEl.style.removeProperty('display');
+      }
+      left.classList.remove('tma-dash__main-head-left--clients-detail');
+      return;
+    }
+
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'tma-dash__clients-detail-head';
+      host.setAttribute('data-clients-detail-head', '');
+      left.appendChild(host);
+    }
+    host.hidden = false;
+    host.innerHTML = renderElevatedDetailChrome(state);
+    if (titleEl) {
+      titleEl.hidden = true;
+      titleEl.style.display = 'none';
+    }
+    left.classList.add('tma-dash__main-head-left--clients-detail');
+  }
+
+  function clientsDetailHeadRoot() {
+    return document.querySelector('[data-clients-detail-head]');
+  }
+
+  function unwiredClientsChrome(root, selector) {
+    var el = MORPH.unwiredOne(root, selector);
+    if (el) return el;
+    var head = clientsDetailHeadRoot();
+    return head ? MORPH.unwiredOne(head, selector) : null;
+  }
+
+  function unwiredAllClientsChrome(root, selector) {
+    var list = MORPH.unwired(root, selector);
+    var head = clientsDetailHeadRoot();
+    if (head) {
+      MORPH.unwired(head, selector).forEach(function (el) {
+        if (list.indexOf(el) === -1) list.push(el);
+      });
+    }
+    return list;
   }
 
   function renderDetailPage(state) {
     return (
       '<div class="tma-dash__clients-page tma-dash__clients-page--detail" data-node-id="clients-page">' +
-      renderDetailBackBar() +
-      renderDetailContent(state) +
+      renderDetailContent(state, { elevateToolbar: true }) +
       '</div>'
     );
   }
@@ -1303,45 +1459,30 @@
     );
   }
 
-  function renderContactFormPanel(state) {
+  function renderContactFormPanel(state, opts) {
+    opts = opts || {};
     var draft = state.draft || emptyDraft({ companyId: state.prefillCompanyId || '' });
-    var isNew = !!state.adding;
-    var contact = isNew ? null : contactFor(state.selectedId);
-    var title = isNew ? 'New person' : 'Edit person';
-    var head = renderFormHeadAvatar(draft, contact, isNew);
+    var toolbar = opts.elevateToolbar ? '' : renderContactFormToolbar(state);
 
     return (
       '<div class="tma-dash__clients-detail">' +
-      '<div class="tma-dash__clients-profile tma-dash__clients-profile--form">' +
-      '<div class="tma-dash__clients-profile-toolbar">' +
-      '<div class="tma-dash__clients-profile-head">' + head +
-      '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
-      '<div class="tma-dash__clients-profile-actions">' +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
-      '<button type="button" class="tma-dash__clients-message-btn" data-clients-save>' + (isNew ? 'Add' : 'Save') + '</button>' +
-      '</div></div>' +
+      '<div class="tma-dash__clients-profile tma-dash__clients-profile--form' +
+      (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
+      toolbar +
       renderContactForm(draft) +
       '</div></div>'
     );
   }
 
-  function renderCompanyFormPanel(state) {
+  function renderCompanyFormPanel(state, opts) {
+    opts = opts || {};
     var draft = state.companyDraft || emptyCompanyDraft();
-    var isNew = state.screen === 'add-company';
-    var title = isNew ? 'New company' : 'Edit company';
+    var toolbar = opts.elevateToolbar ? '' : renderCompanyFormToolbar(state);
     return (
       '<div class="tma-dash__clients-detail">' +
-      '<div class="tma-dash__clients-profile tma-dash__clients-profile--form">' +
-      '<div class="tma-dash__clients-profile-toolbar">' +
-      '<div class="tma-dash__clients-profile-head">' +
-      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
-      '<img src="' + ICONS.Buildings + '" alt="" width="20" height="20">' +
-      '</span>' +
-      '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
-      '<div class="tma-dash__clients-profile-actions">' +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
-      '<button type="button" class="tma-dash__clients-message-btn" data-clients-save-company>' + (isNew ? 'Create' : 'Save') + '</button>' +
-      '</div></div>' +
+      '<div class="tma-dash__clients-profile tma-dash__clients-profile--form' +
+      (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
+      toolbar +
       '<form class="tma-dash__clients-form" data-clients-company-form novalidate>' +
       renderFormSection(
         'Company',
@@ -1359,7 +1500,8 @@
     );
   }
 
-  function renderCompanyProfile(state) {
+  function renderCompanyProfile(state, opts) {
+    opts = opts || {};
     var company = companyFor(state.companyId);
     if (!company) {
       return '<div class="tma-dash__clients-detail"><div class="tma-dash__clients-assigned-empty">Company not found.</div></div>';
@@ -1377,24 +1519,13 @@
         }).join('') + '</div>'
       : '<div class="tma-dash__clients-assigned-empty">No people at this company yet.</div>';
 
+    var toolbar = opts.elevateToolbar ? '' : renderCompanyProfileToolbar(company);
+
     return (
       '<div class="tma-dash__clients-detail">' +
-      '<div class="tma-dash__clients-profile">' +
-      '<div class="tma-dash__clients-profile-toolbar">' +
-      '<div class="tma-dash__clients-profile-head">' +
-      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
-      '<img src="' + ICONS.Buildings + '" alt="" width="20" height="20"></span>' +
-      '<div class="tma-dash__clients-profile-ident">' +
-      '<span class="tma-dash__clients-profile-name">' + esc(company.name) + '</span>' +
-      '<span class="tma-dash__clients-profile-subtitle">' +
-      esc(people.length + (people.length === 1 ? ' person' : ' people')) +
-      '</span></div></div>' +
-      '<div class="tma-dash__clients-profile-actions">' +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
-      '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
-      '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-person>' +
-      '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>' +
-      '</div></div>' +
+      '<div class="tma-dash__clients-profile' +
+      (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
+      toolbar +
       (company.website
         ? '<div class="tma-dash__clients-profile-body"><ul class="tma-dash__clients-list tma-dash__clients-list--profile" role="list">' +
           renderListItem({ icon: ICONS.Globe, label: 'Website', value: company.website, href: company.website, linkLabel: company.website }) +
@@ -1927,31 +2058,18 @@
     );
   }
 
-  function renderProfile(state) {
+  function renderProfile(state, opts) {
+    opts = opts || {};
     var c = contactFor(state.selectedId);
-    var subtitle = [c.nickname ? '"' + c.nickname + '"' : '', c.work.jobTitle, c.work.company].filter(Boolean).join(' · ');
     var activeTab = state.profileTab || 'info';
     var listItems = buildProfileListItems(c);
+    var toolbar = opts.elevateToolbar ? '' : renderContactProfileToolbar(c);
 
     return (
       '<div class="tma-dash__clients-detail">' +
-      '<div class="tma-dash__clients-profile">' +
-      '<div class="tma-dash__clients-profile-toolbar">' +
-      '<div class="tma-dash__clients-profile-head">' + renderAvatar(c, 40) +
-      '<div class="tma-dash__clients-profile-ident">' +
-      '<span class="tma-dash__clients-profile-name">' + esc(c.name) + '</span>' +
-      (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + esc(subtitle) + '</span>' : '') +
-      '</div></div>' +
-      '<div class="tma-dash__clients-profile-actions">' +
-      (clientFolderUuid(c.id)
-        ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
-          '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
-        : '') +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
-      '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
-      '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
-      '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span></button>' +
-      '</div></div>' +
+      '<div class="tma-dash__clients-profile' +
+      (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
+      toolbar +
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(activeTab) +
       '</div>' +
@@ -2476,7 +2594,7 @@
       }
     }
 
-    var backBtn = MORPH.unwiredOne(root, '[data-clients-back]');
+    var backBtn = unwiredClientsChrome(root, '[data-clients-back]');
     if (backBtn) {
       backBtn.addEventListener('click', function () {
         if (state.screen === 'edit') navigate('detail', state.selectedId);
@@ -2488,14 +2606,14 @@
       });
     }
 
-    var editBtn = MORPH.unwiredOne(root, '[data-clients-edit]');
+    var editBtn = unwiredClientsChrome(root, '[data-clients-edit]');
     if (editBtn) {
       editBtn.addEventListener('click', function () {
         navigate('edit', state.selectedId);
       });
     }
 
-    var cancelBtn = MORPH.unwiredOne(root, '[data-clients-cancel]');
+    var cancelBtn = unwiredClientsChrome(root, '[data-clients-cancel]');
     if (cancelBtn) {
       cancelBtn.addEventListener('click', function () {
         if (state.screen === 'add-company') {
@@ -2520,7 +2638,7 @@
       });
     }
 
-    var saveBtn = MORPH.unwiredOne(root, '[data-clients-save]');
+    var saveBtn = unwiredClientsChrome(root, '[data-clients-save]');
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
         if (saveBtn.disabled) return;
@@ -2577,7 +2695,18 @@
     var photoInput = root.querySelector('[data-clients-photo-input]');
     var photoPreview = root.querySelector('[data-clients-photo-preview]');
     var photoRemove = root.querySelector('[data-clients-photo-remove]');
-    var formHead = root.querySelector('.tma-dash__clients-profile--form .tma-dash__clients-profile-head');
+    var detailHead = clientsDetailHeadRoot();
+    var formHead = (detailHead && detailHead.querySelector('.tma-dash__clients-profile-head')) ||
+      root.querySelector('.tma-dash__clients-profile--form .tma-dash__clients-profile-head');
+
+    function refreshFormHeadAvatar() {
+      if (!formHead) return;
+      var contact = state.adding ? null : contactFor(state.selectedId);
+      var title = state.adding ? 'New person' : 'Edit person';
+      formHead.innerHTML =
+        renderFormHeadAvatar(state.draft, contact, !!state.adding) +
+        '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span>';
+    }
 
     if (photoBtn && photoInput) {
       MORPH.on(photoBtn, 'click', function () {
@@ -2593,11 +2722,7 @@
           photoPreview.alt = 'Client photo';
           photoBtn.dataset.hasImage = 'true';
           syncDraftFromForm(root, state);
-          if (formHead) {
-            formHead.innerHTML =
-              renderFormHeadAvatar(state.draft, null, !!state.adding) +
-              '<span class="tma-dash__clients-profile-name">' + esc(state.adding ? 'New client' : 'Edit client') + '</span>';
-          }
+          refreshFormHeadAvatar();
         };
         reader.readAsDataURL(file);
       });
@@ -2614,12 +2739,7 @@
         }
         if (photoInput) photoInput.value = '';
         syncDraftFromForm(root, state);
-        if (formHead) {
-          var contact = state.adding ? null : contactFor(state.selectedId);
-          formHead.innerHTML =
-            renderFormHeadAvatar(state.draft, contact, !!state.adding) +
-            '<span class="tma-dash__clients-profile-name">' + esc(state.adding ? 'New client' : 'Edit client') + '</span>';
-        }
+        refreshFormHeadAvatar();
       });
     }
 
@@ -2634,7 +2754,7 @@
       });
     });
 
-    var messageBtn = MORPH.unwiredOne(root, '[data-clients-message]');
+    var messageBtn = unwiredClientsChrome(root, '[data-clients-message]');
     if (messageBtn) {
       messageBtn.addEventListener('click', function () {
         var userId = clientUserId(state.selectedId);
@@ -2654,7 +2774,7 @@
       });
     }
 
-    MORPH.unwired(root, '[data-clients-open-folder]').forEach(function (btn) {
+    unwiredAllClientsChrome(root, '[data-clients-open-folder]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openClientFolder(state.selectedId);
       });
@@ -2671,14 +2791,14 @@
       });
     });
 
-    var editCompanyBtn = MORPH.unwiredOne(root, '[data-clients-edit-company]');
+    var editCompanyBtn = unwiredClientsChrome(root, '[data-clients-edit-company]');
     if (editCompanyBtn) {
       editCompanyBtn.addEventListener('click', function () {
         navigate('edit-company', null, { companyId: state.companyId });
       });
     }
 
-    var addPersonBtn = MORPH.unwiredOne(root, '[data-clients-add-person]');
+    var addPersonBtn = unwiredClientsChrome(root, '[data-clients-add-person]');
     if (addPersonBtn) {
       addPersonBtn.addEventListener('click', function () {
         state.prefillCompanyId = state.companyId || '';
@@ -2686,7 +2806,7 @@
       });
     }
 
-    var saveCompanyBtn = MORPH.unwiredOne(root, '[data-clients-save-company]');
+    var saveCompanyBtn = unwiredClientsChrome(root, '[data-clients-save-company]');
     if (saveCompanyBtn) {
       saveCompanyBtn.addEventListener('click', function () {
         if (saveCompanyBtn.disabled) return;
@@ -2958,6 +3078,7 @@
       options = options || {};
       syncClientsShell(state.screen, state.viewMode);
       syncClientsPageActions(state, navigate);
+      syncClientsDetailHead(state);
       root.className = state.viewMode === 'grid'
         ? 'tma-dash__clients tma-dash__clients--grid'
         : 'tma-dash__clients';

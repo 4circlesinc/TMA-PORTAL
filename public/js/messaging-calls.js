@@ -1,6 +1,17 @@
 /*
  * TMA - Voice/video calls for Messages (WebRTC + conversation signalling).
  * Global: window.TMAMessagingCalls
+ *
+ * UI model (modern, "today's" call UX):
+ *   - Incoming call arrives as an answerable toast pinned bottom-left.
+ *   - Answering (or placing a call) opens a full-screen stage.
+ *   - The stage can be minimized to a small floating pill, bottom-left,
+ *     that expands back to full screen on click.
+ *
+ * Signalling is deliberately race-tolerant: remote ICE candidates that land
+ * before the peer connection has a remote description are buffered and
+ * flushed once it does, and "Accept" works even if it is clicked before the
+ * caller's offer has arrived (the answer is created the moment it does).
  */
 (function () {
   'use strict';
@@ -8,6 +19,9 @@
   var ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
   var session = null;
   var overlay = null;
+  // The signed-in user's id, learned from the realtime binding / signalling so
+  // a persisted call can record who placed it (incoming vs outgoing in the log).
+  var meId = null;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -19,6 +33,19 @@
     return window.TMAMessagingAPI;
   }
 
+  function initials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  }
+
+  function callKindLabel(media) {
+    return media === 'video' ? 'Video call' : 'Voice call';
+  }
+
+  /* ---------------------------------------------------------- media/peer */
+
   function teardownMedia() {
     if (!session) return;
     if (session.localStream) {
@@ -26,6 +53,13 @@
     }
     if (session.pc) {
       try { session.pc.close(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function stopTimer() {
+    if (session && session.timer) {
+      clearInterval(session.timer);
+      session.timer = null;
     }
   }
 
@@ -42,61 +76,36 @@
     var convId = session.conversationId;
     var media = session.media;
     if (sendHangup && api()) {
-      api().callSignal(convId, { type: 'hangup', media: media }).catch(function () {});
+      api().callSignal(convId, {
+        type: 'hangup',
+        media: media,
+        initiatorId: session.initiatorId || null,
+        answered: !!session.connected,
+      }).catch(function () {});
     }
+    stopTimer();
     teardownMedia();
     session = null;
     closeOverlay();
   }
 
-  function renderOverlay(state) {
-    closeOverlay();
-    overlay = document.createElement('div');
-    overlay.className = 'tma-msg-call';
-    overlay.innerHTML =
-      '<div class="tma-msg-call__panel">' +
-      '<div class="tma-msg-call__title">' + esc(state.title) + '</div>' +
-      '<div class="tma-msg-call__status">' + esc(state.status) + '</div>' +
-      '<div class="tma-msg-call__videos">' +
-      '<video class="tma-msg-call__remote" data-call-remote autoplay playsinline></video>' +
-      '<video class="tma-msg-call__local" data-call-local autoplay playsinline muted></video>' +
-      '</div>' +
-      '<div class="tma-msg-call__actions">' +
-      (state.incoming
-        ? '<button type="button" class="tma-msg-call__accept" data-call-accept>Accept</button>' +
-          '<button type="button" class="tma-msg-call__reject" data-call-reject>Decline</button>'
-        : '<button type="button" class="tma-msg-call__hangup" data-call-hangup>End call</button>') +
-      '</div></div>';
-    document.body.appendChild(overlay);
+  function getMedia(media) {
+    return navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: media === 'video',
+    });
+  }
 
-    if (session && session.localStream) {
-      var local = overlay.querySelector('[data-call-local]');
-      if (local) local.srcObject = session.localStream;
-    }
-    if (session && session.remoteStream) {
-      var remote = overlay.querySelector('[data-call-remote]');
-      if (remote) remote.srcObject = session.remoteStream;
-    }
-
-    var hangup = overlay.querySelector('[data-call-hangup]');
-    if (hangup) hangup.addEventListener('click', function () { endSession(true); });
-    var reject = overlay.querySelector('[data-call-reject]');
-    if (reject) {
-      reject.addEventListener('click', function () {
-        if (session && api()) {
-          api().callSignal(session.conversationId, { type: 'reject', media: session.media }).catch(function () {});
-        }
-        teardownMedia();
-        session = null;
-        closeOverlay();
-      });
-    }
-    var accept = overlay.querySelector('[data-call-accept]');
-    if (accept) {
-      accept.addEventListener('click', function () {
-        acceptIncoming();
-      });
-    }
+  function flushCandidates() {
+    if (!session || !session.pc || !session.candidates) return;
+    var pc = session.pc;
+    // Only safe to add once a remote description exists.
+    if (!pc.remoteDescription || !pc.remoteDescription.type) return;
+    var queued = session.candidates;
+    session.candidates = [];
+    queued.forEach(function (candidate) {
+      pc.addIceCandidate(candidate).catch(function () {});
+    });
   }
 
   function ensurePeer() {
@@ -115,10 +124,7 @@
       ev.streams[0].getTracks().forEach(function (t) {
         session.remoteStream.addTrack(t);
       });
-      if (overlay) {
-        var remote = overlay.querySelector('[data-call-remote]');
-        if (remote) remote.srcObject = session.remoteStream;
-      }
+      attachStreams();
     };
 
     pc.onicecandidate = function (ev) {
@@ -130,17 +136,233 @@
       }).catch(function () {});
     };
 
+    pc.onconnectionstatechange = function () {
+      if (!session || session.pc !== pc) return;
+      var st = pc.connectionState;
+      if (st === 'connected') {
+        markConnected();
+      } else if (st === 'disconnected') {
+        setStatus('Reconnecting…');
+      } else if (st === 'failed') {
+        setStatus('Connection lost');
+      }
+    };
+
     return pc;
   }
 
-  function getMedia(media) {
-    return navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: media === 'video',
+  function markConnected() {
+    if (!session || session.connected) return;
+    session.connected = true;
+    session.startedAt = Date.now();
+    setStatus(formatDuration(0));
+    stopTimer();
+    session.timer = setInterval(function () {
+      if (!session || !session.startedAt) return;
+      setStatus(formatDuration(Date.now() - session.startedAt));
+    }, 1000);
+  }
+
+  function formatDuration(ms) {
+    var total = Math.max(0, Math.floor(ms / 1000));
+    var m = Math.floor(total / 60);
+    var s = total % 60;
+    return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+  }
+
+  /* --------------------------------------------------------------- views */
+
+  function attachStreams() {
+    if (!overlay || !session) return;
+    var local = overlay.querySelector('[data-call-local]');
+    if (local && session.localStream && local.srcObject !== session.localStream) {
+      local.srcObject = session.localStream;
+    }
+    var remote = overlay.querySelector('[data-call-remote]');
+    if (remote && session.remoteStream && remote.srcObject !== session.remoteStream) {
+      remote.srcObject = session.remoteStream;
+    }
+  }
+
+  function setStatus(text) {
+    if (!overlay) return;
+    overlay.querySelectorAll('[data-call-status]').forEach(function (node) {
+      node.textContent = text;
+    });
+    if (session) session.statusText = text;
+  }
+
+  function ensureOverlay() {
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.className = 'tma-call';
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  function avatarMarkup(cls) {
+    if (session && session.peerAvatar) {
+      return '<span class="' + cls + '"><img src="' + esc(session.peerAvatar) +
+        '" alt="" referrerpolicy="no-referrer"></span>';
+    }
+    return '<span class="' + cls + ' ' + cls + '--initials">' +
+      esc(initials(session && session.peerName)) + '</span>';
+  }
+
+  /* Incoming, answerable toast — bottom-left. */
+  function renderIncoming() {
+    ensureOverlay();
+    stopTimer();
+    overlay.className = 'tma-call tma-call--incoming';
+    overlay.innerHTML =
+      '<div class="tma-call__toast" role="dialog" aria-label="Incoming call">' +
+      '<div class="tma-call__toast-head">' +
+      avatarMarkup('tma-call__toast-avatar') +
+      '<div class="tma-call__toast-meta">' +
+      '<div class="tma-call__toast-name">' + esc(session.peerName) + '</div>' +
+      '<div class="tma-call__toast-kind"><span class="tma-call__pulse" aria-hidden="true"></span>' +
+      'Incoming ' + (session.media === 'video' ? 'video call' : 'voice call') + '</div>' +
+      '</div></div>' +
+      '<div class="tma-call__toast-actions">' +
+      '<button type="button" class="tma-call__btn tma-call__btn--decline" data-call-reject aria-label="Decline">' +
+      iconHangup() + '<span>Decline</span></button>' +
+      '<button type="button" class="tma-call__btn tma-call__btn--accept" data-call-accept aria-label="Accept">' +
+      (session.media === 'video' ? iconVideo() : iconPhone()) + '<span>Accept</span></button>' +
+      '</div></div>';
+    wireControls();
+  }
+
+  /* Full-screen active stage (with a collapsible minimized pill). */
+  function renderActive() {
+    ensureOverlay();
+    var minimized = session && session.minimized;
+    overlay.className = 'tma-call tma-call--active tma-call--' + (session.media === 'video' ? 'video' : 'audio') +
+      (minimized ? ' is-minimized' : '');
+
+    var statusText = (session && session.statusText) || 'Calling…';
+
+    overlay.innerHTML =
+      // Full-screen stage
+      '<div class="tma-call__stage" role="dialog" aria-label="' + esc(callKindLabel(session.media)) + '">' +
+      '<button type="button" class="tma-call__minimize" data-call-minimize aria-label="Minimize call">' +
+      iconMinimize() + '</button>' +
+      '<div class="tma-call__stage-inner">' +
+      '<div class="tma-call__videos">' +
+      '<video class="tma-call__remote" data-call-remote autoplay playsinline></video>' +
+      '<div class="tma-call__avatar-wrap">' + avatarMarkup('tma-call__avatar-big') + '</div>' +
+      '<video class="tma-call__local" data-call-local autoplay playsinline muted></video>' +
+      '</div>' +
+      '<div class="tma-call__peer">' +
+      '<div class="tma-call__peer-name">' + esc(session.peerName) + '</div>' +
+      '<div class="tma-call__peer-status" data-call-status>' + esc(statusText) + '</div>' +
+      '</div>' +
+      '<div class="tma-call__controls">' +
+      '<button type="button" class="tma-call__ctrl' + (session.muted ? ' is-off' : '') + '" data-call-mute aria-label="Toggle microphone">' +
+      iconMic() + '</button>' +
+      (session.media === 'video'
+        ? '<button type="button" class="tma-call__ctrl' + (session.cameraOff ? ' is-off' : '') + '" data-call-camera aria-label="Toggle camera">' + iconVideo() + '</button>'
+        : '') +
+      '<button type="button" class="tma-call__ctrl tma-call__ctrl--end" data-call-hangup aria-label="End call">' +
+      iconHangup() + '</button>' +
+      '</div>' +
+      '</div></div>' +
+      // Minimized pill
+      '<div class="tma-call__pill" role="dialog" aria-label="Call in progress">' +
+      '<button type="button" class="tma-call__pill-body" data-call-expand aria-label="Expand call">' +
+      avatarMarkup('tma-call__pill-avatar') +
+      '<span class="tma-call__pill-meta">' +
+      '<span class="tma-call__pill-name">' + esc(session.peerName) + '</span>' +
+      '<span class="tma-call__pill-status" data-call-status>' + esc(statusText) + '</span>' +
+      '</span></button>' +
+      '<button type="button" class="tma-call__pill-end" data-call-hangup aria-label="End call">' +
+      iconHangup() + '</button>' +
+      '</div>';
+
+    wireControls();
+    attachStreams();
+  }
+
+  function setMinimized(minimized) {
+    if (!session) return;
+    session.minimized = !!minimized;
+    if (!overlay) return;
+    overlay.classList.toggle('is-minimized', session.minimized);
+  }
+
+  /* --------------------------------------------------------- control wiring */
+
+  function wireControls() {
+    if (!overlay) return;
+
+    bind('[data-call-accept]', function () { acceptIncoming(); });
+    bind('[data-call-reject]', function () {
+      if (session && api()) {
+        api().callSignal(session.conversationId, {
+          type: 'reject',
+          media: session.media,
+          initiatorId: session.initiatorId || null,
+          answered: false,
+        }).catch(function () {});
+      }
+      stopTimer();
+      teardownMedia();
+      session = null;
+      closeOverlay();
+    });
+    bind('[data-call-hangup]', function () { endSession(true); });
+    bind('[data-call-minimize]', function () { setMinimized(true); });
+    bind('[data-call-expand]', function () { setMinimized(false); });
+    bind('[data-call-mute]', function (btn) { toggleMute(btn); });
+    bind('[data-call-camera]', function (btn) { toggleCamera(btn); });
+  }
+
+  function bind(selector, handler) {
+    overlay.querySelectorAll(selector).forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        handler(btn);
+      });
     });
   }
 
-  function startCall(conversationId, media, peerName) {
+  function toggleMute(btn) {
+    if (!session || !session.localStream) return;
+    session.muted = !session.muted;
+    session.localStream.getAudioTracks().forEach(function (t) { t.enabled = !session.muted; });
+    if (btn) btn.classList.toggle('is-off', session.muted);
+  }
+
+  function toggleCamera(btn) {
+    if (!session || !session.localStream) return;
+    session.cameraOff = !session.cameraOff;
+    session.localStream.getVideoTracks().forEach(function (t) { t.enabled = !session.cameraOff; });
+    if (btn) btn.classList.toggle('is-off', session.cameraOff);
+  }
+
+  /* --------------------------------------------------------------- icons */
+
+  function svg(inner) {
+    return '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">' + inner + '</svg>';
+  }
+  function iconPhone() {
+    return svg('<path fill="currentColor" d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.3 1l-2.2 2.2z"/>');
+  }
+  function iconVideo() {
+    return svg('<path fill="currentColor" d="M4 6h11a2 2 0 0 1 2 2v2.2l3.3-2.3c.5-.4 1.2 0 1.2.6v7c0 .6-.7 1-1.2.6L17 13.8V16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/>');
+  }
+  function iconHangup() {
+    return svg('<path fill="currentColor" d="M12 9c-1.7 0-3.4.3-5 .8V13c0 .5-.3.9-.7 1l-2.3.6c-.5.1-1-.1-1.2-.6C2.3 12.3 2 10.7 2 9c0-.6.4-1 .9-1.1C5.7 6.9 8.8 6.3 12 6.3s6.3.6 9.1 1.6c.5.1.9.5.9 1.1 0 1.7-.3 3.3-.8 5-.2.5-.7.7-1.2.6L17.7 14c-.4-.1-.7-.5-.7-1V9.8C15.4 9.3 13.7 9 12 9z"/>');
+  }
+  function iconMic() {
+    return svg('<path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z"/>');
+  }
+  function iconMinimize() {
+    return svg('<path fill="currentColor" d="M6 13h8a1 1 0 0 1 0 2H6a1 1 0 0 1 0-2z"/>');
+  }
+
+  /* --------------------------------------------------------- call actions */
+
+  function startCall(conversationId, media, peerName, peerAvatar) {
     if (session) {
       endSession(true);
     }
@@ -149,14 +371,14 @@
       conversationId: conversationId,
       media: media,
       role: 'caller',
+      initiatorId: meId,
       peerName: peerName || 'Contact',
+      peerAvatar: peerAvatar || null,
+      candidates: [],
+      statusText: 'Calling…',
     };
 
-    renderOverlay({
-      title: (media === 'video' ? 'Video call' : 'Voice call') + ' · ' + peerName,
-      status: 'Calling…',
-      incoming: false,
-    });
+    renderActive();
 
     getMedia(media)
       .then(function (stream) {
@@ -165,10 +387,7 @@
           return;
         }
         session.localStream = stream;
-        if (overlay) {
-          var local = overlay.querySelector('[data-call-local]');
-          if (local) local.srcObject = stream;
-        }
+        attachStreams();
         ensurePeer();
         return api().callSignal(conversationId, { type: 'ring', media: media });
       })
@@ -185,17 +404,19 @@
         });
       })
       .catch(function (err) {
-        renderOverlay({
-          title: 'Call failed',
-          status: (err && err.message) || 'Could not start call',
-          incoming: false,
-        });
+        setStatus((err && err.message) || 'Could not start call');
         setTimeout(function () { endSession(false); }, 2200);
       });
   }
 
   function acceptIncoming() {
     if (!session || session.role !== 'callee') return;
+    session.accepting = true;
+    // Swap the toast for the full-screen stage right away so the tap feels live.
+    session.statusText = 'Connecting…';
+    session.minimized = false;
+    renderActive();
+
     getMedia(session.media)
       .then(function (stream) {
         if (!session) {
@@ -204,32 +425,43 @@
         }
         session.localStream = stream;
         ensurePeer();
-        if (overlay) {
-          var local = overlay.querySelector('[data-call-local]');
-          if (local) local.srcObject = stream;
+        attachStreams();
+        if (api()) {
+          api().callSignal(session.conversationId, { type: 'accept', media: session.media }).catch(function () {});
         }
-        return api().callSignal(session.conversationId, { type: 'accept', media: session.media });
+        // The offer may already be here, or may still be in flight. Answer now
+        // if we can; otherwise onSignal() answers the moment it arrives.
+        return maybeAnswer();
       })
+      .catch(function () {
+        endSession(true);
+      });
+  }
+
+  /*
+   * Create and send the SDP answer, but only once both the local media and the
+   * caller's offer are available. Callable more than once — it no-ops until the
+   * preconditions are met and after it has already answered.
+   */
+  function maybeAnswer() {
+    if (!session || session.role !== 'callee' || session.answered) return;
+    if (!session.accepting || !session.localStream || !session.remoteOffer || !session.pc) return;
+
+    session.answered = true;
+    return session.pc.setRemoteDescription(session.remoteOffer)
       .then(function () {
-        if (!session || !session.remoteOffer) return;
-        return session.pc.setRemoteDescription(session.remoteOffer).then(function () {
-          return session.pc.createAnswer();
-        }).then(function (answer) {
-          return session.pc.setLocalDescription(answer).then(function () {
+        flushCandidates();
+        return session.pc.createAnswer();
+      })
+      .then(function (answer) {
+        return session.pc.setLocalDescription(answer).then(function () {
+          if (api()) {
             return api().callSignal(session.conversationId, {
               type: 'answer',
               media: session.media,
               payload: { sdp: answer },
             });
-          });
-        });
-      })
-      .then(function () {
-        if (!session) return;
-        renderOverlay({
-          title: (session.media === 'video' ? 'Video call' : 'Voice call') + ' · ' + session.peerName,
-          status: 'Connected',
-          incoming: false,
+          }
         });
       })
       .catch(function () {
@@ -237,7 +469,10 @@
       });
   }
 
-  function onSignal(payload, meId) {
+  /* --------------------------------------------------------- signalling in */
+
+  function onSignal(payload, viewerId) {
+    if (viewerId != null) meId = viewerId;
     if (!payload || payload.fromUserId === meId) return;
     var type = payload.type;
     var convId = payload.conversationId;
@@ -251,39 +486,51 @@
           conversationId: convId,
           media: media,
           role: 'callee',
+          initiatorId: payload.fromUserId || null,
           peerName: fromName,
+          peerAvatar: null,
+          candidates: [],
+          statusText: 'Ringing…',
           remoteOffer: payload.payload && payload.payload.sdp ? payload.payload.sdp : null,
         };
-        renderOverlay({
-          title: (media === 'video' ? 'Incoming video' : 'Incoming call') + ' · ' + fromName,
-          status: 'Ringing…',
-          incoming: true,
-        });
+        renderIncoming();
       } else if (type === 'offer' && payload.payload && payload.payload.sdp) {
         session.remoteOffer = payload.payload.sdp;
+        // If the callee already tapped Accept, answer now that the offer is in.
+        maybeAnswer();
       }
       return;
     }
 
     if (!session || session.conversationId !== convId) return;
 
-    if (type === 'answer' && session.pc && payload.payload && payload.payload.sdp) {
-      session.pc.setRemoteDescription(payload.payload.sdp).then(function () {
-        renderOverlay({
-          title: (session.media === 'video' ? 'Video call' : 'Voice call') + ' · ' + session.peerName,
-          status: 'Connected',
-          incoming: false,
-        });
-      }).catch(function () {});
+    if (type === 'accept') {
+      // Callee picked up: caller stays on the stage, waiting for the answer.
+      if (session.role === 'caller') setStatus('Connecting…');
       return;
     }
 
-    if (type === 'ice' && session.pc && payload.payload && payload.payload.candidate) {
-      session.pc.addIceCandidate(payload.payload.candidate).catch(function () {});
+    if (type === 'answer' && session.pc && payload.payload && payload.payload.sdp) {
+      session.pc.setRemoteDescription(payload.payload.sdp)
+        .then(function () {
+          flushCandidates();
+          if (!session.connected) setStatus('Connecting…');
+        })
+        .catch(function () {});
+      return;
+    }
+
+    if (type === 'ice' && payload.payload && payload.payload.candidate) {
+      // Buffer until there is a peer connection with a remote description; a
+      // candidate added too early throws and the media never connects.
+      if (!session.candidates) session.candidates = [];
+      session.candidates.push(payload.payload.candidate);
+      if (session.pc) flushCandidates();
       return;
     }
 
     if (type === 'hangup' || type === 'reject') {
+      stopTimer();
       teardownMedia();
       session = null;
       closeOverlay();

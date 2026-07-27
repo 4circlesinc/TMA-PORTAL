@@ -1128,6 +1128,11 @@ class MessagingController extends Controller
             'type' => ['required', 'string', 'in:ring,offer,answer,ice,hangup,reject,accept'],
             'payload' => ['nullable', 'array'],
             'media' => ['nullable', 'string', 'in:audio,video'],
+            // Who placed the call, and whether it ever connected — recorded on
+            // the history line so the call log can show missed vs answered and
+            // incoming vs outgoing.
+            'initiatorId' => ['nullable', 'integer'],
+            'answered' => ['nullable', 'boolean'],
         ]);
 
         $payload = $data['payload'] ?? [];
@@ -1145,10 +1150,13 @@ class MessagingController extends Controller
 
         // Persist a brief history line when a call ends or is missed.
         if (in_array($data['type'], ['hangup', 'reject'], true)) {
-            $label = ($data['media'] ?? $payload['media'] ?? 'audio') === 'video'
-                ? 'Video call'
-                : 'Voice call';
-            $event = $data['type'] === 'reject' ? 'call_missed' : 'call_ended';
+            $media = $data['media'] ?? $payload['media'] ?? 'audio';
+            $label = $media === 'video' ? 'Video call' : 'Voice call';
+
+            // A rejected call, or one hung up before it ever connected, is a
+            // missed call; only a call that actually connected counts as ended.
+            $answered = $data['type'] !== 'reject' && ! empty($data['answered']);
+            $event = $answered ? 'call_ended' : 'call_missed';
 
             $system = $conversation->messages()->create([
                 'user_id' => null,
@@ -1157,7 +1165,9 @@ class MessagingController extends Controller
                     'event' => $event,
                     'actorName' => $user->name,
                     'label' => $label,
-                    'media' => $data['media'] ?? $payload['media'] ?? 'audio',
+                    'media' => $media,
+                    'answered' => $answered,
+                    'initiatorId' => $data['initiatorId'] ?? null,
                 ],
             ]);
             $conversation->forceFill(['last_message_at' => $system->created_at])->save();

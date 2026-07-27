@@ -39,6 +39,21 @@
       else window.location.assign(ROOT + url);
     }
 
+    function countLabel(unread) {
+      return unread ? unread + ' unread' : 'All caught up';
+    }
+
+    function head() {
+      var s = Store().state;
+      var unread = s.unread || 0;
+      return '<div class="tma-dash__notifpage-head">' +
+        '<h2 class="tma-dash__notifpage-title">Notifications</h2>' +
+        '<span class="tma-dash__notifpage-count' + (unread ? '' : ' is-empty') + '" data-notifpage-count>' +
+          esc(countLabel(unread)) +
+        '</span>' +
+      '</div>';
+    }
+
     function toolbar() {
       var s = Store().state;
       var cls = ['tma-dash__toolbar-search'];
@@ -105,6 +120,7 @@
     function render() {
       container.className = 'tma-dash__activity tma-dash__activity--overview tma-dash__notifpage';
       container.innerHTML =
+        head() +
         toolbar() +
         '<div class="tma-dash__notifpage-body" data-notifpage-body>' + bodyInner() + '</div>';
     }
@@ -112,6 +128,12 @@
     function renderBody() {
       var body = container.querySelector('[data-notifpage-body]');
       if (body) body.innerHTML = bodyInner();
+      var countEl = container.querySelector('[data-notifpage-count]');
+      if (countEl) {
+        var unreadNow = Store().state.unread || 0;
+        countEl.textContent = countLabel(unreadNow);
+        countEl.classList.toggle('is-empty', !unreadNow);
+      }
       var unreadBtn = container.querySelector('[data-notifpage-unread]');
       if (unreadBtn) {
         unreadBtn.classList.toggle('is-active', state.unreadOnly);

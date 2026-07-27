@@ -1095,7 +1095,7 @@
   /* Folder ids match the server's; counts arrive with the bootstrap payload
    * rather than being baked in here. */
   var FOLDERS = [
-    { id: 'compose', label: 'New Email', icon: 'PencilSimpleLine', compose: true },
+    { id: 'compose', label: 'New Email', icon: 'Plus', compose: true },
     { id: 'inbox', label: 'Inbox', icon: 'Tray' },
     // A virtual view rather than a real folder: the server filters by the
     // important flag across inbox/sent/archive.
