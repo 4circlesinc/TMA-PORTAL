@@ -31,6 +31,7 @@ use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\PresenceService;
+use App\Support\Messaging\TabCounts;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -106,6 +107,9 @@ class MessagingController extends Controller
                 'photo' => $user->avatar_url,
             ],
             'settings' => MessagingSettings::for($user),
+            // Badges for the nav bar's other tabs. Chats is not here: the
+            // client sums it from the visible rows (see TabCounts).
+            'tabCounts' => TabCounts::for($user),
             'realtime' => $this->realtimeConfig(),
             // The real upload ceiling, which PHP's own ini caps can lower well
             // below what messaging would otherwise allow. Sent so the composer
@@ -1212,6 +1216,24 @@ class MessagingController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Badge counts for the Messages nav bar, for polling and after a call. */
+    public function tabCounts(Request $request): JsonResponse
+    {
+        return response()->json(['tabCounts' => TabCounts::for($request->user())]);
+    }
+
+    /** Opening a tab is the act of seeing it (§ TabCounts). */
+    public function markTabSeen(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tab' => ['required', 'string', 'in:calls,updates'],
+        ]);
+
+        return response()->json([
+            'tabCounts' => TabCounts::markSeen($request->user(), $data['tab']),
+        ]);
     }
 
     /**

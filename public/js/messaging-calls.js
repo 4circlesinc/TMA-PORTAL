@@ -112,6 +112,69 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * Ringing
+   *
+   * One looping element for the whole module, started when a call begins to
+   * ring at either end and stopped from closeOverlay() — every path that ends
+   * a call goes through there, so none of them can leave it playing.
+   *
+   * The tone is the user's choice, handed over by messages.js in
+   * window.TMAMessagingSettings; 'none', or notification sounds switched off,
+   * means the call still rings on screen, just not out loud.
+   * ------------------------------------------------------------------ */
+
+  var RINGTONES = {
+    'ringtone-1': 'audio/ringtone-1.mp3',
+    'ringtone-2': 'audio/ringtone-2.mp3',
+  };
+
+  var ringEl = null;
+
+  function ringtoneSrc() {
+    var prefs = window.TMAMessagingSettings || {};
+    if (prefs.notificationSounds === false) return null;
+    var key = prefs.ringtone || 'ringtone-1';
+    if (key === 'none') return null;
+    return RINGTONES[key] || RINGTONES['ringtone-1'];
+  }
+
+  function startRinging() {
+    stopRinging();
+    var src = ringtoneSrc();
+    if (!src) return;
+
+    try {
+      ringEl = new Audio(src);
+      ringEl.loop = true;
+      ringEl.volume = 0.7;
+
+      // Ring out of the device the user picked for calls, where the browser
+      // allows a page to choose at all.
+      var speaker = readDevicePrefs().speaker;
+      if (speaker && typeof ringEl.setSinkId === 'function') {
+        ringEl.setSinkId(speaker).catch(function () { /* keep the default output */ });
+      }
+
+      var played = ringEl.play();
+      // Autoplay policy can refuse this on an incoming call if the page has
+      // not been touched yet. The pop-up is still on screen, which is the part
+      // that matters; a silent ring is not an error to report.
+      if (played && played.catch) played.catch(function () { /* ignore */ });
+    } catch (e) {
+      ringEl = null;
+    }
+  }
+
+  function stopRinging() {
+    if (!ringEl) return;
+    try {
+      ringEl.pause();
+      ringEl.currentTime = 0;
+    } catch (e) { /* ignore */ }
+    ringEl = null;
+  }
+
+  /* ------------------------------------------------------------------ *
    * Session lifecycle
    * ------------------------------------------------------------------ */
 
@@ -193,6 +256,7 @@
   }
 
   function closeOverlay() {
+    stopRinging();
     releaseFocus();
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     overlay = null;
@@ -541,6 +605,7 @@
 
   function markConnected() {
     if (!session || session.connected) return;
+    stopRinging();
     session.connected = true;
     session.startedAt = Date.now();
     // Connecting resolves a *connection* problem, not a device one: someone who
@@ -612,6 +677,9 @@
 
   function showError(info) {
     if (!session) return;
+    // A call that has stopped going anywhere must stop ringing, or a failed
+    // outgoing call rings on underneath its own error dialog.
+    stopRinging();
     session.error = info;
     render();
     announce(info.title);
@@ -1988,6 +2056,10 @@
       statusText: 'Calling…',
     });
     render();
+    // The caller hears the same tone back while it rings, which is the only
+    // signal that the call is actually going somewhere. It is started from the
+    // click, so autoplay policy never blocks this side.
+    startRinging();
     beginOutgoing();
   }
 
@@ -2033,6 +2105,8 @@
 
   function acceptIncoming(withVideo) {
     if (!session || session.role !== 'callee') return;
+
+    stopRinging();
 
     var wantVideo = session.media === 'video' && withVideo !== false;
     session.media = wantVideo ? 'video' : 'audio';
@@ -2097,6 +2171,7 @@
 
   function declineIncoming() {
     if (!session) return;
+    stopRinging();
     stopMeter();
     signal('reject', {
       media: session.media,
@@ -2190,6 +2265,7 @@
           swapped: media === 'video',
         });
         render();
+        startRinging();
         announce('Incoming ' + (media === 'video' ? 'video' : 'voice') + ' call from ' + fromName);
         // Show the callee their own camera before they answer (§2).
         startPreview(media === 'video');
@@ -2205,6 +2281,9 @@
     if (!session || session.conversationId !== convId) return;
 
     if (type === 'accept') {
+      // Answered. The media connection takes a moment more, but ringing past
+      // the moment somebody picked up is the wrong sound.
+      stopRinging();
       if (session.role === 'caller') setStatus('Connecting…');
       return;
     }

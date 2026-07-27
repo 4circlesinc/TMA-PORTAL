@@ -760,10 +760,26 @@
    * guessing game, and Updates in particular is not something anyone would
    * infer from a picture.
    */
+  /*
+   * Badge text for a nav tab. Capped, because past a point the number stops
+   * being information and starts being a wide pill in a narrow bar.
+   */
+  function navCount(n) {
+    if (!n) return 0;
+    return n > 99 ? '99+' : n;
+  }
+
   function renderListFoot(state) {
     state = state || {};
 
-    var unreadUpdates = (state.updates || []).length;
+    // Chats is summed from the visible rows — the same rule the sidebar badge
+    // uses, so archived threads are excluded from both. Calls and Updates come
+    // from the server, which is the only place that knows what this user has
+    // already looked at (see App\Support\Messaging\TabCounts).
+    var counts = STORE.tabCounts || {};
+    var unreadChats = getInboxUnreadCount(state);
+    var missedCalls = counts.calls || 0;
+    var newUpdates = counts.updates || 0;
 
     // Exactly one of these is the current view; "chats" is the default when no
     // takeover is active.
@@ -774,13 +790,12 @@
       : 'chats';
 
     var items = [
-      { key: 'chats', icon: 'ChatCircleDots', label: 'Chats', attr: 'data-messages-nav-chats' },
-      { key: 'updates', icon: 'Broadcast', label: 'Updates', attr: 'data-messages-nav-updates', count: unreadUpdates },
-      // Calling is not built. The entry is present because the design asks for
-      // it, but it says so rather than opening an empty imitation of a call
-      // log — the chat header already marks its call buttons unavailable the
-      // same way, and this stays consistent with that.
-      { key: 'calls', icon: 'Phone', label: 'Calls', attr: 'data-messages-nav-calls' },
+      { key: 'chats', icon: 'ChatCircleDots', label: 'Chats', attr: 'data-messages-nav-chats',
+        count: navCount(unreadChats), countLabel: unreadChats + ' unread messages' },
+      { key: 'updates', icon: 'Broadcast', label: 'Updates', attr: 'data-messages-nav-updates',
+        count: navCount(newUpdates), countLabel: newUpdates + ' new updates' },
+      { key: 'calls', icon: 'Phone', label: 'Calls', attr: 'data-messages-nav-calls',
+        count: navCount(missedCalls), countLabel: missedCalls + ' missed calls' },
       // Archived is not a nav entry: it lives behind the pull-down shelf at
       // the top of the list (see renderArchivedReveal), which is where it is
       // looked for and keeps the bar from crowding its labels into ellipses.
@@ -796,7 +811,11 @@
       return (
         '<button type="button" class="tma-dash__messages-nav-btn' + (active ? ' is-active' : '') + '"' +
         ' ' + item.attr +
-        ' aria-label="' + esc(item.label) + '" title="' + esc(item.label) + '"' +
+        // The badge is a number beside an icon: without it in the label, a
+        // screen reader announces "Calls" and stops (§ colour and shape are
+        // never the only carrier of state).
+        ' aria-label="' + esc(item.label + (item.count ? ', ' + item.countLabel : '')) + '"' +
+        ' title="' + esc(item.label) + '"' +
         (item.action
           ? ' aria-expanded="' + (active ? 'true' : 'false') + '"'
           : ' aria-current="' + (active ? 'page' : 'false') + '"') +
@@ -1229,6 +1248,18 @@
 
       '<div class="tma-dash__messages-setting-group">Notifications</div>' +
       renderSettingsToggle('notificationSounds', 'Notification sounds') +
+      // Picking one plays it, so the list can be heard rather than guessed at.
+      renderSettingsSelect('messageTone', 'Message tone', 'Plays when a message arrives', [
+        { value: 'chime', label: 'Chime' },
+        { value: 'system', label: 'Notification' },
+        { value: 'beep', label: 'Beep' },
+        { value: 'none', label: 'Silent' },
+      ]) +
+      renderSettingsSelect('ringtone', 'Ringtone', 'Plays while a call rings', [
+        { value: 'ringtone-1', label: 'Ringtone 1' },
+        { value: 'ringtone-2', label: 'Ringtone 2' },
+        { value: 'none', label: 'Silent' },
+      ]) +
       renderSettingsToggle('desktopNotifications', 'Desktop notifications', 'Needs browser permission') +
       renderSettingsToggle('notificationPreview', 'Show message text in notifications') +
 
@@ -1512,6 +1543,33 @@
    * only says whether someone's tab is open — this is what they chose to tell
    * people, so it is set explicitly and cleared explicitly.
    * ---------------------------------------------------------------- */
+
+  /*
+   * Opening a tab clears its badge. Cleared locally first so the number goes
+   * the instant the tab does, then confirmed by the server — which decides
+   * *what* was seen, so a call that lands mid-request is not swallowed.
+   */
+  function markTabSeen(root, state, render, tab) {
+    if (!STORE.tabCounts) STORE.tabCounts = {};
+    STORE.tabCounts[tab] = 0;
+    render();
+
+    window.TMAMessagingAPI.markTabSeen(tab).then(function (data) {
+      STORE.tabCounts = (data && data.tabCounts) || STORE.tabCounts;
+      render();
+    }).catch(function () {
+      // The badge reappears on the next load, which is the honest outcome.
+    });
+  }
+
+  /* Re-read the badges after something that could have changed them. */
+  function refreshTabCounts(root, state, render) {
+    return window.TMAMessagingAPI.tabCounts().then(function (data) {
+      if (!data || !data.tabCounts) return;
+      STORE.tabCounts = data.tabCounts;
+      render();
+    }).catch(function () { /* a stale badge is not worth surfacing */ });
+  }
 
   function loadMessagesUpdates(root, state, render) {
     if (state.updatesLoading) return;
@@ -5094,6 +5152,7 @@
         STORE.threads = data.conversations || [];
         STORE.me = data.me || null;
         STORE.settings = data.settings || {};
+        STORE.tabCounts = data.tabCounts || STORE.tabCounts || {};
         publishCallSettings();
         STORE.realtime = data.realtime || null;
         STORE.limits = data.limits || {};
@@ -5295,6 +5354,7 @@
     };
 
     mergeMessages(conversationId, [pending], false);
+    playSentMessageSound();
     clearReplyTo(state);
     setComposerDraft(state, '');
     state.composerLinkUrl = null;
@@ -5692,6 +5752,13 @@
         payload._peerPhoto = row.photo || null;
       }
       window.TMAMessagingCalls.onSignal(payload, (STORE.me || {}).id);
+
+      // A call that ended is a call that may have been missed. The server has
+      // just written the history line, so read the badge back rather than
+      // guessing at it here — only the server knows whether this one counts.
+      if (payload && (payload.type === 'hangup' || payload.type === 'reject')) {
+        setTimeout(function () { refreshTabCounts(root, state, render); }, 400);
+      }
     });
 
     window.TMAMessagingRealtime.listen(channel, 'messaging.inbox', function (payload) {
@@ -5789,7 +5856,7 @@
     var row = findThread(conversationId);
     if (!row || row.muted) return;
 
-    if (STORE.settings.notificationSounds) playNotificationSound();
+    if (STORE.settings.notificationSounds) playIncomingMessageSound();
 
     if (
       STORE.settings.desktopNotifications &&
@@ -5808,10 +5875,129 @@
     }
   }
 
+  /* ------------------------------------------------------------------
+   * Sounds
+   *
+   * Keys, not paths, are what a preference stores; this is the only place
+   * that maps one to a file. 'beep' is the synthesised tone this file has
+   * always played and ships no asset, so it stays available as the lightest
+   * option — and as the fallback if a key ever goes missing.
+   *
+   * Each sound is one <audio> element, reused. Building a new Audio() per
+   * arrival leaves a pile of elements behind on a busy thread and re-fetches
+   * the file before the second one can start.
+   * ---------------------------------------------------------------- */
+
+  var AUDIO_PATH = 'audio/';
+
+  var MESSAGE_TONE_FILES = {
+    chime: AUDIO_PATH + 'message-chime.mp3',
+    system: AUDIO_PATH + 'notification-system.mp3',
+  };
+
+  var SENT_TONE_FILE = AUDIO_PATH + 'message-sent.mp3';
+
+  var RINGTONE_FILES = {
+    'ringtone-1': AUDIO_PATH + 'ringtone-1.mp3',
+    'ringtone-2': AUDIO_PATH + 'ringtone-2.mp3',
+  };
+
+  var toneElements = {};
+
+  function toneElement(src) {
+    if (!toneElements[src]) {
+      var el = new Audio(src);
+      el.preload = 'auto';
+      toneElements[src] = el;
+    }
+    return toneElements[src];
+  }
+
+  /*
+   * Rewound before every play so two arrivals in quick succession both sound.
+   * A blocked play() is not an error worth surfacing: browsers refuse audio
+   * until the page has been interacted with, and the badge and the bubble have
+   * already said the same thing.
+   */
+  function playTone(src, volume) {
+    if (!src) return null;
+    try {
+      var el = toneElement(src);
+      el.loop = false;
+      el.volume = volume == null ? 1 : volume;
+      el.currentTime = 0;
+      var played = el.play();
+      if (played && played.catch) played.catch(function () { /* autoplay blocked */ });
+      return el;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function messageToneKey() {
+    var key = STORE.settings.messageTone;
+    if (key === 'none' || key === 'beep') return key;
+    return MESSAGE_TONE_FILES[key] ? key : 'chime';
+  }
+
+  function playMessageTone(key, volume) {
+    if (key === 'none') return;
+    if (key === 'beep') { playSynthesisedTone(); return; }
+    playTone(MESSAGE_TONE_FILES[key], volume == null ? 0.7 : volume);
+  }
+
+  /* An arriving message, in a conversation that is not muted. */
+  function playIncomingMessageSound() {
+    playMessageTone(messageToneKey());
+  }
+
+  /*
+   * The send confirmation. Deliberately not a separate preference: it is the
+   * counterpart of the arrival tone, so it follows it — silence one and you
+   * have silenced both.
+   */
+  function playSentMessageSound() {
+    if (!STORE.settings.notificationSounds) return;
+    if (messageToneKey() === 'none') return;
+    playTone(SENT_TONE_FILE, 0.45);
+  }
+
+  /*
+   * Settings previews. A ringtone runs 7–16 seconds, which is right for a call
+   * and far too long for "what does this one sound like", so a preview is cut
+   * short — and any previous one stopped, so flicking through the list never
+   * layers two tones over each other.
+   */
+  var previewTone = null;
+  var previewTimer = null;
+
+  function stopTonePreview() {
+    if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
+    if (previewTone) {
+      try { previewTone.pause(); previewTone.currentTime = 0; } catch (err) { /* ignore */ }
+      previewTone = null;
+    }
+  }
+
+  function previewSetting(key, value) {
+    stopTonePreview();
+
+    if (key === 'messageTone') {
+      playMessageTone(value === 'none' ? 'none' : value);
+      return;
+    }
+
+    if (key === 'ringtone') {
+      if (value === 'none') return;
+      previewTone = playTone(RINGTONE_FILES[value] || RINGTONE_FILES['ringtone-1'], 0.7);
+      previewTimer = setTimeout(stopTonePreview, 4000);
+    }
+  }
+
   var audioContext = null;
 
   /* A short tone, synthesised rather than shipped as an asset. */
-  function playNotificationSound() {
+  function playSynthesisedTone() {
     try {
       var Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
@@ -6125,6 +6311,8 @@
     if (!state.composeOpen && !state.settingsOpen) return;
     state.composeOpen = false;
     state.settingsOpen = false;
+    // A ringtone preview must not outlive the panel it was started from.
+    stopTonePreview();
     render();
   }
 
@@ -6157,13 +6345,16 @@
 
   /*
    * The calls module lives outside this file and has no store of its own, so
-   * the one call-related setting is handed to it whenever settings load or
-   * change. Devices are deliberately not here — those are per-machine and the
-   * calls module keeps them in localStorage.
+   * the call-related settings are handed to it whenever settings load or
+   * change — the display preference, and what to ring with. Devices are
+   * deliberately not here: those are per-machine and the calls module keeps
+   * them in localStorage.
    */
   function publishCallSettings() {
     window.TMAMessagingSettings = window.TMAMessagingSettings || {};
     window.TMAMessagingSettings.callDisplay = STORE.settings.callDisplay || 'island';
+    window.TMAMessagingSettings.ringtone = STORE.settings.ringtone || 'ringtone-1';
+    window.TMAMessagingSettings.notificationSounds = STORE.settings.notificationSounds !== false;
     if (window.TMAMessagingCalls && window.TMAMessagingCalls.setDisplayPreference) {
       window.TMAMessagingCalls.setDisplayPreference(window.TMAMessagingSettings.callDisplay);
     }
@@ -6194,6 +6385,10 @@
         return;
       }
     }
+
+    // Choosing a tone plays it. The change event is a user gesture, so this is
+    // the one moment the browser is guaranteed to let the sound through.
+    if (key === 'messageTone' || key === 'ringtone') previewSetting(key, value);
 
     publishCallSettings();
 
@@ -7941,7 +8136,10 @@
         var opening = !state.updatesMode;
         showListView(opening ? 'updates' : 'chats');
         render();
-        if (opening) loadMessagesUpdates(root, state, render);
+        if (opening) {
+          loadMessagesUpdates(root, state, render);
+          markTabSeen(root, state, render, 'updates');
+        }
       });
     });
 
@@ -7982,7 +8180,10 @@
         var opening = !state.callsMode;
         showListView(opening ? 'calls' : 'chats');
         render();
-        if (opening) loadMessagesCalls(root, state, render);
+        if (opening) {
+          loadMessagesCalls(root, state, render);
+          markTabSeen(root, state, render, 'calls');
+        }
       });
     });
 

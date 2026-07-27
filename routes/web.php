@@ -470,6 +470,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // signed-in user sets their own.
         Route::get('/updates', [MessagingController::class, 'updates'])->name('updates');
         Route::put('/updates', [MessagingController::class, 'setUpdate'])->name('updates.set');
+        // Badges on the Messages nav bar, and the act of clearing one.
+        Route::get('/tab-counts', [MessagingController::class, 'tabCounts'])->name('tab-counts');
+        Route::post('/tab-counts/seen', [MessagingController::class, 'markTabSeen'])->name('tab-counts.seen');
         // Bulk receipt acknowledgement — one call covers every conversation.
         Route::post('/delivered', [MessagingController::class, 'markAllDelivered'])->name('delivered');
         Route::get('/settings', [MessagingController::class, 'settings'])->name('settings');

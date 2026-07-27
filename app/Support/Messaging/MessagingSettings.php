@@ -31,8 +31,12 @@ class MessagingSettings
         'readReceipts' => true,
         'typingIndicator' => true,
 
-        // Notifications
+        // Notifications. The two tone keys name a sound in the catalogue
+        // below, never a path — the client resolves them to files in
+        // public/audio, so a stored preference cannot point anywhere else.
         'notificationSounds' => true,
+        'messageTone' => 'chime',
+        'ringtone' => 'ringtone-1',
         'desktopNotifications' => false,
         'notificationPreview' => true,
 
@@ -49,6 +53,16 @@ class MessagingSettings
         // machine, so those stay in localStorage on the device they describe.
         'callDisplay' => self::CALL_ISLAND,
     ];
+
+    /**
+     * The sounds a user may pick, by key.
+     *
+     * 'beep' is the synthesised tone the client has always used and needs no
+     * asset; 'none' silences that one sound without silencing the rest.
+     */
+    public const MESSAGE_TONES = ['chime', 'system', 'beep', 'none'];
+
+    public const RINGTONES = ['ringtone-1', 'ringtone-2', 'none'];
 
     /** Where a live call sits once it is answered. */
     public const CALL_ISLAND = 'island';
@@ -88,6 +102,12 @@ class MessagingSettings
                     $value, [self::EVERYONE, self::CONTACTS, self::NOBODY], true
                 ) ? $value : self::DEFAULTS[$key],
                 $key === 'callDisplay' => in_array($value, self::CALL_DISPLAYS, true)
+                    ? $value
+                    : self::DEFAULTS[$key],
+                $key === 'messageTone' => in_array($value, self::MESSAGE_TONES, true)
+                    ? $value
+                    : self::DEFAULTS[$key],
+                $key === 'ringtone' => in_array($value, self::RINGTONES, true)
                     ? $value
                     : self::DEFAULTS[$key],
                 default => $value,

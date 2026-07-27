@@ -315,6 +315,16 @@
       return api(BASE + '/updates');
     },
 
+    /* Badges for the nav bar's Calls and Updates tabs. */
+    tabCounts: function () {
+      return api(BASE + '/tab-counts');
+    },
+
+    /* Opening a tab clears its badge, server-side, from server truth. */
+    markTabSeen: function (tab) {
+      return api(BASE + '/tab-counts/seen', { method: 'POST', json: { tab: tab } });
+    },
+
     /* Set the viewer's own status. An empty text clears it. */
     setUpdate: function (payload) {
       return api(BASE + '/updates', { method: 'PUT', json: payload });
