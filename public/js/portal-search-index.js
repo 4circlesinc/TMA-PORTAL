@@ -1,0 +1,398 @@
+/**
+ * Site-wide portal search index builders + live fetchers.
+ * Static: nav pages + every Settings / Account Settings screen.
+ * Live (as you type): files, folders, clients, users, signatures, mail, messages.
+ *
+ * Global: window.TMAPortalSearchIndex
+ */
+(function () {
+  'use strict';
+
+  var SETTINGS_PAGES = [
+    { id: 'profile', label: 'Profile' },
+    { id: 'theme', label: 'Theme' },
+    { id: 'time', label: 'Time and language' },
+    { id: 'notifications', label: 'Notifications' },
+    { id: 'privacy', label: 'Privacy' },
+    { id: 'account-security', label: 'Account security' },
+    { id: 'payment', label: 'Payment' },
+    { id: 'plugins', label: 'Plugins' },
+  ];
+
+  var ADMIN_PAGES = [
+    { id: 'profile', label: 'My profile', group: 'Settings' },
+    { id: 'theme', label: 'Theme', group: 'Settings' },
+    { id: 'time', label: 'Time and language', group: 'Settings' },
+    { id: 'notifications', label: 'Notifications', group: 'Settings' },
+    { id: 'privacy', label: 'Privacy', group: 'Settings' },
+    { id: 'payment', label: 'Payment', group: 'Settings' },
+    { id: 'plugins', label: 'Plugins', group: 'Settings' },
+    { id: 'admin-overview', label: 'Admin Overview', group: 'Settings' },
+    { id: 'background-ops', label: 'Background Operations', group: 'Settings' },
+    { id: 'reporting', label: 'Reporting', group: 'Account and Reporting' },
+    { id: 'notification-history', label: 'Notification History', group: 'Account and Reporting' },
+    { id: 'branding', label: 'Edit Company Branding', group: 'Account and Reporting' },
+    { id: 'clienthub-access', label: 'Client hub access', group: 'Client hub management' },
+    { id: 'service-teams', label: 'Service teams', group: 'Client hub management' },
+    { id: 'custom-fields', label: 'Custom fields', group: 'Client hub management' },
+    { id: 'account-security', label: 'Account security', group: 'Security' },
+    { id: 'security-insights', label: 'Security Insights', group: 'Security' },
+    { id: 'dlp', label: 'Data loss prevention', group: 'Security' },
+    { id: 'signin-policy', label: 'Sign in policy', group: 'Security' },
+    { id: 'security-policy', label: 'Security policy', group: 'Security' },
+    { id: 'alert-settings', label: 'Security alert settings', group: 'Security' },
+    { id: 'device-security', label: 'Configure device security', group: 'Security' },
+    { id: 'super-users', label: 'Edit super user group', group: 'Security' },
+    { id: 'quarantined', label: 'Quarantined files', group: 'Security' },
+    { id: 'connectors', label: 'Connectors', group: 'Settings' },
+    { id: 'connection-manager', label: 'Connection Manager', group: 'Settings' },
+    { id: 'storage-usage', label: 'Storage usage', group: 'Storage' },
+    { id: 'ai-settings', label: 'AI Settings', group: 'Advanced Preferences' },
+    { id: 'email-settings', label: 'Email Settings', group: 'Advanced Preferences' },
+    { id: 'permissions', label: 'Permissions', group: 'Advanced Preferences' },
+    { id: 'file-settings', label: 'File Settings', group: 'Advanced Preferences' },
+    { id: 'tools', label: 'Enable Portal Tools', group: 'Advanced Preferences' },
+    { id: 'default-folders', label: 'Default Folders', group: 'Advanced Preferences' },
+    { id: 'folder-templates', label: 'Folder Templates', group: 'Advanced Preferences' },
+    { id: 'upload-forms', label: 'Remote Upload Forms', group: 'Advanced Preferences' },
+    { id: 'file-drops', label: 'File Drops', group: 'Advanced Preferences' },
+  ];
+
+  function root() {
+    return window.__TMA_SITE_ROOT || '';
+  }
+
+  function api() {
+    return window.TMANotifyAPI;
+  }
+
+  function settle(promise) {
+    return Promise.resolve(promise).catch(function () { return []; });
+  }
+
+  function resultKey(item) {
+    if (!item) return '';
+    return item.fileId || item.folderId || item.clientId || item.userId
+      || item.signatureId || item.emailMessageId || item.conversationId
+      || item.adminPage || item.settingsNav
+      || ((item.navId || '') + ':' + (item.label || item.title || ''));
+  }
+
+  function navLeavesFrom(rootEl) {
+    if (!rootEl) return [];
+    return Array.prototype.map.call(
+      rootEl.querySelectorAll('.tma-dash__nav-item[data-nav]'),
+      function (l) {
+        var title = l.getAttribute('data-title') || (l.textContent || '').trim();
+        var crumb = l.getAttribute('data-crumb') || '';
+        var navId = l.getAttribute('data-nav') || '';
+        var view = l.getAttribute('data-view') || '';
+        return {
+          type: 'page',
+          label: title,
+          title: title,
+          subtitle: crumb && crumb !== title ? crumb : '',
+          navId: navId,
+          view: view,
+          href: '#' + navId,
+          keywords: [title, crumb, navId, view, (l.textContent || '').trim()].filter(Boolean),
+        };
+      }
+    );
+  }
+
+  function settingsIndex() {
+    var personal = SETTINGS_PAGES.map(function (page) {
+      return {
+        type: 'page',
+        label: page.label,
+        title: page.label,
+        subtitle: 'Settings',
+        navId: 'settings',
+        view: 'settings',
+        settingsNav: page.id,
+        href: '/settings?nav=' + encodeURIComponent(page.id),
+        keywords: ['settings', page.label, page.id, 'preferences', 'account'],
+      };
+    });
+    var admin = ADMIN_PAGES.map(function (page) {
+      return {
+        type: 'page',
+        label: page.label,
+        title: page.label,
+        subtitle: page.group ? ('Settings / ' + page.group) : 'Settings',
+        navId: 'account-settings',
+        view: 'admin',
+        adminPage: page.id,
+        href: '/account-settings?settings-page=' + encodeURIComponent(page.id),
+        keywords: ['settings', 'admin', page.label, page.id, page.group || '', 'preferences', 'security', 'storage'],
+      };
+    });
+    return personal.concat(admin);
+  }
+
+  function buildStaticIndex(rootEl) {
+    return navLeavesFrom(rootEl).concat(settingsIndex());
+  }
+
+  var contactsCache = null;
+  var contactsPromise = null;
+  var usersCache = null;
+  var usersPromise = null;
+
+  function mapClients(data) {
+    return ((data && data.clients) || []).slice(0, 40).map(function (c) {
+      var name = c.name || 'Client';
+      var company = (c.profile && c.profile.work && c.profile.work.company) || c.company || '';
+      var photo = c.profile && c.profile.photo;
+      var hasPhoto = photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo);
+      return {
+        type: 'user',
+        label: name,
+        title: name,
+        subtitle: company ? ('Client · ' + company) : 'Client',
+        avatarUrl: hasPhoto ? photo : '',
+        clientId: c.id,
+        navId: 'clients',
+        view: 'clients',
+        href: '/clients?client=' + encodeURIComponent(c.id),
+        keywords: [name, company, 'client', 'clients'],
+      };
+    });
+  }
+
+  function fetchContacts() {
+    if (contactsCache) return Promise.resolve(contactsCache);
+    if (contactsPromise) return contactsPromise;
+    var a = api();
+    if (!a || typeof a.api !== 'function') return Promise.resolve([]);
+    contactsPromise = a.api(root() + '/portal/clients').then(function (data) {
+      contactsCache = mapClients(data);
+      contactsPromise = null;
+      return contactsCache;
+    }).catch(function () {
+      contactsPromise = null;
+      return [];
+    });
+    return contactsPromise;
+  }
+
+  function fetchFiles(q) {
+    var net = window.TMAFilesNet;
+    if (!net || typeof net.fetchJSON !== 'function') return Promise.resolve([]);
+    var params = 'section=all&search=' + encodeURIComponent(q) + '&perPage=12';
+    return net.fetchJSON(net.url('/?' + params)).then(function (res) {
+      var folders = (res.folders || []).slice(0, 8).map(function (f) {
+        return {
+          type: 'folder',
+          label: f.name,
+          title: f.name,
+          subtitle: 'Folder',
+          folderId: f.id,
+          navId: 'folders-all',
+          view: 'folders',
+          href: '/folders/all',
+          keywords: [f.name, 'folder', 'files'],
+        };
+      });
+      var files = (res.files || []).slice(0, 12).map(function (f) {
+        var folderName = (f.folder && f.folder.name) || 'Files';
+        return {
+          type: 'file',
+          label: f.name,
+          title: f.name,
+          subtitle: folderName,
+          fileId: f.id,
+          folderId: f.folder && f.folder.id ? f.folder.id : null,
+          navId: 'folders-all',
+          view: 'folders',
+          href: '/folders/all',
+          keywords: [f.name, f.extension || '', folderName, 'file', 'files'],
+        };
+      });
+      return folders.concat(files);
+    });
+  }
+
+  function mapUsers(data) {
+    return ((data && data.users) || []).map(function (u) {
+      return {
+        type: 'user',
+        label: u.name || u.email || 'User',
+        title: u.name || u.email || 'User',
+        subtitle: u.email || u.jobTitle || 'User',
+        avatarUrl: u.avatar || '',
+        userId: u.id,
+        navId: 'users',
+        view: 'users',
+        href: '/users',
+        keywords: [u.name, u.email, u.jobTitle, u.accountType, 'user', 'users'].filter(Boolean),
+      };
+    });
+  }
+
+  function loadUsers() {
+    if (usersCache) return Promise.resolve(usersCache);
+    if (usersPromise) return usersPromise;
+    var a = api();
+    if (!a || typeof a.api !== 'function') return Promise.resolve([]);
+    usersPromise = a.api(root() + '/admin/users').then(function (data) {
+      usersCache = mapUsers(data);
+      usersPromise = null;
+      return usersCache;
+    }).catch(function () {
+      usersPromise = null;
+      return [];
+    });
+    return usersPromise;
+  }
+
+  function fetchUsers(q) {
+    var needle = String(q || '').toLowerCase();
+    return loadUsers().then(function (items) {
+      return items.filter(function (item) {
+        var hay = [item.label, item.subtitle].concat(item.keywords || []).join(' ').toLowerCase();
+        return hay.indexOf(needle) !== -1;
+      }).slice(0, 10);
+    });
+  }
+
+  function fetchSignatures(q) {
+    var net = window.TMAFilesNet;
+    if (!net || typeof net.fetchJSON !== 'function') return Promise.resolve([]);
+    var url = root() + '/portal/signatures/?search=' + encodeURIComponent(q);
+    return net.fetchJSON(url).then(function (res) {
+      return ((res && res.requests) || []).slice(0, 8).map(function (r) {
+        var title = r.title || r.name || 'Signature request';
+        return {
+          type: 'page',
+          label: title,
+          title: title,
+          subtitle: 'Signatures',
+          signatureId: r.id,
+          navId: 'signatures',
+          view: 'signatures',
+          href: '/signatures',
+          keywords: [title, 'signature', 'signatures', 'sign'],
+        };
+      });
+    });
+  }
+
+  function fetchMail(q) {
+    var a = api();
+    if (!a || typeof a.api !== 'function') return Promise.resolve([]);
+    var url = root() + '/portal/mail/messages?q=' + encodeURIComponent(q) + '&perPage=8';
+    return a.api(url).then(function (data) {
+      var rows = (data && (data.messages || data.rows || data.items)) || [];
+      return rows.slice(0, 8).map(function (m) {
+        var subject = m.subject || m.title || '(No subject)';
+        var from = m.from || m.fromName || m.sender || '';
+        return {
+          type: 'page',
+          label: subject,
+          title: subject,
+          subtitle: from ? ('Email · ' + from) : 'Email',
+          emailMessageId: m.id || m.messageId || null,
+          navId: 'email',
+          view: 'email',
+          href: '/email',
+          keywords: [subject, from, 'email', 'mail', 'inbox'].filter(Boolean),
+        };
+      });
+    });
+  }
+
+  function fetchMessaging(q) {
+    var msg = window.TMAMessagingAPI;
+    if (!msg || typeof msg.search !== 'function') return Promise.resolve([]);
+    return msg.search(q).then(function (data) {
+      var results = (data && data.results) || data || {};
+      var out = [];
+      (results.people || []).slice(0, 6).forEach(function (p) {
+        out.push({
+          type: 'user',
+          label: p.name || p.email || 'Person',
+          title: p.name || p.email || 'Person',
+          subtitle: p.email || 'Messages',
+          avatarUrl: p.photo || '',
+          userId: p.id,
+          navId: 'so-messages',
+          view: 'messages',
+          href: '/social/messages',
+          keywords: [p.name, p.email, 'messages', 'people'].filter(Boolean),
+        });
+      });
+      (results.conversations || []).slice(0, 6).forEach(function (c) {
+        var name = c.name || c.title || 'Conversation';
+        out.push({
+          type: 'page',
+          label: name,
+          title: name,
+          subtitle: 'Messages',
+          conversationId: c.id || c.uuid || c.conversationId,
+          navId: 'so-messages',
+          view: 'messages',
+          href: '/social/messages',
+          keywords: [name, 'messages', 'chat', 'conversation'],
+        });
+      });
+      (results.messages || []).slice(0, 4).forEach(function (m) {
+        var body = m.body || m.text || m.preview || 'Message';
+        var label = String(body).replace(/\s+/g, ' ').trim().slice(0, 80);
+        out.push({
+          type: 'page',
+          label: label,
+          title: label,
+          subtitle: 'Message',
+          conversationId: m.conversationId || m.conversation_id || (m.conversation && (m.conversation.id || m.conversation.uuid)),
+          navId: 'so-messages',
+          view: 'messages',
+          href: '/social/messages',
+          keywords: [label, 'messages', 'chat'],
+        });
+      });
+      return out;
+    });
+  }
+
+  function fetchLiveResults(query) {
+    var q = String(query || '').trim();
+    if (q.length < 2) return Promise.resolve([]);
+
+    return Promise.all([
+      settle(fetchFiles(q)),
+      settle(fetchContacts().then(function (items) {
+        var needle = q.toLowerCase();
+        return items.filter(function (item) {
+          var hay = [item.label, item.subtitle].concat(item.keywords || []).join(' ').toLowerCase();
+          return hay.indexOf(needle) !== -1;
+        });
+      })),
+      settle(fetchUsers(q)),
+      settle(fetchSignatures(q)),
+      settle(fetchMail(q)),
+      settle(fetchMessaging(q)),
+    ]).then(function (chunks) {
+      var merged = [];
+      var seen = Object.create(null);
+      chunks.forEach(function (list) {
+        (list || []).forEach(function (item) {
+          var key = resultKey(item);
+          if (!key || seen[key]) return;
+          seen[key] = true;
+          merged.push(item);
+        });
+      });
+      return merged;
+    });
+  }
+
+  window.TMAPortalSearchIndex = {
+    buildStaticIndex: buildStaticIndex,
+    settingsIndex: settingsIndex,
+    fetchContacts: fetchContacts,
+    fetchLiveResults: fetchLiveResults,
+    resultKey: resultKey,
+  };
+})();

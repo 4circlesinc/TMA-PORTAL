@@ -680,6 +680,7 @@
       var sidebarSearch = window.TMAGlobalSearch.mountSidebarSearch(mount, {
         index: searchIndex,
         fetchContacts: opts.fetchContacts,
+        fetchLiveResults: opts.fetchLiveResults,
         onNavigate: opts.onNavigate || function (item) {
           if (item.navId) {
             activate(item.navId, {});
@@ -2167,53 +2168,127 @@
     }
 
     /* ── search / command palette (Figma SearchPopup 33257:43316) ── */
-    var searchIndex = leaves.map(function (l) {
-      var title = l.getAttribute('data-title') || '';
-      var crumb = l.getAttribute('data-crumb') || '';
-      var navId = l.getAttribute('data-nav') || '';
-      return {
-        type: 'page',
-        label: title,
-        title: title,
-        navId: navId,
-        href: '#' + navId,
-        keywords: [title, crumb, navId].filter(Boolean),
-      };
-    });
-
-    function fetchSearchContacts() {
-      var api = window.TMANotifyAPI;
-      if (!api || typeof api.api !== 'function') return Promise.resolve([]);
-      var siteRoot = window.__TMA_SITE_ROOT || '';
-      return api.api(siteRoot + '/portal/clients').then(function (data) {
-        return ((data && data.clients) || []).slice(0, 8).map(function (c) {
-          var name = c.name || 'Client';
-          var photo = c.profile && c.profile.photo;
-          var hasPhoto = photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo);
+    var searchIndexBuilder = window.TMAPortalSearchIndex;
+    var searchIndex = searchIndexBuilder && typeof searchIndexBuilder.buildStaticIndex === 'function'
+      ? searchIndexBuilder.buildStaticIndex(root)
+      : leaves.map(function (l) {
+          var title = l.getAttribute('data-title') || '';
+          var crumb = l.getAttribute('data-crumb') || '';
+          var navId = l.getAttribute('data-nav') || '';
           return {
-            type: 'user',
-            label: name,
-            avatarUrl: hasPhoto ? photo : '',
-            clientId: c.id,
-            navId: 'clients',
-            href: '/clients?client=' + encodeURIComponent(c.id),
-            keywords: [name, c.company || '', (c.profile && c.profile.work && c.profile.work.company) || ''].filter(Boolean),
+            type: 'page',
+            label: title,
+            title: title,
+            navId: navId,
+            href: '#' + navId,
+            keywords: [title, crumb, navId].filter(Boolean),
           };
         });
-      }).catch(function () { return []; });
+
+    function fetchSearchContacts() {
+      if (searchIndexBuilder && typeof searchIndexBuilder.fetchContacts === 'function') {
+        return searchIndexBuilder.fetchContacts();
+      }
+      return Promise.resolve([]);
+    }
+
+    function fetchSearchLiveResults(query) {
+      if (searchIndexBuilder && typeof searchIndexBuilder.fetchLiveResults === 'function') {
+        return searchIndexBuilder.fetchLiveResults(query);
+      }
+      return Promise.resolve([]);
     }
 
     function navigateSearchResult(item, navOpts) {
+      navOpts = navOpts || {};
       if (item.clientId || (item.href && String(item.href).indexOf('/clients') === 0)) {
-        var url = item.href || ('/clients?client=' + encodeURIComponent(item.clientId));
-        if (root._portalNavigate) root._portalNavigate(url);
-        else window.location.assign((window.__TMA_SITE_ROOT || '') + url);
+        var clientUrl = item.href || ('/clients?client=' + encodeURIComponent(item.clientId));
+        if (root._portalNavigate) root._portalNavigate(clientUrl);
+        else window.location.assign((window.__TMA_SITE_ROOT || '') + clientUrl);
+        return;
+      }
+      if (item.settingsNav) {
+        activate('settings', {
+          view: 'settings',
+          title: item.label || item.title || 'Settings',
+          crumb: 'Settings / ' + (item.label || item.title || 'Settings'),
+          settingsNav: item.settingsNav,
+          keepDrawer: navOpts.keepDrawer,
+        });
+        return;
+      }
+      if (item.adminPage) {
+        activate('account-settings', {
+          view: 'admin',
+          title: item.label || item.title || 'Settings',
+          crumb: item.subtitle || ('Settings / ' + (item.label || item.title || 'Settings')),
+          adminPage: item.adminPage,
+          keepDrawer: navOpts.keepDrawer,
+        });
+        return;
+      }
+      if (item.folderId || item.fileId) {
+        activate(item.navId || 'folders-all', {
+          view: 'folders',
+          title: item.label || item.title || 'Files',
+          crumb: item.subtitle ? ('Folders / ' + item.subtitle) : 'Folders / All Files',
+          folderId: item.folderId || null,
+          fileId: item.fileId || null,
+          keepDrawer: navOpts.keepDrawer,
+        });
+        return;
+      }
+      if (item.signatureId) {
+        activate('signatures', {
+          view: 'signatures',
+          title: 'Signature requests',
+          crumb: 'Signatures',
+          signatureId: item.signatureId,
+          keepDrawer: navOpts.keepDrawer,
+        });
+        return;
+      }
+      if (item.emailMessageId) {
+        activate('email', {
+          view: 'email',
+          title: 'Email',
+          crumb: 'Email',
+          emailMessageId: item.emailMessageId,
+          keepDrawer: navOpts.keepDrawer,
+        });
+        return;
+      }
+      if (item.conversationId) {
+        activate('so-messages', {
+          view: 'messages',
+          title: 'Messages',
+          crumb: 'Messages',
+          conversationId: item.conversationId,
+          keepDrawer: navOpts.keepDrawer,
+        });
+        return;
+      }
+      if (item.userId) {
+        activate(item.navId || 'users', {
+          view: item.view || 'users',
+          title: item.label || item.title || 'Users',
+          crumb: item.subtitle || 'Users',
+          userId: item.userId,
+          keepDrawer: navOpts.keepDrawer,
+        });
         return;
       }
       if (item.navId) {
-        activate(item.navId, navOpts || {});
+        activate(item.navId, Object.assign({
+          view: item.view || undefined,
+          title: item.label || item.title || undefined,
+          crumb: item.subtitle || undefined,
+        }, navOpts));
       } else if (item.href && String(item.href).charAt(0) === '#') {
-        activate(String(item.href).slice(1), navOpts || {});
+        activate(String(item.href).slice(1), navOpts);
+      } else if (item.href && String(item.href).charAt(0) === '/') {
+        if (root._portalNavigate) root._portalNavigate(item.href);
+        else window.location.assign((window.__TMA_SITE_ROOT || '') + item.href);
       }
     }
 
@@ -2221,6 +2296,7 @@
       ? window.TMAGlobalSearch.mountDashboardSearch(root, {
           index: searchIndex,
           fetchContacts: fetchSearchContacts,
+          fetchLiveResults: fetchSearchLiveResults,
           onNavigate: function (item) {
             navigateSearchResult(item, { keepDrawer: true });
           },
@@ -2234,6 +2310,7 @@
 
     wireMobileSidebarSearch(searchIndex, {
       fetchContacts: fetchSearchContacts,
+      fetchLiveResults: fetchSearchLiveResults,
       onNavigate: function (item) {
         navigateSearchResult(item, {});
       },

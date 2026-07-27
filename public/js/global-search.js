@@ -331,24 +331,31 @@
     if (item.type === 'user' && (item.avatarUrl || item.avatar)) {
       const src = item.avatarUrl || avatarSrc(item.avatar);
       iconMarkup = `<img src="${escapeHtml(src)}" alt="" class="tma-search-popup__row-avatar" width="24" height="24" />`;
+    } else if (item.type === 'folder') {
+      iconMarkup = `<img src="${iconUrl('Folder')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
+    } else if (item.type === 'file') {
+      iconMarkup = `<img src="${iconUrl('FileText')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'query' || item.icon === 'search') {
       iconMarkup = `<img src="${iconUrl('Search16')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
-    } else if (item.type === 'page') {
+    } else if (item.type === 'page' || item.type === 'settings') {
       iconMarkup = `<img src="${iconUrl('FileText')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
-    } else {
+    } else if (item.type === 'user') {
       iconMarkup = `<img src="${iconUrl('User')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
+    } else {
+      iconMarkup = `<img src="${iconUrl('FileText')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     }
 
     const label = item.label || item.title || '';
+    const mainTitle = item.title || item.label || '';
     let textHtml = '';
     if (item.subtitle) {
       const sub = item.subtitle;
       const match = query.toLowerCase();
       if (match && sub.toLowerCase().includes(match)) {
         const parts = sub.split(new RegExp(`(${query})`, 'i'));
-        textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${escapeHtml(item.title)}</div><div class="tma-search-popup__row-subtext">${parts.map(p => (p.toLowerCase() === match.toLowerCase() ? `<span class="tma-search-popup__highlight">${escapeHtml(p)}</span>` : escapeHtml(p))).join('')}</div></div></div>`;
+        textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${escapeHtml(mainTitle)}</div><div class="tma-search-popup__row-subtext">${parts.map(p => (p.toLowerCase() === match.toLowerCase() ? `<span class="tma-search-popup__highlight">${escapeHtml(p)}</span>` : escapeHtml(p))).join('')}</div></div></div>`;
       } else {
-        textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${escapeHtml(item.title)}</div><div class="tma-search-popup__row-subtext">${escapeHtml(sub)}</div></div></div>`;
+        textHtml = `<div class="tma-search-popup__row-main tma-search-popup__row-main--stack">${iconMarkup}<div><div class="tma-search-popup__row-text">${escapeHtml(mainTitle)}</div><div class="tma-search-popup__row-subtext">${escapeHtml(sub)}</div></div></div>`;
       }
     } else {
       textHtml = `<div class="tma-search-popup__row-main">${iconMarkup}<span class="tma-search-popup__row-text">${splitHighlight(label, query)}</span></div>`;
@@ -501,8 +508,8 @@
   }
 
   function renderResultsBody(query, items, options = {}) {
-    const { interactive = false, selectedIndex = 1 } = options;
-    const countLabel = `<div class="tma-search-popup__group-label">${items.length >= 5 ? '105 results' : `${items.length} results`}</div>`;
+    const { interactive = false, selectedIndex = 0 } = options;
+    const countLabel = `<div class="tma-search-popup__group-label">${items.length} result${items.length === 1 ? '' : 's'}</div>`;
     const rows = items.map((item, i) => renderRow(item, {
       size: 'compact',
       query,
@@ -981,6 +988,30 @@
       }).catch(() => state.contacts);
     }
 
+    function resultKey(item) {
+      if (window.TMAPortalSearchIndex && typeof window.TMAPortalSearchIndex.resultKey === 'function') {
+        return window.TMAPortalSearchIndex.resultKey(item);
+      }
+      return (item && (item.fileId || item.folderId || item.clientId || item.userId
+        || item.signatureId || item.emailMessageId || item.conversationId
+        || item.adminPage || item.settingsNav
+        || ((item.navId || '') + ':' + (item.label || item.title || '')))) || '';
+    }
+
+    function mergeResults(lists) {
+      const merged = [];
+      const seen = Object.create(null);
+      lists.forEach((list) => {
+        (list || []).forEach((item) => {
+          const key = resultKey(item);
+          if (!key || seen[key]) return;
+          seen[key] = true;
+          merged.push(item);
+        });
+      });
+      return merged;
+    }
+
     function portalGroups() {
       return portalInitialGroups(index, state.contacts);
     }
@@ -1073,9 +1104,9 @@
     function renderLivePopup(renderOpts = {}) {
       const q = state.query.trim();
       let stateName = 'initial';
-      if (state.loading) stateName = 'empty';
+      if (q && state.results.length) stateName = 'results';
+      else if (state.loading) stateName = 'empty';
       else if (q && state.results.length === 0 && q.length > 1) stateName = 'empty';
-      else if (q && state.results.length) stateName = 'results';
 
       mount.innerHTML = renderPopup({
         variant: 'compact',
@@ -1103,20 +1134,43 @@
     function runSearch(query, renderOpts = {}) {
       state.query = query;
       state.loading = false;
-      if (!query.trim()) {
+      const q = query.trim();
+      if (!q) {
         state.results = [];
+        state._searchSeq = (state._searchSeq || 0) + 1;
         renderLivePopup(renderOpts);
         return;
       }
 
       pushRecentSearch(query);
-      const pageHits = filterIndex(index, query);
-      const contactHits = filterIndex(state.contacts, query);
-      const seen = new Set(pageHits.map((r) => r.clientId || r.navId || r.label));
-      state.results = pageHits.concat(
-        contactHits.filter((hit) => !seen.has(hit.clientId || hit.navId || hit.label))
-      );
+      const pageHits = filterIndex(index, q);
+      const contactHits = filterIndex(state.contacts, q);
+      state.results = mergeResults([pageHits, contactHits]);
       state.selectedIndex = 0;
+
+      const seq = (state._searchSeq = (state._searchSeq || 0) + 1);
+      const canLive = typeof options.fetchLiveResults === 'function' && q.length > 1;
+      if (canLive) {
+        state.loading = true;
+        renderLivePopup(renderOpts);
+        Promise.resolve(options.fetchLiveResults(q)).then((live) => {
+          if (seq !== state._searchSeq || !state.open) return;
+          state.loading = false;
+          state.results = mergeResults([
+            filterIndex(index, state.query.trim()),
+            filterIndex(state.contacts, state.query.trim()),
+            live,
+          ]);
+          state.selectedIndex = 0;
+          renderLivePopup(renderOpts);
+        }).catch(() => {
+          if (seq !== state._searchSeq || !state.open) return;
+          state.loading = false;
+          renderLivePopup(renderOpts);
+        });
+        return;
+      }
+
       renderLivePopup(renderOpts);
     }
 
