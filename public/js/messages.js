@@ -2033,6 +2033,12 @@
       'M128,176a48.05,48.05,0,0,0,48-48V64a48,48,0,0,0-96,0v64A48.05,48.05,0,0,0,128,176ZM96,64a32,32,0,0,1,64,0v64a32,32,0,0,1-64,0Zm40,143.6V240a8,8,0,0,1-16,0V207.6A80.11,80.11,0,0,1,48,128a8,8,0,0,1,16,0,64,64,0,0,0,128,0,8,8,0,0,1,16,0A80.11,80.11,0,0,1,136,207.6Z',
     PaperPlaneRight:
       'M231.87,114l-168-95.89A16,16,0,0,0,40.92,37.34L71.55,128,40.92,218.67A16,16,0,0,0,56,240a16.15,16.15,0,0,0,7.93-2.1l167.92-96.05a16,16,0,0,0,.05-27.89ZM56,224a.56.56,0,0,0,0-.12L85.74,136H144a8,8,0,0,0,0-16H85.74L56.06,32.16A.46.46,0,0,0,56,32l168,95.83Z',
+    // Inline copies of the Phosphor icons the call log uses as <img>. A call
+    // bubble needs them to take the bubble's own colour, which an <img> cannot.
+    Phone:
+      'M222.37,158.46l-47.11-21.11-.13-.06a16,16,0,0,0-15.17,1.4,8.12,8.12,0,0,0-.75.56L134.87,160c-15.42-7.49-31.34-23.29-38.83-38.51l20.78-24.71c.2-.25.39-.5.57-.77a16,16,0,0,0,1.32-15.06l0-.12L97.54,33.64a16,16,0,0,0-16.62-9.52A56.26,56.26,0,0,0,32,80c0,79.4,64.6,144,144,144a56.26,56.26,0,0,0,55.88-48.92A16,16,0,0,0,222.37,158.46ZM176,208A128.14,128.14,0,0,1,48,80,40.2,40.2,0,0,1,82.87,40a.61.61,0,0,0,0,.12l21,47L83.2,111.86a6.13,6.13,0,0,0-.57.77,16,16,0,0,0-1,15.7c9.06,18.53,27.73,37.06,46.46,46.11a16,16,0,0,0,15.75-1.14,8.44,8.44,0,0,0,.74-.56L168.89,152l47,21.05h0s.08,0,.11,0A40.21,40.21,0,0,1,176,208Z',
+    VideoCamera:
+      'M251.77,73a8,8,0,0,0-8.21.39L208,97.05V72a16,16,0,0,0-16-16H32A16,16,0,0,0,16,72V184a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V159l35.56,23.71A8,8,0,0,0,248,184a8,8,0,0,0,8-8V80A8,8,0,0,0,251.77,73ZM192,184H32V72H192V184Zm48-22.95-32-21.33V116.28L240,95Z',
   };
 
   function renderMessagesIcon(name) {
@@ -2555,6 +2561,65 @@
     return '<div class="tma-dash__messages-divider">' + esc(label) + '</div>';
   }
 
+  var CALL_EVENTS = ['call_started', 'call_ended', 'call_missed'];
+
+  function isCallMessage(msg) {
+    var event = (msg.systemEvent || {}).event;
+    return CALL_EVENTS.indexOf(event) !== -1;
+  }
+
+  /*
+   * A call is a message, not an announcement.
+   *
+   * Calls are stored as system lines, so they used to render as the same
+   * centred pill as "Ana added Ben" — a column of identical grey lozenges that
+   * said nothing about who called whom, and read as chrome rather than as part
+   * of the conversation. They get a bubble on the caller's side instead.
+   *
+   * The wording, the direction arrow and its colours are the call log's, reused
+   * verbatim, so an entry means the same thing in both places.
+   */
+  function renderCallMessage(msg, row) {
+    var event = msg.systemEvent || {};
+    var outgoing = event.initiatorId != null && STORE.me && event.initiatorId === STORE.me.id;
+    var missed = event.event === 'call_missed';
+    var video = event.media === 'video';
+    var side = outgoing ? 'out' : 'in';
+    var dir, stateLabel;
+
+    if (missed) {
+      dir = outgoing ? 'out-missed' : 'in-missed';
+      stateLabel = outgoing ? 'No answer' : 'Missed';
+    } else if (event.event === 'call_started') {
+      dir = outgoing ? 'out' : 'in';
+      stateLabel = 'Ongoing';
+    } else {
+      dir = outgoing ? 'out' : 'in';
+      stateLabel = outgoing ? 'Outgoing' : 'Incoming';
+    }
+
+    var time = resolveMessageTime(msg, row);
+
+    return (
+      '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side +
+      '" data-messages-id="' + esc(msg.id) + '">' +
+      '<div class="tma-dash__messages-bubble-main">' +
+      '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
+      ' tma-dash__messages-bubble--call' + (missed ? ' tma-dash__messages-bubble--call-missed' : '') + '">' +
+      '<span class="tma-dash__messages-call-icon">' +
+      renderMessagesIcon(video ? 'VideoCamera' : 'Phone') +
+      '</span>' +
+      '<span class="tma-dash__messages-call-body">' +
+      '<span class="tma-dash__messages-call-label">' +
+      esc(video ? 'Video call' : 'Voice call') +
+      '</span>' +
+      '<span class="tma-dash__messages-call-meta">' +
+      '<span class="tma-dash__call-dir tma-dash__call-dir--' + dir + '" aria-hidden="true"></span>' +
+      esc(time ? stateLabel + ' · ' + time : stateLabel) +
+      '</span></span></div></div></div>'
+    );
+  }
+
   /* "Ana added Ben to the group", rendered as a centred system line. */
   function renderSystemMessage(msg) {
     return (
@@ -2587,7 +2652,9 @@
   }
 
   function renderBubble(msg, index, isReplyTarget, row, showSender, render) {
-    if (msg.type === 'system') return renderSystemMessage(msg);
+    if (msg.type === 'system') {
+      return isCallMessage(msg) ? renderCallMessage(msg, row) : renderSystemMessage(msg);
+    }
 
     var timeHtml = renderBubbleTime(msg, row);
     var side = msg.direction === 'out' ? 'out' : 'in';

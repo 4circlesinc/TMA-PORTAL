@@ -30543,6 +30543,77 @@ span.tma-dash__messages-profile-avatar {
   color: #ffb4ab;
 }
 
+/* ── Messages: call bubbles ───────────────────────────────────────── */
+
+/*
+ * A call renders as a bubble on the caller's side rather than a centred system
+ * pill: an icon chip, what the call was, and how it went. The direction arrow
+ * and its green/red are the call log's own, so the two read alike.
+ */
+.tma-dash__messages-bubble--call {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+}
+
+.tma-dash__messages-call-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-overlay-4);
+}
+
+.tma-dash__messages-call-icon .tma-dash__messages-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.tma-dash__messages-call-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__messages-call-label {
+  font-size: var(--text-size-14);
+  line-height: 19px;
+}
+
+.tma-dash__messages-call-meta {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-dash__messages-bubble--call-missed .tma-dash__messages-call-icon {
+  background: rgb(192 57 43 / 0.10);
+  color: #c0392b;
+}
+
+/* Your own calls sit on the blue bubble, where the log's tones stop working. */
+.tma-dash__messages-bubble--out.tma-dash__messages-bubble--call .tma-dash__messages-call-icon {
+  background: rgb(255 255 255 / 0.16);
+  color: #ffffff;
+}
+
+.tma-dash__messages-bubble--out .tma-dash__call-dir {
+  color: rgb(255 255 255 / 0.72);
+}
+
+.tma-dash__messages-bubble--out.tma-dash__messages-bubble--call-missed
+  .tma-dash__messages-call-icon,
+.tma-dash__messages-bubble--out .tma-dash__call-dir--out-missed {
+  color: #ffb4ab;
+}
+
 /* In dark mode --color-white resolves to the near-black panel tone, which is
  * the wallpaper's own tone: the incoming bubble would lose its edges entirely.
  * It gets a raised slate surface instead. */
