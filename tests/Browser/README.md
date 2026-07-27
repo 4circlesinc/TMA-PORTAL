@@ -906,6 +906,12 @@ TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/notifications-bulk-calls.m
   video carries its own `swap` — so click `.tma-call__controls [data-call-action="…"]`
   rather than the bare attribute.
 
+  Its last step covers the **nav-bar badges**: a call the caller gives up on
+  badges the Calls tab for the person it rang for, opening the tab clears it,
+  and it stays cleared across a reload because the marker is server-side. The
+  caller's own badge is checked for *movement* rather than for being empty —
+  the seed gives that account missed calls of its own.
+
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= \
   REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http \

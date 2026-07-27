@@ -17,6 +17,8 @@ use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\Design\MailPreviewController;
+use App\Http\Controllers\DesktopAuthController;
+use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\FileLibraryController;
@@ -564,6 +566,29 @@ Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'ca
 Route::post('/auth/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])
     ->middleware(['auth', 'verified'])
     ->name('social.disconnect');
+
+/*
+ * Desktop app sign-in handoff. The macOS shell cannot host Google's OAuth
+ * itself (embedded webviews are refused), so it opens the system browser here
+ * and redeems the result over the tmaportal:// scheme. See DesktopAuthController.
+ */
+Route::get('/auth/desktop/start', [DesktopAuthController::class, 'start'])
+    ->middleware('throttle:20,1')
+    ->name('desktop.start');
+
+Route::get('/auth/desktop/finish', [DesktopAuthController::class, 'finish'])
+    ->middleware('auth')
+    ->name('desktop.finish');
+
+Route::get('/auth/desktop/claim', [DesktopAuthController::class, 'claim'])
+    ->middleware('throttle:20,1')
+    ->name('desktop.claim');
+
+// Update feed the installed macOS app polls. Public by design: it serves only
+// the signed builds we publish, and the app has no session when it checks.
+Route::get('/desktop/{file}', DesktopUpdateController::class)
+    ->where('file', '[A-Za-z0-9 ._-]+')
+    ->name('desktop.update');
 
 /*
  * Post-login "Stay signed in?" — asked after Google, Microsoft, or email

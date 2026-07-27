@@ -62,6 +62,9 @@ class ConversationParticipant extends Model
     {
         return Message::query()
             ->where('conversation_id', $this->conversation_id)
+            // A system line is history, not correspondence: a missed call
+            // should show on the Calls badge, not as an unread message.
+            ->where('type', '!=', Message::TYPE_SYSTEM)
             ->where('id', '>', $this->last_read_message_id ?? 0)
             // A cleared conversation must not resurface as unread.
             ->where('id', '>', $this->cleared_before_message_id ?? 0)

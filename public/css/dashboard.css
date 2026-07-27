@@ -27995,10 +27995,14 @@ button.tma-dash__header-popup-item:focus-visible {
   min-width: 15px;
   padding: 0 3px;
   border-radius: 999px;
-  background: var(--color-text-secondary);
-  color: var(--color-bg-card);
+  /* The same blue the per-row unread badge uses (.tma-badge--blue). These
+   * count the same kind of thing one level up, and the old secondary grey
+   * read as "disabled" on a light bar rather than as "new". */
+  background: var(--color-blue);
+  color: #fff;
   font-size: 10px;
   line-height: 15px;
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 

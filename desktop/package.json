@@ -1,0 +1,67 @@
+{
+  "name": "tma-portal-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "TM ANTOINE Advisory portal — macOS desktop shell",
+  "main": "main.js",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "start:local": "env -u ELECTRON_RUN_AS_NODE TMA_PORTAL_URL=http://localhost:8001 electron .",
+    "icon": "./build-icon.sh",
+    "pack": "electron-builder --mac --dir",
+    "dist": "electron-builder --mac",
+    "release": "env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never",
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.tmantoinelaw.portal",
+    "productName": "TM ANTOINE Portal",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "host-bridge.js",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "pkg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Camera access is required for video calls in the portal.",
+        "NSMicrophoneUsageDescription": "Microphone access is required for voice and video calls in the portal."
+      }
+    },
+    "protocols": [
+      {
+        "name": "TM ANTOINE Portal",
+        "schemes": [
+          "tmaportal"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://portal.tmantoinelaw.com/desktop/",
+        "channel": "latest"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

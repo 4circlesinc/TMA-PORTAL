@@ -166,12 +166,116 @@
   }
 
   function stopRinging() {
+    // A call that has stopped ringing has also stopped being an unanswered
+    // incoming one, so the OS notification goes with it — every accept, decline
+    // and hangup path already funnels through here or through closeOverlay().
+    closeCallNotification();
     if (!ringEl) return;
     try {
       ringEl.pause();
       ringEl.currentTime = 0;
     } catch (e) { /* ignore */ }
     ringEl = null;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Desktop notification (an incoming call, when the tab is not in front)
+   *
+   * The on-screen pop-up and ringtone already cover a focused tab; this is for
+   * the case that actually needs it — the call rung in while the user was in
+   * another tab or another app. Closed the moment the call stops ringing.
+   * ------------------------------------------------------------------ */
+
+  var callNotification = null;
+
+  function notificationsAllowed() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+    // Respect the user's Messages preference; default on when it is unknown,
+    // because a ringing call is exactly what a person expects to be told about.
+    var prefs = window.TMAMessagingSettings || {};
+    return prefs.desktopNotifications !== false;
+  }
+
+  function showCallNotification(sess) {
+    closeCallNotification();
+    if (!sess || !notificationsAllowed()) return;
+    // Focused tab: the pop-up is already on screen and ringing.
+    if (typeof document.hasFocus === 'function' && document.hasFocus()) return;
+
+    try {
+      var isVideo = sess.media === 'video';
+      callNotification = new Notification(sess.peerName, {
+        body: 'Incoming ' + (isVideo ? 'video call' : 'voice call') + '…',
+        tag: 'tma-call-' + sess.conversationId,
+        icon: sess.peerAvatar || undefined,
+        // Keep it up until acted on — a call is not a fire-and-forget alert.
+        requireInteraction: true,
+        renotify: true,
+      });
+      callNotification.onclick = function () {
+        try { window.focus(); } catch (e) { /* ignore */ }
+        closeCallNotification();
+      };
+    } catch (e) {
+      callNotification = null;
+    }
+  }
+
+  function closeCallNotification() {
+    if (!callNotification) return;
+    try { callNotification.close(); } catch (e) { /* ignore */ }
+    callNotification = null;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Permission priming
+   *
+   * A real call must never stop to ask: camera, microphone and notification
+   * permission are all requested once, up front, from the first interaction on
+   * the Messages page. The media grant is persistent, so after this the
+   * pre-answer preview and getUserMedia never prompt again; a stored flag keeps
+   * the whole thing to a single occurrence per browser.
+   * ------------------------------------------------------------------ */
+
+  var PRIME_KEY = 'tma.call.primed';
+  var primeArmed = false;
+
+  function primeCallEnvironment() {
+    try {
+      if ('Notification' in window && Notification.permission === 'default') {
+        var p = Notification.requestPermission();
+        if (p && typeof p.catch === 'function') p.catch(function () {});
+      }
+    } catch (e) { /* older callback-only API — the toggle in settings still works */ }
+
+    if (readStore(PRIME_KEY, '') === '1' || mediaUnsupported()) return;
+
+    var granted = function () { writeStore(PRIME_KEY, '1'); };
+    navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+      .then(function (stream) { stopStream(stream); granted(); })
+      .catch(function (err) {
+        var name = err && err.name;
+        // No camera on this machine? Still secure the microphone so voice calls
+        // never prompt. A denial, by contrast, is a real choice — leave the flag
+        // unset so a later deliberate call can still raise the browser prompt.
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function (stream) { stopStream(stream); granted(); })
+            .catch(function () { /* denied or nothing there — the call will explain */ });
+        }
+      });
+  }
+
+  function armPermissionPrimer() {
+    if (primeArmed) return;
+    primeArmed = true;
+    var fire = function () {
+      document.removeEventListener('pointerdown', fire, true);
+      document.removeEventListener('keydown', fire, true);
+      primeCallEnvironment();
+    };
+    document.addEventListener('pointerdown', fire, true);
+    document.addEventListener('keydown', fire, true);
   }
 
   /* ------------------------------------------------------------------ *
@@ -255,8 +359,26 @@
     }
   }
 
+  /* ------------------------------------------------------------------ *
+   * Host bridge
+   *
+   * The desktop shell runs this page in an isolated world: it shares the DOM
+   * but not our globals, so it cannot see `session`. Publishing the phase onto
+   * <html> lets it ring the dock and hold off display sleep the way a native
+   * call app does. In a browser nothing reads it and nothing changes.
+   * ------------------------------------------------------------------ */
+  function publishCallPhase() {
+    var el = document.documentElement;
+    var phase = '';
+    if (session) phase = session.mode === MODES.INCOMING ? 'ringing' : 'active';
+    if (el.getAttribute('data-tma-call') === phase) return;
+    if (phase) el.setAttribute('data-tma-call', phase);
+    else el.removeAttribute('data-tma-call');
+  }
+
   function closeOverlay() {
     stopRinging();
+    document.documentElement.removeAttribute('data-tma-call');
     releaseFocus();
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     overlay = null;
@@ -953,6 +1075,7 @@
     if (mode === MODES.MODAL || mode === MODES.INCOMING) captureFocus();
     else releaseFocus();
 
+    publishCallPhase();
     tickDuration();
   }
 
@@ -2266,6 +2389,7 @@
         });
         render();
         startRinging();
+        showCallNotification(session);
         announce('Incoming ' + (media === 'video' ? 'video' : 'voice') + ' call from ' + fromName);
         // Show the callee their own camera before they answer (§2).
         startPreview(media === 'video');
@@ -2396,12 +2520,18 @@
     });
   }
 
+  // Ask for camera, microphone and notification permission once, on the first
+  // interaction with the Messages page, so no real call has to stop and prompt.
+  armPermissionPrimer();
+
   window.TMAMessagingCalls = {
     start: startCall,
     end: function () { endSession(true); },
     onSignal: onSignal,
     bindConversation: bindConversation,
     isActive: function () { return !!session; },
+    /* Let the page request permissions eagerly too (e.g. from a call button). */
+    prime: primeCallEnvironment,
     /* Settings write-through: the preference is read on the next answered call. */
     setDisplayPreference: function (mode) {
       if (mode === MODES.MODAL || mode === MODES.COMPACT || mode === MODES.ISLAND) {

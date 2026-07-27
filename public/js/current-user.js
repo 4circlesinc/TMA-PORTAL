@@ -219,6 +219,11 @@
           window.TMAToast.applyToastPrefs(j.toasts);
           try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}
         }
+        // Same idea for desktop banners: the store owns them on every shell,
+        // and this is where it learns whether the user wants them.
+        if (j && j.desktopNotifications && window.TMADesktopNotify) {
+          window.TMADesktopNotify.applyPrefs(j.desktopNotifications);
+        }
         paint();
         return j;
       });

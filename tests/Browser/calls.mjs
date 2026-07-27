@@ -501,6 +501,46 @@ check(log.length >= 2, `the calls were written to the log (${log.length} entries
 check(log.some((c) => c.event === 'call_missed'), 'the declined call is recorded as missed');
 check(log.some((c) => c.event === 'call_ended'), 'the answered call is recorded as ended');
 
+/* ── 13. A genuinely missed call badges the Calls tab ── */
+step(13, 'the missed-call badge');
+// Unlike step 11, nobody declines here: the caller gives up while it rings,
+// which is the only case that is a missed call for the person it rang for.
+const navCount = (page, label) => page.evaluate((want) => {
+  const btn = [...document.querySelectorAll('.tma-dash__messages-nav-btn')]
+    .find((b) => b.querySelector('.tma-dash__messages-nav-label').textContent.trim() === want);
+  const badge = btn && btn.querySelector('.tma-dash__messages-nav-count');
+  return { count: badge ? badge.textContent.trim() : null, aria: btn && btn.getAttribute('aria-label') };
+}, label);
+
+const badgeBefore = await navCount(calleePage, 'Calls');
+// The seed gives this account its own missed calls, so the caller's badge is
+// checked for *movement*, not for being empty.
+const callerBefore = await navCount(callerPage, 'Calls');
+await callerPage.click('[data-messages-call="audio"]');
+await calleePage.waitForSelector('.tma-call__dialog--incoming', { timeout: 20000 });
+await wait(1200);
+await callerPage.click('.tma-call__controls [data-call-action="hangup"]');   // gave up
+await wait(2500);
+
+const badgeAfter = await navCount(calleePage, 'Calls');
+check(badgeAfter.count !== badgeBefore.count && badgeAfter.count !== null,
+  `the missed call appears on the Calls badge (${badgeBefore.count} → ${badgeAfter.count})`);
+check(/missed call/i.test(badgeAfter.aria || ''),
+  `and is announced, not just drawn (${badgeAfter.aria})`);
+
+const callerAfter = await navCount(callerPage, 'Calls');
+check(callerAfter.count === callerBefore.count,
+  `the caller who gave up is not badged for their own unanswered call (${callerBefore.count} → ${callerAfter.count})`);
+
+await calleePage.click('[data-messages-nav-calls]');
+await wait(1500);
+check((await navCount(calleePage, 'Calls')).count === null, 'opening the tab clears the badge');
+await calleePage.reload({ waitUntil: 'networkidle' });
+await calleePage.waitForSelector('.tma-dash__messages-list-foot', { timeout: 20000 });
+await wait(1500);
+check((await navCount(calleePage, 'Calls')).count === null,
+  'and it stays cleared across a reload — the marker is server-side');
+
 /* ── report ── */
 console.log('\n' + '='.repeat(64));
 if (errors.length) {

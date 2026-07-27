@@ -108,8 +108,9 @@ class MessagingController extends Controller
             ],
             'settings' => MessagingSettings::for($user),
             // Badges for the nav bar's other tabs. Chats is not here: the
-            // client sums it from the visible rows (see TabCounts).
-            'tabCounts' => TabCounts::for($user),
+            // client sums it from the visible rows (see TabCounts). The
+            // conversation ids are already in hand, so it does not re-fetch.
+            'tabCounts' => TabCounts::for($user, $conversations->pluck('id')->all()),
             'realtime' => $this->realtimeConfig(),
             // The real upload ceiling, which PHP's own ini caps can lower well
             // below what messaging would otherwise allow. Sent so the composer
@@ -173,6 +174,11 @@ class MessagingController extends Controller
                     ->whereNull('cp.left_at');
             })
             ->whereNull('messages.deleted_at')
+            // System lines — "Voice call · missed", "Ana joined the group" —
+            // are history, not correspondence. Counting them put a badge on a
+            // thread nobody had written in, which became obvious once calls
+            // started writing one line per call.
+            ->where('messages.type', '!=', Message::TYPE_SYSTEM)
             // Anything past this participant's read high-water mark…
             ->whereRaw('messages.id > coalesce(cp.last_read_message_id, 0)')
             // …and past anything they cleared, so a cleared chat cannot come

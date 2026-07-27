@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\WorkDay;
 use App\Support\AvatarService;
+use App\Support\Messaging\MessagingSettings;
 use App\Support\Notifications\ToastSettings;
 use App\Support\RealtimeConfig;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,13 @@ class MeController extends Controller
             // Toast prefs load with identity so the first notification of the
             // session already lands in the right corner with the right hold.
             'toasts' => ToastSettings::for($user),
+            // Desktop notifications are raised by the notification store, which
+            // runs on every shell — including the ones that never mount
+            // Messages and so never load the messaging settings.
+            'desktopNotifications' => [
+                'enabled' => (bool) MessagingSettings::get($user, 'desktopNotifications'),
+                'preview' => (bool) MessagingSettings::get($user, 'notificationPreview'),
+            ],
             // Today's work plan (public fields only) for Messages / profiles.
             'workStatus' => WorkDay::publicStatusFor($user),
         ]);

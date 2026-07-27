@@ -769,6 +769,11 @@
     return n > 99 ? '99+' : n;
   }
 
+  /* "1 missed call", "2 missed calls" — the badge is read aloud, not scanned. */
+  function navCountLabel(n, singular, plural) {
+    return n + ' ' + (n === 1 ? singular : plural);
+  }
+
   function renderListFoot(state) {
     state = state || {};
 
@@ -791,11 +796,14 @@
 
     var items = [
       { key: 'chats', icon: 'ChatCircleDots', label: 'Chats', attr: 'data-messages-nav-chats',
-        count: navCount(unreadChats), countLabel: unreadChats + ' unread messages' },
+        count: navCount(unreadChats),
+        countLabel: navCountLabel(unreadChats, 'unread message', 'unread messages') },
       { key: 'updates', icon: 'Broadcast', label: 'Updates', attr: 'data-messages-nav-updates',
-        count: navCount(newUpdates), countLabel: newUpdates + ' new updates' },
+        count: navCount(newUpdates),
+        countLabel: navCountLabel(newUpdates, 'new update', 'new updates') },
       { key: 'calls', icon: 'Phone', label: 'Calls', attr: 'data-messages-nav-calls',
-        count: navCount(missedCalls), countLabel: missedCalls + ' missed calls' },
+        count: navCount(missedCalls),
+        countLabel: navCountLabel(missedCalls, 'missed call', 'missed calls') },
       // Archived is not a nav entry: it lives behind the pull-down shelf at
       // the top of the list (see renderArchivedReveal), which is where it is
       // looked for and keeps the bar from crowding its labels into ellipses.
@@ -1229,6 +1237,25 @@
     );
   }
 
+  /*
+   * What the browser says about this site, under the toggle.
+   *
+   * The setting is stored per account but the permission is per browser, so
+   * the two can disagree: switched on here, never granted (or later revoked)
+   * there, and nothing appears with nothing to explain why.
+   */
+  function desktopNotificationHint() {
+    var desktop = window.TMADesktopNotify;
+    if (!desktop || !desktop.isSupported()) return 'Not supported by this browser';
+
+    var permission = desktop.permission();
+    if (permission === 'denied') return 'Blocked for this site in your browser settings';
+    if (permission === 'default') return 'Needs browser permission';
+    return STORE.settings.desktopNotifications
+      ? 'Shown when you are away from this window'
+      : 'Allowed by this browser';
+  }
+
   function renderSettingsPanel(state) {
     if (!state.settingsOpen) return '';
 
@@ -1260,7 +1287,7 @@
         { value: 'ringtone-2', label: 'Ringtone 2' },
         { value: 'none', label: 'Silent' },
       ]) +
-      renderSettingsToggle('desktopNotifications', 'Desktop notifications', 'Needs browser permission') +
+      renderSettingsToggle('desktopNotifications', 'Desktop notifications', desktopNotificationHint()) +
       renderSettingsToggle('notificationPreview', 'Show message text in notifications') +
 
       '<div class="tma-dash__messages-setting-group">Composing</div>' +
@@ -5154,6 +5181,7 @@
         STORE.settings = data.settings || {};
         STORE.tabCounts = data.tabCounts || STORE.tabCounts || {};
         publishCallSettings();
+        publishDesktopSettings();
         STORE.realtime = data.realtime || null;
         STORE.limits = data.limits || {};
         STORE.loaded = true;
@@ -5858,21 +5886,15 @@
 
     if (STORE.settings.notificationSounds) playIncomingMessageSound();
 
-    if (
-      STORE.settings.desktopNotifications &&
-      window.Notification &&
-      Notification.permission === 'granted' &&
-      document.hidden
-    ) {
-      try {
-        new Notification(row.name, {
-          body: STORE.settings.notificationPreview ? row.preview : 'New message',
-          tag: conversationId,
-        });
-      } catch (err) {
-        /* notification failed; the in-app badge already updated */
-      }
-    }
+    /*
+     * The desktop banner is not raised here.
+     *
+     * It used to be, which meant it only ever appeared on the two shells that
+     * mount Messages, and only while the tab was hidden. It now belongs to the
+     * notification store (notify-store.js), which runs on every page and gets
+     * the same arrival over the portal notification channel — so being on the
+     * Calendar, or in another application entirely, still notifies.
+     */
   }
 
   /* ------------------------------------------------------------------
@@ -6355,8 +6377,45 @@
     window.TMAMessagingSettings.callDisplay = STORE.settings.callDisplay || 'island';
     window.TMAMessagingSettings.ringtone = STORE.settings.ringtone || 'ringtone-1';
     window.TMAMessagingSettings.notificationSounds = STORE.settings.notificationSounds !== false;
+    // The calls module shows an incoming-call desktop notification. Passed
+    // through raw (not coerced) so the calls side can treat "unset" as on — a
+    // ringing call is high-priority — while still honouring an explicit off.
+    window.TMAMessagingSettings.desktopNotifications = STORE.settings.desktopNotifications;
     if (window.TMAMessagingCalls && window.TMAMessagingCalls.setDisplayPreference) {
       window.TMAMessagingCalls.setDisplayPreference(window.TMAMessagingSettings.callDisplay);
+    }
+  }
+
+  /*
+   * The notification store raises the desktop banners and lives on every
+   * shell, so it is told the moment either preference changes here rather than
+   * waiting for the next page load to pick them up from /me.
+   */
+  function publishDesktopSettings() {
+    if (!window.TMADesktopNotify) return;
+    window.TMADesktopNotify.applyPrefs({
+      enabled: !!STORE.settings.desktopNotifications,
+      preview: STORE.settings.notificationPreview !== false,
+    });
+  }
+
+  /*
+   * A banner the user asked for by switching the setting on, so it is shown
+   * whether or not the window is in the background — the whole point is that
+   * they see it happen.
+   */
+  function showTestDesktopNotification() {
+    try {
+      var note = new Notification('Desktop notifications are on', {
+        body: 'This is how a new message will appear.',
+        tag: 'tma-desktop-test',
+        silent: true,
+      });
+      setTimeout(function () {
+        try { note.close(); } catch (err) { /* ignore */ }
+      }, 5000);
+    } catch (err) {
+      /* the setting is still saved; the banner was only a demonstration */
     }
   }
 
@@ -6366,24 +6425,41 @@
     STORE.settings[key] = value;
     render();
 
-    // Desktop notifications are useless without browser permission, so ask
-    // at the moment the user turns them on.
-    if (key === 'desktopNotifications' && value && window.Notification) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().then(function (result) {
-          if (result !== 'granted') {
-            STORE.settings[key] = false;
-            window.TMAMessagingAPI.updateSettings({ desktopNotifications: false });
-            render();
-            showMessagesToast(root, 'Desktop notifications were blocked by the browser');
-          }
-        });
-      } else if (Notification.permission === 'denied') {
+    // Desktop notifications are useless without browser permission, so ask at
+    // the moment the user turns them on — the toggle is the user gesture the
+    // browser requires before it will even show the prompt.
+    if (key === 'desktopNotifications' && value) {
+      var desktop = window.TMADesktopNotify;
+
+      if (!desktop || !desktop.isSupported()) {
         STORE.settings[key] = false;
         render();
-        showMessagesToast(root, 'Desktop notifications are blocked in your browser settings');
+        showMessagesToast(root, 'This browser does not support desktop notifications');
         return;
       }
+
+      if (desktop.permission() === 'denied') {
+        STORE.settings[key] = false;
+        render();
+        showMessagesToast(root, 'Notifications are blocked for this site in your browser settings');
+        return;
+      }
+
+      desktop.requestPermission().then(function (result) {
+        if (result !== 'granted') {
+          STORE.settings[key] = false;
+          publishDesktopSettings();
+          window.TMAMessagingAPI.updateSettings({ desktopNotifications: false });
+          render();
+          showMessagesToast(root, 'Desktop notifications were blocked by the browser');
+          return;
+        }
+        publishDesktopSettings();
+        // Proof that it works, at the one moment the user is looking for it.
+        // Without this, switching it on and seeing nothing is indistinguishable
+        // from switching it on and it being broken.
+        showTestDesktopNotification();
+      });
     }
 
     // Choosing a tone plays it. The change event is a user gesture, so this is
@@ -6391,6 +6467,7 @@
     if (key === 'messageTone' || key === 'ringtone') previewSetting(key, value);
 
     publishCallSettings();
+    publishDesktopSettings();
 
     var payload = {};
     payload[key] = STORE.settings[key];
@@ -8776,6 +8853,19 @@
       window.TMAMessagingAPI.heartbeat();
       loadConversations(root, state, render, { silent: true });
     });
+
+    /*
+     * Coming back to the tab re-reads the badges. A colleague's status change
+     * has nothing to broadcast on, so Updates would otherwise only ever be
+     * right at page load; this is the cheapest moment it matters.
+     */
+    if (!root._tabCountsFocusBound) {
+      root._tabCountsFocusBound = true;
+      window.addEventListener('focus', function () {
+        if (document.hidden || !root.isConnected) return;
+        refreshTabCounts(root, state, render);
+      });
+    }
 
     // Closing the tab has to retract the indicator too, and a normal request
     // will not survive teardown — sendBeacon is the only thing that does.

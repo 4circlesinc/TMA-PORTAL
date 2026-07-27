@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Models\UserWorkStatus;
+use Illuminate\Support\Carbon;
 
 /**
  * The badges on the Messages nav bar: Calls and Updates.
@@ -34,12 +35,15 @@ final class TabCounts
     private const CAP = 200;
 
     /**
+     * @param  ?array<int, int>  $conversationIds  the caller's conversations,
+     *   when they have already been loaded — the chat list has them in hand,
+     *   and this runs on every one of its loads.
      * @return array{calls:int, updates:int}
      */
-    public static function for(User $user): array
+    public static function for(User $user, ?array $conversationIds = null): array
     {
         return [
-            'calls' => self::missedCalls($user),
+            'calls' => self::missedCalls($user, $conversationIds),
             'updates' => self::newUpdates($user),
         ];
     }
@@ -79,9 +83,9 @@ final class TabCounts
      * A call *they* placed that nobody picked up is "No answer" in the log —
      * they already know how it went, so it is not a badge.
      */
-    private static function missedCalls(User $user): int
+    private static function missedCalls(User $user, ?array $conversationIds = null): int
     {
-        $ids = self::conversationIds($user);
+        $ids = $conversationIds ?? self::conversationIds($user);
         if (empty($ids)) {
             return 0;
         }
@@ -121,8 +125,15 @@ final class TabCounts
                 ->whereNotIn('id', $blocked)
                 ->where('status', User::STATUS_APPROVED));
 
+        // Parsed, not passed through as a string: the marker is stored ISO8601
+        // ("…T15:04:05+00:00") while the column is "…15:04:05", and a string
+        // comparison of the two is decided by the 'T' rather than by the time.
         if ($since = self::markers($user)['updatesAt'] ?? null) {
-            $query->where('updated_at', '>', $since);
+            try {
+                $query->where('updated_at', '>', Carbon::parse($since));
+            } catch (\Throwable $e) {
+                // An unparseable marker means "never looked", not "no updates".
+            }
         }
 
         return min($query->count(), self::CAP);

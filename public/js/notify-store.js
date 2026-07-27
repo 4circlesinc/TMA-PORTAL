@@ -286,6 +286,16 @@
         window.TMAToast.showNotificationToast(item);
       }
 
+      /*
+       * Desktop banner. Deliberately not gated on `added`: the server collapses
+       * repeats in a conversation into one row and re-broadcasts it (see
+       * Notifier::refresh), so the second and every later message of the day
+       * arrives as a *known* id. Each call here is one real event, and
+       * desktop.notify() has its own guard against a socket delivering the same
+       * one twice.
+       */
+      if (item && !item.read) desktop.notify(item);
+
       // Let open views (email, etc.) react to a specific arrival — e.g. a
       // snooze reminder should put the woken message back into the list.
       if (added && item) {
@@ -434,8 +444,156 @@
     };
   })();
 
+  /* ── Desktop notifications ────────────────────────────────────────────
+   *
+   * OS-level banners for arriving notifications, raised here rather than in
+   * messages.js because this store runs on every shell: the messaging page
+   * mounts on two of them, and "you are notified only while you are already
+   * looking at Messages" is not a notification.
+   *
+   * Scope is the messages module — that is what the setting that turns this on
+   * says it covers ("Desktop notifications", under Messages settings). Every
+   * other module still surfaces as the in-app toast and the bell.
+   * ------------------------------------------------------------------- */
+  var desktop = (function () {
+    var prefs = { enabled: false, preview: true };
+    var live = [];
+    var recent = {};
+    var RECENT_MS = 30000;
+
+    function supported() {
+      return typeof window.Notification === 'function';
+    }
+
+    function permission() {
+      if (!supported()) return 'unsupported';
+      return Notification.permission;
+    }
+
+    /*
+     * The window being *hidden* is not the same as the user not looking: a tab
+     * that is frontmost in a window sitting behind another application reports
+     * itself perfectly visible. Focus is the honest test, and the reason
+     * notifications used to seem broken — they only ever fired for a minimised
+     * or background tab.
+     */
+    function backgrounded() {
+      if (document.hidden) return true;
+      return typeof document.hasFocus === 'function' ? !document.hasFocus() : false;
+    }
+
+    function seenRecently(key) {
+      var now = Date.now();
+      Object.keys(recent).forEach(function (k) {
+        if (now - recent[k] > RECENT_MS) delete recent[k];
+      });
+      if (recent[key]) return true;
+      recent[key] = now;
+      return false;
+    }
+
+    /* Same navigation contract the sidebar uses: in-shell when the shell
+     * offers it, a full load otherwise. */
+    function open(url) {
+      try { window.focus(); } catch (e) { /* ignore */ }
+      if (!url) return;
+      var root = document.querySelector('.tma-dash');
+      if (root && root._portalNavigate) root._portalNavigate(url);
+      else window.location.assign((window.__TMA_SITE_ROOT || '') + url);
+    }
+
+    function closeAll() {
+      live.forEach(function (note) {
+        try { note.close(); } catch (e) { /* ignore */ }
+      });
+      live = [];
+    }
+
+    function notify(item) {
+      if (!prefs.enabled || !item) return;
+      if (item.module !== 'messages') return;
+      if (permission() !== 'granted') return;
+      if (!backgrounded()) return;
+      if (seenRecently(item.id + '@' + (item.createdAt || ''))) return;
+
+      try {
+        var note = new Notification(item.title || 'New message', {
+          body: prefs.preview ? (item.message || '') : 'New message',
+          // Per conversation, so a run of messages replaces its own banner
+          // instead of stacking one per message.
+          tag: 'tma-' + (item.id || 'notification'),
+          renotify: true,
+          icon: item.image || null,
+          // The tone is played by messages.js, which knows the user's choice;
+          // letting the OS play its own as well is two sounds for one message.
+          silent: true,
+        });
+        note.onclick = function () {
+          note.close();
+          open(item.actionUrl);
+        };
+        live.push(note);
+      } catch (e) {
+        // Some browsers only permit notifications from a service worker. There
+        // is nothing to fall back to; the bell and the toast already showed it.
+      }
+    }
+
+    /*
+     * Asking is only allowed from a user gesture, so this is called from the
+     * settings toggle rather than on load. Resolves with the resulting
+     * permission either way.
+     */
+    function requestPermission() {
+      if (!supported()) return Promise.resolve('unsupported');
+      if (Notification.permission !== 'default') return Promise.resolve(Notification.permission);
+      try {
+        var asked = Notification.requestPermission();
+        // Older Safari passes the result to a callback and returns undefined.
+        return asked && asked.then ? asked : new Promise(function (resolve) {
+          Notification.requestPermission(resolve);
+        });
+      } catch (e) {
+        return Promise.resolve(Notification.permission);
+      }
+    }
+
+    function applyPrefs(next) {
+      if (!next || typeof next !== 'object') return;
+      if (typeof next.enabled === 'boolean') prefs.enabled = next.enabled;
+      if (typeof next.preview === 'boolean') prefs.preview = next.preview;
+      try { localStorage.setItem('tma.desktopNotifications', JSON.stringify(prefs)); } catch (e) { /* ignore */ }
+    }
+
+    // Last-known prefs, so a notification arriving before /me resolves is not
+    // silently dropped. /me then overwrites this with the truth.
+    try {
+      var cached = JSON.parse(localStorage.getItem('tma.desktopNotifications') || 'null');
+      if (cached && typeof cached === 'object') {
+        prefs.enabled = !!cached.enabled;
+        prefs.preview = cached.preview !== false;
+      }
+    } catch (e) { /* ignore */ }
+
+    // A banner for something the user has come back to is stale.
+    window.addEventListener('focus', closeAll);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) closeAll();
+    });
+
+    return {
+      notify: notify,
+      applyPrefs: applyPrefs,
+      getPrefs: function () { return { enabled: prefs.enabled, preview: prefs.preview }; },
+      permission: permission,
+      requestPermission: requestPermission,
+      isSupported: supported,
+    };
+  })();
+
   window.TMANotifications = notifications;
   window.TMAActivities = activities;
+  window.TMADesktopNotify = desktop;
 
   /*
    * Fallback freshness + wake catch-up. The badge normally updates over the
