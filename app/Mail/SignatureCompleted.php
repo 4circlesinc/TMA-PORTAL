@@ -39,17 +39,18 @@ class SignatureCompleted extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'mail.signatures.completed',
-            with: [
-                'title' => $this->signatureRequest->title,
-                'name' => $this->recipientName,
-                'signers' => $this->signatureRequest->recipients
+            view: 'emails.postcard',
+            with: \App\Support\Mail\Postcards::signatureCompleted(
+                title: $this->signatureRequest->title,
+                name: $this->recipientName,
+                signers: $this->signatureRequest->recipients
                     ->where('role', '!=', 'cc')
                     ->map(fn ($r) => $r->name ?: $r->email)
                     ->values()
                     ->all(),
-                'attached' => $this->signedFile !== null,
-            ],
+                attached: $this->signedFile !== null,
+                url: url('/signatures'),
+            ),
         );
     }
 

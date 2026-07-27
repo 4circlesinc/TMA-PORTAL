@@ -33,19 +33,16 @@ class SignatureInvitation extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'mail.signatures.invitation',
-            with: [
-                'title' => $this->signatureRequest->title,
-                'sender' => $this->signatureRequest->creator?->name,
-                // Deliberately not "message": Laravel injects its own
-                // $message (the Illuminate\Mail\Message) into every mail view,
-                // and ours would be silently shadowed by it.
-                'note' => $this->signatureRequest->message,
-                'url' => $this->signingUrl,
-                'name' => $this->recipient->name,
-                'expiresAt' => $this->signatureRequest->expires_at,
-                'action' => $this->recipient->role === 'approver' ? 'approve' : 'sign',
-            ],
+            view: 'emails.postcard',
+            with: \App\Support\Mail\Postcards::signatureInvitation(
+                title: $this->signatureRequest->title,
+                sender: $this->signatureRequest->creator?->name,
+                note: $this->signatureRequest->message,
+                url: $this->signingUrl,
+                name: $this->recipient->name,
+                expiresAt: $this->signatureRequest->expires_at,
+                action: $this->recipient->role === 'approver' ? 'approve' : 'sign',
+            ),
         );
     }
 }

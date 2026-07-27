@@ -65,18 +65,8 @@ class CalendarEventNotice extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'mail.calendar.'.$this->kind,
-            with: $this->payload + [
-                // Every template reads these; defaulted so a partial payload
-                // can never blow up mid-send for the whole invitee list.
-                'title' => $this->payload['title'] ?? 'Event',
-                'name' => $this->payload['name'] ?? null,
-                'organizer' => $this->payload['organizer'] ?? null,
-                'url' => $this->payload['url'] ?? null,
-                'whenLabel' => $this->payload['whenLabel'] ?? '',
-                'location' => $this->payload['location'] ?? null,
-                'description' => $this->payload['description'] ?? null,
-            ],
+            view: 'emails.postcard',
+            with: \App\Support\Mail\Postcards::calendar($this->kind, $this->payload),
         );
     }
 }

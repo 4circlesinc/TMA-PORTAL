@@ -32,14 +32,14 @@ class SignatureReminder extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'mail.signatures.reminder',
-            with: [
-                'title' => $this->signatureRequest->title,
-                'sender' => $this->signatureRequest->creator?->name,
-                'url' => $this->signingUrl,
-                'name' => $this->recipient->name,
-                'expiresAt' => $this->signatureRequest->expires_at,
-            ],
+            view: 'emails.postcard',
+            with: \App\Support\Mail\Postcards::signatureReminder(
+                title: $this->signatureRequest->title,
+                sender: $this->signatureRequest->creator?->name,
+                url: $this->signingUrl,
+                name: $this->recipient->name,
+                expiresAt: $this->signatureRequest->expires_at,
+            ),
         );
     }
 }

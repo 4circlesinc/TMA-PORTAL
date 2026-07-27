@@ -37,13 +37,13 @@ class SignatureDeclined extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'mail.signatures.declined',
-            with: [
-                'title' => $this->signatureRequest->title,
-                'reason' => $this->reason,
-                'by' => $this->by,
-                'url' => url('/signatures'),
-            ],
+            view: 'emails.postcard',
+            with: \App\Support\Mail\Postcards::signatureDeclined(
+                title: $this->signatureRequest->title,
+                reason: $this->reason,
+                by: $this->by,
+                url: url('/signatures'),
+            ),
         );
     }
 }

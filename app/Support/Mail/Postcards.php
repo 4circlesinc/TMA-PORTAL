@@ -130,4 +130,146 @@ class Postcards
             'button' => ['label' => 'Review activity', 'url' => $reviewUrl],
         ]);
     }
+
+    // ---------------------------------------------------------------- signatures
+    // These return payload arrays (the mailables keep their own subject lines).
+
+    public static function signatureInvitation(string $title, ?string $sender, ?string $note, string $url, ?string $name, $expiresAt, string $action): array
+    {
+        $body = '<p>You can '.$action.' <strong>'.e($title).'</strong> online — no account needed.</p>';
+        if ($expiresAt) {
+            $body .= '<p>This link is personal to you and expires on '.e($expiresAt->format('j M Y')).'.</p>';
+        }
+
+        return [
+            'preheader' => $sender ? $sender.' asked you to '.$action.' a document.' : 'A document needs your signature.',
+            'eyebrow' => 'Signature',
+            'greeting' => $name ? "Hi {$name}," : null,
+            'title' => $sender ? "{$sender} asked you to {$action} a document" : 'A document needs your signature',
+            'bodyHtml' => $body,
+            'quote' => $note ?: null,
+            'button' => ['label' => 'Review & '.$action, 'url' => $url],
+        ];
+    }
+
+    public static function signatureReminder(string $title, ?string $sender, string $url, ?string $name, $expiresAt): array
+    {
+        $body = $expiresAt ? '<p>This link expires on '.e($expiresAt->format('j M Y')).'.</p>' : null;
+
+        return [
+            'preheader' => 'A document is still waiting for your signature.',
+            'eyebrow' => 'Reminder',
+            'greeting' => $name ? "Hi {$name}," : null,
+            'title' => 'A quick reminder',
+            'lead' => $title.' is still waiting for your signature'.($sender ? ', sent by '.$sender : '').'.',
+            'bodyHtml' => $body,
+            'button' => ['label' => 'Review & sign', 'url' => $url],
+        ];
+    }
+
+    /** @param array<int,string> $signers */
+    public static function signatureCompleted(string $title, ?string $name, array $signers, bool $attached, string $url): array
+    {
+        $body = $signers ? '<p>Signed by: '.e(implode(', ', $signers)).'.</p>' : '';
+        $body .= $attached
+            ? '<p>The signed copy is attached to this email for your records.</p>'
+            : '<p>We\'re still preparing the signed copy — it\'ll follow shortly.</p>';
+
+        return [
+            'preheader' => 'Everyone has now signed the document.',
+            'eyebrow' => 'Signed',
+            'greeting' => $name ? "Hi {$name}," : null,
+            'title' => 'Your document is signed',
+            'lead' => 'Everyone has now signed '.$title.'.',
+            'bodyHtml' => $body,
+            'button' => ['label' => 'View in Signatures', 'url' => $url],
+        ];
+    }
+
+    public static function signatureDeclined(string $title, ?string $reason, ?string $by, string $url): array
+    {
+        return [
+            'preheader' => 'A signature request was declined.',
+            'eyebrow' => 'Signature',
+            'title' => 'A signature was declined',
+            'lead' => $title.' was declined'.($by ? ' by '.$by : '').'. Nobody else can sign it now.',
+            'quote' => $reason ?: null,
+            'button' => ['label' => 'Open Signatures', 'url' => $url],
+        ];
+    }
+
+    public static function signatureChangesRequested(string $title, ?string $comment, ?string $by, string $url): array
+    {
+        return [
+            'preheader' => 'A reviewer asked for changes before approving.',
+            'eyebrow' => 'Signature',
+            'title' => 'Changes were requested',
+            'lead' => $title.' was reviewed'.($by ? ' by '.$by : '').', who asked for changes before approving.',
+            'quote' => $comment ?: null,
+            'bodyHtml' => '<p>The request is on hold until you revise and resend it.</p>',
+            'button' => ['label' => 'Open Signatures', 'url' => $url],
+        ];
+    }
+
+    // ------------------------------------------------------------------ calendar
+
+    /** @param array<string,mixed> $p the EventNotifier payload. */
+    public static function calendar(string $kind, array $p): array
+    {
+        $title = $p['title'] ?? 'Event';
+        $name = $p['name'] ?? null;
+        $organizer = $p['organizer'] ?? null;
+        $url = $p['url'] ?? null;
+
+        $details = [];
+        if (! empty($p['whenLabel'])) {
+            $details[] = ['When', e($p['whenLabel'])];
+        }
+        if (! empty($p['location'])) {
+            $details[] = ['Where', e($p['location'])];
+        }
+        if ($organizer) {
+            $details[] = ['Organizer', e($organizer)];
+        }
+
+        $payload = [
+            'eyebrow' => 'Calendar',
+            'greeting' => $name ? "Hi {$name}," : null,
+            'details' => $details ?: null,
+            'quote' => ! empty($p['description']) ? e($p['description']) : null,
+        ];
+
+        [$payload['title'], $payload['lead'], $label] = match ($kind) {
+            'updated' => [
+                $title.' has changed',
+                $organizer ? $organizer.' updated this event.' : 'This event was updated.',
+                'Open in the portal',
+            ],
+            'cancelled' => [
+                $title.' was cancelled',
+                ($organizer ? $organizer.' cancelled this event.' : 'This event was cancelled.').' It has been taken off your calendar.',
+                'Open your calendar',
+            ],
+            'response' => [
+                ($p['attendee'] ?? 'Someone').' '.($p['responseLabel'] ?? 'responded'),
+                ($p['attendee'] ?? 'Someone').' '.($p['responseLabel'] ?? 'responded').' your invitation to '.$title.'.',
+                'See all responses',
+            ],
+            default => [
+                $organizer ? $organizer.' invited you to '.$title : 'You have been invited to '.$title,
+                'Here are the details.',
+                'Open in the portal',
+            ],
+        };
+
+        if ($kind === 'updated' && ! empty($p['changes'])) {
+            $payload['bodyHtml'] = '<p><strong>What changed:</strong> '.e(implode(', ', $p['changes'])).'</p>';
+        }
+
+        if ($url) {
+            $payload['button'] = ['label' => $label, 'url' => $url];
+        }
+
+        return $payload;
+    }
 }

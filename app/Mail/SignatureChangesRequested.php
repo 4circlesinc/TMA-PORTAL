@@ -35,13 +35,13 @@ class SignatureChangesRequested extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'mail.signatures.changes-requested',
-            with: [
-                'title' => $this->signatureRequest->title,
-                'comment' => $this->comment,
-                'by' => $this->by,
-                'url' => url('/signatures'),
-            ],
+            view: 'emails.postcard',
+            with: \App\Support\Mail\Postcards::signatureChangesRequested(
+                title: $this->signatureRequest->title,
+                comment: $this->comment,
+                by: $this->by,
+                url: url('/signatures'),
+            ),
         );
     }
 }
