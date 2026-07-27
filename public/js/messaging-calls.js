@@ -19,6 +19,29 @@
   var ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
   var session = null;
   var overlay = null;
+
+  // Where the minimized island sits. Cycled by the move button and remembered
+  // across calls so it stays clear of whatever it was blocking (e.g. the search
+  // bar). Order runs top→bottom, so each tap walks it to the next spot.
+  var PILL_POSITIONS = ['tc', 'tr', 'br', 'bc', 'bl', 'tl'];
+  var pillPos = (function () {
+    try { return localStorage.getItem('tma.call.pillPos') || 'tc'; } catch (e) { return 'tc'; }
+  })();
+
+  function cyclePillPos() {
+    var i = PILL_POSITIONS.indexOf(pillPos);
+    pillPos = PILL_POSITIONS[(i + 1) % PILL_POSITIONS.length];
+    try { localStorage.setItem('tma.call.pillPos', pillPos); } catch (e) { /* ignore */ }
+    applyPillPos();
+  }
+
+  function applyPillPos() {
+    if (!overlay) return;
+    var pill = overlay.querySelector('.tma-call__pill');
+    if (!pill) return;
+    PILL_POSITIONS.forEach(function (p) { pill.classList.remove('tma-call__pill--' + p); });
+    pill.classList.add('tma-call__pill--' + pillPos);
+  }
   // The signed-in user's id, learned from the realtime binding / signalling so
   // a persisted call can record who placed it (incoming vs outgoing in the log).
   var meId = null;
@@ -315,13 +338,15 @@
       '</div>' +
       '</div></div>' +
       // Minimized pill
-      '<div class="tma-call__pill" role="dialog" aria-label="Call in progress">' +
+      '<div class="tma-call__pill tma-call__pill--' + pillPos + '" role="dialog" aria-label="Call in progress">' +
       '<button type="button" class="tma-call__pill-body" data-call-expand aria-label="Expand call">' +
       avatarMarkup('tma-call__pill-avatar') +
       '<span class="tma-call__pill-meta">' +
       '<span class="tma-call__pill-name">' + esc(session.peerName) + '</span>' +
       '<span class="tma-call__pill-status" data-call-status>' + esc(statusText) + '</span>' +
       '</span></button>' +
+      '<button type="button" class="tma-call__pill-move" data-call-move aria-label="Move call" title="Move call">' +
+      iconMove() + '</button>' +
       '<button type="button" class="tma-call__pill-mic' + (session.muted ? ' is-off' : '') +
       '" data-call-mute aria-label="Toggle microphone">' + iconMic() + '</button>' +
       '<button type="button" class="tma-call__pill-end" data-call-hangup aria-label="End call">' +
@@ -364,6 +389,7 @@
     bind('[data-call-expand]', function () { setMinimized(false); });
     bind('[data-call-mute]', function () { toggleMute(); });
     bind('[data-call-camera]', function () { toggleCamera(); });
+    bind('[data-call-move]', function () { cyclePillPos(); });
   }
 
   function bind(selector, handler) {
@@ -416,6 +442,10 @@
   }
   function iconMinimize() {
     return svg('<path fill="currentColor" d="M6 13h8a1 1 0 0 1 0 2H6a1 1 0 0 1 0-2z"/>');
+  }
+  function iconMove() {
+    // Four-way move arrows.
+    return svg('<path fill="currentColor" d="M12 2l3 3h-2v6h6V9l3 3-3 3v-2h-6v6h2l-3 3-3-3h2v-6H5v2l-3-3 3-3v2h6V5H9l3-3z"/>');
   }
 
   /* --------------------------------------------------------- call actions */
