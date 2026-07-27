@@ -46,6 +46,9 @@ Artisan::command('messaging:prune-attachments {--hours=24}', function () {
 
 Schedule::command('messaging:prune-attachments')->hourly();
 
+// Escalating email reminders (1h/20h/24h) for unread portal messages.
+Schedule::command('messaging:send-unread-reminders')->everyFifteenMinutes()->withoutOverlapping();
+
 /*
  * Create the firm-wide default conversation if it does not exist yet.
  *

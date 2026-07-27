@@ -1299,6 +1299,8 @@ class MessagingController extends Controller
             'last_read_message_id' => max($newest, $participant->last_read_message_id ?? 0),
             'last_read_at' => now(),
             'marked_unread_at' => null,
+            // Reading ends the unread streak: the next one reminds from tier 1.
+            'reminder_tier' => 0,
         ])->save();
 
         // Only tell the room if this user publishes read receipts. Their own

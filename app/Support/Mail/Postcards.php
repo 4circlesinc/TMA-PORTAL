@@ -254,6 +254,41 @@ class Postcards
         ]);
     }
 
+    // ----------------------------------------------------------- message reminders
+
+    /** $tier: 1 (~1h), 2 (~20h), 3 (~24h, final). */
+    public static function messageReminder(int $tier, string $from, ?string $preview, string $url): Postcard
+    {
+        $payload = match ($tier) {
+            2 => [
+                'subject' => 'Still waiting to hear from you',
+                'eyebrow' => 'Reminder',
+                'title' => 'Still waiting to hear from you',
+                'lead' => 'We reached out and haven\'t heard back. Your message is still waiting in the portal.',
+                'button' => ['label' => 'Read and reply', 'url' => $url],
+            ],
+            3 => [
+                'subject' => 'A message from us is still waiting for you',
+                'eyebrow' => 'Final reminder',
+                'title' => 'A message from us is still waiting for you',
+                'lead' => 'It\'s been a full day and we still haven\'t heard back — here\'s one last reminder.',
+                'bodyHtml' => '<p>If now isn\'t a good time, no problem — the message will be waiting whenever you\'re ready.</p>',
+                'button' => ['label' => 'Open the conversation', 'url' => $url],
+            ],
+            default => [
+                'subject' => 'You have a new message from '.$from,
+                'title' => 'You have a new message',
+                'lead' => $from.' sent you a message about an hour ago and it\'s still unread.',
+                'button' => ['label' => 'Read the message', 'url' => $url],
+            ],
+        };
+
+        return new Postcard($payload['subject'], array_merge([
+            'preheader' => 'Your message from '.$from.' is still unread.',
+            'quote' => $preview,
+        ], $payload));
+    }
+
     // --------------------------------------------------------------------- teams
 
     public static function teamAdded(string $addedBy, string $groupName, string $url): Postcard
