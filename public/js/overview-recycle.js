@@ -23,7 +23,41 @@
     message_attachment: 'Message file',
   };
 
+  var KIND_FILTERS = [
+    { value: '', label: 'All types' },
+    { value: 'file', label: 'Files' },
+    { value: 'folder', label: 'Folders' },
+    { value: 'client', label: 'Clients' },
+    { value: 'signature', label: 'Signatures' },
+    { value: 'group', label: 'Groups' },
+    { value: 'calendar_event', label: 'Calendar' },
+    { value: 'message_attachment', label: 'Message files' },
+  ];
+
   function api() { return window.TMANotifyAPI; }
+
+  function toolBtn(icon, attr, label, opts) {
+    opts = opts || {};
+    return '<button type="button" class="tma-dash__tool-btn"' +
+      (attr ? ' ' + attr : '') +
+      (opts.disabled ? ' disabled' : '') +
+      ' aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+      '<img src="' + ICON + esc(icon) + '.svg" alt=""></button>';
+  }
+
+  function toolMenu(btnAttr, aria, items, current, menuLabel) {
+    var menuItems = items.map(function (it) {
+      var active = String(it.value) === String(current) ? ' tma-dash__menu-item--active' : '';
+      return '<button type="button" class="tma-dash__menu-item' + active + '" role="menuitem" data-head-dropdown-item="' +
+        esc(it.value) + '">' + esc(it.label) + '</button>';
+    }).join('');
+    return '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap ' + btnAttr + '>' +
+      '<button type="button" class="tma-dash__tool-btn" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false" aria-label="' + esc(aria) + '">' +
+      '<img src="' + TMA + 'FunnelSimple-16.svg" alt=""></button>' +
+      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--start" data-head-dropdown-menu hidden role="menu" aria-label="' + esc(menuLabel) + '">' +
+      menuItems +
+      '</div></div>';
+  }
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -229,41 +263,25 @@
 
     function renderToolbar() {
       var count = selectedKeys().length;
-      var kindOpts = [
-        { value: '', label: 'All types' },
-        { value: 'file', label: 'Files' },
-        { value: 'folder', label: 'Folders' },
-        { value: 'client', label: 'Clients' },
-        { value: 'signature', label: 'Signatures' },
-        { value: 'group', label: 'Groups' },
-        { value: 'calendar_event', label: 'Calendar' },
-        { value: 'message_attachment', label: 'Message files' },
-      ].map(function (o) {
-        return '<option value="' + esc(o.value) + '"' + (state.kind === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>';
-      }).join('');
+      // Match Folders → Recycle Bin: empty-bin only when nothing is selected;
+      // selection shows Restore + Delete forever (one trash, not two).
+      var actions =
+        toolMenu('data-recycle-filter-menu', 'Filter', KIND_FILTERS, state.kind, 'Filter by type') +
+        (count === 0
+          ? toolBtn('Trash', 'data-recycle-empty', 'Empty recycle bin', { disabled: !state.items.length })
+          : '');
 
-      return '<div class="tma-dash__toolbar' + (count ? ' tma-dash__toolbar--selected' : '') + '">' +
-        '<div class="tma-dash__toolbar-actions">' +
-          '<label class="tma-dash__overview-recycle-filter">' +
-            '<select class="tma-dash__overview-recycle-select" data-recycle-kind aria-label="Filter by type">' + kindOpts + '</select>' +
-          '</label>' +
-          '<div class="tma-dash__toolbar-bulk" data-recycle-bulk' + (count ? '' : ' hidden') + '>' +
-            '<img class="tma-dash__toolbar-divider" src="' + TMA + 'Line-16.svg" alt="" aria-hidden="true">' +
-            '<span class="tma-dash__toolbar-selection" aria-live="polite">' +
-              (count === 1 ? '1 Selected' : count + ' Selected') +
-            '</span>' +
-            '<button type="button" class="tma-dash__tool-btn" data-recycle-bulk-restore aria-label="Restore selected">' +
-              '<img src="' + ICON + 'ArrowCounterClockwise.svg" alt="" width="16" height="16">' +
-            '</button>' +
-            '<button type="button" class="tma-dash__tool-btn" data-recycle-bulk-purge aria-label="Delete selected forever">' +
-              '<img src="' + ICON + 'Trash.svg" alt="" width="16" height="16">' +
-            '</button>' +
-          '</div>' +
-          '<button type="button" class="tma-dash__tool-btn" data-recycle-empty aria-label="Empty recycle bin"' +
-            (state.items.length ? '' : ' disabled') + '>' +
-            '<img src="' + ICON + 'Trash.svg" alt="" width="16" height="16">' +
-          '</button>' +
-        '</div>' +
+      var bulk = '<div class="tma-dash__toolbar-bulk" data-recycle-bulk' + (count === 0 ? ' hidden' : '') + '>' +
+        '<img class="tma-dash__toolbar-divider" src="' + TMA + 'Line-16.svg" alt="" aria-hidden="true">' +
+        '<span class="tma-dash__toolbar-selection" aria-live="polite">' +
+          (count === 1 ? '1 Selected' : count + ' Selected') +
+        '</span>' +
+        toolBtn('ArrowCounterClockwise', 'data-recycle-bulk-restore', 'Restore') +
+        toolBtn('Trash', 'data-recycle-bulk-purge', 'Delete forever') +
+      '</div>';
+
+      return '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
+        '<div class="tma-dash__toolbar-actions">' + actions + bulk + '</div>' +
         renderSearchBar() +
       '</div>';
     }
@@ -304,14 +322,56 @@
           '<span class="tma-dash__cc-truncate">' + esc(formatWhen(item.deletedAt)) + '</span>' +
         '</div>' +
         '<div class="tma-dash__cc tma-dash__cc--actions">' +
-          '<button type="button" class="tma-dash__row-more" data-recycle-restore="' + esc(key) + '" aria-label="Restore ' + esc(item.name) + '" title="Restore">' +
-            '<img src="' + ICON + 'ArrowCounterClockwise.svg" alt="" width="16" height="16">' +
-          '</button>' +
-          '<button type="button" class="tma-dash__row-more" data-recycle-purge="' + esc(key) + '" aria-label="Delete ' + esc(item.name) + ' forever" title="Delete forever">' +
-            '<img src="' + ICON + 'Trash.svg" alt="" width="16" height="16">' +
+          '<button type="button" class="tma-dash__row-more" data-recycle-row-more="' + esc(key) + '" aria-label="More actions for ' + esc(item.name) + '">' +
+            '<img src="' + TMA + 'ThreeDots-16.svg" alt="" width="16" height="16">' +
           '</button>' +
         '</div>' +
       '</div>';
+    }
+
+    function closeRowMenu() {
+      var open = document.querySelector('[data-overview-recycle-menu]');
+      if (open) open.remove();
+    }
+
+    function openRowMenu(btn, item) {
+      closeRowMenu();
+      var key = rowKey(item);
+      var menu = document.createElement('div');
+      menu.className = 'tma-dash__menu tma-dash__overview-files-menu';
+      menu.setAttribute('data-overview-recycle-menu', '');
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML =
+        '<button type="button" class="tma-dash__menu-item" role="menuitem" data-recycle-restore="' + esc(key) + '">Restore</button>' +
+        '<button type="button" class="tma-dash__menu-item" role="menuitem" data-recycle-purge="' + esc(key) + '">Delete forever</button>';
+      document.body.appendChild(menu);
+      var rect = btn.getBoundingClientRect();
+      menu.style.position = 'fixed';
+      menu.style.top = Math.min(window.innerHeight - menu.offsetHeight - 8, rect.bottom + 4) + 'px';
+      menu.style.left = Math.max(8, rect.right - menu.offsetWidth) + 'px';
+      menu.style.zIndex = '80';
+
+      menu.querySelector('[data-recycle-restore]').addEventListener('click', function (e) {
+        e.preventDefault();
+        closeRowMenu();
+        restoreOne(item).then(function () {
+          toast('Restored “' + item.name + '”');
+          load();
+        }).catch(function () {
+          toast('Could not restore', 'negative');
+        });
+      });
+      menu.querySelector('[data-recycle-purge]').addEventListener('click', function (e) {
+        e.preventDefault();
+        closeRowMenu();
+        if (!window.confirm('Permanently delete “' + item.name + '”? This cannot be undone.')) return;
+        purgeOne(item).then(function () {
+          toast('Permanently deleted');
+          load();
+        }).catch(function () {
+          toast('Could not delete', 'negative');
+        });
+      });
     }
 
     function renderTable() {
@@ -371,11 +431,30 @@
     }
 
     function render() {
+      closeRowMenu();
       container.innerHTML =
         '<div class="tma-dash__files tma-dash__files--overview tma-dash__recycle--overview" data-overview-recycle>' +
           renderToolbar() +
           renderTable() +
         '</div>';
+      wireChrome();
+    }
+
+    function wireChrome() {
+      if (window.TMAPortalUI && window.TMAPortalUI.wireHeadDropdownAll) {
+        window.TMAPortalUI.wireHeadDropdownAll(container, '[data-recycle-filter-menu]', function (sel) {
+          state.kind = sel.action || '';
+          load();
+        });
+      }
+      if (state.searchFocused) {
+        var focusInput = container.querySelector('[data-recycle-search]');
+        if (focusInput) {
+          focusInput.focus();
+          var len = focusInput.value.length;
+          focusInput.setSelectionRange(len, len);
+        }
+      }
     }
 
     var searchTimer = null;
@@ -395,12 +474,6 @@
     });
 
     container.addEventListener('change', function (e) {
-      var kind = e.target.closest('[data-recycle-kind]');
-      if (kind) {
-        state.kind = kind.value || '';
-        load();
-        return;
-      }
       var selectAll = e.target.closest('[data-recycle-selectall]');
       if (selectAll) {
         var on = !!selectAll.checked;
@@ -418,6 +491,15 @@
       }
     });
 
+    if (!container._recycleDocClick) {
+      container._recycleDocClick = function (e) {
+        if (!e.target.closest('[data-overview-recycle-menu]') && !e.target.closest('[data-recycle-row-more]')) {
+          closeRowMenu();
+        }
+      };
+      document.addEventListener('click', container._recycleDocClick);
+    }
+
     container.addEventListener('click', function (e) {
       if (e.target.closest('[data-recycle-search-clear]')) {
         state.search = '';
@@ -429,30 +511,12 @@
         return;
       }
 
-      var restoreBtn = e.target.closest('[data-recycle-restore]');
-      if (restoreBtn) {
-        var rItem = findItem(restoreBtn.getAttribute('data-recycle-restore'));
-        if (!rItem) return;
-        restoreOne(rItem).then(function () {
-          toast('Restored “' + rItem.name + '”');
-          load();
-        }).catch(function () {
-          toast('Could not restore', 'negative');
-        });
-        return;
-      }
-
-      var purgeBtn = e.target.closest('[data-recycle-purge]');
-      if (purgeBtn) {
-        var pItem = findItem(purgeBtn.getAttribute('data-recycle-purge'));
-        if (!pItem) return;
-        if (!window.confirm('Permanently delete “' + pItem.name + '”? This cannot be undone.')) return;
-        purgeOne(pItem).then(function () {
-          toast('Permanently deleted');
-          load();
-        }).catch(function () {
-          toast('Could not delete', 'negative');
-        });
+      var moreBtn = e.target.closest('[data-recycle-row-more]');
+      if (moreBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var moreItem = findItem(moreBtn.getAttribute('data-recycle-row-more'));
+        if (moreItem) openRowMenu(moreBtn, moreItem);
         return;
       }
 

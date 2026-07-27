@@ -29457,16 +29457,6 @@ span.tma-dash__messages-profile-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 2px;
-}
-
-.tma-dash__overview-recycle-select {
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: var(--radius-8, 8px);
-  background: var(--color-white);
-  font-size: 13px;
 }
 
 .tma-dash__recycle--overview .tma-dash__cc--date {
