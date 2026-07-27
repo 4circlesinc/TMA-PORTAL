@@ -3,8 +3,10 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use App\Support\Mail\Postcards;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\ResetsUserPasswords;
@@ -37,5 +39,8 @@ class ResetUserPassword implements ResetsUserPasswords
             $user->forceFill(['remember_token' => null])->save();
             $user->trustedDevices()->delete();
         }
+
+        // Confirm the change to the account owner.
+        Mail::to($user->email)->queue(Postcards::passwordChangedFor($user));
     }
 }

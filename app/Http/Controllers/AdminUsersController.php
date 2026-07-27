@@ -13,7 +13,9 @@ use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\DeviceName;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -340,6 +342,9 @@ class AdminUsersController extends Controller
             'message' => 'Welcome to the portal — you now have full access.',
             'action_url' => '/',
         ]);
+        Mail::to($user->email)->queue(
+            Postcards::welcome($user->email, url('/'), $user->first_name ?: null)
+        );
         $this->clearPendingApprovalNotifications($user);
 
         return response()->json(['status' => 'ok']);

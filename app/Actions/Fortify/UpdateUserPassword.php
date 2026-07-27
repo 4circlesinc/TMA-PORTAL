@@ -3,7 +3,9 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use App\Support\Mail\Postcards;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\UpdatesUserPasswords;
@@ -32,5 +34,8 @@ class UpdateUserPassword implements UpdatesUserPasswords
             'password' => Hash::make($input['password']),
             'password_auto' => false,
         ])->save();
+
+        // Confirm the change to the account owner.
+        Mail::to($user->email)->queue(Postcards::passwordChangedFor($user));
     }
 }
