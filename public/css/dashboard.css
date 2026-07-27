@@ -30855,6 +30855,13 @@ span.tma-dash__messages-profile-avatar {
 .tma-call__pill-move svg,
 .tma-call__pill-mic svg { width: 18px; height: 18px; }
 
+/* Drag handle: grab cursor, and never let a touch-drag scroll the page. */
+.tma-call__pill-move { cursor: grab; touch-action: none; }
+.tma-call__pill.is-dragging { transition: none; user-select: none; }
+.tma-call__pill.is-dragging .tma-call__pill-move { cursor: grabbing; }
+/* Keep the move handle open while dragging even if the pointer leaves it. */
+.tma-call__pill.is-dragging .tma-call__pill-move { width: 38px; margin-left: var(--space-8); opacity: 1; }
+
 .tma-call__pill-end {
   display: inline-flex;
   align-items: center;

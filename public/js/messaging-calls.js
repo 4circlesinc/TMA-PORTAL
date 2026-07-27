@@ -390,7 +390,92 @@
     bind('[data-call-expand]', function () { setMinimized(false); });
     bind('[data-call-mute]', function () { toggleMute(); });
     bind('[data-call-camera]', function () { toggleCamera(); });
-    bind('[data-call-move]', function () { cyclePillPos(); });
+    wirePillDrag();
+  }
+
+  /*
+   * Drag the island by its move handle and snap to the nearest anchor on
+   * release — the six spots (corners + top/bottom centre). A plain tap (no
+   * real movement) just walks it to the next anchor.
+   */
+  function clearInlinePos(pill) {
+    pill.style.left = '';
+    pill.style.top = '';
+    pill.style.right = '';
+    pill.style.bottom = '';
+    pill.style.transform = '';
+    pill.style.transition = '';
+  }
+
+  function wirePillDrag() {
+    if (!overlay) return;
+    var pill = overlay.querySelector('.tma-call__pill');
+    var handle = overlay.querySelector('[data-call-move]');
+    if (!pill || !handle) return;
+
+    var dragging = false, moved = false;
+    var startX = 0, startY = 0, offX = 0, offY = 0;
+
+    handle.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      var rect = pill.getBoundingClientRect();
+      dragging = true;
+      moved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      offX = e.clientX - rect.left;
+      offY = e.clientY - rect.top;
+      // Switch to free positioning: drop the anchor class and pin by left/top.
+      PILL_POSITIONS.forEach(function (p) { pill.classList.remove('tma-call__pill--' + p); });
+      pill.style.left = rect.left + 'px';
+      pill.style.top = rect.top + 'px';
+      pill.style.right = 'auto';
+      pill.style.bottom = 'auto';
+      pill.style.transform = 'none';
+      pill.style.transition = 'none';
+      pill.classList.add('is-dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+
+    handle.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) moved = true;
+      var w = pill.offsetWidth, h = pill.offsetHeight;
+      var x = Math.max(8, Math.min(window.innerWidth - w - 8, e.clientX - offX));
+      var y = Math.max(8, Math.min(window.innerHeight - h - 8, e.clientY - offY));
+      pill.style.left = x + 'px';
+      pill.style.top = y + 'px';
+    });
+
+    function endDrag(e) {
+      if (!dragging) return;
+      dragging = false;
+      pill.classList.remove('is-dragging');
+      try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+
+      if (!moved) {
+        // A tap, not a drag: advance to the next anchor.
+        cyclePillPos();
+        clearInlinePos(pill);
+        return;
+      }
+
+      // Snap to the nearest of the six anchors by the island's centre point.
+      var rect = pill.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var horiz = cx < window.innerWidth / 3 ? 'l'
+        : (cx > window.innerWidth * 2 / 3 ? 'r' : 'c');
+      var vert = cy < window.innerHeight / 2 ? 't' : 'b';
+
+      pillPos = vert + horiz; // tl | tc | tr | bl | bc | br
+      try { localStorage.setItem('tma.call.pillPos', pillPos); } catch (err) { /* ignore */ }
+      clearInlinePos(pill);
+      applyPillPos();
+    }
+
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
   }
 
   function bind(selector, handler) {
