@@ -460,6 +460,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // conversations — the inbox column's Media view, as opposed to the
         // per-thread shelf on conversations/{uuid}/gallery.
         Route::get('/media', [MessagingController::class, 'media'])->name('media');
+        // Recent call history across all the user's conversations — the Calls tab.
+        Route::get('/calls', [MessagingController::class, 'calls'])->name('calls');
         // What colleagues are working on — the Updates tab, and where the
         // signed-in user sets their own.
         Route::get('/updates', [MessagingController::class, 'updates'])->name('updates');

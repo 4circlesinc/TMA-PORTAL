@@ -303,6 +303,13 @@
       return api(BASE + '/media' + query({ shelf: shelf }));
     },
 
+    /* Recent call history across all the viewer's conversations — the Calls tab.
+     * Server-backed so it is populated on first open, not only for threads
+     * whose messages happen to be loaded. */
+    calls: function () {
+      return api(BASE + '/calls');
+    },
+
     /* What colleagues are working on, plus the viewer's own status. */
     updates: function () {
       return api(BASE + '/updates');

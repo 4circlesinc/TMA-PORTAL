@@ -1464,7 +1464,7 @@
         : state.updatesMode
           ? renderUpdatesPanel(state)
           : state.callsMode
-            ? renderCallsPanel()
+            ? renderCallsPanel(state)
             : (state.searchMode
               ? renderSearchResults(state)
               : (state.tab === 'archived' ? renderArchivedHead() : '') +
@@ -1500,6 +1500,24 @@
     }).catch(function (err) {
       state.updatesLoading = false;
       state.updatesError = (err && err.message) || 'Updates could not be loaded.';
+      render();
+    });
+  }
+
+  function loadMessagesCalls(root, state, render) {
+    if (state.callsLoading) return;
+
+    state.callsLoading = true;
+    state.callsError = null;
+    render();
+
+    window.TMAMessagingAPI.calls().then(function (data) {
+      state.callLog = (data && data.calls) || [];
+      state.callsLoading = false;
+      render();
+    }).catch(function (err) {
+      state.callsLoading = false;
+      state.callsError = (err && err.message) || 'Calls could not be loaded.';
       render();
     });
   }
@@ -1634,31 +1652,26 @@
    * Recent call system messages across conversations, plus a quick start
    * from any open chat via the header phone / video buttons.
    * ---------------------------------------------------------------- */
-  function renderCallsPanel() {
-    var calls = [];
-    Object.keys(STORE.threadMessages || {}).forEach(function (id) {
-      var row = findThread(id);
-      (getMessages(id) || []).forEach(function (msg) {
-        var event = (msg.systemEvent && msg.systemEvent.event) || '';
-        if (event === 'call_ended' || event === 'call_missed' || event === 'call_started') {
-          calls.push({
-            id: msg.id,
-            conversationId: id,
-            name: row ? row.name : 'Chat',
-            label: (msg.systemEvent && msg.systemEvent.label) || 'Call',
-            event: event,
-            time: msg.time || '',
-            media: (msg.systemEvent && msg.systemEvent.media) || 'audio',
-            answered: !!(msg.systemEvent && msg.systemEvent.answered),
-            // Who placed the call; lets each side show incoming vs outgoing.
-            initiatorId: (msg.systemEvent && msg.systemEvent.initiatorId) || null,
-          });
-        }
-      });
-    });
+  function renderCallsPanel(state) {
+    // The log is server-backed (see loadMessagesCalls): show its loading and
+    // error states rather than a misleading empty one while it is in flight.
+    if (state.callsLoading && !(state.callLog || []).length) {
+      return (
+        '<div class="tma-dash__messages-media">' +
+        '<div class="tma-dash__messages-media-note">Loading calls…</div></div>'
+      );
+    }
 
-    calls.sort(function (a, b) { return (b.id > a.id ? 1 : -1); });
-    calls = calls.slice(0, 40);
+    if (state.callsError) {
+      return (
+        '<div class="tma-dash__messages-media">' +
+        '<div class="tma-dash__messages-media-note">' +
+        '<strong>Calls could not be loaded</strong><br>' + esc(state.callsError) +
+        '</div></div>'
+      );
+    }
+
+    var calls = (state.callLog || []).slice(0, 40);
 
     if (!calls.length) {
       return (
@@ -7788,8 +7801,10 @@
     // --- calls ------------------------------------------------------------
     MORPH.unwired(root, '[data-messages-nav-calls]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        showListView(state.callsMode ? 'chats' : 'calls');
+        var opening = !state.callsMode;
+        showListView(opening ? 'calls' : 'chats');
         render();
+        if (opening) loadMessagesCalls(root, state, render);
       });
     });
 
@@ -8152,9 +8167,12 @@
       updateDraft: null,
       updatesLoading: false,
       updatesError: null,
-      /* Calls has no backing feature yet — the view says so rather than
-       * showing an empty history. */
+      /* Calls: recent call history, fetched from the server when the tab is
+       * opened (not scanned from whatever threads happen to be loaded). */
       callsMode: false,
+      callLog: [],
+      callsLoading: false,
+      callsError: null,
       inboxWidth: loadInboxWidth(),
       profileOpen: false,
       profile: null,

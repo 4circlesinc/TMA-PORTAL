@@ -1179,6 +1179,77 @@ class MessagingController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Recent call history across all of this user's conversations.
+     *
+     * The Calls tab used to scan only the messages the client had already
+     * loaded, so on a fresh page load — before any conversation was opened — it
+     * had nothing to show. This reads the call system-lines straight from the
+     * database instead, so the log is populated the moment the tab is opened.
+     */
+    public function calls(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $conversations = Conversation::query()
+            ->forUser($user)
+            ->with(['activeParticipants.user'])
+            ->get()
+            ->keyBy('id');
+
+        if ($conversations->isEmpty()) {
+            return response()->json(['calls' => []]);
+        }
+
+        $messages = Message::query()
+            ->whereIn('conversation_id', $conversations->keys())
+            ->where('type', Message::TYPE_SYSTEM)
+            ->where(function ($q) {
+                $q->where('system_event->event', 'call_ended')
+                    ->orWhere('system_event->event', 'call_missed')
+                    ->orWhere('system_event->event', 'call_started');
+            })
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+
+        $calls = $messages
+            ->map(function (Message $m) use ($conversations, $user) {
+                $conversation = $conversations->get($m->conversation_id);
+                if (! $conversation) {
+                    return null;
+                }
+
+                $event = $m->system_event ?? [];
+                $counterpart = $conversation->isGroup()
+                    ? null
+                    : $conversation->activeParticipants
+                        ->where('user_id', '!=', $user->id)
+                        ->map(fn (ConversationParticipant $p) => $p->user)
+                        ->filter()
+                        ->first();
+
+                return [
+                    'id' => $m->uuid,
+                    'conversationId' => $conversation->uuid,
+                    'name' => MessagingPresenter::title($conversation, $user),
+                    'photo' => $conversation->isGroup()
+                        ? MessagingPresenter::groupPhotoUrl($conversation)
+                        : $counterpart?->avatar_url,
+                    'label' => $event['label'] ?? 'Call',
+                    'event' => $event['event'] ?? '',
+                    'media' => $event['media'] ?? 'audio',
+                    'answered' => (bool) ($event['answered'] ?? false),
+                    'initiatorId' => $event['initiatorId'] ?? null,
+                    'time' => MessagingPresenter::listTime($m->created_at),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        return response()->json(['calls' => $calls]);
+    }
+
     // ---------------------------------------------------------------- read
 
     public function markRead(Request $request, string $uuid): JsonResponse

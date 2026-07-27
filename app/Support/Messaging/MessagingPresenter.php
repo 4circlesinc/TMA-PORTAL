@@ -456,7 +456,7 @@ class MessagingPresenter
     }
 
     /** Chat-list timestamps compress with age, like every messenger's list. */
-    private static function listTime(?Carbon $at): string
+    public static function listTime(?Carbon $at): string
     {
         if (! $at) {
             return '';
@@ -470,7 +470,7 @@ class MessagingPresenter
         };
     }
 
-    private static function groupPhotoUrl(Conversation $conversation): ?string
+    public static function groupPhotoUrl(Conversation $conversation): ?string
     {
         return $conversation->photo_path
             ? route('messaging.conversations.photo', $conversation->uuid)

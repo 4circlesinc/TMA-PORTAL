@@ -30808,17 +30808,15 @@ span.tma-dash__messages-profile-avatar {
   font-variant-numeric: tabular-nums;
 }
 
-/* Move + mic: collapsed to zero width when compact, sliding open (with their
- * own left margin) only while the island is hovered — so the capsule sits
- * tight normally and cleanly extends by exactly these controls on hover. */
+/* Mic and move share the round control look. The mic is shown upfront; the
+ * move button stays collapsed and slides open only while the island is
+ * hovered, so the capsule extends by exactly that control on hover. */
 .tma-call__pill-move,
 .tma-call__pill-mic {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 0;
   height: 38px;
-  margin-left: 0;
   padding: 0;
   overflow: hidden;
   flex-shrink: 0;
@@ -30827,18 +30825,30 @@ span.tma-dash__messages-profile-avatar {
   background: rgb(255 255 255 / 0.14);
   color: #fff;
   cursor: pointer;
-  opacity: 0;
   transition: width 180ms ease, margin-left 180ms ease,
     opacity 150ms ease, background 120ms ease;
 }
-.tma-call__pill:hover .tma-call__pill-move,
-.tma-call__pill:focus-within .tma-call__pill-move,
-.tma-call__pill:hover .tma-call__pill-mic,
-.tma-call__pill:focus-within .tma-call__pill-mic {
+
+/* Mic: always visible on the island. */
+.tma-call__pill-mic {
   width: 38px;
   margin-left: var(--space-8);
   opacity: 1;
 }
+
+/* Move: hidden when compact, revealed on hover. */
+.tma-call__pill-move {
+  width: 0;
+  margin-left: 0;
+  opacity: 0;
+}
+.tma-call__pill:hover .tma-call__pill-move,
+.tma-call__pill:focus-within .tma-call__pill-move {
+  width: 38px;
+  margin-left: var(--space-8);
+  opacity: 1;
+}
+
 .tma-call__pill-move:hover,
 .tma-call__pill-mic:hover { background: rgb(255 255 255 / 0.24); }
 .tma-call__pill-mic.is-off { background: #fff; color: #0b0f19; }
