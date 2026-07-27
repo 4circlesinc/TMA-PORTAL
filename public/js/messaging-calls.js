@@ -519,9 +519,11 @@
       })
       .catch(function (err) {
         if (session) session.answered = false;
-        console.error('TMA call: failed to answer —', err);
-        setStatus('Could not connect: ' + ((err && (err.name || err.message)) || 'unknown'));
-        setTimeout(function () { endSession(true); }, 6000);
+        console.error('TMA call: failed to answer —', err, '\nSDP was:\n' + offer.sdp);
+        var firstLine = offer.sdp.split(/\r\n|\r|\n/)[0];
+        setStatus('Fail: ' + ((err && err.name) || 'err') +
+          ' · len=' + offer.sdp.length + ' · L1="' + firstLine + '"');
+        setTimeout(function () { endSession(true); }, 12000);
       });
   }
 
