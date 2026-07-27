@@ -20,7 +20,18 @@
      Project Spendings table and the Add Target action — none of them were
      backed by anything, and the page reads as a real dashboard, so figures
      nobody entered are worse than absent sections. */
-  var TABS = ['Overview', 'Employees', 'Users', 'Files', 'Notifications', 'Activity'];
+  var BASE_TABS = ['Overview', 'Employees', 'Users', 'Files', 'Notifications', 'Activity'];
+
+  function isAdminUser() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    return !!(me && me.isAdmin);
+  }
+
+  function visibleTabs() {
+    var tabs = BASE_TABS.slice();
+    if (isAdminUser()) tabs.push('Recycle Bin');
+    return tabs;
+  }
 
   function dateKeyOf(d) {
     return d.getFullYear() + '-' +
@@ -243,6 +254,7 @@
     Files: '.tma-dash__overview-files-tab',
     Notifications: '.tma-dash__overview-notifications-tab',
     Activity: '.tma-dash__overview-activity-tab',
+    'Recycle Bin': '.tma-dash__overview-recycle-tab',
   };
 
   function esc(s) {
@@ -253,7 +265,9 @@
 
   function renderTabs(activeTab) {
     var current = activeTab || 'Overview';
-    var items = TABS.map(function (label) {
+    var tabs = visibleTabs();
+    if (current === 'Recycle Bin' && tabs.indexOf('Recycle Bin') === -1) current = 'Overview';
+    var items = tabs.map(function (label) {
       var active = label === current;
       return '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" data-overview-tab="' + esc(label) + '">' +
         '<span class="tma-tab__label">' + esc(label) + '</span>' +
@@ -464,6 +478,12 @@
       '<div class="tma-dash__activity" data-activity-overview></div></div>';
   }
 
+  function renderRecycleTab(activeTab) {
+    if (!isAdminUser()) return '';
+    return '<div class="tma-dash__overview-recycle-tab"' + (activeTab !== 'Recycle Bin' ? ' hidden' : '') + '>' +
+      '<div class="tma-dash__recycle" data-recycle-overview></div></div>';
+  }
+
   function mountUsersTab(container) {
     var mountEl = container.querySelector('[data-users-overview]');
     if (!mountEl || !window.TMAUsers || typeof window.TMAUsers.mount !== 'function') return;
@@ -486,6 +506,13 @@
     var mountEl = container.querySelector('[data-activity-overview]');
     if (!mountEl || !window.TMAOverviewActivity || typeof window.TMAOverviewActivity.mount !== 'function') return;
     window.TMAOverviewActivity.mount(mountEl);
+  }
+
+  function mountRecycleTab(container) {
+    if (!isAdminUser()) return;
+    var mountEl = container.querySelector('[data-recycle-overview]');
+    if (!mountEl || !window.TMAOverviewRecycle || typeof window.TMAOverviewRecycle.mount !== 'function') return;
+    window.TMAOverviewRecycle.mount(mountEl);
   }
 
   function syncOverviewChrome(tab) {
@@ -515,6 +542,7 @@
       renderFilesTab(tab) +
       renderNotificationsTab(tab) +
       renderActivityTab(tab) +
+      renderRecycleTab(tab) +
       '</div>';
   }
 
@@ -522,6 +550,7 @@
     if (!container) return;
     var overview = container.querySelector('.tma-dash__overview');
     if (!overview) return;
+    if (tab === 'Recycle Bin' && !isAdminUser()) tab = 'Overview';
 
     overview.querySelectorAll('[role="tab"]').forEach(function (btn) {
       var isActive = btn.getAttribute('data-overview-tab') === tab;
@@ -539,11 +568,13 @@
     if (tab === 'Files') mountFilesTab(container);
     if (tab === 'Notifications') mountNotificationsTab(container);
     if (tab === 'Activity') mountActivityTab(container);
+    if (tab === 'Recycle Bin') mountRecycleTab(container);
     syncOverviewChrome(tab);
 
     // Keep the URL in sync so See all / refresh / share land on the same tab.
     try {
       var key = String(tab || 'Overview').toLowerCase();
+      if (key === 'recycle bin') key = 'recycle-bin';
       var url = new URL(window.location.href);
       if (key === 'overview') url.searchParams.delete('tab');
       else url.searchParams.set('tab', key);
@@ -576,6 +607,11 @@
       notification: 'Notifications',
       activity: 'Activity',
       activities: 'Activity',
+      recycle: 'Recycle Bin',
+      'recycle-bin': 'Recycle Bin',
+      recyclebin: 'Recycle Bin',
+      trash: 'Recycle Bin',
+      bin: 'Recycle Bin',
     };
     return map[String(token || '').toLowerCase()] || null;
   }
@@ -865,12 +901,27 @@
     bindRoadWheel(root);
   }
 
+  function remountTabsForAdmin(container) {
+    if (!container || !isAdminUser()) return;
+    var overview = container.querySelector('.tma-dash__overview');
+    if (!overview) return;
+    if (overview.querySelector('[data-overview-tab="Recycle Bin"]')) return;
+    var current = overview.querySelector('[role="tab"][aria-selected="true"]');
+    var tab = (current && current.getAttribute('data-overview-tab')) || 'Overview';
+    var toolbar = overview.querySelector('.tma-dash__overview-toolbar');
+    if (toolbar) toolbar.outerHTML = renderTabs(tab);
+    if (!overview.querySelector('.tma-dash__overview-recycle-tab')) {
+      overview.insertAdjacentHTML('beforeend', renderRecycleTab(tab));
+    }
+  }
+
   function mount(container, opts) {
     if (!container) return;
     var pending = (typeof document !== 'undefined' && document.querySelector('.tma-dash'))
       ? document.querySelector('.tma-dash')._pendingOverviewTab : null;
     var activeTab = (opts && opts.tab) || normalizeTab(pending) || tabFromUrl() || 'Overview';
     if (pending) { try { document.querySelector('.tma-dash')._pendingOverviewTab = null; } catch (e) {} }
+    if (activeTab === 'Recycle Bin' && !isAdminUser()) activeTab = 'Overview';
     container.innerHTML = render(activeTab);
     bindTabs(container);
     bindOverviewActions(container);
@@ -880,9 +931,17 @@
     if (activeTab === 'Files') mountFilesTab(container);
     if (activeTab === 'Notifications') mountNotificationsTab(container);
     if (activeTab === 'Activity') mountActivityTab(container);
+    if (activeTab === 'Recycle Bin') mountRecycleTab(container);
     setActiveTab(container, activeTab);
 
     refreshOverviewData(container);
+
+    // /me may resolve after first paint — reveal the admin Recycle Bin tab then.
+    if (window.TMACurrentUser && typeof window.TMACurrentUser.onChange === 'function') {
+      window.TMACurrentUser.onChange(function () {
+        remountTabsForAdmin(container);
+      });
+    }
   }
 
   /* Open a tab on an already-mounted Overview (used by the "See all

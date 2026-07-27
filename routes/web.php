@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActivityController;
+use App\Http\Controllers\AdminRecycleBinController;
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\AvatarController;
@@ -126,6 +127,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/count', [ActivityController::class, 'count'])->name('count');
         Route::get('/filters', [ActivityController::class, 'filters'])->name('filters');
         Route::post('/seen', [ActivityController::class, 'markSeen'])->name('seen');
+    });
+
+    Route::prefix('portal/admin/recycle-bin')->name('admin.recycle-bin.')->group(function () {
+        Route::get('/', [AdminRecycleBinController::class, 'index'])->name('index');
+        Route::post('/empty', [AdminRecycleBinController::class, 'empty'])->name('empty');
+        Route::post('/{kind}/{id}/restore', [AdminRecycleBinController::class, 'restore'])->name('restore');
+        Route::delete('/{kind}/{id}', [AdminRecycleBinController::class, 'purge'])->name('purge');
     });
 
     Route::get('/admin/users', [AdminUsersController::class, 'index'])->name('admin.users');

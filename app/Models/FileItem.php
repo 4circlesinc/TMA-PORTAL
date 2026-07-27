@@ -48,4 +48,9 @@ class FileItem extends Model
     {
         return $this->belongsTo(User::class, 'uploaded_by');
     }
+
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
+    }
 }

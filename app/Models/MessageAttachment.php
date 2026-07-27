@@ -5,15 +5,18 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 #[Fillable([
     'uuid', 'message_id', 'conversation_id', 'uploaded_by', 'disk', 'path',
     'name', 'mime', 'extension', 'status', 'is_voice', 'size',
-    'width', 'height', 'duration_ms', 'thumb_path', 'waveform',
+    'width', 'height', 'duration_ms', 'thumb_path', 'waveform', 'deleted_by',
 ])]
 class MessageAttachment extends Model
 {
+    use SoftDeletes;
+
     /** Uploaded and previewable, but not yet attached to a sent message. */
     public const STATUS_STAGED = 'staged';
 
@@ -29,7 +32,13 @@ class MessageAttachment extends Model
             'height' => 'integer',
             'duration_ms' => 'integer',
             'waveform' => 'array',
+            'deleted_at' => 'datetime',
         ];
+    }
+
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 
     public function conversation(): BelongsTo

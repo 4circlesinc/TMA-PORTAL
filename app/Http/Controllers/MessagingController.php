@@ -895,12 +895,8 @@ class MessagingController extends Controller
             ->whereNull('message_id')
             ->firstOrFail();
 
-        // Remove the bytes too — a discarded upload should not linger.
-        Storage::disk($attachment->disk)->delete($attachment->path);
-        if ($attachment->thumb_path) {
-            Storage::disk($attachment->disk)->delete($attachment->thumb_path);
-        }
-
+        // Soft-delete into the admin Recycle Bin — keep bytes until purge.
+        $attachment->forceFill(['deleted_by' => $user->id])->save();
         $attachment->delete();
 
         return response()->json(['removed' => true]);
@@ -1027,6 +1023,11 @@ class MessagingController extends Controller
 
         // Soft delete: the bubble stays as a "deleted" placeholder so replies
         // that quote it still resolve, and the thread doesn't reflow.
+        // Attached files go to the admin Recycle Bin (not the message itself).
+        $message->attachments()->each(function (MessageAttachment $attachment) use ($user) {
+            $attachment->forceFill(['deleted_by' => $user->id])->save();
+            $attachment->delete();
+        });
         $message->delete();
 
         Broadcaster::toOthers(new MessageDeleted($message));
