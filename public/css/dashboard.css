@@ -19865,7 +19865,6 @@
   opacity: 0.92;
 }
 
-.tma-dash__email-template-auth-help,
 .tma-dash__email-template-auth-body-copy {
   width: 100%;
   font-size: var(--text-size-14);
@@ -19873,13 +19872,28 @@
   color: var(--color-black);
 }
 
-.tma-dash__email-template-auth-help p,
 .tma-dash__email-template-auth-body-copy p {
   margin: 0 0 var(--space-10);
 }
 
-.tma-dash__email-template-auth-help p:last-child,
 .tma-dash__email-template-auth-body-copy p:last-child {
+  margin-bottom: 0;
+}
+
+/* The "trouble with the button" fine print: small and muted, with the link
+   tucked directly under the sentence (not a paragraph-gap away). */
+.tma-dash__email-template-auth-help {
+  width: 100%;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-template-auth-help p {
+  margin: 0 0 var(--space-4);
+}
+
+.tma-dash__email-template-auth-help p:last-child {
   margin-bottom: 0;
 }
 
