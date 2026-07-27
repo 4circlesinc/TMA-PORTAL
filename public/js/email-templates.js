@@ -99,52 +99,6 @@
     );
   }
 
-  function renderMobileChrome(title, opts) {
-    var o = opts || {};
-    var left = o.close
-      ? '<span class="tma-dash__email-template-mobile-chrome-spacer" aria-hidden="true"></span>'
-      : '<button type="button" class="tma-dash__email-template-mobile-chrome-btn" aria-label="Back">' +
-        '<img src="' + PHOSPHOR + 'CaretLeft.svg" alt="" width="24" height="24"></button>';
-    var right = o.close
-      ? '<button type="button" class="tma-dash__email-template-mobile-chrome-btn tma-dash__email-template-mobile-chrome-btn--text" aria-label="Close">Close</button>'
-      : '<button type="button" class="tma-dash__email-template-mobile-chrome-btn" aria-label="More">' +
-        '<img src="' + PHOSPHOR + 'DotsThree.svg" alt="" width="24" height="24"></button>';
-    return (
-      '<header class="tma-dash__email-template-mobile-chrome">' + left +
-      '<h1 class="tma-dash__email-template-mobile-chrome-title">' + esc(title) + '</h1>' + right +
-      '</header>'
-    );
-  }
-
-  function renderMobileFooter() {
-    return (
-      '<footer class="tma-dash__email-template-mobile-foot">' +
-      '<div class="tma-dash__email-template-mobile-foot-brand">' +
-      '<img src="' + BRAND + 'tma-logo-mark.png" alt="" width="20" height="20">' +
-      '<span>' + esc(SITE_NAME) + '</span></div>' +
-      '<p class="tma-dash__email-template-mobile-foot-address tma-dash__email-template-auth-contact">' +
-      '<a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a>' +
-      renderSocials() + '</p>' +
-      '<p class="tma-dash__email-template-mobile-foot-note">You have received this email from ' + esc(SITE_NAME) + '. Thank you.</p>' +
-      '</footer>'
-    );
-  }
-
-  function renderMobileShell(nodeId, mainHtml, chromeOpts) {
-    var o = chromeOpts || {};
-    return (
-      '<div class="tma-dash__email-template-canvas tma-dash__email-template-canvas--mobile" data-node-id="' + esc(nodeId) + '">' +
-      '<div class="tma-dash__email-template-mobile-device">' +
-      renderMobileChrome(o.title || 'Email', o) +
-      '<div class="tma-dash__email-template-mobile-scroll">' + mainHtml +
-      (o.hideFooter ? '' : renderMobileFooter()) + '</div></div></div>'
-    );
-  }
-
-  function renderMobileMain(mainHtml) {
-    return '<div class="tma-dash__email-template-mobile-main">' + mainHtml + '</div>';
-  }
-
   function renderAuthVerifyHelp() {
     return (
       '<div class="tma-dash__email-template-auth-help">' +
@@ -163,15 +117,6 @@
     );
   }
 
-  function renderAuthSignInMobile() {
-    return renderMobileShell('32534:3782', renderMobileMain(
-      renderAuthMark() +
-      renderAuthHeading('Welcome to ' + SITE_NAME, 'Click the button below to sign in to ' + SITE_NAME + '.') +
-      '<div class="tma-dash__email-template-auth-actions">' + renderAuthButton('Sign in to ' + SITE_NAME) + '</div>' +
-      renderAuthHelp()
-    ));
-  }
-
   function renderAuthVerifyEmail() {
     return renderAuthShell('32534:3776',
       renderAuthMark() +
@@ -180,16 +125,6 @@
       renderAuthCode('1234') + renderAuthButton('Verify email address') + '</div>' +
       renderAuthVerifyHelp()
     );
-  }
-
-  function renderAuthVerifyEmailMobile() {
-    return renderMobileShell('32534:3784', renderMobileMain(
-      renderAuthMark() +
-      renderAuthHeading('Verify email address', 'Your verification code is:') +
-      '<div class="tma-dash__email-template-auth-actions">' +
-      renderAuthCode('1234') + renderAuthButton('Verify email address') + '</div>' +
-      renderAuthVerifyHelp()
-    ));
   }
 
   function renderAuthChangeEmail() {
@@ -202,16 +137,6 @@
     );
   }
 
-  function renderAuthChangeEmailMobile() {
-    return renderMobileShell('32534:3786', renderMobileMain(
-      renderAuthMark() +
-      renderAuthHeading('Change email verification', 'Your verification code is:') +
-      '<div class="tma-dash__email-template-auth-actions">' +
-      renderAuthCode('1234') + renderAuthButton('Verify email address') + '</div>' +
-      renderAuthVerifyHelp()
-    ));
-  }
-
   function renderAuthResetPassword() {
     return renderAuthShell('32534:3778',
       renderAuthMark() +
@@ -219,15 +144,6 @@
       '<div class="tma-dash__email-template-auth-actions">' + renderAuthButton('Set a new password') + '</div>' +
       renderAuthHelp()
     );
-  }
-
-  function renderAuthResetPasswordMobile() {
-    return renderMobileShell('32534:3788', renderMobileMain(
-      renderAuthMark() +
-      renderAuthHeading('Set a new password', 'You are in the process of setting a new password, click the button below to continue.') +
-      '<div class="tma-dash__email-template-auth-actions">' + renderAuthButton('Set a new password') + '</div>' +
-      renderAuthHelp()
-    ));
   }
 
   function renderAuthWelcome() {
@@ -244,20 +160,6 @@
     );
   }
 
-  function renderAuthWelcomeMobile() {
-    return renderMobileShell('32534:3790', renderMobileMain(
-      renderAuthMark() +
-      renderAuthHeading('Welcome to ' + SITE_NAME) +
-      '<div class="tma-dash__email-template-auth-body-copy">' +
-      '<p>Hi there,</p>' +
-      '<p>We\u2019re so excited to welcome you to the <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(SITE_NAME) + '</a> community.</p>' +
-      '<p>Here\u2019s your sign-in address in case you forget:</p>' +
-      '<p>Sign-in: <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(AUTH_LINK) + '</a></p>' +
-      '<p>If you need any help getting started reach out to us at: <a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a>.</p>' +
-      '<p>Enjoy!</p><p>' + esc(SITE_NAME) + '</p></div>'
-    ));
-  }
-
   function renderAuthUnsubscribed() {
     return renderAuthShell('32534:3770',
       '<div class="tma-dash__email-template-auth-unsub">' +
@@ -266,19 +168,6 @@
       renderAuthHeading('Unsubscribed', 'You have unsubscribed from all marketing emails.') +
       '<p class="tma-dash__email-template-auth-unsub-action">Unsubscribed by accident? <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">Resubscribe</a></p>' +
       '<p class="tma-dash__email-template-auth-unsub-settings">Want these emails sent again? <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">Edit settings</a></p></div>'
-    );
-  }
-
-  function renderAuthUnsubscribedMobile() {
-    return renderMobileShell('32534:3792',
-      '<div class="tma-dash__email-template-mobile-unsub">' +
-      '<div class="tma-dash__email-template-mobile-unsub-icon" aria-hidden="true">' +
-      '<img src="' + PHOSPHOR + 'CheckCircle.svg" alt="" width="80" height="80"></div>' +
-      '<h2 class="tma-dash__email-template-mobile-unsub-title">Unsubscribed</h2>' +
-      '<p class="tma-dash__email-template-mobile-unsub-lead">You have unsubscribed from all marketing emails.</p>' +
-      '<p class="tma-dash__email-template-mobile-unsub-action">Unsubscribed by accident? <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">Resubscribe</a></p>' +
-      '<p class="tma-dash__email-template-mobile-unsub-settings">Want these emails sent again? <a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">Edit settings</a></p></div>',
-      { title: 'Unsubscribed', close: true, hideFooter: true }
     );
   }
 
@@ -417,9 +306,6 @@
       thumb: 'auth',
       nodeId: cfg.id,
       render: function () { return renderAuthShell(cfg.id, buildStandardMain(spec)); },
-      renderMobile: function () {
-        return renderMobileShell(cfg.id, renderMobileMain(buildStandardMain(spec)), { title: cfg.name });
-      },
     };
   }
 
@@ -432,9 +318,7 @@
       preview: 'Welcome - click to sign in.',
       thumb: 'auth',
       nodeId: '32534:3772',
-      mobileNodeId: '32534:3782',
       render: renderAuthSignIn,
-      renderMobile: renderAuthSignInMobile,
     },
     {
       id: 'auth-verify-email',
@@ -444,9 +328,7 @@
       preview: 'Your verification code is 1234.',
       thumb: 'auth',
       nodeId: '32534:3776',
-      mobileNodeId: '32534:3784',
       render: renderAuthVerifyEmail,
-      renderMobile: renderAuthVerifyEmailMobile,
     },
     {
       id: 'auth-change-email',
@@ -456,9 +338,7 @@
       preview: 'Confirm your email change with code 1234.',
       thumb: 'auth',
       nodeId: '32534:3794',
-      mobileNodeId: '32534:3786',
       render: renderAuthChangeEmail,
-      renderMobile: renderAuthChangeEmailMobile,
     },
     {
       id: 'auth-reset-password',
@@ -468,9 +348,7 @@
       preview: 'Reset your password with the secure link.',
       thumb: 'auth',
       nodeId: '32534:3778',
-      mobileNodeId: '32534:3788',
       render: renderAuthResetPassword,
-      renderMobile: renderAuthResetPasswordMobile,
     },
     {
       id: 'auth-welcome',
@@ -480,9 +358,7 @@
       preview: 'Hello, welcome to the community.',
       thumb: 'auth',
       nodeId: '32534:3774',
-      mobileNodeId: '32534:3790',
       render: renderAuthWelcome,
-      renderMobile: renderAuthWelcomeMobile,
     },
     {
       id: 'auth-unsubscribed',
@@ -492,9 +368,7 @@
       preview: 'You have unsubscribed from all marketing emails.',
       thumb: 'auth',
       nodeId: '32534:3770',
-      mobileNodeId: '32534:3792',
       render: renderAuthUnsubscribed,
-      renderMobile: renderAuthUnsubscribedMobile,
     },
     {
       id: 'invoice',
@@ -650,25 +524,22 @@
           preview: t.preview,
           thumb: t.thumb,
           nodeId: t.nodeId,
-          mobileNodeId: t.mobileNodeId || null,
-          hasMobile: !!t.renderMobile,
+          // Emails are one responsive design — there is no separate mobile
+          // layout; "mobile" is just the same email at a narrower width.
+          hasMobile: false,
         };
       });
     },
     get: function (id) {
       return findTemplate(id);
     },
-    renderBody: function (id, opts) {
-      opts = opts || {};
-      var template = findTemplate(id);
-      if (opts.viewport === 'mobile' && template.renderMobile) {
-        return template.renderMobile();
-      }
-      return template.render();
+    // viewport is accepted for backwards compatibility but ignored: the email
+    // is a single responsive design, so mobile === desktop content.
+    renderBody: function (id) {
+      return findTemplate(id).render();
     },
-    hasMobile: function (id) {
-      var template = findTemplate(id);
-      return !!(template && template.renderMobile);
+    hasMobile: function () {
+      return false;
     },
   };
 })();

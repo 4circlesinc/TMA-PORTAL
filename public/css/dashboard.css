@@ -19888,7 +19888,7 @@
 }
 
 .tma-dash__email-template-auth-link {
-  color: #adadfb;
+  color: var(--color-text-link);
   text-decoration: none;
 }
 
@@ -19917,8 +19917,8 @@
 .tma-dash__email-template-auth-footer-logo {
   display: block;
   width: auto;
-  max-width: 160px;
-  height: 20px;
+  max-width: 240px;
+  height: 32px;
   object-fit: contain;
   object-position: left center;
 }
@@ -20407,8 +20407,8 @@
 .tma-dash__email-template-invoice-brand-wordmark {
   display: block;
   width: auto;
-  max-width: 160px;
-  height: 20px;
+  max-width: 240px;
+  height: 32px;
   object-fit: contain;
   object-position: left center;
 }
