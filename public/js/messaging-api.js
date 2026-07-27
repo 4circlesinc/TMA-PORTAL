@@ -128,6 +128,24 @@
       return api(BASE + '/messages/' + encodeURIComponent(messageId), { method: 'DELETE' });
     },
 
+    starMessage: function (messageId) {
+      return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/star', { method: 'POST' });
+    },
+
+    forwardMessage: function (messageId, conversationId) {
+      return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/forward', {
+        method: 'POST',
+        json: { conversationId: conversationId },
+      });
+    },
+
+    callSignal: function (conversationId, payload) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/call', {
+        method: 'POST',
+        json: payload || {},
+      });
+    },
+
     /*
      * Upload one file and stage it against a conversation.
      *

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\CallSignal;
 use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
 use App\Events\InboxUpdated;
@@ -15,6 +16,7 @@ use App\Models\ConversationParticipant;
 use App\Models\LinkPreview;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Models\MessageStar;
 use App\Models\User;
 use App\Models\WorkDay;
 use App\Models\UserBlock;
@@ -1033,6 +1035,136 @@ class MessagingController extends Controller
         Broadcaster::toOthers(new MessageDeleted($message));
 
         return response()->json(['deleted' => true, 'id' => $message->uuid]);
+    }
+
+    /** Pin / unpin a message for this viewer (MessageStar). */
+    public function toggleStar(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $message = $this->messageFor($request, $uuid);
+
+        if ($message->trashed() || $message->isSystem()) {
+            abort(403, 'This message cannot be pinned.');
+        }
+
+        $existing = MessageStar::query()
+            ->where('message_id', $message->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+            $starred = false;
+        } else {
+            MessageStar::create([
+                'message_id' => $message->id,
+                'user_id' => $user->id,
+            ]);
+            $starred = true;
+        }
+
+        return response()->json(['starred' => $starred, 'id' => $message->uuid]);
+    }
+
+    /**
+     * Copy a message into another conversation the viewer belongs to.
+     * Text is forwarded as-is with a small "Forwarded" prefix; attachments
+     * are not duplicated in this pass.
+     */
+    public function forwardMessage(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $source = $this->messageFor($request, $uuid)->load('attachments');
+
+        if ($source->trashed() || $source->isSystem()) {
+            abort(403, 'This message cannot be forwarded.');
+        }
+
+        $data = $request->validate([
+            'conversationId' => ['required', 'string'],
+        ]);
+
+        $target = $this->conversationFor($request, $data['conversationId']);
+        $this->assertNotBlocked($target, $user);
+
+        $body = trim((string) $source->body);
+        if ($body === '') {
+            $body = match (true) {
+                $source->type === Message::TYPE_VOICE => 'Voice note',
+                $source->attachments->isNotEmpty() => $source->attachments->first()->name ?: 'Attachment',
+                default => 'Forwarded message',
+            };
+        }
+
+        $message = DB::transaction(function () use ($target, $user, $body) {
+            $message = $target->messages()->create([
+                'user_id' => $user->id,
+                'type' => Message::TYPE_TEXT,
+                'body' => 'Forwarded: '.$body,
+            ]);
+
+            $target->forceFill(['last_message_at' => $message->created_at])->save();
+
+            return $message;
+        });
+
+        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
+        Broadcaster::toOthers(new MessageSent($message));
+
+        return response()->json([
+            'message' => MessagingPresenter::message($message, $user, $target),
+            'conversation' => MessagingPresenter::conversation($target, $user),
+        ]);
+    }
+
+    /** Relay a WebRTC call signalling payload to the conversation channel. */
+    public function callSignal(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $conversation = $this->conversationFor($request, $uuid);
+        $this->assertNotBlocked($conversation, $user);
+
+        $data = $request->validate([
+            'type' => ['required', 'string', 'in:ring,offer,answer,ice,hangup,reject,accept'],
+            'payload' => ['nullable', 'array'],
+            'media' => ['nullable', 'string', 'in:audio,video'],
+        ]);
+
+        $payload = $data['payload'] ?? [];
+        if (! empty($data['media'])) {
+            $payload['media'] = $data['media'];
+        }
+        $payload['fromName'] = $user->name;
+
+        Broadcaster::toOthers(new CallSignal(
+            $conversation->uuid,
+            $user->id,
+            $data['type'],
+            $payload,
+        ));
+
+        // Persist a brief history line when a call ends or is missed.
+        if (in_array($data['type'], ['hangup', 'reject'], true)) {
+            $label = ($data['media'] ?? $payload['media'] ?? 'audio') === 'video'
+                ? 'Video call'
+                : 'Voice call';
+            $event = $data['type'] === 'reject' ? 'call_missed' : 'call_ended';
+
+            $system = $conversation->messages()->create([
+                'user_id' => null,
+                'type' => Message::TYPE_SYSTEM,
+                'system_event' => [
+                    'event' => $event,
+                    'actorName' => $user->name,
+                    'label' => $label,
+                    'media' => $data['media'] ?? $payload['media'] ?? 'audio',
+                ],
+            ]);
+            $conversation->forceFill(['last_message_at' => $system->created_at])->save();
+            Broadcaster::toOthers(new MessageSent($system));
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     // ---------------------------------------------------------------- read

@@ -415,6 +415,10 @@ class MessagingPresenter
     /** Text stand-in for any message type, used in previews and reply quotes. */
     private static function snippet(Message $message): string
     {
+        if ($message->isSystem()) {
+            return self::systemSnippet($message);
+        }
+
         if ($message->body) {
             return Str::limit($message->body, 80);
         }
@@ -430,6 +434,27 @@ class MessagingPresenter
         };
     }
 
+    /** Inbox/reply wording for system events (member added, renamed, etc.). */
+    private static function systemSnippet(Message $message): string
+    {
+        $event = $message->system_event ?? [];
+        $actor = $event['actorName'] ?? 'Someone';
+        $subject = $event['subjectName'] ?? 'someone';
+
+        return match ($event['event'] ?? '') {
+            'group_created' => $actor.' created the group',
+            'member_added' => $actor.' added '.$subject,
+            'member_removed' => $actor.' removed '.$subject,
+            'member_left' => $actor.' left',
+            'admin_granted' => $actor.' made '.$subject.' an administrator',
+            'admin_revoked' => $actor.' removed '.$subject.' as administrator',
+            'name_changed' => $actor.' changed the group name to "'.($event['name'] ?? '').'"',
+            'photo_changed' => $actor.' changed the group photo',
+            'call_ended', 'call_missed', 'call_started' => $event['label'] ?? 'Call',
+            default => $message->body ?: 'Conversation updated',
+        };
+    }
+
     /** Chat-list timestamps compress with age, like every messenger's list. */
     private static function listTime(?Carbon $at): string
     {
@@ -438,7 +463,7 @@ class MessagingPresenter
         }
 
         return match (true) {
-            $at->isToday() => $at->format('H:i'),
+            $at->isToday() => $at->format('g:i A'),
             $at->isYesterday() => 'Yesterday',
             $at->isCurrentYear() => $at->format('M j'),
             default => $at->format('M j, Y'),

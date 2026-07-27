@@ -92,6 +92,7 @@
     Plus: ICON + 'Plus.svg',
     SidebarSimple: ICON + 'SidebarSimple.svg',
     List: ICON + 'List.svg',
+    Hamburger: ICON + 'Hamburger.svg',
     CaretLeft: ICON + 'CaretLeft.svg',
     CaretRight: ICON + 'CaretRight.svg',
     Smiley: ICON + 'Smiley.svg',
@@ -99,7 +100,8 @@
 
   var LAYOUT_STORE_KEY = 'tma.email.layoutStyle';
   var SPLIT_RATIO_STORE_KEY = 'tma.email.splitListRatio';
-  var SIDEBAR_COLLAPSE_KEY = 'tma.email.sidebarCollapsed';
+  // v2: prior key could be stuck "open" from a broken overflowing toggle.
+  var SIDEBAR_COLLAPSE_KEY = 'tma.email.sidebarCollapsed.v2';
   var SPLIT_RATIO_MIN = 0.22;
   var SPLIT_RATIO_MAX = 0.78;
   // Inbox list narrower than the reading pane by default.
@@ -770,6 +772,21 @@
       className: cls,
       attrs: ' data-email-refresh' + (state.refreshing ? ' aria-busy="true"' : ''),
       innerHtml: '<img src="' + ICONS.ArrowsClockwise + '" alt="">',
+    });
+  }
+
+  /* Menu control lives in the inbox toolbar (not inside the folder rail). */
+  function renderEmailSidebarMenuBtn(state) {
+    if (isEmailMobile()) return '';
+    var collapsed = !!state.sidebarCollapsed;
+    var label = collapsed ? 'Show mail folders' : 'Hide mail folders';
+    return renderEmailIconTooltipBtn({
+      tipId: 'email-sidebar-menu-tip',
+      label: label,
+      className: 'tma-dash__email-sidebar-menu-btn' + (collapsed ? '' : ' is-active'),
+      attrs:
+        ' data-email-sidebar-toggle aria-pressed="' + (collapsed ? 'false' : 'true') + '"',
+      innerHtml: '<img src="' + ICONS.List + '" alt="">',
     });
   }
 
@@ -2785,17 +2802,13 @@
     var sidebarCls = 'tma-dash__email-sidebar';
     if (state.mobileNavOpen) sidebarCls += ' tma-dash__email-sidebar--open';
     if (collapsed) sidebarCls += ' tma-dash__email-sidebar--collapsed';
-    var toggleLabel = collapsed ? 'Expand mail folders' : 'Collapse mail folders';
     return (
       '<div class="' + sidebarCls + '">' +
       (isEmailMobile()
         ? ''
-        : '<div class="tma-dash__email-sidebar-top">' +
+        : '<div class="tma-dash__email-sidebar-chrome">' +
           renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false) +
-          '<button type="button" class="tma-dash__email-sidebar-toggle" data-email-sidebar-toggle' +
-          ' aria-label="' + esc(toggleLabel) + '" aria-pressed="' + (collapsed ? 'true' : 'false') + '" title="' + esc(toggleLabel) + '">' +
-          '<img src="' + ICONS.SidebarSimple + '" alt="">' +
-          '</button></div>') +
+          '</div>') +
       '<div class="tma-dash__email-sidebar-nav">' +
       renderFolders(state) +
       renderEmailLabelsSection(state) +
@@ -2877,6 +2890,7 @@
     return (
       '<div class="tma-dash__email-list tma-dash__email-list--templates">' +
       '<div class="tma-dash__email-list-head tma-dash__email-list-head--templates">' +
+      renderEmailSidebarMenuBtn(state) +
       '<span class="tma-dash__email-template-list-title">Templates</span>' +
       renderListHeadActions(state, { templateCount: templates.length, showFilter: false }) +
       '</div>' +
@@ -2911,6 +2925,7 @@
       '<div class="tma-dash__email-list">' +
       renderListMobileHead(state) +
       '<div class="tma-dash__email-list-head">' +
+      renderEmailSidebarMenuBtn(state) +
       '<label class="tma-dash__email-list-check">' +
       '<input type="checkbox" class="tma-dash__check" data-email-selectall' + (allChecked ? ' checked' : '') + ' aria-label="Select all">' +
       '</label>' +
@@ -7449,6 +7464,17 @@
 
     if (root._emailState && root._emailRender) {
       if (opts.folder) root._emailState.folder = opts.folder;
+      // Backfill fields added after the first mount so a soft remount still
+      // gets the closed-by-default icon rail and filter state.
+      if (typeof root._emailState.sidebarCollapsed !== 'boolean') {
+        root._emailState.sidebarCollapsed = loadSidebarCollapsed();
+      }
+      if (typeof root._emailState.listFilter !== 'string') {
+        root._emailState.listFilter = 'all';
+      }
+      if (typeof root._emailState.filterMenuOpen !== 'boolean') {
+        root._emailState.filterMenuOpen = false;
+      }
       root._emailToggleMobileNav = function () {
         closeEmailProfileSidebar(root._emailState);
         root._emailState.mobileNavOpen = !root._emailState.mobileNavOpen;

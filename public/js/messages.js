@@ -48,6 +48,8 @@
     ThreadsLogo: ICON + 'ThreadsLogo.svg',
     CaretLeft: ICON + 'CaretLeft.svg',
     PushPin: ICON + 'PushPin.svg',
+    Star: ICON + 'Star.svg',
+    StarFilled: ICON + 'StarFilled.svg',
     BellSlash: ICON + 'BellSlash.svg',
     Archive: ICON + 'Archive.svg',
     Trash: ICON + 'Trash.svg',
@@ -56,6 +58,11 @@
     ArrowLineDown: ICON + 'ArrowLineDown.svg',
     ChatCircleDots: ICON + 'ChatCircleDots.svg',
     Broadcast: ICON + 'Broadcast.svg',
+    PencilSimple: ICON + 'PencilSimple.svg',
+    ShareNetwork: ICON + 'ShareNetwork.svg',
+    Copy: ICON + 'Copy.svg',
+    Translate: ICON + 'Translate.svg',
+    X: ICON + 'X.svg',
   };
 
   var MESSAGES_MOBILE_MQ = '(max-width: 1024px)';
@@ -456,11 +463,16 @@
 
   function renderInboxThreadIcon(row) {
     var icon = threadIcon(resolveThread(row));
-    if (!isThreadOnline(row)) return icon;
+    if (!isDirectThread(row)) return icon;
+    var online = isThreadOnline(row);
     return (
-      '<span class="tma-dash__messages-row-avatar-wrap tma-dash__messages-row-avatar-wrap--online">' +
+      '<span class="tma-dash__messages-row-avatar-wrap tma-dash__messages-row-avatar-wrap--' +
+      (online ? 'online' : 'offline') +
+      '">' +
       icon +
-      '<span class="tma-dash__messages-row-online-dot" aria-hidden="true"></span>' +
+      '<span class="tma-dash__messages-row-' +
+      (online ? 'online' : 'offline') +
+      '-dot" aria-hidden="true"></span>' +
       '</span>'
     );
   }
@@ -849,10 +861,10 @@
       '<span class="tma-dash__messages-row-name">' +
       esc(item.name) +
       (pinned
-        ? '<img class="tma-dash__messages-row-pin" src="' + ICONS.PushPin + '" alt="" width="14" height="14" aria-hidden="true">'
+        ? '<img class="tma-dash__messages-row-pin" src="' + ICONS.StarFilled + '" alt="" width="12" height="12" aria-hidden="true">'
         : '') +
       (muted
-        ? '<img class="tma-dash__messages-row-mute" src="' + ICONS.BellSlash + '" alt="" width="14" height="14" aria-hidden="true">'
+        ? '<img class="tma-dash__messages-row-mute" src="' + ICONS.BellSlash + '" alt="" width="12" height="12" aria-hidden="true">'
         : '') +
       '</span>' +
       '<span class="tma-dash__messages-row-preview">' +
@@ -869,12 +881,12 @@
             : esc(row.preview || '')) +
       '</span>' +
       '</span>' +
-      '<span class="tma-dash__messages-row-meta">' +
       '<span class="tma-dash__messages-row-time">' +
       esc(row.time) +
       '</span>' +
-      renderBadge(row.unread) +
-      '</span>'
+      (row.unread
+        ? '<span class="tma-dash__messages-row-meta">' + renderBadge(row.unread) + '</span>'
+        : '<span class="tma-dash__messages-row-meta" aria-hidden="true"></span>')
     );
   }
 
@@ -911,12 +923,12 @@
       ' data-messages-row-swipe-action="pin" data-messages-row-id="' +
       esc(rowId) +
       '" aria-label="' +
-      (pinned ? 'Unpin conversation' : 'Pin conversation') +
+      (pinned ? 'Remove from favorites' : 'Add to favorites') +
       '">' +
       '<img class="tma-dash__messages-row-swipe-action-icon" src="' +
-      ICONS.PushPin +
+      ICONS.Star +
       '" alt="" width="18" height="18">' +
-      (pinned ? 'Unpin' : 'Pin') +
+      (pinned ? 'Unfavorite' : 'Favorite') +
       '</button>' +
       '<button type="button" class="tma-dash__messages-row-swipe-action tma-dash__messages-row-swipe-action--mute"' +
       ' data-messages-row-swipe-action="mute" data-messages-row-id="' +
@@ -1348,29 +1360,45 @@
     return '<div class="tma-dash__messages-list-state">No conversations yet.</div>';
   }
 
+  function renderInboxRow(row, state, mobile) {
+    if (mobile) return buildMessagesRowSwipeWrap(row, state, buildMessagesRowHtml(row, state));
+    var active = state.selectedId === row.id;
+    return (
+      '<button type="button" class="tma-dash__messages-row' +
+      (active ? ' tma-dash__messages-row--active' : '') +
+      (row.pinned ? ' tma-dash__messages-row--pinned' : '') +
+      (row.muted ? ' tma-dash__messages-row--muted' : '') +
+      '" data-messages-row="' +
+      esc(row.id) +
+      '">' +
+      buildMessagesRowInner(row, state) +
+      '</button>'
+    );
+  }
+
   function renderList(state) {
     var mobile = isMessagesMobile();
     var rows = getVisibleThreads(state);
+    var favorites = rows.filter(function (row) { return row.pinned; });
+    var chats = rows.filter(function (row) { return !row.pinned; });
 
-    var body = rows.length
-      ? rows
-          .map(function (row) {
-            if (mobile) return buildMessagesRowSwipeWrap(row, state, buildMessagesRowHtml(row, state));
-            var active = state.selectedId === row.id;
-            return (
-              '<button type="button" class="tma-dash__messages-row' +
-              (active ? ' tma-dash__messages-row--active' : '') +
-              (row.pinned ? ' tma-dash__messages-row--pinned' : '') +
-              (row.muted ? ' tma-dash__messages-row--muted' : '') +
-              '" data-messages-row="' +
-              esc(row.id) +
-              '">' +
-              buildMessagesRowInner(row, state) +
-              '</button>'
-            );
-          })
-          .join('')
-      : renderListPlaceholder(state);
+    var body = '';
+    if (!rows.length) {
+      body = renderListPlaceholder(state);
+    } else if (state.tab === 'archived' || (state.search || '').trim()) {
+      body = rows.map(function (row) { return renderInboxRow(row, state, mobile); }).join('');
+    } else {
+      if (favorites.length) {
+        body +=
+          '<div class="tma-dash__messages-list-group">Favorites</div>' +
+          favorites.map(function (row) { return renderInboxRow(row, state, mobile); }).join('');
+      }
+      if (chats.length) {
+        body +=
+          '<div class="tma-dash__messages-list-group">Chats</div>' +
+          chats.map(function (row) { return renderInboxRow(row, state, mobile); }).join('');
+      }
+    }
 
     // A search can also turn up people with no conversation yet, so the field
     // finds someone whether or not you have spoken before.
@@ -1528,20 +1556,66 @@
   /* ------------------------------------------------------------------
    * Calls
    *
-   * There is no calling in the portal — no signalling, no media transport,
-   * nothing that could place or record one. The chat header already marks its
-   * call buttons unavailable rather than pretending; this says the same thing
-   * in the same words instead of showing an empty call log, which would read
-   * as "you have no calls" rather than "calls do not exist yet".
+   * Recent call system messages across conversations, plus a quick start
+   * from any open chat via the header phone / video buttons.
    * ---------------------------------------------------------------- */
   function renderCallsPanel() {
+    var calls = [];
+    Object.keys(STORE.threadMessages || {}).forEach(function (id) {
+      var row = findThread(id);
+      (getMessages(id) || []).forEach(function (msg) {
+        var event = (msg.systemEvent && msg.systemEvent.event) || '';
+        if (event === 'call_ended' || event === 'call_missed' || event === 'call_started') {
+          calls.push({
+            id: msg.id,
+            conversationId: id,
+            name: row ? row.name : 'Chat',
+            label: (msg.systemEvent && msg.systemEvent.label) || 'Call',
+            event: event,
+            time: msg.time || '',
+            media: (msg.systemEvent && msg.systemEvent.media) || 'audio',
+          });
+        }
+      });
+    });
+
+    calls.sort(function (a, b) { return (b.id > a.id ? 1 : -1); });
+    calls = calls.slice(0, 40);
+
+    if (!calls.length) {
+      return (
+        '<div class="tma-dash__messages-media">' +
+        '<div class="tma-dash__messages-media-note">' +
+        '<strong>No recent calls</strong><br>' +
+        'Start a voice or video call from any conversation header.' +
+        '</div></div>'
+      );
+    }
+
     return (
       '<div class="tma-dash__messages-media">' +
-      '<div class="tma-dash__messages-media-note">' +
-      '<strong>Calls aren’t available yet.</strong><br>' +
-      'Voice and video calling hasn’t been built into the portal. ' +
-      'When it is, your call history will appear here.' +
-      '</div>' +
+      calls
+        .map(function (call) {
+          return (
+            '<button type="button" class="tma-dash__messages-person" data-messages-row="' +
+            esc(call.conversationId) +
+            '">' +
+            '<span class="tma-dash__messages-row-avatar tma-dash__messages-row-avatar--initial">' +
+            '<img src="' +
+            (call.media === 'video' ? ICONS.VideoCamera : ICONS.Phone) +
+            '" alt="" width="18" height="18"></span>' +
+            '<span class="tma-dash__messages-person-text">' +
+            '<span class="tma-dash__messages-person-name">' +
+            esc(call.name) +
+            '</span>' +
+            '<span class="tma-dash__messages-person-meta">' +
+            esc(call.label) +
+            (call.event === 'call_missed' ? ' · Missed' : '') +
+            (call.time ? ' · ' + esc(call.time) : '') +
+            '</span></span></button>'
+          );
+        })
+        .join('') +
       '</div>'
     );
   }
@@ -2340,6 +2414,9 @@
       case 'admin_revoked': return actor + ' removed ' + subject + ' as administrator';
       case 'name_changed': return actor + ' changed the group name to "' + (event.name || '') + '"';
       case 'photo_changed': return actor + ' changed the group photo';
+      case 'call_started': return (event.label || 'Call') + ' started';
+      case 'call_ended': return (event.label || 'Call') + ' ended';
+      case 'call_missed': return 'Missed ' + ((event.label || 'call').toLowerCase());
       default: return msg.body || 'Conversation updated';
     }
   }
@@ -2459,15 +2536,36 @@
     );
   }
 
-  /* Hover actions on a bubble: react, reply, and the overflow menu. */
+  /* Hover actions on a bubble: quick reacts, edit/reply, and the overflow menu. */
   function renderBubbleActions(msg, index) {
     if (msg.deleted || msg.pending) return '';
+    var quick = (emojiData().quick || []).slice(0, 4);
+    var mine = (msg.reactions || [])
+      .filter(function (r) { return r.mine; })
+      .map(function (r) { return r.emoji; });
+    var canEdit = !!(msg.can && msg.can.edit);
+
     return (
-      '<div class="tma-dash__messages-bubble-actions">' +
+      '<div class="tma-dash__messages-bubble-actions" role="toolbar" aria-label="Message actions">' +
+      quick
+        .map(function (char) {
+          return (
+            '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action tma-dash__messages-bubble-action--emoji' +
+            (mine.indexOf(char) !== -1 ? ' is-mine' : '') +
+            '" data-messages-quick-react="' + esc(msg.id) + '" data-messages-quick-emoji="' + esc(char) + '"' +
+            ' aria-label="React with ' + esc(char) + '">' + esc(char) + '</button>'
+          );
+        })
+        .join('') +
       '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" ' +
-      'data-messages-react-open="' + esc(msg.id) + '" aria-label="React to message">' +
-      renderMessagesIcon('Smiley') +
-      '</button>' +
+      'data-messages-react-open="' + esc(msg.id) + '" aria-label="More reactions">+</button>' +
+      '<span class="tma-dash__messages-bubble-action-sep" aria-hidden="true"></span>' +
+      (canEdit
+        ? '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" ' +
+          'data-messages-edit="' + esc(msg.id) + '" aria-label="Edit message">' +
+          '<img src="' + ICONS.PencilSimple + '" alt="" width="16" height="16">' +
+          '</button>'
+        : '') +
       '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" ' +
       'data-messages-reply="' + index + '" aria-label="Reply to message">' +
       renderMessagesIcon('ArrowBendUpLeft') +
@@ -2478,6 +2576,12 @@
       '</button>' +
       '</div>'
     );
+  }
+
+  function chatBackgroundClass() {
+    var key = '';
+    try { key = localStorage.getItem('tma.messages.chatBg') || ''; } catch (e) { /* ignore */ }
+    return key ? ' tma-dash__messages-chat-body--bg-' + key : '';
   }
 
   function getInboxUnreadCount(state) {
@@ -3481,10 +3585,7 @@
       '<span class="tma-dash__messages-chat-contact-text">' +
       '<span class="tma-dash__messages-chat-name">Conversation info</span>' +
       '</span>' +
-      '<div class="tma-dash__messages-chat-actions">' +
-      '<button type="button" class="tma-dash__messages-icon-btn" data-messages-close ' +
-      'aria-label="Close conversation"><span aria-hidden="true">×</span></button>' +
-      '</div></div>' +
+      '</div>' +
 
       '<div class="tma-dash__messages-profile" data-messages-profile-body>' +
 
@@ -3532,9 +3633,29 @@
       'data-messages-profile-mute' + (row.muted ? ' checked' : '') + '></label>' +
       '<label class="tma-dash__messages-setting">' +
       '<span class="tma-dash__messages-setting-text">' +
-      '<span class="tma-dash__messages-setting-label">Pin conversation</span></span>' +
+      '<span class="tma-dash__messages-setting-label">Favorite conversation</span></span>' +
       '<input type="checkbox" class="tma-dash__messages-setting-input" ' +
       'data-messages-profile-pin' + (row.pinned ? ' checked' : '') + '></label>' +
+      '<label class="tma-dash__messages-setting">' +
+      '<span class="tma-dash__messages-setting-text">' +
+      '<span class="tma-dash__messages-setting-label">Chat background</span></span>' +
+      '<select class="tma-dash__messages-setting-input" data-messages-chat-bg>' +
+      [
+        { value: '', label: 'Default' },
+        { value: 'soft', label: 'Soft wash' },
+        { value: 'grid', label: 'Light grid' },
+        { value: 'dots', label: 'Dots' },
+      ]
+        .map(function (opt) {
+          var current = localStorage.getItem('tma.messages.chatBg') || '';
+          return (
+            '<option value="' + opt.value + '"' +
+            (current === opt.value ? ' selected' : '') +
+            '>' + esc(opt.label) + '</option>'
+          );
+        })
+        .join('') +
+      '</select></label>' +
       '</div>' +
 
       // Shared content.
@@ -3608,11 +3729,9 @@
       '</span>' +
       '</div>' +
       '<div class="tma-dash__messages-chat-actions">' +
-      // Calling is out of scope for this phase: the buttons stay in the design
-      // but are disabled and announced as unavailable rather than doing nothing.
       [
-        { icon: 'Phone', label: 'Voice call (unavailable)', disabled: true },
-        { icon: 'VideoCamera', label: 'Video call (unavailable)', disabled: true },
+        { icon: 'Phone', label: 'Voice call', attr: ' data-messages-call="audio"' },
+        { icon: 'VideoCamera', label: 'Video call', attr: ' data-messages-call="video"' },
         {
           icon: 'DotsThree',
           label: 'Conversation menu',
@@ -3621,10 +3740,8 @@
       ]
         .map(function (action) {
           return (
-            '<button type="button" class="tma-dash__messages-icon-btn' +
-            (action.disabled ? ' tma-dash__messages-icon-btn--disabled' : '') +
-            '" aria-label="' + esc(action.label) + '"' +
-            (action.disabled ? ' disabled aria-disabled="true" title="Calling is not available yet"' : '') +
+            '<button type="button" class="tma-dash__messages-icon-btn"' +
+            ' aria-label="' + esc(action.label) + '"' +
             (action.attr || '') +
             '>' +
             '<img src="' + esc(ICONS[action.icon]) + '" alt="">' +
@@ -3632,13 +3749,11 @@
           );
         })
         .join('') +
-      // Close the conversation and go back to the list. Escape does the same.
-      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-chat-close" ' +
-      'data-messages-close aria-label="Close conversation" title="Close conversation (Esc)">' +
-      '<span aria-hidden="true">×</span></button>' +
       '</div>' +
       '</div>' +
-      '<div class="tma-dash__messages-chat-body" data-messages-chat-body>' +
+      '<div class="tma-dash__messages-chat-body' +
+      chatBackgroundClass() +
+      '" data-messages-chat-body>' +
       renderChatBody(state, row, render) +
       '</div>' +
       '<div class="tma-dash__messages-composer' +
@@ -4050,7 +4165,7 @@
     if (action === 'pin') {
       row.pinned = !row.pinned;
       changes = { pinned: row.pinned };
-      message = row.pinned ? 'Conversation pinned' : 'Conversation unpinned';
+      message = row.pinned ? 'Added to favorites' : 'Removed from favorites';
     } else if (action === 'mute') {
       row.muted = !row.muted;
       // null = mute indefinitely, 0 = unmute.
@@ -5022,6 +5137,12 @@
       onRemoteMessage(root, state, render, payload);
     });
 
+    window.TMAMessagingRealtime.listen(channel, 'call.signal', function (payload) {
+      if (window.TMAMessagingCalls) {
+        window.TMAMessagingCalls.onSignal(payload, (STORE.me || {}).id);
+      }
+    });
+
     window.TMAMessagingRealtime.listen(channel, 'message.updated', function (payload) {
       var msg = findMessageById(payload.conversationId, payload.messageId);
       if (!msg) return;
@@ -5366,6 +5487,105 @@
     });
   }
 
+  function toggleMessagePin(root, state, render, msg) {
+    var next = !msg.starred;
+    msg.starred = next;
+    render();
+    window.TMAMessagingAPI.starMessage(msg.id)
+      .then(function (data) {
+        msg.starred = !!(data && data.starred);
+        render();
+        showMessagesToast(root, msg.starred ? 'Message pinned' : 'Message unpinned');
+      })
+      .catch(function () {
+        msg.starred = !next;
+        render();
+        showMessagesToast(root, 'Could not update pin');
+      });
+  }
+
+  function forwardMessage(root, state, render, msg) {
+    var targets = getThreads().filter(function (row) {
+      return row.id !== state.selectedId && !row.archived;
+    });
+    if (!targets.length) {
+      showMessagesToast(root, 'No other conversations to forward to');
+      return;
+    }
+
+    var pick = window.prompt(
+      'Forward to conversation (type the name):\n' +
+        targets.slice(0, 12).map(function (t, i) { return (i + 1) + '. ' + t.name; }).join('\n')
+    );
+    if (!pick) return;
+
+    var target = null;
+    var asNum = parseInt(pick, 10);
+    if (!isNaN(asNum) && asNum >= 1 && asNum <= targets.length) {
+      target = targets[asNum - 1];
+    } else {
+      var term = pick.trim().toLowerCase();
+      target = targets.find(function (t) {
+        return (t.name || '').toLowerCase().indexOf(term) !== -1;
+      });
+    }
+
+    if (!target) {
+      showMessagesToast(root, 'Conversation not found');
+      return;
+    }
+
+    window.TMAMessagingAPI.forwardMessage(msg.id, target.id)
+      .then(function () {
+        showMessagesToast(root, 'Forwarded to ' + target.name);
+      })
+      .catch(function () {
+        showMessagesToast(root, 'Could not forward message');
+      });
+  }
+
+  function translateMessage(root, state, render, msg) {
+    if (!msg.body) {
+      showMessagesToast(root, 'Nothing to translate');
+      return;
+    }
+
+    var host = root.querySelector('[data-messages-id="' + msg.id + '"] .tma-dash__messages-bubble-copy');
+    if (msg._translated) {
+      if (host) host.textContent = msg.body;
+      msg._translated = false;
+      showMessagesToast(root, 'Original text restored');
+      return;
+    }
+
+    function apply(text) {
+      msg._translated = true;
+      if (host) host.textContent = text;
+      showMessagesToast(root, 'Translated');
+    }
+
+    // Prefer the browser Translator API when present; otherwise open a translate tab.
+    if (window.Translator && typeof window.Translator.create === 'function') {
+      window.Translator.create({ sourceLanguage: 'auto', targetLanguage: 'en' })
+        .then(function (translator) { return translator.translate(msg.body); })
+        .then(apply)
+        .catch(function () {
+          window.open(
+            'https://translate.google.com/?sl=auto&tl=en&text=' + encodeURIComponent(msg.body),
+            '_blank',
+            'noopener'
+          );
+        });
+      return;
+    }
+
+    window.open(
+      'https://translate.google.com/?sl=auto&tl=en&text=' + encodeURIComponent(msg.body),
+      '_blank',
+      'noopener'
+    );
+  }
+
   function startEditingMessage(root, state, render, msg) {
     state.editing = { id: msg.id, original: msg.body || '' };
     setComposerDraft(state, msg.body || '');
@@ -5564,6 +5784,36 @@
 
   var localAttachmentSeq = 0;
 
+  function enqueueAcceptedFiles(root, state, render, accepted, caption) {
+    if (!accepted || !accepted.length) return;
+    var items = pendingAttachments(state);
+
+    if (caption) {
+      var draft = getComposerDraft(state);
+      setComposerDraft(state, draft ? draft + '\n' + caption : caption);
+    }
+
+    accepted.forEach(function (file) {
+      localAttachmentSeq += 1;
+      var item = {
+        localId: 'a' + localAttachmentSeq,
+        conversationId: state.selectedId,
+        file: file,
+        name: file.name,
+        size: file.size,
+        status: 'uploading',
+        progress: 0,
+        attachment: null,
+        // Shows an image immediately, before the server has it.
+        previewUrl: /^image\//.test(file.type) ? URL.createObjectURL(file) : null,
+      };
+      items.push(item);
+      startUpload(root, state, render, item);
+    });
+
+    render();
+  }
+
   function queueFiles(root, state, render, files) {
     if (!state.selectedId || !files || !files.length) return;
 
@@ -5600,25 +5850,22 @@
       }
     }
 
-    accepted.forEach(function (file) {
-      localAttachmentSeq += 1;
-      var item = {
-        localId: 'a' + localAttachmentSeq,
-        conversationId: state.selectedId,
-        file: file,
-        name: file.name,
-        size: file.size,
-        status: 'uploading',
-        progress: 0,
-        attachment: null,
-        // Shows an image immediately, before the server has it.
-        previewUrl: /^image\//.test(file.type) ? URL.createObjectURL(file) : null,
-      };
-      items.push(item);
-      startUpload(root, state, render, item);
+    if (!accepted.length) return;
+
+    var hasImages = accepted.some(function (file) {
+      return /^image\//.test(file.type) && file.type !== 'image/svg+xml';
     });
 
-    render();
+    if (hasImages && window.TMAMessagingImageEditor) {
+      window.TMAMessagingImageEditor.openMany(accepted, {
+        onDone: function (edited, caption) {
+          enqueueAcceptedFiles(root, state, render, edited, caption);
+        },
+      });
+      return;
+    }
+
+    enqueueAcceptedFiles(root, state, render, accepted, '');
   }
 
   function startUpload(root, state, render, item) {
@@ -6509,7 +6756,7 @@
 
   function conversationMenuItems(row) {
     var items = [
-      { action: 'pin', label: row.pinned ? 'Unpin conversation' : 'Pin conversation' },
+      { action: 'pin', label: row.pinned ? 'Remove from favorites' : 'Add to favorites' },
       { action: 'mute', label: row.muted ? 'Unmute notifications' : 'Mute notifications' },
       { action: 'archive', label: row.archived ? 'Unarchive conversation' : 'Archive conversation' },
       { action: 'unread', label: 'Mark as unread' },
@@ -6683,6 +6930,51 @@
       });
     });
 
+    MORPH.unwired(root, '[data-messages-edit]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var msg = findMessageById(state.selectedId, btn.getAttribute('data-messages-edit'));
+        if (msg) startEditingMessage(root, state, render, msg);
+      });
+    });
+
+    MORPH.unwired(root, '[data-messages-quick-react]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        toggleReaction(
+          root,
+          state,
+          render,
+          btn.getAttribute('data-messages-quick-react'),
+          btn.getAttribute('data-messages-quick-emoji')
+        );
+      });
+    });
+
+    MORPH.unwired(root, '[data-messages-call]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var row = findThread(state.selectedId);
+        if (!row || !window.TMAMessagingCalls) return;
+        window.TMAMessagingCalls.start(
+          state.selectedId,
+          btn.getAttribute('data-messages-call') || 'audio',
+          row.name || 'Contact'
+        );
+      });
+    });
+
+    var chatBg = MORPH.unwiredOne(root, '[data-messages-chat-bg]');
+    if (chatBg) {
+      chatBg.addEventListener('change', function () {
+        try { localStorage.setItem('tma.messages.chatBg', chatBg.value || ''); } catch (err) { /* ignore */ }
+        render();
+      });
+    }
+
     // Clicking a reaction pill shows who reacted; the viewer's own reaction is
     // marked there and can be removed from the same panel.
     MORPH.unwired(root, '[data-messages-react-emoji]').forEach(function (btn) {
@@ -6752,17 +7044,23 @@
         // Let the browser's own menu handle links and selected text.
         if (e.target.closest('a') || String(window.getSelection() || '')) return;
         e.preventDefault();
+        root.querySelectorAll('.tma-dash__messages-bubble-row.is-highlighted').forEach(function (el) {
+          el.classList.remove('is-highlighted', 'is-actions-open');
+        });
+        row.classList.add('is-highlighted', 'is-actions-open');
         openMessageMenu(root, state, render, row, messageId, { x: e.clientX, y: e.clientY });
       });
 
       var pressTimer = null;
       var pressOrigin = null;
 
-      function cancelPress() {
+      function cancelPress(clearHighlight) {
         if (pressTimer) clearTimeout(pressTimer);
         pressTimer = null;
         pressOrigin = null;
-        row.classList.remove('is-actions-open');
+        if (clearHighlight) {
+          row.classList.remove('is-actions-open', 'is-highlighted');
+        }
       }
 
       row.addEventListener('pointerdown', function (e) {
@@ -6770,7 +7068,10 @@
         pressOrigin = { x: e.clientX, y: e.clientY };
         pressTimer = setTimeout(function () {
           pressTimer = null;
-          row.classList.add('is-actions-open');
+          root.querySelectorAll('.tma-dash__messages-bubble-row.is-highlighted').forEach(function (el) {
+            el.classList.remove('is-highlighted', 'is-actions-open');
+          });
+          row.classList.add('is-actions-open', 'is-highlighted');
           openMessageMenu(root, state, render, row, messageId, pressOrigin);
         }, 450);
       });
@@ -6779,12 +7080,12 @@
         if (!pressOrigin) return;
         // Any real movement means a scroll or a swipe, not a press.
         if (Math.abs(e.clientX - pressOrigin.x) > 8 || Math.abs(e.clientY - pressOrigin.y) > 8) {
-          cancelPress();
+          cancelPress(true);
         }
       });
 
-      row.addEventListener('pointerup', cancelPress);
-      row.addEventListener('pointercancel', cancelPress);
+      row.addEventListener('pointerup', function () { cancelPress(false); });
+      row.addEventListener('pointercancel', function () { cancelPress(true); });
     });
 
     // The chat header's three-dot menu.
@@ -7410,10 +7711,6 @@
    * long press. Only actions that will actually work are listed — permissions
    * come from the server on each message (`msg.can`), never from hiding
    * buttons client-side alone.
-   *
-   * Attachment actions (open / download / save to library) and forward, star
-   * and message info arrive with their phases; listing them now would put back
-   * exactly the dead controls this work is removing.
    */
   function openMessageMenu(root, state, render, anchor, messageId, position) {
     closeMessageMenu();
@@ -7421,10 +7718,19 @@
     var msg = findMessageById(state.selectedId, messageId);
     if (!msg || msg.deleted) return;
 
-    var items = [{ action: 'reply', label: 'Reply' }];
-    if (msg.body) items.push({ action: 'copy', label: 'Copy text' });
+    var items = [
+      { action: 'reply', label: 'Reply' },
+      { action: 'forward', label: 'Forward' },
+    ];
+    if (msg.body) {
+      items.push({ action: 'copy', label: 'Copy text' });
+      items.push({ action: 'translate', label: 'Translate' });
+    }
+    items.push({ action: 'pin', label: msg.starred ? 'Unpin message' : 'Pin message' });
     if (msg.can && msg.can.edit) items.push({ action: 'edit', label: 'Edit' });
-    if (msg.can && msg.can.delete) items.push({ action: 'delete', label: 'Delete', danger: true });
+    if (msg.can && msg.can.delete) {
+      items.push({ action: 'delete', label: 'Delete for everyone', danger: true });
+    }
 
     // Which emoji this viewer already holds on the message, so the row can
     // show them as active and a second tap removes them.
@@ -7476,6 +7782,9 @@
         } else if (action === 'copy') copyMessageText(root, msg);
         else if (action === 'edit') startEditingMessage(root, state, render, msg);
         else if (action === 'delete') deleteMessage(root, state, render, msg);
+        else if (action === 'forward') forwardMessage(root, state, render, msg);
+        else if (action === 'pin') toggleMessagePin(root, state, render, msg);
+        else if (action === 'translate') translateMessage(root, state, render, msg);
       });
     });
 
@@ -7515,6 +7824,9 @@
     if (openMenuEl && openMenuEl.parentNode) openMenuEl.parentNode.removeChild(openMenuEl);
     openMenuEl = null;
     document.removeEventListener('click', closeMessageMenuOnce, true);
+    document.querySelectorAll('.tma-dash__messages-bubble-row.is-highlighted').forEach(function (el) {
+      el.classList.remove('is-highlighted', 'is-actions-open');
+    });
   }
 
   /*

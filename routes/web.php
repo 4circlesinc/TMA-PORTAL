@@ -493,6 +493,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/messages/{uuid}', [MessagingController::class, 'destroyMessage'])->name('messages.destroy');
         // Toggling: reacting again with the same emoji removes it.
         Route::post('/messages/{uuid}/reactions', [MessagingController::class, 'react'])->name('messages.react');
+        Route::post('/messages/{uuid}/star', [MessagingController::class, 'toggleStar'])->name('messages.star');
+        Route::post('/messages/{uuid}/forward', [MessagingController::class, 'forwardMessage'])->name('messages.forward');
+        Route::post('/conversations/{uuid}/call', [MessagingController::class, 'callSignal'])->name('conversations.call');
 
         // Files are staged by upload first, then claimed by a message on send,
         // so the composer can preview and remove them before anything is sent.
