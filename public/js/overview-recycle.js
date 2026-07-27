@@ -38,10 +38,11 @@
 
   function toolBtn(icon, attr, label, opts) {
     opts = opts || {};
-    return '<button type="button" class="tma-dash__tool-btn"' +
+    return '<button type="button" class="tma-dash__tool-btn' + (opts.active ? ' is-active' : '') + '"' +
       (attr ? ' ' + attr : '') +
       (opts.disabled ? ' disabled' : '') +
-      ' aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+      ' aria-label="' + esc(label) + '" title="' + esc(label) + '"' +
+      (opts.pressed != null ? ' aria-pressed="' + opts.pressed + '"' : '') + '>' +
       '<img src="' + ICON + esc(icon) + '.svg" alt=""></button>';
   }
 
@@ -111,14 +112,16 @@
     return 'grey';
   }
 
-  function itemVisual(item) {
+  function itemVisual(item, size) {
     var meta = item.meta || {};
     var kind = item.kind;
+    var px = size || 24;
+    var iconPx = px >= 40 ? 40 : 16;
 
     if (kind === 'folder') {
       var html = window.TMAFolderIcons
-        ? window.TMAFolderIcons.html('FolderFilled', meta.colour, meta.iconName, 24)
-        : '<img src="' + ICON + 'Folder.svg" alt="" width="24" height="24">';
+        ? window.TMAFolderIcons.html('FolderFilled', meta.colour, meta.iconName, px)
+        : '<img src="' + ICON + 'Folder.svg" alt="" width="' + px + '" height="' + px + '">';
       return { html: html, tone: '' };
     }
 
@@ -126,7 +129,8 @@
       var photo = meta.avatarUrl;
       var src = avatarSrc(photo, item.name);
       return {
-        html: '<img class="tma-dash__overview-recycle-avatar" src="' + esc(src) + '" alt="" width="24" height="24">',
+        html: '<img class="tma-dash__overview-recycle-avatar' + (px >= 40 ? ' tma-dash__overview-recycle-avatar--lg' : '') +
+          '" src="' + esc(src) + '" alt="" width="' + px + '" height="' + px + '">',
         tone: '',
       };
     }
@@ -139,13 +143,16 @@
       var tone = toneFor(meta.extension, meta.category);
       if (meta.thumbUrl) {
         return {
-          html: '<img class="tma-dash__overview-recycle-thumb" src="' + esc(meta.thumbUrl) + '" alt="" width="24" height="24" loading="lazy"' +
-            ' onerror="this.onerror=null;this.src=\'' + esc(fallback) + '\'">',
+          html: '<img class="' + (px >= 40 ? 'tma-portal-file-card__thumb-img' : 'tma-dash__overview-recycle-thumb') +
+            '" src="' + esc(meta.thumbUrl) + '" alt="" width="' + px + '" height="' + px + '" loading="lazy"' +
+            ' onerror="this.onerror=null;this.className=\'' + (px >= 40 ? 'tma-portal-file-card__icon' : '') +
+            '\';this.src=\'' + esc(fallback) + '\'">',
           tone: tone,
         };
       }
       return {
-        html: '<img src="' + esc(fallback) + '" alt="" width="16" height="16">',
+        html: '<img class="' + (px >= 40 ? 'tma-portal-file-card__icon' : '') +
+          '" src="' + esc(fallback) + '" alt="" width="' + iconPx + '" height="' + iconPx + '">',
         tone: tone,
       };
     }
@@ -157,7 +164,7 @@
             : 'Trash'
     );
     return {
-      html: '<img src="' + ICON + esc(glyph) + '.svg" alt="" width="16" height="16">',
+      html: '<img src="' + ICON + esc(glyph) + '.svg" alt="" width="' + iconPx + '" height="' + iconPx + '">',
       tone: 'grey',
     };
   }
@@ -179,6 +186,7 @@
       search: '',
       searchFocused: false,
       kind: '',
+      view: 'table', // 'table' | 'grid'
       selected: {},
     };
 
@@ -269,7 +277,15 @@
         toolMenu('data-recycle-filter-menu', 'Filter', KIND_FILTERS, state.kind, 'Filter by type') +
         (count === 0
           ? toolBtn('Trash', 'data-recycle-empty', 'Empty recycle bin', { disabled: !state.items.length })
-          : '');
+          : '') +
+        toolBtn('Rows', 'data-recycle-view="table"', 'List view', {
+          active: state.view === 'table',
+          pressed: state.view === 'table',
+        }) +
+        toolBtn('GridFour', 'data-recycle-view="grid"', 'Grid view', {
+          active: state.view === 'grid',
+          pressed: state.view === 'grid',
+        });
 
       var bulk = '<div class="tma-dash__toolbar-bulk" data-recycle-bulk' + (count === 0 ? ' hidden' : '') + '>' +
         '<img class="tma-dash__toolbar-divider" src="' + TMA + 'Line-16.svg" alt="" aria-hidden="true">' +
@@ -374,7 +390,7 @@
       });
     }
 
-    function renderTable() {
+    function renderStatus() {
       if (state.loading) {
         return '<div class="tma-dash__files-empty">' +
           (window.TMASkeleton ? window.TMASkeleton.rows(6) : 'Loading…') +
@@ -406,7 +422,40 @@
             })
           : '<p class="tma-dash__overview-empty">Recycle bin is empty</p>';
       }
+      return null;
+    }
 
+    function renderCard(item) {
+      var key = rowKey(item);
+      var checked = !!state.selected[key];
+      var visual = itemVisual(item, 40);
+      var kindLabel = KIND_LABEL[item.kind] || item.kind;
+      var sizeLabel = (item.meta && item.meta.sizeLabel) || '';
+      var sub = sizeLabel && sizeLabel !== '—'
+        ? kindLabel + ' · ' + sizeLabel
+        : kindLabel;
+      return '<div class="tma-portal-file-card' + (checked ? ' is-selected' : '') +
+        '" data-recycle-row="' + esc(key) + '" tabindex="0">' +
+        '<label class="tma-portal-file-card__check">' +
+          '<input type="checkbox" class="tma-dash__check" data-recycle-check="' + esc(key) + '"' +
+            (checked ? ' checked' : '') + ' aria-label="Select ' + esc(item.name) + '">' +
+        '</label>' +
+        '<button type="button" class="tma-portal-row-menu tma-dash__overview-recycle-card-more" data-recycle-row-more="' + esc(key) + '" aria-label="More actions for ' + esc(item.name) + '">' +
+          '<img src="' + TMA + 'ThreeDots-16.svg" alt="" width="16" height="16">' +
+        '</button>' +
+        '<div class="tma-portal-file-card__thumb" aria-hidden="true">' + visual.html + '</div>' +
+        '<span class="tma-portal-file-card__name" title="' + esc(item.name) + '">' + esc(item.name) + '</span>' +
+        '<span class="tma-portal-file-card__meta">' + esc(sub) + '</span>' +
+      '</div>';
+    }
+
+    function renderGrid() {
+      return '<div class="tma-portal-grid" role="list" aria-label="Recycle bin">' +
+        state.items.map(renderCard).join('') +
+      '</div>';
+    }
+
+    function renderTable() {
       var allChecked = state.items.length && state.items.every(function (item) {
         return !!state.selected[rowKey(item)];
       });
@@ -430,12 +479,18 @@
       '</div>';
     }
 
+    function renderBody() {
+      var status = renderStatus();
+      if (status) return status;
+      return state.view === 'grid' ? renderGrid() : renderTable();
+    }
+
     function render() {
       closeRowMenu();
       container.innerHTML =
         '<div class="tma-dash__files tma-dash__files--overview tma-dash__recycle--overview" data-overview-recycle>' +
           renderToolbar() +
-          renderTable() +
+          renderBody() +
         '</div>';
       wireChrome();
     }
@@ -508,6 +563,17 @@
       }
       if (e.target.closest('[data-recycle-retry]')) {
         load();
+        return;
+      }
+
+      var viewBtn = e.target.closest('[data-recycle-view]');
+      if (viewBtn) {
+        e.preventDefault();
+        var nextView = viewBtn.getAttribute('data-recycle-view');
+        if (nextView === 'table' || nextView === 'grid') {
+          state.view = nextView;
+          render();
+        }
         return;
       }
 

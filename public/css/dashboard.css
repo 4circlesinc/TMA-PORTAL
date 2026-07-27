@@ -29442,8 +29442,20 @@ span.tma-dash__messages-profile-avatar {
   display: block;
 }
 
+.tma-dash__overview-recycle-avatar--lg {
+  width: 40px;
+  height: 40px;
+}
+
 .tma-dash__overview-recycle-thumb {
   border-radius: 6px;
+}
+
+.tma-dash__overview-recycle-card-more {
+  position: absolute;
+  top: var(--space-4, 4px);
+  right: var(--space-4, 4px);
+  z-index: 1;
 }
 
 .tma-dash__recycle--overview .tma-dash__cc--filename {
