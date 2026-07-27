@@ -30434,49 +30434,35 @@ span.tma-dash__messages-profile-avatar {
 
 /*
  * The default wallpaper: the TMA pattern (leaf mark, columns, scales, gavel)
- * over a light blue tint.
+ * on an off-white surface.
  *
- * The artwork is a single fixed ink — #94bacb — so the tint underneath is what
- * decides whether it reads. It sits lighter *and* bluer than the ink, which
- * keeps the pattern legible as a wallpaper without letting it drift into the
- * same tone and disappear. Anything much darker camouflages the pattern;
- * plain white makes it shout.
+ * One image scaled to cover the pane, not a repeating tile — tiling put
+ * visible seams and an obvious grid rhythm behind the thread. `cover` means
+ * the artwork is cropped rather than duplicated at any pane size.
+ *
+ * The wash is baked into the PNG's alpha (~40%) rather than applied here: the
+ * ink is one fixed colour the CSS cannot recolour, so lightening it in the
+ * asset is what lets it sit under a near-white surface at any strength.
  *
  * `background-attachment` is left at its default, so the wallpaper stays put
  * while the thread scrolls over it.
  */
 .tma-dash__messages-chat-body--bg-tma {
-  background-color: #e3eef8;
+  background-color: #f9fbfc;
   background-image: url("../images/brand/tma/chat-wallpaper-pattern.png");
-  background-repeat: repeat;
-  background-size: 380px auto;
-  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
 }
 
-/* On a dark thread the ink would glare, and it cannot be recoloured from CSS,
- * so a veil is painted over the pattern instead. */
+/* The baked-in wash is calibrated against a near-white surface; the same ink
+ * on a dark thread lands much brighter, so a veil takes it back down. */
 .tma-dash[data-theme="dark"] .tma-dash__messages-chat-body--bg-tma {
   background-color: #1a1d20;
   background-image:
-    linear-gradient(rgb(26 29 32 / 0.80), rgb(26 29 32 / 0.80)),
+    linear-gradient(rgb(26 29 32 / 0.55), rgb(26 29 32 / 0.55)),
     url("../images/brand/tma/chat-wallpaper-pattern.png");
-  background-size: auto, 380px auto;
-}
-
-/* Day separators need a surface of their own once there is a pattern behind
- * them. System messages already carry one, so they keep theirs. */
-.tma-dash__messages-chat-body--bg-tma
-  .tma-dash__messages-divider:not(.tma-dash__messages-divider--system) {
-  padding: 2px var(--space-12);
-  border-radius: var(--radius-pill);
-  background: rgb(255 255 255 / 0.72);
-  font-size: var(--text-size-12);
-  line-height: 18px;
-}
-
-.tma-dash[data-theme="dark"] .tma-dash__messages-chat-body--bg-tma
-  .tma-dash__messages-divider:not(.tma-dash__messages-divider--system) {
-  background: rgb(255 255 255 / 0.10);
+  background-size: auto, cover;
 }
 
 .tma-dash__messages-chat-body--bg-soft {
