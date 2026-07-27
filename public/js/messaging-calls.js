@@ -131,7 +131,17 @@
     // Unwrap an accidental extra { sdp: {...} } layer.
     if (desc.sdp && typeof desc.sdp === 'object') desc = desc.sdp;
     if (typeof desc.sdp !== 'string' || !desc.sdp) return null;
-    return { type: desc.type || fallbackType, sdp: desc.sdp };
+
+    // Canonicalize line endings. SDP must be a sequence of `x=value` lines
+    // separated by CRLF with no blank lines; a signalling round-trip can leave
+    // stray lone `\r`s or doubled newlines that the parser rejects as an
+    // "Invalid SDP line". Collapsing any run of CR/LF and rejoining fixes it.
+    var sdp = desc.sdp
+      .split(/[\r\n]+/)
+      .filter(function (line) { return line.length > 0; })
+      .join('\r\n') + '\r\n';
+
+    return { type: desc.type || fallbackType, sdp: sdp };
   }
 
   function ensurePeer() {
@@ -520,9 +530,14 @@
       .catch(function (err) {
         if (session) session.answered = false;
         console.error('TMA call: failed to answer —', err, '\nSDP was:\n' + offer.sdp);
-        var firstLine = offer.sdp.split(/\r\n|\r|\n/)[0];
+        // Pinpoint the first structurally-invalid line for on-screen reporting.
+        var lines = offer.sdp.split('\r\n');
+        var bad = '';
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i] && !/^[a-z]=/i.test(lines[i])) { bad = lines[i]; break; }
+        }
         setStatus('Fail: ' + ((err && err.name) || 'err') +
-          ' · len=' + offer.sdp.length + ' · L1="' + firstLine + '"');
+          ' · bad="' + (bad || '(none found)').slice(0, 30) + '"');
         setTimeout(function () { endSession(true); }, 12000);
       });
   }
