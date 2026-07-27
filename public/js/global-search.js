@@ -328,8 +328,9 @@
       : '';
 
     let iconMarkup = '';
-    if (item.type === 'user' && item.avatar) {
-      iconMarkup = `<img src="${avatarSrc(item.avatar)}" alt="" class="tma-search-popup__row-avatar" width="24" height="24" />`;
+    if (item.type === 'user' && (item.avatarUrl || item.avatar)) {
+      const src = item.avatarUrl || avatarSrc(item.avatar);
+      iconMarkup = `<img src="${escapeHtml(src)}" alt="" class="tma-search-popup__row-avatar" width="24" height="24" />`;
     } else if (item.type === 'query' || item.icon === 'search') {
       iconMarkup = `<img src="${iconUrl('Search16')}" alt="" class="tma-search-popup__row-icon" width="16" height="16" />`;
     } else if (item.type === 'page') {
@@ -360,6 +361,58 @@
     return `<${tag} class="tma-search-popup__row${selectedCls}${interactiveCls}"${attrs}>${textHtml}${hint}</${tag}>`;
   }
 
+  const RECENT_SEARCH_KEY = 'tma.search.recent';
+  const RECENT_VISIT_KEY = 'tma.search.visited';
+
+  function readJsonStore(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function writeJsonStore(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) { /* ignore quota / private mode */ }
+  }
+
+  function pushRecentSearch(label) {
+    const text = String(label || '').trim();
+    if (!text) return;
+    const next = [{ type: 'query', label: text }]
+      .concat(readJsonStore(RECENT_SEARCH_KEY, []).filter((item) => item && item.label !== text))
+      .slice(0, 6);
+    writeJsonStore(RECENT_SEARCH_KEY, next);
+  }
+
+  function pushRecentVisit(item) {
+    if (!item) return;
+    const label = item.label || item.title;
+    if (!label && !item.navId) return;
+    const entry = {
+      type: item.type || 'page',
+      label,
+      navId: item.navId || '',
+      href: item.href || '',
+      clientId: item.clientId || '',
+      avatar: item.avatar || '',
+      avatarUrl: item.avatarUrl || '',
+    };
+    const key = entry.clientId || entry.navId || entry.label;
+    const next = [entry]
+      .concat(readJsonStore(RECENT_VISIT_KEY, []).filter((row) => {
+        const rowKey = (row && (row.clientId || row.navId || row.label)) || '';
+        return rowKey !== key;
+      }))
+      .slice(0, 6);
+    writeJsonStore(RECENT_VISIT_KEY, next);
+  }
+
   function getDesignDemoInitialItems() {
     return [
       { type: 'query', label: 'Landing page design' },
@@ -371,19 +424,61 @@
     ];
   }
 
-  function renderInitialBody(options = {}) {
-    const { interactive = false, designDemo = false } = options;
-    if (!designDemo) {
-      return '<div class="tma-search-popup__empty">No recent searches</div>';
-    }
+  function designDemoGroups() {
     const items = getDesignDemoInitialItems();
-    const recent = items.slice(0, 2);
-    const visited = items.slice(2, 3);
-    const contacts = items.slice(3);
-    let rowIndex = 0;
+    return [
+      { title: 'Recent search', items: items.slice(0, 2) },
+      { title: 'Recently visited', items: items.slice(2, 3) },
+      { title: 'Clients', items: items.slice(3) },
+    ];
+  }
 
-    const group = (title, groupItems) => {
-      const rows = groupItems.map((item) => {
+  function portalInitialGroups(index, contacts) {
+    const recent = readJsonStore(RECENT_SEARCH_KEY, []).slice(0, 2);
+    let visited = readJsonStore(RECENT_VISIT_KEY, []).slice(0, 2);
+    if (!visited.length && Array.isArray(index)) {
+      visited = index
+        .filter((item) => item && (item.type === 'page' || item.navId))
+        .slice(0, 2)
+        .map((item) => ({
+          type: 'page',
+          label: item.label || item.title,
+          navId: item.navId,
+          href: item.href,
+          icon: 'search',
+        }));
+    }
+    const clientItems = (Array.isArray(contacts) && contacts.length
+      ? contacts
+      : (index || []).filter((item) => item && item.type === 'user')
+    ).slice(0, 3);
+
+    const groups = [
+      { title: 'Recent search', items: recent },
+      { title: 'Recently visited', items: visited },
+      { title: 'Clients', items: clientItems },
+    ];
+
+    const first = groups.find((g) => g.items.length);
+    if (first && first.items[0] && !first.items.some((i) => i.selected)) {
+      first.items[0] = Object.assign({}, first.items[0], { selected: true });
+    }
+    return groups;
+  }
+
+  function getInitialBodyState(options = {}) {
+    const { interactive = false, designDemo = false, groups = null } = options;
+    const groupList = groups || (designDemo ? designDemoGroups() : null);
+    if (!groupList) {
+      return { html: '<div class="tma-search-popup__empty">No recent searches</div>', items: [] };
+    }
+
+    let rowIndex = 0;
+    const flat = [];
+    const html = groupList.map((group) => {
+      if (!group.items || !group.items.length) return '';
+      const rows = group.items.map((item) => {
+        flat.push(item);
         const row = renderRow(item, {
           selected: item.selected,
           interactive,
@@ -392,10 +487,17 @@
         rowIndex += 1;
         return row;
       }).join('');
-      return `<div class="tma-search-popup__group"><div class="tma-search-popup__group-label">${title}</div>${rows}</div>`;
-    };
+      return `<div class="tma-search-popup__group"><div class="tma-search-popup__group-label">${escapeHtml(group.title)}</div>${rows}</div>`;
+    }).join('');
 
-    return group('Recent search', recent) + group('Recently visited', visited) + group('Clients', contacts);
+    if (!html) {
+      return { html: '<div class="tma-search-popup__empty">No recent searches</div>', items: [] };
+    }
+    return { html, items: flat };
+  }
+
+  function renderInitialBody(options = {}) {
+    return getInitialBodyState(options).html;
   }
 
   function renderResultsBody(query, items, options = {}) {
@@ -798,12 +900,12 @@
     new ResizeObserver(() => updateSceneScale(scene)).observe(scene);
   }
 
-  function bindInitialBodyEvents(body, handlers) {
+  function bindInitialBodyEvents(body, handlers, items) {
     if (!body || !handlers) return;
-    const items = getDesignDemoInitialItems();
+    const list = Array.isArray(items) ? items : getDesignDemoInitialItems();
     body.querySelectorAll('[data-search-result]').forEach((btn) => {
       const index = Number(btn.getAttribute('data-result-index'));
-      btn.addEventListener('click', () => handlers.onInitialSelect(items[index]));
+      btn.addEventListener('click', () => handlers.onInitialSelect(list[index]));
     });
   }
 
@@ -819,6 +921,8 @@
       selectedIndex: 0,
       loading: false,
       results: [],
+      contacts: Array.isArray(options.contacts) ? options.contacts.slice() : [],
+      initialItems: [],
     };
 
     function popupEl() {
@@ -842,6 +946,7 @@
 
     function navigateResult(item, event) {
       if (!item) return;
+      if (item.type !== 'query') pushRecentVisit(item);
       if (typeof options.onNavigate === 'function') {
         options.onNavigate(item, event);
       } else if (item.href && item.href.startsWith('http')) {
@@ -857,13 +962,27 @@
         runSearch(item.label);
         return;
       }
-      if (item.navId) {
+      if (item.navId || item.clientId || item.href) {
         navigateResult(item);
         return;
       }
       if (item.label) {
         runSearch(item.label);
       }
+    }
+
+    function ensureContacts() {
+      if (state.contacts.length || typeof options.fetchContacts !== 'function') {
+        return Promise.resolve(state.contacts);
+      }
+      return Promise.resolve(options.fetchContacts()).then((list) => {
+        state.contacts = Array.isArray(list) ? list : [];
+        return state.contacts;
+      }).catch(() => state.contacts);
+    }
+
+    function portalGroups() {
+      return portalInitialGroups(index, state.contacts);
     }
 
     function bindPopupEvents(popup) {
@@ -925,8 +1044,13 @@
       if (!body) return;
 
       if (stateName === 'initial') {
-        body.innerHTML = renderInitialBody({ interactive: true });
-        bindInitialBodyEvents(body, { onInitialSelect: handleInitialSelect });
+        const initial = getInitialBodyState({
+          interactive: true,
+          groups: portalGroups(),
+        });
+        state.initialItems = initial.items;
+        body.innerHTML = initial.html;
+        bindInitialBodyEvents(body, { onInitialSelect: handleInitialSelect }, initial.items);
         return;
       }
 
@@ -985,8 +1109,14 @@
         return;
       }
 
-      state.results = filterIndex(index, query);
-      state.selectedIndex = state.results.length ? 0 : 0;
+      pushRecentSearch(query);
+      const pageHits = filterIndex(index, query);
+      const contactHits = filterIndex(state.contacts, query);
+      const seen = new Set(pageHits.map((r) => r.clientId || r.navId || r.label));
+      state.results = pageHits.concat(
+        contactHits.filter((hit) => !seen.has(hit.clientId || hit.navId || hit.label))
+      );
+      state.selectedIndex = 0;
       renderLivePopup(renderOpts);
     }
 
@@ -994,7 +1124,7 @@
       state.open = true;
       if (overlay) overlay.hidden = false;
       if (openOpts.query != null && String(openOpts.query).length) {
-        runSearch(String(openOpts.query), openOpts);
+        ensureContacts().then(() => runSearch(String(openOpts.query), openOpts));
         return;
       }
       state.query = '';
@@ -1002,6 +1132,9 @@
       state.loading = false;
       state.results = [];
       renderLivePopup(openOpts);
+      ensureContacts().then(() => {
+        if (state.open && !state.query.trim()) renderLivePopup(openOpts);
+      });
     }
 
     if (overlay) {

@@ -665,7 +665,7 @@
       syncMobileHeaderScroll();
     }
 
-    function wireMobileSidebarSearch(searchIndex) {
+    function wireMobileSidebarSearch(searchIndex, searchOpts) {
       if (!sidebar || !window.TMAGlobalSearch || !window.TMAGlobalSearch.mountSidebarSearch) return;
       var head = sidebar.querySelector('[data-sidebar-mobile-head]');
       if (!head || head.getAttribute('data-sidebar-search-wired')) return;
@@ -675,10 +675,12 @@
       var panel = sidebar.querySelector('[data-sidebar-search-panel]');
       var mount = sidebar.querySelector('[data-sidebar-search-mount]');
       if (!searchTrigger || !panel || !mount) return;
+      var opts = searchOpts || {};
 
       var sidebarSearch = window.TMAGlobalSearch.mountSidebarSearch(mount, {
         index: searchIndex,
-        onNavigate: function (item) {
+        fetchContacts: opts.fetchContacts,
+        onNavigate: opts.onNavigate || function (item) {
           if (item.navId) {
             activate(item.navId, {});
           } else if (item.href && String(item.href).charAt(0) === '#') {
@@ -1365,25 +1367,58 @@
       });
     }
 
+    function isHoverRailOpen() {
+      if (!sidebar || isMobileSidebar()) return false;
+      if (!root.classList.contains('is-sidebar-collapsed')) return true;
+      if (root.classList.contains('tma-dash--sidebar-standard')) return false;
+      return sidebar.matches(':hover') || sidebar.contains(document.activeElement);
+    }
+
+    function collapseAllSubnavs() {
+      root.querySelectorAll('.tma-dash__nav-item--expand[aria-expanded="true"]').forEach(function (btn) {
+        setExpanded(btn, false);
+      });
+    }
+
+    function expandActiveSubnav() {
+      var active = root.querySelector('.tma-dash__sidebar .tma-dash__nav-item--active');
+      if (active) expandGroupFor(active);
+    }
+
     function syncRailTitlesForSidebarState() {
       if (isMobileSidebar() || !sidebar) {
         applyRailTitles(false);
         return;
       }
       var collapsed = root.classList.contains('is-sidebar-collapsed');
-      var hoverStyle = !root.classList.contains('tma-dash--sidebar-standard');
-      var railOpen = !collapsed ||
-        (hoverStyle && (sidebar.matches(':hover') || sidebar.contains(document.activeElement)));
+      var railOpen = isHoverRailOpen();
       applyRailTitles(collapsed && !railOpen);
+    }
+
+    /* Hover rail: when the overlay closes, collapse Folders/Projects/People
+       so an open submenu can't reappear as a floating white panel the next
+       time the rail animates open (or peek out of the 72px icon column). */
+    function onHoverRailClosed() {
+      if (root.classList.contains('tma-dash--sidebar-standard')) return;
+      if (isHoverRailOpen()) return;
+      collapseAllSubnavs();
+      syncRailTitlesForSidebarState();
+    }
+
+    function onHoverRailOpened() {
+      syncRailTitlesForSidebarState();
+      if (!root.classList.contains('tma-dash--sidebar-standard') && isHoverRailOpen()) {
+        expandActiveSubnav();
+      }
     }
 
     if (sidebar && !sidebar._railTitleBound) {
       sidebar._railTitleBound = true;
-      sidebar.addEventListener('mouseenter', syncRailTitlesForSidebarState);
-      sidebar.addEventListener('mouseleave', syncRailTitlesForSidebarState);
-      sidebar.addEventListener('focusin', syncRailTitlesForSidebarState);
+      sidebar.addEventListener('mouseenter', onHoverRailOpened);
+      sidebar.addEventListener('mouseleave', onHoverRailClosed);
+      sidebar.addEventListener('focusin', onHoverRailOpened);
       sidebar.addEventListener('focusout', function () {
-        setTimeout(syncRailTitlesForSidebarState, 0);
+        setTimeout(onHoverRailClosed, 0);
       });
     }
     function closeSidebarHoverPin() {
@@ -1411,7 +1446,12 @@
         store.set('tma.sidebarCollapsed', collapsed ? '1' : '0');
         // The icon-only rail has no room for the tabs, so it always shows the
         // main menu — leaving the shortcuts tab active would empty the rail.
-        if (collapsed) showList('main');
+        if (collapsed) {
+          showList('main');
+          collapseAllSubnavs();
+        } else {
+          expandActiveSubnav();
+        }
         syncRailTitlesForSidebarState();
         syncSidebarToggleIcon();
       } else if (sidebar) {
@@ -2141,15 +2181,48 @@
       };
     });
 
+    function fetchSearchContacts() {
+      var api = window.TMANotifyAPI;
+      if (!api || typeof api.api !== 'function') return Promise.resolve([]);
+      var siteRoot = window.__TMA_SITE_ROOT || '';
+      return api.api(siteRoot + '/portal/clients').then(function (data) {
+        return ((data && data.clients) || []).slice(0, 8).map(function (c) {
+          var name = c.name || 'Client';
+          var photo = c.profile && c.profile.photo;
+          var hasPhoto = photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo);
+          return {
+            type: 'user',
+            label: name,
+            avatarUrl: hasPhoto ? photo : '',
+            clientId: c.id,
+            navId: 'clients',
+            href: '/clients?client=' + encodeURIComponent(c.id),
+            keywords: [name, c.company || '', (c.profile && c.profile.work && c.profile.work.company) || ''].filter(Boolean),
+          };
+        });
+      }).catch(function () { return []; });
+    }
+
+    function navigateSearchResult(item, navOpts) {
+      if (item.clientId || (item.href && String(item.href).indexOf('/clients') === 0)) {
+        var url = item.href || ('/clients?client=' + encodeURIComponent(item.clientId));
+        if (root._portalNavigate) root._portalNavigate(url);
+        else window.location.assign((window.__TMA_SITE_ROOT || '') + url);
+        return;
+      }
+      if (item.navId) {
+        activate(item.navId, navOpts || {});
+      } else if (item.href && String(item.href).charAt(0) === '#') {
+        activate(String(item.href).slice(1), navOpts || {});
+      }
+    }
+
     var searchPalette = window.TMAGlobalSearch && window.TMAGlobalSearch.mountDashboardSearch
       ? window.TMAGlobalSearch.mountDashboardSearch(root, {
           index: searchIndex,
+          fetchContacts: fetchSearchContacts,
           onNavigate: function (item) {
-            if (item.navId) {
-              activate(item.navId, { keepDrawer: true });
-            } else if (item.href && String(item.href).charAt(0) === '#') {
-              activate(String(item.href).slice(1), { keepDrawer: true });
-            }
+            navigateSearchResult(item, { keepDrawer: true });
           },
           onClose: function () {
             if (sidebar && sidebar.classList.contains('tma-dash__sidebar--mobile-search')) {
@@ -2159,7 +2232,12 @@
         })
       : null;
 
-    wireMobileSidebarSearch(searchIndex);
+    wireMobileSidebarSearch(searchIndex, {
+      fetchContacts: fetchSearchContacts,
+      onNavigate: function (item) {
+        navigateSearchResult(item, {});
+      },
+    });
 
     function openSearch() {
       if (root.classList.contains('tma-dash--email')) {

@@ -3233,7 +3233,7 @@
   background: var(--color-hover);
 }
 
-/* Command / search palette */
+/* Command / search palette — light frost so the dashboard stays readable */
 .tma-dash__cmd {
   position: fixed;
   inset: 0;
@@ -3242,9 +3242,9 @@
   justify-content: center;
   align-items: flex-start;
   padding-top: 12vh;
-  background: rgba(0, 0, 0, 0.32);
-  -webkit-backdrop-filter: var(--blur-16);
-  backdrop-filter: var(--blur-16);
+  background: rgba(0, 0, 0, 0.1);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 .tma-dash__cmd[hidden] { display: none; }
 
@@ -3321,9 +3321,18 @@
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-skeleton { display: none; }
 
   /* Expanded submenus are text-only (no rail icons). Hide them in the
-     collapsed rail so truncated labels like "All F" / "Pers" never leak. */
+     collapsed rail so truncated labels like "All F" / "Pers" never leak —
+     and so an open Folders/Projects group can't paint as a floating white
+     panel while the hover rail is closed or mid-width animation. */
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__subnav,
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__subnav { display: none; }
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__subnav {
+    display: none !important;
+  }
+
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__sidebar {
+    overflow: hidden !important;
+  }
 
   /* Desktop profile: one horizontal row — avatar | name/email | logout.
      Avatar sized to fit the 72px rail beside --dash-nav-icon-inset (same
