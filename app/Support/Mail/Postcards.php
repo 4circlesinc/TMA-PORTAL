@@ -211,6 +211,20 @@ class Postcards
         ];
     }
 
+    // --------------------------------------------------------------------- files
+
+    public static function fileShared(string $sharer, string $itemName, bool $isFolder, string $url, ?string $note = null): Postcard
+    {
+        return new Postcard($sharer.' shared '.($isFolder ? 'a folder' : 'a file').' with you', [
+            'preheader' => 'A new '.($isFolder ? 'folder' : 'document').' is waiting for you in the portal.',
+            'title' => $sharer.' shared '.($isFolder ? 'a folder' : 'a file').' with you',
+            'lead' => 'It\'s ready for you in your space.',
+            'files' => [[$itemName, $isFolder ? 'Folder' : 'File']],
+            'quote' => $note ?: null,
+            'button' => ['label' => 'View in the portal', 'url' => $url],
+        ]);
+    }
+
     // ------------------------------------------------------------------ calendar
 
     /** @param array<string,mixed> $p the EventNotifier payload. */

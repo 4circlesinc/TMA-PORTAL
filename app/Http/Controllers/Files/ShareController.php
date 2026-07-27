@@ -10,11 +10,13 @@ use App\Support\Activity\ActivityLogger;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Sharing;
+use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class ShareController extends BaseFilesController
@@ -154,6 +156,9 @@ class ShareController extends BaseFilesController
                 'action_url' => '/portal/files',
                 'dedupe_key' => 'share:'.$type.':'.$item->id.':'.$target->id,
             ]);
+            Mail::to($target->email)->queue(
+                Postcards::fileShared($user->name, $item->name, $type === 'folder', url('/portal/files'))
+            );
         }
     }
 
