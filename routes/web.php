@@ -10,6 +10,7 @@ use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\ClientAssignmentController;
+use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\CompaniesController;
 use App\Http\Controllers\ConnectorsController;
@@ -258,6 +259,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::patch('/{uid}', [ClientsController::class, 'update'])->name('update');
         Route::delete('/{uid}', [ClientsController::class, 'destroy'])->name('destroy');
         Route::post('/{uid}/duplicate', [ClientsController::class, 'duplicate'])->name('duplicate');
+        // Invite a client (with no login) to create a portal account.
+        Route::post('/{uid}/invite', [ClientInviteController::class, 'send'])->name('invite');
     });
 
     Route::prefix('portal/companies')->name('companies.')->group(function () {
@@ -596,6 +599,15 @@ Route::post('/s/{token}/unlock', [PublicShareController::class, 'unlock'])->name
 Route::get('/s/{token}/preview', [PublicShareController::class, 'preview'])->name('share.preview');
 Route::get('/s/{token}/download', [PublicShareController::class, 'download'])->name('share.download');
 Route::get('/s/{token}/file/{fileUuid}', [PublicShareController::class, 'file'])->name('share.file');
+
+/*
+ * Client-connect: the public create-account flow from an emailed invite. No
+ * login (that's the point); the token in the link is the only key.
+ */
+Route::get('/client-invite/{token}', [ClientInviteController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]+')->name('client-invite.show');
+Route::post('/client-invite/{token}', [ClientInviteController::class, 'store'])
+    ->where('token', '[A-Za-z0-9]+')->name('client-invite.store');
 
 /*
  * Email postcard gallery. A staff-only documentation site that renders every

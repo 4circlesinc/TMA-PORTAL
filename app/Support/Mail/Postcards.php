@@ -211,6 +211,35 @@ class Postcards
         ];
     }
 
+    // ------------------------------------------------------------- client invite
+
+    public static function clientInvite(?string $name, string $url, ?string $inviter = null): Postcard
+    {
+        return new Postcard('Connect to your files with '.self::SITE, [
+            'preheader' => 'Create your account to see the files we\'re working on together.',
+            'eyebrow' => 'You\'re invited',
+            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+            'title' => 'Connect to your files',
+            'lead' => self::SITE.' has set up a secure space for you.',
+            'bodyHtml' => '<p>Create your account to see the files we\'re working on together, message us directly, and follow along as things progress — all in one place.</p>'
+                .'<p>Creating your account links it to your existing records with us automatically.</p>'
+                .($inviter ? '<p>This invitation was set up for you by '.e($inviter).'.</p>' : ''),
+            'button' => ['label' => 'Create your account', 'url' => $url],
+        ]);
+    }
+
+    public static function clientInviteReminder(?string $name, string $url): Postcard
+    {
+        return new Postcard('Reminder: finish connecting to your files', [
+            'preheader' => 'Your invitation is still waiting — it takes about a minute.',
+            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+            'title' => 'Your invitation is still waiting',
+            'lead' => 'Setting up your account takes about a minute.',
+            'bodyHtml' => '<p>A little while ago we invited you to connect to your files with '.self::SITE.'. Your secure space is ready whenever you are.</p>',
+            'button' => ['label' => 'Finish setting up', 'url' => $url],
+        ]);
+    }
+
     // --------------------------------------------------------------------- files
 
     public static function fileShared(string $sharer, string $itemName, bool $isFolder, string $url, ?string $note = null): Postcard
