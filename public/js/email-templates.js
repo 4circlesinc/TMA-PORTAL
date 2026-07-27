@@ -12,7 +12,6 @@
   var SITE_NAME = 'TM ANTOINE Advisory';
   var AUTH_LINK = 'https://portal.tmantoine.com/';
   var SUPPORT_EMAIL = 'support@tmantoine.com';
-  var MOBILE_ADDRESS = '+852 19850622, One Apple Park Way, Cupertino, CA 95014';
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -35,9 +34,8 @@
     return (
       '<div class="tma-dash__email-template-auth-contact">' +
       '<div class="tma-dash__email-template-auth-contact-col">' +
-      '<p>+852 19850622</p><p>support@tmantoine.com</p><p>portal.tmantoine.com</p></div>' +
-      '<div class="tma-dash__email-template-auth-contact-col">' +
-      '<p>One Apple Park Way</p><p>Cupertino, CA 95014</p></div></div>'
+      '<p><a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a></p>' +
+      '<p><a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">portal.tmantoine.com</a></p></div></div>'
     );
   }
 
@@ -110,7 +108,9 @@
       '<div class="tma-dash__email-template-mobile-foot-brand">' +
       '<img src="' + BRAND + 'tma-logo-mark.png" alt="" width="20" height="20">' +
       '<span>' + esc(SITE_NAME) + '</span></div>' +
-      '<p class="tma-dash__email-template-mobile-foot-address">' + esc(MOBILE_ADDRESS) + '</p>' +
+      '<p class="tma-dash__email-template-mobile-foot-address">' +
+      '<a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a>' +
+      '  ·  portal.tmantoine.com</p>' +
       '<p class="tma-dash__email-template-mobile-foot-note">You have received this email from ' + esc(SITE_NAME) + '. Thank you.</p>' +
       '</footer>'
     );
@@ -346,9 +346,67 @@
       '<p class="tma-dash__email-template-invoice-grand-total-value">$340.94</p></div></div>' +
       '<div class="tma-dash__email-template-invoice-foot">' + renderBrandFooter() +
       '<div class="tma-dash__email-template-invoice-contact">' +
-      '<div class="tma-dash__email-template-invoice-contact-col"><p>+852 19850622</p><p>support@tmantoine.com</p><p>advisory.tmantoine.com</p></div>' +
-      '<div class="tma-dash__email-template-invoice-contact-col"><p>One Apple Park Way</p><p>Cupertino, CA 95014</p></div></div></div></div></div>'
+      '<div class="tma-dash__email-template-invoice-contact-col"><p>support@tmantoine.com</p><p>portal.tmantoine.com</p></div></div></div></div></div>'
     );
+  }
+
+  // ---- Reusable builders for the additional postcards ---------------------
+  // Every new email is composed only from the existing auth-card components
+  // (mark, heading, body copy, button, help) so it matches the approved design.
+
+  function renderAuthBody(html) {
+    return '<div class="tma-dash__email-template-auth-body-copy">' + html + '</div>';
+  }
+
+  function renderAuthActions(inner) {
+    return '<div class="tma-dash__email-template-auth-actions">' + inner + '</div>';
+  }
+
+  // A small "detail" line list (When / Device / Location…) rendered as body copy.
+  function renderDetailLines(rows) {
+    return rows.map(function (r) {
+      return '<p><strong>' + esc(r[0]) + ':</strong> ' + esc(r[1]) + '</p>';
+    }).join('');
+  }
+
+  // A file line: bold name + muted meta, as body copy.
+  function renderFileLines(files) {
+    return files.map(function (f) {
+      return '<p><strong>' + esc(f[0]) + '</strong><br>' + esc(f[1]) + '</p>';
+    }).join('');
+  }
+
+  // A quoted message (what the portal message actually said).
+  function renderQuote(text) {
+    return '<p><em>“' + esc(text) + '”</em></p>';
+  }
+
+  // spec: { title, lead, body(html), button(label) }
+  function buildStandardMain(spec) {
+    return (
+      renderAuthMark() +
+      renderAuthHeading(spec.title, spec.lead) +
+      (spec.body ? renderAuthBody(spec.body) : '') +
+      (spec.button ? renderAuthActions(renderAuthButton(spec.button)) : '') +
+      (spec.help === false ? '' : renderAuthHelp())
+    );
+  }
+
+  function makeStandardTemplate(cfg) {
+    var spec = cfg.spec;
+    return {
+      id: cfg.id,
+      name: cfg.name,
+      category: cfg.category,
+      subject: cfg.subject,
+      preview: cfg.preview,
+      thumb: 'auth',
+      nodeId: cfg.id,
+      render: function () { return renderAuthShell(cfg.id, buildStandardMain(spec)); },
+      renderMobile: function () {
+        return renderMobileShell(cfg.id, renderMobileMain(buildStandardMain(spec)), { title: cfg.name });
+      },
+    };
   }
 
   var TEMPLATES = [
@@ -435,6 +493,130 @@
       render: renderInvoiceTemplate,
     },
   ];
+
+  // Additional postcards, built from the same components as the auth cards.
+  [
+    makeStandardTemplate({
+      id: 'auth-new-login', name: 'New sign-in alert', category: 'Authentication',
+      subject: 'New sign-in to your account', preview: 'A new device just signed in to your account.',
+      spec: {
+        title: 'New sign-in to your account',
+        lead: 'We noticed a sign-in to your account from a new device.',
+        body: renderDetailLines([
+          ['When', '27 Jul 2026, 2:14 PM'],
+          ['Device', 'Safari on iPhone'],
+          ['Location', 'Kingston, Jamaica (approx.)'],
+        ]) + '<p>If this was you, no action is needed. If you don’t recognise it, secure your account now.</p>',
+        button: 'Review activity',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'auth-password-changed', name: 'Password changed', category: 'Authentication',
+      subject: 'Your password was changed', preview: 'Your account password was just changed.',
+      spec: {
+        title: 'Your password was changed',
+        lead: 'This confirms the password on your account was just changed.',
+        body: renderDetailLines([
+          ['When', '27 Jul 2026, 2:14 PM'],
+          ['Device', 'Chrome on macOS'],
+        ]) + '<p>Didn’t make this change? Reset your password right away and contact us at <a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a>.</p>',
+        button: 'Secure my account',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'client-invite', name: 'Connect to your files', category: 'Client',
+      subject: 'Connect to your files with ' + SITE_NAME, preview: 'Create your account to see the files we’re working on together.',
+      spec: {
+        title: 'Connect to your files',
+        lead: SITE_NAME + ' has set up a secure space for you.',
+        body: '<p>Hello,</p>' +
+          '<p>Create your account to see the files we’re working on together, message us directly, and follow along as things progress — all in one place.</p>' +
+          '<p>Creating your account links it to your existing records with us automatically.</p>',
+        button: 'Create your account',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'client-invite-reminder', name: 'Invite reminder', category: 'Client',
+      subject: 'Reminder: finish connecting to your files', preview: 'Your invitation is still waiting — it takes about a minute.',
+      spec: {
+        title: 'Your invitation is still waiting',
+        lead: 'Setting up your account takes about a minute.',
+        body: '<p>Hello,</p>' +
+          '<p>A little while ago we invited you to connect to your files with ' + esc(SITE_NAME) + '. Your secure space is ready whenever you are.</p>',
+        button: 'Finish setting up',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'file-shared', name: 'A file was shared', category: 'Files',
+      subject: 'A file has been shared with you', preview: 'A new document is waiting for you in the portal.',
+      spec: {
+        title: 'A file has been shared with you',
+        lead: 'Tanya shared a document to your space.',
+        body: renderFileLines([['2025-Financial-Statement.pdf', 'PDF · 2.4 MB']]) +
+          '<p>Have a look and let us know if anything needs adjusting.</p>',
+        button: 'View the file',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'file-chain', name: 'File chain (multiple)', category: 'Files',
+      subject: '4 files have been shared with you', preview: 'Four documents were added to your space.',
+      spec: {
+        title: '4 files have been shared with you',
+        lead: 'These documents were added to your 2025 Year-End folder.',
+        body: renderFileLines([
+          ['2025-Financial-Statement.pdf', 'PDF · 2.4 MB'],
+          ['Balance-Sheet-Q4.xlsx', 'Spreadsheet · 88 KB'],
+          ['Tax-Summary-2025.pdf', 'PDF · 512 KB'],
+          ['Engagement-Letter-Signed.pdf', 'PDF · 240 KB'],
+        ]),
+        button: 'Open the folder',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'file-updated', name: 'File updated', category: 'Files',
+      subject: 'A file you’re following was updated', preview: 'A new version of a document you follow is available.',
+      spec: {
+        title: 'A file you’re following was updated',
+        lead: 'A new version is now available.',
+        body: renderFileLines([['2025-Financial-Statement.pdf', 'Version 3 · updated by Tanya']]) +
+          '<p>Previous versions are still kept, so nothing is lost.</p>',
+        button: 'View the latest version',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'message-reminder-1', name: 'Unread message (1 hour)', category: 'Reminders',
+      subject: 'You have a new message from Tanya', preview: 'Tanya sent you a message an hour ago.',
+      spec: {
+        title: 'You have a new message',
+        lead: 'Tanya sent you a message about an hour ago and it’s still unread.',
+        body: renderQuote('Hi Marcus — just checking in on the statement whenever you get a moment.'),
+        button: 'Read the message',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'message-reminder-2', name: 'Still waiting (~20 hours)', category: 'Reminders',
+      subject: 'Still waiting to hear from you', preview: 'Your message from Tanya is still unread.',
+      spec: {
+        title: 'Still waiting to hear from you',
+        lead: 'We reached out yesterday and haven’t heard back.',
+        body: '<p>Your message from Tanya is still waiting in the portal.</p>' +
+          renderQuote('Hi Marcus — just checking in on the statement whenever you get a moment.'),
+        button: 'Read and reply',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'message-reminder-3', name: 'Final reminder (24 hours)', category: 'Reminders',
+      subject: 'A message from us is still waiting for you', preview: 'One last reminder about your unread message.',
+      spec: {
+        title: 'A message from us is still waiting for you',
+        lead: 'It’s been a full day and we haven’t heard back.',
+        body: '<p>We don’t want anything important to slip through, so here’s one last reminder.</p>' +
+          renderQuote('Hi Marcus — just checking in on the statement whenever you get a moment.') +
+          '<p>If now isn’t a good time, the message will be waiting whenever you’re ready.</p>',
+        button: 'Open the conversation',
+      },
+    }),
+  ].forEach(function (t) { TEMPLATES.push(t); });
 
   function findTemplate(id) {
     for (var i = 0; i < TEMPLATES.length; i++) {

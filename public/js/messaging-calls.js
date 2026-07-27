@@ -450,8 +450,8 @@
       })
       .catch(function (err) {
         console.error('TMA call: accept failed —', err);
-        setStatus('Could not connect');
-        setTimeout(function () { endSession(true); }, 2000);
+        setStatus('Could not connect: ' + ((err && (err.name || err.message)) || 'unknown'));
+        setTimeout(function () { endSession(true); }, 6000);
       });
   }
 
@@ -484,10 +484,10 @@
         });
       })
       .catch(function (err) {
-        session.answered = false;
+        if (session) session.answered = false;
         console.error('TMA call: failed to answer —', err);
-        setStatus('Could not connect');
-        setTimeout(function () { endSession(true); }, 2000);
+        setStatus('Could not connect: ' + ((err && (err.name || err.message)) || 'unknown'));
+        setTimeout(function () { endSession(true); }, 6000);
       });
   }
 

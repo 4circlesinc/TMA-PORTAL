@@ -4,86 +4,133 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Email postcards · TM ANTOINE Advisory</title>
+
+  {{-- Load the same tokens + component styles the portal uses, so the
+       templates render pixel-identically to /email/templates. --}}
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url('/css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url('/css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url('/css/components.css') }}">
+  <link rel="stylesheet" href="{{ url('/css/dashboard.css') }}?v=83">
+
   <style>
-    :root {
-      --bg: #f6f7f9; --panel: #ffffff; --line: #e6e8ec; --ink: #0f1115;
-      --muted: #6b7280; --accent: #136da0; --accent-soft: #eaf3f8;
-    }
+    :root { --gal-line: #e6e8ec; --gal-ink: #0f1115; --gal-muted: #6b7280; --gal-accent: #136da0; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
-    .wrap { display: grid; grid-template-columns: 288px 1fr; min-height: 100vh; }
+    body { margin: 0; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--gal-ink); background: #f6f7f9; }
+    .gal { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; }
 
-    .side { border-right: 1px solid var(--line); background: var(--panel); padding: 20px 0; overflow-y: auto; height: 100vh; position: sticky; top: 0; }
-    .side__head { padding: 0 20px 16px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
-    .side__title { font-size: 15px; font-weight: 700; margin: 0; }
-    .side__sub { font-size: 12px; color: var(--muted); margin: 4px 0 0; line-height: 17px; }
-    .grp { padding: 12px 0 4px; }
-    .grp__label { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; color: var(--muted); padding: 0 20px 6px; }
-    .item { display: flex; align-items: center; gap: 8px; padding: 9px 20px; font-size: 13.5px; color: #374151; text-decoration: none; border-left: 3px solid transparent; }
-    .item:hover { background: #f9fafb; }
-    .item.is-active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--accent); font-weight: 600; }
-    .item__dot { width: 6px; height: 6px; border-radius: 50%; background: #cbd2d9; flex: none; }
-    .item.is-active .item__dot { background: var(--accent); }
+    .gal__side { border-right: 1px solid var(--gal-line); background: #fff; height: 100vh; position: sticky; top: 0; overflow-y: auto; padding: 20px 0; }
+    .gal__head { padding: 0 20px 16px; border-bottom: 1px solid var(--gal-line); margin-bottom: 8px; }
+    .gal__title { font-size: 15px; font-weight: 700; margin: 0; }
+    .gal__sub { font-size: 12px; color: var(--gal-muted); margin: 4px 0 0; line-height: 17px; }
+    .gal__grp-label { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; color: var(--gal-muted); padding: 14px 20px 6px; }
+    .gal__link { display: block; padding: 8px 20px; font-size: 13.5px; color: #374151; text-decoration: none; border-left: 3px solid transparent; cursor: pointer; }
+    .gal__link:hover { background: #f9fafb; }
+    .gal__link.is-active { background: #eaf3f8; border-left-color: var(--gal-accent); color: var(--gal-accent); font-weight: 600; }
 
-    .main { padding: 24px 28px; }
-    .bar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
-    .bar__label { font-size: 18px; font-weight: 700; margin: 0; }
-    .bar__slug { font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .subject { font-size: 13px; color: var(--muted); margin: 2px 0 18px; }
-    .subject b { color: #374151; font-weight: 600; }
+    .gal__main { padding: 28px 32px 120px; }
+    .gal__item { margin: 0 0 44px; scroll-margin-top: 20px; }
+    .gal__bar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 2px; }
+    .gal__name { font-size: 18px; font-weight: 700; margin: 0; }
+    .gal__badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--gal-accent); background: #eaf3f8; padding: 3px 8px; border-radius: 999px; }
+    .gal__subject { font-size: 13px; color: var(--gal-muted); margin: 2px 0 12px; }
+    .gal__subject b { color: #374151; font-weight: 600; }
+    .gal__viewport { display: inline-flex; gap: 4px; margin: 0 0 12px; }
+    .gal__vp-btn { font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border: 1px solid var(--gal-line); background: #fff; color: var(--gal-muted); border-radius: 8px; cursor: pointer; }
+    .gal__vp-btn.is-active { background: var(--gal-accent); border-color: var(--gal-accent); color: #fff; }
+    .gal__stage { border: 1px solid var(--gal-line); border-radius: 14px; overflow: hidden; background: #fff; }
 
-    .stage { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-    .stage__chrome { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
-    .stage__dot { width: 10px; height: 10px; border-radius: 50%; background: #e0e3e8; }
-    .stage__url { margin-left: 8px; font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .stage__actions { margin-left: auto; }
-    .stage__open { font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 600; }
-    iframe { width: 100%; height: calc(100vh - 200px); min-height: 560px; border: 0; display: block; background: #f6f7f9; }
-
-    @media (max-width: 820px) { .wrap { grid-template-columns: 1fr; } .side { position: static; height: auto; } }
+    @media (max-width: 860px) { .gal { grid-template-columns: 1fr; } .gal__side { position: static; height: auto; } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <aside class="side">
-      <div class="side__head">
-        <p class="side__title">Email postcards</p>
-        <p class="side__sub">Every transactional email the portal sends, rendered from sample data. Review each and approve — nothing here is live.</p>
+  <div class="gal">
+    <aside class="gal__side">
+      <div class="gal__head">
+        <p class="gal__title">Email postcards</p>
+        <p class="gal__sub">Every template from <b>/email/templates</b>, rendered for review. These are the real designs — approve them and we wire them to real sends.</p>
       </div>
-      @foreach ($groups as $group)
-        <div class="grp">
-          <div class="grp__label">{!! $group['label'] !!}</div>
-          @foreach ($group['items'] as $slug => $entry)
-            <a class="item {{ $slug === $current ? 'is-active' : '' }}" href="{{ url('/design/mail/'.$slug) }}">
-              <span class="item__dot"></span>{{ $entry['label'] }}
-            </a>
-          @endforeach
-        </div>
-      @endforeach
+      <nav id="gal-nav"></nav>
     </aside>
-
-    <main class="main">
-      @if ($currentEntry)
-        <div class="bar">
-          <h1 class="bar__label">{{ $currentEntry['label'] }}</h1>
-          <span class="bar__slug">{{ $current }}</span>
-        </div>
-        <p class="subject">Subject line: <b>{{ $currentEntry['subject'] }}</b></p>
-
-        <div class="stage">
-          <div class="stage__chrome">
-            <span class="stage__dot"></span><span class="stage__dot"></span><span class="stage__dot"></span>
-            <span class="stage__url">inbox — {{ $currentEntry['subject'] }}</span>
-            <span class="stage__actions">
-              <a class="stage__open" href="{{ url('/design/mail/'.$current.'/raw') }}" target="_blank" rel="noopener">Open full ↗</a>
-            </span>
-          </div>
-          <iframe src="{{ url('/design/mail/'.$current.'/raw') }}" title="{{ $currentEntry['label'] }} preview"></iframe>
-        </div>
-      @else
-        <p>No postcard selected.</p>
-      @endif
-    </main>
+    <main class="gal__main" id="gal-main"></main>
   </div>
+
+  <script src="{{ url('/js/email-templates.js') }}"></script>
+  <script>
+    (function () {
+      var T = window.TMAEmailTemplates;
+      var nav = document.getElementById('gal-nav');
+      var main = document.getElementById('gal-main');
+      if (!T) { main.innerHTML = '<p>Templates failed to load.</p>'; return; }
+
+      var list = T.list();
+      var groups = [];
+      var byCat = {};
+      list.forEach(function (t) {
+        if (!byCat[t.category]) { byCat[t.category] = []; groups.push(t.category); }
+        byCat[t.category].push(t);
+      });
+
+      groups.forEach(function (cat) {
+        var lbl = document.createElement('div');
+        lbl.className = 'gal__grp-label';
+        lbl.textContent = cat;
+        nav.appendChild(lbl);
+
+        byCat[cat].forEach(function (t) {
+          var a = document.createElement('a');
+          a.className = 'gal__link';
+          a.textContent = t.name;
+          a.href = '#tpl-' + t.id;
+          nav.appendChild(a);
+
+          var item = document.createElement('section');
+          item.className = 'gal__item';
+          item.id = 'tpl-' + t.id;
+
+          var bar = '<div class="gal__bar"><h2 class="gal__name">' + t.name +
+            '</h2><span class="gal__badge">' + t.category + '</span></div>' +
+            '<p class="gal__subject">Subject: <b>' + t.subject + '</b></p>';
+
+          var vp = '';
+          if (t.hasMobile) {
+            vp = '<div class="gal__viewport" role="group" aria-label="Viewport">' +
+              '<button type="button" class="gal__vp-btn is-active" data-vp="desktop">Desktop</button>' +
+              '<button type="button" class="gal__vp-btn" data-vp="mobile">Mobile</button></div>';
+          }
+
+          item.innerHTML = bar + vp +
+            '<div class="gal__stage" data-stage></div>';
+          main.appendChild(item);
+
+          var stage = item.querySelector('[data-stage]');
+          function paint(mode) { stage.innerHTML = T.renderBody(t.id, { viewport: mode }); }
+          paint('desktop');
+
+          if (t.hasMobile) {
+            item.querySelectorAll('[data-vp]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                item.querySelectorAll('[data-vp]').forEach(function (b) { b.classList.remove('is-active'); });
+                btn.classList.add('is-active');
+                paint(btn.getAttribute('data-vp'));
+              });
+            });
+          }
+        });
+      });
+
+      // Highlight the sidebar link for whatever section is in view.
+      var links = Array.prototype.slice.call(nav.querySelectorAll('.gal__link'));
+      var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          links.forEach(function (l) {
+            l.classList.toggle('is-active', l.getAttribute('href') === '#' + en.target.id);
+          });
+        });
+      }, { rootMargin: '-10% 0px -80% 0px' });
+      main.querySelectorAll('.gal__item').forEach(function (s) { obs.observe(s); });
+    })();
+  </script>
 </body>
 </html>

@@ -600,15 +600,9 @@ Route::get('/s/{token}/file/{fileUuid}', [PublicShareController::class, 'file'])
  * them are wired to real events. Available on the live portal (unlike the
  * local-only /design previews below) so it can actually be signed off on.
  */
-Route::middleware(['auth', 'verified', 'account.approved'])
-    ->prefix('design/mail')->name('design.mail.')
-    ->group(function () {
-        Route::get('/', [MailPreviewController::class, 'index'])->name('index');
-        Route::get('/{slug}/raw', [MailPreviewController::class, 'show'])
-            ->where('slug', '[a-z0-9\-]+')->name('raw');
-        Route::get('/{slug}', [MailPreviewController::class, 'index'])
-            ->where('slug', '[a-z0-9\-]+')->name('show');
-    });
+Route::get('/design/mail', [MailPreviewController::class, 'index'])
+    ->middleware(['auth', 'verified', 'account.approved'])
+    ->name('design.mail.index');
 
 /*
  * Friendly aliases from the design-phase URLs.
