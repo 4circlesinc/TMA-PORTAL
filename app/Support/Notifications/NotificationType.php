@@ -43,6 +43,11 @@ final class NotificationType
         'message.group_removed' => ['module' => 'messages', 'level' => Notification::LEVEL_INFO, 'icon' => 'UsersThree',  'priority' => 'normal', 'pref' => 'groups',   'action_label' => null],
         'message.group_admin'   => ['module' => 'messages', 'level' => Notification::LEVEL_INFO, 'icon' => 'UserGear',    'priority' => 'normal', 'pref' => 'groups',   'action_label' => 'View group'],
 
+        // ── Calls ──────────────────────────────────────────────
+        // Calls live in the messages module: they happen inside a conversation,
+        // and the same preference that silences a thread silences its ringing.
+        'call.missed' => ['module' => 'messages', 'level' => Notification::LEVEL_WARNING, 'icon' => 'PhoneX', 'priority' => 'high', 'pref' => 'messages', 'action_label' => 'Call back'],
+
         // ── Calendar ───────────────────────────────────────────
         'calendar.invitation'  => ['module' => 'calendar', 'level' => Notification::LEVEL_ACTION,   'icon' => 'CalendarPlus',  'priority' => 'high',   'pref' => 'calendar', 'action_label' => 'Respond'],
         'calendar.updated'     => ['module' => 'calendar', 'level' => Notification::LEVEL_INFO,     'icon' => 'CalendarBlank', 'priority' => 'normal', 'pref' => 'calendar', 'action_label' => 'View event'],

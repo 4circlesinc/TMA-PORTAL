@@ -219,6 +219,36 @@
         .catch(function () { return refreshCount(); });
     }
 
+    /*
+     * One action across a selection: 'read', 'unread' or 'delete'.
+     *
+     * Applied locally first so the list responds to the click, then reconciled
+     * with the server's authoritative unread total — a bulk change touches too
+     * many rows for a local count to be worth trusting.
+     */
+    function bulk(ids, action) {
+      var wanted = {};
+      (ids || []).forEach(function (id) { wanted[id] = true; });
+      if (!Object.keys(wanted).length) return Promise.resolve(state);
+
+      if (action === 'delete') {
+        state.items = state.items.filter(function (it) { return !wanted[it.id]; });
+      } else {
+        state.items.forEach(function (it) {
+          if (wanted[it.id]) it.read = action === 'read';
+        });
+      }
+      state.unread = state.items.filter(function (it) { return !it.read; }).length;
+      changed();
+
+      return api(NOTIF_BASE + '/bulk', { method: 'POST', json: { ids: Object.keys(wanted), action: action } })
+        .then(function (data) {
+          if (data && typeof data.unread === 'number') { state.unread = data.unread; changed(); }
+          return state;
+        })
+        .catch(function () { return refreshCount(); });
+    }
+
     function remove(uid) {
       var i = indexOf(uid);
       if (i !== -1) { var wasUnread = !state.items[i].read; state.items.splice(i, 1); if (wasUnread) state.unread = Math.max(0, state.unread - 1); changed(); }
@@ -277,6 +307,7 @@
       markAllRead: markAllRead,
       complete: complete,
       remove: remove,
+      bulk: bulk,
       prepend: prepend,
       applyRealtime: applyRealtime,
       getUnreadCount: function () { return state.unread; },

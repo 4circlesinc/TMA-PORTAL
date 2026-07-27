@@ -3,7 +3,12 @@
  *
  * Uses the shared TMANotifications store so counts stay consistent with the
  * right sidebar and header bell. Load-more pagination; mark-all-read; unread
- * filter. Rows open their action URL in place via the shell navigator.
+ * filter; bulk selection. Rows open their action URL in place via the shell
+ * navigator.
+ *
+ * The toolbar deliberately mirrors the Users table — same
+ * .tma-dash__toolbar / .tma-dash__tool-btn / .tma-dash__check parts, same
+ * "N Selected" bulk group that appears only once something is picked.
  *
  * Global: window.TMAOverviewNotifications
  */
@@ -14,6 +19,7 @@
   function Store() { return window.TMANotifications; }
   var ROOT = window.__TMA_SITE_ROOT || '';
   var TMA = 'images/icons/tma/';
+  var ICON = 'images/icons/phosphor/';
 
   function esc(s) {
     return R() ? R().esc(s) : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -30,7 +36,25 @@
       search: '',
       searchFocused: false,
       searchTimer: null,
+      // id -> true. Kept across re-renders, pruned against the loaded list so a
+      // filter change can never act on a row that is no longer on screen.
+      selected: {},
     };
+
+    function items() { return Store().state.items || []; }
+
+    function pruneSelection() {
+      var live = {};
+      items().forEach(function (it) { live[it.id] = true; });
+      Object.keys(state.selected).forEach(function (id) {
+        if (!live[id]) delete state.selected[id];
+      });
+    }
+
+    function selectedIds() {
+      pruneSelection();
+      return Object.keys(state.selected);
+    }
 
     function navigate(url) {
       if (!url) return;
@@ -39,19 +63,32 @@
       else window.location.assign(ROOT + url);
     }
 
-    function countLabel(unread) {
-      return unread ? unread + ' unread' : 'All caught up';
+    /*
+     * The one count on this screen, and the only place it is stated: how many
+     * of the caller's notifications are still unread, straight from the store
+     * (which is the same number the bell and the sidebar render). It is not
+     * repeated on the filter button — a badge there read as "how many rows this
+     * filter would show", which it never was.
+     */
+    function countLabel() {
+      var unread = Store().state.unread || 0;
+      if (!unread) return 'All caught up';
+      return unread + ' unread';
     }
 
     function head() {
-      var s = Store().state;
-      var unread = s.unread || 0;
+      var unread = Store().state.unread || 0;
       return '<div class="tma-dash__notifpage-head">' +
         '<h2 class="tma-dash__notifpage-title">Notifications</h2>' +
-        '<span class="tma-dash__notifpage-count' + (unread ? '' : ' is-empty') + '" data-notifpage-count>' +
-          esc(countLabel(unread)) +
-        '</span>' +
+        '<span class="tma-dash__notifpage-count' + (unread ? '' : ' is-empty') + '" data-notifpage-count ' +
+          'aria-live="polite">' + esc(countLabel()) + '</span>' +
       '</div>';
+    }
+
+    function bulkBtn(action, icon, label) {
+      return '<button type="button" class="tma-dash__tool-btn" data-notifpage-bulk="' + action + '" ' +
+        'aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+        '<img src="' + icon + '" alt=""></button>';
     }
 
     function toolbar() {
@@ -59,17 +96,35 @@
       var cls = ['tma-dash__toolbar-search'];
       if (state.searchFocused || state.search) cls.push('tma-dash__toolbar-search--focused');
       if (state.search) cls.push('tma-dash__toolbar-search--has-value');
-      return '<div class="tma-dash__toolbar">' +
+
+      var picked = selectedIds().length;
+      var total = items().length;
+      var allPicked = total > 0 && picked === total;
+      var selectionLabel = picked === 1 ? '1 Selected' : picked + ' Selected';
+
+      return '<div class="tma-dash__toolbar' + (picked ? ' tma-dash__toolbar--selected' : '') + '">' +
         '<div class="tma-dash__toolbar-actions">' +
+          '<label class="tma-dash__notifpage-selectall">' +
+            '<input type="checkbox" class="tma-dash__check" data-notifpage-selectall' +
+              (allPicked ? ' checked' : '') + (picked && !allPicked ? ' data-indeterminate' : '') +
+              (total ? '' : ' disabled') + ' aria-label="Select all notifications">' +
+          '</label>' +
           '<button type="button" class="tma-dash__tool-btn' + (state.unreadOnly ? ' is-active' : '') +
             '" data-notifpage-unread aria-pressed="' + (state.unreadOnly ? 'true' : 'false') + '" title="Unread only">' +
             '<img src="' + TMA + 'FunnelSimple-16.svg" alt="">' +
-            (s.unread ? '<span class="tma-dash__actlog-filter-count">' + esc(String(s.unread)) + '</span>' : '') +
           '</button>' +
           '<button type="button" class="tma-dash__tool-btn" data-notifpage-read-all' +
             (s.unread ? '' : ' disabled') + ' title="Mark all as read">' +
-            '<img src="images/icons/phosphor/Checks.svg" alt="">' +
+            '<img src="' + ICON + 'Checks.svg" alt="">' +
           '</button>' +
+          '<div class="tma-dash__toolbar-bulk" data-notifpage-bulkbar' + (picked ? '' : ' hidden') + '>' +
+            '<img class="tma-dash__toolbar-divider" src="' + TMA + 'Line.svg" alt="" aria-hidden="true">' +
+            '<span class="tma-dash__toolbar-selection" data-notifpage-selection aria-live="polite">' +
+              esc(selectionLabel) + '</span>' +
+            bulkBtn('read', ICON + 'EnvelopeSimpleOpen.svg', 'Mark selected as read') +
+            bulkBtn('unread', ICON + 'EnvelopeSimple.svg', 'Mark selected as unread') +
+            bulkBtn('delete', ICON + 'Trash.svg', 'Delete selected') +
+          '</div>' +
         '</div>' +
         '<div class="' + cls.join(' ') + '" role="search">' +
           '<img src="' + TMA + 'Search-16.svg" alt="">' +
@@ -107,8 +162,16 @@
             })
           : '<div class="tma-dash__actlog-empty">You are all caught up.</div>';
       }
+      // The checkbox is wrapped around the shared row rather than built into
+      // it: the bell popup and the right sidebar render the same component and
+      // have nothing to select.
       var rows = s.items.map(function (it) {
-        return R().notificationItem(it, 'popup');
+        var picked = !!state.selected[it.id];
+        return '<div class="tma-dash__notifpage-row' + (picked ? ' is-selected' : '') + '">' +
+          '<input type="checkbox" class="tma-dash__check" data-notifpage-check="' + esc(it.id) + '"' +
+            (picked ? ' checked' : '') + ' aria-label="Select notification">' +
+          R().notificationItem(it, 'popup') +
+        '</div>';
       }).join('');
       var more = s.hasMore
         ? '<button type="button" class="tma-dash__actlog-more" data-notifpage-more' +
@@ -123,33 +186,51 @@
         head() +
         toolbar() +
         '<div class="tma-dash__notifpage-body" data-notifpage-body>' + bodyInner() + '</div>';
+      syncSelectAll();
+    }
+
+    /* The "some but not all" state has no HTML attribute — it is a property. */
+    function syncSelectAll() {
+      var all = container.querySelector('[data-notifpage-selectall]');
+      if (!all) return;
+      var picked = selectedIds().length;
+      var total = items().length;
+      all.checked = total > 0 && picked === total;
+      all.indeterminate = picked > 0 && picked < total;
+    }
+
+    function syncCount() {
+      var countEl = container.querySelector('[data-notifpage-count]');
+      if (!countEl) return;
+      countEl.textContent = countLabel();
+      countEl.classList.toggle('is-empty', !(Store().state.unread || 0));
+    }
+
+    /* Toolbar bits that change without the list being rebuilt. */
+    function syncToolbar() {
+      syncCount();
+      var picked = selectedIds().length;
+      var bulkbar = container.querySelector('[data-notifpage-bulkbar]');
+      var label = container.querySelector('[data-notifpage-selection]');
+      var toolbarEl = container.querySelector('.tma-dash__toolbar');
+      if (bulkbar) bulkbar.hidden = picked === 0;
+      if (label) label.textContent = picked === 1 ? '1 Selected' : picked + ' Selected';
+      if (toolbarEl) toolbarEl.classList.toggle('tma-dash__toolbar--selected', picked > 0);
+
+      var unreadBtn = container.querySelector('[data-notifpage-unread]');
+      if (unreadBtn) {
+        unreadBtn.classList.toggle('is-active', state.unreadOnly);
+        unreadBtn.setAttribute('aria-pressed', state.unreadOnly ? 'true' : 'false');
+      }
+      var readAll = container.querySelector('[data-notifpage-read-all]');
+      if (readAll) readAll.disabled = !Store().state.unread;
+      syncSelectAll();
     }
 
     function renderBody() {
       var body = container.querySelector('[data-notifpage-body]');
       if (body) body.innerHTML = bodyInner();
-      var countEl = container.querySelector('[data-notifpage-count]');
-      if (countEl) {
-        var unreadNow = Store().state.unread || 0;
-        countEl.textContent = countLabel(unreadNow);
-        countEl.classList.toggle('is-empty', !unreadNow);
-      }
-      var unreadBtn = container.querySelector('[data-notifpage-unread]');
-      if (unreadBtn) {
-        unreadBtn.classList.toggle('is-active', state.unreadOnly);
-        unreadBtn.setAttribute('aria-pressed', state.unreadOnly ? 'true' : 'false');
-        var badge = unreadBtn.querySelector('.tma-dash__actlog-filter-count');
-        var unread = Store().state.unread;
-        if (unread && !badge) {
-          unreadBtn.insertAdjacentHTML('beforeend', '<span class="tma-dash__actlog-filter-count">' + esc(String(unread)) + '</span>');
-        } else if (unread && badge) {
-          badge.textContent = String(unread);
-        } else if (!unread && badge) {
-          badge.remove();
-        }
-      }
-      var readAll = container.querySelector('[data-notifpage-read-all]');
-      if (readAll) readAll.disabled = !Store().state.unread;
+      syncToolbar();
     }
 
     function reload() {
@@ -183,9 +264,52 @@
       state.searchTimer = setTimeout(reload, 220);
     });
 
+    container.addEventListener('change', function (e) {
+      var all = e.target.closest('[data-notifpage-selectall]');
+      if (all) {
+        state.selected = {};
+        if (all.checked) items().forEach(function (it) { state.selected[it.id] = true; });
+        container.querySelectorAll('[data-notifpage-check]').forEach(function (cb) {
+          cb.checked = all.checked;
+          var row = cb.closest('.tma-dash__notifpage-row');
+          if (row) row.classList.toggle('is-selected', all.checked);
+        });
+        syncToolbar();
+        return;
+      }
+
+      var check = e.target.closest('[data-notifpage-check]');
+      if (check) {
+        var id = check.getAttribute('data-notifpage-check');
+        if (check.checked) state.selected[id] = true;
+        else delete state.selected[id];
+        var rowEl = check.closest('.tma-dash__notifpage-row');
+        if (rowEl) rowEl.classList.toggle('is-selected', check.checked);
+        syncToolbar();
+      }
+    });
+
     container.addEventListener('click', function (e) {
+      // A click on a checkbox (or its row padding) must never also open the
+      // notification underneath it.
+      if (e.target.closest('[data-notifpage-check], [data-notifpage-selectall]')) {
+        e.stopPropagation();
+        return;
+      }
+
+      var bulk = e.target.closest('[data-notifpage-bulk]');
+      if (bulk) {
+        var ids = selectedIds();
+        if (!ids.length) return;
+        var action = bulk.getAttribute('data-notifpage-bulk');
+        state.selected = {};
+        Store().bulk(ids, action);
+        return;
+      }
+
       if (e.target.closest('[data-notifpage-unread]')) {
         state.unreadOnly = !state.unreadOnly;
+        state.selected = {};
         reload();
         return;
       }

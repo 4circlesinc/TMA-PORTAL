@@ -27523,40 +27523,107 @@ button.tma-dash__header-popup-item:focus-visible {
   color: #c0392b;
 }
 
-/* Call-log outcome icon: a real phone-family glyph, tinted by state and left
- * naked — no avatar circle. Masked so a single-colour SVG can carry the tint. */
-.tma-dash__call-icon {
-  display: inline-block;
+/* Call log. The row is a person row like any other — photo, name, subtitle —
+ * with the outcome carried by a small arrow in the subtitle and the call
+ * actions parked on the right. */
+.tma-dash__call-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.tma-dash__call-row .tma-dash__messages-person {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.tma-dash__call-row:hover .tma-dash__call-action,
+.tma-dash__call-row:focus-within .tma-dash__call-action {
+  opacity: 1;
+}
+.tma-dash__call-name-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+  min-width: 0;
+}
+.tma-dash__call-name-line .tma-dash__messages-person-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tma-dash__call-time {
   flex: none;
-  width: 22px;
-  height: 22px;
+  font-size: var(--text-size-11, 11px);
+  line-height: 14px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.tma-dash__call-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  padding-right: var(--space-8);
+}
+.tma-dash__call-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  /* Visible on touch (no hover) and on keyboard focus; softened until the row
+   * is pointed at, so a long log stays a list rather than a wall of buttons. */
+  opacity: 0.55;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+.tma-dash__call-action:hover {
+  background: var(--color-hover);
+  opacity: 1;
+}
+.tma-dash__call-action:focus-visible {
+  outline: 2px solid var(--color-primary, #03a5e9);
+  outline-offset: 2px;
+  opacity: 1;
+}
+@media (hover: none) {
+  .tma-dash__call-action { opacity: 1; }
+}
+
+/* Direction arrow in the subtitle: up-right for a call you placed, down-left
+ * for one you received, red when it never connected. Masked so one SVG can
+ * carry either tint. */
+.tma-dash__call-dir {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  vertical-align: -2px;
   background-color: currentColor;
+  color: #1e874b;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
   mask-position: center;
-  -webkit-mask-size: 22px 22px;
-  mask-size: 22px 22px;
+  -webkit-mask-size: 14px 14px;
+  mask-size: 14px 14px;
+  -webkit-mask-image: url(../images/icons/phosphor/ArrowDownLeft.svg);
+  mask-image: url(../images/icons/phosphor/ArrowDownLeft.svg);
 }
-.tma-dash__call-icon--in-answered {
-  color: #1e874b;
-  -webkit-mask-image: url(../images/icons/phosphor/PhoneIncoming.svg);
-  mask-image: url(../images/icons/phosphor/PhoneIncoming.svg);
+.tma-dash__call-dir--out,
+.tma-dash__call-dir--out-missed {
+  -webkit-mask-image: url(../images/icons/phosphor/ArrowUpRight.svg);
+  mask-image: url(../images/icons/phosphor/ArrowUpRight.svg);
 }
-.tma-dash__call-icon--out-answered {
-  color: #1e874b;
-  -webkit-mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
-  mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
-}
-.tma-dash__call-icon--missed {
+.tma-dash__call-dir--in-missed,
+.tma-dash__call-dir--out-missed {
   color: #c0392b;
-  -webkit-mask-image: url(../images/icons/phosphor/PhoneX.svg);
-  mask-image: url(../images/icons/phosphor/PhoneX.svg);
-}
-.tma-dash__call-icon--out-noanswer {
-  color: #c0392b;
-  -webkit-mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
-  mask-image: url(../images/icons/phosphor/PhoneOutgoing.svg);
 }
 
 /* New-message and settings panels: they cover the chat list rather than
@@ -29815,6 +29882,33 @@ span.tma-dash__messages-profile-avatar {
 }
 .tma-dash__notifpage-list .tma-dash__header-popup-item:hover {
   background: var(--color-hover);
+}
+
+/* Bulk selection: the checkbox sits outside the shared notification row, so
+ * the same component still renders un-selectable in the bell and sidebar. */
+.tma-dash__notifpage-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+.tma-dash__notifpage-row > .tma-dash__check {
+  flex: none;
+  margin-left: var(--space-4);
+}
+.tma-dash__notifpage-row > .tma-dash__header-popup-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.tma-dash__notifpage-row.is-selected > .tma-dash__header-popup-item {
+  border-color: var(--color-primary, #03a5e9);
+  background: var(--color-hover);
+}
+.tma-dash__notifpage-selectall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
 }
 
 /* ── Overview → Activity: the full server-backed log ── */

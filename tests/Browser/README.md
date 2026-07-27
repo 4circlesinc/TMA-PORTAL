@@ -808,3 +808,61 @@ just don't arrive until the next load (see `App\Support\Messaging\Broadcaster`).
 Address conversations **by name, not by list position**. Sending reorders the
 list, so `.first()` is not a stable handle on a conversation — an earlier
 version of the draft checks failed for exactly that reason.
+
+## Notifications: bulk actions, the call log, and messages in the bell
+
+- **`notifications-bulk-calls.mjs`** — three things that only exist together in
+  a browser: the Overview → Notifications toolbar (no count badge on the filter,
+  a live header count, select-all going indeterminate on a partial pick, and
+  each bulk action moving the count the right way), the Messages call log (a
+  person row per call with an arrow for the outcome and buttons that place a
+  call without opening the chat first), and the round trip of a message from
+  another account arriving as a notification whose link opens that conversation.
+
+  Two things about it are worth knowing before changing it:
+
+  - **The recipient has to be away from the thread when the message lands.**
+    Reading a conversation marks its notifications read (`MessageNotifier::
+    clearForConversation`), so a check run with the chat open measures nothing.
+    The script navigates to Overview first for exactly that reason.
+  - **The call-log check stubs `TMAMessagingCalls.start`.** WebRTC needs a peer
+    and a microphone; what is being tested is that the button places the right
+    call for the right person, which the stub records.
+
+  Its seed needs two users, one conversation between them, three call system
+  lines (answered, missed, outgoing-no-answer) and a few notifications:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$me = App\Models\User::where('email', 'e2e@example.com')->first();
+  \$tom = App\Models\User::firstOrCreate(['email' => 'tom@example.com'],
+    ['name' => 'Tom Ashley', 'password' => Hash::make('password12345')]);
+  \$tom->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(),
+    'onboarding_completed_at' => now(), 'status' => 'approved',
+    'account_type' => 'Administrator'])->save();
+  \$c = App\Models\Conversation::create(['type' => 'direct',
+    'created_by' => \$me->id, 'last_message_at' => now()]);
+  foreach ([\$me, \$tom] as \$u) {
+    \$c->participants()->create(['user_id' => \$u->id, 'role' => 'member', 'joined_at' => now()]);
+  }
+  \$c->messages()->create(['user_id' => \$tom->id, 'type' => 'text', 'body' => 'Morning — did the filing go out?']);
+  foreach ([['call_ended','Voice call','audio',true,\$tom->id],
+            ['call_missed','Video call','video',false,\$tom->id],
+            ['call_missed','Voice call','audio',false,\$me->id]] as [\$e,\$l,\$m,\$a,\$who]) {
+    \$c->messages()->create(['user_id' => null, 'type' => 'system',
+      'system_event' => ['event' => \$e, 'label' => \$l, 'media' => \$m,
+        'answered' => \$a, 'initiatorId' => \$who, 'actorName' => 'Tom Ashley']]);
+  }
+  foreach (['Contract.pdf','Accounts 2025.xlsx','Receipts.zip','Notes.txt','Payroll.csv'] as \$i => \$f) {
+    App\Support\Notifications\Notifier::send(['user' => \$me, 'actor' => \$tom,
+      'type' => 'file.shared', 'title' => 'Tom Ashley shared '.\$f,
+      'message' => 'Shared with you in the File Library',
+      'action_url' => '/portal/files', 'dedupe_key' => 'seed-file-'.\$i]);
+  }
+"
+
+TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/notifications-bulk-calls.mjs
+```
+
+  It asserts absolute counts, so re-seed a fresh database between runs — it
+  reads, unreads and deletes rows as it goes.

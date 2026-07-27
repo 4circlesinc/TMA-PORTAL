@@ -117,6 +117,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/preferences', [NotificationController::class, 'preferences'])->name('preferences');
         Route::put('/preferences', [NotificationController::class, 'updatePreferences'])->name('preferences.update');
         Route::post('/read-all', [NotificationController::class, 'readAll'])->name('read-all');
+        Route::post('/bulk', [NotificationController::class, 'bulk'])->name('bulk');
         Route::post('/{uid}/read', [NotificationController::class, 'read'])->name('read');
         Route::post('/{uid}/unread', [NotificationController::class, 'unread'])->name('unread');
         Route::post('/{uid}/complete', [NotificationController::class, 'complete'])->name('complete');

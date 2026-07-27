@@ -1685,43 +1685,75 @@
 
     return (
       '<div class="tma-dash__messages-media">' +
-      calls
-        .map(function (call) {
-          // A naked, colour-coded phone icon carries the call's outcome:
-          // green in/out arrows for answered calls, red for missed / no-answer.
-          var outgoing = call.initiatorId != null && STORE.me && call.initiatorId === STORE.me.id;
-          var kind = call.media === 'video' ? 'Video' : 'Voice';
-          var iconMod, stateLabel, missed = false;
-
-          if (call.event === 'call_missed') {
-            missed = true;
-            iconMod = outgoing ? 'out-noanswer' : 'missed';
-            stateLabel = outgoing ? 'No answer' : 'Missed';
-          } else if (call.event === 'call_started') {
-            iconMod = outgoing ? 'out-answered' : 'in-answered';
-            stateLabel = 'Ongoing';
-          } else {
-            iconMod = outgoing ? 'out-answered' : 'in-answered';
-            stateLabel = outgoing ? 'Outgoing' : 'Incoming';
-          }
-
-          return (
-            '<button type="button" class="tma-dash__messages-person" data-messages-row="' +
-            esc(call.conversationId) +
-            '">' +
-            '<span class="tma-dash__call-icon tma-dash__call-icon--' + iconMod + '" aria-hidden="true"></span>' +
-            '<span class="tma-dash__messages-person-text">' +
-            '<span class="tma-dash__messages-person-name">' +
-            esc(call.name) +
-            '</span>' +
-            '<span class="tma-dash__messages-person-meta' + (missed ? ' is-missed' : '') + '">' +
-            stateLabel + ' · ' + kind + ' call' +
-            (call.time ? ' · ' + esc(call.time) : '') +
-            '</span></span></button>'
-          );
-        })
-        .join('') +
+      calls.map(renderCallRow).join('') +
       '</div>'
+    );
+  }
+
+  /*
+   * One entry in the call log.
+   *
+   * The row is the person, not the event: their photo leads it exactly as it
+   * does everywhere else in Messages, and the outcome is carried by a small
+   * direction arrow beside the subtitle — the same shorthand every phone uses.
+   * A large naked phone glyph in the avatar's place said "call" three times
+   * over and left the log looking nothing like the chat list above it.
+   *
+   * The phone and camera on the right are the point of a call log: calling
+   * back should not mean opening the conversation first.
+   */
+  function renderCallRow(call) {
+    var outgoing = call.initiatorId != null && STORE.me && call.initiatorId === STORE.me.id;
+    var kind = call.media === 'video' ? 'Video' : 'Voice';
+    var missed = call.event === 'call_missed';
+    var dir, stateLabel;
+
+    if (missed) {
+      dir = outgoing ? 'out-missed' : 'in-missed';
+      stateLabel = outgoing ? 'No answer' : 'Missed';
+    } else if (call.event === 'call_started') {
+      dir = outgoing ? 'out' : 'in';
+      stateLabel = 'Ongoing';
+    } else {
+      dir = outgoing ? 'out' : 'in';
+      stateLabel = outgoing ? 'Outgoing' : 'Incoming';
+    }
+
+    var name = call.name || 'Contact';
+    var avatar = call.photo
+      ? '<span class="tma-dash__messages-row-avatar"><img src="' + esc(call.photo) + '" alt="" loading="lazy"></span>'
+      : renderInitialAvatar(name);
+
+    function actionBtn(media, icon, label) {
+      return (
+        '<button type="button" class="tma-dash__call-action" ' +
+        'data-calls-start="' + esc(call.conversationId) + '" data-calls-media="' + media + '" ' +
+        'aria-label="' + esc(label + ' ' + name) + '" title="' + esc(label + ' ' + name) + '">' +
+        '<img src="' + icon + '" alt="" width="18" height="18">' +
+        '</button>'
+      );
+    }
+
+    return (
+      '<div class="tma-dash__call-row">' +
+      '<button type="button" class="tma-dash__messages-person" data-calls-open="' +
+      esc(call.conversationId) + '">' +
+      avatar +
+      '<span class="tma-dash__messages-person-text">' +
+      // Time sits on the name line, as it does in the chat list — the subtitle
+      // is narrow enough already once the call buttons take their room.
+      '<span class="tma-dash__call-name-line">' +
+      '<span class="tma-dash__messages-person-name">' + esc(name) + '</span>' +
+      (call.time ? '<span class="tma-dash__call-time">' + esc(call.time) + '</span>' : '') +
+      '</span>' +
+      '<span class="tma-dash__messages-person-meta' + (missed ? ' is-missed' : '') + '">' +
+      '<span class="tma-dash__call-dir tma-dash__call-dir--' + dir + '" aria-hidden="true"></span>' +
+      esc(stateLabel + ' · ' + kind) +
+      '</span></span></button>' +
+      '<span class="tma-dash__call-actions">' +
+      actionBtn('audio', ICONS.Phone, 'Voice call') +
+      actionBtn('video', ICONS.VideoCamera, 'Video call') +
+      '</span></div>'
     );
   }
 
@@ -5077,7 +5109,13 @@
     row.markedUnread = false;
     syncTabBarBadges();
 
-    window.TMAMessagingAPI.markRead(conversationId).catch(function () {
+    window.TMAMessagingAPI.markRead(conversationId).then(function () {
+      // Reading the thread also settles its bell notifications server-side;
+      // pull the new total so the badge in this tab agrees straight away.
+      if (window.TMANotifications && window.TMANotifications.refreshCount) {
+        window.TMANotifications.refreshCount();
+      }
+    }).catch(function () {
       // Left unread server-side; the next load will show it again.
     });
   }
@@ -7741,12 +7779,11 @@
      * this so a new one can never forget to close the others — which is
      * exactly how two panels end up stacked on top of each other. */
     function showListView(view) {
+      showMessagesChats(state);
       state.mediaMode = view === 'media';
       state.updatesMode = view === 'updates';
       state.callsMode = view === 'calls';
       state.tab = view === 'archived' ? 'archived' : 'all';
-      state.settingsOpen = false;
-      state.composeOpen = false;
     }
 
     // --- chats (the default view) -----------------------------------------
@@ -7805,6 +7842,38 @@
         showListView(opening ? 'calls' : 'chats');
         render();
         if (opening) loadMessagesCalls(root, state, render);
+      });
+    });
+
+    // Opening a call's conversation returns the column to chats, the way a
+    // team channel does. Wired here rather than through [data-messages-row]
+    // so it works on mobile too, where that handler is left to the swipe
+    // machinery the call log does not use.
+    MORPH.unwired(root, '[data-calls-open]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-calls-open');
+        showListView('chats');
+        if (id && id !== state.selectedId) openConversation(root, state, render, id);
+        else render();
+      });
+    });
+
+    // Call back straight from the log.
+    MORPH.unwired(root, '[data-calls-start]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!window.TMAMessagingCalls) return;
+        var id = btn.getAttribute('data-calls-start');
+        var row = findThread(id);
+        var label = btn.closest('.tma-dash__call-row');
+        var nameEl = label && label.querySelector('.tma-dash__messages-person-name');
+        window.TMAMessagingCalls.start(
+          id,
+          btn.getAttribute('data-calls-media') || 'audio',
+          (row && row.name) || (nameEl && nameEl.textContent) || 'Contact',
+          (row && row.photo) || null
+        );
       });
     });
 
@@ -8224,6 +8293,17 @@
       render();
       if (opts.openDirectUserId) {
         startConversationWith(root, state, render, opts.openDirectUserId);
+        return;
+      }
+      // Re-entered from a notification link while the page was already up
+      // (the shell mounts Messages on load, whichever view is showing).
+      var reopen = opts.openConversationId || takePendingConversationId();
+      if (reopen) {
+        showMessagesChats(state);
+        if (findThread(reopen)) openConversation(root, state, render, reopen);
+        else loadConversations(root, state, render).then(function () {
+          if (findThread(reopen)) openConversation(root, state, render, reopen);
+        });
       }
       return;
     }
@@ -8373,8 +8453,50 @@
     loadConversations(root, state, render).then(function () {
       if (opts.openDirectUserId) {
         startConversationWith(root, state, render, opts.openDirectUserId);
+        return;
+      }
+      // Arriving from a message or missed-call notification: open the
+      // conversation it came from. Read from the URL as well as the mount
+      // options so a cold load of /social/messages?conversation=… lands in the
+      // same place an in-shell navigation does.
+      var wanted = opts.openConversationId || takePendingConversationId();
+      if (wanted && findThread(wanted)) {
+        showMessagesChats(state);
+        openConversation(root, state, render, wanted);
       }
     });
+  }
+
+  /*
+   * ?conversation=<uuid> — how a notification names the thread it is about.
+   *
+   * Read once, here at load, because the shell rewrites the address bar to the
+   * bare page path as soon as it activates a view: by the time the inbox has
+   * finished loading the parameter is long gone. Consumed on first use so a
+   * later re-mount doesn't drag the user back to it.
+   */
+  var pendingConversationId = (function () {
+    try {
+      return new URLSearchParams(window.location.search).get('conversation') || '';
+    } catch (e) {
+      return '';
+    }
+  })();
+
+  function takePendingConversationId() {
+    var id = pendingConversationId;
+    pendingConversationId = '';
+    return id;
+  }
+
+  /* Return the inbox column to the chat list, whatever panel is over it. */
+  function showMessagesChats(state) {
+    state.mediaMode = false;
+    state.updatesMode = false;
+    state.callsMode = false;
+    state.tab = 'all';
+    state.settingsOpen = false;
+    state.composeOpen = false;
   }
 
   window.TMAMessages = {

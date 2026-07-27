@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
 /**
  * The signed-in user's own notifications: the bell popup, the right-sidebar
  * Notifications section, and the full list all read from here. Every query is
- * scoped to the caller ÿÿÿ a user can only ever see, read, or delete their own
+ * scoped to the caller ï¿½ï¿½ï¿½ a user can only ever see, read, or delete their own
  * rows (?28).
  */
 class NotificationController extends Controller
@@ -135,6 +135,37 @@ class NotificationController extends Controller
         $query->update(['read_at' => now()]);
 
         return response()->json(['unread' => $this->unreadCount($request)]);
+    }
+
+    /**
+     * Apply one action to a selection of notifications (?20).
+     *
+     * Scoped to the caller's own rows like every other route here, so an id
+     * belonging to someone else is silently no-op rather than an error â€” the
+     * selection is a UI convenience, not an authorisation surface.
+     */
+    public function bulk(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', 'string', 'in:read,unread,delete'],
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['string'],
+        ]);
+
+        $query = Notification::query()
+            ->forUser($request->user())
+            ->whereIn('uid', $data['ids']);
+
+        $affected = match ($data['action']) {
+            'read' => (clone $query)->whereNull('read_at')->update(['read_at' => now()]),
+            'unread' => (clone $query)->whereNotNull('read_at')->update(['read_at' => null]),
+            'delete' => (clone $query)->delete(),
+        };
+
+        return response()->json([
+            'affected' => $affected,
+            'unread' => $this->unreadCount($request),
+        ]);
     }
 
     /** Dismiss a notification the user is allowed to remove (?20). */

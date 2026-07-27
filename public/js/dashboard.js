@@ -1048,6 +1048,7 @@
         if (messagesMount) {
           window.TMAMessages.mount(messagesMount, {
             openDirectUserId: opts.openDirectUserId || null,
+            openConversationId: opts.openConversationId || null,
           });
         }
       }
@@ -1165,6 +1166,20 @@
             crumb: 'Email',
             emailFolder: base === '/email/templates' ? 'templates' : 'inbox',
             emailMessageId: params.message || null,
+          });
+          return true;
+        }
+      }
+
+      // A message or missed-call notification points at the conversation it
+      // came from, not just the page.
+      if (base === '/social/messages') {
+        if (root.querySelector('.tma-dash__view[data-view="messages"]')) {
+          activate('so-messages', {
+            view: 'messages',
+            title: 'Messages',
+            crumb: 'Messages',
+            openConversationId: params.conversation || null,
           });
           return true;
         }

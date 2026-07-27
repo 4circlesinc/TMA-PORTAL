@@ -25,6 +25,7 @@ use App\Models\UserWorkStatus;
 use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\LinkPreviewService;
+use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
@@ -393,6 +394,10 @@ class MessagingController extends Controller
         $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageSent($message));
+
+        // The Messages page has its own badge; this is what reaches the bell,
+        // the right sidebar and Overview when the recipient is elsewhere.
+        MessageNotifier::announceMessage($conversation, $message, $user);
 
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $conversation),
@@ -1174,6 +1179,18 @@ class MessagingController extends Controller
             // To everyone, sender included: the person who hung up has no local
             // copy of this system line, so they must receive it to see it too.
             Broadcaster::to(new MessageSent($system));
+
+            // A missed call is the one call outcome the person it happened to
+            // may never see — they were not at the screen. It gets a
+            // notification like any other arrival.
+            if (! $answered) {
+                MessageNotifier::announceMissedCall(
+                    $conversation,
+                    $user,
+                    $data['initiatorId'] ?? null,
+                    $label,
+                );
+            }
         }
 
         return response()->json(['ok' => true]);
@@ -1274,6 +1291,9 @@ class MessagingController extends Controller
 
         // Reading here has to clear the badge in this user's other tabs too.
         $this->announceSelf($user, 'read', $conversation);
+
+        // Opening the thread answers whatever the bell was pointing at.
+        MessageNotifier::clearForConversation($user, $conversation);
 
         return response()->json(['unread' => 0]);
     }

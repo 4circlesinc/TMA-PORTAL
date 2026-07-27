@@ -70,6 +70,52 @@ class NotificationsApiTest extends TestCase
             ->assertOk()->assertJsonPath('unread', 0);
     }
 
+    public function test_bulk_marks_read_unread_and_deletes_a_selection(): void
+    {
+        $me = $this->user();
+        $this->seedNotifications($me, $this->user(), 4);
+
+        $ids = collect($this->actingAs($me)->getJson('/portal/notifications')->json('items'))
+            ->pluck('id')->all();
+        $picked = array_slice($ids, 0, 2);
+
+        $this->actingAs($me)->postJson('/portal/notifications/bulk', ['ids' => $picked, 'action' => 'read'])
+            ->assertOk()->assertJsonPath('affected', 2)->assertJsonPath('unread', 2);
+
+        $this->actingAs($me)->postJson('/portal/notifications/bulk', ['ids' => $picked, 'action' => 'unread'])
+            ->assertOk()->assertJsonPath('unread', 4);
+
+        $this->actingAs($me)->postJson('/portal/notifications/bulk', ['ids' => $picked, 'action' => 'delete'])
+            ->assertOk()->assertJsonPath('unread', 2);
+
+        $this->actingAs($me)->getJson('/portal/notifications')->assertJsonCount(2, 'items');
+    }
+
+    public function test_bulk_cannot_reach_another_users_notifications(): void
+    {
+        $me = $this->user();
+        $other = $this->user();
+        $this->seedNotifications($me, $this->user(), 1);
+        $this->seedNotifications($other, $this->user(), 2);
+
+        $foreign = \App\Models\Notification::where('user_id', $other->id)->pluck('uid')->all();
+
+        $this->actingAs($me)->postJson('/portal/notifications/bulk', ['ids' => $foreign, 'action' => 'delete'])
+            ->assertOk()->assertJsonPath('affected', 0);
+
+        $this->assertSame(2, \App\Models\Notification::where('user_id', $other->id)->count());
+    }
+
+    public function test_bulk_rejects_an_unknown_action(): void
+    {
+        $me = $this->user();
+        $this->seedNotifications($me, $this->user(), 1);
+        $uid = \App\Models\Notification::where('user_id', $me->id)->value('uid');
+
+        $this->actingAs($me)->postJson('/portal/notifications/bulk', ['ids' => [$uid], 'action' => 'archive'])
+            ->assertStatus(422);
+    }
+
     public function test_a_user_cannot_touch_another_users_notification(): void
     {
         $me = $this->user();
