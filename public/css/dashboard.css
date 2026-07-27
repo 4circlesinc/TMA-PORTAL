@@ -19926,10 +19926,28 @@
 .tma-dash__email-template-auth-contact {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-8) var(--space-28);
+  align-items: center;
+  gap: var(--space-12);
   font-size: var(--text-size-12);
   line-height: 16px;
   color: var(--color-text-secondary);
+}
+
+.tma-dash__email-template-auth-socials {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-dash__email-template-auth-social {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.tma-dash__email-template-auth-social img {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .tma-dash__email-template-auth-contact-col p {

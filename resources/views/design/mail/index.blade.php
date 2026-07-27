@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {{-- The templates reference images with root-relative paths (images/...);
+       the gallery is served at /design/mail, so a base href makes them resolve
+       from the site root. In-page nav uses JS scrolling, not #fragments, so
+       this doesn't hijack the sidebar links. --}}
+  <base href="{{ url('/') }}/">
   <title>Email postcards · TM ANTOINE Advisory</title>
 
   {{-- Load the same tokens + component styles the portal uses, so the
@@ -81,7 +86,12 @@
           var a = document.createElement('a');
           a.className = 'gal__link';
           a.textContent = t.name;
-          a.href = '#tpl-' + t.id;
+          a.setAttribute('role', 'button');
+          a.setAttribute('data-target', 'tpl-' + t.id);
+          a.addEventListener('click', function () {
+            var el = document.getElementById(this.getAttribute('data-target'));
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
           nav.appendChild(a);
 
           var item = document.createElement('section');
@@ -125,7 +135,7 @@
         entries.forEach(function (en) {
           if (!en.isIntersecting) return;
           links.forEach(function (l) {
-            l.classList.toggle('is-active', l.getAttribute('href') === '#' + en.target.id);
+            l.classList.toggle('is-active', l.getAttribute('data-target') === en.target.id);
           });
         });
       }, { rootMargin: '-10% 0px -80% 0px' });

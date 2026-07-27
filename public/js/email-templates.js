@@ -12,6 +12,10 @@
   var SITE_NAME = 'TM ANTOINE Advisory';
   var AUTH_LINK = 'https://portal.tmantoine.com/';
   var SUPPORT_EMAIL = 'support@tmantoine.com';
+  var SOCIALS = [
+    { name: 'Facebook', href: 'https://www.facebook.com/tmantoinepartners', icon: 'Facebook40.svg' },
+    { name: 'Instagram', href: 'https://www.instagram.com/tmapartners/', icon: 'Instagram40.svg' },
+  ];
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
@@ -30,12 +34,22 @@
     );
   }
 
+  function renderSocials() {
+    return (
+      '<span class="tma-dash__email-template-auth-socials">' +
+      SOCIALS.map(function (s) {
+        return '<a class="tma-dash__email-template-auth-social" href="' + esc(s.href) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(s.name) + '">' +
+          '<img src="' + ICON + s.icon + '" alt="' + esc(s.name) + '" width="18" height="18"></a>';
+      }).join('') + '</span>'
+    );
+  }
+
+  // One line: a single contact email and the social icons.
   function renderAuthContact() {
     return (
       '<div class="tma-dash__email-template-auth-contact">' +
-      '<div class="tma-dash__email-template-auth-contact-col">' +
-      '<p><a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a></p>' +
-      '<p><a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">portal.tmantoine.com</a></p></div></div>'
+      '<a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a>' +
+      renderSocials() + '</div>'
     );
   }
 
@@ -108,9 +122,9 @@
       '<div class="tma-dash__email-template-mobile-foot-brand">' +
       '<img src="' + BRAND + 'tma-logo-mark.png" alt="" width="20" height="20">' +
       '<span>' + esc(SITE_NAME) + '</span></div>' +
-      '<p class="tma-dash__email-template-mobile-foot-address">' +
+      '<p class="tma-dash__email-template-mobile-foot-address tma-dash__email-template-auth-contact">' +
       '<a class="tma-dash__email-template-auth-link" href="mailto:' + esc(SUPPORT_EMAIL) + '">' + esc(SUPPORT_EMAIL) + '</a>' +
-      '  ·  portal.tmantoine.com</p>' +
+      renderSocials() + '</p>' +
       '<p class="tma-dash__email-template-mobile-foot-note">You have received this email from ' + esc(SITE_NAME) + '. Thank you.</p>' +
       '</footer>'
     );
