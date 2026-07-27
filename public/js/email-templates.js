@@ -64,8 +64,8 @@
   function renderAuthHelp() {
     return (
       '<div class="tma-dash__email-template-auth-help">' +
-      '<p>If you have any trouble with the button, you can copy and paste the link below into your browser:</p>' +
-      '<p><a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(AUTH_LINK) + '</a></p></div>'
+      '<p>Trouble with the button? Copy and paste this link into your browser: ' +
+      '<a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(AUTH_LINK) + '</a></p></div>'
     );
   }
 
@@ -102,9 +102,9 @@
   function renderAuthVerifyHelp() {
     return (
       '<div class="tma-dash__email-template-auth-help">' +
-      '<p>Please click the button to open the link or fill in the verification code in the page.</p>' +
-      '<p>If you have any trouble with the button, you can copy and paste the link below into your browser:</p>' +
-      '<p><a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(AUTH_LINK) + '</a></p></div>'
+      '<p>Click the button to open the link, or enter the verification code on the page.</p>' +
+      '<p>Trouble with the button? Copy and paste this link into your browser: ' +
+      '<a class="tma-dash__email-template-auth-link" href="' + esc(AUTH_LINK) + '">' + esc(AUTH_LINK) + '</a></p></div>'
     );
   }
 
