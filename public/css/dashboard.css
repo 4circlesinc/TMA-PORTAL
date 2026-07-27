@@ -19920,8 +19920,8 @@
 .tma-dash__email-template-auth-footer-logo {
   display: block;
   width: auto;
-  max-width: 280px;
-  height: 44px;
+  max-width: 360px;
+  height: 72px;
   object-fit: contain;
   object-position: center;
 }
@@ -20453,8 +20453,8 @@
 .tma-dash__email-template-invoice-brand-wordmark {
   display: block;
   width: auto;
-  max-width: 240px;
-  height: 32px;
+  max-width: 300px;
+  height: 48px;
   object-fit: contain;
   object-position: left center;
 }
