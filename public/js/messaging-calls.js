@@ -184,6 +184,14 @@
       }
     };
 
+    // Fallback for browsers that fire iceconnectionstatechange first (or don't
+    // reliably surface connectionState) — either path counts as connected.
+    pc.oniceconnectionstatechange = function () {
+      if (!session || session.pc !== pc) return;
+      var st = pc.iceConnectionState;
+      if (st === 'connected' || st === 'completed') markConnected();
+    };
+
     return pc;
   }
 
@@ -197,6 +205,10 @@
       if (!session || !session.startedAt) return;
       setStatus(formatDuration(Date.now() - session.startedAt));
     }, 1000);
+
+    // Once the call is live, drop to the compact top pill automatically — the
+    // full-screen stage is opt-in from there (tap the pill to expand).
+    setMinimized(true);
   }
 
   function formatDuration(ms) {
@@ -310,6 +322,8 @@
       '<span class="tma-call__pill-name">' + esc(session.peerName) + '</span>' +
       '<span class="tma-call__pill-status" data-call-status>' + esc(statusText) + '</span>' +
       '</span></button>' +
+      '<button type="button" class="tma-call__pill-mic' + (session.muted ? ' is-off' : '') +
+      '" data-call-mute aria-label="Toggle microphone">' + iconMic() + '</button>' +
       '<button type="button" class="tma-call__pill-end" data-call-hangup aria-label="End call">' +
       iconHangup() + '</button>' +
       '</div>';
@@ -348,8 +362,8 @@
     bind('[data-call-hangup]', function () { endSession(true); });
     bind('[data-call-minimize]', function () { setMinimized(true); });
     bind('[data-call-expand]', function () { setMinimized(false); });
-    bind('[data-call-mute]', function (btn) { toggleMute(btn); });
-    bind('[data-call-camera]', function (btn) { toggleCamera(btn); });
+    bind('[data-call-mute]', function () { toggleMute(); });
+    bind('[data-call-camera]', function () { toggleCamera(); });
   }
 
   function bind(selector, handler) {
@@ -361,18 +375,26 @@
     });
   }
 
-  function toggleMute(btn) {
+  function syncToggle(selector, off) {
+    if (!overlay) return;
+    overlay.querySelectorAll(selector).forEach(function (b) {
+      b.classList.toggle('is-off', off);
+    });
+  }
+
+  function toggleMute() {
     if (!session || !session.localStream) return;
     session.muted = !session.muted;
     session.localStream.getAudioTracks().forEach(function (t) { t.enabled = !session.muted; });
-    if (btn) btn.classList.toggle('is-off', session.muted);
+    // Keep every mute control (stage + pill) in step.
+    syncToggle('[data-call-mute]', session.muted);
   }
 
-  function toggleCamera(btn) {
+  function toggleCamera() {
     if (!session || !session.localStream) return;
     session.cameraOff = !session.cameraOff;
     session.localStream.getVideoTracks().forEach(function (t) { t.enabled = !session.cameraOff; });
-    if (btn) btn.classList.toggle('is-off', session.cameraOff);
+    syncToggle('[data-call-camera]', session.cameraOff);
   }
 
   /* --------------------------------------------------------------- icons */
@@ -503,13 +525,6 @@
       return;
     }
 
-    console.log('TMA call: applying offer', {
-      type: offer.type,
-      sdpLength: offer.sdp.length,
-      firstLines: offer.sdp.split(/\r\n|\r|\n/).slice(0, 4),
-      hasCRLF: offer.sdp.indexOf('\r\n') !== -1,
-    });
-
     session.answered = true;
     return session.pc.setRemoteDescription(offer)
       .then(function () {
@@ -529,16 +544,9 @@
       })
       .catch(function (err) {
         if (session) session.answered = false;
-        console.error('TMA call: failed to answer —', err, '\nSDP was:\n' + offer.sdp);
-        // Pinpoint the first structurally-invalid line for on-screen reporting.
-        var lines = offer.sdp.split('\r\n');
-        var bad = '';
-        for (var i = 0; i < lines.length; i++) {
-          if (lines[i] && !/^[a-z]=/i.test(lines[i])) { bad = lines[i]; break; }
-        }
-        setStatus('Fail: ' + ((err && err.name) || 'err') +
-          ' · bad="' + (bad || '(none found)').slice(0, 30) + '"');
-        setTimeout(function () { endSession(true); }, 12000);
+        console.error('TMA call: failed to answer —', err);
+        setStatus('Could not connect');
+        setTimeout(function () { endSession(true); }, 2500);
       });
   }
 
@@ -550,7 +558,10 @@
     var type = payload.type;
     var convId = payload.conversationId;
     var media = (payload.payload && payload.payload.media) || 'audio';
-    var fromName = (payload.payload && payload.payload.fromName) || 'Contact';
+    // Prefer the peer info the messages layer resolved locally (it has the
+    // caller's photo); fall back to the name the caller stamped on the signal.
+    var fromName = payload._peerName || (payload.payload && payload.payload.fromName) || 'Contact';
+    var fromPhoto = payload._peerPhoto || null;
 
     if (type === 'ring' || type === 'offer') {
       if (session && session.conversationId !== convId) return;
@@ -561,7 +572,7 @@
           role: 'callee',
           initiatorId: payload.fromUserId || null,
           peerName: fromName,
-          peerAvatar: null,
+          peerAvatar: fromPhoto,
           candidates: [],
           statusText: 'Ringing…',
           remoteOffer: payload.payload && payload.payload.sdp ? payload.payload.sdp : null,

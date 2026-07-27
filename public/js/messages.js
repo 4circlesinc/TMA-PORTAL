@@ -5373,6 +5373,14 @@
 
     window.TMAMessagingRealtime.listen(channel, 'call.signal', function (payload) {
       if (window.TMAMessagingCalls) {
+        // The caller's signal has no avatar, but the answerer already has this
+        // conversation locally — hand the calls module the peer's name/photo so
+        // the incoming call and pill can show their picture, not just initials.
+        var row = payload && findThread(payload.conversationId);
+        if (row) {
+          payload._peerName = row.name;
+          payload._peerPhoto = row.photo || null;
+        }
         window.TMAMessagingCalls.onSignal(payload, (STORE.me || {}).id);
       }
     });

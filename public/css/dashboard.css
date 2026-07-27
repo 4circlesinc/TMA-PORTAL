@@ -30471,6 +30471,7 @@ span.tma-dash__messages-profile-avatar {
 .tma-call__btn svg,
 .tma-call__ctrl svg,
 .tma-call__pill-end svg,
+.tma-call__pill-mic svg,
 .tma-call__minimize svg { display: block; }
 
 /* Shared avatar treatment */
@@ -30726,21 +30727,39 @@ span.tma-dash__messages-profile-avatar {
 .tma-call__ctrl--end:hover { background: #d92d20; }
 
 /* ── Minimized pill (bottom-left) ───────────────────────────────── */
+/* Dynamic-Island-style capsule, pinned top-center. Compact by default; grows
+ * on hover to reveal the mic control. */
 .tma-call__pill {
   position: fixed;
-  left: var(--space-24);
-  bottom: var(--space-24);
+  top: var(--space-16);
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1250;
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding: var(--space-8);
-  padding-right: var(--space-12);
+  padding: var(--space-6);
+  padding-right: var(--space-10);
   border-radius: var(--radius-pill);
-  background: #101828;
+  background: #0b0f19;
   color: #fff;
-  box-shadow: 0 12px 32px rgb(8 12 20 / 0.4);
-  animation: tma-call-rise 200ms ease;
+  box-shadow: 0 14px 36px rgb(8 12 20 / 0.5);
+  transition: transform 200ms ease, box-shadow 200ms ease,
+    gap 180ms ease, padding 180ms ease;
+}
+
+.tma-call.is-minimized .tma-call__pill {
+  animation: tma-call-pill-in 240ms ease;
+}
+
+@keyframes tma-call-pill-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.tma-call__pill:hover {
+  transform: translateX(-50%) scale(1.03);
+  box-shadow: 0 20px 46px rgb(8 12 20 / 0.58);
 }
 
 .tma-call__pill-body {
@@ -30754,12 +30773,12 @@ span.tma-dash__messages-profile-avatar {
   font: inherit;
   cursor: pointer;
   min-width: 0;
-  max-width: 180px;
+  max-width: 200px;
 }
 
 .tma-call__pill-avatar {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   font-size: var(--text-size-14);
 }
 
@@ -30775,13 +30794,40 @@ span.tma-dash__messages-profile-avatar {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px;
+  max-width: 140px;
 }
 .tma-call__pill-status {
   font-size: var(--text-size-12);
   color: #12b76a;
   font-variant-numeric: tabular-nums;
 }
+
+/* Mic: hidden when compact, slides in when the island is hovered. */
+.tma-call__pill-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 38px;
+  padding: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: width 180ms ease, opacity 150ms ease, background 120ms ease;
+}
+.tma-call__pill:hover .tma-call__pill-mic,
+.tma-call__pill:focus-within .tma-call__pill-mic {
+  width: 38px;
+  opacity: 1;
+}
+.tma-call__pill-mic:hover { background: rgb(255 255 255 / 0.24); }
+.tma-call__pill-mic.is-off { background: #fff; color: #0b0f19; }
+.tma-call__pill-mic svg { width: 18px; height: 18px; }
 
 .tma-call__pill-end {
   display: inline-flex;
