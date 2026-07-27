@@ -115,6 +115,25 @@
     });
   }
 
+  /*
+   * Coerce whatever arrived over the wire into a clean { type, sdp } dict.
+   * The SDP survives one or more JSON round-trips fine, but the *wrapper* can
+   * drift: it may come through as a JSON string, or double-nested as
+   * { sdp: { type, sdp } } — the latter makes the browser read `.sdp` as an
+   * object, stringify it to "[object Object]" and throw "Invalid SDP line".
+   */
+  function toDescription(raw, fallbackType) {
+    var desc = raw;
+    if (typeof desc === 'string') {
+      try { desc = JSON.parse(desc); } catch (e) { return null; }
+    }
+    if (!desc || typeof desc !== 'object') return null;
+    // Unwrap an accidental extra { sdp: {...} } layer.
+    if (desc.sdp && typeof desc.sdp === 'object') desc = desc.sdp;
+    if (typeof desc.sdp !== 'string' || !desc.sdp) return null;
+    return { type: desc.type || fallbackType, sdp: desc.sdp };
+  }
+
   function ensurePeer() {
     if (session.pc) return session.pc;
     var pc = new RTCPeerConnection(ICE);
@@ -466,8 +485,23 @@
     // valid and lets the callee join even when their mic/camera is unavailable.
     if (!session.accepting || !session.remoteOffer || !session.pc) return;
 
+    var offer = toDescription(session.remoteOffer, 'offer');
+    if (!offer) {
+      console.error('TMA call: unusable offer —', session.remoteOffer);
+      setStatus('Could not connect: bad offer');
+      setTimeout(function () { endSession(true); }, 6000);
+      return;
+    }
+
+    console.log('TMA call: applying offer', {
+      type: offer.type,
+      sdpLength: offer.sdp.length,
+      firstLines: offer.sdp.split(/\r\n|\r|\n/).slice(0, 4),
+      hasCRLF: offer.sdp.indexOf('\r\n') !== -1,
+    });
+
     session.answered = true;
-    return session.pc.setRemoteDescription(session.remoteOffer)
+    return session.pc.setRemoteDescription(offer)
       .then(function () {
         flushCandidates();
         return session.pc.createAnswer();
@@ -533,12 +567,19 @@
     }
 
     if (type === 'answer' && session.pc && payload.payload && payload.payload.sdp) {
-      session.pc.setRemoteDescription(payload.payload.sdp)
+      var answer = toDescription(payload.payload.sdp, 'answer');
+      if (!answer) {
+        console.error('TMA call: unusable answer —', payload.payload.sdp);
+        return;
+      }
+      session.pc.setRemoteDescription(answer)
         .then(function () {
           flushCandidates();
           if (!session.connected) setStatus('Connecting…');
         })
-        .catch(function () {});
+        .catch(function (err) {
+          console.error('TMA call: failed to apply answer —', err);
+        });
       return;
     }
 
