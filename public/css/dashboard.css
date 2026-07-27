@@ -20050,7 +20050,14 @@
 
   .tma-dash__email-template-auth-footer {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
+  }
+
+  .tma-dash__email-template-auth-contact,
+  .tma-dash__email-template-auth-legal {
+    justify-content: center;
+    width: 100%;
   }
 }
 
