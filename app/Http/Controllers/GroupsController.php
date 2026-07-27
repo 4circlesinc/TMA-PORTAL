@@ -7,7 +7,9 @@ use App\Models\GroupMember;
 use App\Models\User;
 use App\Support\Calendar\CalendarAccess;
 use App\Support\Calendar\GroupMembership;
+use App\Support\Mail\Postcards;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -297,11 +299,23 @@ class GroupsController extends Controller
                 ->whereIn('account_type', ['Administrator', 'Employee'])
                 ->pluck('id');
 
+            $newlyAdded = [];
             foreach ($staff as $id) {
-                GroupMember::firstOrCreate(
+                $member = GroupMember::firstOrCreate(
                     ['group_id' => $group->id, 'user_id' => $id],
                     ['role' => $role, 'added_by' => $actor->id],
                 );
+                if ($member->wasRecentlyCreated) {
+                    $newlyAdded[] = $id;
+                }
+            }
+
+            // Let each newly-added member know by email (not the person who added them).
+            if ($newlyAdded) {
+                User::whereIn('id', $newlyAdded)->where('id', '!=', $actor->id)->get()
+                    ->each(fn (User $u) => Mail::to($u->email)->queue(
+                        Postcards::teamAdded($actor->name, $group->name, url('/groups'))
+                    ));
             }
         }
 

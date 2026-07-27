@@ -225,6 +225,20 @@ class Postcards
         ]);
     }
 
+    // --------------------------------------------------------------------- teams
+
+    public static function teamAdded(string $addedBy, string $groupName, string $url): Postcard
+    {
+        return new Postcard('You were added to '.$groupName, [
+            'preheader' => $addedBy.' added you to a team in the portal.',
+            'eyebrow' => 'Teams',
+            'title' => 'You were added to '.$groupName,
+            'lead' => $addedBy.' added you to a team in the portal.',
+            'bodyHtml' => '<p>You can now see the team\'s shared files, calendar and conversations, and reach everyone on it in one place.</p>',
+            'button' => ['label' => 'Open the team', 'url' => $url],
+        ]);
+    }
+
     // ------------------------------------------------------------------ calendar
 
     /** @param array<string,mixed> $p the EventNotifier payload. */
