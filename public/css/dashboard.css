@@ -30603,11 +30603,15 @@ span.tma-dash__messages-profile-avatar {
   color: #fff;
 }
 
-.tma-call--incoming .tma-call__stage,
-.tma-call--incoming .tma-call__pill { display: none; }
-.tma-call--active .tma-call__toast { display: none; }
-.tma-call.is-minimized .tma-call__stage { display: none; }
-.tma-call:not(.is-minimized) .tma-call__pill { display: none; }
+/* The stage is only visible for an active, non-minimized call. The pill/island
+ * is visible for an incoming call (answerable there) and for an active call
+ * once minimized. */
+.tma-call__stage { display: none; }
+.tma-call--active:not(.is-minimized) .tma-call__stage { display: flex; }
+
+.tma-call__pill { display: none; }
+.tma-call--incoming .tma-call__pill,
+.tma-call--active.is-minimized .tma-call__pill { display: flex; }
 
 .tma-call__minimize {
   position: absolute;
@@ -30741,10 +30745,8 @@ span.tma-dash__messages-profile-avatar {
   border-radius: var(--radius-pill);
   background: #0b0f19;
   color: #fff;
-  box-shadow: 0 14px 36px rgb(8 12 20 / 0.5);
-  /* The capsule never repositions on hover — only its revealed children add
-   * width, so it grows in length from a fixed anchor. */
-  transition: box-shadow 200ms ease;
+  /* No drop shadow — the capsule sits flat. It never repositions on hover;
+   * only its revealed children add width, so it grows from a fixed anchor. */
 }
 
 /* Six anchors. Centre anchors keep the horizontal-centre transform. */
@@ -30764,10 +30766,6 @@ span.tma-dash__messages-profile-avatar {
 @keyframes tma-call-pill-in {
   from { opacity: 0; }
   to   { opacity: 1; }
-}
-
-.tma-call__pill:hover {
-  box-shadow: 0 20px 46px rgb(8 12 20 / 0.58);
 }
 
 .tma-call__pill-body {
@@ -30863,3 +30861,40 @@ span.tma-dash__messages-profile-avatar {
 }
 .tma-call__pill-end:hover { background: #d92d20; }
 .tma-call__pill-end svg { width: 18px; height: 18px; }
+
+/* Incoming island: static (non-tappable) body + always-visible answer/decline. */
+.tma-call__pill-body--static { cursor: default; }
+
+.tma-call__pill-incoming-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-size-12);
+  color: rgb(255 255 255 / 0.72);
+  white-space: nowrap;
+}
+
+.tma-call__pill-accept,
+.tma-call__pill-decline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-left: var(--space-8);
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  color: #fff;
+  cursor: pointer;
+}
+.tma-call__pill-accept svg,
+.tma-call__pill-decline svg { display: block; width: 18px; height: 18px; }
+.tma-call__pill-accept { background: #12b76a; }
+.tma-call__pill-accept:hover { background: #0ea15c; }
+.tma-call__pill-decline { background: #f04438; }
+.tma-call__pill-decline:hover { background: #d92d20; }
+
+/* Incoming island just fades in — the pulsing green dot carries the "ringing"
+ * cue, no shadow/glow. */
+.tma-call__pill--incoming { animation: tma-call-pill-in 240ms ease; }

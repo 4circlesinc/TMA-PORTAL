@@ -30,4 +30,21 @@ class Broadcaster
             ]);
         }
     }
+
+    /**
+     * Broadcast to everyone on the channel, the sender included. Used for
+     * events the sender holds no local copy of — e.g. the system line a call
+     * leaves behind, which the person who hung up must also see appear.
+     */
+    public static function to(object $event): void
+    {
+        try {
+            broadcast($event);
+        } catch (Throwable $e) {
+            Log::warning('Messaging broadcast failed; message was still saved.', [
+                'event' => $event::class,
+                'reason' => $e->getMessage(),
+            ]);
+        }
+    }
 }

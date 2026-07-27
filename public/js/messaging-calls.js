@@ -280,26 +280,27 @@
       esc(initials(session && session.peerName)) + '</span>';
   }
 
-  /* Incoming, answerable toast — bottom-left. */
+  /* Incoming, answerable Dynamic Island — same top capsule as the active pill,
+   * with Accept / Decline in place of the in-call controls. */
   function renderIncoming() {
     ensureOverlay();
     stopTimer();
     overlay.className = 'tma-call tma-call--incoming';
     overlay.innerHTML =
-      '<div class="tma-call__toast" role="dialog" aria-label="Incoming call">' +
-      '<div class="tma-call__toast-head">' +
-      avatarMarkup('tma-call__toast-avatar') +
-      '<div class="tma-call__toast-meta">' +
-      '<div class="tma-call__toast-name">' + esc(session.peerName) + '</div>' +
-      '<div class="tma-call__toast-kind"><span class="tma-call__pulse" aria-hidden="true"></span>' +
-      'Incoming ' + (session.media === 'video' ? 'video call' : 'voice call') + '</div>' +
-      '</div></div>' +
-      '<div class="tma-call__toast-actions">' +
-      '<button type="button" class="tma-call__btn tma-call__btn--decline" data-call-reject aria-label="Decline">' +
-      iconHangup() + '<span>Decline</span></button>' +
-      '<button type="button" class="tma-call__btn tma-call__btn--accept" data-call-accept aria-label="Accept">' +
-      (session.media === 'video' ? iconVideo() : iconPhone()) + '<span>Accept</span></button>' +
-      '</div></div>';
+      '<div class="tma-call__pill tma-call__pill--incoming tma-call__pill--' + pillPos +
+      '" role="dialog" aria-label="Incoming call">' +
+      '<span class="tma-call__pill-body tma-call__pill-body--static">' +
+      avatarMarkup('tma-call__pill-avatar') +
+      '<span class="tma-call__pill-meta">' +
+      '<span class="tma-call__pill-name">' + esc(session.peerName) + '</span>' +
+      '<span class="tma-call__pill-incoming-kind"><span class="tma-call__pulse" aria-hidden="true"></span>' +
+      'Incoming ' + (session.media === 'video' ? 'video call' : 'voice call') + '</span>' +
+      '</span></span>' +
+      '<button type="button" class="tma-call__pill-decline" data-call-reject aria-label="Decline">' +
+      iconHangup() + '</button>' +
+      '<button type="button" class="tma-call__pill-accept" data-call-accept aria-label="Accept">' +
+      (session.media === 'video' ? iconVideo() : iconPhone()) + '</button>' +
+      '</div>';
     wireControls();
   }
 
@@ -500,9 +501,10 @@
   function acceptIncoming() {
     if (!session || session.role !== 'callee') return;
     session.accepting = true;
-    // Swap the toast for the full-screen stage right away so the tap feels live.
+    // Stay in the island: the incoming capsule becomes the connecting/active
+    // pill in place. Full screen remains one tap away (tap the pill body).
     session.statusText = 'Connecting…';
-    session.minimized = false;
+    session.minimized = true;
     renderActive();
 
     // Try for local media, but do not let its absence drop the call: if the

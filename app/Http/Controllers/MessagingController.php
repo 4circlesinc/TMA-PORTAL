@@ -1171,7 +1171,9 @@ class MessagingController extends Controller
                 ],
             ]);
             $conversation->forceFill(['last_message_at' => $system->created_at])->save();
-            Broadcaster::toOthers(new MessageSent($system));
+            // To everyone, sender included: the person who hung up has no local
+            // copy of this system line, so they must receive it to see it too.
+            Broadcaster::to(new MessageSent($system));
         }
 
         return response()->json(['ok' => true]);
