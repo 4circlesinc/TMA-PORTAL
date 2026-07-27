@@ -90,6 +90,13 @@
   }
 
   function getMedia(media) {
+    // getUserMedia only exists in a secure context (https, or localhost). On a
+    // plain-http LAN origin navigator.mediaDevices is undefined, which would
+    // otherwise throw synchronously; return a rejection with a clear reason so
+    // callers can handle it uniformly.
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return Promise.reject(new Error('Camera/mic need a secure (https) connection'));
+    }
     return navigator.mediaDevices.getUserMedia({
       audio: true,
       video: media === 'video',
@@ -417,13 +424,21 @@
     session.minimized = false;
     renderActive();
 
+    // Try for local media, but do not let its absence drop the call: if the
+    // mic/camera is denied or busy (common when both ends run on one machine),
+    // join receive-only so the caller can still be heard, rather than ending.
     getMedia(session.media)
+      .catch(function (err) {
+        console.warn('TMA call: local media unavailable, joining receive-only —', err && err.name, err && err.message);
+        setStatus('Mic/camera unavailable — listening only');
+        return null;
+      })
       .then(function (stream) {
         if (!session) {
-          stream.getTracks().forEach(function (t) { t.stop(); });
+          if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
           return;
         }
-        session.localStream = stream;
+        if (stream) session.localStream = stream;
         ensurePeer();
         attachStreams();
         if (api()) {
@@ -433,8 +448,10 @@
         // if we can; otherwise onSignal() answers the moment it arrives.
         return maybeAnswer();
       })
-      .catch(function () {
-        endSession(true);
+      .catch(function (err) {
+        console.error('TMA call: accept failed —', err);
+        setStatus('Could not connect');
+        setTimeout(function () { endSession(true); }, 2000);
       });
   }
 
@@ -445,7 +462,9 @@
    */
   function maybeAnswer() {
     if (!session || session.role !== 'callee' || session.answered) return;
-    if (!session.accepting || !session.localStream || !session.remoteOffer || !session.pc) return;
+    // Local media is intentionally NOT required — a receive-only answer is
+    // valid and lets the callee join even when their mic/camera is unavailable.
+    if (!session.accepting || !session.remoteOffer || !session.pc) return;
 
     session.answered = true;
     return session.pc.setRemoteDescription(session.remoteOffer)
@@ -464,8 +483,11 @@
           }
         });
       })
-      .catch(function () {
-        endSession(true);
+      .catch(function (err) {
+        session.answered = false;
+        console.error('TMA call: failed to answer —', err);
+        setStatus('Could not connect');
+        setTimeout(function () { endSession(true); }, 2000);
       });
   }
 

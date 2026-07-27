@@ -9418,6 +9418,13 @@
   pointer-events: none;
 }
 
+/* The collapsed count is a filled blue badge, so its number must stay white
+ * even on the active folder — otherwise the active-folder colour rule below
+ * paints it dark-blue-on-blue and the number vanishes (the "empty pill"). */
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder--active .tma-dash__email-folder-count {
+  color: #fff;
+}
+
 /* The blue compose button keeps its white "+" centered with no badge slot. */
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder--compose {
   padding-top: var(--space-8, 8px);
@@ -12415,6 +12422,18 @@
     width: 168px;
     min-width: 168px;
     flex-shrink: 0;
+  }
+
+  /* The 168px above is the *expanded* width. Collapsed must stay a true narrow
+   * icon rail — without this override it never shrank, so labels hid but the
+   * column stayed wide and the unread badges stranded far from their icons.
+   * The `.tma-dash--email` prefix raises specificity above the blanket 152px
+   * rule in dashboard-tma-overrides.css, which loads later and would otherwise
+   * win by source order. */
+  .tma-dash--email .tma-dash__email-sidebar--collapsed {
+    flex: 0 0 var(--dash-sidebar-collapsed-w, 72px);
+    width: var(--dash-sidebar-collapsed-w, 72px);
+    min-width: var(--dash-sidebar-collapsed-w, 72px);
   }
 }
 
