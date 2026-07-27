@@ -272,11 +272,28 @@
     }).join('');
   }
 
-  // A file line: bold name + muted meta, as body copy.
+  // Real file-type icon, via the shared TMAFileIcons map (falls back to a small
+  // built-in map so the templates still render if that helper isn't loaded).
+  function fileIcon(name) {
+    if (window.TMAFileIcons) return window.TMAFileIcons.fileIconSrc('', name);
+    var ext = (String(name).match(/\.([a-z0-9]+)$/i) || [])[1] || '';
+    var map = { pdf: 'FilePdf', doc: 'FileDoc', docx: 'FileDoc', xls: 'FileXls', xlsx: 'FileXls', csv: 'FileCsv', ppt: 'FilePpt', pptx: 'FilePpt', png: 'FileImage', jpg: 'FileImage', jpeg: 'FileImage', zip: 'FileZip' };
+    return PHOSPHOR + (map[ext] || 'File') + '.svg';
+  }
+
+  // A quiet attachment row: file-type icon + a small two-line name/meta. Kept
+  // deliberately low-key so it reads as an attachment, not a headline.
   function renderFileLines(files) {
-    return files.map(function (f) {
-      return '<p><strong>' + esc(f[0]) + '</strong><br>' + esc(f[1]) + '</p>';
-    }).join('');
+    return (
+      '<div class="tma-dash__email-template-files">' +
+      files.map(function (f) {
+        return '<span class="tma-dash__email-template-file">' +
+          '<img class="tma-dash__email-template-file-icon" src="' + esc(fileIcon(f[0])) + '" alt="" width="28" height="28">' +
+          '<span class="tma-dash__email-template-file-text">' +
+          '<span class="tma-dash__email-template-file-name">' + esc(f[0]) + '</span>' +
+          '<span class="tma-dash__email-template-file-meta">' + esc(f[1]) + '</span></span></span>';
+      }).join('') + '</div>'
+    );
   }
 
   // A quoted message (what the portal message actually said).
@@ -502,6 +519,127 @@
           renderQuote('Hi Marcus — just checking in on the statement whenever you get a moment.') +
           '<p>If now isn’t a good time, the message will be waiting whenever you’re ready.</p>',
         button: 'Open the conversation',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'signature-request', name: 'Signature request', category: 'Signatures',
+      subject: 'Please sign: Engagement Letter 2025', preview: 'Tanya asked you to sign a document.',
+      spec: {
+        title: 'Tanya asked you to sign a document',
+        lead: 'You can review and sign online — no account needed.',
+        body: renderFileLines([['Engagement-Letter-2025.pdf', 'PDF · 240 KB']]) +
+          renderQuote('Please review and sign at your earliest convenience. — Tanya') +
+          '<p>This link is personal to you and expires on 10 Aug 2026.</p>',
+        button: 'Review & sign',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'signature-reminder', name: 'Signature reminder', category: 'Signatures',
+      subject: 'Reminder: your signature is needed', preview: 'A document is still waiting for your signature.',
+      spec: {
+        title: 'A quick reminder',
+        lead: 'A document is still waiting for your signature.',
+        body: renderFileLines([['Engagement-Letter-2025.pdf', 'PDF · 240 KB']]) +
+          '<p>Sent by Tanya Antoine.</p>',
+        button: 'Review & sign',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'signature-completed', name: 'Document signed', category: 'Signatures',
+      subject: 'Signed: Engagement Letter 2025', preview: 'Everyone has now signed the document.',
+      spec: {
+        title: 'Your document is signed',
+        lead: 'Everyone has now signed Engagement-Letter-2025.pdf.',
+        body: '<p>Signed by: Marcus Reid, Tanya Antoine.</p>' +
+          renderFileLines([['Engagement-Letter-2025-signed.pdf', 'PDF · 262 KB · attached']]) +
+          '<p>The signed copy is attached to this email for your records.</p>',
+        button: 'View the signed document',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'signature-declined', name: 'Signature declined', category: 'Signatures',
+      subject: 'A signature was declined', preview: 'A signature request was declined.',
+      spec: {
+        title: 'A signature was declined',
+        lead: 'Engagement-Letter-2025.pdf was declined by Marcus Reid. Nobody else can sign it now.',
+        body: renderQuote('I need the payment terms revised before I can sign.'),
+        button: 'Open Signatures',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'signature-changes', name: 'Changes requested', category: 'Signatures',
+      subject: 'Changes were requested on your document', preview: 'A reviewer asked for changes before approving.',
+      spec: {
+        title: 'Changes were requested',
+        lead: 'Engagement-Letter-2025.pdf was reviewed by Marcus Reid, who asked for changes before approving.',
+        body: renderQuote('Please update section 3 and resend.') +
+          '<p>The request is on hold until you revise and resend it.</p>',
+        button: 'Open Signatures',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'calendar-invitation', name: 'Event invitation', category: 'Calendar',
+      subject: 'Invitation: Quarterly Review', preview: 'Tanya invited you to Quarterly Review.',
+      spec: {
+        title: 'Tanya invited you to Quarterly Review',
+        lead: 'Here are the details.',
+        body: renderDetailLines([
+          ['When', 'Wed, 6 Aug 2026 · 2:00–3:00 PM'],
+          ['Where', 'Boardroom · Google Meet'],
+          ['Organizer', 'Tanya Antoine'],
+        ]) + '<p>You can accept, mark yourself tentative, or decline from the event.</p>',
+        button: 'Open in the portal',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'calendar-updated', name: 'Event updated', category: 'Calendar',
+      subject: 'Updated: Quarterly Review', preview: 'The details for Quarterly Review changed.',
+      spec: {
+        title: 'Quarterly Review has changed',
+        lead: 'Tanya updated this event. Here are the current details.',
+        body: '<p><strong>What changed:</strong> new time, new location.</p>' +
+          renderDetailLines([
+            ['When', 'Thu, 7 Aug 2026 · 10:00–11:00 AM'],
+            ['Where', 'Conference Room B'],
+            ['Organizer', 'Tanya Antoine'],
+          ]),
+        button: 'Open in the portal',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'calendar-cancelled', name: 'Event cancelled', category: 'Calendar',
+      subject: 'Cancelled: Quarterly Review', preview: 'Quarterly Review was cancelled.',
+      spec: {
+        title: 'Quarterly Review was cancelled',
+        lead: 'Tanya cancelled this event. You don’t need to do anything — it has been taken off your calendar.',
+        body: renderDetailLines([
+          ['When', 'Wed, 6 Aug 2026 · 2:00–3:00 PM'],
+          ['Organizer', 'Tanya Antoine'],
+        ]),
+        button: 'Open your calendar',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'calendar-response', name: 'Invitation response', category: 'Calendar',
+      subject: 'Marcus Reid accepted Quarterly Review', preview: 'An attendee responded to your invitation.',
+      spec: {
+        title: 'Marcus Reid accepted',
+        lead: 'Marcus Reid accepted your invitation to Quarterly Review.',
+        body: renderDetailLines([
+          ['When', 'Wed, 6 Aug 2026 · 2:00–3:00 PM'],
+          ['Organizer', 'You'],
+        ]),
+        button: 'See all responses',
+      },
+    }),
+    makeStandardTemplate({
+      id: 'team-added', name: 'Added to a team', category: 'Teams',
+      subject: 'You were added to the Advisory Team', preview: 'Tanya added you to a team in the portal.',
+      spec: {
+        title: 'You were added to the Advisory Team',
+        lead: 'Tanya added you to a team in the portal.',
+        body: '<p>You can now see the team’s shared files, calendar and conversations, and reach everyone on it in one place.</p>',
+        button: 'Open the team',
       },
     }),
   ].forEach(function (t) { TEMPLATES.push(t); });

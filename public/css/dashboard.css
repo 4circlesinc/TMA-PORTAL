@@ -19902,34 +19902,38 @@
 
 .tma-dash__email-template-auth-footer {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: center;
   gap: var(--space-16);
   width: 100%;
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--color-border-soft);
+  text-align: center;
 }
 
 .tma-dash__email-template-auth-footer-brand {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
+  justify-content: center;
 }
 
 .tma-dash__email-template-auth-footer-logo {
   display: block;
   width: auto;
-  max-width: 240px;
-  height: 32px;
+  max-width: 280px;
+  height: 44px;
   object-fit: contain;
-  object-position: left center;
+  object-position: center;
 }
 
 .tma-dash__email-template-auth-contact {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-12);
-  font-size: var(--text-size-12);
-  line-height: 16px;
+  justify-content: center;
+  gap: var(--space-8) var(--space-16);
+  font-size: var(--text-size-13);
+  line-height: 18px;
   color: var(--color-text-secondary);
 }
 
@@ -19937,6 +19941,48 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-8);
+}
+
+/* Attachment rows inside an email body: small icon + quiet two-line label. */
+.tma-dash__email-template-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: 100%;
+  margin: var(--space-4) 0;
+  text-align: left;
+}
+
+.tma-dash__email-template-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10, 10px);
+}
+
+.tma-dash__email-template-file-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.tma-dash__email-template-file-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__email-template-file-name {
+  font-size: var(--text-size-14);
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-template-file-meta {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
 }
 
 .tma-dash__email-template-auth-social {

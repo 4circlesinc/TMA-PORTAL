@@ -62,6 +62,7 @@
     <main class="gal__main" id="gal-main"></main>
   </div>
 
+  <script src="{{ url('/js/file-icons.js') }}"></script>
   <script src="{{ url('/js/email-templates.js') }}"></script>
   <script>
     (function () {
