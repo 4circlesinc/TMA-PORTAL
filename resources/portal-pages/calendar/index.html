@@ -211,7 +211,7 @@
         <div class="tma-dash__header-icons">
           <button type="button" class="tma-dash__icon-btn" data-action="toggle-theme" aria-label="Toggle theme"><img src="images/icons/phosphor/Sun.svg" alt=""></button>
           <button type="button" class="tma-dash__icon-btn" data-action="toggle-activities-popup" aria-label="Activities" aria-expanded="false" aria-haspopup="true"><img src="images/icons/phosphor/ClockCounterClockwise.svg" alt=""></button>
-          <button type="button" class="tma-dash__icon-btn" data-action="toggle-notifications-popup" aria-label="Notifications" aria-expanded="false" aria-haspopup="true"><img src="images/icons/phosphor/Bell.svg" alt=""></button>
+          <button type="button" class="tma-dash__icon-btn" data-action="toggle-notifications-popup" aria-label="Activity" aria-expanded="false" aria-haspopup="true"><img src="images/icons/phosphor/Bell.svg" alt=""></button>
           <button type="button" class="tma-dash__icon-btn" data-action="toggle-rightbar" aria-label="Toggle right panel"><img src="images/icons/tma/Rightbar.svg" alt=""></button>
         </div>
       </div>
@@ -350,6 +350,12 @@
         <section class="tma-dash__rb-section" data-rb-section="notifications">
           <div class="tma-dash__rb-title">Notifications</div>
           <div class="tma-dash__rb-body" data-rb-body="notifications">
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
+          </div>
+        </section>
+        <section class="tma-dash__rb-section tma-dash__rb-section--activities" data-rb-section="activities">
+          <div class="tma-dash__rb-title">Activities</div>
+          <div class="tma-dash__rb-body" data-rb-body="activities">
             <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
           </div>
         </section>
@@ -519,7 +525,7 @@
   <script src="js/users.js?v=5"></script>
   <script src="js/notify-store.js?v=12"></script>
   <script src="js/notify-render.js?v=8"></script>
-  <script src="js/right-sidebar.js?v=4"></script>
+  <script src="js/right-sidebar.js?v=5"></script>
   <script src="js/notify-realtime.js?v=2"></script>
   <script src="js/activity-popups.js?v=2"></script>
   <script src="js/global-search.js"></script>

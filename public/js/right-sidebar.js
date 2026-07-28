@@ -1,9 +1,10 @@
 /*
  * TMA - Right sidebar sections (§1, §5).
  *
- * Fills the existing right sidebar's sections — Notifications and Clients —
- * with real data from the notifications store and the clients API. Activities
- * live in the header popup / Overview tab instead of this rail.
+ * Fills the existing right sidebar's three sections — Notifications, Activities,
+ * Clients — with real data from the shared stores (notifications, activity) and
+ * the clients API. The layout, spacing, and card styles are untouched; only the
+ * content is now live.
  *
  * Re-renders are per-section and scroll-preserving: a new notification updates
  * just that list, never the whole panel, and never resets the scroll position
@@ -32,11 +33,7 @@
       Array.prototype.slice.call(host.querySelectorAll('[data-rb-body]')).forEach(function (body) {
         body.innerHTML = '';
       });
-      // Drop a leftover Activities block from older shells.
-      var legacyAct = host.querySelector('[data-rb-section="activities"]');
-      if (legacyAct) legacyAct.remove();
-
-      ['notifications'].forEach(function (kind) {
+      ['notifications', 'activities'].forEach(function (kind) {
         var sec = host.querySelector('[data-rb-section="' + kind + '"]');
         if (sec && !sec.querySelector('[data-rb-footer="' + kind + '"]')) {
           var foot = document.createElement('div');
@@ -53,6 +50,7 @@
       host.setAttribute('data-rb-sections', '');
       host.innerHTML =
         section('notifications', 'Notifications') +
+        section('activities', 'Activities') +
         section('clients', 'Clients');
       rightbar.appendChild(host);
     }
@@ -60,9 +58,9 @@
     var clients = { items: [], loaded: false, loading: false, error: false, forbidden: false };
     // Kept for load-more while a section is temporarily expanded; "See all"
     // navigates to the full Overview tabs instead of expanding in place.
-    var expanded = { notifications: false };
+    var expanded = { notifications: false, activities: false };
 
-    /* Adaptive preview counts: keep ≥6 clients visible; trim notification
+    /* Adaptive preview counts: keep ≥6 clients visible; trim notif/activity
        previews when the sidebar is short so nested scrollbars are avoided. */
     function previewLimits() {
       var h = rightbar.clientHeight || window.innerHeight || 800;
@@ -71,13 +69,15 @@
       else if (h >= 780) clientsLimit = 8;
 
       var notifLimit = 6;
-      if (h < 720) notifLimit = 4;
-      else if (h < 820) notifLimit = 5;
-      if (h < 640) notifLimit = 3;
+      var actLimit = 6;
+      if (h < 720) { notifLimit = 4; actLimit = 3; }
+      else if (h < 820) { notifLimit = 5; actLimit = 4; }
+      if (h < 640) { notifLimit = 3; actLimit = 2; }
 
       return {
         clients: clientsLimit,
         notifications: notifLimit,
+        activities: actLimit,
       };
     }
 
@@ -97,7 +97,7 @@
     }
 
     function seeAllControl(kind) {
-      var label = 'See all notifications';
+      var label = kind === 'notifications' ? 'See all notifications' : 'See all activities';
       return '<button type="button" class="tma-dash__rb-see-all" data-rb-see-all="' + kind + '">' + label + '</button>';
     }
 
@@ -123,6 +123,24 @@
         var rows = expanded.notifications ? s.items : s.items.slice(0, preview);
         el.innerHTML = rows.map(function (it) { return R().notificationItem(it, 'sidebar'); }).join('');
         syncFooter('notifications', s.items.length, preview, !!s.hasMore);
+      });
+    }
+
+    function renderActivities() {
+      var el = bodyEl('activities');
+      if (!el) return;
+      var s = window.TMAActivities.state;
+      var limits = previewLimits();
+      withScroll(function () {
+        if (!s.loaded && s.loading) { el.innerHTML = R().skeleton(3); syncFooter('activities', 0, limits.activities, false); return; }
+        if (s.error && !s.items.length) { el.innerHTML = R().errorState('Could not load activity.'); syncFooter('activities', 0, limits.activities, false); return; }
+        if (!s.items.length) { el.innerHTML = R().emptyState('No recent activity.', 'ClockCounterClockwise'); syncFooter('activities', 0, limits.activities, false); return; }
+        var preview = limits.activities;
+        var rows = expanded.activities ? s.items : s.items.slice(0, preview);
+        el.innerHTML = rows.map(function (it) {
+          return R().activityItem(it, 'sidebar');
+        }).join('');
+        syncFooter('activities', s.items.length, preview, !!s.hasMore);
       });
     }
 
@@ -180,14 +198,17 @@
 
     /* ── data wiring ───────────────────────────────────────────── */
     window.TMANotifications.subscribe(renderNotifications);
+    window.TMAActivities.subscribe(renderActivities);
 
     function loadAll() {
       window.TMANotifications.ensureLoaded({ limit: 20 });
+      window.TMAActivities.ensureLoaded({ limit: 20 });
       loadClients();
     }
 
     // Paint whatever is already known, then ensure fresh data.
     renderNotifications();
+    renderActivities();
     renderClients();
     loadAll();
 
@@ -196,6 +217,7 @@
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function () {
         if (!expanded.notifications) renderNotifications();
+        if (!expanded.activities) renderActivities();
         renderClients();
       }, 120);
     });
@@ -208,6 +230,7 @@
         var sec = retry.closest('[data-rb-section]');
         var kind = sec && sec.getAttribute('data-rb-section');
         if (kind === 'notifications') window.TMANotifications.load({ limit: 20 });
+        else if (kind === 'activities') window.TMAActivities.load({ limit: 20 });
         else if (kind === 'clients') { clients.loaded = false; clients.error = false; loadClients(); }
         return;
       }
@@ -215,18 +238,18 @@
       var seeAll = e.target.closest('[data-rb-see-all]');
       if (seeAll) {
         e.preventDefault();
-        if (seeAll.getAttribute('data-rb-see-all') === 'notifications') {
-          navigate('/overview?tab=notifications');
-        }
+        var seeKind = seeAll.getAttribute('data-rb-see-all');
+        if (seeKind === 'notifications') navigate('/overview?tab=notifications');
+        else if (seeKind === 'activities') navigate('/overview?tab=activity');
         return;
       }
 
       var more = e.target.closest('[data-rb-more]');
       if (more) {
         e.preventDefault();
-        if (more.getAttribute('data-rb-more') === 'notifications') {
-          window.TMANotifications.loadMore();
-        }
+        var mkind = more.getAttribute('data-rb-more');
+        if (mkind === 'notifications') window.TMANotifications.loadMore();
+        else if (mkind === 'activities') window.TMAActivities.loadMore();
         return;
       }
 
@@ -236,6 +259,9 @@
       var notif = e.target.closest('[data-notification-id]');
       if (notif) { openNotification(notif.getAttribute('data-notification-id'), notif.getAttribute('data-action-url')); return; }
 
+      var act = e.target.closest('[data-activity-id]');
+      if (act) { navigate(act.getAttribute('data-action-url')); return; }
+
       var client = e.target.closest('[data-client-id]');
       if (client) { navigate('/clients?client=' + encodeURIComponent(client.getAttribute('data-client-id'))); return; }
     });
@@ -243,7 +269,7 @@
     // Keyboard access for the role="button" rows.
     host.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      var row = e.target.closest('[data-notification-id],[data-client-id]');
+      var row = e.target.closest('[data-notification-id],[data-activity-id],[data-client-id]');
       if (!row) return;
       e.preventDefault();
       row.click();
@@ -263,14 +289,14 @@
     }
 
     function expand(kind) {
-      if (kind !== 'notifications') return;
+      if (kind !== 'notifications' && kind !== 'activities') return;
       expanded[kind] = true;
-      var store = window.TMANotifications;
+      var store = kind === 'notifications' ? window.TMANotifications : window.TMAActivities;
       var limits = previewLimits();
-      var preview = limits.notifications;
+      var preview = kind === 'notifications' ? limits.notifications : limits.activities;
       // Pull a fuller page if we only have the compact set so far.
       if (store.state.items.length <= preview && store.state.hasMore) store.loadMore();
-      renderNotifications();
+      if (kind === 'notifications') renderNotifications(); else renderActivities();
       var sec = host.querySelector('[data-rb-section="' + kind + '"]');
       if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -278,6 +304,7 @@
     rightbar._rbControl = {
       loadAll: loadAll,
       renderNotifications: renderNotifications,
+      renderActivities: renderActivities,
       expand: expand,
     };
   }
@@ -289,10 +316,12 @@
   }
 
   function section(kind, title) {
-    return '<section class="tma-dash__rb-section" data-rb-section="' + kind + '">' +
+    // Preserve the original activities modifier (draws the connector line).
+    var cls = 'tma-dash__rb-section' + (kind === 'activities' ? ' tma-dash__rb-section--activities' : '');
+    return '<section class="' + cls + '" data-rb-section="' + kind + '">' +
       '<div class="tma-dash__rb-title">' + title + '</div>' +
       '<div class="tma-dash__rb-body" data-rb-body="' + kind + '"></div>' +
-      (kind === 'notifications'
+      ((kind === 'notifications' || kind === 'activities')
         ? '<div class="tma-dash__rb-footer" data-rb-footer="' + kind + '" hidden></div>'
         : '') +
     '</section>';
