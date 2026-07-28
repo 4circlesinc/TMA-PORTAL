@@ -2380,9 +2380,15 @@
    * the thought, and the earlier bubbles in that run keep an empty slot of the
    * same width so the whole run stays in one column — which is how WhatsApp
    * and Teams both draw a group of messages from one person.
+   *
+   * `side` is the side the bubble is *drawn* on, which is not always
+   * `msg.direction`: a call you placed is written by whichever client logged
+   * it, so an outgoing call can arrive as an incoming row. The photo has to
+   * follow the bubble, or your own call ends up wearing the other person's
+   * face.
    */
-  function renderBubbleAvatar(msg, row, show) {
-    if (msg.direction === 'out') return '';
+  function renderBubbleAvatar(msg, row, side, show) {
+    if (side === 'out') return '';
 
     var person = show ? bubbleAvatarPerson(msg, row) : null;
 
@@ -2767,9 +2773,11 @@
     return (
       '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side +
       '" data-messages-id="' + esc(msg.id) + '">' +
-      // A call is always its own run, so it always carries the caller's photo
-      // — and that keeps it in the same column as the bubbles around it.
-      renderBubbleAvatar(msg, row, true) +
+      // A call is always its own run, so an incoming one always carries the
+      // caller's photo — which keeps it in the same column as the bubbles
+      // around it. One you placed sits on your side and carries none, exactly
+      // like every other message of yours.
+      renderBubbleAvatar(msg, row, side, true) +
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       ' tma-dash__messages-bubble--call' + (missed ? ' tma-dash__messages-bubble--call-missed' : '') + '">' +
@@ -2896,7 +2904,7 @@
      * overflow so the bubble can slide under the reply icon.
      */
     var bubble =
-      renderBubbleAvatar(msg, row, opts.showAvatar) +
+      renderBubbleAvatar(msg, row, side, opts.showAvatar) +
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       bubbleExtraClass +
