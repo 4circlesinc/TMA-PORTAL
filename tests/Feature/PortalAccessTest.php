@@ -97,9 +97,19 @@ class PortalAccessTest extends TestCase
     {
         $employee = $this->user(Role::EMPLOYEE);
 
-        foreach (['clients', 'users', 'email', 'overview'] as $page) {
+        foreach (['clients', 'users', 'email'] as $page) {
             $this->actingAs($employee)->get('/'.$page)->assertOk();
         }
+    }
+
+    public function test_the_admin_overview_is_administrators_only(): void
+    {
+        // It reports on the firm as a whole — storage, the recycle bin, every
+        // employee's activity — so an employee gets the same 404 a client does.
+        $this->actingAs($this->user(Role::EMPLOYEE))->get('/overview')->assertNotFound();
+        $this->actingAs($this->user(Role::ADMINISTRATOR))->get('/overview')->assertOk();
+
+        $this->assertFalse(Role::can($this->user(Role::EMPLOYEE), 'overview.view'));
     }
 
     /* ── the mailbox ─────────────────────────────────────────────────── */

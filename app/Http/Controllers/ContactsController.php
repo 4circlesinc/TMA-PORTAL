@@ -31,7 +31,9 @@ class ContactsController extends Controller
             ->orderByRaw('COALESCE(NULLIF(last_name, \'\'), first_name)')
             ->orderBy('first_name')
             ->get()
-            ->map->toRecord()
+            // `canEdit` travels with the row so the list only offers the
+            // actions this reader would actually be allowed to take.
+            ->map(fn (Contact $c) => $c->toRecord() + ['canEdit' => $this->mayWrite($user, $c)])
             ->values();
 
         return response()->json([

@@ -272,8 +272,8 @@
         return {
           navId: 'dash-project-overview',
           view: 'overview',
-          title: 'Project Overview',
-          crumb: 'Dashboard / Overview',
+          title: 'Admin Overview',
+          crumb: 'Admin Overview',
         };
       }
       if (p === '/account') {
@@ -1149,7 +1149,7 @@
 
       if (base === '/overview') {
         if (root.querySelector('.tma-dash__view[data-view="overview"]')) {
-          activate('dash-project-overview', { view: 'overview', title: 'Project Overview', crumb: 'Dashboard / Overview' });
+          activate('dash-project-overview', { view: 'overview', title: 'Admin Overview', crumb: 'Admin Overview' });
           if (params.tab) {
             if (window.TMAOverview && window.TMAOverview.selectTab) window.TMAOverview.selectTab(params.tab);
             else root._pendingOverviewTab = params.tab;
@@ -1447,6 +1447,20 @@
        so an open submenu can't reappear as a floating white panel the next
        time the rail animates open (or peek out of the 72px icon column). */
     function onHoverRailClosed() {
+      /*
+       * The hover rail is a desktop idea — below SIDEBAR_BP the sidebar is a
+       * full-width drawer with no rail to collapse into.
+       *
+       * This guard is what makes submenus tappable. isHoverRailOpen() reports
+       * false on a mobile sidebar (there is no rail, so it cannot be open),
+       * which read here as "the rail just closed" and collapsed every group.
+       * Tapping a second group then moved focus off the first group's button,
+       * firing focusout on the sidebar and running this — so the group the tap
+       * had just opened was closed again a tick later. The first tap of a
+       * session worked (nothing inside held focus yet), every one after it
+       * looked completely dead.
+       */
+      if (isMobileSidebar()) return;
       if (root.classList.contains('tma-dash--sidebar-standard')) return;
       if (isHoverRailOpen()) return;
       collapseAllSubnavs();

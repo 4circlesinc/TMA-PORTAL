@@ -19,6 +19,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\Design\MailPreviewController;
 use App\Http\Controllers\DesktopAuthController;
+use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\DevDatabaseController;
@@ -51,6 +52,7 @@ use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\Signatures\PublicSigningController;
 use App\Http\Controllers\Signatures\SignatureFieldController;
 use App\Http\Controllers\Signatures\SignatureRequestController;
+use App\Http\Controllers\SignInActivityController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\StaySignedInController;
 use App\Http\Controllers\WorkPlanController;
@@ -70,6 +72,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     // Team presence board on the portal home (online + work-plan status).
     Route::get('/portal/dashboard/staff', StaffPresenceController::class)
         ->name('dashboard.staff');
+
+    // Recent sign-ins across the firm, for the Overview card. Staff-gated
+    // inside the controller — clients never see who signed in.
+    Route::get('/portal/sign-ins', SignInActivityController::class)
+        ->name('portal.sign-ins');
 
     // All settings now live in Account settings; this preserved URL (and
     // the flashes Fortify/social redirects attach to it) forwards there.
@@ -615,6 +622,15 @@ Route::get('/auth/desktop/finish', [DesktopAuthController::class, 'finish'])
 Route::get('/auth/desktop/claim', [DesktopAuthController::class, 'claim'])
     ->middleware('throttle:20,1')
     ->name('desktop.claim');
+
+// Human-facing download links, resolved from the same manifests. Registered
+// before the feed below, which would otherwise swallow /desktop/releases.
+Route::get('/desktop/releases', [DesktopReleasesController::class, 'index'])
+    ->name('desktop.releases');
+
+Route::get('/desktop/download/{platform}', [DesktopReleasesController::class, 'download'])
+    ->where('platform', 'mac|windows')
+    ->name('desktop.download');
 
 // Update feed the installed macOS app polls. Public by design: it serves only
 // the signed builds we publish, and the app has no session when it checks.

@@ -293,13 +293,27 @@
 }
 
 @media (max-width: 1024px) {
+  /*
+   * Card width, not viewport width. This used to pin left AND right, which
+   * stretched a two-line notification across the whole screen — ~1000px of
+   * card for a name and a subject line on a tablet. It keeps the desktop
+   * width and only shrinks once the screen is narrower than the card, so a
+   * phone still gets a comfortable edge gap.
+   */
   .tma-notify-toast-host,
   .tma-notify-toast-host--top-right,
-  .tma-notify-toast-host--bottom-right,
+  .tma-notify-toast-host--bottom-right {
+    left: auto;
+    right: 12px;
+    width: 344px;
+    max-width: calc(100vw - 24px);
+  }
+
   .tma-notify-toast-host--bottom-left {
     left: 12px;
-    right: 12px;
-    width: auto;
+    right: auto;
+    width: 344px;
+    max-width: calc(100vw - 24px);
   }
 
   .tma-notify-toast-host--top-right {

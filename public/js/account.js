@@ -9,6 +9,7 @@
   var TMA = 'images/icons/tma/';
   var AVATAR = 'images/avatars/';
   var ILLUSTRATIONS = 'images/illustrations/';
+  var ROOT = window.__TMA_SITE_ROOT || '';
 
   var TABS = ['Overview', 'Settings', 'Security', 'Billing', 'Statements', 'Referrals', 'API Keys', 'Logs'];
 
@@ -127,13 +128,72 @@
       '<div class="tma-dash__account-details" data-account-details>' + rows + '</div></section>';
   }
 
+  /* Desktop app downloads. The build that is current changes with every
+     release, so the buttons ask the server what exists rather than hard-coding
+     a filename — and a platform with no published build stays disabled instead
+     of linking at a 404. One fetch is shared by every promo card on the page. */
+  var DESKTOP_PLATFORMS = [
+    { key: 'mac', label: 'macOS' },
+    { key: 'windows', label: 'Windows' },
+  ];
+  var desktopReleasesPromise = null;
+
+  function desktopReleases() {
+    if (!desktopReleasesPromise) {
+      desktopReleasesPromise = fetch(ROOT + '/desktop/releases', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    }
+    return desktopReleasesPromise;
+  }
+
+  function renderDownloadBtn(p) {
+    return '<a class="tma-dash__account-promo-btn tma-dash__account-promo-btn--download is-disabled" ' +
+      'data-desktop-download="' + p.key + '" href="' + ROOT + '/desktop/download/' + p.key + '" ' +
+      'aria-disabled="true" title="Checking for a build…">' +
+      // Masked span, not an img: the phosphor logos are black artwork sitting
+      // on a black pill, so they have to take the button's own colour.
+      '<span class="tma-dash__account-promo-btn-icon tma-dash__account-promo-btn-icon--' + p.key + '" aria-hidden="true"></span>' +
+      '<span>' + esc(p.label) + '</span></a>';
+  }
+
+  function applyDesktopReleases(root, data) {
+    (root || document).querySelectorAll('[data-desktop-download]').forEach(function (btn) {
+      var info = data && data[btn.getAttribute('data-desktop-download')];
+      var ready = !!(info && info.available);
+      btn.classList.toggle('is-disabled', !ready);
+      btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+      btn.title = ready
+        ? 'Version ' + info.version
+        : 'No build published yet';
+    });
+  }
+
+  function mountPromo(root) {
+    var host = root || document;
+    if (!host.querySelector || !host.querySelector('[data-desktop-download]')) return;
+    desktopReleases().then(function (data) {
+      applyDesktopReleases(host, data);
+    });
+  }
+
+  function bindPromoClicks(container) {
+    if (!container || container.dataset.desktopPromoBound) return;
+    container.dataset.desktopPromoBound = '1';
+    container.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-desktop-download]');
+      if (!btn || !container.contains(btn)) return;
+      if (btn.getAttribute('aria-disabled') === 'true') e.preventDefault();
+    });
+  }
+
   function renderPromo() {
     return '<section class="tma-dash__account-block tma-dash__account-block--promo" data-node-id="32546:46816">' +
       '<div class="tma-dash__account-promo-copy">' +
-      '<p class="tma-dash__account-promo-title">Have you tried<br>new Mobile Application?</p>' +
+      '<p class="tma-dash__account-promo-title">Have you tried<br>new macOS / Windows Application?</p>' +
       '<div class="tma-dash__account-promo-actions">' +
-      '<button type="button" class="tma-dash__account-promo-link">Learn more</button>' +
-      '<button type="button" class="tma-dash__account-promo-btn">Try Now</button>' +
+      DESKTOP_PLATFORMS.map(renderDownloadBtn).join('') +
       '</div></div>' +
       '<img class="tma-dash__account-promo-art" src="' + ILLUSTRATIONS + 'Illustration18.svg" alt="" width="100" height="75" decoding="async">' +
       '</section>';
@@ -1107,11 +1167,40 @@
       '</div>';
   }
 
+  /* The profile header, details, and download promo as a standalone pair of
+     rows. The account page is one host; the admin Overview grid is the other,
+     which is why this is exported rather than inlined into the panel. */
+  function renderProfileCards(me) {
+    me = me !== undefined ? me : currentUser();
+    return '<div class="tma-dash__account-row">' + renderProfileHeader(me) + renderProfileDetails(me) + '</div>' +
+      '<div class="tma-dash__account-row">' + renderPromo() + '</div>';
+  }
+
+  function mountProfileCards(container) {
+    if (!container) return;
+    hydrateAccountProfile(container, currentUser());
+    mountPromo(container);
+    bindPromoClicks(container);
+    bindProfileUserChange(container);
+  }
+
+  /* Names, avatars, and details arrive after the first paint, so any host of
+     the cards re-hydrates on the user store rather than rendering "Loading…"
+     forever. */
+  function bindProfileUserChange(container) {
+    if (!container || container.dataset.accountProfileUserBound) return;
+    if (!window.TMACurrentUser || !window.TMACurrentUser.onChange) return;
+    container.dataset.accountProfileUserBound = '1';
+    window.TMACurrentUser.onChange(function (me) {
+      if (!container.isConnected) return;
+      hydrateAccountProfile(container, me);
+    });
+  }
+
   function renderOverviewPanel(activeTab, me) {
     var hidden = activeTab !== 'Overview' ? ' hidden' : '';
     return '<div class="tma-dash__account-panel tma-dash__account-panel--overview"' + hidden + ' data-account-panel="Overview">' +
-      '<div class="tma-dash__account-row">' + renderProfileHeader(me) + renderProfileDetails(me) + '</div>' +
-      '<div class="tma-dash__account-row">' + renderPromo() + '</div></div>';
+      renderProfileCards(me) + '</div>';
   }
 
   function renderStubPanel(tab, activeTab) {
@@ -1220,6 +1309,8 @@
     bindApiKeysPanel(container);
     bindLogsPanel(container);
     setActiveTab(container, activeTab);
+    mountPromo(container);
+    bindPromoClicks(container);
     if (window.TMACurrentUser && window.TMACurrentUser.onChange && !container.dataset.accountUserBound) {
       container.dataset.accountUserBound = '1';
       window.TMACurrentUser.onChange(function (me) {
@@ -1243,6 +1334,8 @@
   window.TMAAccount = {
     mount: mount,
     render: render,
+    renderProfileCards: renderProfileCards,
+    mountProfileCards: mountProfileCards,
     setActiveTab: setActiveTab,
     tabForNav: tabForNav,
     isTabVisible: isTabVisible,

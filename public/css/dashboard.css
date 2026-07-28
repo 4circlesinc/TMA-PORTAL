@@ -4816,8 +4816,22 @@
 }
 
 .tma-dash__overview-block--hero,
-.tma-dash__overview-block--spendings {
+.tma-dash__overview-block--spendings,
+.tma-dash__overview-block--signins,
+/* The profile cards borrowed from the account page arrive as flex rows, so
+   they lay themselves out — they just need the grid's full width. */
+.tma-dash__overview-grid > .tma-dash__account-row {
   grid-column: 1 / -1;
+}
+
+/* Sign-in rows are the shared activity component, which brings its own
+   padding — this only stacks them under the card head. */
+.tma-dash__overview-signins {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-12);
+  min-width: 0;
 }
 
 .tma-dash__overview-block--hero {
@@ -7652,6 +7666,44 @@
   font-size: var(--text-size-12);
   line-height: 16px;
   cursor: pointer;
+}
+
+/* Platform download pills. A platform with no published build stays visible
+   but inert, so the card never promises a link that 404s. */
+.tma-dash__account-promo-btn--download {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 28px;
+  text-decoration: none;
+}
+
+.tma-dash__account-promo-btn--download.is-disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tma-dash__account-promo-btn-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.tma-dash__account-promo-btn-icon--mac {
+  -webkit-mask-image: url('../images/icons/phosphor/AppleLogo.svg');
+  mask-image: url('../images/icons/phosphor/AppleLogo.svg');
+}
+
+.tma-dash__account-promo-btn-icon--windows {
+  -webkit-mask-image: url('../images/icons/phosphor/WindowsLogo.svg');
+  mask-image: url('../images/icons/phosphor/WindowsLogo.svg');
 }
 
 .tma-dash__account-promo-art {

@@ -91,8 +91,10 @@ class Role
         'templates.view' => [self::EMPLOYEE],
         // Automated workflows and the approval queue.
         'workflows.view' => [self::EMPLOYEE],
-        // The Project Overview page (firm activity, storage, recycle bin).
-        'overview.view' => [self::EMPLOYEE],
+        // The Admin Overview page (firm activity, storage, recycle bin).
+        // Administrators only — it reports on the firm as a whole, not on the
+        // work of whoever is reading it.
+        'overview.view' => [],
         // Read the whole firm's audit trail rather than only your own.
         'activity.viewAll' => [],
 

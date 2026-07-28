@@ -25,6 +25,34 @@ field placement and drawing, and computed CSS only exist in a browser.
   mock: create a client through the form, confirm it survives a reload, then
   bulk-delete it. Reads the directory back through the API so the check doesn't
   depend on how the list renders. Needs a staff account.
+- **`people.mjs`** — the whole People section, which used to render from a
+  localStorage store that was always empty. Checks each of the eight URLs is
+  *served* on a cold load (they 404'd before, so a hard refresh dropped you on
+  the dashboard) and that each screen paints a real table: staff on Browse
+  employees with their activation state and a working Showing filter, client
+  accounts on Browse client contacts, both prospect sources merged, a contact
+  added to the personal book surviving a reload while staying out of the shared
+  one, a real group created through the builder, and the resend screen listing
+  who is actually still waiting. Ends by confirming a Client gets a 404 rather
+  than a page that fills with permission errors.
+
+  Needs the three standard accounts, one client record carrying a pending
+  invitation, and an account that has never signed in:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute='
+    App\Models\AuthEvent::create(["user_id" => 1, "event" => "login",
+      "ip" => "127.0.0.1", "user_agent" => "seed", "created_at" => now()->subDay()]);
+    App\Models\User::where("email", "emp@example.com")->update(["password_auto" => true]);
+    $c = App\Models\Client::create(["uid" => "selina-kyle", "name" => "Selina Kyle",
+      "company" => "Kyle Ltd", "email" => "selina@example.com", "data" => []]);
+    App\Models\ClientInvite::create(["client_id" => $c->id, "email" => "selina@example.com",
+      "token" => App\Models\ClientInvite::freshToken(), "expires_at" => now()->addDays(14),
+      "last_sent_at" => now()]);'
+
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/people.mjs
+  ```
+
 - **`calendar-sync.mjs`** — Phase 4 (Google/Microsoft). Real providers can't be
   reached from a test, so the seed supplies a `google`-source calendar carrying
   one conflicted event (its `conflict_snapshot` holds the overwritten local
@@ -55,10 +83,10 @@ field placement and drawing, and computed CSS only exist in a browser.
   confirms the organizer sees the acceptance. The check worth keeping is that
   no event title appears anywhere in an availability response.
 
-  Two setup notes it was written around: there is no served shell for
-  `/people/*`, so that URL 404s on a cold load and the script reaches the
-  Groups screen via `TMADashboard.navigate`; and the staff picker is ordered by
-  name, so members are selected by email rather than index.
+  One setup note it was written around: the staff picker is ordered by name, so
+  members are selected by email rather than index. (It also reaches the Groups
+  screen through `TMADashboard.navigate` because `/people/*` used to 404 on a
+  cold load; those URLs are served now — see `people.mjs`.)
 
 - **`calendar.mjs`** — the Calendar page is server-backed, not the old
   localStorage prototype: a fresh account is provisioned one Personal calendar
@@ -73,6 +101,59 @@ field placement and drawing, and computed CSS only exist in a browser.
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
   the client profile's "Open folder" action lands in the File Library. Needs an
   administrator account.
+- **`settings-personal-prefs.mjs`** — Settings Phase 1: Theme, Privacy and
+  Plugins save to the account rather than to one browser. It drives the real
+  panels (plus the header's own dark-mode toggle, which used to write
+  localStorage and stop there) and reads `/me/preferences` back, then opens a
+  **second browser context** — empty localStorage, same account — on the
+  *dashboard*, not Settings, and checks the saved theme is actually applied
+  there. It also pins two things a unit test can't reach: a plain page load
+  must not rewrite the preferences it just hydrated, and a removed plugin must
+  stay removed across a reload. Resets the account to shipped defaults first,
+  so it is safe to re-run. Needs the standard `e2e@example.com` account.
+
+  Two gotchas it was written around: Settings mounts **twice** (desktop and
+  mobile), so every selector here is `:visible`-scoped or the counts double;
+  and the switch `<input>` sits under its own track/thumb spans, so a real
+  click never lands — activate the wrapping `<label>` instead.
+- **`overview-profile.mjs`** — everything the Admin Overview borrows from
+  elsewhere: the profile cards from the account page, the desktop download
+  promo they carry, and the Recent sign-ins card. The profile cards are one
+  component rendered in two places, so this checks the borrowed copy
+  *hydrates* (a stale one sits on "Loading…" forever) and that its flex rows
+  span the two-column grid instead of landing in one column. The download
+  buttons must say what is really published — macOS enabled with its version
+  in the tooltip, Windows inert because nothing builds it yet.
+
+  The sign-ins card is the shared activity row component over a different
+  feed, so the checks are: no skeleton rows left behind, every row carrying
+  text *and* a time, an avatar box that stays a small circle, no sign-outs,
+  and — the property the card exists for — somebody other than the viewer in
+  the feed. That last one is asserted against `/portal/sign-ins` rather than
+  the visible rows, because the viewer's own logins pile up at the top across
+  runs. It also confirms the feed never carries `ip`/`device`, and that "See
+  all activity" switches tabs in place. Ends on `/account` to confirm the
+  original profile panel still works.
+
+  Needs the standard `e2e@example.com` account plus a colleague with a
+  sign-in, and a manifest on the files disk for the download buttons:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local \
+    php artisan tinker --execute="
+      Storage::disk(config('filesystems.files_disk'))->put('desktop/latest-mac.yml',
+        \"version: 0.8.0\nfiles:\n  - url: TM ANTOINE Portal-0.8.0-arm64.dmg\n    size: 2\n\");
+      \\\$b = App\Models\User::firstOrCreate(['email' => 'bea@example.com'],
+        ['name' => 'Bea Adams', 'password' => Hash::make('password12345')]);
+      \\\$b->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(),
+        'onboarding_completed_at' => now(), 'status' => 'approved',
+        'account_type' => 'Employee'])->save();
+      App\Models\AuthEvent::create(['user_id' => \\\$b->id, 'event' => 'login',
+        'ip' => '41.13.8.2', 'user_agent' => 'Safari', 'created_at' => now()->subHour()]);"
+
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/overview-profile.mjs
+  ```
+
 - **`sidebar-access.mjs`** — role gating and the Folder Shortcuts icon box, the
   two sidebar things PHPUnit can't see. A shortcut with no custom stamp renders
   the folder as a bare `<img>` carrying *both* `.tma-folder-icon__base`

@@ -2857,7 +2857,10 @@
       });
     });
 
-    root.querySelectorAll('[data-settings-plugin-dropdown-item]').forEach(function (item) {
+    // The rows carry data-settings-plugin-action; there is no
+    // data-settings-plugin-dropdown-item attribute, so the old selector
+    // matched nothing and Configure/Remove did nothing at all.
+    root.querySelectorAll('[data-settings-plugin-action]').forEach(function (item) {
       if (item.dataset.pluginActionBound) return;
       item.dataset.pluginActionBound = '1';
       item.addEventListener('click', function (e) {

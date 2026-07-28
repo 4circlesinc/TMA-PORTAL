@@ -2242,6 +2242,48 @@ html.tma-dash--signatures-wizard body {
   color: var(--color-text-secondary);
 }
 
+/* ── tick-list picker (People → group members) ─────
+   The group builder's staff picker used these class names with no rules
+   behind them, so the list rendered as a run of unaligned checkboxes. */
+.tma-portal-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 280px;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-8);
+}
+
+.tma-portal-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-8);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+  cursor: pointer;
+}
+
+label.tma-portal-check-row:hover {
+  background: var(--color-hover);
+}
+
+.tma-portal-check-row input {
+  flex-shrink: 0;
+}
+
+.tma-portal-check-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── choose a recipient from the portal ───────────── */
 .tma-portal-sig-person {
   display: flex;

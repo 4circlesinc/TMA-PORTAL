@@ -4,21 +4,43 @@
  * Browse prospects, Shared / Personal address books, Distribution
  * groups, Resend welcome emails.
  * Registers view: 'people'.
+ *
+ * Every screen reads the real directory. Accounts come from
+ * /portal/people/* (a staff read of the users table) and are written through
+ * /admin/users, which is where the rules for creating, suspending and
+ * deleting an account already live; the address books are /portal/contacts;
+ * groups are /portal/groups. Nothing here keeps a list of its own — the page
+ * used to hold one in localStorage, which is why it always looked empty.
  */
 (function () {
   'use strict';
 
   function ui() { return window.TMAPortalUI; }
-  function data() { return window.TMAPortalData; }
 
-  var state = {
-    el: null,
-    screen: 'home',
-    alpha: 'All',
-    search: '',
-    statusFilter: 'All employees',
-    selected: {},
+  /*
+   * Rendering reconciles rather than replaces (see dom-morph.js), so nodes
+   * survive a render — every binding below therefore goes through
+   * MORPH.unwired / unwiredOne / on, never a bare addEventListener walk, or
+   * handlers stack one per render.
+   */
+  var MORPH = window.TMAMorph || {
+    patch: function (root, html) { root.innerHTML = html; },
+    unwired: function (root, sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); },
+    unwiredOne: function (root, sel) { return root.querySelector(sel); },
+    on: function (el, type, fn) { if (el) el.addEventListener(type, fn); },
   };
+
+  var ROOT = window.__TMA_SITE_ROOT || '';
+
+  function net(url, opts) {
+    return window.TMAFilesNet.fetchJSON(ROOT + url, opts);
+  }
+
+  function errMsg(e, fallback) {
+    return (e && e.message) || fallback;
+  }
+
+  /* ── state ──────────────────────────────────────── */
 
   var SCREEN_FOR_NAV = {
     'people-home': 'home',
@@ -31,233 +53,451 @@
     'people-resend': 'resend',
   };
 
+  var state = {
+    el: null,
+    screen: 'home',
+    alpha: 'All',
+    search: '',
+    statusFilter: 'All employees',
+    selected: {},
+    caps: { manageUsers: false, viewClients: false, manageGroups: false, viewGroups: false },
+  };
+
+  /* One cache per feed. `loaded` is what tells a revisited screen not to
+     re-skeleton over data it already has. */
+  function feed() {
+    return { loaded: false, loading: false, error: null, items: [], extra: {} };
+  }
+
+  var store = {
+    summary: feed(),
+    employees: feed(),
+    clients: feed(),
+    prospects: feed(),
+    shared: feed(),
+    personal: feed(),
+    groups: feed(),
+    candidates: feed(),
+  };
+
+  /* Fetch a feed once. `pick` maps the response onto { items, extra }. */
+  function load(key, url, pick, force) {
+    var f = store[key];
+    if (f.loading || (f.loaded && !force)) return;
+    f.loading = true;
+    f.error = null;
+
+    net(url)
+      .then(function (d) {
+        var out = pick(d || {});
+        f.items = out.items || [];
+        f.extra = out.extra || {};
+        if (d && d.capabilities) state.caps = d.capabilities;
+        f.loaded = true;
+        f.loading = false;
+        render();
+      })
+      .catch(function (e) {
+        f.loaded = true;
+        f.loading = false;
+        f.error = errMsg(e, 'Couldn’t load this list.');
+        render();
+      });
+  }
+
+  function reload(key) {
+    var f = store[key];
+    f.loaded = false;
+    ensure(key, true);
+  }
+
+  /* The feed each screen needs, and where it comes from. */
+  function ensure(key, force) {
+    if (key === 'summary') {
+      load('summary', '/portal/people/summary', function (d) {
+        return { items: [], extra: d.counts || {} };
+      }, force);
+    } else if (key === 'employees') {
+      load('employees', '/portal/people/employees', function (d) {
+        return { items: d.employees || [] };
+      }, force);
+    } else if (key === 'clients') {
+      load('clients', '/portal/people/client-contacts', function (d) {
+        return { items: d.contacts || [] };
+      }, force);
+    } else if (key === 'prospects') {
+      load('prospects', '/portal/people/prospects', function (d) {
+        return { items: d.prospects || [] };
+      }, force);
+    } else if (key === 'shared' || key === 'personal') {
+      var scope = key === 'shared' ? 'shared' : 'personal';
+      load(key, '/portal/contacts?scope=' + scope, function (d) {
+        return { items: d.contacts || [], extra: { canManageShared: !!d.canManageShared } };
+      }, force);
+    } else if (key === 'groups') {
+      load('groups', '/portal/groups', function (d) {
+        return { items: d.groups || [], extra: { canManage: !!d.canManage } };
+      }, force);
+    } else if (key === 'candidates') {
+      load('candidates', '/portal/people/welcome-candidates', function (d) {
+        return { items: d.candidates || [] };
+      }, force);
+    }
+  }
+
   function navigate(navId, title, crumb) {
-    if (window.TMADashboard) window.TMADashboard.navigate({ navId: navId, view: 'people', title: title, crumb: crumb });
-  }
-
-  function displayName(p) {
-    return (p.lastName ? p.lastName + ', ' : '') + p.firstName;
-  }
-
-  function matchesFilters(p) {
-    if (state.alpha !== 'All' && state.alpha !== '#') {
-      var letter = (p.lastName || p.firstName || '').charAt(0).toUpperCase();
-      if (letter !== state.alpha) return false;
+    if (window.TMADashboard) {
+      window.TMADashboard.navigate({ navId: navId, view: 'people', title: title, crumb: crumb });
     }
-    if (state.alpha === '#') {
-      var first = (p.lastName || p.firstName || '').charAt(0);
-      if (/[a-z]/i.test(first)) return false;
-    }
-    var q = state.search.toLowerCase();
-    if (q) {
-      var hay = (p.firstName + ' ' + (p.lastName || '') + ' ' + p.email + ' ' + (p.company || '')).toLowerCase();
-      if (hay.indexOf(q) === -1) return false;
-    }
-    return true;
   }
 
-  function personModal(kind, onDone, existing) {
-    var isEmployee = kind === 'employee';
-    ui().openModal({
-      title: existing ? 'Edit ' + kind : (isEmployee ? 'Create employee' : kind === 'client' ? 'Add client contact' : 'Add ' + kind),
-      body:
-        ui().field('First name', ui().input({ attrs: 'data-person-first', value: existing ? existing.firstName : '' })) +
-        ui().field('Last name', ui().input({ attrs: 'data-person-last', value: existing ? existing.lastName : '' })) +
-        ui().field('Email address', ui().input({ type: 'email', attrs: 'data-person-email', value: existing ? existing.email : '' })) +
-        ui().field('Company', ui().input({ attrs: 'data-person-company', value: existing ? existing.company || '' : '' })) +
-        '<div class="tma-portal-form-actions">' + ui().btn({ label: existing ? 'Save' : (isEmployee ? 'Create' : 'Add'), attrs: 'data-person-save' }) + '</div>',
-      onMount: function (host) {
-        host.querySelector('[data-person-save]').addEventListener('click', function () {
-          var first = host.querySelector('[data-person-first]').value.trim();
-          var email = host.querySelector('[data-person-email]').value.trim();
-          if (!first || !email) { host.querySelector(first ? '[data-person-email]' : '[data-person-first]').focus(); return; }
-          var record = {
-            firstName: first,
-            lastName: host.querySelector('[data-person-last]').value.trim(),
-            email: email,
-            company: host.querySelector('[data-person-company]').value.trim(),
-          };
-          onDone(record, existing);
-          ui().closeModal();
-        });
-      },
-    });
+  /* ── shared bits ────────────────────────────────── */
+
+  function esc(s) { return ui().esc(s); }
+
+  function sortKey(p) {
+    return String(p.lastName || p.name || p.firstName || p.email || '').toLowerCase();
   }
 
-  /* ── home ───────────────────────────────────────── */
-  var HOME_LINKS = [
-    { nav: 'people-employees', title: 'Browse employees', desc: 'Manage employee accounts, permissions and personal folders.', icon: 'UserList' },
-    { nav: 'people-clients', title: 'Browse client contacts', desc: 'Manage the clients you exchange files with.', icon: 'AddressBook' },
-    { nav: 'people-prospects', title: 'Browse prospects', desc: 'People invited to the portal who have not activated yet.', icon: 'UserCirclePlus' },
-    { nav: 'people-shared-address', title: 'Shared address book', desc: 'Account-wide contacts available to every employee.', icon: 'BookOpen' },
-    { nav: 'people-personal-address', title: 'Personal address book', desc: 'Your private contacts.', icon: 'Book' },
-    { nav: 'people-groups', title: 'Distribution groups', desc: 'Send and share with many people at once.', icon: 'UsersThree' },
-    { nav: 'people-resend', title: 'Resend welcome emails', desc: 'Re-invite users who have not signed in yet.', icon: 'PaperPlaneTilt' },
-  ];
-
-  function renderHome() {
-    var s = data().state();
-    return '<div class="tma-portal-head"><div>' +
-      '<h2 class="tma-portal-head__title">Manage users</h2>' +
-      '<p class="tma-portal-subtitle">' + s.employees.length + ' employee' + (s.employees.length === 1 ? '' : 's') + ' · ' +
-      s.clientContacts.length + ' client contact' + (s.clientContacts.length === 1 ? '' : 's') + '</p>' +
-      '</div><div class="tma-portal-head__actions">' +
-      ui().btn({ label: 'Create employee', icon: 'UserPlus', attrs: 'data-people-quick="employee"' }) +
-      ui().btn({ label: 'Add client contact', icon: 'Plus', variant: 'ghost', attrs: 'data-people-quick="client"' }) +
-      '</div></div>' +
-      '<div class="tma-portal-card-grid">' +
-      HOME_LINKS.map(function (l) {
-        return '<button type="button" class="tma-portal-tpl-card" data-people-link="' + l.nav + '" data-people-title="' + ui().esc(l.title) + '" style="cursor:pointer;text-align:left;font-family:inherit">' +
-          '<div class="tma-portal-tpl-card__preview"><img src="images/icons/phosphor/' + l.icon + '.svg" alt=""></div>' +
-          '<h3 class="tma-portal-tpl-card__name">' + ui().esc(l.title) + '</h3>' +
-          '<p class="tma-portal-tpl-card__desc">' + ui().esc(l.desc) + '</p>' +
-          '</button>';
-      }).join('') +
-      '</div>';
+  function matchesAlpha(p) {
+    if (state.alpha === 'All') return true;
+    var first = String(p.lastName || p.name || p.firstName || p.email || '').charAt(0);
+    if (state.alpha === '#') return !/[a-z]/i.test(first);
+    return first.toUpperCase() === state.alpha;
   }
 
-  function personAvatarSrc(p) {
-    var name = displayName(p);
-    if (window.TMACurrentUser && typeof window.TMACurrentUser.avatarSrc === 'function') {
-      return window.TMACurrentUser.avatarSrc(p.avatar || null, name);
-    }
-    if (window.TMACurrentUser && typeof window.TMACurrentUser.initialsFor === 'function') {
-      return window.TMACurrentUser.initialsFor(name, p.email || p.id);
+  function matchesSearch(p) {
+    var q = state.search.trim().toLowerCase();
+    if (!q) return true;
+    var hay = [p.name, p.firstName, p.lastName, p.email, p.company, p.jobTitle]
+      .filter(Boolean).join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
+
+  function filtered(list) {
+    return list.filter(function (p) { return matchesAlpha(p) && matchesSearch(p); })
+      .sort(function (a, b) { return sortKey(a) < sortKey(b) ? -1 : sortKey(a) > sortKey(b) ? 1 : 0; });
+  }
+
+  function avatarSrc(p) {
+    var name = p.name || p.email || '';
+    if (window.TMACurrentUser) {
+      if (p.avatar && typeof window.TMACurrentUser.avatarSrc === 'function') {
+        return window.TMACurrentUser.avatarSrc(p.avatar, name);
+      }
+      if (typeof window.TMACurrentUser.initialsFor === 'function') {
+        return window.TMACurrentUser.initialsFor(name, p.email || String(p.id));
+      }
     }
     return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   }
 
-  /* ── employees ──────────────────────────────────── */
-  function renderEmployees() {
-    var s = data().state();
-    var list = s.employees.filter(matchesFilters);
-    var atLimit = s.employees.length >= s.trial.employeeLimit;
-
-    var rows = list.map(function (p) {
-      return '<tr>' +
-        '<td><span class="tma-portal-avatar-cell">' +
-        '<img src="' + personAvatarSrc(p) + '" alt="">' +
-        '<strong>' + ui().esc(displayName(p)) + '</strong>' +
-        (p.admin ? ' <span class="tma-portal-chip">Admin</span>' : '') +
-        '</span></td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(p.lastLogin || '-') + '</td>' +
-        '<td><div class="tma-portal-row-actions">' +
-        '<button type="button" class="tma-portal-icon-btn" data-people-manage="' + p.id + '" title="Manage" aria-label="Manage ' + ui().esc(p.firstName) + '"><img src="images/icons/phosphor/GearSix.svg" alt=""></button>' +
-        '</div></td></tr>';
-    }).join('') || '<tr class="tma-portal-table__empty"><td colspan="4">No employees match your filters.</td></tr>';
-
-    return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Browse Employees</h2>' +
-      '<div class="tma-portal-head__actions">' + ui().btn({ label: 'Create employee', attrs: 'data-people-create-employee', disabled: atLimit }) + '</div></div>' +
-      ui().alphaFilter(state.alpha) +
-      '<div class="tma-portal-toolbar">' +
-      '<div class="tma-portal-toolbar__group">' +
-      ui().searchInput('Search Employees', 'data-people-search', state.search) +
-      '<span class="tma-portal-subtitle">Showing</span>' +
-      ui().select(['All employees', 'Active', 'Not activated'], state.statusFilter, 'data-people-status', 'Employee status') +
-      '</div></div>' +
-      ui().table(['Name', 'Email', 'Last Login', { html: '<span class="tma-portal-row-actions">Manage</span>' }], rows);
+  function nameCell(p, chips) {
+    return '<td><span class="tma-portal-avatar-cell">' +
+      '<img src="' + avatarSrc(p) + '" alt="" width="24" height="24">' +
+      '<strong>' + esc(p.name || p.email) + '</strong>' +
+      (chips || '') +
+      '</span></td>';
   }
 
-  /* ── clients / prospects ────────────────────────── */
-  function renderContacts(kind) {
-    var s = data().state();
-    var isClients = kind === 'clients';
-    var source = isClients ? s.clientContacts : s.prospects;
-    var list = source.filter(matchesFilters);
-    var hasSelection = Object.keys(state.selected).some(function (k) { return state.selected[k]; });
+  function chip(label, variant) {
+    return '<span class="tma-portal-chip' + (variant ? ' tma-portal-chip--' + variant : '') + '">' + esc(label) + '</span>';
+  }
+
+  /* One vocabulary for "can this person actually get in?", used by the
+     employees and client-contacts tables and by the Showing filter. */
+  function statusOf(p) {
+    if (p.status === 'suspended') return { key: 'Suspended', label: 'Suspended', variant: '' };
+    if (p.status === 'pending') return { key: 'Not activated', label: 'Awaiting approval', variant: '' };
+    if (!p.lastLogin) return { key: 'Not activated', label: 'Not activated', variant: '' };
+    return { key: 'Active', label: 'Active', variant: 'ok' };
+  }
+
+  function menuBtn(attr, id, label) {
+    return '<div class="tma-portal-row-actions">' +
+      '<button type="button" class="tma-portal-icon-btn" ' + attr + '="' + esc(id) + '"' +
+      ' title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+      '<img src="images/icons/phosphor/DotsThree.svg" alt="" width="20" height="20"></button></div>';
+  }
+
+  function feedProblem(f) {
+    return f.error ? ui().banner('warning', esc(f.error)) : '';
+  }
+
+  function toolbar(placeholder, right) {
+    return '<div class="tma-portal-toolbar">' +
+      '<div class="tma-portal-toolbar__group">' +
+      ui().searchInput(placeholder, 'data-people-search', state.search) +
+      '</div>' +
+      (right ? '<div class="tma-portal-toolbar__group">' + right + '</div>' : '') +
+      '</div>';
+  }
+
+  function selectedIds() {
+    return Object.keys(state.selected).filter(function (k) { return state.selected[k]; });
+  }
+
+  function head(title, subtitle, actions) {
+    return '<div class="tma-portal-head"><div>' +
+      '<h2 class="tma-portal-head__title">' + esc(title) + '</h2>' +
+      (subtitle ? '<p class="tma-portal-subtitle">' + esc(subtitle) + '</p>' : '') +
+      '</div>' +
+      (actions ? '<div class="tma-portal-head__actions">' + actions + '</div>' : '') +
+      '</div>';
+  }
+
+  /* ── home ───────────────────────────────────────── */
+
+  var HOME_LINKS = [
+    { nav: 'people-employees', screen: 'employees', title: 'Browse employees', desc: 'Manage employee accounts, permissions and personal folders.', icon: 'UserList', count: 'employees' },
+    { nav: 'people-clients', screen: 'clients', title: 'Browse client contacts', desc: 'The client accounts that can sign in to the portal.', icon: 'AddressBook', count: 'clientContacts', cap: 'viewClients' },
+    { nav: 'people-prospects', screen: 'prospects', title: 'Browse prospects', desc: 'People invited to the portal who have not activated yet.', icon: 'UserCirclePlus', count: 'prospects', cap: 'viewClients' },
+    { nav: 'people-shared-address', screen: 'shared-address', title: 'Shared address book', desc: 'Account-wide contacts available to every employee.', icon: 'BookOpen', count: 'sharedContacts' },
+    { nav: 'people-personal-address', screen: 'personal-address', title: 'Personal address book', desc: 'Your private contacts.', icon: 'Book', count: 'personalContacts' },
+    { nav: 'people-groups', screen: 'groups', title: 'Distribution groups', desc: 'Send and share with many people at once.', icon: 'UsersThree', count: 'groups', cap: 'viewGroups' },
+    { nav: 'people-resend', screen: 'resend', title: 'Resend welcome emails', desc: 'Re-invite people who have not signed in yet.', icon: 'PaperPlaneTilt', cap: 'manageUsers' },
+  ];
+
+  function renderHome() {
+    var f = store.summary;
+    var counts = f.extra || {};
+
+    var actions =
+      (state.caps.manageUsers ? ui().btn({ label: 'Create employee', icon: 'UserPlus', attrs: ' data-people-quick="employee"' }) : '') +
+      (state.caps.manageUsers ? ui().btn({ label: 'Add client contact', icon: 'Plus', variant: 'ghost', attrs: ' data-people-quick="client"' }) : '');
+
+    var subtitle = f.loaded && !f.error
+      ? counts.employees + ' employee' + (counts.employees === 1 ? '' : 's') + ' · ' +
+        counts.clientContacts + ' client contact' + (counts.clientContacts === 1 ? '' : 's') +
+        (counts.prospects ? ' · ' + counts.prospects + ' waiting to activate' : '')
+      : '';
+
+    var body;
+    if (!f.loaded) {
+      body = ui().loading({ grid: true, count: 6 });
+    } else {
+      body = '<div class="tma-portal-card-grid">' +
+        HOME_LINKS.filter(function (l) { return !l.cap || state.caps[l.cap]; }).map(function (l) {
+          var n = l.count ? counts[l.count] : null;
+          return '<button type="button" class="tma-portal-tpl-card" data-people-link="' + l.nav + '"' +
+            ' data-people-screen="' + l.screen + '" data-people-title="' + esc(l.title) + '"' +
+            ' style="cursor:pointer;text-align:left;font-family:inherit">' +
+            '<div class="tma-portal-tpl-card__preview"><img src="images/icons/phosphor/' + l.icon + '.svg" alt=""></div>' +
+            '<h3 class="tma-portal-tpl-card__name">' + esc(l.title) +
+            (n != null ? ' ' + chip(String(n)) : '') + '</h3>' +
+            '<p class="tma-portal-tpl-card__desc">' + esc(l.desc) + '</p>' +
+            '</button>';
+        }).join('') +
+        '</div>';
+    }
+
+    return head('Manage users', subtitle, actions) + feedProblem(f) + body;
+  }
+
+  /* ── employees ──────────────────────────────────── */
+
+  var EMPLOYEE_FILTERS = ['All employees', 'Active', 'Not activated', 'Suspended'];
+
+  function renderEmployees() {
+    var f = store.employees;
+    var actions = state.caps.manageUsers
+      ? ui().btn({ label: 'Create employee', icon: 'UserPlus', attrs: ' data-people-create="employee"' })
+      : '';
+
+    var right = '<span class="tma-portal-subtitle">Showing</span>' +
+      ui().select(EMPLOYEE_FILTERS, state.statusFilter, 'data-people-status', 'Employee status');
+
+    var chrome = head('Browse Employees', null, actions) + feedProblem(f) +
+      ui().alphaFilter(state.alpha) + toolbar('Search employees', right);
+
+    if (!f.loaded) return chrome + ui().loading({ count: 6 });
+    if (f.error) return chrome;
+
+    var list = filtered(f.items).filter(function (p) {
+      return state.statusFilter === 'All employees' || statusOf(p).key === state.statusFilter;
+    });
+
+    if (!list.length) {
+      return chrome + ui().emptyState({
+        illustration: 'Illustration14',
+        title: f.items.length ? 'No employees match these filters' : 'No employees yet',
+        subtitle: f.items.length ? 'Try a different letter, search or status.' : 'Create an employee to get started.',
+      });
+    }
 
     var rows = list.map(function (p) {
-      return '<tr>' +
-        '<td><label class="tma-portal-checkbox"><input type="checkbox" data-people-select="' + p.id + '"' + (state.selected[p.id] ? ' checked' : '') + '></label></td>' +
-        '<td><strong>' + ui().esc(displayName(p)) + '</strong></td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(p.company || '-') + '</td>' +
+      var s = statusOf(p);
+      var chips = (p.admin ? ' ' + chip('Admin') : '') + (p.self ? ' ' + chip('You') : '');
+      return '<tr data-people-row="' + p.id + '">' +
+        nameCell(p, chips) +
+        '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.jobTitle || '—') + '</td>' +
+        '<td>' + chip(s.label, s.variant) + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.lastLogin || 'Never') + '</td>' +
+        (state.caps.manageUsers
+          ? '<td>' + menuBtn('data-people-manage', p.id, 'Manage ' + (p.name || p.email)) + '</td>'
+          : '<td></td>') +
         '</tr>';
     }).join('');
 
-    var title = isClients ? 'Browse client contacts' : 'Browse prospects';
-    var emptyText = isClients ? 'There are no matching client contacts.' : 'There are no matching prospects.';
+    return chrome + ui().table(
+      ['Name', 'Email', 'Job title', 'Status', 'Last sign-in', { html: '<span class="tma-portal-row-actions">Manage</span>' }],
+      rows
+    );
+  }
 
-    return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">' + title + '</h2>' +
-      '<div class="tma-portal-head__actions">' +
-      ui().btn({ label: isClients ? 'Add client contact' : 'Add prospect', attrs: 'data-people-add-contact' }) +
-      '</div></div>' +
-      ui().alphaFilter(state.alpha) +
-      '<div class="tma-portal-toolbar">' +
-      '<div class="tma-portal-toolbar__group">' + ui().searchInput('Search ' + (isClients ? 'client contacts' : 'prospects'), 'data-people-search', state.search) + '</div>' +
-      '<div class="tma-portal-toolbar__group">' +
-      (isClients ? ui().btn({ label: 'Send agreement', variant: 'ghost', attrs: 'data-people-agreement', disabled: !hasSelection }) : '') +
-      ui().btn({ label: 'Delete Selected', variant: 'danger', attrs: 'data-people-delete-selected', disabled: !hasSelection }) +
-      '</div></div>' +
-      (list.length
-        ? ui().table(['', 'Name', 'Email', 'Company'], rows)
-        : ui().emptyState({ illustration: 'Illustration14', title: emptyText, subtitle: 'People you add will appear in this list.' }));
+  /* ── client contacts ────────────────────────────── */
+
+  function renderClients() {
+    var f = store.clients;
+    var picked = selectedIds();
+
+    var actions = state.caps.manageUsers
+      ? ui().btn({ label: 'Add client contact', icon: 'Plus', attrs: ' data-people-create="client"' })
+      : '';
+    var right = state.caps.manageUsers
+      ? ui().btn({ label: 'Delete selected', variant: 'danger', attrs: ' data-people-delete-users', disabled: !picked.length })
+      : '';
+
+    var chrome = head('Browse client contacts', 'Client accounts that can sign in to the portal.', actions) +
+      feedProblem(f) + ui().alphaFilter(state.alpha) + toolbar('Search client contacts', right);
+
+    if (!f.loaded) return chrome + ui().loading({ count: 6 });
+    if (f.error) return chrome;
+
+    var list = filtered(f.items);
+    if (!list.length) {
+      return chrome + ui().emptyState({
+        illustration: 'Illustration14',
+        title: f.items.length ? 'No client contacts match these filters' : 'No client contacts yet',
+        subtitle: f.items.length
+          ? 'Try a different letter or search.'
+          : 'Client accounts appear here once they are created or a client accepts an invitation.',
+      });
+    }
+
+    var rows = list.map(function (p) {
+      var s = statusOf(p);
+      return '<tr data-people-row="' + p.id + '">' +
+        '<td><label class="tma-portal-checkbox"><input type="checkbox" data-people-select="' + p.id + '"' +
+        (state.selected[p.id] ? ' checked' : '') + ' aria-label="Select ' + esc(p.name || p.email) + '"></label></td>' +
+        nameCell(p) +
+        '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.company || '—') + '</td>' +
+        '<td>' + chip(s.label, s.variant) + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.lastLogin || 'Never') + '</td>' +
+        // No menu at all when every action in it would be refused.
+        '<td>' + (state.caps.manageUsers || p.clientUid
+          ? menuBtn('data-people-client-menu', p.id, 'Manage ' + (p.name || p.email))
+          : '') + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return chrome + ui().table(
+      ['', 'Name', 'Email', 'Company', 'Status', 'Last sign-in', { html: '<span class="tma-portal-row-actions">Manage</span>' }],
+      rows
+    );
+  }
+
+  /* ── prospects ──────────────────────────────────── */
+
+  function renderProspects() {
+    var f = store.prospects;
+
+    var chrome = head('Browse prospects', 'Invited to the portal, not activated yet.') +
+      feedProblem(f) + ui().alphaFilter(state.alpha) + toolbar('Search prospects');
+
+    if (!f.loaded) return chrome + ui().loading({ count: 5 });
+    if (f.error) return chrome;
+
+    var list = filtered(f.items);
+    if (!list.length) {
+      return chrome + ui().emptyState({
+        illustration: 'Illustration14',
+        title: f.items.length ? 'No prospects match these filters' : 'Nobody is waiting to activate',
+        subtitle: f.items.length
+          ? 'Try a different letter or search.'
+          : 'People you invite appear here until they sign in for the first time.',
+      });
+    }
+
+    var rows = list.map(function (p) {
+      var badge = p.expired
+        ? chip('Invitation expired')
+        : p.awaitingApproval ? chip('Awaiting approval') : chip('Invited');
+      return '<tr data-people-row="' + esc(p.id) + '">' +
+        nameCell(p) +
+        '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.company || p.accountType || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.invited || '—') + '</td>' +
+        '<td>' + badge + '</td>' +
+        (state.caps.manageUsers
+          ? '<td>' + menuBtn('data-people-prospect-menu', p.id, 'Manage invitation for ' + (p.name || p.email)) + '</td>'
+          : '<td></td>') +
+        '</tr>';
+    }).join('');
+
+    return chrome + ui().table(
+      ['Name', 'Email', 'Company', 'Invited', 'Status', { html: '<span class="tma-portal-row-actions">Manage</span>' }],
+      rows
+    );
   }
 
   /* ── address books ──────────────────────────────── */
-  function renderAddressBook(kind) {
-    var s = data().state();
-    var isShared = kind === 'shared-address';
-    var source = isShared ? s.sharedAddressBook : s.personalAddressBook;
-    var list = source.filter(matchesFilters);
-    var hasSelection = Object.keys(state.selected).some(function (k) { return state.selected[k]; });
 
-    var rows = list.map(function (p) {
-      return '<tr>' +
-        '<td><label class="tma-portal-checkbox"><input type="checkbox" data-people-select="' + p.id + '"' + (state.selected[p.id] ? ' checked' : '') + '></label></td>' +
-        '<td><strong>' + ui().esc(displayName(p)) + '</strong></td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
+  function bookKey() { return state.screen === 'shared-address' ? 'shared' : 'personal'; }
+  function bookScope() { return state.screen === 'shared-address' ? 'shared' : 'personal'; }
+
+  function renderAddressBook() {
+    var isShared = state.screen === 'shared-address';
+    var f = store[bookKey()];
+    var picked = selectedIds();
+
+    var actions = ui().btn({ label: 'Add contact', icon: 'Plus', attrs: ' data-people-contact-add' });
+    var right = ui().btn({
+      label: 'Remove selected', variant: 'danger',
+      attrs: ' data-people-contact-remove', disabled: !picked.length,
+    });
+
+    var chrome = head(
+      isShared ? 'Shared Address Book' : 'Personal Address Book',
+      isShared ? 'Contacts every employee can use.' : 'Contacts only you can see.',
+      actions
+    ) + feedProblem(f) + ui().alphaFilter(state.alpha) + toolbar('Search contacts', right);
+
+    if (!f.loaded) return chrome + ui().loading({ count: 5 });
+    if (f.error) return chrome;
+
+    var list = filtered(f.items);
+    if (!list.length) {
+      return chrome + ui().emptyState({
+        illustration: 'Illustration13',
+        title: f.items.length ? 'No contacts match these filters' : 'This address book is empty',
+        subtitle: f.items.length ? 'Try a different letter or search.' : 'Add a contact to keep their details here.',
+      });
+    }
+
+    var rows = list.map(function (c) {
+      return '<tr data-people-row="' + esc(c.id) + '">' +
+        '<td><label class="tma-portal-checkbox"><input type="checkbox" data-people-select="' + esc(c.id) + '"' +
+        (state.selected[c.id] ? ' checked' : '') + ' aria-label="Select ' + esc(c.name) + '"></label></td>' +
+        '<td><strong>' + esc(c.name) + '</strong></td>' +
+        '<td class="tma-portal-table__muted">' + esc(c.email || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(c.company || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(c.phone || '—') + '</td>' +
+        // A shared entry someone else added is read-only unless you administer
+        // the account, so it gets no menu rather than one that only errors.
+        '<td>' + (c.canEdit === false ? '' : menuBtn('data-people-contact-menu', c.id, 'Manage ' + c.name)) + '</td>' +
         '</tr>';
     }).join('');
 
-    return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">' + (isShared ? 'Shared Address Book' : 'Personal Address Book') + '</h2></div>' +
-      ui().alphaFilter(state.alpha) +
-      '<div class="tma-portal-toolbar">' +
-      '<div class="tma-portal-toolbar__group">' + ui().searchInput('Search Users', 'data-people-search', state.search) + '</div>' +
-      '<div class="tma-portal-toolbar__group">' +
-      ui().btn({ label: 'Remove Selected', variant: 'danger', attrs: 'data-people-delete-selected', disabled: !hasSelection }) +
-      ui().btn({ label: 'Add New User', attrs: 'data-people-add-contact' }) +
-      '</div></div>' +
-      (list.length
-        ? ui().table(['', 'Name', 'Email'], rows)
-        : '<div class="tma-portal-table-wrap"><div class="tma-portal-empty" style="padding:var(--space-24)">' +
-          '<p class="tma-portal-empty__subtitle">No users in this address book yet.</p></div></div>');
+    return chrome + ui().table(
+      ['', 'Name', 'Email', 'Company', 'Phone', { html: '<span class="tma-portal-row-actions">Manage</span>' }],
+      rows
+    );
   }
 
-  /* ── groups (teams, departments, projects, committees) ────
-   *
-   * Server-backed via /portal/groups. These are the same groups a calendar
-   * can be shared with and a whole team invited to an event by — not a
-   * page-local list, which is what this screen used to keep.
-   */
-
-  var groupsState = { loaded: false, loading: false, error: null, groups: [], canManage: false, staff: [] };
-
-  function groupsNet(url, opts) {
-    var root = window.__TMA_SITE_ROOT || '';
-    return window.TMAFilesNet.fetchJSON(root + url, opts);
-  }
-
-  function loadGroups(then) {
-    groupsState.loading = true;
-    groupsState.error = null;
-
-    groupsNet('/portal/groups')
-      .then(function (d) {
-        groupsState.loaded = true;
-        groupsState.loading = false;
-        groupsState.groups = (d && d.groups) || [];
-        groupsState.canManage = !!(d && d.canManage);
-        if (then) then();
-      })
-      .catch(function (e) {
-        groupsState.loaded = true;
-        groupsState.loading = false;
-        groupsState.error = (e && e.message) || 'Couldn’t load groups.';
-        if (then) then();
-      });
-  }
+  /* ── distribution groups ────────────────────────── */
 
   var GROUP_TYPE_LABELS = {
     team: 'Team', department: 'Department', project: 'Project',
@@ -265,349 +505,690 @@
   };
 
   function renderGroups() {
-    if (!groupsState.loaded) {
-      return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Groups</h2></div>' +
-        ui().loading({ count: 4 });
+    var f = store.groups;
+    var canManage = !!(f.extra && f.extra.canManage);
+
+    var actions = canManage
+      ? ui().btn({ label: 'New group', icon: 'Plus', attrs: ' data-people-group-new' })
+      : '';
+
+    var chrome = head(
+      'Distribution Groups',
+      'Teams, departments, projects and committees. Share a calendar or invite a whole team at once.',
+      actions
+    ) + feedProblem(f) + toolbar('Search groups');
+
+    if (!f.loaded) return chrome + ui().loading({ count: 4 });
+    if (f.error) return chrome;
+
+    var q = state.search.trim().toLowerCase();
+    var list = f.items.filter(function (g) {
+      return !q || (g.name + ' ' + (g.description || '')).toLowerCase().indexOf(q) !== -1;
+    });
+
+    if (!list.length) {
+      return chrome + ui().emptyState({
+        illustration: 'Illustration13',
+        title: f.items.length ? 'No groups match that search' : 'No groups yet',
+        subtitle: f.items.length
+          ? 'Try a different search.'
+          : 'Create a group to share calendars and invite several people at once.',
+      });
     }
 
-    if (groupsState.error) {
-      return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Groups</h2></div>' +
-        ui().banner('error', groupsState.error);
-    }
-
-    var rows = groupsState.groups.map(function (g) {
-      return '<tr><td><strong>' + ui().esc(g.name) + '</strong>' +
-        (g.description ? '<div class="tma-portal-table__muted">' + ui().esc(g.description) + '</div>' : '') +
-        '</td>' +
-        '<td class="tma-portal-table__muted">' + ui().esc(GROUP_TYPE_LABELS[g.type] || g.type) + '</td>' +
+    var rows = list.map(function (g) {
+      return '<tr data-people-row="' + esc(g.id) + '">' +
+        '<td><strong>' + esc(g.name) + '</strong>' +
+        (g.description ? '<div class="tma-portal-table__muted">' + esc(g.description) + '</div>' : '') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(GROUP_TYPE_LABELS[g.type] || g.type) + '</td>' +
         '<td class="tma-portal-table__muted">' + g.memberCount + ' member' + (g.memberCount === 1 ? '' : 's') +
         (g.autoJoin ? ' · all staff' : '') + '</td>' +
-        '<td><div class="tma-portal-row-actions">' +
-        (groupsState.canManage
-          ? '<button type="button" class="tma-portal-icon-btn" data-people-group-delete="' + ui().esc(g.id) +
-            '" title="Delete group" aria-label="Delete group"><img src="images/icons/phosphor/Trash.svg" alt=""></button>'
-          : '') +
-        '</div></td></tr>';
+        '<td>' + menuBtn('data-people-group-menu', g.id, 'Manage ' + g.name) + '</td>' +
+        '</tr>';
     }).join('');
 
-    return '<div class="tma-portal-head"><h2 class="tma-portal-head__title">Groups</h2>' +
-      '<p class="tma-portal-subtitle">Teams, departments, projects and committees. Share a calendar or invite a whole team at once.</p>' +
-      (groupsState.canManage
-        ? '<div class="tma-portal-head__actions">' + ui().btn({ label: 'New group', icon: 'Plus', attrs: 'data-people-new-group' }) + '</div>'
-        : '') +
-      '</div>' +
-      (groupsState.groups.length
-        ? ui().table(['Group', 'Type', 'Members', ''], rows)
-        : ui().emptyState({
-            illustration: 'Illustration13',
-            title: 'No groups yet',
-            subtitle: 'Create a group to share calendars and invite several people at once.',
-          }));
+    return chrome + ui().table(
+      ['Group', 'Type', 'Members', { html: '<span class="tma-portal-row-actions">Manage</span>' }],
+      rows
+    );
   }
 
   /* ── resend welcome emails ──────────────────────── */
+
   function renderResend() {
-    var s = data().state();
-    return '<div class="tma-portal-head"><div>' +
-      '<h2 class="tma-portal-head__title">Resend Welcome Emails</h2>' +
-      '<p class="tma-portal-subtitle">Send a customized message to let the new users know they’ve been added to the account. Email addresses must be verified to allow users access.</p>' +
-      '</div></div>' +
+    var f = store.candidates;
+
+    var waiting = '';
+    if (!f.loaded) {
+      waiting = ui().loading({ count: 3 });
+    } else if (f.error) {
+      waiting = feedProblem(f);
+    } else if (f.items.length) {
+      var rows = f.items.map(function (p) {
+        return '<tr data-people-row="' + esc(p.id) + '">' +
+          '<td><strong>' + esc(p.name || p.email) + '</strong></td>' +
+          '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
+          '<td class="tma-portal-table__muted">' + esc(p.invited || '—') + '</td>' +
+          '<td>' + ui().btn({ label: 'Send', small: true, variant: 'ghost', attrs: ' data-people-resend-one="' + esc(p.email) + '"' }) + '</td>' +
+          '</tr>';
+      }).join('');
+      waiting = '<h3 class="tma-portal-section__title">Waiting to activate</h3>' +
+        ui().table(['Name', 'Email', 'Invited', ''], rows);
+    } else {
+      waiting = ui().banner('info', 'Everyone in the account has signed in at least once.');
+    }
+
+    return head(
+      'Resend Welcome Emails',
+      'Send someone the email that gets them into the portal. Accounts that have never set a password get their activation link instead.'
+    ) +
       '<div class="tma-portal-section__card" style="max-width:560px">' +
-      ui().field('To:', ui().input({ type: 'email', placeholder: 'Email Address', attrs: 'data-resend-to' })) +
-      (s.trial.active ? ui().banner('info', 'You can customize this welcome message once you upgrade from a trial account.') : '') +
-      '<div class="tma-portal-field"><span class="tma-portal-field__label">Message:</span>' +
-      '<textarea class="tma-portal-textarea" data-resend-msg' + (s.trial.active ? ' disabled' : '') + ' placeholder="I’ve added you to my ' + ui().esc(s.user.company) + ' portal account!"></textarea></div>' +
-      '<label class="tma-portal-checkbox"><input type="checkbox" data-resend-copy><span>Send me a copy of this email</span></label>' +
-      '<button type="button" class="tma-portal-link" data-resend-preview style="align-self:flex-end">Preview Email</button>' +
+      ui().field('To', ui().input({ type: 'email', placeholder: 'Email address', attrs: ' data-resend-to' })) +
+      '<div class="tma-portal-field"><span class="tma-portal-field__label">Message</span>' +
+      '<textarea class="tma-portal-textarea" data-resend-msg rows="4" placeholder="Add a short note (optional)"></textarea></div>' +
+      '<label class="tma-portal-checkbox"><input type="checkbox" data-resend-copy><span>Send me a copy</span></label>' +
       '<div class="tma-portal-form-actions">' +
-      ui().btn({ label: 'Notify', attrs: 'data-resend-notify' }) +
-      ui().btn({ label: 'Skip', variant: 'ghost', attrs: 'data-resend-skip' }) +
-      '</div></div>';
+      ui().btn({ label: 'Send', attrs: ' data-resend-send' }) +
+      ui().btn({ label: 'Cancel', variant: 'ghost', attrs: ' data-resend-cancel' }) +
+      '</div></div>' +
+      waiting;
   }
 
-  /* ── render + wiring ────────────────────────────── */
-  function render() {
-    var el = state.el;
-    if (!el) return;
-    var s = data().state();
+  /* ── modals ─────────────────────────────────────── */
 
-    var body;
-    if (state.screen === 'home') body = renderHome();
-    else if (state.screen === 'employees') body = renderEmployees();
-    else if (state.screen === 'clients') body = renderContacts('clients');
-    else if (state.screen === 'prospects') body = renderContacts('prospects');
-    else if (state.screen === 'shared-address') body = renderAddressBook('shared-address');
-    else if (state.screen === 'personal-address') body = renderAddressBook('personal-address');
-    else if (state.screen === 'groups') {
-      // Groups are server-backed; fetch on first arrival, then render from
-      // what we hold so revisiting the screen doesn't re-skeleton.
-      if (!groupsState.loaded && !groupsState.loading) loadGroups(render);
-      body = renderGroups();
-    } else body = renderResend();
+  var ACCOUNT_TYPES = ['Employee', 'Administrator'];
 
-    el.innerHTML = '<div class="tma-portal-page">' + body + '</div>';
+  /* Create an account (employee or client contact) through /admin/users. */
+  function accountModal(kind) {
+    var isClient = kind === 'client';
+    ui().openModal({
+      title: isClient ? 'Add client contact' : 'Create employee',
+      body:
+        ui().field('First name', ui().input({ attrs: ' data-acct-first' })) +
+        ui().field('Last name', ui().input({ attrs: ' data-acct-last' })) +
+        ui().field('Email address', ui().input({ type: 'email', attrs: ' data-acct-email' })) +
+        (isClient ? '' : ui().field('Account type', ui().select(ACCOUNT_TYPES, 'Employee', 'data-acct-type', 'Account type'))) +
+        ui().field('Phone (optional)', ui().input({ attrs: ' data-acct-phone' })) +
+        ui().banner('info', 'They get an email with a link to set their own password.') +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: isClient ? 'Add contact' : 'Create employee', attrs: ' data-acct-save' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-acct-save]').addEventListener('click', function () {
+          var first = host.querySelector('[data-acct-first]').value.trim();
+          var last = host.querySelector('[data-acct-last]').value.trim();
+          var email = host.querySelector('[data-acct-email]').value.trim();
+          if (!first) { host.querySelector('[data-acct-first]').focus(); return; }
+          if (!email) { host.querySelector('[data-acct-email]').focus(); return; }
 
-    /* home links + quick actions */
-    el.querySelectorAll('[data-people-link]').forEach(function (card) {
-      card.addEventListener('click', function () {
-        var nav = card.getAttribute('data-people-link');
-        var title = card.getAttribute('data-people-title');
-        navigate(nav, title, 'People / ' + title);
-      });
+          var typeEl = host.querySelector('[data-acct-type]');
+          net('/admin/users', {
+            method: 'POST',
+            json: {
+              name: (first + ' ' + last).trim(),
+              email: email,
+              account_type: isClient ? 'Client' : (typeEl ? typeEl.value : 'Employee'),
+              phone: host.querySelector('[data-acct-phone]').value.trim() || null,
+            },
+          }).then(function () {
+            ui().closeModal();
+            ui().toast(isClient ? 'Client contact added' : 'Employee created');
+            reload(isClient ? 'clients' : 'employees');
+            reload('summary');
+            reload('prospects');
+          }).catch(function (e) {
+            ui().toastError(errMsg(e, 'Couldn’t create that account.'));
+          });
+        });
+      },
     });
-    el.querySelectorAll('[data-people-quick]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var kind = b.getAttribute('data-people-quick');
-        if (kind === 'employee') { navigate('people-employees', 'Browse employees', 'People / Browse employees'); setTimeout(function () { createEmployee(); }, 60); }
-        else { navigate('people-clients', 'Browse client contacts', 'People / Browse client contacts'); setTimeout(function () { addContact('clients'); }, 60); }
-      });
+  }
+
+  function editAccountModal(person, feedKey) {
+    ui().openModal({
+      title: 'Edit ' + (person.name || person.email),
+      body:
+        ui().field('First name', ui().input({ attrs: ' data-acct-first', value: person.firstName || '' })) +
+        ui().field('Last name', ui().input({ attrs: ' data-acct-last', value: person.lastName || '' })) +
+        ui().field('Email address', ui().input({ type: 'email', attrs: ' data-acct-email', value: person.email || '' })) +
+        ui().field('Account type', ui().select(
+          ['Client', 'Employee', 'Administrator'], person.accountType, 'data-acct-type', 'Account type'
+        )) +
+        ui().field('Job title', ui().input({ attrs: ' data-acct-job', value: person.jobTitle || '' })) +
+        ui().field('Phone', ui().input({ attrs: ' data-acct-phone', value: person.phone || '' })) +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save changes', attrs: ' data-acct-save' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-acct-save]').addEventListener('click', function () {
+          var first = host.querySelector('[data-acct-first]').value.trim();
+          var last = host.querySelector('[data-acct-last]').value.trim();
+          if (!first) { host.querySelector('[data-acct-first]').focus(); return; }
+          if (!last) { host.querySelector('[data-acct-last]').focus(); return; }
+
+          net('/admin/users/' + person.id, {
+            method: 'PATCH',
+            json: {
+              first_name: first,
+              last_name: last,
+              email: host.querySelector('[data-acct-email]').value.trim(),
+              account_type: host.querySelector('[data-acct-type]').value,
+              job_title: host.querySelector('[data-acct-job]').value.trim() || null,
+              phone: host.querySelector('[data-acct-phone]').value.trim() || null,
+            },
+          }).then(function () {
+            ui().closeModal();
+            ui().toast('Changes saved');
+            reload(feedKey);
+            reload('summary');
+          }).catch(function (e) {
+            ui().toastError(errMsg(e, 'Couldn’t save those changes.'));
+          });
+        });
+      },
     });
+  }
 
-    /* alpha + search + status filters */
-    el.querySelectorAll('[data-alpha]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        state.alpha = b.getAttribute('data-alpha');
-        render();
-      });
+  function contactModal(existing) {
+    var scope = bookScope();
+    var key = bookKey();
+    var c = existing || {};
+    ui().openModal({
+      title: existing ? 'Edit contact' : 'Add contact',
+      body:
+        ui().field('First name', ui().input({ attrs: ' data-contact-first', value: c.firstName || '' })) +
+        ui().field('Last name', ui().input({ attrs: ' data-contact-last', value: c.lastName || '' })) +
+        ui().field('Email address', ui().input({ type: 'email', attrs: ' data-contact-email', value: c.email || '' })) +
+        ui().field('Company', ui().input({ attrs: ' data-contact-company', value: c.company || '' })) +
+        ui().field('Phone', ui().input({ attrs: ' data-contact-phone', value: c.phone || '' })) +
+        ui().field('Job title', ui().input({ attrs: ' data-contact-job', value: c.jobTitle || '' })) +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: existing ? 'Save contact' : 'Add contact', attrs: ' data-contact-save' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-contact-save]').addEventListener('click', function () {
+          var first = host.querySelector('[data-contact-first]').value.trim();
+          if (!first) { host.querySelector('[data-contact-first]').focus(); return; }
+
+          var payload = {
+            scope: scope,
+            first_name: first,
+            last_name: host.querySelector('[data-contact-last]').value.trim() || null,
+            email: host.querySelector('[data-contact-email]').value.trim() || null,
+            company: host.querySelector('[data-contact-company]').value.trim() || null,
+            phone: host.querySelector('[data-contact-phone]').value.trim() || null,
+            job_title: host.querySelector('[data-contact-job]').value.trim() || null,
+          };
+
+          var req = existing
+            ? net('/portal/contacts/' + encodeURIComponent(existing.id), { method: 'PATCH', json: payload })
+            : net('/portal/contacts', { method: 'POST', json: payload });
+
+          req.then(function () {
+            ui().closeModal();
+            ui().toast(existing ? 'Contact saved' : 'Contact added');
+            reload(key);
+            reload('summary');
+          }).catch(function (e) {
+            ui().toastError(errMsg(e, 'Couldn’t save that contact.'));
+          });
+        });
+      },
     });
-    var search = el.querySelector('[data-people-search]');
-    if (search) search.addEventListener('input', function () { state.search = search.value; render(); moveFocus(search); });
-    var status = el.querySelector('[data-people-status]');
-    if (status) status.addEventListener('change', function () { state.statusFilter = status.value; render(); });
+  }
 
-    function moveFocus(oldInput) {
-      var fresh = el.querySelector('[data-people-search]');
-      if (fresh && oldInput !== fresh) {
-        fresh.focus();
-        fresh.setSelectionRange(fresh.value.length, fresh.value.length);
-      }
-    }
-
-    /* employees */
-    function createEmployee() {
-      if (s.employees.length >= s.trial.employeeLimit) { ui().toast('Employee limit reached - upgrade to add more users'); return; }
-      personModal('employee', function (record) {
-        record.id = data().uid('emp');
-        record.lastLogin = '-';
-        record.admin = false;
-        s.employees.push(record);
-        data().save();
-        data().logNotification('Welcome email sent to ' + record.email, record.email);
-        ui().toast('Employee created');
-        render();
-      });
-    }
-    var createBtn = el.querySelector('[data-people-create-employee]');
-    if (createBtn) createBtn.addEventListener('click', createEmployee);
-
-    el.querySelectorAll('[data-people-manage]').forEach(function (b) {
-      var person = s.employees.filter(function (p) { return p.id === b.getAttribute('data-people-manage'); })[0];
-      if (!person) return;
-      ui().wireMenu(b, [
-        { label: 'Edit employee', action: 'edit' },
-        { label: 'Resend welcome email', action: 'resend' },
-        { label: 'Delete employee', action: 'delete', disabled: person.admin },
-      ], function (item) {
-        if (item.action === 'edit') {
-          personModal('employee', function (record, existing) {
-            Object.assign(existing, record);
-            data().save();
-            ui().toast('Employee updated');
-            render();
-          }, person);
-        } else if (item.action === 'resend') {
-          data().logNotification('Welcome email re-sent to ' + person.email, person.email);
-          ui().toast('Welcome email sent');
-        } else if (item.action === 'delete') {
-          s.employees = s.employees.filter(function (p) { return p.id !== person.id; });
-          data().save();
-          ui().toast('Employee deleted');
-          render();
-        }
-      });
-    });
-
-    /* contacts + address books */
-    function currentListRef() {
-      if (state.screen === 'clients') return s.clientContacts;
-      if (state.screen === 'prospects') return s.prospects;
-      if (state.screen === 'shared-address') return s.sharedAddressBook;
-      return s.personalAddressBook;
-    }
-
-    function addContact(kindOverride) {
-      var kind = kindOverride || (state.screen === 'clients' ? 'client' : state.screen === 'prospects' ? 'prospect' : 'user');
-      personModal(kind === 'clients' ? 'client' : kind, function (record) {
-        record.id = data().uid('person');
-        currentListRef().push(record);
-        data().save();
-        ui().toast(kind === 'client' || kind === 'clients' ? 'Client contact added' : 'Added');
-        render();
-      });
-    }
-    var addBtn = el.querySelector('[data-people-add-contact]');
-    if (addBtn) addBtn.addEventListener('click', function () { addContact(); });
-
-    el.querySelectorAll('[data-people-select]').forEach(function (cb) {
-      cb.addEventListener('change', function () {
-        state.selected[cb.getAttribute('data-people-select')] = cb.checked;
-        render();
-      });
-    });
-
-    var deleteSel = el.querySelector('[data-people-delete-selected]');
-    if (deleteSel) deleteSel.addEventListener('click', function () {
-      var list = currentListRef();
-      var keep = list.filter(function (p) { return !state.selected[p.id]; });
-      list.length = 0;
-      Array.prototype.push.apply(list, keep);
-      state.selected = {};
-      data().save();
-      ui().toast('Removed');
-      render();
-    });
-
-    var agreement = el.querySelector('[data-people-agreement]');
-    if (agreement) agreement.addEventListener('click', function () {
-      var picked = s.clientContacts.filter(function (p) { return state.selected[p.id]; });
-      picked.forEach(function (p) { data().logNotification('Agreement sent to ' + p.email, p.email); });
-      ui().toast('Agreement sent to ' + picked.length + ' contact' + (picked.length === 1 ? '' : 's'));
-    });
-
-    /* groups */
-    var newGroup = el.querySelector('[data-people-new-group]');
-    if (newGroup) newGroup.addEventListener('click', function () {
-      // The staff picker is a real list, fetched when the modal opens.
-      groupsNet('/portal/groups/staff').then(function (d) {
-        groupsState.staff = (d && d.staff) || [];
-        openGroupModal();
-      }).catch(function (e) {
-        ui().toast((e && e.message) || 'Couldn’t load the staff list');
-      });
-    });
-
-    function openGroupModal() {
-      var typeOptions = Object.keys(GROUP_TYPE_LABELS).map(function (k) {
-        return '<option value="' + k + '">' + ui().esc(GROUP_TYPE_LABELS[k]) + '</option>';
-      }).join('');
-
-      var staffRows = groupsState.staff.map(function (p) {
+  function staffPicker(selectedIdsList, disabled) {
+    return net('/portal/groups/staff').then(function (d) {
+      return (d && d.staff ? d.staff : []).map(function (p) {
+        var on = (selectedIdsList || []).indexOf(p.id) !== -1;
         return '<label class="tma-portal-check-row">' +
-          '<input type="checkbox" class="tma-dash__check" data-group-member="' + p.id + '">' +
-          '<span>' + ui().esc(p.name) + '<span class="tma-portal-table__muted"> · ' + ui().esc(p.email) + '</span></span>' +
+          '<input type="checkbox" class="tma-dash__check" data-group-member="' + p.id + '"' +
+          (on ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+          '<span>' + esc(p.name) + '<span class="tma-portal-table__muted"> · ' + esc(p.email) + '</span></span>' +
           '</label>';
+      }).join('');
+    });
+  }
+
+  function groupModal(existing) {
+    var isEdit = !!existing;
+
+    function open(staffRows, memberIds) {
+      var typeOptions = Object.keys(GROUP_TYPE_LABELS).map(function (k) {
+        var on = existing ? existing.type === k : k === 'team';
+        return '<option value="' + k + '"' + (on ? ' selected' : '') + '>' + esc(GROUP_TYPE_LABELS[k]) + '</option>';
       }).join('');
 
       ui().openModal({
-        title: 'New group',
+        title: isEdit ? 'Edit ' + existing.name : 'New group',
         body:
-          ui().field('Group name', ui().input({ placeholder: 'e.g. Marketing Team', attrs: 'data-group-name' })) +
-          ui().field('Description', ui().input({ placeholder: 'What is this group for?', attrs: 'data-group-desc' })) +
-          ui().field('Type', '<select class="tma-portal-input" data-group-type>' + typeOptions + '</select>') +
+          ui().field('Group name', ui().input({ placeholder: 'e.g. Marketing Team', attrs: ' data-group-name', value: existing ? existing.name : '' })) +
+          ui().field('Description', ui().input({ placeholder: 'What is this group for?', attrs: ' data-group-desc', value: existing ? (existing.description || '') : '' })) +
+          ui().field('Type', '<select class="tma-portal-select" data-group-type>' + typeOptions + '</select>') +
           ui().field('Everyone on staff',
-            '<label class="tma-portal-check-row"><input type="checkbox" class="tma-dash__check" data-group-auto>' +
+            '<label class="tma-portal-check-row"><input type="checkbox" class="tma-dash__check" data-group-auto' +
+            (existing && existing.autoJoin ? ' checked' : '') + '>' +
             '<span>Membership follows the staff list — new joiners are added automatically</span></label>') +
           ui().field('Members',
             '<div class="tma-portal-check-list" data-group-members>' +
             (staffRows || '<p class="tma-portal-table__muted">No staff to add yet.</p>') + '</div>') +
-          '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create group', attrs: 'data-group-create' }) + '</div>',
+          '<div class="tma-portal-form-actions">' +
+          ui().btn({ label: isEdit ? 'Save group' : 'Create group', attrs: ' data-group-save' }) + '</div>',
         onMount: function (host) {
           // An auto-join group manages its own membership, so the picker is
           // meaningless for it.
           var auto = host.querySelector('[data-group-auto]');
           var list = host.querySelector('[data-group-members]');
-          if (auto && list) {
-            auto.addEventListener('change', function () {
-              list.style.opacity = auto.checked ? '0.4' : '';
-              list.querySelectorAll('input').forEach(function (i) { i.disabled = auto.checked; });
-            });
+          function syncAuto() {
+            if (!auto || !list) return;
+            list.style.opacity = auto.checked ? '0.4' : '';
+            list.querySelectorAll('input').forEach(function (i) { i.disabled = auto.checked; });
           }
+          if (auto) auto.addEventListener('change', syncAuto);
+          syncAuto();
 
-          host.querySelector('[data-group-create]').addEventListener('click', function () {
+          host.querySelector('[data-group-save]').addEventListener('click', function () {
             var nameEl = host.querySelector('[data-group-name]');
             var name = nameEl.value.trim();
             if (!name) { nameEl.focus(); return; }
 
-            var memberIds = Array.prototype.slice
+            var chosen = Array.prototype.slice
               .call(host.querySelectorAll('[data-group-member]:checked'))
               .map(function (i) { return Number(i.getAttribute('data-group-member')); });
 
-            groupsNet('/portal/groups', {
-              method: 'POST',
-              json: {
-                name: name,
-                description: host.querySelector('[data-group-desc]').value.trim() || null,
-                group_type: host.querySelector('[data-group-type]').value,
-                auto_join: !!(auto && auto.checked),
-                memberIds: memberIds,
-              },
-            }).then(function () {
+            var payload = {
+              name: name,
+              description: host.querySelector('[data-group-desc]').value.trim() || null,
+              group_type: host.querySelector('[data-group-type]').value,
+              auto_join: !!(auto && auto.checked),
+            };
+
+            var req;
+            if (isEdit) {
+              req = net('/portal/groups/' + encodeURIComponent(existing.id), { method: 'PATCH', json: payload })
+                .then(function () { return syncMembers(existing, memberIds, chosen, payload.auto_join); });
+            } else {
+              payload.memberIds = chosen;
+              req = net('/portal/groups', { method: 'POST', json: payload });
+            }
+
+            req.then(function () {
               ui().closeModal();
-              ui().toast('Group created');
-              loadGroups(render);
+              ui().toast(isEdit ? 'Group saved' : 'Group created');
+              reload('groups');
+              reload('summary');
             }).catch(function (e) {
-              ui().toast((e && e.message) || 'Couldn’t create the group');
+              ui().toastError(errMsg(e, 'Couldn’t save that group.'));
             });
           });
         },
       });
     }
 
-    el.querySelectorAll('[data-people-group-delete]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var id = b.getAttribute('data-people-group-delete');
-        var group = groupsState.groups.filter(function (g) { return g.id === id; })[0];
-        if (!group) return;
-        if (!window.confirm('Delete “' + group.name + '”? Calendars shared with it lose that access.')) return;
+    if (!isEdit) {
+      staffPicker([], false).then(function (rows) { open(rows, []); })
+        .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t load the staff list.')); });
+      return;
+    }
 
-        groupsNet('/portal/groups/' + encodeURIComponent(id), { method: 'DELETE' })
+    // Editing: the picker starts from who is actually in the group.
+    net('/portal/groups/' + encodeURIComponent(existing.id) + '/members')
+      .then(function (d) {
+        var memberIds = (d && d.members ? d.members : []).map(function (m) { return m.userId; });
+        return staffPicker(memberIds, false).then(function (rows) { open(rows, memberIds); });
+      })
+      .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t load that group.')); });
+  }
+
+  /* Membership is edited as a set; send only what actually changed. */
+  function syncMembers(group, before, after, autoJoin) {
+    if (autoJoin) return Promise.resolve();
+
+    var added = after.filter(function (id) { return before.indexOf(id) === -1; });
+    var removed = before.filter(function (id) { return after.indexOf(id) === -1; });
+    var base = '/portal/groups/' + encodeURIComponent(group.id) + '/members';
+
+    var chain = added.length
+      ? net(base, { method: 'POST', json: { memberIds: added } })
+      : Promise.resolve();
+
+    return removed.reduce(function (p, id) {
+      return p.then(function () { return net(base + '/' + id, { method: 'DELETE' }); });
+    }, chain);
+  }
+
+  /* ── actions ────────────────────────────────────── */
+
+  function findPerson(key, id) {
+    return store[key].items.filter(function (p) { return String(p.id) === String(id); })[0];
+  }
+
+  function sendWelcome(email, opts) {
+    var o = opts || {};
+    return net('/portal/people/welcome', {
+      method: 'POST',
+      json: { email: email, message: o.message || null, copyToMe: !!o.copyToMe },
+    }).then(function (d) {
+      ui().toast(d && d.kind === 'activation' ? 'Activation link sent' : 'Welcome email sent');
+      return d;
+    }).catch(function (e) {
+      ui().toastError(errMsg(e, 'Couldn’t send that email.'));
+      throw e;
+    });
+  }
+
+  function deleteUser(person, feedKey) {
+    if (!window.confirm('Delete ' + (person.name || person.email) + '? Their account and sessions are removed.')) return;
+    net('/admin/users/' + person.id, { method: 'DELETE' })
+      .then(function () {
+        ui().toast('Account deleted');
+        reload(feedKey);
+        reload('summary');
+      })
+      .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t delete that account.')); });
+  }
+
+  /* ── render ─────────────────────────────────────── */
+
+  var SCREEN_FEED = {
+    home: 'summary',
+    employees: 'employees',
+    clients: 'clients',
+    prospects: 'prospects',
+    'shared-address': 'shared',
+    'personal-address': 'personal',
+    groups: 'groups',
+    resend: 'candidates',
+  };
+
+  function render() {
+    var el = state.el;
+    if (!el) return;
+
+    ensure(SCREEN_FEED[state.screen]);
+    // The home cards are gated on capabilities, which arrive with the summary.
+    if (state.screen !== 'home') ensure('summary');
+
+    var body;
+    if (state.screen === 'home') body = renderHome();
+    else if (state.screen === 'employees') body = renderEmployees();
+    else if (state.screen === 'clients') body = renderClients();
+    else if (state.screen === 'prospects') body = renderProspects();
+    else if (state.screen === 'shared-address' || state.screen === 'personal-address') body = renderAddressBook();
+    else if (state.screen === 'groups') body = renderGroups();
+    else body = renderResend();
+
+    MORPH.patch(el, '<div class="tma-portal-page">' + body + '</div>');
+    wire();
+  }
+
+  function wire() {
+    var el = state.el;
+
+    /* home cards + quick actions */
+    MORPH.unwired(el, '[data-people-link]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var title = card.getAttribute('data-people-title');
+        navigate(card.getAttribute('data-people-link'), title, 'People / ' + title);
+      });
+    });
+    MORPH.unwired(el, '[data-people-quick]').forEach(function (b) {
+      b.addEventListener('click', function () { accountModal(b.getAttribute('data-people-quick')); });
+    });
+
+    /* filters */
+    MORPH.unwired(el, '[data-alpha]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.alpha = b.getAttribute('data-alpha');
+        render();
+      });
+    });
+    ui().wireToolbarSearch(el, '[data-people-search]', function (value) {
+      state.search = value;
+      render();
+    });
+    var status = el.querySelector('[data-people-status]');
+    MORPH.on(status, 'change', function () {
+      state.statusFilter = status.value;
+      render();
+    });
+
+    /* selection */
+    MORPH.unwired(el, '[data-people-select]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        state.selected[cb.getAttribute('data-people-select')] = cb.checked;
+        render();
+      });
+    });
+
+    /* create */
+    MORPH.unwired(el, '[data-people-create]').forEach(function (b) {
+      b.addEventListener('click', function () { accountModal(b.getAttribute('data-people-create')); });
+    });
+
+    /* employee row menu */
+    MORPH.unwired(el, '[data-people-manage]').forEach(function (b) {
+      var person = findPerson('employees', b.getAttribute('data-people-manage'));
+      if (!person) return;
+      ui().wireMenu(b, [
+        { label: 'Edit details', action: 'edit' },
+        { label: 'Send password reset', action: 'reset' },
+        { label: person.lastLogin ? 'Resend welcome email' : 'Resend activation email', action: 'welcome' },
+        person.status === 'suspended'
+          ? { label: 'Reactivate account', action: 'reactivate' }
+          : { label: 'Suspend account', action: 'suspend', disabled: person.self },
+        { label: 'Delete employee', action: 'delete', disabled: person.self },
+      ], function (item) {
+        if (item.action === 'edit') editAccountModal(person, 'employees');
+        else if (item.action === 'reset') {
+          net('/admin/users/' + person.id + '/send-reset', { method: 'POST' })
+            .then(function () { ui().toast('Password reset sent'); })
+            .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t send that reset link.')); });
+        } else if (item.action === 'welcome') {
+          sendWelcome(person.email).then(function () { reload('prospects'); }).catch(function () {});
+        } else if (item.action === 'suspend' || item.action === 'reactivate') {
+          net('/admin/users/' + person.id + '/' + item.action, { method: 'POST' })
+            .then(function () {
+              ui().toast(item.action === 'suspend' ? 'Account suspended' : 'Account reactivated');
+              reload('employees');
+            })
+            .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t update that account.')); });
+        } else if (item.action === 'delete') {
+          deleteUser(person, 'employees');
+        }
+      });
+    });
+
+    /* client contact row menu */
+    MORPH.unwired(el, '[data-people-client-menu]').forEach(function (b) {
+      var person = findPerson('clients', b.getAttribute('data-people-client-menu'));
+      if (!person) return;
+      // Only what this viewer may actually do — the writes below are all
+      // administrator-only, so an employee gets the client record link alone.
+      var items = [];
+      if (state.caps.manageUsers) items.push({ label: 'Edit details', action: 'edit' });
+      if (person.clientUid) items.push({ label: 'Open client record', action: 'open' });
+      if (state.caps.manageUsers) {
+        items.push({ label: person.lastLogin ? 'Resend welcome email' : 'Resend activation email', action: 'welcome' });
+        items.push({ label: 'Delete contact', action: 'delete' });
+      }
+      if (!items.length) return;
+
+      ui().wireMenu(b, items, function (item) {
+        if (item.action === 'edit') editAccountModal(person, 'clients');
+        else if (item.action === 'open') {
+          window.location.href = ROOT + '/clients/' + encodeURIComponent(person.clientUid);
+        } else if (item.action === 'welcome') {
+          sendWelcome(person.email).catch(function () {});
+        } else if (item.action === 'delete') {
+          deleteUser(person, 'clients');
+        }
+      });
+    });
+
+    /* bulk delete of client accounts */
+    var deleteUsers = MORPH.unwiredOne(el, '[data-people-delete-users]');
+    if (deleteUsers) deleteUsers.addEventListener('click', function () {
+      var ids = selectedIds().map(Number);
+      if (!ids.length) return;
+      if (!window.confirm('Delete ' + ids.length + ' account' + (ids.length === 1 ? '' : 's') + '?')) return;
+      net('/admin/users/bulk-delete', { method: 'POST', json: { ids: ids } })
+        .then(function (d) {
+          state.selected = {};
+          ui().toast('Deleted ' + (d && d.deleted ? d.deleted : ids.length));
+          reload('clients');
+          reload('summary');
+        })
+        .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t delete those accounts.')); });
+    });
+
+    /* prospect row menu */
+    MORPH.unwired(el, '[data-people-prospect-menu]').forEach(function (b) {
+      var id = b.getAttribute('data-people-prospect-menu');
+      var person = findPerson('prospects', id);
+      if (!person) return;
+      ui().wireMenu(b, [
+        { label: person.source === 'invite' ? 'Resend invitation' : 'Resend activation email', action: 'welcome' },
+        { label: person.source === 'invite' ? 'Cancel invitation' : 'Remove account', action: 'cancel' },
+      ], function (item) {
+        if (item.action === 'welcome') {
+          sendWelcome(person.email).then(function () { reload('prospects'); }).catch(function () {});
+        } else {
+          var q = person.source === 'invite'
+            ? 'Cancel the invitation to ' + person.email + '?'
+            : 'Remove the unused account for ' + person.email + '?';
+          if (!window.confirm(q)) return;
+          net('/portal/people/prospects/' + encodeURIComponent(person.id), { method: 'DELETE' })
+            .then(function () {
+              ui().toast(person.source === 'invite' ? 'Invitation cancelled' : 'Account removed');
+              reload('prospects');
+              reload('summary');
+            })
+            .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t do that.')); });
+        }
+      });
+    });
+
+    /* address books */
+    var addContact = MORPH.unwiredOne(el, '[data-people-contact-add]');
+    if (addContact) addContact.addEventListener('click', function () { contactModal(null); });
+
+    MORPH.unwired(el, '[data-people-contact-menu]').forEach(function (b) {
+      var contact = findPerson(bookKey(), b.getAttribute('data-people-contact-menu'));
+      if (!contact) return;
+      ui().wireMenu(b, [
+        { label: 'Edit contact', action: 'edit' },
+        { label: 'Remove contact', action: 'remove' },
+      ], function (item) {
+        if (item.action === 'edit') { contactModal(contact); return; }
+        if (!window.confirm('Remove ' + contact.name + ' from this address book?')) return;
+        net('/portal/contacts/' + encodeURIComponent(contact.id), { method: 'DELETE' })
           .then(function () {
-            ui().toast('Group deleted');
-            loadGroups(render);
+            ui().toast('Contact removed');
+            reload(bookKey());
+            reload('summary');
           })
-          .catch(function (e) { ui().toast((e && e.message) || 'Couldn’t delete the group'); });
+          .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t remove that contact.')); });
+      });
+    });
+
+    var removeContacts = MORPH.unwiredOne(el, '[data-people-contact-remove]');
+    if (removeContacts) removeContacts.addEventListener('click', function () {
+      var ids = selectedIds();
+      if (!ids.length) return;
+      if (!window.confirm('Remove ' + ids.length + ' contact' + (ids.length === 1 ? '' : 's') + '?')) return;
+      net('/portal/contacts/bulk-delete', { method: 'POST', json: { ids: ids, scope: bookScope() } })
+        .then(function (d) {
+          state.selected = {};
+          ui().toast('Removed ' + (d && d.deleted != null ? d.deleted : ids.length));
+          reload(bookKey());
+          reload('summary');
+        })
+        .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t remove those contacts.')); });
+    });
+
+    /* groups */
+    var newGroup = MORPH.unwiredOne(el, '[data-people-group-new]');
+    if (newGroup) newGroup.addEventListener('click', function () { groupModal(null); });
+
+    MORPH.unwired(el, '[data-people-group-menu]').forEach(function (b) {
+      var group = findPerson('groups', b.getAttribute('data-people-group-menu'));
+      if (!group) return;
+      var canManage = !!(store.groups.extra && store.groups.extra.canManage);
+      ui().wireMenu(b, [
+        { label: 'View members', action: 'members' },
+        { label: 'Edit group', action: 'edit', disabled: !canManage },
+        { label: 'Delete group', action: 'delete', disabled: !canManage },
+      ], function (item) {
+        if (item.action === 'members') {
+          net('/portal/groups/' + encodeURIComponent(group.id) + '/members')
+            .then(function (d) {
+              var members = (d && d.members) || [];
+              ui().openModal({
+                title: group.name + ' · members',
+                body: members.length
+                  ? '<div class="tma-portal-check-list">' + members.map(function (m) {
+                      return '<div class="tma-portal-check-row"><span>' + esc(m.name) +
+                        '<span class="tma-portal-table__muted"> · ' + esc(m.email) + '</span></span></div>';
+                    }).join('') + '</div>'
+                  : '<p class="tma-portal-table__muted">This group has no members yet.</p>',
+              });
+            })
+            .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t load the members.')); });
+        } else if (item.action === 'edit') {
+          groupModal(group);
+        } else if (item.action === 'delete') {
+          if (!window.confirm('Delete “' + group.name + '”? Calendars shared with it lose that access.')) return;
+          net('/portal/groups/' + encodeURIComponent(group.id), { method: 'DELETE' })
+            .then(function () {
+              ui().toast('Group deleted');
+              reload('groups');
+              reload('summary');
+            })
+            .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t delete that group.')); });
+        }
       });
     });
 
     /* resend welcome emails */
-    var notify = el.querySelector('[data-resend-notify]');
-    if (notify) notify.addEventListener('click', function () {
+    var send = MORPH.unwiredOne(el, '[data-resend-send]');
+    if (send) send.addEventListener('click', function () {
       var to = el.querySelector('[data-resend-to]');
+      var msg = el.querySelector('[data-resend-msg]');
+      var copy = el.querySelector('[data-resend-copy]');
       if (!to.value.trim()) { to.focus(); return; }
-      data().logNotification('Welcome email re-sent to ' + to.value.trim(), to.value.trim());
-      if (el.querySelector('[data-resend-copy]').checked) {
-        data().logNotification('Copy of welcome email sent to ' + s.user.email, s.user.email);
-      }
-      ui().toast('Welcome email sent');
-      to.value = '';
+      sendWelcome(to.value.trim(), {
+        message: msg ? msg.value.trim() : '',
+        copyToMe: !!(copy && copy.checked),
+      }).then(function () {
+        to.value = '';
+        if (msg) msg.value = '';
+        if (copy) copy.checked = false;
+        reload('candidates');
+        reload('prospects');
+      }).catch(function () {});
     });
-    var skip = el.querySelector('[data-resend-skip]');
-    if (skip) skip.addEventListener('click', function () {
+
+    var cancel = MORPH.unwiredOne(el, '[data-resend-cancel]');
+    if (cancel) cancel.addEventListener('click', function () {
       navigate('people-home', 'Manage users', 'People / Manage users');
     });
-    var preview = el.querySelector('[data-resend-preview]');
-    if (preview) preview.addEventListener('click', function () {
-      ui().openModal({
-        title: 'Email preview',
-        body:
-          '<p><strong>Subject:</strong> You’ve been added to ' + ui().esc(s.user.company) + '</p>' +
-          '<p>Hi there,</p>' +
-          '<p>' + ui().esc(s.user.name) + ' added you to the ' + ui().esc(s.user.company) + ' client portal. ' +
-          'Click the activation link in this email to verify your address and set your password.</p>' +
-          '<p class="tma-portal-note">This is how the welcome email will appear to recipients.</p>',
+
+    MORPH.unwired(el, '[data-people-resend-one]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        sendWelcome(b.getAttribute('data-people-resend-one'))
+          .then(function () { reload('candidates'); })
+          .catch(function () {});
       });
     });
   }
 
+  /* ── mount ──────────────────────────────────────── */
+
   function mount(el, opts) {
     state.el = el;
-    var next = opts && opts.navId && SCREEN_FOR_NAV[opts.navId];
+    var next = (opts && opts.navId && SCREEN_FOR_NAV[opts.navId]) || null;
     if (next && next !== state.screen) {
+      // A different screen starts clean — a letter or search left over from
+      // the last list would silently hide rows on this one.
       state.alpha = 'All';
       state.search = '';
       state.selected = {};
-      state.screen = next;
-    } else if (next) {
+      state.statusFilter = 'All employees';
       state.screen = next;
     }
     render();

@@ -75,6 +75,8 @@
   var FILES = [];
   var METRICS = null;
   var WORK_PLAN = null;
+  var SIGNINS = [];
+  var SIGNINS_STATE = 'loading';
   var ROOT = window.__TMA_SITE_ROOT || '';
 
   function apiGet(url) {
@@ -237,6 +239,18 @@
     });
   }
 
+  /* Sign-ins are their own feed, not a slice of the audit trail: failed
+     attempts only exist in auth_events, and the trail shows non-admins their
+     own rows alone. apiGet swallows the failure, so a null answer is the
+     error state rather than an empty list — an empty list means nobody has
+     signed in, which is a different thing to say. */
+  function loadSignIns() {
+    return apiGet('/portal/sign-ins?limit=8').then(function (j) {
+      SIGNINS = (j && j.items) || [];
+      SIGNINS_STATE = j ? 'ready' : 'error';
+    });
+  }
+
   function loadWorkPlan() {
     var today = new Date();
     var key = today.getFullYear() + '-' +
@@ -318,6 +332,18 @@
       d.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, 0, 0);
       return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     } catch (e) { return String(hm || ''); }
+  }
+
+  /* Your profile, the same cards the account page shows, borrowed from
+     TMAAccount so the two never drift apart. */
+  function renderProfile() {
+    if (!window.TMAAccount || typeof window.TMAAccount.renderProfileCards !== 'function') return '';
+    return window.TMAAccount.renderProfileCards();
+  }
+
+  function mountProfile(root) {
+    if (!root || !window.TMAAccount || typeof window.TMAAccount.mountProfileCards !== 'function') return;
+    window.TMAAccount.mountProfileCards(root);
   }
 
   function renderHero() {
@@ -447,6 +473,30 @@
       '</div></div></section>';
   }
 
+  /* Recent sign-ins. The rows are the shared activity component the right
+     sidebar and the Activities popup already use, so a sign-in looks the same
+     wherever it is shown — only the feed behind it is different. */
+  function renderSignInRows() {
+    var R = window.TMANotifyRender;
+    if (!R) return '';
+    if (SIGNINS_STATE === 'loading') return R.skeleton(4);
+    if (SIGNINS_STATE === 'error') return R.errorState('Could not load sign-ins.');
+    if (!SIGNINS.length) return R.emptyState('No sign-ins recorded yet.', 'ClockCounterClockwise');
+    return SIGNINS.map(function (item) {
+      return R.activityItem(item, 'sidebar');
+    }).join('');
+  }
+
+  function renderSignIns() {
+    return '<section class="tma-dash__overview-block tma-dash__overview-block--signins" data-overview-signins>' +
+      '<div class="tma-dash__overview-block-head">' +
+      '<h3 class="tma-dash__overview-block-title">Recent sign-ins</h3>' +
+      '<button type="button" class="tma-dash__overview-link" data-overview-view-all-activity>See all activity</button>' +
+      '</div>' +
+      '<div class="tma-dash__overview-signins" data-overview-signins-body>' + renderSignInRows() + '</div>' +
+      '</section>';
+  }
+
   function renderEmployeesTab(activeTab) {
     return '<div class="tma-dash__overview-employees-tab"' + (activeTab !== 'Employees' ? ' hidden' : '') + '>' +
       '<div class="tma-dash__overview-employees-mount" data-employees-overview></div></div>';
@@ -535,7 +585,7 @@
     return '<div class="tma-dash__overview" data-node-id="32546:96118">' +
       renderTabs(tab) +
       '<div class="tma-dash__overview-grid"' + (tab !== 'Overview' ? ' hidden' : '') + '>' +
-      renderHero() + renderRoad() + renderFiles() +
+      renderProfile() + renderHero() + renderRoad() + renderFiles() + renderSignIns() +
       '</div>' +
       renderEmployeesTab(tab) +
       renderUsers(tab) +
@@ -628,9 +678,10 @@
     var grid = container.querySelector('.tma-dash__overview-grid');
     if (!grid) return;
     var scrollY = window.scrollY || 0;
-    grid.innerHTML = renderHero() + renderRoad() + renderFiles();
+    grid.innerHTML = renderProfile() + renderHero() + renderRoad() + renderFiles() + renderSignIns();
     try { window.scrollTo(0, scrollY); } catch (e) {}
     bindRoadWheel(container);
+    mountProfile(grid);
   }
 
   function remountRoadSection(container) {
@@ -751,6 +802,13 @@
         return;
       }
 
+      var allActivity = e.target.closest('[data-overview-view-all-activity]');
+      if (allActivity && container.contains(allActivity)) {
+        e.preventDefault();
+        setActiveTab(container, 'Activity');
+        return;
+      }
+
       var workEdit = e.target.closest('[data-overview-workplan-edit]');
       if (workEdit && container.contains(workEdit)) {
         e.preventDefault();
@@ -861,6 +919,7 @@
       loadLatestFiles(),
       loadMetrics(),
       loadWorkPlan(),
+      loadSignIns(),
     ]).then(function () {
       var current = container.querySelector('[role="tab"][aria-selected="true"]');
       var tab = (current && current.getAttribute('data-overview-tab')) || 'Overview';
@@ -926,6 +985,7 @@
     bindTabs(container);
     bindOverviewActions(container);
     bindRoadWheel(container);
+    mountProfile(container.querySelector('.tma-dash__overview-grid'));
     if (activeTab === 'Employees') mountEmployeesTab(container);
     if (activeTab === 'Users') mountUsersTab(container);
     if (activeTab === 'Files') mountFilesTab(container);

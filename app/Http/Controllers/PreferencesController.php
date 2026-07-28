@@ -156,7 +156,11 @@ class PreferencesController extends Controller
                 continue;
             }
             if ($key === 'plugins') {
-                $current[$key] = $this->sanitizePlugins(is_array($value) ? $value : []);
+                // An explicit null puts the list back to "never customized",
+                // which is not the same as an empty list (every plugin
+                // removed) — the client falls back to its catalog for one and
+                // shows nothing for the other.
+                $current[$key] = is_array($value) ? $this->sanitizePlugins($value) : null;
 
                 continue;
             }
