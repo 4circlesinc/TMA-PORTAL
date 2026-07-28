@@ -2343,6 +2343,37 @@
   }
 
   /*
+   * Who a bubble's photo belongs to.
+   *
+   * The message carries its own sender, but not every message has one — a
+   * system line has no author, and older or optimistically-rendered rows can
+   * reach the renderer before the server has filled it in. The conversation
+   * always knows: a direct chat *is* the other person, and a group lists its
+   * members. Falling through to it is what stops an unresolved sender being
+   * drawn as a "?" tile.
+   */
+  function bubbleAvatarPerson(msg, row) {
+    var sender = msg.sender || {};
+    var thread = resolveThread(row);
+    var member = null;
+
+    if (sender.id != null) {
+      member = (thread.members || []).filter(function (m) {
+        return m.id === sender.id;
+      })[0];
+    }
+
+    // A direct conversation only has one other person in it, so its own photo
+    // and name are that person's — the same ones the inbox row shows.
+    var direct = isDirectThread(thread) ? thread : {};
+
+    return {
+      name: sender.name || (member && member.name) || direct.name || '',
+      photo: sender.photo || (member && member.photo) || direct.photo || '',
+    };
+  }
+
+  /*
    * The sender's photo beside their bubble.
    *
    * It sits on the *last* bubble of a run, next to the message that finished
@@ -2350,30 +2381,31 @@
    * same width so the whole run stays in one column — which is how WhatsApp
    * and Teams both draw a group of messages from one person.
    */
-  function renderBubbleAvatar(msg, show) {
+  function renderBubbleAvatar(msg, row, show) {
     if (msg.direction === 'out') return '';
 
-    if (!show) {
+    var person = show ? bubbleAvatarPerson(msg, row) : null;
+
+    // An empty slot rather than a placeholder: nobody wants a wall of "?".
+    if (!person || (!person.photo && !person.name)) {
       return (
         '<span class="tma-dash__messages-bubble-avatar tma-dash__messages-bubble-avatar--blank"' +
         ' aria-hidden="true"></span>'
       );
     }
 
-    var sender = msg.sender || {};
-
-    if (sender.photo) {
+    if (person.photo) {
       return (
-        '<span class="tma-dash__messages-bubble-avatar" title="' + esc(sender.name || '') + '">' +
-        '<img src="' + esc(sender.photo) + '" alt="" loading="lazy"></span>'
+        '<span class="tma-dash__messages-bubble-avatar" title="' + esc(person.name) + '">' +
+        '<img src="' + esc(person.photo) + '" alt="" loading="lazy"></span>'
       );
     }
 
     return (
       '<span class="tma-dash__messages-bubble-avatar tma-dash__messages-bubble-avatar--initial ' +
-      'tma-dash__messages-row-avatar--' + initialColourFor(sender.name) +
-      '" title="' + esc(sender.name || '') + '">' +
-      esc(initialsFor(sender.name)) +
+      'tma-dash__messages-row-avatar--' + initialColourFor(person.name) +
+      '" title="' + esc(person.name) + '">' +
+      esc(initialsFor(person.name)) +
       '</span>'
     );
   }
@@ -2737,7 +2769,7 @@
       '" data-messages-id="' + esc(msg.id) + '">' +
       // A call is always its own run, so it always carries the caller's photo
       // — and that keeps it in the same column as the bubbles around it.
-      renderBubbleAvatar(msg, true) +
+      renderBubbleAvatar(msg, row, true) +
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       ' tma-dash__messages-bubble--call' + (missed ? ' tma-dash__messages-bubble--call-missed' : '') + '">' +
@@ -2864,7 +2896,7 @@
      * overflow so the bubble can slide under the reply icon.
      */
     var bubble =
-      renderBubbleAvatar(msg, opts.showAvatar) +
+      renderBubbleAvatar(msg, row, opts.showAvatar) +
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       bubbleExtraClass +
