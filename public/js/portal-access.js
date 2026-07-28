@@ -85,11 +85,24 @@
     });
   }
 
-  /* A section left with nothing in it would still draw its divider. */
-  function pruneEmptySections(scope) {
-    scope.querySelectorAll('.tma-dash__nav-section').forEach(function (section) {
+  /* A section left with nothing in it would still draw its divider. Takes the
+     list snapshotted before pruning, NOT a live query: sections that never
+     held nav rows — the Main Menu / Folder Shortcuts tab row, the shortcuts
+     list — carry buttons and containers rather than [data-nav], so a live
+     query reads them as empty and deletes them for every user. */
+  function pruneEmptySections(sections) {
+    sections.forEach(function (section) {
       if (!section.querySelector('[data-nav], [data-expand]')) remove(section);
     });
+  }
+
+  /* The sections that actually hold nav rows, captured before anything is
+     removed, so only sections emptied *by* the prune are dropped. */
+  function navSections(scope) {
+    return Array.prototype.filter.call(
+      scope.querySelectorAll('.tma-dash__nav-section'),
+      function (section) { return !!section.querySelector('[data-nav], [data-expand]'); }
+    );
   }
 
   function pruneTabs(scope) {
@@ -101,9 +114,10 @@
 
   function apply() {
     var scope = document;
+    var sections = navSections(scope);
     pruneNavItems(scope);
     pruneEmptyGroups(scope);
-    pruneEmptySections(scope);
+    pruneEmptySections(sections);
     pruneTabs(scope);
     document.documentElement.setAttribute('data-tma-access', 'ready');
   }
