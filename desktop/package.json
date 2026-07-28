@@ -1,6 +1,6 @@
 {
   "name": "tma-portal-desktop",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "TM ANTOINE Advisory portal — macOS desktop shell",
   "main": "main.js",

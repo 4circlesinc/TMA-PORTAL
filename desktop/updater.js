@@ -20,6 +20,8 @@ const { spawn, execFile } = require('node:child_process');
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
 
+const { version: APP_VERSION } = require('./package.json');
+
 const FEED_URL = process.env.TMA_UPDATE_URL || 'https://portal.tmantoinelaw.com/desktop/';
 
 const CHECK_INTERVAL = 3600000; // hourly, so a deploy lands the same day
@@ -166,6 +168,15 @@ rm -f ${JSON.stringify(script)}
 
 let checking = false;
 let declined = null; // version the user said "Later" to, so we ask once
+let onStateChange = () => {};
+
+/** A version the user deferred, so the menu can offer it again by name. */
+const deferredUpdate = () => declined;
+
+function defer(version) {
+  declined = version;
+  onStateChange();
+}
 
 function progressBar(fraction) {
   const win = BrowserWindow.getAllWindows()[0];
@@ -183,7 +194,7 @@ async function runUpdate(release, parentWindow) {
   });
 
   if (response !== 1) {
-    declined = release.version;
+    defer(release.version);
     return;
   }
 
@@ -225,12 +236,12 @@ async function checkForUpdates({ silent = true } = {}) {
   try {
     const release = await fetchManifest();
 
-    if (!release || compareVersions(release.version, app.getVersion()) <= 0) {
+    if (!release || compareVersions(release.version, APP_VERSION) <= 0) {
       if (!silent) {
         dialog.showMessageBox(parentWindow, {
           type: 'info',
           message: "You're up to date",
-          detail: `Version ${app.getVersion()}.`,
+          detail: `Version ${APP_VERSION}.`,
         });
       }
       return null;
@@ -262,5 +273,13 @@ function start() {
 }
 
 module.exports = {
-  start, checkForUpdates, fetchManifest, stageRelease, parseManifest, compareVersions, FEED_URL,
+  start,
+  checkForUpdates,
+  fetchManifest,
+  stageRelease,
+  parseManifest,
+  compareVersions,
+  deferredUpdate,
+  onStateChange: (fn) => { onStateChange = fn; },
+  FEED_URL,
 };

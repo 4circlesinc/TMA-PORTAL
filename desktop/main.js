@@ -11,6 +11,9 @@ const updater = require('./updater');
 const { installCloseToBackground } = require('./window-policy');
 const callWindow = require('./call-window');
 const settings = require('./settings');
+// Our own version, not app.getVersion(): that reports Electron's own version
+// whenever the app is started from a file rather than a package directory.
+const { version: APP_VERSION } = require('./package.json');
 
 // Which portal this shell talks to. Override for local work:
 //   TMA_PORTAL_URL=http://localhost:8001 npm start
@@ -490,6 +493,21 @@ async function signOutOfThisDevice() {
   loadPortal(mainWindow);
 }
 
+/**
+ * Appears in more than one menu, so it is built rather than repeated. Reads
+ * "Restart to Update" once a download is waiting, because at that point
+ * checking again is not what the user wants.
+ */
+function checkForUpdatesItem() {
+  return {
+    label: updater.deferredUpdate()
+      ? `Install Update ${updater.deferredUpdate()}…`
+      : 'Check for Updates…',
+    enabled: app.isPackaged,
+    click: () => updater.checkForUpdates({ silent: false }),
+  };
+}
+
 /** A checkbox that writes straight through to settings.js. */
 function toggle(label, key, detail) {
   return {
@@ -510,19 +528,17 @@ function buildMenu() {
       role: 'appMenu',
       submenu: [
         { role: 'about' },
-        {
-          label: 'Check for Updates…',
-          enabled: app.isPackaged,
-          click: () => updater.checkForUpdates({ silent: false }),
-        },
+        checkForUpdatesItem(),
         { type: 'separator' },
         {
-          label: 'Settings…',
+          // Named for what it opens. The submenu below is this app's own
+          // settings, and two items called "Settings" is one too many.
+          label: 'Portal Settings…',
           accelerator: 'CmdOrCtrl+,',
           click: () => go('/account-settings'),
         },
         {
-          label: 'App Settings',
+          label: 'Desktop App Settings',
           submenu: [
             toggle('Launch at Login', 'launchAtLogin',
               'Start the portal when you log in to this Mac.'),
@@ -530,6 +546,9 @@ function buildMenu() {
               'Closing the window keeps messages and calls arriving. Off makes the red button quit.'),
             toggle('Ring Calls in a Separate Window', 'ringPanel',
               'Incoming calls appear in a small panel instead of opening the app.'),
+            { type: 'separator' },
+            { label: `Version ${APP_VERSION}`, enabled: false },
+            checkForUpdatesItem(),
           ],
         },
         { type: 'separator' },
@@ -610,11 +629,15 @@ function buildMenu() {
     {
       role: 'help',
       submenu: [
+        // Also here: the app menu is the convention, but Help is where people
+        // actually go looking for it.
+        checkForUpdatesItem(),
+        { type: 'separator' },
         { label: 'Open Portal in Browser', click: () => shell.openExternal(PORTAL_URL) },
         {
           label: 'Report a Problem…',
           click: () => shell.openExternal(
-            `mailto:support@tmantoine.com?subject=${encodeURIComponent(`Portal desktop ${app.getVersion()}`)}`,
+            `mailto:support@tmantoine.com?subject=${encodeURIComponent(`Portal desktop ${APP_VERSION}`)}`,
           ),
         },
       ],
@@ -678,6 +701,8 @@ if (!app.requestSingleInstanceLock()) {
 
     createWindow();
     buildMenu();
+    // Relabel the menu when an update is found and deferred.
+    updater.onStateChange(buildMenu);
     updater.start();
 
     // Clicking the dock icon brings back the window we hid on close.
