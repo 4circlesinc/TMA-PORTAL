@@ -258,6 +258,13 @@
     { nav: 'people-resend', screen: 'resend', title: 'Resend welcome emails', desc: 'Re-invite people who have not signed in yet.', icon: 'PaperPlaneTilt', cap: 'manageUsers' },
   ];
 
+  /* "UserCirclePlus" -> "user-circle-plus", naming the mask rule in
+     portal.css. The art itself is named there, never inline — a relative
+     url() in an inline style resolves against the page, not the stylesheet. */
+  function iconSlug(name) {
+    return String(name).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+  }
+
   function renderHome() {
     var f = store.summary;
     var counts = f.extra || {};
@@ -279,10 +286,12 @@
       body = '<div class="tma-portal-card-grid">' +
         HOME_LINKS.filter(function (l) { return !l.cap || state.caps[l.cap]; }).map(function (l) {
           var n = l.count ? counts[l.count] : null;
-          return '<button type="button" class="tma-portal-tpl-card" data-people-link="' + l.nav + '"' +
-            ' data-people-screen="' + l.screen + '" data-people-title="' + esc(l.title) + '"' +
-            ' style="cursor:pointer;text-align:left;font-family:inherit">' +
-            '<div class="tma-portal-tpl-card__preview"><img src="images/icons/phosphor/' + l.icon + '.svg" alt=""></div>' +
+          return '<button type="button" class="tma-portal-tpl-card tma-portal-tpl-card--module"' +
+            ' data-people-link="' + l.nav + '"' +
+            ' data-people-screen="' + l.screen + '" data-people-title="' + esc(l.title) + '">' +
+            '<span class="tma-portal-module-icon">' +
+            '<span class="tma-portal-module-icon__art tma-portal-module-icon__art--' +
+            iconSlug(l.icon) + '" aria-hidden="true"></span></span>' +
             '<h3 class="tma-portal-tpl-card__name">' + esc(l.title) +
             (n != null ? ' ' + chip(String(n)) : '') + '</h3>' +
             '<p class="tma-portal-tpl-card__desc">' + esc(l.desc) + '</p>' +

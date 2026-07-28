@@ -40,13 +40,26 @@
     return (window.TMACurrentUser && window.TMACurrentUser.get()) || null;
   }
 
+  /* Every row here is a real column on the account, served by /me and edited
+     on the profile page — a dash means the person has not filled it in, not
+     that the portal has nowhere to keep it. */
   function profileDetailsFor(me) {
     return [
       { label: 'Company', value: (me && me.company) || '—' },
       { label: 'Contact Phone', value: (me && me.phone) || '—' },
       { label: 'Email', value: (me && me.email) || '—' },
       { label: 'Job title', value: (me && me.jobTitle) || '—' },
+      { label: 'LinkedIn', value: (me && me.linkedin) || '—', link: me && me.linkedin },
     ];
+  }
+
+  /* Show the handle, not the whole URL: "linkedin.com/in/vernon-francis" is
+     already long, and the https:// prefix earns nothing in a two-column row. */
+  function linkedinLabel(url) {
+    return String(url || '')
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .replace(/\/$/, '');
   }
 
   function esc(s) {
@@ -95,11 +108,7 @@
       (email
         ? '<span class="tma-dash__account-meta-item" data-account-email><img src="' + ICON + 'EnvelopeSimple.svg" alt="" width="16" height="16">' + esc(email) + '</span>'
         : '') +
-      '</div></div>' +
-      '<div class="tma-dash__account-stats tma-dash__account-stats--empty">' +
-      '<div class="tma-dash__account-stat"><span class="tma-dash__account-stat-label">Account stats</span>' +
-      '<p class="tma-dash__account-stat-value">Coming soon</p></div>' +
-      '</div></div>' +
+      '</div></div></div>' +
       '<img class="tma-dash__account-avatar" data-account-avatar src="' + esc(avatarSrc) + '" alt="' + esc(name) + '" width="40" height="40">' +
       '</section>';
   }
@@ -111,6 +120,10 @@
         '<img src="' + ICON + row.icon + '.svg" alt="" width="16" height="16"></span>';
     }
     var valueHtml = esc(row.value);
+    if (row.link) {
+      valueHtml = '<a class="tma-dash__account-detail-link" href="' + esc(row.link) +
+        '" target="_blank" rel="noopener noreferrer">' + esc(linkedinLabel(row.link)) + '</a>';
+    }
     if (row.pill) {
       valueHtml = '<span class="tma-dash__account-detail-value-wrap"><span>' + esc(row.value) + '</span>' +
         renderPill(row.pill.label, row.pill.color) + '</span>';
@@ -125,7 +138,7 @@
     return '<section class="tma-dash__account-block tma-dash__account-block--details" data-node-id="32546:46802">' +
       '<div class="tma-dash__account-block-head">' +
       '<h3 class="tma-dash__account-block-title">Profile Details</h3>' +
-      '<button type="button" class="tma-dash__account-block-link">Edit Profile</button></div>' +
+      '<button type="button" class="tma-dash__account-block-link" data-account-edit-profile>Edit Profile</button></div>' +
       '<div class="tma-dash__account-details" data-account-details>' + rows + '</div></section>';
   }
 
@@ -1183,7 +1196,39 @@
     hydrateAccountProfile(container, currentUser());
     mountPromo(container);
     bindPromoClicks(container);
+    bindEditProfile(container);
     bindProfileUserChange(container);
+  }
+
+  /* Edit Profile opens the real editor — Account settings → My profile — which
+     already owns validation, the photo cropper and the PUT to /profile. A
+     second form here would be a copy of all three, drifting from the day it
+     shipped. In-app where the shell can route; a plain load otherwise. */
+  function openProfileEditor() {
+    if (window.TMADashboard && typeof window.TMADashboard.navigate === 'function') {
+      window.TMADashboard.navigate({
+        navId: 'account-settings',
+        view: 'admin',
+        adminPage: 'profile',
+        title: 'Account settings',
+        crumb: 'Account settings / My profile',
+      });
+      // The settings shell may not be on this page at all; if it never took,
+      // fall through to the URL that serves it.
+      if (document.querySelector('.tma-dash__view[data-view="admin"]:not([hidden])')) return;
+    }
+    window.location.href = (window.__TMA_SITE_ROOT || '') + '/account-settings?settings-page=profile';
+  }
+
+  function bindEditProfile(container) {
+    if (!container || container.dataset.accountEditProfileBound) return;
+    container.dataset.accountEditProfileBound = '1';
+    container.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-account-edit-profile]');
+      if (!btn || !container.contains(btn)) return;
+      e.preventDefault();
+      openProfileEditor();
+    });
   }
 
   /* Names, avatars, and details arrive after the first paint, so any host of
@@ -1313,6 +1358,7 @@
     setActiveTab(container, activeTab);
     mountPromo(container);
     bindPromoClicks(container);
+    bindEditProfile(container);
     if (window.TMACurrentUser && window.TMACurrentUser.onChange && !container.dataset.accountUserBound) {
       container.dataset.accountUserBound = '1';
       window.TMACurrentUser.onChange(function (me) {

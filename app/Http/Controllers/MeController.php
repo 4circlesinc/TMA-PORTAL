@@ -28,6 +28,13 @@ class MeController extends Controller
             'firstName' => $user->first_name ?: $user->name,
             'lastName' => $user->last_name,
             'email' => $user->email,
+            // The profile card renders straight from this store, on the account
+            // page and on the Overview — without these four it had nothing but
+            // dashes to show.
+            'phone' => $user->phone,
+            'jobTitle' => $user->job_title,
+            'company' => $user->companyName(),
+            'linkedin' => $user->linkedin_url,
             // No fallback avatar: the front-end draws initials when this is null.
             'avatar' => $user->avatar_url,
             'hasAvatar' => (bool) $user->avatar_url,
@@ -73,6 +80,10 @@ class MeController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'jobTitle' => $user->job_title,
+            // The editable value, not companyName(): a client must not have
+            // their client record's company silently saved back onto them.
+            'company' => $user->company,
+            'companyInherited' => $user->company ? null : $user->clientRecord?->company,
             'bio' => $user->bio,
             'linkedin' => $user->linkedin_url,
             'accountType' => $user->account_type,

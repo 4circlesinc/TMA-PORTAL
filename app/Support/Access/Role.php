@@ -68,8 +68,20 @@ class Role
         /* ── Communication ───────────────────────────────────────────── */
         // Use the portal mailbox (Gmail/Graph). Clients talk via Messages.
         'mail.use' => [self::EMPLOYEE],
-        // The internal social feed.
+        // The internal social feed. Reaching it at all; what a person may do
+        // *inside* a channel is decided by their membership row — see
+        // App\Support\Feed\FeedAccess.
         'feed.view' => [self::EMPLOYEE],
+        // Create a new channel. Employees may; whether a client channel is
+        // allowed is a separate decision made per channel type.
+        'feed.createChannel' => [self::EMPLOYEE],
+        // Moderate any channel, including ones you were never added to —
+        // delete posts, lock comments, archive. Administrators only, so
+        // moderation still works on a private channel nobody invited them to.
+        'feed.moderate' => [],
+        // Read Feed analytics across every channel rather than only the ones
+        // you administer.
+        'feed.analytics' => [],
         // Start a conversation with anyone in the organization. Clients are
         // restricted to the staff assigned to them — see MessagingController.
         'messaging.contactAll' => [self::EMPLOYEE],

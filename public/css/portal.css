@@ -1785,6 +1785,75 @@
 
 .tma-portal-tpl-card__preview img { width: 44px; height: 44px; opacity: 0.7; }
 
+/* Module cards (the People home) — a card you click, not a template preview.
+ * They use the portal's standard icon tile, the same 44px box as
+ * .tma-portal-shortcut__icon, instead of the oversized 96px preview band. */
+.tma-portal-tpl-card--module {
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.tma-portal-module-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-tag);
+}
+
+/* A masked span, not an <img>. The phosphor art is fill="currentColor", which
+ * through an <img> resolves to flat black and cannot be recoloured — the same
+ * reason the sidebar nav icons are masked spans. The art is named here rather
+ * than inline, so the relative url() resolves against this stylesheet
+ * (/css/ -> /images/) and keeps working on nested URLs like
+ * /people/employees. */
+.tma-portal-module-icon__art {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-color: var(--color-primary);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.tma-portal-module-icon__art--user-list {
+  -webkit-mask-image: url('../images/icons/phosphor/UserList.svg');
+  mask-image: url('../images/icons/phosphor/UserList.svg');
+}
+.tma-portal-module-icon__art--address-book {
+  -webkit-mask-image: url('../images/icons/phosphor/AddressBook.svg');
+  mask-image: url('../images/icons/phosphor/AddressBook.svg');
+}
+.tma-portal-module-icon__art--user-circle-plus {
+  -webkit-mask-image: url('../images/icons/phosphor/UserCirclePlus.svg');
+  mask-image: url('../images/icons/phosphor/UserCirclePlus.svg');
+}
+.tma-portal-module-icon__art--book-open {
+  -webkit-mask-image: url('../images/icons/phosphor/BookOpen.svg');
+  mask-image: url('../images/icons/phosphor/BookOpen.svg');
+}
+.tma-portal-module-icon__art--book {
+  -webkit-mask-image: url('../images/icons/phosphor/Book.svg');
+  mask-image: url('../images/icons/phosphor/Book.svg');
+}
+.tma-portal-module-icon__art--users-three {
+  -webkit-mask-image: url('../images/icons/phosphor/UsersThree.svg');
+  mask-image: url('../images/icons/phosphor/UsersThree.svg');
+}
+.tma-portal-module-icon__art--paper-plane-tilt {
+  -webkit-mask-image: url('../images/icons/phosphor/PaperPlaneTilt.svg');
+  mask-image: url('../images/icons/phosphor/PaperPlaneTilt.svg');
+}
+
 .tma-portal-tpl-card__name {
   margin: 0;
   font-size: var(--text-size-14);
@@ -3677,6 +3746,10 @@ label.tma-portal-check-row:hover {
   .tma-portal-home-defaults__grid { grid-template-columns: 1fr; }
 }
 
+/* These sit on the white page in the same near-white as every other panel, so
+ * they read as background rather than as the shelf of folders they are. The
+ * hairline and soft drop give them an edge; the min-height stops a folder
+ * holding two files from collapsing to a strip half the size of its neighbour. */
 .tma-portal-default-folder {
   display: flex;
   flex-direction: column;
@@ -3684,14 +3757,16 @@ label.tma-portal-check-row:hover {
   padding: var(--space-16);
   border-radius: var(--radius-16);
   background: var(--color-bg-card);
+  border: 1px solid var(--color-border-soft);
+  box-shadow: var(--shadow-glass-1);
   min-width: 0;
-  min-height: 0;
+  min-height: 260px;
   box-sizing: border-box;
 }
 
 .tma-portal-default-folder--skeleton {
   background: color-mix(in srgb, var(--color-bg-card) 70%, var(--color-hover));
-  min-height: 160px;
+  min-height: 260px;
 }
 
 .tma-portal-default-folder__head {

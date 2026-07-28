@@ -36,6 +36,17 @@ field placement and drawing, and computed CSS only exist in a browser.
   who is actually still waiting. Ends by confirming a Client gets a 404 rather
   than a page that fills with permission errors.
 
+  Step 2 also measures the home cards' **icons**, which are masked spans rather
+  than `<img>` (the phosphor art is `fill="currentColor"`, so through an `<img>`
+  it renders flat black and CSS cannot recolour it). It asserts the computed
+  44px tile, the 20px icon, a non-black tint, seven distinct masks, and that
+  each mask URL actually loads — a 404 mask still leaves a correctly sized,
+  correctly coloured box, so the art has to be fetched to catch it. It also
+  pins that the masks resolve against the *stylesheet* (`/images/…`): named
+  inline instead, a relative `url()` would resolve to `/people/images/…` and
+  404 on every nested People URL. See the nav-icon notes in
+  `folder-shortcuts.mjs` for the same class of bug.
+
   Needs the three standard accounts, one client record carrying a pending
   invitation, and an account that has never signed in:
 
@@ -135,8 +146,15 @@ field placement and drawing, and computed CSS only exist in a browser.
   all activity" switches tabs in place. Ends on `/account` to confirm the
   original profile panel still works.
 
-  Needs the standard `e2e@example.com` account plus a colleague with a
-  sign-in, and a manifest on the files disk for the download buttons:
+  Profile Details is checked field by field, because every row on it is a real
+  column now (`company` included) served through `/me` — a dash there means the
+  payload dropped a field, not that the person left it blank. It then clicks
+  Edit Profile and asserts the real editor opened *in place*, with the account's
+  values already in the form.
+
+  Needs the standard `e2e@example.com` account with its profile filled in, a
+  colleague with a sign-in, and a manifest on the files disk for the download
+  buttons:
 
   ```sh
   DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local \
@@ -149,7 +167,11 @@ field placement and drawing, and computed CSS only exist in a browser.
         'onboarding_completed_at' => now(), 'status' => 'approved',
         'account_type' => 'Employee'])->save();
       App\Models\AuthEvent::create(['user_id' => \\\$b->id, 'event' => 'login',
-        'ip' => '41.13.8.2', 'user_agent' => 'Safari', 'created_at' => now()->subHour()]);"
+        'ip' => '41.13.8.2', 'user_agent' => 'Safari', 'created_at' => now()->subHour()]);
+      App\Models\User::where('email', 'e2e@example.com')->first()->forceFill([
+        'phone' => '+1 555 123 4567', 'job_title' => 'Managing Attorney',
+        'company' => 'TM ANTOINE Advisory',
+        'linkedin_url' => 'https://linkedin.com/in/vernon-francis'])->save();"
 
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/overview-profile.mjs
   ```

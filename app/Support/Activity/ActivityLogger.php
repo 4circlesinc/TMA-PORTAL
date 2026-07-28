@@ -33,6 +33,12 @@ final class ActivityLogger
         'conversation' => 'messages',
         'group' => 'messages',
         'signature' => 'signatures',
+        // The Feed's three subjects all belong to one module, so a channel
+        // edit and a post edit read as one trail rather than two.
+        'feed' => 'feed',
+        'channel' => 'feed',
+        'post' => 'feed',
+        'comment' => 'feed',
         'account' => 'account',
         'user' => 'account',
         'security' => 'security',

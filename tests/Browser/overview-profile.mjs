@@ -71,7 +71,11 @@ const state = await page.evaluate(() => {
     name: q('[data-account-name]')?.textContent?.trim(),
     email: q('[data-account-email]')?.textContent?.trim(),
     details: [...grid.querySelectorAll('[data-account-details] .tma-dash__account-detail-row')]
-      .map((r) => r.textContent.trim()),
+      .map((r) => ({
+        label: r.querySelector('.tma-dash__account-detail-label')?.textContent?.trim(),
+        value: r.querySelector('.tma-dash__account-detail-value')?.textContent?.trim(),
+        href: r.querySelector('.tma-dash__account-detail-link')?.getAttribute('href') || null,
+      })),
     promoTitle: q('.tma-dash__account-promo-title')?.innerText?.trim(),
     buttons: btns,
     heroPresent: !!q('.tma-dash__overview-block--hero'),
@@ -98,6 +102,27 @@ if (signInEl) await signInEl.screenshot({ path: `${DIR}/overview-signins.png` })
 
 const fail = [];
 if (!state.name || state.name === 'Loading…') fail.push(`profile name not hydrated: ${state.name}`);
+
+/* Profile Details must show what the account actually holds, not a column of
+   dashes. The seed fills all five, so a dash here means /me dropped a field. */
+const want = {
+  Company: 'TM ANTOINE Advisory',
+  'Contact Phone': '+1 555 123 4567',
+  'Job title': 'Managing Attorney',
+  LinkedIn: 'linkedin.com/in/vernon-francis',
+};
+for (const [label, value] of Object.entries(want)) {
+  const row = state.details.find((r) => r.label === label);
+  if (!row) fail.push(`Profile Details is missing the ${label} row`);
+  else if (row.value !== value) fail.push(`${label} shows "${row.value}", want "${value}"`);
+}
+const linkedin = state.details.find((r) => r.label === 'LinkedIn');
+if (linkedin && linkedin.href !== 'https://linkedin.com/in/vernon-francis') {
+  fail.push(`LinkedIn row is not a working link: ${linkedin.href}`);
+}
+if (!state.details.some((r) => r.label === 'Email' && /@/.test(r.value || ''))) {
+  fail.push('Email row lost its value');
+}
 if (!state.heroPresent) fail.push('workspace metrics block disappeared');
 if (state.rowWidths.some((w) => w < state.gridWidth - 2)) {
   fail.push(`account rows not full width: ${state.rowWidths} vs grid ${state.gridWidth}`);
@@ -156,6 +181,31 @@ console.log('see all activity:', JSON.stringify(afterSeeAll));
 if (!afterSeeAll.activityShown || !afterSeeAll.gridHidden) {
   fail.push(`See all activity did not open the Activity tab: ${JSON.stringify(afterSeeAll)}`);
 }
+
+/* Edit Profile has to land on the real editor — the form that PUTs /profile —
+   without a page load, and with the fields already filled from the account. */
+await page.goto(`${BASE}/overview`, { waitUntil: 'networkidle' });
+await page.waitForSelector('[data-account-edit-profile]', { timeout: 20000 });
+await page.evaluate(() => { window.__tmaNoReload = true; });
+await page.click('[data-account-edit-profile]');
+await page.waitForSelector('[data-pf-save]', { timeout: 20000 }).catch(() => {});
+const editor = await page.evaluate(() => {
+  const val = (n) => document.querySelector(`[data-pf="${n}"]`)?.value || '';
+  return {
+    survivedInPage: !!window.__tmaNoReload,
+    saveButton: !!document.querySelector('[data-pf-save]'),
+    company: val('company'),
+    jobTitle: val('job_title'),
+    linkedin: val('linkedin_url'),
+    phone: val('phone'),
+  };
+});
+console.log('edit profile:', JSON.stringify(editor));
+if (!editor.saveButton) fail.push('Edit Profile did not open the profile editor');
+if (!editor.survivedInPage) fail.push('Edit Profile reloaded the page instead of routing in place');
+if (editor.company !== 'TM ANTOINE Advisory') fail.push(`editor company field: "${editor.company}"`);
+if (editor.jobTitle !== 'Managing Attorney') fail.push(`editor job title field: "${editor.jobTitle}"`);
+if (!/linkedin\.com\/in\/vernon-francis/.test(editor.linkedin)) fail.push(`editor linkedin field: "${editor.linkedin}"`);
 
 // The account page must still work, and its promo is the same component.
 await page.goto(`${BASE}/account`, { waitUntil: 'networkidle' });

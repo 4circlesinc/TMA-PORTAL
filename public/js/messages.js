@@ -1580,10 +1580,13 @@
     if (!STORE.tabCounts) STORE.tabCounts = {};
     STORE.tabCounts[tab] = 0;
     render();
+    // Clearing the Calls badge lowers the sidebar's Messages badge too.
+    syncTabBarBadges();
 
     window.TMAMessagingAPI.markTabSeen(tab).then(function (data) {
       STORE.tabCounts = (data && data.tabCounts) || STORE.tabCounts;
       render();
+      syncTabBarBadges();
     }).catch(function () {
       // The badge reappears on the next load, which is the honest outcome.
     });
@@ -1595,6 +1598,7 @@
       if (!data || !data.tabCounts) return;
       STORE.tabCounts = data.tabCounts;
       render();
+      syncTabBarBadges();
     }).catch(function () { /* a stale badge is not worth surfacing */ });
   }
 
@@ -3010,6 +3014,20 @@
     return getVisibleThreads(state || {}).reduce(function (total, row) {
       return total + (row.unread || 0);
     }, 0);
+  }
+
+  /*
+   * Missed calls, for the badges outside this page.
+   *
+   * A missed call is deliberately *not* an unread message server-side — it has
+   * no read state of its own, and counting system lines put a badge on threads
+   * nobody had written in (§ ConversationParticipant::unreadCount). But the
+   * sidebar badge answers a broader question than the Chats one: "what is
+   * waiting for me in Messages". A call nobody picked up is waiting there as
+   * much as an unread message is, so it belongs in that number.
+   */
+  function getMissedCallCount() {
+    return (STORE.tabCounts || {}).calls || 0;
   }
 
   function getComposerDraft(state) {
@@ -5351,6 +5369,10 @@
         seedComposerDraft(state, state.selectedId);
 
         render();
+        // The sidebar badge counts missed calls alongside unread messages, so
+        // it has to be re-read whenever the tab counts land, not only when a
+        // conversation changes.
+        syncTabBarBadges();
         startRealtime(root, state, render);
 
         // Having the list *is* delivery: this account demonstrably holds these
@@ -9077,6 +9099,7 @@
     mount: mount,
     clearMobileHeader: clearMessagesMobileHeader,
     getInboxUnreadCount: getInboxUnreadCount,
+    getMissedCallCount: getMissedCallCount,
     openDirect: function (userId) {
       var mountEl = document.querySelector('[data-messages]');
       if (!mountEl || !mountEl._messagesState) return;

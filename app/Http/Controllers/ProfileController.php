@@ -29,6 +29,7 @@ class ProfileController extends Controller
             'gender' => ['nullable', Rule::in(['Female', 'Male', 'Non-binary', 'Prefer not to say'])],
             'phone' => ['nullable', 'string', 'max:32', 'regex:/^\+?[0-9 ()\-]{7,32}$/'],
             'job_title' => ['nullable', 'string', 'max:120'],
+            'company' => ['nullable', 'string', 'max:160'],
             'bio' => ['nullable', 'string', 'max:1000'],
             'linkedin_url' => ['nullable', 'string', 'max:255', 'regex:/^(https:\/\/)?([a-z]{2,3}\.)?linkedin\.com\/.+/i'],
             'avatar_photo' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],
@@ -52,6 +53,7 @@ class ProfileController extends Controller
             'gender' => $data['gender'] ?? null,
             'phone' => $data['phone'] ?? null,
             'job_title' => $data['job_title'] ?? null,
+            'company' => $data['company'] ?? null,
             'bio' => $data['bio'] ?? null,
             'linkedin_url' => $linkedin,
         ];

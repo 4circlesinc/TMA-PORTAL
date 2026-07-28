@@ -93,6 +93,43 @@ try {
   const cards = await view(page).locator('[data-people-link]').count();
   check(cards === 7, `all seven section cards render (got ${cards})`);
 
+  // The card icons are masked spans, not <img>: the phosphor art is
+  // fill="currentColor", which through an <img> renders flat black and cannot
+  // be recoloured. Only computed styles catch a broken one — a 404 mask still
+  // leaves a correctly sized, correctly coloured box, so the art URL is
+  // fetched too.
+  const icons = await page.evaluate(() =>
+    [...document.querySelectorAll('.tma-portal-module-icon')].map((tile) => {
+      const art = tile.querySelector('.tma-portal-module-icon__art');
+      const cs = getComputedStyle(art);
+      const box = (el) => {
+        const r = el.getBoundingClientRect();
+        return [Math.round(r.width), Math.round(r.height)];
+      };
+      return {
+        tile: box(tile),
+        art: box(art),
+        color: cs.backgroundColor,
+        mask: (cs.maskImage || cs.webkitMaskImage || '').replace(/^url\(["']?|["']?\)$/g, ''),
+      };
+    }));
+  check(icons.length === 7, `seven icon tiles (got ${icons.length})`);
+  check(icons.every((i) => i.tile[0] === 44 && i.tile[1] === 44),
+    `every tile is 44x44 (first ${JSON.stringify(icons[0]?.tile)})`);
+  check(icons.every((i) => i.art[0] === 20 && i.art[1] === 20),
+    `every icon is 20x20 (first ${JSON.stringify(icons[0]?.art)})`);
+  check(new Set(icons.map((i) => i.mask)).size === 7, 'all seven masks are distinct art');
+  // Stylesheet-relative, not page-relative — a page-relative url() would
+  // resolve to /people/images/... and 404 on any nested People URL.
+  check(icons.every((i) => new URL(i.mask).pathname.startsWith('/images/icons/phosphor/')),
+    `masks resolve against the stylesheet (${icons[0]?.mask})`);
+  check(icons.every((i) => i.color !== 'rgb(0, 0, 0)' && i.color !== 'rgba(0, 0, 0, 0)'),
+    `icons are tinted, not black (${icons[0]?.color})`);
+  const maskCodes = await page.evaluate((urls) =>
+    Promise.all(urls.map((u) => fetch(u).then((r) => r.status).catch(() => 0))),
+  [...new Set(icons.map((i) => i.mask))]);
+  check(maskCodes.every((s) => s === 200), `every mask URL loads (${maskCodes.join(',')})`);
+
   step(3, 'Browse employees lists staff with their activation state');
   await open(page, '/people/employees');
   check((await rowsIn(page)) === 2, 'two staff rows');

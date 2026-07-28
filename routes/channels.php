@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\Conversation;
+use App\Models\FeedChannel;
 use App\Models\User;
+use App\Support\Feed\FeedAccess;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
@@ -29,4 +31,19 @@ Broadcast::channel('conversation.{uuid}', function (User $user, string $uuid) {
  */
 Broadcast::channel('messaging.user.{id}', function (User $user, string $id) {
     return (int) $user->id === (int) $id;
+});
+
+/**
+ * Live updates for one Feed channel.
+ *
+ * The websocket half of the same rule the HTTP endpoints enforce: a user may
+ * only subscribe to a channel they can actually read. Without it, knowing a
+ * uuid would be enough to watch a private channel's traffic — and although the
+ * event payload carries no content, the pattern of activity is itself
+ * information.
+ */
+Broadcast::channel('feed.channel.{uuid}', function (User $user, string $uuid) {
+    $channel = FeedChannel::query()->where('uuid', $uuid)->first();
+
+    return $channel !== null && FeedAccess::canView($channel, $user);
 });

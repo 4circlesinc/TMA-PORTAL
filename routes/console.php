@@ -210,3 +210,70 @@ Artisan::command('calendar:sync-providers', function () {
 Schedule::command('calendar:sync-providers')
     ->everyTenMinutes()
     ->withoutOverlapping();
+
+/*
+ * Publish scheduled Feed posts whose time has come (§6).
+ *
+ * The tick only *finds* due posts; the job does the publishing and claims each
+ * row conditionally, so a slow queue, a retry, or an author hitting "publish
+ * now" mid-flight can never produce two publications of the same post.
+ *
+ * A window rather than an exact match: if the scheduler misses ticks (a
+ * deploy, a paused worker) a post scheduled during the gap must still go out,
+ * late, rather than be skipped forever. The status flip is what stops it
+ * being picked up twice.
+ */
+Artisan::command('feed:publish-scheduled', function () {
+    $due = \App\Models\FeedPost::query()
+        ->where('status', \App\Models\FeedPost::STATUS_SCHEDULED)
+        ->whereNotNull('scheduled_for')
+        ->where('scheduled_for', '<=', now())
+        ->orderBy('scheduled_for')
+        ->limit(200)
+        ->pluck('id');
+
+    foreach ($due as $id) {
+        \App\Jobs\PublishScheduledFeedPost::dispatch($id);
+    }
+
+    $this->info("Queued {$due->count()} scheduled post(s) for publication.");
+})->purpose('Publish Feed posts whose scheduled time has arrived');
+
+// Minute granularity matches the composer's time picker, which is to the minute.
+Schedule::command('feed:publish-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+/*
+ * Remove staged Feed attachments that were never claimed by a post.
+ *
+ * The intake prunes the uploader's own stale rows on every upload so storage
+ * stays bounded even with no scheduler running — a recurring problem on this
+ * portal. This is the thorough pass across every uploader.
+ */
+Artisan::command('feed:prune-attachments {--hours=24}', function () {
+    $hours = max(1, (int) $this->option('hours'));
+
+    $stale = \App\Models\FeedAttachment::query()
+        ->where('status', \App\Models\FeedAttachment::STATUS_STAGED)
+        ->where('created_at', '<', now()->subHours($hours))
+        ->get();
+
+    foreach ($stale as $attachment) {
+        try {
+            \Illuminate\Support\Facades\Storage::disk($attachment->disk)->delete(array_filter([
+                $attachment->path,
+                $attachment->thumb_path,
+            ]));
+        } catch (\Throwable) {
+            // The row goes either way; bytes left behind are cheaper than a
+            // prune that aborts halfway through on one unreachable file.
+        }
+
+        $attachment->forceDelete();
+    }
+
+    $this->info("Removed {$stale->count()} abandoned Feed attachment(s) older than {$hours}h.");
+})->purpose('Remove staged Feed attachments that were never posted');
+
+Schedule::command('feed:prune-attachments')->hourly();

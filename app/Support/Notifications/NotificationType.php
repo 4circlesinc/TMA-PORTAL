@@ -104,8 +104,26 @@ final class NotificationType
         'security.connection_expired'=> ['module' => 'security', 'level' => Notification::LEVEL_WARNING,  'icon' => 'PlugsConnected', 'priority' => 'high',   'pref' => 'security',  'action_label' => 'Reconnect'],
         'security.permission_changed'=> ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'Key',            'priority' => 'high',   'pref' => 'security',  'action_label' => 'Review security activity'],
 
+        // ── Feed ───────────────────────────────────────────────
+        // The internal communications feed (§8). These all sit in one
+        // preference group, so someone who wants the Feed quiet silences it
+        // once rather than type by type — except a mention, which is
+        // addressed to them personally and rides the same 'At' icon the
+        // messaging mention uses.
+        'feed.post'               => ['module' => 'feed', 'level' => Notification::LEVEL_INFO,     'icon' => 'Newspaper',     'priority' => 'normal', 'pref' => 'feed', 'action_label' => 'Open post'],
+        'feed.announcement'       => ['module' => 'feed', 'level' => Notification::LEVEL_ACTION,   'icon' => 'Megaphone',     'priority' => 'high',   'pref' => 'feed', 'action_label' => 'Read announcement'],
+        'feed.mention'            => ['module' => 'feed', 'level' => Notification::LEVEL_INFO,     'icon' => 'At',            'priority' => 'high',   'pref' => 'feed', 'action_label' => 'Open post'],
+        'feed.comment'            => ['module' => 'feed', 'level' => Notification::LEVEL_INFO,     'icon' => 'ChatTeardropText','priority' => 'normal','pref' => 'feed', 'action_label' => 'Open post'],
+        'feed.reply'              => ['module' => 'feed', 'level' => Notification::LEVEL_INFO,     'icon' => 'ArrowBendUpLeft','priority' => 'normal', 'pref' => 'feed', 'action_label' => 'Open post'],
+        'feed.reaction'           => ['module' => 'feed', 'level' => Notification::LEVEL_INFO,     'icon' => 'Smiley',        'priority' => 'low',    'pref' => 'feed', 'action_label' => 'Open post'],
+        'feed.poll'               => ['module' => 'feed', 'level' => Notification::LEVEL_ACTION,   'icon' => 'ChartBarHorizontal','priority' => 'normal','pref' => 'feed', 'action_label' => 'Vote'],
+        'feed.scheduled_published'=> ['module' => 'feed', 'level' => Notification::LEVEL_SUCCESS,  'icon' => 'PaperPlaneTilt','priority' => 'normal', 'pref' => 'feed', 'action_label' => 'Open post'],
+        'feed.schedule_failed'    => ['module' => 'feed', 'level' => Notification::LEVEL_ERROR,    'icon' => 'WarningCircle', 'priority' => 'high',   'pref' => 'feed', 'action_label' => 'Open draft'],
+        'feed.channel_invite'     => ['module' => 'feed', 'level' => Notification::LEVEL_INFO,     'icon' => 'UsersThree',    'priority' => 'normal', 'pref' => 'feed', 'action_label' => 'Open channel'],
+        'feed.acknowledgement'    => ['module' => 'feed', 'level' => Notification::LEVEL_REMINDER, 'icon' => 'SealCheck',     'priority' => 'high',   'pref' => 'feed', 'action_label' => 'Acknowledge'],
+
         // ── System ─────────────────────────────────────────────
-        'system.sync_completed'    => ['module' => 'system', 'level' => Notification::LEVEL_SUCCESS,  'icon' => 'ArrowsClockwise', 'priority' => 'low',    'pref' => 'system', 'action_label' => null],
+        'system.sync_completed'    =>['module' => 'system', 'level' => Notification::LEVEL_SUCCESS,  'icon' => 'ArrowsClockwise', 'priority' => 'low',    'pref' => 'system', 'action_label' => null],
         'system.upload_processed'  => ['module' => 'system', 'level' => Notification::LEVEL_SUCCESS,  'icon' => 'CheckCircle',     'priority' => 'low',    'pref' => 'system', 'action_label' => 'View file'],
         'system.storage_warning'   => ['module' => 'system', 'level' => Notification::LEVEL_WARNING,  'icon' => 'HardDrives',      'priority' => 'high',   'pref' => 'system', 'action_label' => null],
         'system.import_completed'  => ['module' => 'system', 'level' => Notification::LEVEL_SUCCESS,  'icon' => 'CheckCircle',     'priority' => 'low',    'pref' => 'system', 'action_label' => null],
@@ -124,7 +142,7 @@ final class NotificationType
      */
     public const PREFERENCE_GROUPS = [
         'email', 'messages', 'calendar', 'files', 'signatures',
-        'clients', 'groups', 'approvals', 'security', 'system',
+        'clients', 'groups', 'feed', 'approvals', 'security', 'system',
     ];
 
     /** Groups whose portal notifications can never be fully switched off (§21). */

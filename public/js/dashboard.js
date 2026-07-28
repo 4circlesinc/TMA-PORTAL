@@ -1664,7 +1664,15 @@
       if (!window.TMAMessages || !window.TMAMessages.getInboxUnreadCount) return 0;
       var messagesMount = root.querySelector('[data-messages]');
       var messagesState = messagesMount && messagesMount._messagesState;
-      return window.TMAMessages.getInboxUnreadCount(messagesState);
+      // Unread messages *and* missed calls. The two are separate counts inside
+      // Messages — Chats and Calls each carry their own badge — but the nav
+      // item is one door onto both, so its number is the sum. A call nobody
+      // answered is waiting for you as much as an unread message is.
+      var count = window.TMAMessages.getInboxUnreadCount(messagesState);
+      if (window.TMAMessages.getMissedCallCount) {
+        count += window.TMAMessages.getMissedCallCount();
+      }
+      return count;
     }
 
     function getCalendarBadgeCount() {

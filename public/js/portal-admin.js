@@ -712,6 +712,10 @@
           secSelect('Gender', 'gender', me.gender, ['Female', 'Male', 'Non-binary', 'Prefer not to say']) +
           secField('Phone', 'phone', me.phone, '+1 555 123 4567') +
           secField('Role', 'job_title', me.jobTitle) +
+          // Client accounts inherit their company from the client record staff
+          // set up; showing it as the placeholder says where it came from
+          // without saving a copy onto the account.
+          secField('Company', 'company', me.company, me.companyInherited || 'Who you work for') +
           secField('LinkedIn', 'linkedin_url', me.linkedin, 'linkedin.com/in/your-name', 'brands/LinkedIn16') +
           '<label class="tma-pf__field tma-pf__field--wide"><span class="tma-pf__label">About you</span>' +
           '<textarea class="tma-pf__input tma-pf__input--area" data-pf="bio" rows="4" maxlength="1000">' + esc(me.bio || '') + '</textarea></label>' +
@@ -786,6 +790,7 @@
           fd.append('last_name', val('last_name'));
           fd.append('phone', val('phone'));
           fd.append('job_title', val('job_title'));
+          fd.append('company', val('company'));
           fd.append('linkedin_url', val('linkedin_url'));
           fd.append('gender', val('gender'));
           fd.append('bio', val('bio'));

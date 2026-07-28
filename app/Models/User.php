@@ -15,7 +15,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'first_name', 'middle_name', 'last_name', 'gender', 'email', 'password', 'status', 'account_type', 'phone', 'job_title', 'bio', 'linkedin_url'])]
+#[Fillable(['name', 'first_name', 'middle_name', 'last_name', 'gender', 'email', 'password', 'status', 'account_type', 'phone', 'job_title', 'company', 'bio', 'linkedin_url'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -121,5 +121,23 @@ class User extends Authenticatable implements MustVerifyEmail
     public function connectedAccount(string $provider): ?ConnectedAccount
     {
         return $this->connectedAccounts->firstWhere('provider', $provider);
+    }
+
+    /** The client record this account signs in for, when it is a client. */
+    public function clientRecord(): HasOne
+    {
+        return $this->hasOne(Client::class);
+    }
+
+    /**
+     * Who this person works for, for the profile card.
+     *
+     * Staff type their own. A client account usually has one already: staff
+     * recorded it on the client record when they were set up, and repeating
+     * that typing would be the only way to see it here.
+     */
+    public function companyName(): ?string
+    {
+        return $this->company ?: $this->clientRecord?->company;
     }
 }

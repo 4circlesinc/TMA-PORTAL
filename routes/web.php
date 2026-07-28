@@ -23,6 +23,14 @@ use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\DevDatabaseController;
+use App\Http\Controllers\Feed\FeedAnalyticsController;
+use App\Http\Controllers\Feed\FeedAttachmentController;
+use App\Http\Controllers\Feed\FeedChannelController;
+use App\Http\Controllers\Feed\FeedCommentController;
+use App\Http\Controllers\Feed\FeedPollController;
+use App\Http\Controllers\Feed\FeedPostController;
+use App\Http\Controllers\Feed\FeedReactionController;
+use App\Http\Controllers\Feed\FeedSearchController;
 use App\Http\Controllers\FileLibraryController;
 use App\Http\Controllers\Files\BrowserController;
 use App\Http\Controllers\Files\BulkController;
@@ -473,6 +481,104 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/{uuid}/members', [GroupsController::class, 'members'])->name('members');
         Route::post('/{uuid}/members', [GroupsController::class, 'addMembers'])->name('members.add');
         Route::delete('/{uuid}/members/{userId}', [GroupsController::class, 'removeMember'])->name('members.remove');
+    });
+
+    /*
+     * Portal Feed API (the /social/feed page).
+     *
+     * Channels are addressed by uuid and every route resolves through
+     * FeedAccess, which 404s rather than 403s for a channel the caller cannot
+     * see — a private channel's existence is itself information. The whole
+     * prefix sits behind `feed.view`; what a person may do *inside* a channel
+     * is their membership row's business, not the router's.
+     */
+    Route::prefix('portal/feed')->middleware('capability:feed.view')->name('feed.')->group(function () {
+        /*
+         * Channels. Literal paths come before the {uuid} wildcard so it can't
+         * swallow them.
+         */
+        Route::get('/channels', [FeedChannelController::class, 'index'])->name('channels.index');
+        Route::post('/channels', [FeedChannelController::class, 'store'])->name('channels.store');
+        Route::get('/channels/{uuid}', [FeedChannelController::class, 'show'])->name('channels.show');
+        Route::patch('/channels/{uuid}', [FeedChannelController::class, 'update'])->name('channels.update');
+        Route::delete('/channels/{uuid}', [FeedChannelController::class, 'destroy'])->name('channels.destroy');
+
+        // Profile picture and cover. `which` is validated in the controller.
+        Route::post('/channels/{uuid}/image/{which}', [FeedChannelController::class, 'updateImage'])
+            ->name('channels.image.store');
+        Route::get('/channels/{uuid}/image/{which}', [FeedChannelController::class, 'image'])
+            ->name('channels.image');
+
+        Route::get('/channels/{uuid}/members', [FeedChannelController::class, 'members'])->name('channels.members');
+        Route::post('/channels/{uuid}/members', [FeedChannelController::class, 'addMembersRequest'])
+            ->name('channels.members.add');
+        Route::patch('/channels/{uuid}/members/{userId}', [FeedChannelController::class, 'updateMember'])
+            ->name('channels.members.update');
+        Route::delete('/channels/{uuid}/members/{userId}', [FeedChannelController::class, 'removeMember'])
+            ->name('channels.members.remove');
+
+        Route::post('/channels/{uuid}/join', [FeedChannelController::class, 'join'])->name('channels.join');
+        Route::post('/channels/{uuid}/leave', [FeedChannelController::class, 'leave'])->name('channels.leave');
+        Route::post('/channels/{uuid}/read', [FeedChannelController::class, 'markRead'])->name('channels.read');
+        Route::patch('/channels/{uuid}/membership', [FeedChannelController::class, 'updateMyMembership'])
+            ->name('channels.membership');
+        Route::post('/channels/{uuid}/archive', [FeedChannelController::class, 'archive'])->name('channels.archive');
+        Route::post('/channels/{uuid}/restore', [FeedChannelController::class, 'restore'])->name('channels.restore');
+
+        // Staged before the post that will own them; claimed on save.
+        Route::post('/channels/{uuid}/attachments', [FeedAttachmentController::class, 'store'])
+            ->name('attachments.store');
+
+        /*
+         * Posts. One collection serves the stream, drafts, scheduled posts,
+         * bookmarks, mentions and pinned — they differ by the `view` parameter,
+         * not by endpoint, because they are the same rows read differently.
+         */
+        Route::get('/posts', [FeedPostController::class, 'index'])->name('posts.index');
+        Route::post('/posts', [FeedPostController::class, 'store'])->name('posts.store');
+        Route::get('/posts/{uuid}', [FeedPostController::class, 'show'])->name('posts.show');
+        Route::patch('/posts/{uuid}', [FeedPostController::class, 'update'])->name('posts.update');
+        Route::delete('/posts/{uuid}', [FeedPostController::class, 'destroy'])->name('posts.destroy');
+        // Runs on a timer while someone types, so it never logs or stamps.
+        Route::put('/posts/{uuid}/autosave', [FeedPostController::class, 'autosave'])->name('posts.autosave');
+        Route::post('/posts/{uuid}/publish', [FeedPostController::class, 'publish'])->name('posts.publish');
+        Route::post('/posts/{uuid}/duplicate', [FeedPostController::class, 'duplicate'])->name('posts.duplicate');
+
+        Route::post('/posts/{uuid}/pin', [FeedPostController::class, 'togglePin'])->name('posts.pin');
+        Route::post('/posts/{uuid}/lock', [FeedPostController::class, 'toggleLock'])->name('posts.lock');
+        Route::post('/posts/{uuid}/bookmark', [FeedPostController::class, 'toggleBookmark'])->name('posts.bookmark');
+        Route::post('/posts/{uuid}/acknowledge', [FeedPostController::class, 'acknowledge'])
+            ->name('posts.acknowledge');
+        Route::get('/posts/{uuid}/acknowledgements', [FeedPostController::class, 'acknowledgements'])
+            ->name('posts.acknowledgements');
+
+        // Toggling: reacting again with the same emoji removes it.
+        Route::post('/posts/{uuid}/reactions', [FeedReactionController::class, 'post'])->name('posts.react');
+        Route::get('/posts/{uuid}/reactions', [FeedReactionController::class, 'people'])->name('posts.reactions');
+
+        Route::post('/posts/{uuid}/poll/vote', [FeedPollController::class, 'vote'])->name('polls.vote');
+        Route::post('/posts/{uuid}/poll/close', [FeedPollController::class, 'close'])->name('polls.close');
+        Route::get('/posts/{uuid}/poll/voters', [FeedPollController::class, 'voters'])->name('polls.voters');
+
+        Route::get('/posts/{uuid}/comments', [FeedCommentController::class, 'index'])->name('comments.index');
+        Route::post('/posts/{uuid}/comments', [FeedCommentController::class, 'store'])->name('comments.store');
+        Route::patch('/comments/{uuid}', [FeedCommentController::class, 'update'])->name('comments.update');
+        Route::delete('/comments/{uuid}', [FeedCommentController::class, 'destroy'])->name('comments.destroy');
+        Route::post('/comments/{uuid}/reactions', [FeedReactionController::class, 'comment'])
+            ->name('comments.react');
+
+        // Attachment bytes. Both re-check channel access on every request.
+        Route::delete('/attachments/{uuid}', [FeedAttachmentController::class, 'destroy'])
+            ->name('attachments.destroy');
+        Route::get('/attachments/{uuid}', [FeedAttachmentController::class, 'show'])->name('attachments.show');
+        Route::get('/attachments/{uuid}/thumb', [FeedAttachmentController::class, 'thumb'])
+            ->name('attachments.thumb');
+
+        // Search, the composer's @/# autocomplete, and analytics.
+        Route::get('/search', FeedSearchController::class)->name('search');
+        Route::get('/mentionable', [FeedSearchController::class, 'mentionable'])->name('mentionable');
+        Route::get('/hashtags', [FeedSearchController::class, 'hashtagSuggestions'])->name('hashtags');
+        Route::get('/analytics', FeedAnalyticsController::class)->name('analytics');
     });
 
     /*

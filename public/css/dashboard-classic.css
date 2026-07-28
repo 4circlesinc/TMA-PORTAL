@@ -6473,6 +6473,18 @@
   gap: var(--space-8);
 }
 
+/* The LinkedIn row is the one detail that goes somewhere. */
+.tma-dash__account-detail-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.tma-dash__account-detail-link:hover {
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__pill {
   display: inline-flex;
   align-items: center;
