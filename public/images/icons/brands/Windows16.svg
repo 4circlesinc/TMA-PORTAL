@@ -1,0 +1,11 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!--
+    The Windows flag in the Microsoft palette: four panes in perspective, the
+    outer edges tilting away. Microsoft16.svg is the flat-square mark and is
+    left alone — this is the one the desktop download button uses.
+  -->
+  <path d="M0 2.25L6.56 1.41V7.81H0V2.25Z" fill="#F25022"/>
+  <path d="M7.5 1.31L16 0.25V7.81H7.5V1.31Z" fill="#7FBA00"/>
+  <path d="M0 8.69H6.56V15.09L0 14.25V8.69Z" fill="#00A4EF"/>
+  <path d="M7.5 8.69H16V15.75L7.5 14.69V8.69Z" fill="#FFB900"/>
+</svg>

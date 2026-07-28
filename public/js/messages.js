@@ -2112,6 +2112,10 @@
       'M229.66,109.66l-48,48a8,8,0,0,1-11.32-11.32L204.69,112H128a88.1,88.1,0,0,0-88,88,8,8,0,0,1-16,0A104.11,104.11,0,0,1,128,96h76.69L170.34,61.66a8,8,0,0,1,11.32-11.32l48,48A8,8,0,0,1,229.66,109.66Z',
     DotsThree:
       'M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm56-12a12,12,0,1,0,12,12A12,12,0,0,0,196,116ZM60,116a12,12,0,1,0,12,12A12,12,0,0,0,60,116Z',
+    // Read receipts: the eye takes the receipt line's own colour, so it has to
+    // be drawn rather than loaded as an <img>.
+    Eye:
+      'M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z',
     Paperclip:
       'M209.66,122.34a8,8,0,0,1,0,11.32l-82.05,82a56,56,0,0,1-79.2-79.21L147.67,35.73a40,40,0,1,1,56.61,56.55L105,193A24,24,0,1,1,71,159L154.3,74.38A8,8,0,1,1,165.7,85.6L82.39,170.31a8,8,0,1,0,11.27,11.36L192.93,81A24,24,0,1,0,159,47L59.76,147.68a40,40,0,1,0,56.53,56.62l82.06-82A8,8,0,0,1,209.66,122.34Z',
     Microphone:
@@ -2276,57 +2280,100 @@
     return '';
   }
 
-  /*
-   * Delivery ticks. Drawn as one SVG rather than two "✓" glyphs so the second
-   * tick can overlap the first the way every messenger renders it — text
-   * characters sit a full advance-width apart and read as two separate marks.
-   *
-   * The viewBox is deliberately narrow (16x10) and the second tick starts at
-   * x=5, giving the tight nested look.
-   */
-  function renderTicks(doubled) {
-    var stroke =
-      'fill="none" stroke="currentColor" stroke-width="2" ' +
-      'stroke-linecap="round" stroke-linejoin="round"';
-
-    return (
-      '<svg class="tma-dash__messages-tick" viewBox="0 0 16 10" width="16" height="10" aria-hidden="true">' +
-      '<path d="M1 5.5 L4 8.5 L10 1.5" ' + stroke + '></path>' +
-      (doubled ? '<path d="M6 5.5 L9 8.5 L15 1.5" ' + stroke + '></path>' : '') +
-      '</svg>'
-    );
+  function messageDeliveryState(msg) {
+    return msg.failed ? 'failed' : msg.pending ? 'pending' : msg.status || 'sent';
   }
 
   /*
-   * Sender-side only — an incoming message never carries a tick.
+   * Sender-side only — an incoming message never carries a delivery state.
+   *
+   * The words replace the pair of nested ticks messengers usually draw: one
+   * tick versus two is a convention you have to be taught, and it is read
+   * wrong as often as it is read right. The label says what happened.
    *
    *   pending    the optimistic bubble, not yet confirmed by the server
    *   sent       stored, but nobody's client has acknowledged it
-   *   delivered  every other participant's client has it  (two grey)
-   *   read       every other participant has opened it    (two blue)
+   *   delivered  every other participant's client has it
+   *   read       drawn *outside* the bubble instead — see renderBubbleReceipt
    *   failed     the send errored and can be retried
    */
   function renderBubbleStatus(msg) {
     if (msg.direction !== 'out') return '';
 
-    var state = msg.failed ? 'failed' : msg.pending ? 'pending' : msg.status || 'sent';
+    var state = messageDeliveryState(msg);
+
+    // "Seen" is the one state that belongs under the bubble rather than in it.
+    if (state === 'read') return '';
+
     var label = {
       pending: 'Sending',
-      failed: 'Not sent — tap to retry',
+      failed: 'Not sent',
       sent: 'Sent',
       delivered: 'Delivered',
-      read: 'Seen',
     }[state] || 'Sent';
 
-    var glyph;
-    if (state === 'failed') glyph = '<span aria-hidden="true">!</span>';
-    else if (state === 'pending') glyph = '<span class="tma-dash__messages-tick-pending" aria-hidden="true"></span>';
-    else glyph = renderTicks(state === 'delivered' || state === 'read');
+    var title = state === 'failed' ? 'Not sent — tap to retry' : label;
 
     return (
       '<span class="tma-dash__messages-bubble-status tma-dash__messages-bubble-status--' + state +
-      '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
-      glyph +
+      '" title="' + esc(title) + '">' +
+      esc(label) +
+      '</span>'
+    );
+  }
+
+  /*
+   * "Seen", under the bubble and outside it, the way iMessage and Teams both
+   * place it.
+   *
+   * Only the newest read message carries it. Everything above the last read
+   * message has necessarily been read too, so a column of "Seen" lines would
+   * repeat one fact once per bubble.
+   */
+  function renderBubbleReceipt(msg, show) {
+    if (!show || msg.direction !== 'out') return '';
+    if (messageDeliveryState(msg) !== 'read') return '';
+
+    return (
+      '<div class="tma-dash__messages-bubble-receipt">' +
+      renderMessagesIcon('Eye') +
+      '<span>Seen</span>' +
+      '</div>'
+    );
+  }
+
+  /*
+   * The sender's photo beside their bubble.
+   *
+   * It sits on the *last* bubble of a run, next to the message that finished
+   * the thought, and the earlier bubbles in that run keep an empty slot of the
+   * same width so the whole run stays in one column — which is how WhatsApp
+   * and Teams both draw a group of messages from one person.
+   */
+  function renderBubbleAvatar(msg, show) {
+    if (msg.direction === 'out') return '';
+
+    if (!show) {
+      return (
+        '<span class="tma-dash__messages-bubble-avatar tma-dash__messages-bubble-avatar--blank"' +
+        ' aria-hidden="true"></span>'
+      );
+    }
+
+    var sender = msg.sender || {};
+
+    if (sender.photo) {
+      return (
+        '<span class="tma-dash__messages-bubble-avatar" title="' + esc(sender.name || '') + '">' +
+        '<img src="' + esc(sender.photo) + '" alt="" loading="lazy"></span>'
+      );
+    }
+
+    return (
+      '<span class="tma-dash__messages-bubble-avatar tma-dash__messages-bubble-avatar--initial ' +
+      'tma-dash__messages-row-avatar--' + initialColourFor(sender.name) +
+      '" title="' + esc(sender.name || '') + '">' +
+      esc(initialsFor(sender.name)) +
       '</span>'
     );
   }
@@ -2688,6 +2735,9 @@
     return (
       '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side +
       '" data-messages-id="' + esc(msg.id) + '">' +
+      // A call is always its own run, so it always carries the caller's photo
+      // — and that keeps it in the same column as the bubbles around it.
+      renderBubbleAvatar(msg, true) +
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       ' tma-dash__messages-bubble--call' + (missed ? ' tma-dash__messages-bubble--call-missed' : '') + '">' +
@@ -2736,10 +2786,12 @@
     }
   }
 
-  function renderBubble(msg, index, isReplyTarget, row, showSender, render) {
+  function renderBubble(msg, index, isReplyTarget, row, opts, render) {
     if (msg.type === 'system') {
       return isCallMessage(msg) ? renderCallMessage(msg, row) : renderSystemMessage(msg);
     }
+
+    var showSender = opts.showSender;
 
     var timeHtml = renderBubbleTime(msg, row);
     var side = msg.direction === 'out' ? 'out' : 'in';
@@ -2804,11 +2856,15 @@
         : '';
 
     /*
-     * The bubble and its reactions stack; the action tools sit *beside* that
-     * stack rather than under it. They used to be a third block in the column,
-     * which pushed them well below the message and far from each other.
+     * The photo sits beside the bubble; the bubble, its reactions and its read
+     * receipt stack beneath it.
+     *
+     * The action tools are *not* part of this: they are pinned over the top
+     * edge of the message and live outside the swipe wrapper, which clips its
+     * overflow so the bubble can slide under the reply icon.
      */
     var bubble =
+      renderBubbleAvatar(msg, opts.showAvatar) +
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       bubbleExtraClass +
@@ -2821,8 +2877,8 @@
       inner +
       '</div>' +
       renderReactions(msg) +
-      '</div>' +
-      renderBubbleActions(msg, index);
+      renderBubbleReceipt(msg, opts.showReceipt) +
+      '</div>';
 
     return (
       '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' +
@@ -2849,6 +2905,7 @@
       esc(msg.id) +
       '">' +
       renderSwipeTrack(bubble, side) +
+      renderBubbleActions(msg, index) +
       '</div>'
     );
   }
@@ -3687,25 +3744,54 @@
       ? state.replyTo.messageId
       : null;
 
+    /*
+     * "Seen" is drawn once, on the newest message of yours that has been read
+     * — see renderBubbleReceipt. Scanning backwards finds it; everything above
+     * it has been read too and stays unmarked.
+     */
+    var seenIndex = -1;
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].direction === 'out' && messageDeliveryState(messages[i]) === 'read') {
+        seenIndex = i;
+        break;
+      }
+    }
+
     var html = '';
     messages.forEach(function (msg, index) {
       var previous = messages[index - 1];
+      var next = messages[index + 1];
 
       if (!previous || !sameDay(previous.sentAt, msg.sentAt)) {
         html += renderDayDivider(dayLabel(msg.sentAt));
       }
 
-      // Only label the first bubble of a run by the same sender.
-      var showSender =
-        isGroup &&
-        msg.direction === 'in' &&
-        (!previous ||
-          previous.type === 'system' ||
-          !previous.sender ||
-          !msg.sender ||
-          previous.sender.id !== msg.sender.id);
+      var startsRun =
+        !previous ||
+        previous.type === 'system' ||
+        previous.direction !== msg.direction ||
+        !previous.sender ||
+        !msg.sender ||
+        previous.sender.id !== msg.sender.id ||
+        !sameDay(previous.sentAt, msg.sentAt);
 
-      html += renderBubble(msg, index, replyId === msg.id, row, showSender, render);
+      // The photo goes on the bubble that *ends* a run, so it lines up with
+      // the last thing the person said rather than the first.
+      var endsRun =
+        !next ||
+        next.type === 'system' ||
+        next.direction !== msg.direction ||
+        !next.sender ||
+        !msg.sender ||
+        next.sender.id !== msg.sender.id ||
+        !sameDay(msg.sentAt, next.sentAt);
+
+      html += renderBubble(msg, index, replyId === msg.id, row, {
+        // Only label the first bubble of a run by the same sender.
+        showSender: isGroup && msg.direction === 'in' && startsRun,
+        showAvatar: msg.direction === 'in' && endsRun,
+        showReceipt: index === seenIndex,
+      }, render);
     });
 
     return head + html;

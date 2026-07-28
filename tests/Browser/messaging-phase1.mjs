@@ -1,12 +1,15 @@
 import { chromium } from 'playwright';
 
-// Phase 1 of the Messages rework: delivery ticks, message action placement,
+// Phase 1 of the Messages rework: delivery state, message action placement,
 // the right-click menu, closing a chat, the repositioned inbox toolbar, the
 // conversation menu, and conversation swipe/right-click actions.
 //
-// Two contexts, because the tick states are only meaningful between two
-// people: a message is "delivered" when the *other* client acknowledges it and
-// "seen" when they open it.
+// Delivery is spelled out in words rather than ticks — "Sent", "Delivered",
+// and "Seen" on its own line under the bubble.
+//
+// Two contexts, because the states are only meaningful between two people: a
+// message is "delivered" when the *other* client acknowledges it and "seen"
+// when they open it.
 //
 // See README.md for setup. Needs the messaging seed.
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
@@ -55,17 +58,25 @@ async function session(email, track) {
   return page;
 }
 
-// Tick state of the newest outgoing message.
+// Delivery state of the newest outgoing message. The states are words now, not
+// tick glyphs — "Sent" and "Delivered" inside the bubble, and "Seen" on its own
+// line underneath it, outside the bubble.
 const lastOutStatus = (page) =>
   page.evaluate(() => {
     const rows = [...document.querySelectorAll('.tma-dash__messages-bubble-row--out')];
-    const el = rows[rows.length - 1]?.querySelector('.tma-dash__messages-bubble-status');
-    if (!el) return null;
-    const state = [...el.classList].find((c) => c.includes('--')) || '';
+    const row = rows[rows.length - 1];
+    if (!row) return null;
+
+    const el = row.querySelector('.tma-dash__messages-bubble-status');
+    const receipt = row.querySelector('.tma-dash__messages-bubble-receipt');
+    const cls = el ? [...el.classList].find((c) => c.includes('--')) || '' : '';
+
     return {
-      state: state.split('--').pop(),
-      ticks: el.querySelectorAll('.tma-dash__messages-tick path').length,
-      colour: getComputedStyle(el).color,
+      state: receipt ? 'read' : cls.split('--').pop(),
+      // The label without the "·" separator the stylesheet adds.
+      label: el ? el.textContent.trim() : '',
+      receipt: receipt ? receipt.textContent.trim() : '',
+      colour: el ? getComputedStyle(el).color : '',
     };
   });
 
@@ -132,13 +143,14 @@ try {
   await a.waitForTimeout(1500);
   check(await a.locator('.tma-dash__messages-bubble').count() > 0, "A opened Ana Ruiz's thread");
 
-  step(5, 'Ticks appear only on the sender\'s own messages, which sit on the right');
+  step(5, 'Delivery state appears only on the sender\'s own messages, which sit on the right');
   const incomingTicks = await a.locator(
-    '.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-status',
+    '.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-status, ' +
+    '.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-receipt',
   ).count();
-  check(incomingTicks === 0, `no ticks on incoming messages (${incomingTicks} found)`);
+  check(incomingTicks === 0, `no delivery state on incoming messages (${incomingTicks} found)`);
 
-  // Side matters as much as the tick: your own messages carry the ticks *and*
+  // Side matters as much as the state: your own messages carry it *and*
   // belong on the right. These were inverted once — own messages rendered on
   // the left, which made the ticks look like they were on the recipient's.
   const placement = await a.evaluate(() => {
@@ -165,7 +177,7 @@ try {
   check(placement.mine > 0 && placement.mineLeft === 0, `all ${placement.mine} of my messages are on the right`);
   check(placement.theirs === 0 || placement.theirsRight === 0, `all ${placement.theirs} incoming messages are on the left`);
 
-  step(6, 'A sends while B is offline → one grey tick');
+  step(6, 'A sends while B is offline → "Sent"');
   // "Elsewhere" has to mean *disconnected*, not merely on another screen: with
   // the websocket up, an open page acknowledges receipt the instant a message
   // arrives, so the sent-only state would never be observable. Closing B's
@@ -173,7 +185,7 @@ try {
   await contexts[USER_B].close();
   await a.waitForTimeout(500);
 
-  const probe = 'tick probe ' + Date.now();
+  const probe = 'delivery probe ' + Date.now();
   await a.click('[data-messages-composer-input]');
   await a.keyboard.type(probe);
   await a.click('[data-messages-composer-send]');
@@ -181,9 +193,9 @@ try {
 
   let status = await lastOutStatus(a);
   check(status?.state === 'sent', `state is "sent" (got ${status?.state})`);
-  check(status?.ticks === 1, `one tick drawn (${status?.ticks})`);
+  check(/^·?\s*Sent$/.test(status?.label || ''), `bubble reads "Sent" (got "${status?.label}")`);
 
-  step(7, "B's client comes back and receives it → two grey ticks");
+  step(7, "B's client comes back and receives it → \"Delivered\"");
   // B signs in again and lands on the list *without* opening the thread:
   // received, not read.
   b = await session(USER_B, false);
@@ -196,14 +208,13 @@ try {
 
   status = await lastOutStatus(a);
   check(status?.state === 'delivered', `state is "delivered" (got ${status?.state})`);
-  check(status?.ticks === 2, `two ticks drawn (${status?.ticks})`);
-  const greyColour = status?.colour;
+  check(/Delivered$/.test(status?.label || ''), `bubble reads "Delivered" (got "${status?.label}")`);
 
-  step(8, 'B opens the conversation → two blue ticks');
+  step(8, 'B opens the conversation → "Seen", under the bubble');
   await b.locator('.tma-dash__messages-row', { hasText: 'Test User' }).first().click();
   await b.waitForTimeout(2500);
 
-  // This script asserts the tick *state machine*, so it re-reads deliberately
+  // This script asserts the delivery *state machine*, so it re-reads deliberately
   // rather than waiting on a transport. Live propagation of the same change is
   // covered by messaging-realtime.mjs, which runs against a real Reverb server.
   await a.reload({ waitUntil: 'networkidle' });
@@ -213,19 +224,31 @@ try {
 
   status = await lastOutStatus(a);
   check(status?.state === 'read', `state became "read" (got ${status?.state})`);
-  check(status?.ticks === 2, `still two ticks (${status?.ticks})`);
-  check(status?.colour !== greyColour, `seen ticks changed colour (${greyColour} → ${status?.colour})`);
+  check(/Seen$/.test(status?.receipt || ''), `receipt reads "Seen" (got "${status?.receipt}")`);
+  check(status?.label === '', 'the in-bubble word is gone once it says Seen');
 
-  step(9, 'The two ticks sit tight together, not spaced apart');
-  const tickBox = await a.evaluate(() => {
-    const svg = document.querySelector('.tma-dash__messages-tick');
-    if (!svg) return null;
-    const r = svg.getBoundingClientRect();
-    return { width: r.width, height: r.height };
+  step(9, 'Seen sits under the bubble and outside it, once');
+  const receiptBox = await a.evaluate(() => {
+    const rows = [...document.querySelectorAll('.tma-dash__messages-bubble-row--out')];
+    const row = rows[rows.length - 1];
+    const bubble = row?.querySelector('.tma-dash__messages-bubble');
+    const receipt = row?.querySelector('.tma-dash__messages-bubble-receipt');
+    if (!bubble || !receipt) return null;
+    const b = bubble.getBoundingClientRect();
+    const r = receipt.getBoundingClientRect();
+    return {
+      below: r.top >= b.bottom - 1,
+      hasIcon: !!receipt.querySelector('svg'),
+      total: document.querySelectorAll('.tma-dash__messages-bubble-receipt').length,
+    };
   });
-  check(tickBox && tickBox.width <= 20, `tick pair is ${Math.round(tickBox?.width)}px wide (compact)`);
+  check(receiptBox?.below, 'the Seen line is below the bubble, not inside it');
+  check(receiptBox?.hasIcon, 'the Seen line carries the eye icon');
+  // Everything above the newest read message has been read too, so repeating
+  // the line on each of them would say one thing many times.
+  check(receiptBox?.total === 1, `exactly one Seen line in the thread (${receiptBox?.total})`);
 
-  step(10, 'Message tools sit beside the bubble, not below it');
+  step(10, 'Message tools sit over the top of the bubble, not below or beside it');
   const bubbleRow = a.locator('.tma-dash__messages-bubble-row--out').last();
   await bubbleRow.hover();
   await a.waitForTimeout(400);
@@ -237,22 +260,19 @@ try {
     if (!bubble || !actions) return null;
     const b = bubble.getBoundingClientRect();
     const x = actions.getBoundingClientRect();
-    // The tools sit on the bubble's inward edge, which is the *left* for a
-    // right-aligned outgoing message — so measure the gap from whichever side
-    // they are on rather than assuming they follow the bubble.
-    const gap = x.left >= b.right ? x.left - b.right : b.left - x.right;
     return {
-      verticalOverlap: Math.min(b.bottom, x.bottom) - Math.max(b.top, x.top),
-      horizontalGap: Math.round(gap),
+      // Pinned over the message's top edge, overlapping it horizontally.
+      aboveTop: Math.round(b.top - x.top),
+      horizontalOverlap: Math.round(Math.min(b.right, x.right) - Math.max(b.left, x.left)),
       buttons: actions.querySelectorAll('button').length,
     };
   });
-  check(geometry?.verticalOverlap > 0, 'tools are vertically level with the bubble, not underneath');
+  check(geometry?.aboveTop > 0, `tools rise ${geometry?.aboveTop}px above the bubble's top edge`);
   check(
-    geometry?.horizontalGap >= 0 && geometry?.horizontalGap < 24,
-    `tools sit ${geometry?.horizontalGap}px from the bubble`,
+    geometry?.horizontalOverlap > 0,
+    `tools sit over the message, overlapping it by ${geometry?.horizontalOverlap}px`,
   );
-  check(geometry?.buttons === 3, `three tools: react, reply, more (${geometry?.buttons})`);
+  check(geometry?.buttons >= 3, `react, reply and more are all present (${geometry?.buttons})`);
 
   step(11, 'Right-clicking a message opens its menu');
   await bubbleRow.click({ button: 'right' });

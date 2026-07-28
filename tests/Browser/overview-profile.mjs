@@ -47,14 +47,19 @@ const state = await page.evaluate(() => {
   const q = (s) => grid.querySelector(s);
   const btns = [...grid.querySelectorAll('[data-desktop-download]')].map((b) => {
     const icon = b.querySelector('.tma-dash__account-promo-btn-icon');
-    const cs = icon && getComputedStyle(icon);
     return {
       platform: b.getAttribute('data-desktop-download'),
       label: b.textContent.trim(),
       href: b.getAttribute('href'),
       disabled: b.getAttribute('aria-disabled'),
       title: b.title,
-      icon: cs ? { w: cs.width, h: cs.height, mask: (cs.maskImage || cs.webkitMaskImage || '').slice(0, 60) } : null,
+      icon: icon ? {
+        w: Math.round(icon.getBoundingClientRect().width),
+        h: Math.round(icon.getBoundingClientRect().height),
+        src: icon.getAttribute('src') || '',
+        // A broken SVG still lays out; naturalWidth is what proves it loaded.
+        loaded: icon.complete && icon.naturalWidth > 0,
+      } : null,
     };
   });
   const rowWidths = [...grid.querySelectorAll(':scope > .tma-dash__account-row')]
@@ -102,8 +107,15 @@ const win = state.buttons.find((b) => b.platform === 'windows');
 if (!mac || !win) fail.push('missing download buttons');
 if (mac && mac.disabled !== 'false') fail.push(`mac button should be enabled: ${JSON.stringify(mac)}`);
 if (win && win.disabled !== 'true') fail.push(`windows button should be disabled: ${JSON.stringify(win)}`);
-if (mac && !/AppleLogo/.test(mac.icon?.mask || '')) fail.push(`mac icon mask missing: ${mac.icon?.mask}`);
-if (win && !/WindowsLogo/.test(win.icon?.mask || '')) fail.push(`windows icon mask missing: ${win.icon?.mask}`);
+// Brand artwork: the right file, actually decoded, and boxed at 16px so a
+// slow SVG can't stretch the pill.
+if (mac && !/AppleLight16\.svg$/.test(mac.icon?.src || '')) fail.push(`mac logo wrong: ${mac.icon?.src}`);
+if (win && !/Windows16\.svg$/.test(win.icon?.src || '')) fail.push(`windows logo wrong: ${win.icon?.src}`);
+for (const b of [mac, win]) {
+  if (!b) continue;
+  if (!b.icon?.loaded) fail.push(`${b.platform} logo failed to load: ${b.icon?.src}`);
+  if (b.icon?.w !== 16 || b.icon?.h !== 16) fail.push(`${b.platform} logo box is ${b.icon?.w}x${b.icon?.h}, want 16x16`);
+}
 if (!/macOS \/ Windows/.test(state.promoTitle || '')) fail.push(`promo copy wrong: ${state.promoTitle}`);
 
 // Sign-ins: firm-wide rows, resolved (no skeletons left), full grid width.

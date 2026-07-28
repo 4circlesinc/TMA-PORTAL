@@ -6549,27 +6549,14 @@
   cursor: default;
 }
 
+/* Brand artwork, so it keeps its own colours — the fixed box stops a bare
+   <img> stretching the pill before the SVG has loaded. */
 .tma-dash__account-promo-btn-icon {
   width: 16px;
   height: 16px;
-  flex-shrink: 0;
-  background-color: currentColor;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-}
-
-.tma-dash__account-promo-btn-icon--mac {
-  -webkit-mask-image: url('../images/icons/phosphor/AppleLogo.svg');
-  mask-image: url('../images/icons/phosphor/AppleLogo.svg');
-}
-
-.tma-dash__account-promo-btn-icon--windows {
-  -webkit-mask-image: url('../images/icons/phosphor/WindowsLogo.svg');
-  mask-image: url('../images/icons/phosphor/WindowsLogo.svg');
+  flex: 0 0 16px;
+  object-fit: contain;
+  display: block;
 }
 
 .tma-dash__account-promo-art {

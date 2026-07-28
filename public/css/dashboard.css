@@ -7683,27 +7683,14 @@
   cursor: default;
 }
 
+/* Brand artwork, so it keeps its own colours — the fixed box stops a bare
+   <img> stretching the pill before the SVG has loaded. */
 .tma-dash__account-promo-btn-icon {
   width: 16px;
   height: 16px;
-  flex-shrink: 0;
-  background-color: currentColor;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-}
-
-.tma-dash__account-promo-btn-icon--mac {
-  -webkit-mask-image: url('../images/icons/phosphor/AppleLogo.svg');
-  mask-image: url('../images/icons/phosphor/AppleLogo.svg');
-}
-
-.tma-dash__account-promo-btn-icon--windows {
-  -webkit-mask-image: url('../images/icons/phosphor/WindowsLogo.svg');
-  mask-image: url('../images/icons/phosphor/WindowsLogo.svg');
+  flex: 0 0 16px;
+  object-fit: contain;
+  display: block;
 }
 
 .tma-dash__account-promo-art {
@@ -14808,7 +14795,14 @@
 }
 
 .tma-dash__messages-bubble-row {
+  /* The photo column an incoming message reserves beside its bubble. Declared
+   * here so the bubble, the call bubble and the hover tools all measure the
+   * same gutter. */
+  --messages-avatar: 28px;
+
   display: flex;
+  align-items: flex-end;
+  gap: var(--space-8);
   max-width: min(560px, 85%);
   position: relative;
 }
@@ -14836,15 +14830,18 @@
 
 /* The small corner is the bubble's "tail", so it has to point at the side the
  * bubble is aligned to: bottom-left for an incoming bubble on the left,
- * bottom-right for your own on the right. */
+ * bottom-right for your own on the right.
+ *
+ * The corners are deliberately shallow. At 16px a short message reads as a
+ * lozenge rather than as a bubble, and a column of them looks like tags. */
 .tma-dash__messages-bubble--in {
   background: var(--color-1);
-  border-radius: var(--radius-16) var(--radius-16) var(--radius-16) var(--radius-4);
+  border-radius: var(--radius-8) var(--radius-8) var(--radius-8) var(--radius-4);
 }
 
 .tma-dash__messages-bubble--out {
   background: var(--color-2);
-  border-radius: var(--radius-16) var(--radius-16) var(--radius-4) var(--radius-16);
+  border-radius: var(--radius-8) var(--radius-8) var(--radius-4) var(--radius-8);
 }
 
 .tma-dash__messages-bubble-text p {
@@ -27314,42 +27311,57 @@ button.tma-dash__header-popup-item:focus-visible {
   text-decoration: underline;
 }
 
-/* Delivery ticks. Drawn as SVG so the two ticks nest tightly instead of
- * sitting a text advance-width apart. */
+/*
+ * Delivery state, in words rather than ticks: "Sent", "Delivered". Set small
+ * and quiet, after the time and separated from it by a dot — it is a footnote
+ * on the message, not part of it.
+ */
 .tma-dash__messages-bubble-status {
   display: inline-flex;
   align-items: center;
   margin-left: var(--space-4);
-  font-size: var(--text-size-12);
+  font-size: 11px;
   line-height: 16px;
   vertical-align: middle;
   color: var(--color-text-secondary);
 }
 
-.tma-dash__messages-tick {
-  display: block;
-  width: 16px;
-  height: 10px;
+.tma-dash__messages-bubble-status::before {
+  content: '·';
+  margin-right: var(--space-4);
+  opacity: 0.7;
 }
 
-/* Sent and delivered are both grey; only "seen" changes colour. */
-.tma-dash__messages-bubble-status--read {
-  color: var(--color-primary-brand, #1c6ef2);
-}
-
-/* An unconfirmed optimistic send: a small hollow ring, not a tick. */
-.tma-dash__messages-tick-pending {
-  display: block;
-  width: 9px;
-  height: 9px;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-  opacity: 0.6;
+/* Still in flight: the word is dimmed until the server confirms it. */
+.tma-dash__messages-bubble-status--pending {
+  opacity: 0.7;
+  font-style: italic;
 }
 
 .tma-dash__messages-bubble-status--failed {
   color: var(--color-danger, #d92d20);
-  font-weight: 700;
+  font-weight: 600;
+}
+
+/*
+ * "Seen" sits below the bubble, outside it, on the newest read message only.
+ * Outside because it is about the other person, not about the message — the
+ * same reason iMessage and Teams put it there.
+ */
+.tma-dash__messages-bubble-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-bubble-receipt .tma-dash__messages-icon {
+  width: 13px;
+  height: 13px;
+  opacity: 0.85;
 }
 
 .tma-dash__messages-bubble-edited {
@@ -27393,23 +27405,51 @@ button.tma-dash__header-popup-item:focus-visible {
   cursor: pointer;
 }
 
-/* The bubble and its reactions stack; the action tools sit alongside that
- * stack. Direction flips per side so the tools are always on the *outside*
- * edge of the message, never overlapping the conversation's centre. */
+/* An incoming message is a photo beside a bubble; the bubble, its reactions
+ * and its read receipt stack in the column next to it. */
 .tma-dash__messages-bubble-track {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-}
-
-/* Tools sit on the inward edge of the message: to the left of your own
- * right-aligned bubbles, to the right of incoming ones. */
-.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-track {
-  flex-direction: row;
+  align-items: flex-end;
+  gap: var(--space-8);
 }
 
 .tma-dash__messages-bubble-row--out .tma-dash__messages-bubble-track {
   flex-direction: row-reverse;
+}
+
+/* The sender's photo, on the bubble that ends their run. */
+.tma-dash__messages-bubble-avatar {
+  flex: 0 0 var(--messages-avatar);
+  width: var(--messages-avatar);
+  height: var(--messages-avatar);
+  /* Bottom-aligned with the last line of the bubble, not floating beside its
+   * middle — the tail and the photo should meet. */
+  margin-bottom: 2px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--color-overlay-4);
+  font-size: 11px;
+}
+
+.tma-dash__messages-bubble-avatar > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* No photo: their initials, in the same colour the inbox row gives them. */
+.tma-dash__messages-bubble-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Every other bubble in the run holds the same slot open so the run stays in
+ * one column. */
+.tma-dash__messages-bubble-avatar--blank {
+  background: none;
 }
 
 .tma-dash__messages-bubble-main {
@@ -27424,14 +27464,25 @@ button.tma-dash__header-popup-item:focus-visible {
   align-items: flex-end;
 }
 
-/* Hover actions beside a bubble — tight to each other and to the message. */
+/*
+ * Hover actions sit *over the top edge* of the message rather than beside it.
+ *
+ * Alongside, they competed with the bubble for the row's width and pushed long
+ * messages narrower on hover; over the top they cost nothing, and it is where
+ * Slack and Teams both put the same toolbar.
+ *
+ * They are a child of the row, not of the swipe wrapper: that wrapper clips its
+ * overflow so the bubble can slide under the reply icon, and anything reaching
+ * above the bubble would be cut off inside it.
+ */
 .tma-dash__messages-bubble-actions {
+  position: absolute;
+  top: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   gap: 2px;
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 2px;
+  transform: translateY(-70%);
   padding: 2px;
   border-radius: var(--radius-pill);
   background: var(--color-bg-elevated, #fff);
@@ -27440,6 +27491,16 @@ button.tma-dash__header-popup-item:focus-visible {
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
+}
+
+/* Anchored to the message's own outer edge — past the photo gutter on an
+ * incoming row, flush right on your own. */
+.tma-dash__messages-bubble-row--in .tma-dash__messages-bubble-actions {
+  left: calc(var(--messages-avatar) + var(--space-8));
+}
+
+.tma-dash__messages-bubble-row--out .tma-dash__messages-bubble-actions {
+  right: 0;
 }
 
 .tma-dash__messages-bubble-row:hover .tma-dash__messages-bubble-actions,
@@ -27474,11 +27535,13 @@ button.tma-dash__header-popup-item:focus-visible {
   height: 16px;
 }
 
-/* Touch devices have no hover, so keep the tools visible rather than
- * unreachable — long-press still opens the fuller context menu. */
+/* Touch devices have no hover. The tools used to sit permanently at 0.55 so
+ * they were reachable; over the message that would mean a faded toolbar parked
+ * on every bubble, so they stay hidden and long-press reveals them (it already
+ * sets is-actions-open, alongside opening the fuller context menu). */
 @media (hover: none) {
   .tma-dash__messages-bubble-actions {
-    opacity: 0.55;
+    transform: translateY(-80%);
   }
 }
 
@@ -30655,7 +30718,7 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__messages-bubble--out {
   /*
-   * Everything inside a bubble — timestamps, ticks, quoted replies, file
+   * Everything inside a bubble — timestamps, delivery labels, quoted replies, file
    * names, voice-note times — reads the text tokens. Re-pointing the two
    * tokens here recolours the whole subtree for white-on-blue rather than
    * listing every descendant one by one.
@@ -30687,12 +30750,8 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-primary-dark);
 }
 
-/* The read and failed tick tones are picked for a light bubble; on blue they
- * need lighter equivalents. */
-.tma-dash__messages-bubble--out .tma-dash__messages-bubble-status--read {
-  color: #8fdcff;
-}
-
+/* The failed tone is picked for a light bubble; on blue it needs a lighter
+ * equivalent. */
 .tma-dash__messages-bubble--out .tma-dash__messages-bubble-status--failed {
   color: #ffb4ab;
 }

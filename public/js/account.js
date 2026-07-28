@@ -9,6 +9,7 @@
   var TMA = 'images/icons/tma/';
   var AVATAR = 'images/avatars/';
   var ILLUSTRATIONS = 'images/illustrations/';
+  var BRANDS = 'images/icons/brands/';
   var ROOT = window.__TMA_SITE_ROOT || '';
 
   var TABS = ['Overview', 'Settings', 'Security', 'Billing', 'Statements', 'Referrals', 'API Keys', 'Logs'];
@@ -133,8 +134,8 @@
      a filename — and a platform with no published build stays disabled instead
      of linking at a 404. One fetch is shared by every promo card on the page. */
   var DESKTOP_PLATFORMS = [
-    { key: 'mac', label: 'macOS' },
-    { key: 'windows', label: 'Windows' },
+    { key: 'mac', label: 'macOS', logo: 'AppleLight16' },
+    { key: 'windows', label: 'Windows', logo: 'Windows16' },
   ];
   var desktopReleasesPromise = null;
 
@@ -152,9 +153,10 @@
     return '<a class="tma-dash__account-promo-btn tma-dash__account-promo-btn--download is-disabled" ' +
       'data-desktop-download="' + p.key + '" href="' + ROOT + '/desktop/download/' + p.key + '" ' +
       'aria-disabled="true" title="Checking for a build…">' +
-      // Masked span, not an img: the phosphor logos are black artwork sitting
-      // on a black pill, so they have to take the button's own colour.
-      '<span class="tma-dash__account-promo-btn-icon tma-dash__account-promo-btn-icon--' + p.key + '" aria-hidden="true"></span>' +
+      // The real brand marks, drawn as artwork rather than masked: Windows is
+      // four colours and would lose them to a mask, and Apple ships light grey
+      // so it reads on the black pill.
+      '<img class="tma-dash__account-promo-btn-icon" src="' + BRANDS + p.logo + '.svg" alt="" width="16" height="16">' +
       '<span>' + esc(p.label) + '</span></a>';
   }
 

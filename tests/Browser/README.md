@@ -621,22 +621,25 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 node tests/Browser/messaging-toolbar.mjs
 ```
 
-- **`messaging-phase1.mjs`** — the Phase 1 rework: three-state delivery ticks,
+- **`messaging-phase1.mjs`** — the Phase 1 rework: three-state delivery,
   message tool placement, the right-click menu, closing a chat, the
   repositioned inbox toolbar, and the conversation menu. Runs **two contexts**,
-  because the tick states are only meaningful between two people — a message is
+  because the states are only meaningful between two people — a message is
   *delivered* when the other client acknowledges it and *seen* when they open
   it.
 
-  It asserts the tick **state machine** (`sent` → `delivered` → `read`) and
+  It asserts the delivery **state machine** (`sent` → `delivered` → `read`) and
   re-reads deliberately rather than waiting on a transport; live propagation of
   the same change belongs to `messaging-realtime.mjs`, which runs against real
-  Reverb. It also pins that ticks never appear on incoming messages, that the
-  pair renders ≤20px wide (they used to be two text glyphs a full advance-width
-  apart), and that closing a chat holds the inbox scroll position.
+  Reverb. The states are words rather than ticks, so it reads the labels: "Sent"
+  and "Delivered" inside the bubble, and a single "Seen" line with the eye icon
+  *below* it — one per thread, on the newest read message. It also pins that
+  delivery state never appears on incoming messages, that the hover tools sit
+  over the message's top edge, and that closing a chat holds the inbox scroll
+  position.
 
   Reset delivery state between runs, or every message is already `read` and the
-  first two tick states can't be observed:
+  first two states can't be observed:
 
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="

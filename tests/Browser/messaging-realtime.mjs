@@ -88,10 +88,10 @@ try {
   }
   check(arrived, `A saw B's message within ${arrived ? '<6' : '6+'}s without reloading`);
 
-  step(5, "A's read receipt turns B's tick over, live");
+  step(5, "A's read receipt raises the Seen line under B's message, live");
   let readTick = false;
   for (let i = 0; i < 30; i++) {
-    const count = await b.page.locator('.tma-dash__messages-bubble-status--read').count();
+    const count = await b.page.locator('.tma-dash__messages-bubble-receipt').count();
     if (count > 0) { readTick = true; break; }
     await b.page.waitForTimeout(200);
   }
