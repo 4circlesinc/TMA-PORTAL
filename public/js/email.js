@@ -113,14 +113,81 @@
       if (saved === '0') return false;
       if (saved === '1') return true;
     } catch (e) { /* ignore */ }
-    // Closed (icon rail) by default — matches the main menu collapsed rail.
-    return true;
+    /*
+     * Open by default.
+     *
+     * It used to default to the collapsed icon rail to echo the main menu,
+     * but sitting flush beside that rail it read as a second strip of
+     * unlabelled icons. The sidebar is its own card now — the same one the
+     * Feed uses — so it opens showing folder names, and the collapse toggle
+     * is still there for anyone who wants the width back.
+     */
+    return false;
   }
 
   function saveSidebarCollapsed(collapsed) {
     try {
       localStorage.setItem(SIDEBAR_COLLAPSE_KEY, collapsed ? '1' : '0');
     } catch (e) { /* ignore */ }
+  }
+
+  /*
+   * Which sidebar groups are expanded. Mirrors the Feed's sidebar, which
+   * remembers the same thing — a group someone closed should stay closed on
+   * the next visit rather than springing back open.
+   */
+  var SIDEBAR_GROUPS_KEY = 'tma.email.sidebarGroups';
+
+  function loadSidebarGroups() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(SIDEBAR_GROUPS_KEY) || '{}');
+      if (saved && typeof saved === 'object') return saved;
+    } catch (e) { /* ignore */ }
+    return {};
+  }
+
+  function saveSidebarGroups(groups) {
+    try {
+      localStorage.setItem(SIDEBAR_GROUPS_KEY, JSON.stringify(groups || {}));
+    } catch (e) { /* ignore */ }
+  }
+
+  /* A group is open unless it was explicitly closed. */
+  function isSidebarGroupOpen(state, key) {
+    return !(state.sidebarGroups && state.sidebarGroups[key] === false);
+  }
+
+  /*
+   * One collapsible sidebar section: a caret, a title, and its rows.
+   *
+   * The titles are hidden in the collapsed rail (there is no room for them),
+   * so the caret is not rendered there either — a control that cannot be
+   * labelled is a control nobody can use.
+   */
+  function renderEmailSidebarGroup(state, key, label, bodyHtml, actionHtml) {
+    if (!isEmailMobile() && state.sidebarCollapsed) {
+      return '<section class="tma-dash__email-group" data-email-group="' + esc(key) + '">' +
+        bodyHtml + '</section>';
+    }
+
+    var open = isSidebarGroupOpen(state, key);
+
+    return (
+      '<section class="tma-dash__email-group" data-email-group="' + esc(key) + '">' +
+      '<div class="tma-dash__email-group-head">' +
+      '<button type="button" class="tma-dash__email-group-title"' +
+      ' data-email-group-toggle="' + esc(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+      '<span class="tma-dash__email-group-caret' + (open ? ' tma-dash__email-group-caret--open' : '') + '"' +
+      ' aria-hidden="true">' +
+      '<svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor"' +
+      ' stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
+      '<span>' + esc(label) + '</span>' +
+      '</button>' +
+      (actionHtml || '') +
+      '</div>' +
+      (open ? '<div class="tma-dash__email-group-body">' + bodyHtml + '</div>' : '') +
+      '</section>'
+    );
   }
 
   function clampSplitRatio(ratio) {
@@ -976,14 +1043,24 @@
   }
 
   function renderEmailLabelsSection(state) {
+    // The "+" rides in the group header, the way the Feed's new-channel
+    // button sits beside its sidebar title.
+    var create =
+      '<button type="button" class="tma-dash__email-labels-create" data-email-label-create' +
+      ' aria-label="Create label" title="Create label">' +
+      '<img src="' + ICONS.Plus + '" alt="">' +
+      '</button>';
+
     return (
       '<div class="tma-dash__email-labels-section">' +
-      '<div class="tma-dash__email-labels-head">' +
-      '<span class="tma-dash__email-labels-title">Labels</span>' +
-      '<button type="button" class="tma-dash__email-labels-create" data-email-label-create aria-label="Create label">' +
-      '<img src="' + ICONS.Plus + '" alt="">' +
-      '</button>' +
-      '</div>' +
+      renderEmailSidebarGroup(state, 'labels', 'Labels', renderEmailLabelsNav(state), create) +
+      renderEmailLabelEditor(state) +
+      '</div>'
+    );
+  }
+
+  function renderEmailLabelsNav(state) {
+    return (
       '<nav class="tma-dash__email-labels" aria-label="Labels">' +
       emailLabels(state).map(function (label) {
         var active = state.activeLabelId === label.id;
@@ -1005,9 +1082,7 @@
           '</div>'
         );
       }).join('') +
-      '</nav>' +
-      renderEmailLabelEditor(state) +
-      '</div>'
+      '</nav>'
     );
   }
 
@@ -2797,6 +2872,17 @@
     return counts.total || null;
   }
 
+  /*
+   * Does this folder's badge count *unread*, or just how much is in there?
+   *
+   * The two get different treatments: unread is the filled pill that asks for
+   * attention, a total is quiet grey text. Rendering a total as a pill made
+   * "27 templates" read as 27 unread ones.
+   */
+  function folderCountIsUnread(folder) {
+    return folder.id === 'inbox' || folder.id === 'important' || folder.id === 'spam';
+  }
+
   function renderEmailSidebar(state) {
     var collapsed = !isEmailMobile() && !!state.sidebarCollapsed;
     var sidebarCls = 'tma-dash__email-sidebar';
@@ -2810,7 +2896,10 @@
           renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false) +
           '</div>') +
       '<div class="tma-dash__email-sidebar-nav">' +
-      renderFolders(state) +
+      // Compose is deliberately outside the group: it is an action, not a
+      // place, and it must stay reachable when Mailboxes is collapsed.
+      renderComposeButton(state) +
+      renderEmailSidebarGroup(state, 'folders', 'Mailboxes', renderFolders(state)) +
       renderEmailLabelsSection(state) +
       '</div>' +
       '</div>'
@@ -2851,11 +2940,32 @@
     );
   }
 
+  /*
+   * The New Email button. Rendered on its own above the groups so collapsing
+   * Mailboxes never takes composing away with it.
+   */
+  function renderComposeButton(state) {
+    if (isEmailMobile()) return '';
+
+    var folder = FOLDERS.filter(function (f) { return f.compose; })[0];
+    if (!folder) return '';
+
+    return (
+      '<button type="button" class="tma-dash__email-folder tma-dash__email-folder--compose"' +
+      ' data-email-folder="' + esc(folder.id) + '"' +
+      ' title="' + esc(folder.label) + '" aria-label="' + esc(folder.label) + '">' +
+      '<img src="' + esc(ICONS[folder.icon]) + '" alt="">' +
+      '<span class="tma-dash__email-folder-label">' + esc(folder.label) + '</span>' +
+      '</button>'
+    );
+  }
+
   function renderFolders(state) {
     return (
       '<nav class="tma-dash__email-folders" aria-label="Mail folders">' +
       FOLDERS.filter(function (folder) {
-        return !(isEmailMobile() && folder.compose);
+        // Compose has its own button above; see renderComposeButton.
+        return !folder.compose;
       }).map(function (folder) {
         var active = !folder.compose && state.folder === folder.id && !state.activeLabelId;
         var cls = 'tma-dash__email-folder';
@@ -2865,7 +2975,9 @@
         var countHtml =
           count === null
             ? ''
-            : '<span class="tma-dash__email-folder-count">' + count + '</span>';
+            : '<span class="tma-dash__email-folder-count' +
+              (folderCountIsUnread(folder) ? ' tma-dash__email-folder-count--unread' : '') +
+              '">' + count + '</span>';
         return (
           '<button type="button" class="' + cls + '" data-email-folder="' + esc(folder.id) + '"' +
           ' title="' + esc(folder.label) + '" aria-label="' + esc(folder.label) + '">' +
@@ -7006,6 +7118,16 @@
       }
     }
 
+    MORPH.unwired(root, '[data-email-group-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-email-group-toggle');
+        state.sidebarGroups = state.sidebarGroups || {};
+        state.sidebarGroups[key] = state.sidebarGroups[key] === false;
+        saveSidebarGroups(state.sidebarGroups);
+        render();
+      });
+    });
+
     MORPH.unwired(root, '[data-email-sidebar-toggle]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.sidebarCollapsed = !state.sidebarCollapsed;
@@ -7480,6 +7602,9 @@
       if (typeof root._emailState.sidebarCollapsed !== 'boolean') {
         root._emailState.sidebarCollapsed = loadSidebarCollapsed();
       }
+      if (!root._emailState.sidebarGroups) {
+        root._emailState.sidebarGroups = loadSidebarGroups();
+      }
       if (typeof root._emailState.listFilter !== 'string') {
         root._emailState.listFilter = 'all';
       }
@@ -7565,6 +7690,7 @@
       layoutStyle: loadLayoutStyle(),
       splitListRatio: loadSplitListRatio(),
       sidebarCollapsed: loadSidebarCollapsed(),
+      sidebarGroups: loadSidebarGroups(),
       listFilter: 'all',
       filterMenuOpen: false,
       reading: false,

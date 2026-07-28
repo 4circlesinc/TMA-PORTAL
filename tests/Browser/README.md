@@ -49,6 +49,29 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/feed.mjs
   ```
+- **`email-sidebar.mjs`** — the mailbox sidebar after it was restyled to match
+  the Feed's: a card at 232px with collapsible Mailboxes and Labels groups,
+  rather than the bare 72px icon rail that sat flush against the main menu.
+
+  It asserts **computed** style, not markup, because every bug in this area has
+  been a specificity bug that is invisible from the rule that looks like it
+  should win — a blanket `152px` in `dashboard-tma-overrides.css` (which loads
+  last) and a hardcoded `168px` inside a `min-width: 861px` media query each
+  silently beat the sidebar's own width. It also checks the unread pill and a
+  plain total are styled differently (a total drawn as the filled pill made "27
+  templates" read as 27 unread), that the collapsed rail still collapses, that a
+  closed group survives a reload, that dark mode does not leave the card white,
+  and that mobile is untouched.
+
+  One harness note: park the mouse away from the main rail before clicking in
+  the sidebar. Left hovering there, the hover-overlay sidebar expands across the
+  email card and swallows the click — that is the rail behaving normally.
+
+  Needs a staff account with a connected mailbox:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/email-sidebar.mjs
+  ```
 - **`people.mjs`** — the whole People section, which used to render from a
   localStorage store that was always empty. Checks each of the eight URLs is
   *served* on a cold load (they 404'd before, so a hard refresh dropped you on

@@ -9336,38 +9336,47 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  /* Flush left to the main-menu edge; light right pad so the reading pane
-     doesn't kiss the viewport. */
-  padding-left: 0;
+  /* Inset on both sides. The sidebar used to sit flush against the main-menu
+     rail, which made it read as a second strip of the same rail rather than as
+     its own thing; it is a card now, like the Feed's, and a card needs room to
+     be one. */
+  padding-left: var(--space-12);
   padding-right: var(--space-12);
 }
 
-/* Collapsed: no gap between icon rail and inbox — max width for the list. */
-.tma-dash__email-layout:has(.tma-dash__email-sidebar--collapsed) {
-  gap: 0;
-}
-
+/*
+ * The mailbox sidebar, styled as a card to match the Feed's (see feed.css,
+ * .tma-dash__feed-sidebar). Same border, radius, background and padding, so
+ * the two modules read as one system — which is what the flush rail it
+ * replaced never managed, sitting as it did directly against the main menu.
+ */
 .tma-dash__email-sidebar {
-  /* Match the main menu rail tokens so the two sidebars feel like one system. */
-  --email-sidebar-w: var(--dash-sidebar-w, 225px);
-  --dash-icon-md: 20px;
-  --dash-nav-icon-inset: calc(var(--space-2) + 16px + var(--space-4));
+  --email-sidebar-w: 232px;
+  --dash-icon-md: 16px;
   flex: 0 0 var(--email-sidebar-w);
   width: var(--email-sidebar-w);
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-12);
   min-height: 0;
   min-width: 0;
+  padding: var(--space-12);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
   overflow: hidden;
+  box-sizing: border-box;
   transition:
     width var(--dash-sidebar-close-ms, 190ms) var(--dash-sidebar-ease-close, ease),
     flex-basis var(--dash-sidebar-close-ms, 190ms) var(--dash-sidebar-ease-close, ease);
 }
 
-/* Same collapsed width as the main menu icon rail. */
+/* Collapsed: an icon rail inside the same card. Icons go back up to 20px —
+   with no label beside them they are the only target there is. */
 .tma-dash__email-sidebar--collapsed {
   --email-sidebar-w: var(--dash-sidebar-collapsed-w, 72px);
+  --dash-icon-md: 20px;
+  padding: var(--space-8);
   transition:
     width var(--dash-sidebar-open-ms, 280ms) var(--dash-sidebar-ease-open, ease),
     flex-basis var(--dash-sidebar-open-ms, 280ms) var(--dash-sidebar-ease-open, ease);
@@ -9426,7 +9435,7 @@
  * fade out, width clips to 72px. Do not recenter or shrink the row boxes.
  */
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder-label,
-.tma-dash__email-sidebar--collapsed .tma-dash__email-labels-title,
+.tma-dash__email-sidebar--collapsed .tma-dash__email-group-title,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-item-name,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-item-count,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-edit,
@@ -9460,12 +9469,30 @@
   justify-content: center;
   padding-left: var(--space-4);
   padding-right: var(--space-4);
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
+}
+
+/* No labels in the rail, so no group headers either — renderEmailSidebarGroup
+   omits the markup, and this covers anything left over. */
+.tma-dash__email-sidebar--collapsed .tma-dash__email-group-head,
+.tma-dash__email-sidebar--collapsed .tma-dash__email-labels-create {
+  display: none;
+}
+
+.tma-dash__email-sidebar--collapsed .tma-dash__email-label-item {
+  justify-content: center;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
 }
 
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count {
   position: absolute;
   top: 3px;
   right: 10px;
+  /* Overrides the expanded pill's own metrics — in the rail it is a corner
+     badge on the icon, not a trailing count. */
+  line-height: 1;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -9496,18 +9523,13 @@
   margin-bottom: var(--space-8, 8px);
 }
 
-.tma-dash__email-sidebar--collapsed .tma-dash__email-labels-title,
+.tma-dash__email-sidebar--collapsed .tma-dash__email-group-title,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-label-edit {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
-}
-
-.tma-dash__email-sidebar--collapsed .tma-dash__email-labels-head {
-  justify-content: flex-start;
-  padding-left: var(--space-2);
 }
 
 .tma-dash__email-sidebar--collapsed .tma-dash__email-profile-wrap--sidebar {
@@ -9518,7 +9540,7 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: 2px;
   padding: 0;
   min-height: 0;
   width: 100%;
@@ -9528,11 +9550,82 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-8);
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   scrollbar-width: none;
-  padding: 0 var(--space-4) var(--space-4);
+  /* The card's own padding does this job now. */
+  padding: 0;
+}
+
+/* ── Sidebar groups ──────────────────────────────────────
+   The Feed's collapsible sections (.tma-dash__feed-group-*), rebuilt against
+   the same tokens so a "Mailboxes" header and a "Channels" header are the
+   same header. */
+
+.tma-dash__email-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__email-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.tma-dash__email-group-title {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tma-dash__email-group-caret {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.tma-dash__email-group-caret svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tma-dash__email-group-caret--open {
+  transform: rotate(90deg);
+}
+
+.tma-dash__email-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-4);
+  min-width: 0;
+}
+
+/* The compose button sits above the groups, full width of the card. */
+.tma-dash__email-sidebar-nav > .tma-dash__email-folder--compose {
+  flex: 0 0 auto;
 }
 
 .tma-dash__email-sidebar-nav::-webkit-scrollbar {
@@ -9543,24 +9636,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  padding-top: var(--space-8);
-  border-top: 0.5px solid var(--dash-border);
 }
 
-.tma-dash__email-labels-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
-  padding: 0;
+/* The label header is a group header now; see .tma-dash__email-group-head. */
+.tma-dash__email-labels-section > .tma-dash__email-group {
+  min-width: 0;
 }
 
-.tma-dash__email-labels-title {
-  font-size: var(--text-size-12);
-  line-height: 16px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-}
+
 
 .tma-dash__email-labels-create {
   appearance: none;
@@ -9775,17 +9858,17 @@
   appearance: none;
   display: flex;
   align-items: center;
-  gap: var(--space-10, 10px);
+  gap: var(--space-8);
   width: 100%;
   min-width: 0;
-  padding: var(--space-8) var(--space-4) var(--space-8) var(--space-2);
+  padding: var(--space-6) var(--space-8);
   border: 0;
-  border-radius: var(--radius-10, 10px);
+  border-radius: var(--radius-8);
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--text-size-12);
+  line-height: 16px;
   text-align: left;
   cursor: pointer;
   box-sizing: border-box;
@@ -9796,7 +9879,7 @@
 }
 
 .tma-dash__email-label-item--active {
-  background: var(--color-hover);
+  background: var(--color-hover-deep);
   font-weight: 600;
 }
 
@@ -10115,25 +10198,27 @@
 }
 
 /* Folder rows — same metrics as .tma-dash__sidebar-nav .tma-dash__nav-item */
+/* Metrics copied from the Feed's .tma-dash__feed-nav so a folder row and a
+   channel row are the same row. */
 .tma-dash__email-folder {
   display: flex;
   align-items: center;
-  gap: var(--space-10, 10px);
+  gap: var(--space-8);
   width: 100%;
   min-width: 0;
-  padding: var(--space-8) var(--space-4) var(--space-8) var(--space-2);
+  padding: var(--space-6) var(--space-8);
   border: none;
-  border-radius: var(--radius-10, 10px);
+  border-radius: var(--radius-8);
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--text-size-12);
+  line-height: 16px;
   text-align: left;
   cursor: pointer;
   position: relative;
   box-sizing: border-box;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .tma-dash__email-folder-label {
@@ -10144,22 +10229,45 @@
   white-space: nowrap;
 }
 
+/*
+ * Two kinds of count, deliberately different.
+ *
+ * A plain total ("how many drafts") is quiet grey text. Unread gets the Feed's
+ * filled pill (.tma-dash__feed-channel-unread), because that is the one that
+ * is asking to be dealt with.
+ */
 .tma-dash__email-folder-count {
   flex-shrink: 0;
   font-size: var(--text-size-12);
   line-height: 16px;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
+.tma-dash__email-folder-count--unread {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  line-height: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
 .tma-dash__email-folder--active {
-  background: var(--color-accent-bg, var(--color-hover));
-  color: var(--color-primary-dark, var(--color-text-primary));
+  background: var(--color-hover-deep);
+  color: var(--color-text-primary);
   font-weight: 600;
 }
 
 .tma-dash__email-folder--active .tma-dash__email-folder-count {
-  color: var(--color-primary-dark, var(--color-text-primary));
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-folder--active .tma-dash__email-folder-count--unread {
+  color: #fff;
 }
 
 .tma-dash__email-folder--active img {
@@ -10167,11 +10275,10 @@
 }
 
 .tma-dash__email-folder img {
-  width: var(--dash-icon-md, 20px);
-  height: var(--dash-icon-md, 20px);
-  flex: 0 0 var(--dash-icon-md, 20px);
-  margin-right: 2px;
-  opacity: 0.85;
+  width: var(--dash-icon-md, 16px);
+  height: var(--dash-icon-md, 16px);
+  flex: 0 0 var(--dash-icon-md, 16px);
+  opacity: 0.72;
 }
 
 .tma-dash__email-folder:hover {
@@ -10183,14 +10290,19 @@
 .tma-dash__email-folder--compose {
   justify-content: center;
   gap: var(--space-6, 6px);
-  margin-bottom: var(--space-8, 8px);
-  padding-top: var(--space-10, 10px);
-  padding-bottom: var(--space-10, 10px);
-  background: var(--color-primary-dark, #136da0);
+  margin-bottom: 0;
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
+  border-radius: var(--radius-12);
+  background: var(--color-primary);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(3, 62, 96, 0.28);
-  transition: background 140ms ease, box-shadow 140ms ease, transform 60ms ease;
+  box-shadow: none;
+  transition: background 140ms ease, transform 60ms ease;
+}
+
+.tma-dash__email-folder--compose:hover {
+  background: var(--color-primary-dark);
 }
 
 .tma-dash__email-folder--compose:hover,
@@ -12481,23 +12593,22 @@
 }
 
 @media (min-width: 861px) {
+  /*
+   * Width comes from --email-sidebar-w, which the base rule sets to 232px and
+   * the --collapsed modifier drops to 72px.
+   *
+   * This block used to hardcode 168px expanded, and needed a second
+   * `.tma-dash--email`-prefixed rule to claw the collapsed width back — both
+   * only existed to out-specify a blanket 152px rule in
+   * dashboard-tma-overrides.css, which loads later and won by source order.
+   * That rule is gone, so the variable is enough and the two widths are stated
+   * once each rather than four times between three files.
+   */
   .tma-dash__email-sidebar {
-    flex: 0 0 168px;
-    width: 168px;
-    min-width: 168px;
+    flex: 0 0 var(--email-sidebar-w);
+    width: var(--email-sidebar-w);
+    min-width: var(--email-sidebar-w);
     flex-shrink: 0;
-  }
-
-  /* The 168px above is the *expanded* width. Collapsed must stay a true narrow
-   * icon rail — without this override it never shrank, so labels hid but the
-   * column stayed wide and the unread badges stranded far from their icons.
-   * The `.tma-dash--email` prefix raises specificity above the blanket 152px
-   * rule in dashboard-tma-overrides.css, which loads later and would otherwise
-   * win by source order. */
-  .tma-dash--email .tma-dash__email-sidebar--collapsed {
-    flex: 0 0 var(--dash-sidebar-collapsed-w, 72px);
-    width: var(--dash-sidebar-collapsed-w, 72px);
-    min-width: var(--dash-sidebar-collapsed-w, 72px);
   }
 }
 
@@ -12590,11 +12701,11 @@
     gap: var(--space-4);
   }
 
-  .tma-dash__email-labels-head {
+  .tma-dash__email-group-head {
     padding: 0 0 var(--space-4);
   }
 
-  .tma-dash__email-labels-title {
+  .tma-dash__email-group-title {
     font-size: var(--text-size-12);
     line-height: var(--text-lh-12);
     font-weight: var(--font-weight-medium);
@@ -19230,6 +19341,13 @@
 
 .tma-dash__calendar-history-row + .tma-dash__calendar-history-row {
   border-top: 1px solid var(--color-overlay-4);
+}
+
+/* The mailbox sidebar is a card now, so it needs the same dark surface every
+   other card gets. */
+.tma-dash[data-theme="dark"] .tma-dash__email-sidebar {
+  background: var(--color-bg-card);
+  border-color: var(--dash-border);
 }
 
 /* ── Social Feed ─────────────────────────────────────── */

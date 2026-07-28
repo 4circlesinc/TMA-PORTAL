@@ -1082,14 +1082,15 @@ a.tma-dash__tab-btn:visited {
   gap: var(--space-8);
 }
 
-.tma-dash__email-sidebar {
-  flex: 0 0 152px;
-  width: 152px;
-}
-
-.tma-dash__email-sidebar-nav {
-  padding: 0 var(--space-4) var(--space-8);
-}
+/*
+ * The hard 152px width and the nav padding that used to live here are gone.
+ *
+ * This file loads last, so those unconditional declarations silently beat the
+ * sidebar's own rules in dashboard.css — the sidebar is a 232px card now (see
+ * .tma-dash__email-sidebar there, which matches the Feed's) and it was being
+ * squeezed to 152px with no way to tell from the rule that set it. The card
+ * supplies its own padding.
+ */
 
 /* ── Header notification badges (lost in Portal Designs restore) ── */
 .tma-dash__icon-btn {
