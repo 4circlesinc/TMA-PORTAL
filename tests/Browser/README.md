@@ -25,6 +25,30 @@ field placement and drawing, and computed CSS only exist in a browser.
   mock: create a client through the form, confirm it survives a reload, then
   bulk-delete it. Reads the directory back through the API so the check doesn't
   depend on how the list renders. Needs a staff account.
+- **`feed.mjs`** — the Feed module. PHPUnit covers the API
+  (`tests/Feature/FeedTest.php`); what only a browser can check is §22 — that
+  posting, commenting, reacting, voting, bookmarking and pinning all *patch*
+  the page instead of reloading it. So it plants a sentinel on `window` at the
+  start and asserts it is still there at the end: a single navigation anywhere
+  in the run kills it.
+
+  It also covers the parts that only exist as rendered state: the Feed's own
+  sidebar and its memory (the selected channel and a collapsed group both have
+  to survive a reload — they are keyed by account, and reading that key before
+  `/me` answers is what broke it the first time), the rich-text composer
+  (`data-morph-skip` on the editor is load-bearing; without it a re-render
+  mid-sentence deletes what was typed), threaded replies, live poll tallies,
+  and that author faces fall back to initials rather than a blank pixel.
+
+  Ends with a **second browser context** on another staff account, confirming a
+  private channel is absent from their sidebar while the org-wide one is there.
+
+  Needs two staff accounts (`e2e@example.com` and `bea@example.com`). The
+  empty-state check only runs on a fresh database, so it is safe to re-run:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/feed.mjs
+  ```
 - **`people.mjs`** — the whole People section, which used to render from a
   localStorage store that was always empty. Checks each of the eight URLs is
   *served* on a cold load (they 404'd before, so a hard refresh dropped you on

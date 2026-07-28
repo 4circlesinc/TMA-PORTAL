@@ -776,6 +776,24 @@ class FeedTest extends TestCase
         $this->assertCount(1, $stats['outstanding']);
     }
 
+    public function test_taking_a_link_counts_as_a_share(): void
+    {
+        $owner = $this->staff();
+        $uuid = $this->makeChannel($owner);
+
+        $post = $this->actingAs($owner)->postJson('/portal/feed/posts', [
+            'channelId' => $uuid,
+            'body' => '<p>Pass it on.</p>',
+            'status' => FeedPost::STATUS_PUBLISHED,
+        ])->json('post');
+
+        $this->assertSame(0, $post['counts']['shares']);
+
+        $this->actingAs($owner)->postJson('/portal/feed/posts/'.$post['id'].'/share')
+            ->assertOk()
+            ->assertJsonPath('shares', 1);
+    }
+
     /* ── Mentions, hashtags, search ───────────────────────────────── */
 
     public function test_a_mention_is_recorded_and_surfaces_in_the_mentions_view(): void

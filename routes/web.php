@@ -547,6 +547,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/posts/{uuid}/pin', [FeedPostController::class, 'togglePin'])->name('posts.pin');
         Route::post('/posts/{uuid}/lock', [FeedPostController::class, 'toggleLock'])->name('posts.lock');
         Route::post('/posts/{uuid}/bookmark', [FeedPostController::class, 'toggleBookmark'])->name('posts.bookmark');
+        Route::post('/posts/{uuid}/share', [FeedPostController::class, 'share'])->name('posts.share');
         Route::post('/posts/{uuid}/acknowledge', [FeedPostController::class, 'acknowledge'])
             ->name('posts.acknowledge');
         Route::get('/posts/{uuid}/acknowledgements', [FeedPostController::class, 'acknowledgements'])

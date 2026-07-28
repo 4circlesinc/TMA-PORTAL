@@ -179,7 +179,10 @@ class NotificationsFoundationTest extends TestCase
         sort($modules);
 
         $this->assertEqualsCanonicalizing(
-            ['account', 'calendar', 'clients', 'email', 'files', 'messages', 'security', 'signatures', 'system'],
+            [
+                'account', 'calendar', 'clients', 'email', 'feed', 'files',
+                'messages', 'security', 'signatures', 'system',
+            ],
             $modules,
         );
     }

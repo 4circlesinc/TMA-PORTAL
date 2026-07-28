@@ -1368,6 +1368,10 @@
     { id: 'signatures', label: 'Signatures' },
     { id: 'clients', label: 'Clients' },
     { id: 'groups', label: 'Groups' },
+    // Mirrors NotificationType::PREFERENCE_GROUPS. This list is hardcoded
+    // rather than derived, so a new module has to be added here too or its
+    // notifications arrive with no way to switch them off.
+    { id: 'feed', label: 'Feed' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'security', label: 'Security' },
     { id: 'system', label: 'System updates' },

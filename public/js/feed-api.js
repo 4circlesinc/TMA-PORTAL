@@ -161,6 +161,7 @@
     togglePin: function (id) { return send('POST', '/posts/' + encodeURIComponent(id) + '/pin'); },
     toggleLock: function (id) { return send('POST', '/posts/' + encodeURIComponent(id) + '/lock'); },
     toggleBookmark: function (id) { return send('POST', '/posts/' + encodeURIComponent(id) + '/bookmark'); },
+    share: function (id) { return send('POST', '/posts/' + encodeURIComponent(id) + '/share'); },
     acknowledge: function (id) { return send('POST', '/posts/' + encodeURIComponent(id) + '/acknowledge'); },
     acknowledgements: function (id) { return get('/posts/' + encodeURIComponent(id) + '/acknowledgements'); },
 

@@ -1,0 +1,2231 @@
+/*
+ * TMA - Social Feed ( /social/feed )
+ *
+ * The Feed's own layer. Everything here is built from the same tokens the rest
+ * of the portal uses — spacing, radii, colours and transitions all resolve to
+ * variables from tokens.css, and nothing invents a value.
+ *
+ * The composer's collapsed state (.tma-dash__feed-compose-*) already lives in
+ * dashboard.css and is deliberately not repeated: this file adds what the
+ * module grew into, and leaves the original prompt exactly as it was.
+ *
+ * Loaded after dashboard-tma-overrides.css. That file's unconditional
+ * declarations outrank dashboard.css media queries, which has broken layouts
+ * here before — every class below is new, so nothing it sets can apply.
+ */
+
+/* ── layout ──────────────────────────────────────────────── */
+
+.tma-dash__feed-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-16);
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-4) 0 var(--space-24);
+}
+
+/*
+ * The Feed's own sidebar (§1), independent of the portal's. It sticks so the
+ * channel list stays reachable while a long stream scrolls past it.
+ */
+.tma-dash__feed-sidebar {
+  position: sticky;
+  top: 0;
+  flex: 0 0 232px;
+  width: 232px;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tma-dash__feed-layout--collapsed .tma-dash__feed-sidebar {
+  display: none;
+}
+
+.tma-dash__feed-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  /* The stream is a reading column; it stops growing where lines get long. */
+  max-width: 720px;
+}
+
+.tma-dash__feed-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-sidebar-title {
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.tma-dash__feed-sidebar-empty {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-muted);
+  padding: var(--space-8) var(--space-4);
+  margin: 0;
+}
+
+/* ── sidebar groups ──────────────────────────────────────── */
+
+.tma-dash__feed-group + .tma-dash__feed-group {
+  margin-top: var(--space-8);
+}
+
+.tma-dash__feed-group-title {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-4);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tma-dash__feed-group-caret {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.tma-dash__feed-group-caret svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tma-dash__feed-group-caret--open {
+  transform: rotate(90deg);
+}
+
+.tma-dash__feed-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-4);
+}
+
+.tma-dash__feed-subgroup-title {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: var(--space-8) var(--space-8) var(--space-4);
+}
+
+/* ── sidebar rows ────────────────────────────────────────── */
+
+.tma-dash__feed-nav,
+.tma-dash__feed-channel {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.tma-dash__feed-nav:hover,
+.tma-dash__feed-channel:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__feed-nav--active,
+.tma-dash__feed-channel--active {
+  background: var(--color-hover-deep);
+  font-weight: 600;
+}
+
+.tma-dash__feed-nav-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.tma-dash__feed-nav-label,
+.tma-dash__feed-channel-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__feed-channel-unread {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  line-height: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.tma-dash__feed-channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-dash__feed-channel-search,
+.tma-dash__feed-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 28px;
+  padding: 2px var(--space-8);
+  background: var(--color-bg-input);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-16);
+}
+
+.tma-dash__feed-channel-search img,
+.tma-dash__feed-search img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-channel-search input,
+.tma-dash__feed-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-12);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+/* ── the channel badge ───────────────────────────────────── */
+
+.tma-dash__feed-badge {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-8);
+  object-fit: cover;
+  overflow: hidden;
+}
+
+/* --radius-pill (80px) is the design system's "fully round"; there is no
+   --radius-full token, and using one silently left every avatar square. */
+.tma-dash__feed-badge--xs { width: 16px; height: 16px; border-radius: var(--radius-4); }
+.tma-dash__feed-badge--sm { width: 20px; height: 20px; }
+.tma-dash__feed-badge--lg { width: 48px; height: 48px; border-radius: var(--radius-12); }
+
+.tma-dash__feed-badge img {
+  width: 60%;
+  height: 60%;
+  object-fit: contain;
+}
+
+.tma-dash__feed-badge--xs img { width: 10px; height: 10px; }
+
+/* Images fill their badge rather than sitting inside it. */
+img.tma-dash__feed-badge {
+  object-fit: cover;
+}
+
+/*
+ * A colour per channel, mixed against the surface rather than used at full
+ * strength — a saturated dot next to 12px text reads as an error state.
+ */
+.tma-dash__feed-badge--blue   { background: color-mix(in srgb, var(--color-blue) 30%, transparent); }
+.tma-dash__feed-badge--green  { background: color-mix(in srgb, var(--color-green) 30%, transparent); }
+.tma-dash__feed-badge--orange { background: color-mix(in srgb, var(--color-orange) 30%, transparent); }
+.tma-dash__feed-badge--red    { background: color-mix(in srgb, var(--color-red) 22%, transparent); }
+.tma-dash__feed-badge--pink   { background: color-mix(in srgb, var(--color-pink) 30%, transparent); }
+.tma-dash__feed-badge--yellow { background: color-mix(in srgb, var(--color-yellow) 30%, transparent); }
+
+/* ── headers ─────────────────────────────────────────────── */
+
+.tma-dash__feed-head,
+.tma-dash__feed-channel-head {
+  background: var(--color-white);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-16);
+  overflow: hidden;
+}
+
+.tma-dash__feed-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20);
+}
+
+.tma-dash__feed-cover {
+  height: 140px;
+  background: var(--color-bg-card);
+}
+
+.tma-dash__feed-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tma-dash__feed-channel-head-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20);
+}
+
+/* The avatar overlaps the cover, the way a profile header reads. */
+.tma-dash__feed-channel-head--cover .tma-dash__feed-badge--lg {
+  margin-top: -40px;
+  border: 3px solid var(--color-white);
+  background-clip: padding-box;
+}
+
+.tma-dash__feed-head-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tma-dash__feed-head-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin: 0;
+  font-size: var(--text-size-18, 18px);
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-head-desc {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-head-meta {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.tma-dash__feed-tag {
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+/* ── toolbar ─────────────────────────────────────────────── */
+
+.tma-dash__feed-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-toolbar .tma-dash__feed-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.tma-dash__feed-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.tma-dash__tool-btn--active {
+  background: var(--color-hover-deep);
+}
+
+.tma-dash__feed-filter-count {
+  position: absolute;
+  transform: translate(10px, -10px);
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 9px;
+  line-height: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── buttons and chips ───────────────────────────────────── */
+
+.tma-dash__feed-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.tma-dash__feed-btn:hover { background: var(--color-hover); }
+.tma-dash__feed-btn:disabled { opacity: 0.5; cursor: default; }
+
+.tma-dash__feed-btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.tma-dash__feed-btn--primary:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
+.tma-dash__feed-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-btn--ghost:hover { background: var(--color-hover); }
+
+.tma-dash__feed-btn--danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-red) 40%, transparent);
+  color: var(--color-red);
+}
+
+.tma-dash__feed-btn--danger:hover {
+  background: color-mix(in srgb, var(--color-red) 10%, transparent);
+}
+
+.tma-dash__feed-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-size-12);
+  color: var(--color-text-link);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.tma-dash__feed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-dash__feed-chip img { width: 12px; height: 12px; opacity: 0.7; }
+
+.tma-dash__feed-chip--muted { color: var(--color-text-muted); }
+
+.tma-dash__feed-chip--question {
+  background: color-mix(in srgb, var(--color-blue) 22%, transparent);
+  color: var(--color-primary-dark);
+}
+.tma-dash__feed-chip--praise {
+  background: color-mix(in srgb, var(--color-green) 24%, transparent);
+  color: #2f6b40;
+}
+.tma-dash__feed-chip--poll {
+  background: color-mix(in srgb, var(--color-orange) 26%, transparent);
+  color: #8a5a12;
+}
+.tma-dash__feed-chip--announcement {
+  background: color-mix(in srgb, var(--color-red) 16%, transparent);
+  color: #a83232;
+}
+
+/* ── composer (open state) ───────────────────────────────── */
+
+.tma-dash__feed-composer--open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20) var(--space-12);
+}
+
+.tma-dash__feed-compose-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.tma-dash__feed-compose-head-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-dash__feed-compose-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-compose-name {
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-compose-target {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-compose-saved {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-compose-title {
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-input);
+  font: inherit;
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.tma-dash__feed-editor-wrap {
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-input);
+  overflow: hidden;
+}
+
+.tma-dash__feed-editor-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: var(--space-4);
+  border-bottom: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-editor-tool {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__feed-editor-tool:hover { background: var(--color-hover); }
+.tma-dash__feed-editor-tool img { width: 14px; height: 14px; opacity: 0.72; }
+
+.tma-dash__feed-editor {
+  min-height: 96px;
+  max-height: 420px;
+  overflow: auto;
+  padding: var(--space-12);
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+/* The placeholder is drawn only while the field is genuinely empty. */
+.tma-dash__feed-editor:empty::before,
+.tma-dash__feed-comment-input:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.tma-dash__feed-compose-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.tma-dash__feed-compose-tools,
+.tma-dash__feed-compose-submit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.tma-dash__feed-compose-submit { gap: var(--space-8); }
+
+.tma-dash__feed-error {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-red);
+  margin: 0;
+}
+
+/* ── mention menu ────────────────────────────────────────── */
+
+.tma-dash__feed-mention-menu {
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.tma-dash__feed-mention-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-mention-name { flex: 1; min-width: 0; }
+
+.tma-dash__feed-mention-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+
+/* ── attachments tray ────────────────────────────────────── */
+
+.tma-dash__feed-attach-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-attach {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  max-width: 260px;
+  padding: var(--space-6) var(--space-8);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.tma-dash__feed-attach-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-8);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-attach-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-attach-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-dash__feed-attach-name {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__feed-attach-size {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-attach-remove {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-attach-remove:hover { background: var(--color-hover); }
+
+.tma-dash__feed-attach-progress {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hover-deep);
+  overflow: hidden;
+}
+
+.tma-dash__feed-attach-progress span {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+  transition: width var(--transition-fast);
+}
+
+/* ── forms ───────────────────────────────────────────────── */
+
+.tma-dash__feed-input,
+.tma-dash__feed-select {
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-input);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.tma-dash__feed-input:focus,
+.tma-dash__feed-select:focus {
+  border-color: var(--color-overlay-40);
+  box-shadow: 0 0 0 4px var(--color-overlay-4);
+}
+
+.tma-dash__feed-textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.tma-dash__feed-select--inline {
+  width: auto;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__feed-select--sm {
+  width: auto;
+  padding: 2px var(--space-8);
+  font-size: 11px;
+}
+
+.tma-dash__feed-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  flex: 1;
+}
+
+.tma-dash__feed-field-label {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-form,
+.tma-dash__feed-compose-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tma-dash__feed-compose-options {
+  padding: var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.tma-dash__feed-form-row,
+.tma-dash__feed-option-row {
+  display: flex;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.tma-dash__feed-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-dash__feed-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.tma-dash__feed-swatch {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.tma-dash__feed-swatch--on { border-color: var(--color-text-primary); }
+
+.tma-dash__feed-swatch--blue   { background: var(--color-blue); }
+.tma-dash__feed-swatch--green  { background: var(--color-green); }
+.tma-dash__feed-swatch--orange { background: var(--color-orange); }
+.tma-dash__feed-swatch--red    { background: var(--color-red); }
+.tma-dash__feed-swatch--pink   { background: var(--color-pink); }
+.tma-dash__feed-swatch--yellow { background: var(--color-yellow); }
+
+.tma-dash__feed-icon-pick {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  cursor: pointer;
+}
+
+.tma-dash__feed-icon-pick--on {
+  border-color: var(--color-primary);
+  background: var(--color-accent-bg);
+}
+
+.tma-dash__feed-icon-pick img { width: 16px; height: 16px; opacity: 0.8; }
+
+.tma-dash__feed-form-images {
+  display: flex;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.tma-dash__feed-image-drop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  cursor: pointer;
+}
+
+.tma-dash__feed-image-drop--wide { flex: 1; min-width: 200px; }
+
+.tma-dash__feed-image-preview {
+  width: 100%;
+  max-width: 240px;
+  height: 72px;
+  border-radius: var(--radius-12);
+  object-fit: cover;
+  border: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-image-empty {
+  display: grid;
+  place-items: center;
+  height: 72px;
+  min-width: 96px;
+  border: 1px dashed var(--color-border-medium);
+  border-radius: var(--radius-12);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* ── poll builder ────────────────────────────────────────── */
+
+.tma-dash__feed-poll-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.tma-dash__feed-poll-builder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tma-dash__feed-poll-builder-title {
+  font-size: var(--text-size-12);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-poll-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.tma-dash__feed-poll-option-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.tma-dash__feed-poll-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  align-items: flex-end;
+}
+
+/* ── the stream ──────────────────────────────────────────── */
+
+.tma-dash__feed-stream {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-height: 0;
+}
+
+.tma-dash__feed-pinned-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+}
+
+.tma-dash__feed-band-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-band-title img { opacity: 0.6; }
+
+.tma-dash__feed-more {
+  appearance: none;
+  padding: var(--space-12);
+  border: 0.5px dashed var(--dash-border);
+  border-radius: var(--radius-12);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-dash__feed-more:hover { background: var(--color-hover); }
+
+/* ── post card ───────────────────────────────────────────── */
+
+.tma-dash__feed-post {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-white);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-16);
+  overflow: hidden;
+}
+
+/* An announcement is marked by a rail, not by a different card. */
+.tma-dash__feed-post--announcement {
+  border-left: 3px solid var(--color-orange);
+}
+
+.tma-dash__feed-post--draft,
+.tma-dash__feed-post--scheduled {
+  border-style: dashed;
+}
+
+.tma-dash__feed-post-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20) var(--space-8);
+}
+
+.tma-dash__feed-post-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-post-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-dash__feed-post-author {
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-post-sub {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-post-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tma-dash__feed-post-channel {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--space-8);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tma-dash__feed-post-channel:hover { background: var(--color-hover-deep); }
+
+.tma-dash__feed-post-menu-wrap { position: relative; }
+
+.tma-dash__feed-post-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  padding: var(--space-4);
+}
+
+.tma-dash__menu-item--danger { color: var(--color-red); }
+
+.tma-dash__feed-post-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin: 0 var(--space-20) var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-8);
+  background: color-mix(in srgb, var(--color-orange) 14%, transparent);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: #8a5a12;
+}
+
+.tma-dash__feed-post-status--muted {
+  background: var(--color-hover);
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-post-status img { opacity: 0.7; }
+.tma-dash__feed-post-status span:first-of-type { flex: 1; min-width: 0; }
+
+.tma-dash__feed-post-body {
+  padding: 0 var(--space-20) var(--space-12);
+}
+
+.tma-dash__feed-post-title {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-size-16, 16px);
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* ── rendered rich text ──────────────────────────────────── */
+
+.tma-dash__feed-rich {
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+.tma-dash__feed-rich--sm { font-size: var(--text-size-12); line-height: 18px; }
+
+.tma-dash__feed-rich p { margin: 0 0 var(--space-8); }
+.tma-dash__feed-rich p:last-child { margin-bottom: 0; }
+
+.tma-dash__feed-rich h1,
+.tma-dash__feed-rich h2,
+.tma-dash__feed-rich h3,
+.tma-dash__feed-rich h4 {
+  margin: var(--space-12) 0 var(--space-4);
+  font-size: var(--text-size-16, 16px);
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.tma-dash__feed-rich ul,
+.tma-dash__feed-rich ol {
+  margin: 0 0 var(--space-8);
+  padding-left: var(--space-20);
+}
+
+.tma-dash__feed-rich blockquote {
+  margin: 0 0 var(--space-8);
+  padding: var(--space-4) var(--space-12);
+  border-left: 2px solid var(--color-overlay-4);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-rich pre {
+  margin: 0 0 var(--space-8);
+  padding: var(--space-12);
+  border-radius: var(--radius-8);
+  background: var(--color-bg-card);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-size-12);
+  line-height: 18px;
+  /* Code must scroll inside its own box, never widen the card. */
+  overflow-x: auto;
+}
+
+.tma-dash__feed-rich code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--color-hover);
+}
+
+.tma-dash__feed-rich pre code { padding: 0; background: transparent; }
+
+.tma-dash__feed-rich a {
+  color: var(--color-text-link);
+  text-decoration: underline;
+}
+
+/* Mentions and hashtags, as written into the body by the composer. */
+.tma-feed-mention,
+.tma-dash__feed-hashtag,
+.tma-feed-hashtag {
+  color: var(--color-text-link);
+  font-weight: 500;
+}
+
+.tma-dash__feed-hashtags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding: 0 var(--space-20) var(--space-12);
+}
+
+.tma-dash__feed-hashtag {
+  appearance: none;
+  border: 0;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-bg);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.tma-dash__feed-hashtag:hover { background: var(--color-accent-bg-hover); }
+
+/* ── media and files ─────────────────────────────────────── */
+
+.tma-dash__feed-media {
+  display: grid;
+  gap: 2px;
+  padding: 0 var(--space-20) var(--space-12);
+}
+
+.tma-dash__feed-media--1 { grid-template-columns: 1fr; }
+.tma-dash__feed-media--2 { grid-template-columns: 1fr 1fr; }
+.tma-dash__feed-media--3,
+.tma-dash__feed-media--4 { grid-template-columns: 1fr 1fr; }
+
+.tma-dash__feed-media-item {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-8);
+  overflow: hidden;
+  cursor: zoom-in;
+  aspect-ratio: 16 / 10;
+}
+
+.tma-dash__feed-media--1 .tma-dash__feed-media-item { aspect-ratio: auto; max-height: 460px; }
+
+.tma-dash__feed-media-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tma-dash__feed-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: 0 var(--space-20) var(--space-12);
+}
+
+.tma-dash__feed-files--sm { padding: var(--space-6) 0 0; }
+
+.tma-dash__feed-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+  text-decoration: none;
+  color: inherit;
+}
+
+.tma-dash__feed-file:hover { background: var(--color-hover); }
+
+.tma-dash__feed-file-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-file-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tma-dash__feed-file-name {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__feed-file-size { font-size: 11px; color: var(--color-text-muted); }
+.tma-dash__feed-file-download { opacity: 0.5; flex-shrink: 0; }
+
+.tma-dash__feed-video,
+.tma-dash__feed-audio {
+  width: 100%;
+  border-radius: var(--radius-12);
+  background: #000;
+}
+
+.tma-dash__feed-audio { background: transparent; }
+
+/* ── poll (rendered) ─────────────────────────────────────── */
+
+.tma-dash__feed-poll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0 var(--space-20) var(--space-12);
+  padding: var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.tma-dash__feed-poll-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-dash__feed-poll-question {
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-poll-meta,
+.tma-dash__feed-poll-foot {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-poll-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-poll-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.tma-dash__feed-poll-row {
+  position: relative;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+}
+
+.tma-dash__feed-poll-row:disabled { cursor: default; }
+.tma-dash__feed-poll-row:not(:disabled):hover { border-color: var(--color-border-medium); }
+
+.tma-dash__feed-poll-row--chosen { border-color: var(--color-primary); }
+
+/* The tally bar sits behind the label rather than beside it. */
+.tma-dash__feed-poll-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-accent-bg);
+  transition: width var(--transition-base, 200ms);
+}
+
+.tma-dash__feed-poll-label,
+.tma-dash__feed-poll-count {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-dash__feed-poll-count { font-weight: 600; flex-shrink: 0; }
+
+.tma-dash__feed-poll-dot,
+.tma-dash__feed-poll-box {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--color-border-medium);
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-poll-dot { border-radius: var(--radius-pill); }
+.tma-dash__feed-poll-box { border-radius: 4px; }
+
+.tma-dash__feed-poll-dot.is-on,
+.tma-dash__feed-poll-box.is-on {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-white);
+}
+
+/* ── acknowledgement ─────────────────────────────────────── */
+
+.tma-dash__feed-ack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin: 0 var(--space-20) var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-8);
+  background: color-mix(in srgb, var(--color-orange) 14%, transparent);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: #8a5a12;
+}
+
+.tma-dash__feed-ack--done {
+  background: color-mix(in srgb, var(--color-green) 18%, transparent);
+  color: #2f6b40;
+  justify-content: flex-start;
+  gap: var(--space-6);
+}
+
+.tma-dash__feed-ack-meter {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hover-deep);
+  overflow: hidden;
+}
+
+.tma-dash__feed-ack-fill {
+  display: block;
+  height: 100%;
+  background: var(--color-green);
+}
+
+.tma-dash__feed-ack-summary {
+  margin: var(--space-8) 0 0;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+/* ── post footer ─────────────────────────────────────────── */
+
+.tma-dash__feed-post-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-20) var(--space-12);
+  border-top: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-post-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.tma-dash__feed-post-counts {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-react-summary {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__feed-react-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-react-chip--mine {
+  background: var(--color-accent-bg);
+  color: var(--color-primary-dark);
+}
+
+.tma-dash__feed-post-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.tma-dash__feed-action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-10, 10px);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.tma-dash__feed-action:hover {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-action--on { color: var(--color-primary-dark); }
+.tma-dash__feed-action img { width: 16px; height: 16px; opacity: 0.72; }
+.tma-dash__feed-action-emoji { font-size: 14px; line-height: 16px; }
+
+.tma-dash__feed-react-wrap { position: relative; }
+
+.tma-dash__feed-react-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.tma-dash__feed-react-option {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.tma-dash__feed-react-option:hover {
+  background: var(--color-hover);
+  transform: scale(1.15);
+}
+
+.tma-dash__feed-react-option--mine { background: var(--color-accent-bg); }
+
+/* ── comments ────────────────────────────────────────────── */
+
+.tma-dash__feed-comments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-20) var(--space-16);
+  border-top: 0.5px solid var(--dash-border);
+  background: var(--color-bg-card);
+}
+
+.tma-dash__feed-comment {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-comment-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-comment-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tma-dash__feed-comment-bubble {
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  border: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-comment-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  margin-bottom: 2px;
+}
+
+.tma-dash__feed-comment-author {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-comment-time {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-comment-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding-left: var(--space-4);
+}
+
+.tma-dash__feed-comment-action {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.tma-dash__feed-comment-action:hover { color: var(--color-text-primary); }
+.tma-dash__feed-comment-action--on { color: var(--color-primary-dark); }
+.tma-dash__feed-comment-action--danger:hover { color: var(--color-red); }
+
+.tma-dash__feed-replies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-top: var(--space-4);
+  padding-left: var(--space-12);
+  border-left: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__feed-comments-empty {
+  margin: 0;
+  font-size: var(--text-size-12);
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-comment-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.tma-dash__feed-comment-input {
+  flex: 1;
+  min-width: 140px;
+  min-height: 34px;
+  max-height: 160px;
+  overflow: auto;
+  padding: var(--space-8) var(--space-12);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  font-size: var(--text-size-12);
+  line-height: 18px;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.tma-dash__feed-reply-to {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+/* ── empty, error and loading states (§23) ───────────────── */
+
+.tma-dash__feed-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-32, 32px) var(--space-20);
+  border: 0.5px dashed var(--dash-border);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  text-align: center;
+}
+
+.tma-dash__feed-state-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
+}
+
+.tma-dash__feed-state-icon img { opacity: 0.5; }
+
+.tma-dash__feed-state-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-state-text {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+  max-width: 320px;
+}
+
+/*
+ * Skeletons stand in for content while it loads. They are never sample data —
+ * nothing here carries a name, a body or a number.
+ */
+.tma-dash__feed-skel-row,
+.tma-dash__feed-skel-card,
+.tma-dash__feed-comment-skel {
+  border-radius: var(--radius-12);
+  background: linear-gradient(
+    90deg,
+    var(--color-hover) 25%,
+    var(--color-hover-deep) 37%,
+    var(--color-hover) 63%
+  );
+  background-size: 400% 100%;
+  animation: tma-feed-shimmer 1.4s ease infinite;
+}
+
+.tma-dash__feed-skel-row { height: 28px; margin-bottom: var(--space-8); }
+.tma-dash__feed-skel-card { height: 180px; border-radius: var(--radius-16); }
+.tma-dash__feed-comment-skel { height: 64px; }
+
+@keyframes tma-feed-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash__feed-skel-row,
+  .tma-dash__feed-skel-card,
+  .tma-dash__feed-comment-skel { animation: none; }
+}
+
+/* ── panels, lists and tables ────────────────────────────── */
+
+.tma-dash__feed-panel {
+  padding: var(--space-16) var(--space-20);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+}
+
+.tma-dash__feed-panel + .tma-dash__feed-panel { margin-top: var(--space-12); }
+
+.tma-dash__feed-panel-title {
+  margin: 0 0 var(--space-12);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__feed-people,
+.tma-dash__feed-member-list,
+.tma-dash__feed-results,
+.tma-dash__feed-rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-person,
+.tma-dash__feed-member {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-size-12);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-person img,
+.tma-dash__feed-member-avatar {
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-person-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-member-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tma-dash__feed-member-name { font-weight: 500; }
+.tma-dash__feed-member-sub { font-size: 11px; color: var(--color-text-muted); }
+
+.tma-dash__feed-members {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.tma-dash__feed-member-add { position: relative; }
+
+.tma-dash__feed-member-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  max-height: 220px;
+  overflow: auto;
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+}
+
+.tma-dash__feed-result {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__feed-result:hover { background: var(--color-hover); }
+
+.tma-dash__feed-result-title {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-result-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tma-dash__feed-rank-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) 0;
+}
+
+.tma-dash__feed-rank-row[data-feed-open-post] { cursor: pointer; }
+.tma-dash__feed-rank-row[data-feed-open-post]:hover { background: var(--color-hover); }
+
+.tma-dash__feed-rank-avatar {
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-dash__feed-rank-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tma-dash__feed-rank-name {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__feed-rank-sub { font-size: 11px; color: var(--color-text-muted); }
+
+.tma-dash__feed-rank-value {
+  font-size: var(--text-size-12);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+/* ── analytics ───────────────────────────────────────────── */
+
+.tma-dash__feed-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.tma-dash__feed-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--space-8);
+}
+
+.tma-dash__feed-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-12) var(--space-16);
+  border: 0.5px solid var(--dash-border);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+}
+
+.tma-dash__feed-stat-value {
+  font-size: var(--text-size-20, 20px);
+  line-height: 26px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-stat-label {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-muted);
+}
+
+/* A wide table scrolls inside its own box; the page never scrolls sideways. */
+.tma-dash__feed-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tma-dash__feed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-size-12);
+}
+
+.tma-dash__feed-table th,
+.tma-dash__feed-table td {
+  padding: var(--space-6) var(--space-8);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-table th {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* ── modals ──────────────────────────────────────────────── */
+
+.tma-dash__feed-modal-scrim {
+  position: fixed;
+  inset: 0;
+  /*
+   * Above the page and its popovers, below the portal's toasts — see the
+   * z-index layer notes; a dialog that outranks the toast hides the very
+   * message confirming what the dialog just did.
+   */
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  padding: var(--space-16);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.tma-dash__feed-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.tma-dash__feed-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-20);
+  border-bottom: 0.5px solid var(--dash-border);
+}
+
+.tma-dash__feed-modal-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__feed-modal-body {
+  padding: var(--space-20);
+  overflow: auto;
+}
+
+.tma-dash__feed-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  padding-top: var(--space-4);
+}
+
+.tma-dash__feed-confirm-text {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 18px;
+  color: var(--color-text-secondary);
+}
+
+/* ── accessibility helper ────────────────────────────────── */
+
+.tma-dash__feed-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── dark theme ──────────────────────────────────────────── */
+
+.tma-dash[data-theme="dark"] .tma-dash__feed-sidebar,
+.tma-dash[data-theme="dark"] .tma-dash__feed-head,
+.tma-dash[data-theme="dark"] .tma-dash__feed-channel-head,
+.tma-dash[data-theme="dark"] .tma-dash__feed-post,
+.tma-dash[data-theme="dark"] .tma-dash__feed-panel,
+.tma-dash[data-theme="dark"] .tma-dash__feed-stat,
+.tma-dash[data-theme="dark"] .tma-dash__feed-state,
+.tma-dash[data-theme="dark"] .tma-dash__feed-modal,
+.tma-dash[data-theme="dark"] .tma-dash__feed-comment-bubble,
+.tma-dash[data-theme="dark"] .tma-dash__feed-comment-input,
+.tma-dash[data-theme="dark"] .tma-dash__feed-poll-row,
+.tma-dash[data-theme="dark"] .tma-dash__feed-icon-pick,
+.tma-dash[data-theme="dark"] .tma-dash__feed-btn {
+  background: var(--color-bg-card);
+  border-color: var(--dash-border);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__feed-btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__feed-comments,
+.tma-dash[data-theme="dark"] .tma-dash__feed-pinned-band,
+.tma-dash[data-theme="dark"] .tma-dash__feed-poll,
+.tma-dash[data-theme="dark"] .tma-dash__feed-file,
+.tma-dash[data-theme="dark"] .tma-dash__feed-attach,
+.tma-dash[data-theme="dark"] .tma-dash__feed-compose-options,
+.tma-dash[data-theme="dark"] .tma-dash__feed-poll-builder {
+  background: var(--color-overlay-4);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__feed-channel-head--cover .tma-dash__feed-badge--lg {
+  border-color: var(--color-bg-card);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__feed-file-icon,
+.tma-dash[data-theme="dark"] .tma-dash__feed-poll-dot.is-on,
+.tma-dash[data-theme="dark"] .tma-dash__feed-poll-box.is-on {
+  box-shadow: inset 0 0 0 2px var(--color-bg-card);
+}
+
+/* ── responsive ──────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .tma-dash__feed-sidebar {
+    flex-basis: 200px;
+    width: 200px;
+  }
+}
+
+@media (max-width: 900px) {
+  /*
+   * The sidebar becomes a horizontal rail above the stream. Two columns at
+   * this width leave the reading column too narrow to be worth having.
+   */
+  .tma-dash__feed-layout {
+    flex-direction: column;
+  }
+
+  .tma-dash__feed-sidebar {
+    position: static;
+    flex: none;
+    width: 100%;
+    max-height: 220px;
+  }
+
+  .tma-dash__feed-main { max-width: none; }
+}
+
+@media (max-width: 640px) {
+  .tma-dash__feed-post-head,
+  .tma-dash__feed-post-body,
+  .tma-dash__feed-post-foot,
+  .tma-dash__feed-comments,
+  .tma-dash__feed-media,
+  .tma-dash__feed-files,
+  .tma-dash__feed-hashtags {
+    padding-left: var(--space-12);
+    padding-right: var(--space-12);
+  }
+
+  .tma-dash__feed-poll,
+  .tma-dash__feed-ack,
+  .tma-dash__feed-post-status {
+    margin-left: var(--space-12);
+    margin-right: var(--space-12);
+  }
+
+  .tma-dash__feed-composer--open {
+    padding-left: var(--space-12);
+    padding-right: var(--space-12);
+  }
+
+  .tma-dash__feed-channel-head-body,
+  .tma-dash__feed-head {
+    flex-wrap: wrap;
+    padding: var(--space-12);
+  }
+
+  .tma-dash__feed-head-actions { width: 100%; }
+
+  .tma-dash__feed-form-row,
+  .tma-dash__feed-option-row { flex-direction: column; align-items: stretch; }
+
+  .tma-dash__feed-media--3,
+  .tma-dash__feed-media--4 { grid-template-columns: 1fr; }
+}

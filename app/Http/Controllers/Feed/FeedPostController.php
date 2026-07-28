@@ -705,6 +705,25 @@ class FeedPostController extends Controller
     }
 
     /**
+     * Record that a post's link was taken (§4).
+     *
+     * Deliberately just a counter: the portal has no way to know where a
+     * copied link then goes, so this counts the act of sharing rather than
+     * pretending to measure reach. Reading a post is already covered by views.
+     */
+    public function share(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $post = $this->postFor($request, $uuid);
+
+        abort_unless(FeedAccess::canEngage($post->channel, $user), 403);
+
+        $post->increment('shares_count');
+
+        return response()->json(['shares' => $post->fresh()->shares_count]);
+    }
+
+    /**
      * Acknowledge an announcement (§12).
      *
      * firstOrCreate rather than create: acknowledging twice is a double-click,
