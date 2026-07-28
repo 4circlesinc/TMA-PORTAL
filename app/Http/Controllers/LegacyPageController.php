@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Access\Role;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -90,8 +91,15 @@ class LegacyPageController extends Controller
         if (in_array($page, self::PUBLIC_PAGES, true)) {
             $path = public_path($page.'/index.html');
         } elseif (in_array($page, self::SPA_PAGES, true)) {
+            // A page the account may not use does not exist as far as it is
+            // concerned — 404, not 403, so the portal never advertises the
+            // staff tooling a client can't reach.
+            abort_unless(Role::canViewPage($request->user(), $page), 404);
+
             $path = self::spaShellPath();
         } elseif (in_array($page, self::STANDALONE_PAGES, true)) {
+            abort_unless(Role::canViewPage($request->user(), $page), 404);
+
             $path = resource_path('portal-pages/'.$page.'/index.html');
         } else {
             abort(404);

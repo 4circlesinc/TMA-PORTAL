@@ -1,0 +1,170 @@
+/*
+ * Applies the signed-in account's capabilities to the shell.
+ *
+ * The sidebar, the mobile menu and the bottom tab bar are static HTML shared
+ * by every account type, so a client used to see Clients, Users, Email,
+ * Templates, Workflows and People — click any of them and the page loaded,
+ * then filled with permission errors. This removes what the server would
+ * refuse, so the portal only ever offers what the account can actually use.
+ *
+ * Removal, not hiding: the global search index is built by reading nav items
+ * out of the DOM (portal-search-index.js), so a detached item disappears from
+ * search for free. Hiding would have left it findable.
+ *
+ * This is presentation only. Every capability below is enforced again on the
+ * server — see App\Support\Access\Role.
+ *
+ * Global: window.TMAPortalAccess  ({ can, ready, apply })
+ */
+(function () {
+  'use strict';
+
+  /* data-nav id => the capability needed to see it. Anything absent is open
+     to every account: their own dashboard, calendar, files, signatures,
+     messages, projects and settings. Names match Role::MATRIX exactly. */
+  var NAV_CAPABILITIES = {
+    'dash-project-overview': 'overview.view',
+    'clients': 'clients.view',
+    'email': 'mail.use',
+    'so-feed': 'feed.view',
+    'users': 'users.view',
+    'templates': 'templates.view',
+    'folders-all': 'files.viewOrg',
+    'folders-shared': 'files.viewOrg',
+    'workflows-automated': 'workflows.view',
+    'workflows-feedback': 'workflows.view',
+    'people-home': 'users.view',
+    'people-employees': 'users.view',
+    'people-clients': 'clients.view',
+    'people-prospects': 'clients.view',
+    'people-shared-address': 'users.view',
+    'people-personal-address': 'users.view',
+    'people-groups': 'groups.view',
+    'people-resend': 'users.manage',
+  };
+
+  /* Bottom tab bar (mobile). data-tab => capability. */
+  var TAB_CAPABILITIES = {
+    email: 'mail.use',
+  };
+
+  var caps = null;
+  var readyResolve;
+  var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
+
+  function can(capability) {
+    if (!capability) return true;
+    // Before /me resolves nothing is known; callers should await ready().
+    if (!caps) return false;
+    return caps.indexOf(capability) !== -1;
+  }
+
+  function remove(el) {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  /* Sidebar and mobile-menu rows both carry data-nav, so one pass covers
+     both. The mobile rows use data-mrow but the same ids. */
+  function pruneNavItems(scope) {
+    scope.querySelectorAll('[data-nav]').forEach(function (el) {
+      var need = NAV_CAPABILITIES[el.getAttribute('data-nav')];
+      if (need && !can(need)) remove(el);
+    });
+  }
+
+  /* A group whose children have all gone should not leave an empty
+     disclosure behind — drop the toggle and its panel together. */
+  function pruneEmptyGroups(scope) {
+    scope.querySelectorAll('[data-subnav]').forEach(function (panel) {
+      if (panel.querySelector('[data-nav]')) return;
+
+      var name = panel.getAttribute('data-subnav');
+      var toggle = scope.querySelector('[data-expand="' + name + '"]');
+      remove(toggle);
+      remove(panel);
+    });
+  }
+
+  /* A section left with nothing in it would still draw its divider. */
+  function pruneEmptySections(scope) {
+    scope.querySelectorAll('.tma-dash__nav-section').forEach(function (section) {
+      if (!section.querySelector('[data-nav], [data-expand]')) remove(section);
+    });
+  }
+
+  function pruneTabs(scope) {
+    scope.querySelectorAll('[data-tab]').forEach(function (el) {
+      var need = TAB_CAPABILITIES[el.getAttribute('data-tab')];
+      if (need && !can(need)) remove(el);
+    });
+  }
+
+  function apply() {
+    var scope = document;
+    pruneNavItems(scope);
+    pruneEmptyGroups(scope);
+    pruneEmptySections(scope);
+    pruneTabs(scope);
+    document.documentElement.setAttribute('data-tma-access', 'ready');
+  }
+
+  /* Hide the gated items until we know, so a client never sees Clients or
+     Users flash on screen before /me answers. Staff see them a beat later,
+     which is the same beat the profile skeleton already waits for. */
+  function injectHoldCss() {
+    if (document.getElementById('tma-access-css')) return;
+    var selectors = Object.keys(NAV_CAPABILITIES).map(function (id) {
+      return '[data-nav="' + id + '"]';
+    }).concat(Object.keys(TAB_CAPABILITIES).map(function (id) {
+      return '[data-tab="' + id + '"]';
+    }));
+
+    var style = document.createElement('style');
+    style.id = 'tma-access-css';
+    style.textContent = 'html:not([data-tma-access="ready"]) ' +
+      selectors.join(', html:not([data-tma-access="ready"]) ') +
+      '{visibility:hidden!important}';
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  injectHoldCss();
+
+  function adopt(me) {
+    if (!me) return;
+    caps = Array.isArray(me.capabilities) ? me.capabilities : [];
+    apply();
+    readyResolve(caps);
+  }
+
+  /* If /me never answers we must not leave the sidebar permanently hidden.
+     Reveal everything and let the server refuse — a nav item that 403s is a
+     far better failure than a portal with half a menu and no explanation. */
+  function releaseHold() {
+    if (caps) return;
+    document.documentElement.setAttribute('data-tma-access', 'ready');
+    readyResolve([]);
+  }
+
+  function start() {
+    if (!window.TMACurrentUser) {
+      // No identity source on this shell — reveal rather than strand the nav.
+      releaseHold();
+      return;
+    }
+    window.TMACurrentUser.onChange(adopt);
+    setTimeout(releaseHold, 8000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+
+  window.TMAPortalAccess = {
+    can: can,
+    apply: apply,
+    ready: function () { return readyPromise; },
+    capabilities: function () { return caps ? caps.slice() : []; },
+  };
+})();

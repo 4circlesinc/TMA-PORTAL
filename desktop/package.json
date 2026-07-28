@@ -1,6 +1,6 @@
 {
   "name": "tma-portal-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "TM ANTOINE Advisory portal — macOS desktop shell",
   "main": "main.js",
@@ -11,7 +11,8 @@
     "pack": "electron-builder --mac --dir",
     "dist": "electron-builder --mac",
     "release": "env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never",
-    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js"
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js",
+    "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -27,6 +28,7 @@
       "main.js",
       "preload.js",
       "host-bridge.js",
+      "updater.js",
       "package.json"
     ],
     "mac": {
@@ -60,8 +62,5 @@
         "channel": "latest"
       }
     ]
-  },
-  "dependencies": {
-    "electron-updater": "^6.8.9"
   }
 }

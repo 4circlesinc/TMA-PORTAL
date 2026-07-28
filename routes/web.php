@@ -277,8 +277,12 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      * Mailbox API. Backed by the user's connected Google or Microsoft account
      * (see App\Support\Mail). Messages are addressed by uuid; every write hits
      * the provider first and is mirrored locally only once it succeeds.
+     *
+     * Staff only: clients correspond through Messages, and nothing here was
+     * stopping a client who connected Gmail from running a full mailbox
+     * inside the portal.
      */
-    Route::prefix('portal/mail')->name('mail.')->group(function () {
+    Route::prefix('portal/mail')->middleware('capability:mail.use')->name('mail.')->group(function () {
         Route::get('/', [MailController::class, 'index'])->name('index');
         Route::post('/sync', [MailController::class, 'sync'])->name('sync');
         Route::get('/sync-status', [MailController::class, 'syncStatus'])->name('sync-status');

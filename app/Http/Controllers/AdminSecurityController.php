@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\SecurityPolicies;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,6 +55,6 @@ class AdminSecurityController extends Controller
 
     private function isAdmin(User $user): bool
     {
-        return $user->account_type === 'Administrator';
+        return Role::can($user, 'settings.security');
     }
 }

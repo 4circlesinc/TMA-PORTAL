@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Notifications\Notifier;
@@ -280,7 +281,7 @@ class ClientsController extends Controller
     private function authorizeStaff(Request $request): void
     {
         abort_unless(
-            in_array($request->user()?->account_type, self::STAFF, true),
+            Role::can($request->user(), 'clients.view'),
             403,
             'Only staff can manage the client directory.'
         );

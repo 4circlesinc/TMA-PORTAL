@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -77,6 +78,6 @@ class ConnectorsController extends Controller
 
     private function isAdmin(User $user): bool
     {
-        return $user->account_type === 'Administrator';
+        return Role::can($user, 'settings.connectors');
     }
 }

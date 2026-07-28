@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\ClientInvite;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Mail\Postcards;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -29,7 +30,7 @@ class ClientInviteController extends Controller
     /** Staff: create (or refresh) an invite for a client and email it. */
     public function send(Request $request, string $uid): JsonResponse
     {
-        abort_unless(in_array($request->user()?->account_type, self::STAFF, true), 403, 'Staff only.');
+        abort_unless(Role::can($request->user(), 'clients.invite'), 403, 'Staff only.');
 
         $client = Client::where('uid', $uid)->firstOrFail();
 

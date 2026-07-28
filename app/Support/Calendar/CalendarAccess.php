@@ -5,6 +5,7 @@ namespace App\Support\Calendar;
 use App\Models\Calendar;
 use App\Models\CalendarMember;
 use App\Models\User;
+use App\Support\Access\Role;
 
 /**
  * The single server-side authorization surface for calendar actions.
@@ -70,13 +71,13 @@ class CalendarAccess
 
     public static function isAdmin(User $user): bool
     {
-        return $user->account_type === 'Administrator';
+        return Role::isAdmin($user);
     }
 
     /** Staff = internal users (never clients). */
     public static function isStaff(User $user): bool
     {
-        return in_array($user->account_type, ['Administrator', 'Employee'], true);
+        return Role::isStaff($user);
     }
 
     /**

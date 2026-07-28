@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Notifications\NotificationPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class ActivityController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $isAdmin = $user->account_type === 'Administrator';
+        $isAdmin = Role::can($user, 'activity.viewAll');
 
         $query = ActivityLog::query()
             ->with(['actor', 'client'])
@@ -67,7 +68,7 @@ class ActivityController extends Controller
             $newQuery->where('created_at', '>', $seenAt);
         }
         // A user's own actions are not "new activity" to review.
-        if ($user->account_type === 'Administrator') {
+        if (Role::can($user, 'activity.viewAll')) {
             $newQuery->where(function ($q) use ($user) {
                 $q->whereNull('actor_id')->orWhere('actor_id', '!=', $user->id);
             });
@@ -111,7 +112,7 @@ class ActivityController extends Controller
             'modules' => $base()->distinct()->orderBy('module')->pluck('module')->filter()->values(),
             'types' => $base()->distinct()->orderBy('activity_type')->pluck('activity_type')->filter()->values(),
             'statuses' => [ActivityLog::STATUS_SUCCESS, ActivityLog::STATUS_FAILURE, ActivityLog::STATUS_PENDING],
-            'actors' => $user->account_type === 'Administrator'
+            'actors' => Role::can($user, 'activity.viewAll')
                 ? User::query()
                     ->whereIn('id', $base()->whereNotNull('actor_id')->distinct()->pluck('actor_id'))
                     ->orderBy('name')

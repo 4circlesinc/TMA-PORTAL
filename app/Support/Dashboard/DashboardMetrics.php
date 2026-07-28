@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\Share;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Signatures\Status;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -68,12 +69,12 @@ class DashboardMetrics
 
     public function isStaff(): bool
     {
-        return in_array($this->user->account_type, self::STAFF_TYPES, true);
+        return Role::isStaff($this->user);
     }
 
     private function isAdministrator(): bool
     {
-        return $this->user->account_type === 'Administrator';
+        return Role::isAdmin($this->user);
     }
 
     /** @return array<string, mixed> */

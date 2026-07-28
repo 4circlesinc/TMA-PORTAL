@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FileLibrarySetting;
 use App\Models\Folder;
+use App\Support\Access\Role;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\Naming;
 use Illuminate\Http\JsonResponse;
@@ -178,7 +179,7 @@ class FileLibraryController extends Controller
     private function authorizeAdmin(Request $request): void
     {
         abort_unless(
-            $request->user()?->account_type === 'Administrator',
+            Role::can($request->user(), 'files.settings'),
             403,
             'Only administrators can manage the File Library configuration.'
         );

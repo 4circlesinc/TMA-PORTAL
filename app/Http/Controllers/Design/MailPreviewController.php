@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Design;
 
 use App\Http\Controllers\Controller;
+use App\Support\Access\Role;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -23,7 +24,7 @@ class MailPreviewController extends Controller
     public function index(Request $request)
     {
         abort_unless(
-            in_array($request->user()?->account_type, self::STAFF, true),
+            Role::isStaff($request->user()),
             Response::HTTP_FORBIDDEN,
             'The email gallery is staff-only.'
         );

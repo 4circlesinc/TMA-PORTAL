@@ -17,9 +17,13 @@
     --dash-tabbar-clearance: 72px;
 }
 
-/* nested (no icon) items: modest submenu indent past the parent icon */
+/* nested (no icon) items: indent past the caret so labels line up under the
+   parent's icon. The sidebar copy of this lives on
+   `.tma-dash__sidebar-nav .tma-dash__nav-item--nested` in dashboard.css —
+   this single-class rule is outranked there by the nav-item `padding`
+   shorthand, so keep the two in sync. */
 .tma-dash__nav-item--nested {
-  padding-left: calc(var(--dash-nav-icon-inset) + var(--space-12));
+  padding-left: calc(var(--space-2) + 1em + var(--space-10, 10px));
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;

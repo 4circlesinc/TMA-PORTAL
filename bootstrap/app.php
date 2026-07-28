@@ -3,6 +3,7 @@
 use App\Http\Middleware\ApplySecurityPolicyHeaders;
 use App\Http\Middleware\EnforceTwoFactor;
 use App\Http\Middleware\EnsureAccountApproved;
+use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureOnboarded;
 use App\Http\Middleware\EnsureStaySignedInChoice;
 use App\Http\Middleware\IssueTrustedDeviceCookie;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'account.approved' => EnsureAccountApproved::class,
+            'capability' => EnsureCapability::class,
             'mfa.enforced' => EnforceTwoFactor::class,
             'profile.complete' => EnsureProfileComplete::class,
             'onboarded' => EnsureOnboarded::class,

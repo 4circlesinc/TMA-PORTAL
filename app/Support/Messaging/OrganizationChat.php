@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -95,7 +96,7 @@ class OrganizationChat
                 continue;
             }
 
-            $role = $user->account_type === 'Administrator'
+            $role = Role::isAdmin($user)
                 ? ConversationParticipant::ROLE_ADMIN
                 : ConversationParticipant::ROLE_MEMBER;
 

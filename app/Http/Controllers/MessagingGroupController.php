@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
+use App\Support\Access\ContactScope;
 use App\Support\Files\FileType;
 use App\Support\Files\Vault;
 use App\Support\Messaging\MessagingPresenter;
@@ -44,9 +45,15 @@ class MessagingGroupController extends Controller
             'memberIds.*' => ['integer', 'exists:users,id'],
         ]);
 
+        // A client may only build a group from the people working on their
+        // account — the ids come straight off the request, so filter rather
+        // than trust them.
+        $reachable = ContactScope::visibleUserIds($user);
+
         $members = User::query()
             ->whereIn('id', $data['memberIds'])
             ->where('id', '!=', $user->id)
+            ->when($reachable !== null, fn ($q) => $q->whereIn('id', $reachable))
             ->where('status', User::STATUS_APPROVED)
             ->get();
 
@@ -196,8 +203,14 @@ class MessagingGroupController extends Controller
         }
 
         $added = [];
+        $reachable = ContactScope::visibleUserIds($user);
 
-        foreach (User::whereIn('id', $data['memberIds'])->where('status', User::STATUS_APPROVED)->get() as $member) {
+        $candidates = User::whereIn('id', $data['memberIds'])
+            ->when($reachable !== null, fn ($q) => $q->whereIn('id', $reachable))
+            ->where('status', User::STATUS_APPROVED)
+            ->get();
+
+        foreach ($candidates as $member) {
             $existing = $conversation->participants()->where('user_id', $member->id)->first();
 
             if ($existing && $existing->left_at === null) {

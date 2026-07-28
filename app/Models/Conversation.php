@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -85,7 +86,7 @@ class Conversation extends Model
         }
 
         if ($this->is_default) {
-            return $user->account_type === 'Administrator';
+            return Role::isAdmin($user);
         }
 
         return (bool) $this->participantFor($user)?->isAdmin();

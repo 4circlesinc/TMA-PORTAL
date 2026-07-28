@@ -9,6 +9,7 @@ use App\Models\Folder;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\WorkDay;
+use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\DeviceName;
@@ -33,7 +34,7 @@ class AdminUsersController extends Controller
         // actions on this controller stay admin-only.
         $viewer = $request->user();
         abort_unless(
-            in_array($viewer->account_type, ['Administrator', 'Employee'], true),
+            Role::can($viewer, 'users.view'),
             403,
             'Only staff can view the user directory.'
         );
@@ -194,7 +195,7 @@ class AdminUsersController extends Controller
 
         // Demoting an administrator must never leave the portal without one.
         if (
-            $user->account_type === 'Administrator'
+            Role::isAdmin($user)
             && ($data['account_type'] ?? null)
             && $data['account_type'] !== 'Administrator'
         ) {
@@ -408,7 +409,7 @@ class AdminUsersController extends Controller
     /** Give a newly active staff member a personal folder, if configured. */
     private function maybeProvisionStaffFolder(User $user, User $actor): void
     {
-        if (in_array($user->account_type, ['Administrator', 'Employee'], true)
+        if (Role::isStaff($user)
             && FileLibrarySetting::autoCreateStaffFolder()) {
             FolderProvisioner::provisionStaffFolder($user, $actor);
         }
@@ -541,7 +542,7 @@ class AdminUsersController extends Controller
 
     private function isAdmin(User $user): bool
     {
-        return $user->account_type === 'Administrator';
+        return Role::can($user, 'users.manage');
     }
 
     private function record(int $userId, string $event): void

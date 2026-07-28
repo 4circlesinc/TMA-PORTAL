@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Support\Access\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -124,7 +125,7 @@ class CompaniesController extends Controller
     private function authorizeStaff(Request $request): void
     {
         abort_unless(
-            in_array($request->user()?->account_type, self::STAFF, true),
+            Role::can($request->user(), 'clients.view'),
             403,
             'Only staff can manage companies.'
         );

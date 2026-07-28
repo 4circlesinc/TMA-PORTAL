@@ -9,6 +9,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
 const HOST_BRIDGE = require('./host-bridge');
+const { parseManifest, compareVersions } = require('./updater');
 
 // Stands in for notify-store.js and messaging-calls.js.
 const PAGE = `
@@ -97,6 +98,43 @@ app.whenReady().then(async () => {
   await settle();
   check('focus: relayed from window.focus()', seen.focus, 1);
 
+  testUpdater();
+
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASS');
   app.exit(failures ? 1 : 0);
 });
+
+/*
+ * The updater decides whether to replace the app the user is running, off a
+ * file fetched over the network. Both halves of that decision are here.
+ */
+function testUpdater() {
+  // Real output from electron-builder. The `files:` list repeats url/sha512
+  // for the dmg, so a naive line match picks the wrong artifact and hash.
+  const manifest = [
+    'version: 0.3.0',
+    'files:',
+    '  - url: TM ANTOINE Portal-0.3.0-arm64-mac.zip',
+    '    sha512: ZIPHASH==',
+    '    size: 96094319',
+    '  - url: TM ANTOINE Portal-0.3.0-arm64.dmg',
+    '    sha512: DMGHASH==',
+    '    size: 100294070',
+    'path: TM ANTOINE Portal-0.3.0-arm64-mac.zip',
+    'sha512: ZIPHASH==',
+    "releaseDate: '2026-07-28T22:03:27.032Z'",
+  ].join('\n');
+
+  const parsed = parseManifest(manifest);
+
+  check('manifest: version', parsed.version, '0.3.0');
+  check('manifest: takes the zip, not the dmg', parsed.file, 'TM ANTOINE Portal-0.3.0-arm64-mac.zip');
+  check('manifest: takes the top-level hash', parsed.sha512, 'ZIPHASH==');
+  check('manifest: rejects junk', parseManifest('not a manifest'), null);
+
+  check('version: newer', compareVersions('0.3.0', '0.2.0') > 0, true);
+  check('version: same', compareVersions('0.2.0', '0.2.0'), 0);
+  check('version: older is never offered', compareVersions('0.1.9', '0.2.0') < 0, true);
+  check('version: 0.10 beats 0.9', compareVersions('0.10.0', '0.9.0') > 0, true);
+  check('version: patch counts', compareVersions('1.0.1', '1.0') > 0, true);
+}

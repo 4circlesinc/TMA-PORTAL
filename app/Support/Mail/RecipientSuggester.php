@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\User;
+use App\Support\Access\Role;
 
 /**
  * Phase-1 recipient suggestions for compose To/Cc/Bcc — no provider OAuth.
@@ -46,7 +47,7 @@ final class RecipientSuggester
             self::put($byEmail, $row);
         }
 
-        if (in_array($viewer->account_type, self::STAFF, true)) {
+        if (Role::isStaff($viewer)) {
             foreach (self::clients($term) as $row) {
                 self::put($byEmail, $row);
             }

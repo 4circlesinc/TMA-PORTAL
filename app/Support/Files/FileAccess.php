@@ -7,6 +7,7 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Support\Collection;
 
 /**
@@ -29,13 +30,13 @@ class FileAccess
 
     public static function isAdmin(User $user): bool
     {
-        return $user->account_type === 'Administrator';
+        return Role::isAdmin($user);
     }
 
     /** Staff = internal users (never clients). Drives org/client/staff access. */
     public static function isStaff(User $user): bool
     {
-        return in_array($user->account_type, ['Administrator', 'Employee'], true);
+        return Role::isStaff($user);
     }
 
     /** Effective role a user holds over a file (null = no access). */

@@ -22,6 +22,8 @@ use App\Models\WorkDay;
 use App\Models\UserBlock;
 use App\Models\UserPresence;
 use App\Models\UserWorkStatus;
+use App\Support\Access\ContactScope;
+use App\Support\Access\Role;
 use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\LinkPreviewService;
@@ -500,7 +502,7 @@ class MessagingController extends Controller
             'can' => [
                 // Only a direct conversation has someone to block.
                 'block' => ! $conversation->isGroup() && $counterpart !== null,
-                'openClientRecord' => in_array($user->account_type, ['Administrator', 'Employee'], true)
+                'openClientRecord' => Role::can($user, 'clients.view')
                     && ! $conversation->isGroup(),
             ],
         ]);
@@ -1653,9 +1655,14 @@ class MessagingController extends Controller
             ->where('user_id', $user->id)->pluck('blocked_user_id')
             ->merge(UserBlock::where('blocked_user_id', $user->id)->pluck('user_id'));
 
+        // Staff get the whole directory; a client gets only the people working
+        // on their account, so they can never discover another client.
+        $reachable = ContactScope::visibleUserIds($user);
+
         $people = User::query()
             ->where('id', '!=', $user->id)
             ->whereNotIn('id', $blocked)
+            ->when($reachable !== null, fn ($q) => $q->whereIn('id', $reachable))
             ->where('status', User::STATUS_APPROVED)
             // lower() rather than ilike so the search behaves the same on the
             // Postgres the portal runs on and the SQLite the tests use.
@@ -1698,6 +1705,14 @@ class MessagingController extends Controller
         }
 
         if (UserBlock::blockedBetween($user->id, $other->id)) {
+            abort(403, 'This conversation is unavailable.');
+        }
+
+        // The contact search is already scoped, but the id arrives from the
+        // request — re-check it here or a client could open a thread with
+        // anyone by posting their user id.
+        $reachable = ContactScope::visibleUserIds($user);
+        if ($reachable !== null && ! in_array($other->id, $reachable, true)) {
             abort(403, 'This conversation is unavailable.');
         }
 

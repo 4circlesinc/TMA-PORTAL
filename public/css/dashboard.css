@@ -647,6 +647,12 @@
 .tma-dash__sidebar-nav .tma-dash__nav-item--nested {
   padding-top: var(--space-6);
   padding-bottom: var(--space-6);
+  /* Must be restated here: `.tma-dash__sidebar-nav .tma-dash__nav-item` above
+     sets the `padding` shorthand at this same specificity, so the single-class
+     --nested rules (here and in dashboard-tma-overrides.css) lose and the row
+     collapses to a 2px left pad, hard against the sidebar edge.
+     Indent = caret column + gap, so labels align under the parent's icon. */
+  padding-left: calc(var(--space-2) + 1em + var(--space-10, 10px));
 }
 
 /* Folder Shortcuts tab - the user's pinned folders */
@@ -30860,6 +30866,7 @@ span.tma-dash__messages-profile-avatar {
 /* Shared avatar treatment. */
 .tma-call__avatar-big,
 .tma-call__incoming-avatar,
+.tma-call__incoming-photo,
 .tma-call__compact-avatar,
 .tma-call__pill-avatar,
 .tma-call__off-avatar {
@@ -30875,6 +30882,7 @@ span.tma-dash__messages-profile-avatar {
 }
 .tma-call__avatar-big img,
 .tma-call__incoming-avatar img,
+.tma-call__incoming-photo img,
 .tma-call__compact-avatar img,
 .tma-call__pill-avatar img,
 .tma-call__off-avatar img {
@@ -30936,9 +30944,12 @@ span.tma-dash__messages-profile-avatar {
 }
 
 .tma-call__dialog--incoming {
-  width: min(560px, 92vw);
+  width: min(400px, 92vw);
   max-height: 92vh;
-  padding-bottom: var(--space-20);
+  padding-bottom: var(--space-16);
+}
+.tma-call__dialog--incoming-video {
+  width: min(480px, 92vw);
 }
 
 @keyframes tma-call-fade {
@@ -31145,34 +31156,62 @@ span.tma-dash__messages-profile-avatar {
 .tma-call--audio .tma-call__media { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 /* ── Incoming pop-up (§1, §2, §14) ──────────────────────────────── */
-.tma-call__incoming-preview {
-  position: relative;
-  height: min(320px, 42vh);
-  margin: var(--space-16) var(--space-16) 0;
-  border-radius: var(--radius-16);
-  overflow: hidden;
-  background: #05070c;
-  display: flex;
-}
-.tma-call--audio .tma-call__incoming-preview { height: auto; padding: var(--space-24) 0; }
-
 /* Before answering there is nothing from the caller to show — and nothing of
  * the callee has been sent. The main frame is the self-view. */
 .tma-call--incoming .tma-call__frame--remote { display: none; }
 
-.tma-call__incoming-fallback {
-  position: relative;
-  flex: 1;
+/* A quiet, centered card: photo, who, and the two choices. */
+.tma-call__incoming-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-32) var(--space-24) var(--space-8);
+}
+.tma-call__incoming-photo {
+  width: 96px;
+  height: 96px;
+  font-size: 34px;
+}
+
+/* A video call previews the self-view in a framed rectangle instead. */
+.tma-call__dialog--incoming-video .tma-call__incoming-hero {
+  padding: var(--space-16) var(--space-16) var(--space-8);
+}
+.tma-call__dialog--incoming-video .tma-call__incoming-hero .tma-call__media-slot {
+  width: 100%;
+  height: min(280px, 40vh);
+  border-radius: var(--radius-16);
+  overflow: hidden;
+  background: #05070c;
+}
+
+.tma-call__incoming-id {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-12);
+  gap: var(--space-4);
+  padding: 0 var(--space-24);
+  text-align: center;
+}
+.tma-call__incoming-name {
+  max-width: 100%;
+  font-size: var(--text-size-20, 20px);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tma-call__incoming-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-size-13, 13px);
+  color: rgb(255 255 255 / 0.62);
 }
 
 .tma-call__notice {
   max-width: 320px;
-  margin: 0;
+  margin: var(--space-4) 0 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -31181,71 +31220,10 @@ span.tma-dash__messages-profile-avatar {
 }
 .tma-call__notice strong { color: #fff; font-size: var(--text-size-14); }
 
-.tma-call__ringing {
-  position: absolute;
-  left: var(--space-12);
-  top: var(--space-12);
-  /* Above the video frames, which carry their own stacking order. */
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  padding: 5px 10px;
-  border-radius: var(--radius-pill);
-  background: rgb(5 7 12 / 0.6);
-  font-size: var(--text-size-12);
-  color: rgb(255 255 255 / 0.85);
-}
-
-.tma-call__incoming-body {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-16) var(--space-20) 0;
-}
-
-.tma-call__incoming-avatar { width: 52px; height: 52px; font-size: var(--text-size-18, 18px); }
-.tma-call__incoming-meta { flex: 1; min-width: 0; }
-.tma-call__incoming-name {
-  font-size: var(--text-size-18, 18px);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tma-call__incoming-kind {
-  margin-top: 2px;
-  font-size: var(--text-size-13, 13px);
-  color: rgb(255 255 255 / 0.7);
-}
-
-.tma-call__incoming-states { display: flex; gap: var(--space-6); flex-wrap: wrap; justify-content: flex-end; }
-
-/* State is carried by icon + word, never by colour alone (§21). */
-.tma-call__status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  border-radius: var(--radius-pill);
-  background: rgb(255 255 255 / 0.12);
-  font-size: var(--text-size-12);
-  color: rgb(255 255 255 / 0.82);
-  white-space: nowrap;
-}
-.tma-call__status-pill svg { width: 14px; height: 14px; }
-.tma-call__status-pill.is-off { background: rgb(240 68 56 / 0.22); color: #ffd7d3; }
-
-.tma-call__incoming-tools {
-  display: flex;
-  gap: var(--space-8);
-  padding: var(--space-16) var(--space-20) 0;
-}
-
 .tma-call__incoming-actions {
   display: flex;
-  gap: var(--space-8);
-  padding: var(--space-16) var(--space-20) 0;
+  gap: var(--space-12);
+  padding: var(--space-24) var(--space-24) var(--space-8);
 }
 
 /* ── Buttons and controls ───────────────────────────────────────── */
@@ -31392,6 +31370,17 @@ span.tma-dash__messages-profile-avatar {
   gap: var(--space-16);
 }
 .tma-call__audio-name { font-size: var(--text-size-24, 22px); font-weight: 600; }
+
+/* A voice call shows no picture, so the (hidden) media slot must not keep
+ * claiming half the row — collapse it so the avatar and name sit centered
+ * across the whole stage rather than being pushed to one side. */
+.tma-call--audio .tma-call__stage-body { justify-content: center; }
+.tma-call--audio .tma-call__stage-body > .tma-call__media-slot {
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+}
 
 .tma-call__controls {
   display: flex;

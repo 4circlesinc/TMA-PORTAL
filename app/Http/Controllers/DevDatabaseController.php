@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Access\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -23,7 +24,7 @@ class DevDatabaseController extends Controller
 
     public function __invoke(Request $request): View
     {
-        abort_unless($request->user()?->account_type === 'Administrator', 403, 'Administrators only.');
+        abort_unless(Role::isAdmin($request->user()), 403, 'Administrators only.');
 
         $tables = collect(Schema::getTableListing())
             // strip the SQLite schema prefix ("main.users" -> "users")

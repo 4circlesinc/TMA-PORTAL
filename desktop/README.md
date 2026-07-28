@@ -8,7 +8,8 @@ sign-in, and updates that install themselves.
 ```
 npm start           # run against production
 npm run start:local # run against http://localhost:8001
-npm test            # verify the page → shell bridge
+npm test            # verify the page → shell bridge, and update logic
+npm run test:update # drive a real update against the build in release/
 npm run dist        # build .dmg, .pkg and .zip into release/
 npm run icon        # rebuild assets/icon.icns from the icon master
 ```
@@ -30,6 +31,20 @@ but not globals — so everything crosses on attributes of `<html>`:
 
 `preload.js` relays them over IPC and `main.js` acts on them. `npm test`
 drives the whole chain with a fake page.
+
+## Closing versus quitting
+
+Closing the window hides it; the app keeps running, so messages and calls still
+arrive and reopening from the dock is instant with nothing reloaded. Only Quit
+(⌘Q) actually ends it.
+
+Two things make that work, and both are easy to undo by accident:
+
+- `backgroundThrottling: false` on the window. Chromium throttles timers to
+  roughly once a minute in hidden windows, and a hidden window is this app's
+  normal state — the websocket heartbeat and the badge refresh both live there.
+- The `close` handler calls `preventDefault()` and hides unless `quitting` is
+  set. `before-quit` is what sets it, which is also why an update restart works.
 
 ## Releasing
 

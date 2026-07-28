@@ -1089,64 +1089,41 @@
       esc(initials(session && session.peerName)) + '</span>';
   }
 
-  function statusPill(on, offLabel, onLabel, icon) {
-    // Never colour alone (§21): the label and the icon both change.
-    return '<span class="tma-call__status-pill' + (on ? ' is-off' : '') + '">' +
-      icon + '<span>' + esc(on ? offLabel : onLabel) + '</span></span>';
-  }
-
-  /* ── Incoming: a large centered pop-up, never a screen takeover (§1,§14) ── */
+  /*
+   * ── Incoming: a plain, centered call card (§1,§14) ──
+   * Deliberately quiet before it is answered — photo, who is calling, and the
+   * two choices that matter. Mid-call controls (mute, camera, devices) belong
+   * to the call once it exists, not to the decision of whether to take it, so
+   * they are not shown here. A video call still previews the self-view so the
+   * callee can see how they look before answering.
+   */
   function renderIncoming() {
     var isVideo = session.media === 'video';
     var permission = session.previewError;
+    var showPreview = isVideo && !permission;
 
     return '<div class="tma-call__scrim"></div>' +
-      '<div class="tma-call__dialog tma-call__dialog--incoming" role="dialog" aria-modal="true" ' +
+      '<div class="tma-call__dialog tma-call__dialog--incoming' +
+      (showPreview ? ' tma-call__dialog--incoming-video' : '') + '" role="dialog" aria-modal="true" ' +
       'aria-label="Incoming ' + (isVideo ? 'video' : 'voice') + ' call from ' + esc(session.peerName) + '">' +
 
-      '<div class="tma-call__incoming-preview">' +
-      (isVideo && !permission
+      '<div class="tma-call__incoming-hero">' +
+      (showPreview
         ? '<div class="tma-call__media-slot" data-call-media-slot></div>'
-        : '<div class="tma-call__incoming-fallback">' +
-          avatarBlock('tma-call__avatar-big') +
-          (permission
-            ? '<p class="tma-call__notice"><strong>' + esc(permission.title) + '</strong>' +
-              '<span>' + esc(permission.message) + '</span></p>'
-            : '') +
-          '<div class="tma-call__media-park" data-call-media-slot aria-hidden="true"></div>' +
-          '</div>') +
-      '<span class="tma-call__ringing"><span class="tma-call__pulse" aria-hidden="true"></span>' +
-      'Incoming ' + (isVideo ? 'video call' : 'voice call') + '</span>' +
+        : avatarBlock('tma-call__incoming-photo') +
+          '<div class="tma-call__media-park" data-call-media-slot aria-hidden="true"></div>') +
       '</div>' +
 
-      '<div class="tma-call__incoming-body">' +
-      avatarBlock('tma-call__incoming-avatar') +
-      '<div class="tma-call__incoming-meta">' +
+      '<div class="tma-call__incoming-id">' +
       '<div class="tma-call__incoming-name">' + esc(session.peerName) + '</div>' +
-      '<div class="tma-call__incoming-kind">Incoming ' + (isVideo ? 'video call' : 'voice call') + '</div>' +
-      '</div>' +
-      '<div class="tma-call__incoming-states">' +
-      statusPill(session.muted, 'Mic off', 'Mic on', iconMic()) +
-      (isVideo ? statusPill(session.cameraOff, 'Camera off', 'Camera on', iconVideo()) : '') +
-      '</div>' +
-      '</div>' +
-
-      '<div class="tma-call__incoming-tools">' +
-      '<button type="button" class="tma-call__ctrl tma-call__ctrl--sm' + (session.muted ? ' is-off' : '') +
-      '" data-call-action="mute" aria-pressed="' + (session.muted ? 'true' : 'false') +
-      '" aria-label="' + (session.muted ? 'Unmute microphone' : 'Mute microphone') + '">' +
-      (session.muted ? iconMicOff() : iconMic()) + '</button>' +
-      (isVideo
-        ? '<button type="button" class="tma-call__ctrl tma-call__ctrl--sm' + (session.cameraOff ? ' is-off' : '') +
-          '" data-call-action="camera" aria-pressed="' + (session.cameraOff ? 'true' : 'false') +
-          '" aria-label="' + (session.cameraOff ? 'Turn camera on' : 'Turn camera off') + '">' +
-          (session.cameraOff ? iconCameraOff() : iconVideo()) + '</button>'
+      '<div class="tma-call__incoming-kind">' +
+      '<span class="tma-call__pulse" aria-hidden="true"></span>' +
+      'Incoming ' + (isVideo ? 'video call' : 'voice call') + '</div>' +
+      (permission
+        ? '<p class="tma-call__notice"><strong>' + esc(permission.title) + '</strong>' +
+          '<span>' + esc(permission.message) + '</span></p>'
         : '') +
-      '<button type="button" class="tma-call__ctrl tma-call__ctrl--sm" data-call-action="devices" ' +
-      'aria-label="Device settings">' + iconSettings() + '</button>' +
       '</div>' +
-
-      renderDeviceSheet() +
 
       '<div class="tma-call__incoming-actions">' +
       '<button type="button" class="tma-call__btn tma-call__btn--decline" data-call-action="decline">' +

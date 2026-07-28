@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Models\UserBlock;
+use App\Support\Access\ContactScope;
 use Illuminate\Support\Str;
 
 /**
@@ -80,9 +81,14 @@ class MessagingSearch
             ->where('user_id', $user->id)->pluck('blocked_user_id')
             ->merge(UserBlock::where('blocked_user_id', $user->id)->pluck('user_id'));
 
+        // Same scope as the new-chat search: a client finds their own team,
+        // never another client.
+        $reachable = ContactScope::visibleUserIds($user);
+
         return User::query()
             ->where('id', '!=', $user->id)
             ->whereNotIn('id', $blocked)
+            ->when($reachable !== null, fn ($q) => $q->whereIn('id', $reachable))
             ->where('status', User::STATUS_APPROVED)
             ->where(function ($q) use ($term) {
                 self::like($q, 'name', $term);

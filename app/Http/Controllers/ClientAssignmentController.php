@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
@@ -64,7 +65,7 @@ class ClientAssignmentController extends Controller
 
         // Only internal staff can be assigned to a client.
         $staff = User::findOrFail($data['userId']);
-        abort_unless(in_array($staff->account_type, self::STAFF, true), 422, 'Only staff can be assigned to a client.');
+        abort_unless(Role::isStaff($staff), 422, 'Only staff can be assigned to a client.');
 
         $assignment = ClientAssignment::updateOrCreate(
             ['client_id' => $client->id, 'user_id' => $staff->id],
@@ -150,11 +151,11 @@ class ClientAssignmentController extends Controller
 
     private function authorizeStaff(Request $request): void
     {
-        abort_unless(in_array($request->user()?->account_type, self::STAFF, true), 403, 'Staff only.');
+        abort_unless(Role::can($request->user(), 'clients.view'), 403, 'Staff only.');
     }
 
     private function authorizeAdmin(Request $request): void
     {
-        abort_unless($request->user()?->account_type === 'Administrator', 403, 'Only administrators can manage assignments.');
+        abort_unless(Role::can($request->user(), 'clients.assign'), 403, 'Only administrators can manage assignments.');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\WorkDay;
+use App\Support\Access\Role;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class WorkPlanController extends Controller
         $target = $user;
         if (! empty($data['userId']) && (int) $data['userId'] !== (int) $user->id) {
             abort_unless(
-                in_array($user->account_type, ['Administrator', 'Employee'], true),
+                Role::can($user, 'presence.view'),
                 403,
                 'You cannot view that work plan.'
             );

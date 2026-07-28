@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Calendar\CalendarAccess;
 use App\Support\Calendar\GroupMembership;
 use App\Support\Mail\Postcards;
@@ -277,7 +278,7 @@ class GroupsController extends Controller
 
     private function authorizeStaff(User $user): void
     {
-        abort_unless(CalendarAccess::isStaff($user), 403, 'Groups are staff only.');
+        abort_unless(Role::can($user, 'groups.view'), 403, 'Groups are staff only.');
     }
 
     private function memberCount(Group $group): int

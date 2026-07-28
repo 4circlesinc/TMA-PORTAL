@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\WorkDay;
+use App\Support\Access\Role;
 use App\Support\Messaging\PresenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class StaffPresenceController extends Controller
     {
         $viewer = $request->user();
 
-        if (! in_array($viewer->account_type, ['Administrator', 'Employee'], true)) {
+        if (! Role::can($viewer, 'presence.view')) {
             return response()->json(['staff' => false, 'employees' => []]);
         }
 
@@ -58,7 +59,7 @@ class StaffPresenceController extends Controller
             'staff' => true,
             'employees' => $employees,
             // Administrators always see the widget; employees may too.
-            'canManage' => $viewer->account_type === 'Administrator',
+            'canManage' => Role::can($viewer, 'users.manage'),
         ]);
     }
 }

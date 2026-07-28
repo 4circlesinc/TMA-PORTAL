@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -77,7 +78,7 @@ class ActivityLog extends Model
      */
     public function scopeVisibleTo(Builder $query, User $viewer): Builder
     {
-        if ($viewer->account_type === 'Administrator') {
+        if (Role::can($viewer, 'activity.viewAll')) {
             return $query;
         }
 

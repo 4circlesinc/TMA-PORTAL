@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\WorkDay;
+use App\Support\Access\Role;
 use App\Support\AvatarService;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Notifications\ToastSettings;
@@ -31,7 +32,13 @@ class MeController extends Controller
             'avatar' => $user->avatar_url,
             'hasAvatar' => (bool) $user->avatar_url,
             'accountType' => $user->account_type,
-            'isAdmin' => $user->account_type === 'Administrator',
+            'isAdmin' => Role::isAdmin($user),
+            'isStaff' => Role::isStaff($user),
+            // What this account may reach, so the sidebar, the mobile menu and
+            // the global search index can hide exactly what the server would
+            // refuse. Convenience only — every one of these is enforced again
+            // on the request that acts on it.
+            'capabilities' => Role::capabilities($user),
             'providerPhoto' => $user->provider_avatar_url,
             // Lets the notification realtime share the messaging websocket.
             'realtime' => RealtimeConfig::client(),

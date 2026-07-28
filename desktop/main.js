@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 
 const HOST_BRIDGE = require('./host-bridge');
+const updater = require('./updater');
 
 // Which portal this shell talks to. Override for local work:
 //   TMA_PORTAL_URL=http://localhost:8001 npm start
@@ -78,6 +79,11 @@ function chromeUserAgent() {
 
 let mainWindow = null;
 
+// Closing the window puts the app in the background rather than ending it, so
+// messages and calls keep arriving. Only Quit — or an update restart — sets
+// this, and only then is the window really allowed to go.
+let quitting = false;
+
 function createWindow() {
   const state = readWindowState();
 
@@ -93,11 +99,25 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: true,
+      // Chromium throttles timers to a crawl in hidden windows. A hidden
+      // window is this app's normal state, and the websocket heartbeat and
+      // badge refresh both live in there.
+      backgroundThrottling: false,
     },
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
-  mainWindow.on('close', () => saveWindowState(mainWindow));
+
+  mainWindow.on('close', (event) => {
+    saveWindowState(mainWindow);
+    if (quitting) return;
+
+    // Hide, don't destroy: the page stays loaded and connected, so reopening
+    // is instant and nothing was missed while it was away.
+    event.preventDefault();
+    mainWindow.hide();
+  });
+
   mainWindow.on('closed', () => { mainWindow = null; });
 
   attachNavigationRules(mainWindow);
@@ -383,52 +403,9 @@ function applyPermissionPolicy() {
   });
 }
 
-/* ------------------------------------------------------------------ auto-update */
-
-let updateReady = false;
-
-function setupAutoUpdate() {
-  // electron-updater needs a packaged, signed app; in dev there is nothing to
-  // replace and it throws on the missing app-update.yml.
-  if (!app.isPackaged) return;
-
-  const { autoUpdater } = require('electron-updater');
-
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on('update-downloaded', async ({ version }) => {
-    updateReady = true;
-
-    const { response } = await dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      buttons: ['Later', 'Restart Now'],
-      defaultId: 1,
-      cancelId: 0,
-      message: `Version ${version} is ready`,
-      detail: 'Restart to finish updating. It will also install on its own the next time you quit.',
-    });
-
-    if (response === 1) autoUpdater.quitAndInstall();
-  });
-
-  autoUpdater.on('error', () => {
-    // A failed check is not worth interrupting anyone over; the next one runs
-    // within the hour, and the app still works.
-  });
-
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
-
-  setTimeout(check, 10000);        // shortly after launch
-  setInterval(check, 3600000);     // and hourly, so a deploy lands the same day
-  app.on('browser-window-focus', check);
-
-  return autoUpdater;
-}
-
 /* ------------------------------------------------------------------------- menu */
 
-function buildMenu(autoUpdater) {
+function buildMenu() {
   const template = [
     {
       role: 'appMenu',
@@ -437,21 +414,7 @@ function buildMenu(autoUpdater) {
         {
           label: 'Check for Updates…',
           enabled: app.isPackaged,
-          click: async () => {
-            if (!autoUpdater) return;
-            if (updateReady) return autoUpdater.quitAndInstall();
-
-            const result = await autoUpdater.checkForUpdates().catch(() => null);
-            const latest = result && result.updateInfo && result.updateInfo.version;
-
-            if (!latest || latest === app.getVersion()) {
-              dialog.showMessageBox(mainWindow, {
-                type: 'info',
-                message: "You're up to date",
-                detail: `Version ${app.getVersion()}.`,
-              });
-            }
-          },
+          click: () => updater.checkForUpdates({ silent: false }),
         },
         { type: 'separator' },
         { role: 'services' },
@@ -562,12 +525,19 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('tma:focus', (event) => fromMainWindow(event) && revealWindow({ steal: true }));
 
     createWindow();
-    buildMenu(setupAutoUpdate());
+    buildMenu();
+    updater.start();
 
+    // Clicking the dock icon brings back the window we hid on close.
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (!mainWindow) return createWindow();
+      revealWindow({ steal: true });
     });
   });
+
+  // Quit is the only thing that ends the app; closing the window backgrounds
+  // it so messages and calls keep arriving.
+  app.on('before-quit', () => { quitting = true; });
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();

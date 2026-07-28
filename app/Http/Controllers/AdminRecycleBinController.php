@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Access\Role;
 use App\Support\AdminRecycleBin;
 use App\Support\Files\FileAccess;
 use Illuminate\Http\JsonResponse;
@@ -73,6 +74,6 @@ class AdminRecycleBinController extends Controller
 
     private function authorizeAdmin(Request $request): void
     {
-        abort_unless(FileAccess::isAdmin($request->user()), 403, 'Only administrators can manage the recycle bin.');
+        abort_unless(Role::can($request->user(), 'recyclebin.admin'), 403, 'Only administrators can manage the recycle bin.');
     }
 }
