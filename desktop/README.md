@@ -9,6 +9,7 @@ sign-in, and updates that install themselves.
 npm start           # run against production
 npm run start:local # run against http://localhost:8001
 npm test            # verify the page → shell bridge, and update logic
+npm run test:call   # verify the incoming-call panel
 npm run test:update # drive a real update against the build in release/
 npm run dist        # build .dmg, .pkg and .zip into release/
 npm run icon        # rebuild assets/icon.icns from the icon master
@@ -31,6 +32,41 @@ but not globals — so everything crosses on attributes of `<html>`:
 
 `preload.js` relays them over IPC and `main.js` acts on them. `npm test`
 drives the whole chain with a fake page.
+
+## Incoming calls
+
+A ringing call opens a small panel in the top-right corner naming the caller,
+with Accept and Decline — it does not open the app. The app only comes forward
+if the call is answered.
+
+The panel is its own `BrowserWindow` ([call-window.js](call-window.js)) because
+it has to float above full-screen apps and across Spaces, which the portal page
+cannot do from inside the main window. It shows with `showInactive()` so a call
+never steals the keyboard mid-sentence.
+
+It has no portal session of its own: Accept and Decline go over IPC to the main
+process, which calls `TMAMessagingCalls.accept()` / `.decline()` on the page
+that owns the call, landing on the same code paths as the in-page buttons.
+
+If the app is already focused, no panel appears — the page's own call UI is
+right there, and a second one on top of it would just be in the way.
+
+## Menu and app settings
+
+The menu carries ⌘1…⌘9 for the nine main areas (Go), Back/Forward, ⌘, for
+portal settings, and an **App Settings** submenu under the app menu with three
+switches that belong to this Mac rather than the account — anything about the
+person already syncs through `/me/preferences`, so these stay local in
+[settings.js](settings.js):
+
+| Setting | Default | Off means |
+|---|---|---|
+| Launch at Login | off | — |
+| Keep Running When Window Closes | on | the red button quits, like a plain window |
+| Ring Calls in a Separate Window | on | a call surfaces the main window instead |
+
+Toggling one rebuilds the menu, so every checkbox reflects what is actually
+stored.
 
 ## Closing versus quitting
 
@@ -59,16 +95,32 @@ and `DesktopUpdateController` serves them at `/desktop/{file}` — which is the
 feed URL baked into the app. The manifest uploads last, so no installed app
 ever sees a version whose build is still uploading.
 
-Installed apps check on launch, on window focus, and hourly. The update
-downloads in the background; the user is offered a restart, and it installs on
-quit either way.
+Installed apps check ten seconds after launch and hourly after that. When a
+newer version is on the feed the user is asked, and on Update Now the app
+downloads it (progress shows on the dock icon), verifies it against the hash in
+the manifest, swaps the bundle and relaunches.
 
-**Auto-update needs a signed app.** Squirrel refuses to replace a bundle whose
-signature it cannot verify, so until there is a Developer ID certificate the
-check runs, finds the new version, downloads it, and then fails to install.
-Everything else works unsigned. Note also that `.pkg` is an installer format,
-not an update format: updates always come from the `.zip`, which is why all
-three targets are built.
+`updater.js` does that swap itself rather than using electron-updater, which
+delegates to Squirrel — and Squirrel refuses to replace a bundle whose
+signature it cannot verify, so on an unsigned build it downloads a new version
+and then fails at the last step. Doing it here works signed or unsigned, and
+keeps working if a certificate arrives later.
+
+Two things follow from how macOS works, not from this code:
+
+- The app cannot delete itself while running, so the swap is handed to a
+  detached script that waits for the process to exit, replaces the bundle with
+  `ditto`, and reopens it.
+- If the bundle is not writable — which is what installing via `.pkg` as root
+  produces — there is nothing to swap. That case opens the `.pkg` for the new
+  version instead and lets the OS installer ask for a password, rather than
+  this app collecting one.
+
+`.pkg` is an installer format, not an update format: updates always come from
+the `.zip`, which is why all three targets are built.
+
+`npm run test:update` runs the whole path — feed, download, checksum,
+extraction — against whatever is in `release/`, over a local server.
 
 ## Signing
 

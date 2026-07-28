@@ -8,6 +8,9 @@ const crypto = require('node:crypto');
 
 const HOST_BRIDGE = require('./host-bridge');
 const updater = require('./updater');
+const { installCloseToBackground } = require('./window-policy');
+const callWindow = require('./call-window');
+const settings = require('./settings');
 
 // Which portal this shell talks to. Override for local work:
 //   TMA_PORTAL_URL=http://localhost:8001 npm start
@@ -108,15 +111,11 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
-  mainWindow.on('close', (event) => {
-    saveWindowState(mainWindow);
-    if (quitting) return;
-
-    // Hide, don't destroy: the page stays loaded and connected, so reopening
-    // is instant and nothing was missed while it was away.
-    event.preventDefault();
-    mainWindow.hide();
-  });
+  installCloseToBackground(
+    mainWindow,
+    () => quitting || !settings.get('backgroundOnClose'),
+    () => saveWindowState(mainWindow),
+  );
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
@@ -328,24 +327,73 @@ function applyBadge(count) {
 /* ----------------------------------------------------------------------- calling
  *
  * messaging-calls.js publishes the phase; the shell supplies what a web page
- * cannot: a dock that keeps bouncing until the call is dealt with, and a
- * display that does not sleep mid-call.
+ * cannot: a ring panel that floats over everything without opening the app, a
+ * dock that keeps bouncing until the call is dealt with, and a display that
+ * does not sleep mid-call.
  */
 
 let bounceId = null;
 let powerBlockerId = null;
 
+/** Who is calling, straight from the page — see publishCallPhase(). */
+async function readCallInfo() {
+  const fallback = { name: 'Incoming call', avatar: '', media: 'audio' };
+  if (!mainWindow) return fallback;
+
+  try {
+    const raw = await mainWindow.webContents.executeJavaScript(
+      "document.documentElement.getAttribute('data-tma-call-info')", true,
+    );
+    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function ringPanel() {
+  // The app is already in front: the page's own call UI is right there, and a
+  // second panel on top of it would just be in the way.
+  if (mainWindow && mainWindow.isVisible() && mainWindow.isFocused()) return;
+
+  if (!settings.get('ringPanel')) {
+    revealWindow({ steal: false });
+    return;
+  }
+
+  callWindow.show(await readCallInfo());
+}
+
+function answerCall() {
+  callWindow.close();
+  if (!mainWindow) return;
+  mainWindow.webContents.executeJavaScript('window.TMAMessagingCalls.accept(true)', true).catch(() => {});
+  // Answering is the one moment the app should come forward.
+  revealWindow({ steal: true });
+}
+
+function declineCall() {
+  callWindow.close();
+  if (!mainWindow) return;
+  mainWindow.webContents.executeJavaScript('window.TMAMessagingCalls.decline()', true).catch(() => {});
+}
+
 function applyCallPhase(phase) {
   if (phase === 'ringing') {
-    revealWindow({ steal: false });
+    ringPanel();
+
     if (process.platform === 'darwin' && bounceId == null) {
       // 'critical' bounces until the app is activated — the whole point of a
       // ring you can hear from another Space.
       bounceId = app.dock.bounce('critical');
     }
-  } else if (bounceId != null) {
-    if (process.platform === 'darwin') app.dock.cancelBounce(bounceId);
-    bounceId = null;
+  } else {
+    // Answered elsewhere, cancelled, or over.
+    callWindow.close();
+
+    if (bounceId != null) {
+      if (process.platform === 'darwin') app.dock.cancelBounce(bounceId);
+      bounceId = null;
+    }
   }
 
   const onCall = phase === 'ringing' || phase === 'active';
@@ -405,6 +453,57 @@ function applyPermissionPolicy() {
 
 /* ------------------------------------------------------------------------- menu */
 
+/** Where ⌘1…⌘9 go. Paths are the portal's own, served as real pages. */
+const PLACES = [
+  { label: 'Home', path: '/' },
+  { label: 'Messages', path: '/social/messages' },
+  { label: 'Email', path: '/email' },
+  { label: 'Files', path: '/folders/all' },
+  { label: 'Calendar', path: '/calendar' },
+  { label: 'Clients', path: '/clients' },
+  { label: 'People', path: '/people' },
+  { label: 'Signatures', path: '/signatures' },
+  { label: 'Projects', path: '/projects/all' },
+];
+
+function go(to) {
+  if (!mainWindow) return;
+  revealWindow({ steal: true });
+  loadPortal(mainWindow, new URL(to, PORTAL_ORIGIN).toString());
+}
+
+const history = () => mainWindow && mainWindow.webContents.navigationHistory;
+
+async function signOutOfThisDevice() {
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Clear Session'],
+    defaultId: 1,
+    cancelId: 0,
+    message: 'Clear the saved session on this Mac?',
+    detail: 'You will be asked to sign in again the next time you open the app.',
+  });
+
+  if (response !== 1) return;
+
+  await session.defaultSession.clearStorageData({ storages: ['cookies', 'localstorage'] });
+  loadPortal(mainWindow);
+}
+
+/** A checkbox that writes straight through to settings.js. */
+function toggle(label, key, detail) {
+  return {
+    label,
+    type: 'checkbox',
+    checked: settings.get(key),
+    toolTip: detail,
+    click: (item) => {
+      settings.set(key, item.checked);
+      buildMenu(); // keep every copy of the checkbox honest
+    },
+  };
+}
+
 function buildMenu() {
   const template = [
     {
@@ -417,6 +516,23 @@ function buildMenu() {
           click: () => updater.checkForUpdates({ silent: false }),
         },
         { type: 'separator' },
+        {
+          label: 'Settings…',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => go('/account-settings'),
+        },
+        {
+          label: 'App Settings',
+          submenu: [
+            toggle('Launch at Login', 'launchAtLogin',
+              'Start the portal when you log in to this Mac.'),
+            toggle('Keep Running When Window Closes', 'backgroundOnClose',
+              'Closing the window keeps messages and calls arriving. Off makes the red button quit.'),
+            toggle('Ring Calls in a Separate Window', 'ringPanel',
+              'Incoming calls appear in a small panel instead of opening the app.'),
+          ],
+        },
+        { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
         { role: 'hide' },
@@ -426,16 +542,46 @@ function buildMenu() {
         { role: 'quit' },
       ],
     },
-    { role: 'fileMenu' },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Message', accelerator: 'CmdOrCtrl+N', click: () => go('/social/messages') },
+        { label: 'New Event', accelerator: 'CmdOrCtrl+Shift+N', click: () => go('/calendar') },
+        { type: 'separator' },
+        { label: 'Open Portal in Browser', click: () => shell.openExternal(PORTAL_URL) },
+        { type: 'separator' },
+        { label: 'Sign Out of This Device', click: signOutOfThisDevice },
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
     { role: 'editMenu' },
+    {
+      label: 'Go',
+      submenu: [
+        ...PLACES.map((place, index) => ({
+          label: place.label,
+          accelerator: `CmdOrCtrl+${index + 1}`,
+          click: () => go(place.path),
+        })),
+        { type: 'separator' },
+        {
+          label: 'Back',
+          accelerator: 'CmdOrCtrl+[',
+          enabled: !!(history() && history().canGoBack()),
+          click: () => history() && history().goBack(),
+        },
+        {
+          label: 'Forward',
+          accelerator: 'CmdOrCtrl+]',
+          enabled: !!(history() && history().canGoForward()),
+          click: () => history() && history().goForward(),
+        },
+      ],
+    },
     {
       label: 'View',
       submenu: [
-        {
-          label: 'Portal Home',
-          accelerator: 'CmdOrCtrl+Shift+H',
-          click: () => mainWindow && loadPortal(mainWindow),
-        },
         { role: 'reload' },
         { role: 'forceReload' },
         { type: 'separator' },
@@ -447,29 +593,29 @@ function buildMenu() {
         { role: 'toggleDevTools' },
       ],
     },
-    { role: 'windowMenu' },
+    {
+      role: 'windowMenu',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        {
+          label: 'Show Portal',
+          accelerator: 'CmdOrCtrl+Shift+H',
+          click: () => revealWindow({ steal: true }),
+        },
+        { type: 'separator' },
+        { role: 'front' },
+      ],
+    },
     {
       role: 'help',
       submenu: [
+        { label: 'Open Portal in Browser', click: () => shell.openExternal(PORTAL_URL) },
         {
-          label: 'Open Portal in Browser',
-          click: () => shell.openExternal(PORTAL_URL),
-        },
-        {
-          label: 'Sign Out of This Device',
-          click: async () => {
-            const { response } = await dialog.showMessageBox(mainWindow, {
-              type: 'question',
-              buttons: ['Cancel', 'Clear Session'],
-              defaultId: 1,
-              cancelId: 0,
-              message: 'Clear the saved session on this Mac?',
-              detail: 'You will be asked to sign in again the next time you open the app.',
-            });
-            if (response !== 1) return;
-            await session.defaultSession.clearStorageData({ storages: ['cookies', 'localstorage'] });
-            loadPortal(mainWindow);
-          },
+          label: 'Report a Problem…',
+          click: () => shell.openExternal(
+            `mailto:support@tmantoine.com?subject=${encodeURIComponent(`Portal desktop ${app.getVersion()}`)}`,
+          ),
         },
       ],
     },
@@ -517,12 +663,18 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     applyPermissionPolicy();
+    settings.apply();
 
     const fromMainWindow = (event) => mainWindow && event.sender === mainWindow.webContents;
 
     ipcMain.on('tma:badge', (event, count) => fromMainWindow(event) && applyBadge(count));
     ipcMain.on('tma:call', (event, phase) => fromMainWindow(event) && applyCallPhase(phase));
     ipcMain.on('tma:focus', (event) => fromMainWindow(event) && revealWindow({ steal: true }));
+
+    // From the ring panel. It has no portal session of its own, so answering
+    // and declining both go through the page that owns the call.
+    ipcMain.on('call:accept', answerCall);
+    ipcMain.on('call:decline', declineCall);
 
     createWindow();
     buildMenu();

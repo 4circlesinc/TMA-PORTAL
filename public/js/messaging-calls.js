@@ -199,6 +199,9 @@
   function showCallNotification(sess) {
     closeCallNotification();
     if (!sess || !notificationsAllowed()) return;
+    // The desktop app rings in its own panel, with Accept and Decline on it.
+    // A notification alongside would be the same call announced twice.
+    if (window.TMADesktop && window.TMADesktop.isDesktop) return;
     // Focused tab: the pop-up is already on screen and ringing.
     if (typeof document.hasFocus === 'function' && document.hasFocus()) return;
 
@@ -371,6 +374,22 @@
     var el = document.documentElement;
     var phase = '';
     if (session) phase = session.mode === MODES.INCOMING ? 'ringing' : 'active';
+
+    // The desktop shell rings in its own small window rather than opening the
+    // app, so it needs to know who is calling. Written before the phase flips,
+    // because that is what the shell reads on.
+    if (phase === 'ringing') {
+      try {
+        el.setAttribute('data-tma-call-info', JSON.stringify({
+          name: session.peerName || 'Unknown caller',
+          avatar: session.peerAvatar || '',
+          media: session.media || 'audio',
+        }));
+      } catch (e) { /* a shell that cannot read it just shows less */ }
+    } else {
+      el.removeAttribute('data-tma-call-info');
+    }
+
     if (el.getAttribute('data-tma-call') === phase) return;
     if (phase) el.setAttribute('data-tma-call', phase);
     else el.removeAttribute('data-tma-call');
@@ -1287,7 +1306,7 @@
       '" data-call-action="camera" aria-label="' +
       (isVideo ? (session.cameraOff ? 'Turn camera on' : 'Turn camera off') : 'Switch to video') + '">' +
       (isVideo && !session.cameraOff ? iconVideo() : iconCameraOff()) + '</button>' +
-      '<button type="button" class="tma-call__pill-btn" data-call-action="mode-compact" ' +
+      '<button type="button" class="tma-call__pill-btn tma-call__pill-btn--reveal" data-call-action="mode-compact" ' +
       'aria-label="Move call to the compact window">' + iconCompact() + '</button>' +
       '<button type="button" class="tma-call__pill-end" data-call-action="hangup" ' +
       'aria-label="End call">' + iconHangup() + '</button>' +
@@ -1495,6 +1514,9 @@
     }
     session.sheet = null;
     session.mode = mode;
+    // The compact window always reopens in the far bottom-right — forget any
+    // spot it was dragged to the last time it was shown.
+    if (mode === MODES.COMPACT) session.compactPos = null;
     render();
   }
 
@@ -1531,16 +1553,15 @@
   }
 
   /*
-   * The compact window's resting place (§19). It starts clear of the sidebar
-   * and of the toast stack, and any position the user drags it to is kept for
-   * the rest of the session, clamped back into view on resize.
+   * The compact window's resting place (§19): the far bottom-right corner. It
+   * lands there every time the mode is entered — setMode() clears any position
+   * it was dragged to on a previous visit — and a drag within the session is
+   * still honoured until the next entry, clamped back into view on resize.
    */
   function defaultCompactPos(w, h) {
-    var sidebar = document.querySelector('.tma-dash__sidebar');
-    var left = (sidebar ? sidebar.getBoundingClientRect().right : 0) + 16;
     return {
-      x: Math.max(16, Math.min(window.innerWidth - w - 16, left)),
-      y: Math.max(16, window.innerHeight - h - 96),
+      x: Math.max(16, window.innerWidth - w - 16),
+      y: Math.max(16, window.innerHeight - h - 16),
     };
   }
 
@@ -2509,6 +2530,13 @@
     isActive: function () { return !!session; },
     /* Let the page request permissions eagerly too (e.g. from a call button). */
     prime: primeCallEnvironment,
+    /*
+     * Answering from outside the page: the desktop shell rings in its own
+     * window, and its buttons have to land on the same code paths as the ones
+     * in the overlay rather than synthesising clicks at them.
+     */
+    accept: function (withVideo) { acceptIncoming(withVideo !== false); },
+    decline: function () { declineIncoming(); },
     /* Settings write-through: the preference is read on the next answered call. */
     setDisplayPreference: function (mode) {
       if (mode === MODES.MODAL || mode === MODES.COMPACT || mode === MODES.ISLAND) {

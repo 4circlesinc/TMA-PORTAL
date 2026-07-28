@@ -10,6 +10,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
 const HOST_BRIDGE = require('./host-bridge');
 const { parseManifest, compareVersions } = require('./updater');
+const { installCloseToBackground } = require('./window-policy');
 
 // Stands in for notify-store.js and messaging-calls.js.
 const PAGE = `
@@ -99,10 +100,48 @@ app.whenReady().then(async () => {
   check('focus: relayed from window.focus()', seen.focus, 1);
 
   testUpdater();
+  await testCloseToBackground();
 
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASS');
   app.exit(failures ? 1 : 0);
 });
+
+/*
+ * The behaviour the whole background-app feature rests on. win.close() is
+ * exactly what the red button calls — note that window.close() from page
+ * script is NOT: the spec makes that a no-op for a window the script did not
+ * open, so it looks like this is broken when it is not.
+ */
+async function testCloseToBackground() {
+  let quitting = false;
+
+  const win = new BrowserWindow({ show: false });
+  installCloseToBackground(win, () => quitting);
+
+  await win.loadURL('data:text/html,<title>bg</title>');
+  win.show();
+
+  win.close();
+  await settle();
+
+  check('close: window survives', win.isDestroyed(), false);
+  check('close: window is hidden', win.isVisible(), false);
+
+  // And the page behind it is untouched, which is why reopening does not
+  // reload and the websocket is never dropped.
+  const stillThere = await win.webContents.executeJavaScript('document.title').catch(() => null);
+  check('close: page still loaded', stillThere, 'bg');
+
+  win.show();
+  check('reopen: shows the same window', win.isVisible(), true);
+
+  // Quit must still be able to end it, or the app becomes unquittable.
+  quitting = true;
+  win.close();
+  await settle();
+
+  check('quit: window really closes', win.isDestroyed(), true);
+}
 
 /*
  * The updater decides whether to replace the app the user is running, off a

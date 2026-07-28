@@ -31755,12 +31755,19 @@ span.tma-dash__messages-profile-avatar {
   opacity: 1;
 }
 
-/* Move stays collapsed until the island is hovered; it is the one control
- * that is about the island rather than about the call. */
-.tma-call__pill-move { width: 0; margin-left: 0; opacity: 0; }
+/* Move — and the compact-window button — stay collapsed until the island is
+ * hovered: both are about where the island lives, not about the call itself.
+ * They reveal from the capsule's inner end, so the island grows toward the
+ * screen centre (it is anchored to whichever edge it is docked against) and
+ * never spills off the side it is parked on. */
+.tma-call__pill-move,
+.tma-call__pill-btn--reveal { width: 0; margin-left: 0; opacity: 0; }
 .tma-call__pill:hover .tma-call__pill-move,
 .tma-call__pill:focus-within .tma-call__pill-move,
-.tma-call__pill.is-dragging .tma-call__pill-move {
+.tma-call__pill.is-dragging .tma-call__pill-move,
+.tma-call__pill:hover .tma-call__pill-btn--reveal,
+.tma-call__pill:focus-within .tma-call__pill-btn--reveal,
+.tma-call__pill.is-dragging .tma-call__pill-btn--reveal {
   width: 38px;
   margin-left: var(--space-8);
   opacity: 1;

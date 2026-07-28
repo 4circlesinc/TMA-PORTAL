@@ -79,12 +79,12 @@ class MailRecipientSuggestTest extends TestCase
             'email' => 'client-user@example.com',
         ]);
 
-        $clientHits = $this->actingAs($clientUser)
+        // A client account has no mailbox at all now — the whole portal/mail
+        // prefix is staff-only, so there is nothing to filter client contacts
+        // out of. Clients correspond through Messages instead.
+        $this->actingAs($clientUser)
             ->getJson('/portal/mail/suggest?q=acme')
-            ->assertOk()
-            ->json('suggestions');
-
-        $this->assertFalse(collect($clientHits)->contains(fn ($s) => ($s['source'] ?? null) === 'client'));
+            ->assertForbidden();
     }
 
     public function test_suggests_a_group_as_an_expandable_member_list(): void

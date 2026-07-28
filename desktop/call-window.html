@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Incoming call</title>
+<style>
+  :root { color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
+
+  /* The whole panel is a drag handle; the buttons opt back out below. */
+  .panel {
+    -webkit-app-region: drag;
+    height: 100%;
+    border-radius: 18px;
+    padding: 26px 22px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    color: #fff;
+    background: linear-gradient(160deg, #1f4b52 0%, #17343c 55%, #12262d 100%);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+    animation: rise .22s ease-out;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(-8px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .name {
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kind {
+    margin-top: 5px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, .72);
+  }
+
+  .avatar {
+    /* auto top and bottom: centres the photo in whatever space is left
+       between the caller's name and the buttons. */
+    margin: auto 0;
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: rgba(255, 255, 255, .12);
+    display: grid;
+    place-items: center;
+    font-size: 34px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, .82);
+    overflow: hidden;
+  }
+
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .actions {
+    display: flex;
+    gap: 46px;
+    margin-top: 20px;
+  }
+
+  .action {
+    -webkit-app-region: no-drag;
+    background: none;
+    border: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 9px;
+    font: inherit;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .action:active .bubble { transform: scale(.93); }
+
+  .bubble {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    transition: transform .12s ease;
+  }
+
+  .bubble svg { width: 26px; height: 26px; fill: #fff; }
+
+  .decline .bubble { background: #e5484d; }
+  .accept  .bubble { background: #30c05b; }
+
+  /* Accept pulses so the eye lands on it, the way a ringing phone does. */
+  .accept .bubble { animation: pulse 1.6s ease-in-out infinite; }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(48, 192, 91, .55); }
+    70%      { box-shadow: 0 0 0 12px rgba(48, 192, 91, 0); }
+  }
+
+  .action span { font-size: 13px; color: rgba(255, 255, 255, .88); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel, .accept .bubble { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <div class="name" id="name">Incoming call</div>
+    <div class="kind" id="kind">TM ANTOINE call</div>
+
+    <div class="avatar" id="avatar"></div>
+
+    <div class="actions">
+      <button class="action decline" id="decline" type="button">
+        <span class="bubble">
+          <!-- handset, rotated down -->
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(133deg)">
+            <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .7-.2 1l-2.3 2.2z"/>
+          </svg>
+        </span>
+        <span>Decline</span>
+      </button>
+
+      <button class="action accept" id="accept" type="button">
+        <span class="bubble">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .7-.2 1l-2.3 2.2z"/>
+          </svg>
+        </span>
+        <span>Accept</span>
+      </button>
+    </div>
+  </div>
+
+<script>
+  const initials = (name) => String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('') || '?';
+
+  window.TMACallPanel.onCall((call) => {
+    document.getElementById('name').textContent = call.name;
+    document.getElementById('kind').textContent =
+      `TM ANTOINE ${call.media === 'video' ? 'video' : 'audio'} call`;
+
+    const avatar = document.getElementById('avatar');
+
+    if (call.avatar) {
+      const img = new Image();
+      // Only swap in the photo once it has actually loaded, so a broken or
+      // slow URL leaves the initials in place instead of an empty circle.
+      img.onload = () => { avatar.textContent = ''; avatar.appendChild(img); };
+      img.src = call.avatar;
+    }
+
+    avatar.textContent = initials(call.name);
+  });
+
+  document.getElementById('accept').addEventListener('click', () => window.TMACallPanel.accept());
+  document.getElementById('decline').addEventListener('click', () => window.TMACallPanel.decline());
+
+  // Escape declines, the way dismissing any other alert does.
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') window.TMACallPanel.decline();
+  });
+</script>
+</body>
+</html>
