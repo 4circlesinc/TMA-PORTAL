@@ -5307,6 +5307,17 @@
   function ensureEmailMobileHeader(root, state) {
     var dash = getEmailDashRoot(root);
     if (!dash) return;
+
+    // Same rule as syncEmailHeaderSearch: these modifiers restyle the shared
+    // shell (header slots, and .tma-dash__main's padding on narrow screens),
+    // so they may only be on while Email is the visible view. Email renders in
+    // the background on sync and realtime updates.
+    var view = root.closest('[data-view="email"]');
+    if (view && view.hidden) {
+      teardownEmailMobileHeader(dash);
+      return;
+    }
+
     var mobile = isEmailMobile();
     var reading = mobile && isSingleReading(state);
     var bulkActive = isEmailBulkActive(state);

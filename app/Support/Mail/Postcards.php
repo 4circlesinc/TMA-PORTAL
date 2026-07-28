@@ -104,9 +104,13 @@ class Postcards
         ]);
     }
 
-    public static function welcome(string $email, string $portalUrl, ?string $name = null): Postcard
+    /**
+     * $note is the optional line a staff member types on People → Resend
+     * welcome emails; it rides along as the quote block.
+     */
+    public static function welcome(string $email, string $portalUrl, ?string $name = null, ?string $note = null): Postcard
     {
-        return new Postcard('Your account is ready', [
+        return new Postcard('Your account is ready', array_filter([
             'preheader' => 'Your account has been approved — here\'s how to get started.',
             'eyebrow' => 'Welcome',
             'greeting' => $name ? "Hi {$name}," : 'Hello,',
@@ -114,8 +118,9 @@ class Postcards
             'bodyHtml' => '<p>An administrator has approved your account. You now have access to your files, messages, calendar and everything the firm shares with you.</p>'
                 .'<p>Here\'s your sign-in address in case you forget: <a href="'.e($portalUrl).'" style="color:#03a5e9;text-decoration:none;">'.e($email).'</a></p>'
                 .'<p>If you need any help getting started, reach out at <a href="mailto:support@tmantoine.com" style="color:#03a5e9;text-decoration:none;">support@tmantoine.com</a>.</p>',
+            'quote' => $note,
             'button' => ['label' => 'Open the portal', 'url' => $portalUrl],
-        ]);
+        ]));
     }
 
     public static function newLogin(array $details, string $reviewUrl): Postcard

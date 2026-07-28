@@ -1333,17 +1333,33 @@
       applySidebarStyle(getSidebarStyle());
     }
 
+    /* Save a look preference to the account as well as this browser.
+       Deliberately only called from the set* entry points below — the ones a
+       click reaches. applyUserPreferences() re-applies the same values on
+       every mount, and routing those through here would push a fresh
+       browser's defaults over the account's real settings before
+       settings.js has hydrated them back. Called before the local write so
+       the write-through can still see the previous value. */
+    function saveLookPref(key, value) {
+      if (!window.TMAPrefs || !window.TMAPrefs.push) return;
+      try { window.TMAPrefs.push(key, String(value), localStorage.getItem(key)); } catch (e) {}
+    }
+
     function setThemeMode(mode) {
       if (mode !== 'system' && mode !== 'light' && mode !== 'dark') return;
+      saveLookPref('tma.themeMode', mode);
       store.set('tma.themeMode', mode);
       applyThemeVisual(resolveTheme(mode));
     }
 
     function setFontScalePref(scale) {
-      applyFontScale(scale);
+      var level = Math.max(1, Math.min(5, parseInt(String(scale), 10) || 3));
+      saveLookPref('tma.fontScale', level);
+      applyFontScale(level);
     }
 
     function setAccentColorPref(colorId) {
+      saveLookPref('tma.accentColor', ACCENT_COLORS[colorId] ? colorId : 'indigo');
       applyAccentColor(colorId);
     }
 
@@ -1547,6 +1563,7 @@
 
     function setSidebarStyle(style) {
       var next = style === 'standard' ? 'standard' : 'hover';
+      saveLookPref('tma.sidebarStyle', next);
       store.set('tma.sidebarStyle', next);
       applySidebarStyle(next);
     }

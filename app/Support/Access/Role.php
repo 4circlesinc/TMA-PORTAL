@@ -132,6 +132,16 @@ class Role
         'email' => 'mail.use',
         'email/templates' => 'mail.use',
         'overview' => 'overview.view',
+        // The People section, screen by screen. These mirror portal-access.js
+        // exactly: the sidebar hides what the server would refuse.
+        'people' => 'users.view',
+        'people/employees' => 'users.view',
+        'people/clients' => 'clients.view',
+        'people/prospects' => 'clients.view',
+        'people/shared-address-book' => 'users.view',
+        'people/personal-address-book' => 'users.view',
+        'people/distribution-groups' => 'groups.view',
+        'people/resend-welcome-emails' => 'users.manage',
         'social/feed' => 'feed.view',
         'users' => 'users.view',
         'users/new' => 'users.manage',

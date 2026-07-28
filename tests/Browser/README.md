@@ -73,6 +73,38 @@ field placement and drawing, and computed CSS only exist in a browser.
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
   the client profile's "Open folder" action lands in the File Library. Needs an
   administrator account.
+- **`sidebar-access.mjs`** — role gating and the Folder Shortcuts icon box, the
+  two sidebar things PHPUnit can't see. A shortcut with no custom stamp renders
+  the folder as a bare `<img>` carrying *both* `.tma-folder-icon__base`
+  (`width:100%`) and `.tma-dash__nav-icon` (a fixed box); portal-files.css loads
+  after dashboard.css, so at equal specificity the 100% won and the folder grew
+  to ~189px — the full width of the sidebar. Only a *computed* box catches that,
+  so the script measures every shortcut icon expanded and in the collapsed rail.
+  It then checks a Client is not offered Clients/Users/Email/Feed/Overview while
+  keeping their own nav, and — the regression that bit once already — that the
+  prune leaves the sidebar's own tab row, shortcuts list and profile block
+  alone. Needs three accounts: `e2e@example.com` (Administrator),
+  `emp@example.com` (Employee) and `client@example.com` (Client).
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute='
+    foreach ([["Test Admin","e2e@example.com","Administrator"],
+              ["Emp Loyee","emp@example.com","Employee"],
+              ["Cli Ent","client@example.com","Client"]] as [$n, $e, $t]) {
+      $u = App\Models\User::create(["name" => $n, "email" => $e,
+        "password" => Hash::make("password12345")]);
+      $u->forceFill(["email_verified_at" => now(), "profile_completed_at" => now(),
+        "onboarding_completed_at" => now(), "status" => "approved",
+        "account_type" => $t])->save();
+    }'
+  ```
+
+  Two things it was written around: the desktop sidebar opens on the collapsed
+  72px rail with `[data-action="toggle-sidebar"]` *hidden*, so the script hovers
+  the sidebar to expand it (and moves the pointer away to measure the rail); and
+  "Stay signed in?" sits in front of the whole portal, redirecting even the JSON
+  APIs until it is answered — an unanswered gate shows up as HTML where JSON was
+  expected.
 - **`mailbox.mjs`** — the email page is server-backed, not the old hard-coded
   `INBOX` array: the list loads from `/portal/mail`, opening a message marks it
   read, starring round-trips, folder badges come from the server, and Email

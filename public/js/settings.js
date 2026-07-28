@@ -423,16 +423,64 @@
   }
 
   /* localStorage key ↔ server preference key, for settings we persist to the
-     account (Time and language, sidebar style). Changing one of these
-     write-through saves to /me/preferences; on mount we hydrate localStorage
-     from the server. */
+     account (Time and language, Theme, Privacy, Plugins). Changing one of
+     these write-through saves to /me/preferences; on load we hydrate
+     localStorage from the server. */
   var PREF_SERVER_KEYS = {
     'tma.autoTimezone': 'autoTimezone',
     'tma.timezone': 'timezone',
     'tma.language': 'language',
     'tma.voice': 'voice',
     'tma.sidebarStyle': 'sidebarStyle',
+    'tma.themeMode': 'themeMode',
+    'tma.fontScale': 'fontScale',
+    'tma.accentColor': 'accentColor',
+    'tma.privacy.cookie.functional': 'cookieFunctional',
+    'tma.privacy.cookie.analytics': 'cookieAnalytics',
+    'tma.privacy.cookie.marketing': 'cookieMarketing',
+    'tma.privacy.historyDays': 'historyDays',
+    'tma.plugins.list': 'plugins',
   };
+
+  /* localStorage only holds strings, but the API is typed. Keys listed here
+     get converted both ways; anything absent travels as a plain string. */
+  function prefBoolCodec() {
+    return {
+      toServer: function (v) { return v === '1' || v === true; },
+      toLocal: function (v) { return v ? '1' : '0'; },
+    };
+  }
+  function prefIntCodec(fallback) {
+    return {
+      toServer: function (v) { var n = parseInt(v, 10); return isNaN(n) ? fallback : n; },
+      toLocal: function (v) { return String(v); },
+    };
+  }
+  var PREF_CODECS = {
+    autoTimezone: prefBoolCodec(),
+    cookieFunctional: prefBoolCodec(),
+    cookieAnalytics: prefBoolCodec(),
+    cookieMarketing: prefBoolCodec(),
+    fontScale: prefIntCodec(3),
+    historyDays: prefIntCodec(30),
+    // The plugin list rides in localStorage as JSON text; the column wants
+    // the real array.
+    plugins: {
+      toServer: function (v) {
+        try { var a = JSON.parse(v); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+      },
+      toLocal: function (v) { return JSON.stringify(v || []); },
+    },
+  };
+
+  function prefToServer(serverKey, rawValue) {
+    var codec = PREF_CODECS[serverKey];
+    return codec ? codec.toServer(rawValue) : rawValue;
+  }
+  function prefToLocal(serverKey, value) {
+    var codec = PREF_CODECS[serverKey];
+    return codec ? codec.toLocal(value) : String(value);
+  }
 
   function prefXsrf() {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
@@ -441,9 +489,7 @@
 
   var prefPending = {}, prefTimer = null;
   function queuePrefSync(serverKey, localKey, rawValue) {
-    prefPending[serverKey] = localKey === 'tma.autoTimezone'
-      ? (rawValue === '1' || rawValue === true)
-      : rawValue;
+    prefPending[serverKey] = prefToServer(serverKey, rawValue);
     if (prefTimer) clearTimeout(prefTimer);
     prefTimer = setTimeout(flushPrefSync, 400);
   }
@@ -473,12 +519,29 @@
       }
     },
     set: function (k, v) {
+      var prev = null;
       try {
+        prev = localStorage.getItem(k);
         localStorage.setItem(k, v);
       } catch (e) {}
-      if (PREF_SERVER_KEYS[k]) queuePrefSync(PREF_SERVER_KEYS[k], k, v);
+      pushPref(k, v, prev);
     },
   };
+
+  /* Single write-through path to /me/preferences, shared with dashboard.js so
+     the header dark-mode toggle saves the same way the Theme panel does.
+     Skips no-op writes (re-applying the value already stored) and anything
+     replayed by hydration. */
+  function pushPref(localKey, value, prev) {
+    var serverKey = PREF_SERVER_KEYS[localKey];
+    if (!serverKey || prefsSuppressPush) return;
+    var next = String(value);
+    if (prev === undefined) {
+      try { prev = localStorage.getItem(localKey); } catch (e) { prev = null; }
+    }
+    if (prev === next) return;
+    queuePrefSync(serverKey, localKey, next);
+  }
 
   function applyLanguage() {
     try {
@@ -487,42 +550,64 @@
     } catch (e) {}
   }
 
+  /* Applying a hydrated value walks the same setters a click does, which would
+     bounce it straight back to the server. Held up while we replay. */
+  var prefsSuppressPush = false;
+  function withoutPrefPush(fn) {
+    prefsSuppressPush = true;
+    try { fn(); } finally { prefsSuppressPush = false; }
+  }
+
+  /* dashboard.js boots the theme from localStorage before this lands, so the
+     account's saved look has to be re-applied once it arrives — otherwise a
+     new browser keeps whatever the defaults painted. Idempotent when the
+     stored value already matched. */
+  function applyHydratedTheme(p) {
+    var api = getPrefsApi();
+    if (!api) return;
+    withoutPrefPush(function () {
+      if (p.themeMode && api.setThemeMode) api.setThemeMode(p.themeMode);
+      if (p.fontScale && api.setFontScale) api.setFontScale(p.fontScale);
+      if (p.accentColor && api.setAccentColor) api.setAccentColor(p.accentColor);
+      if (p.sidebarStyle && api.setSidebarStyle) api.setSidebarStyle(p.sidebarStyle);
+    });
+  }
+
+  /* Every panel that reads a synced preference. Each sync is a no-op when its
+     panel isn't in the DOM, so this can be fired blind after hydration. */
+  function syncSyncedPanels(root) {
+    if (!root || !document.body.contains(root)) return;
+    try { syncTimePanelUI(root); } catch (e) {}
+    try { syncThemePanelUI(root); } catch (e) {}
+    try { syncNotificationsPanelUI(root); } catch (e) {}
+    try { syncPrivacyPanelUI(root); } catch (e) {}
+    try { syncPluginsPanelUI(root); } catch (e) {}
+  }
+
   var prefsHydrated = false;
+  var prefsHydration = null;
   function hydratePrefs(root) {
-    fetch('/me/preferences', {
+    return fetch('/me/preferences', {
       credentials: 'same-origin',
       headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     }).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
       if (!p) return;
-      var changed = false;
       Object.keys(PREF_SERVER_KEYS).forEach(function (localKey) {
         var serverKey = PREF_SERVER_KEYS[localKey];
         if (p[serverKey] === undefined || p[serverKey] === null) return;
-        var val = localKey === 'tma.autoTimezone' ? (p[serverKey] ? '1' : '0') : String(p[serverKey]);
-        if (localStorage.getItem(localKey) !== val) {
-          try { localStorage.setItem(localKey, val); } catch (e) {}
-          changed = true;
-        }
+        var val = prefToLocal(serverKey, p[serverKey]);
+        if (localStorage.getItem(localKey) === val) return;
+        try { localStorage.setItem(localKey, val); } catch (e) {}
       });
       applyLanguage();
-      // Sidebar style needs to actually take effect on load (not just sit in
-      // localStorage until the user visits Settings), so this always applies
-      // it — idempotent when it hasn't changed from what dashboard.js booted
-      // with.
-      if (p.sidebarStyle) {
-        var api = getPrefsApi();
-        if (api && api.setSidebarStyle) api.setSidebarStyle(p.sidebarStyle);
-      }
+      // The theme and the sidebar have to take effect on load, not sit in
+      // localStorage until the user next opens Settings.
+      applyHydratedTheme(p);
       if (p.toasts) {
         writeToastPrefs(p.toasts, { sync: false, preview: false });
       }
-      if (changed && root && document.body.contains(root)) {
-        try { syncTimePanelUI(root); } catch (e) {}
-        try { syncThemePanelUI(root); } catch (e) {}
-        try { syncNotificationsPanelUI(root); } catch (e) {}
-      } else if (root && document.body.contains(root) && p.toasts) {
-        try { syncNotificationsPanelUI(root); } catch (e) {}
-      }
+      // Panels only exist when Settings is on screen.
+      syncSyncedPanels(root);
     }).catch(function () {});
   }
 
@@ -2644,18 +2729,33 @@
     },
   ];
 
+  function defaultPlugins() {
+    return DEFAULT_PLUGINS.map(function (p) { return Object.assign({}, p); });
+  }
+
+  function findPluginInCatalog(id) {
+    return DEFAULT_PLUGINS.find(function (p) { return p.id === id; });
+  }
+
+  /* The saved list is authoritative for *membership*, not just on/off — it
+     used to be replayed over the whole catalog, so a removed plugin came
+     straight back on the next load. Only the name/icon/copy come from the
+     catalog; ids no longer in it are dropped. */
   function readPlugins() {
     try {
       var raw = store.get('tma.plugins.list', '');
-      if (!raw) return DEFAULT_PLUGINS.map(function (p) { return Object.assign({}, p); });
+      if (!raw) return defaultPlugins();
       var saved = JSON.parse(raw);
-      if (!Array.isArray(saved)) return DEFAULT_PLUGINS.map(function (p) { return Object.assign({}, p); });
-      return DEFAULT_PLUGINS.map(function (plugin) {
-        var match = saved.find(function (item) { return item.id === plugin.id; });
-        return Object.assign({}, plugin, match ? { enabled: !!match.enabled } : {});
+      if (!Array.isArray(saved)) return defaultPlugins();
+      var out = [];
+      saved.forEach(function (item) {
+        var plugin = item && findPluginInCatalog(item.id);
+        if (!plugin) return;
+        out.push(Object.assign({}, plugin, { enabled: !!item.enabled }));
       });
+      return out;
     } catch (e) {
-      return DEFAULT_PLUGINS.map(function (p) { return Object.assign({}, p); });
+      return defaultPlugins();
     }
   }
 
@@ -4679,10 +4779,19 @@
 
   function mount(root, opts) {
     if (!root) return;
-    // Pull the account's saved Time-and-language prefs into localStorage (once
-    // per page load), so the panels reflect what's stored on the account.
+    // Normally already done by the page-load hydration below; this covers the
+    // case where Settings mounts before that request came back, so the panels
+    // render against the account's values rather than stale localStorage.
     applyLanguage();
-    if (!prefsHydrated) { prefsHydrated = true; hydratePrefs(root); }
+    if (!prefsHydrated) {
+      prefsHydrated = true;
+      prefsHydration = hydratePrefs(root);
+    } else if (prefsHydration) {
+      // The page-load hydration may still be in flight, and it had no panels
+      // to update. Re-sync once it lands — the .then defers past the render
+      // below, so the panels exist by then.
+      prefsHydration.then(function () { syncSyncedPanels(root); });
+    }
     var snap = currentUserSnapshot();
     CURRENT_EMAIL = snap.email || '';
     var initialNav = (opts && (opts.activeNav || opts.settingsNav)) || 'profile';
@@ -4726,4 +4835,30 @@
     closePopups: closePopups,
     closeChangeEmail: closeChangeEmailPopup,
   };
+
+  /* Account preferences, exposed for the other modules that change them
+     outside the Settings panel (dashboard.js owns the header dark-mode
+     toggle). Everything funnels through the one debounced writer here so
+     there is a single place that talks to /me/preferences. */
+  window.TMAPrefs = {
+    push: pushPref,
+    flush: flushPrefSync,
+  };
+
+  /* Preferences used to hydrate only when the Settings panel mounted, so the
+     account's theme and sidebar style did nothing on every other page until
+     you happened to visit Settings. settings.js loads on all the portal
+     shells, so hydrate here instead — once per page load. */
+  function bootPrefs() {
+    applyLanguage();
+    if (prefsHydrated) return;
+    prefsHydrated = true;
+    prefsHydration = hydratePrefs(null);
+  }
+
+  // dashboard.js paints the theme on DOMContentLoaded; wait for `load` so
+  // window.TMADashboard exists and the hydrated values can actually be
+  // applied rather than silently no-oping.
+  if (document.readyState === 'complete') bootPrefs();
+  else window.addEventListener('load', bootPrefs);
 })();

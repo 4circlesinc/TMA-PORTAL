@@ -61,6 +61,18 @@ module.exports = `(function () {
     }, 250);
   }
 
+  /* ---- notification permission ----
+   *
+   * The app has its own permission store, separate from any browser, and the
+   * portal only ever asks from the settings toggle — so a user who turned
+   * notifications on in Safari months ago still lands here at "default", and
+   * every banner is dropped silently. Ask on load; the shell approves it
+   * without a prompt, so nothing is shown to the user.
+   */
+  if (typeof window.Notification === 'function' && Notification.permission === 'default') {
+    try { Notification.requestPermission(); } catch (e) { /* ignore */ }
+  }
+
   /* ---- focus requests ----
    *
    * Both the notification store and the call module already call

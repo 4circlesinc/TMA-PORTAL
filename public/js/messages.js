@@ -4220,6 +4220,22 @@
     var dash = getMessagesDashRoot();
     if (!dash) return;
 
+    /*
+     * The modifier reshapes the whole shell for full-bleed chat: it strips
+     * .tma-dash__main's side gutters and swaps its scroll for `overflow:
+     * hidden`. That is only ever right while Messages is the visible view.
+     *
+     * render() runs in the background too — realtime events, resizes, badge
+     * syncs — so toggling on viewport width alone stamped the modifier on
+     * every narrow load. The Dashboard then lost its gutters entirely and
+     * could not scroll past the fold.
+     */
+    var view = root && root.closest ? root.closest('.tma-dash__view') : null;
+    if (view && view.hidden) {
+      clearMessagesMobileHeader();
+      return;
+    }
+
     dash.classList.toggle('tma-dash--messages-mobile', isMessagesMobile());
     dash.classList.toggle('tma-dash--messages-mobile-reading', isMessagesReading(state));
 

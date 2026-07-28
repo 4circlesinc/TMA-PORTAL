@@ -4625,12 +4625,17 @@
   }
 }
 
-/* ── Narrow content: stack dashboard panels ── */
-@media (max-width: 720px) {
+/* Below the desktop sidebar breakpoint the KPI row has the full width to
+ * itself, but four columns still leaves each card ~170px — narrow enough that
+ * every label ellipsizes. Two up keeps the labels readable. */
+@media (max-width: 900px) {
   .tma-dash__cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
+/* ── Narrow content: stack dashboard panels ── */
+@media (max-width: 720px) {
   .tma-dash__panels {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
@@ -4646,6 +4651,8 @@
 }
 
 /* ── Small tablets / large phones ── */
+/* Two up holds down to ~480px ("Avg. Response to Clients" still fits a 216px
+ * card); below that every label ellipsizes, so stack instead. */
 @media (max-width: 520px) {
   .tma-dash__cards {
     grid-template-columns: minmax(0, 1fr);

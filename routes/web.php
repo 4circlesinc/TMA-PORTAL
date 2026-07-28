@@ -14,6 +14,7 @@ use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\CompaniesController;
 use App\Http\Controllers\ConnectorsController;
+use App\Http\Controllers\ContactsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\Design\MailPreviewController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingGroupController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
@@ -156,6 +158,32 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::post('/admin/users/{user}/deny', [AdminUsersController::class, 'deny'])->name('admin.users.deny');
     Route::post('/admin/users/{user}/suspend', [AdminUsersController::class, 'suspend'])->name('admin.users.suspend');
     Route::post('/admin/users/{user}/reactivate', [AdminUsersController::class, 'reactivate'])->name('admin.users.reactivate');
+
+    /*
+     * The People section. Reading the directory is staff-wide; the writes it
+     * offers (create, edit, delete an account) are AdminUsersController's
+     * above, so the rules for those live in exactly one place.
+     */
+    Route::prefix('portal/people')->name('people.')->group(function () {
+        Route::get('/summary', [PeopleController::class, 'summary'])->name('summary');
+        Route::get('/employees', [PeopleController::class, 'employees'])->name('employees');
+        Route::get('/client-contacts', [PeopleController::class, 'clientContacts'])->name('client-contacts');
+        Route::get('/prospects', [PeopleController::class, 'prospects'])->name('prospects');
+        Route::delete('/prospects/{ref}', [PeopleController::class, 'destroyProspect'])
+            ->where('ref', '(invite|user):[0-9]+')->name('prospects.destroy');
+        Route::get('/welcome-candidates', [PeopleController::class, 'welcomeCandidates'])->name('welcome-candidates');
+        Route::post('/welcome', [PeopleController::class, 'sendWelcome'])->name('welcome');
+    });
+
+    // People → Shared / Personal address book.
+    Route::prefix('portal/contacts')->name('contacts.')->group(function () {
+        Route::get('/', [ContactsController::class, 'index'])->name('index');
+        Route::post('/', [ContactsController::class, 'store'])->name('store');
+        // Literal path before the {uuid} wildcard so it can't swallow it.
+        Route::post('/bulk-delete', [ContactsController::class, 'bulkDestroy'])->name('bulk-delete');
+        Route::patch('/{uuid}', [ContactsController::class, 'update'])->name('update');
+        Route::delete('/{uuid}', [ContactsController::class, 'destroy'])->name('destroy');
+    });
 
     Route::get('/admin/connectors', [ConnectorsController::class, 'index'])->name('admin.connectors');
     Route::put('/admin/connectors', [ConnectorsController::class, 'update'])->name('admin.connectors.update');

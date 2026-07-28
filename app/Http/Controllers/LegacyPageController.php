@@ -34,6 +34,17 @@ class LegacyPageController extends Controller
         'email',
         'email/templates',
         'overview',
+        // The People section. Every screen is a real URL, so hard-refreshing
+        // (or opening a link to) one loads the shell instead of 404ing and
+        // sending the visitor back to the dashboard.
+        'people',
+        'people/employees',
+        'people/clients',
+        'people/prospects',
+        'people/shared-address-book',
+        'people/personal-address-book',
+        'people/distribution-groups',
+        'people/resend-welcome-emails',
         'projects',
         'settings',
         'settings/change-email',
@@ -58,26 +69,8 @@ class LegacyPageController extends Controller
 
     /** @deprecated Use SPA_PAGES + STANDALONE_PAGES. Kept for route registration. */
     public const PORTAL_PAGES = [
-        'account',
-        'account-settings',
-        'account-info',
-        'billing-details',
-        'billing-details/card',
-        'calendar',
-        'choose-account-type',
-        'classic',
-        'clients',
-        'email',
-        'email/templates',
-        'overview',
-        'projects',
-        'settings',
-        'settings/change-email',
-        'signatures',
-        'social/feed',
-        'social/messages',
-        'users',
-        'users/new',
+        ...self::SPA_PAGES,
+        ...self::STANDALONE_PAGES,
     ];
 
     /** One approved shell — menu order lives only here. */

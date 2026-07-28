@@ -1,0 +1,51 @@
+/* Does a non-messages notification actually raise a banner now? */
+const { app, BrowserWindow, session } = require('electron');
+const fs = require('node:fs');
+const HOST_BRIDGE = require('./host-bridge');
+
+const STORE = fs.readFileSync('../public/js/notify-store.js', 'utf8');
+let failures = 0;
+const check = (l, g, w) => { const ok = g === w; if (!ok) failures++; console.log(`${ok?'PASS':'FAIL'}  ${l}: expected ${JSON.stringify(w)}, got ${JSON.stringify(g)}`); };
+
+app.whenReady().then(async () => {
+  session.defaultSession.setPermissionRequestHandler((_wc, p, cb) => cb(p === 'notifications'));
+
+  const win = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true } });
+  await win.loadURL('data:text/html,<title>t</title>');
+
+  // Capture what the store hands to the OS instead of really notifying.
+  await win.webContents.executeJavaScript(`
+    window.__raised = [];
+    window.Notification = function (title, opts) { window.__raised.push({ title, body: opts.body }); this.close = function(){}; };
+    window.Notification.permission = 'granted';
+    window.Notification.requestPermission = function () { return Promise.resolve('granted'); };
+    document.hasFocus = function () { return false; };   // backgrounded
+    window.__TMA_SITE_ROOT = '';
+  `, true);
+
+  await win.webContents.executeJavaScript(STORE, true);
+  await win.webContents.executeJavaScript(
+    "window.TMADesktopNotify.applyPrefs({ enabled: true, preview: true })", true);
+
+  const raise = (module, title, message) => win.webContents.executeJavaScript(
+    `window.TMADesktopNotify.notify(${JSON.stringify({ id: module + Math.random(), module, title, message, createdAt: 't' })}); window.__raised.length`, true);
+
+  check('email raises a banner', await raise('email', 'New email from Dana', 'Contract'), 1);
+  check('messages still raises', await raise('messages', 'Dana', 'hi'), 2);
+  check('calendar raises', await raise('calendar', 'Event moved', 'Tomorrow'), 3);
+  check('files raises', await raise('files', 'File shared', 'Deed.pdf'), 4);
+
+  const first = await win.webContents.executeJavaScript('window.__raised[0]', true);
+  check('email banner keeps its title', first.title, 'New email from Dana');
+  check('email banner shows the preview', first.body, 'Contract');
+
+  // Preview off must not leak content, and must not call everything a message.
+  await win.webContents.executeJavaScript(
+    "window.TMADesktopNotify.applyPrefs({ enabled: true, preview: false })", true);
+  await raise('email', 'New email', 'secret subject');
+  const quiet = await win.webContents.executeJavaScript('window.__raised[window.__raised.length-1]', true);
+  check('preview off hides the subject', quiet.body, 'New email');
+
+  console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASS');
+  app.exit(failures ? 1 : 0);
+});

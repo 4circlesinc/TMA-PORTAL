@@ -20,6 +20,22 @@ class PreferencesController extends Controller
         'language' => 'en',
         'voice' => 'en-us',
         'sidebarStyle' => 'hover',
+        // Theme panel. These used to live only in localStorage, so the look
+        // reset on every new browser — they follow the account now.
+        'themeMode' => 'system',
+        'fontScale' => 3,
+        'accentColor' => 'indigo',
+        // Privacy panel. "necessary" cookies are not stored: they are always
+        // on and the switch is hard-locked in the UI.
+        'cookieFunctional' => true,
+        'cookieAnalytics' => true,
+        'cookieMarketing' => true,
+        'historyDays' => 30,
+        // Plugins panel. null means "never customized" — the client falls
+        // back to its shipped catalog. Once set, the stored list is
+        // authoritative for membership as well as on/off, so removing a
+        // plugin sticks instead of reappearing on reload.
+        'plugins' => null,
         // Calendar page chrome, remembered per user so the page reopens the
         // way it was left. Which calendars are ticked is not here — that is
         // server state on calendar_subscriptions.
@@ -33,6 +49,17 @@ class PreferencesController extends Controller
         'language' => ['string', 'max:16', 'regex:/^[a-z]{2}(-[a-z]{2,7})?$/i'],
         'voice' => ['string', 'max:32'],
         'sidebarStyle' => ['string', 'in:standard,hover'],
+        'themeMode' => ['string', 'in:system,light,dark'],
+        'fontScale' => ['integer', 'between:1,5'],
+        'accentColor' => ['string', 'in:indigo,yellow,red,blue,orange,green'],
+        'cookieFunctional' => ['boolean'],
+        'cookieAnalytics' => ['boolean'],
+        'cookieMarketing' => ['boolean'],
+        'historyDays' => ['integer', 'in:7,14,30,60,90,365'],
+        // Plugin catalog lives in the client; we only keep id + on/off.
+        'plugins' => ['array'],
+        'plugins.*.id' => ['required', 'string', 'max:40'],
+        'plugins.*.enabled' => ['boolean'],
         'calendarView' => ['string', 'in:week,month,agenda,day,work_week'],
         'calendarSidebarOpen' => ['boolean'],
         // Nested toast prefs — validated + cleaned by ToastSettings.
@@ -120,9 +147,17 @@ class PreferencesController extends Controller
 
         $user = $request->user();
         $current = $user->preferences ?? [];
-        $booleans = ['autoTimezone', 'calendarSidebarOpen'];
+        $booleans = [
+            'autoTimezone', 'calendarSidebarOpen',
+            'cookieFunctional', 'cookieAnalytics', 'cookieMarketing',
+        ];
         foreach ($data as $key => $value) {
             if ($key === 'toasts') {
+                continue;
+            }
+            if ($key === 'plugins') {
+                $current[$key] = $this->sanitizePlugins(is_array($value) ? $value : []);
+
                 continue;
             }
             if ($key === 'dashboardTiles') {
@@ -136,7 +171,16 @@ class PreferencesController extends Controller
 
                 continue;
             }
-            $current[$key] = in_array($key, $booleans, true) ? (bool) $value : $value;
+            if (in_array($key, $booleans, true)) {
+                $current[$key] = (bool) $value;
+
+                continue;
+            }
+            // The `integer` rule accepts numeric strings, so normalize here —
+            // otherwise "3" round-trips and the client sees a string.
+            $current[$key] = in_array($key, ['fontScale', 'historyDays'], true)
+                ? (int) $value
+                : $value;
         }
 
         $user->forceFill(['preferences' => $current])->save();
@@ -177,6 +221,33 @@ class PreferencesController extends Controller
         }
 
         return $payload;
+    }
+
+    /**
+     * Keep the plugin list to `{id, enabled}` pairs, first occurrence wins.
+     * The catalog itself is the client's, so we don't police which ids are
+     * real — only the shape, so the column can't be used as scratch storage.
+     *
+     * @param  array<int, mixed>  $plugins
+     * @return list<array{id: string, enabled: bool}>
+     */
+    private function sanitizePlugins(array $plugins): array
+    {
+        $out = [];
+        $seen = [];
+        foreach ($plugins as $plugin) {
+            if (! is_array($plugin) || ! is_string($plugin['id'] ?? null)) {
+                continue;
+            }
+            $id = $plugin['id'];
+            if ($id === '' || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $out[] = ['id' => $id, 'enabled' => (bool) ($plugin['enabled'] ?? false)];
+        }
+
+        return $out;
     }
 
     /**

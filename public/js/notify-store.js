@@ -451,9 +451,11 @@
    * mounts on two of them, and "you are notified only while you are already
    * looking at Messages" is not a notification.
    *
-   * Scope is the messages module — that is what the setting that turns this on
-   * says it covers ("Desktop notifications", under Messages settings). Every
-   * other module still surfaces as the in-app toast and the bell.
+   * Every module banners, not just messages. Which notifications a user gets
+   * at all is already decided server-side by their per-type preferences, so
+   * filtering again here only ever meant email, calendar and file activity
+   * reached the bell and then died there — silently, which is the worst way
+   * for a notification to fail.
    * ------------------------------------------------------------------- */
   var desktop = (function () {
     var prefs = { enabled: false, preview: true };
@@ -509,16 +511,27 @@
       live = [];
     }
 
+    /* What a banner says when the preview is switched off. */
+    var QUIET_BODY = {
+      messages: 'New message',
+      email: 'New email',
+      calendar: 'Calendar update',
+      files: 'File activity',
+      clients: 'Client update',
+      signatures: 'Signature update',
+    };
+
     function notify(item) {
       if (!prefs.enabled || !item) return;
-      if (item.module !== 'messages') return;
       if (permission() !== 'granted') return;
       if (!backgrounded()) return;
       if (seenRecently(item.id + '@' + (item.createdAt || ''))) return;
 
       try {
-        var note = new Notification(item.title || 'New message', {
-          body: prefs.preview ? (item.message || '') : 'New message',
+        var note = new Notification(item.title || 'New notification', {
+          body: prefs.preview
+            ? (item.message || '')
+            : (QUIET_BODY[item.module] || 'New notification'),
           // Per conversation, so a run of messages replaces its own banner
           // instead of stacking one per message.
           tag: 'tma-' + (item.id || 'notification'),

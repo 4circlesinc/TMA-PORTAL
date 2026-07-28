@@ -500,6 +500,18 @@ a.tma-dash__tab-btn:visited {
     --dash-tabbar-clearance: calc(var(--dash-tabbar-float-gap) + var(--dash-tabbar-block-h));
     --dash-mobile-drawer-w: min(280px, 78vw);
     --header-logo-progress: 0;
+    /* dashboard.css steps this down at =<560px, but this file's unconditional
+     * `.tma-dash { --dash-gutter }` above loads later at the same specificity
+     * and wins, so the narrow-screen gutter has to be restated here. 28px
+     * between cards is desktop spacing; on a tablet it matches the home
+     * board's tile gap, and on a phone it matches the page gutter. */
+    --dash-gutter: var(--space-20);
+  }
+
+  @media (max-width: 560px) {
+    .tma-dash {
+      --dash-gutter: var(--dash-mobile-gutter);
+    }
   }
 
   .tma-dash__sidebar {
@@ -645,6 +657,16 @@ a.tma-dash__tab-btn:visited {
   }
 
   .tma-dash__sidebar .tma-dash__nav-icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+  }
+
+  /* The two-class shortcut rule below is more specific than the one above, so
+     it has to be restated here or folder shortcuts would stay 20px while every
+     other nav icon grew to 24px. */
+  .tma-dash__sidebar .tma-dash__nav-icon.tma-folder-icon__base,
+  .tma-dash__sidebar .tma-dash__nav-icon.tma-folder-icon {
     width: 24px;
     height: 24px;
     flex: 0 0 24px;
@@ -1032,6 +1054,22 @@ a.tma-dash__tab-btn:visited {
 .tma-dash__nav-icon {
   display: block;
   object-fit: contain;
+}
+
+/* Folder Shortcuts: keep the folder art inside the nav icon's box.
+   A shortcut with no custom stamp renders the folder as a bare <img> that is
+   ITSELF the nav icon, so it carries both .tma-folder-icon__base and
+   .tma-dash__nav-icon. The former is `width:100%` — correct when the art sits
+   inside a sized .tma-folder-icon wrapper, ruinous when it doesn't — and
+   portal-files.css loads after dashboard.css, so at equal specificity that
+   100% won and the folder grew to the full width of the sidebar.
+   Matching on both classes hits only the outermost element, so art nested in
+   a wrapper keeps its 100% and every other folder icon is untouched. */
+.tma-dash__sidebar .tma-dash__nav-icon.tma-folder-icon__base,
+.tma-dash__sidebar .tma-dash__nav-icon.tma-folder-icon {
+  width: var(--dash-icon-md);
+  height: var(--dash-icon-md);
+  flex: 0 0 var(--dash-icon-md);
 }
 
 .tma-dash__tab-badge--email,

@@ -661,11 +661,19 @@
     return 1 / cols;
   }
 
+  /*
+   * Kept fractional on purpose. Rounding each column up made the columns no
+   * longer fit the container they were derived from — at 1152px wide, three
+   * 370.67px columns became 371px each and the last one no longer passed the
+   * `x + w <= containerWidth` test in packHomeTiles. The tile fell back to an
+   * earlier column and the board rendered a whole empty column on the right,
+   * at every container width that doesn't divide evenly.
+   */
   function fractionToPx(frac, containerWidth, gap, cols) {
     if (frac >= 0.999) return containerWidth;
     var colW = (containerWidth - gap * (cols - 1)) / cols;
     var spanCols = Math.max(1, Math.round(frac * cols));
-    return Math.round(spanCols * colW + (spanCols - 1) * gap);
+    return spanCols * colW + (spanCols - 1) * gap;
   }
 
   function rectsOverlap(a, b, gap) {
