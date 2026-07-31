@@ -30,6 +30,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Portal file changes mirror out to any linked SharePoint library.
+        \App\Models\FileItem::observe(\App\Observers\FileSharePointObserver::class);
+
         // In production the app sits behind Laravel Cloud's TLS-terminating
         // proxy, so PHP sees plain http. Force https on every generated URL so
         // OAuth callbacks, signed email links and assets keep the https scheme.

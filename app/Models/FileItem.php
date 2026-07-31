@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 #[Fillable([
     'uuid', 'folder_id', 'name', 'extension', 'mime_type', 'size', 'disk',
-    'storage_path', 'checksum', 'version_number', 'owner_id', 'uploaded_by',
+    'storage_path', 'checksum', 'version_number', 'origin', 'owner_id', 'uploaded_by',
     'source_modified_at', 'deleted_by',
 ])]
 #[Hidden(['storage_path', 'disk'])]
