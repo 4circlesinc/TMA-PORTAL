@@ -108,6 +108,18 @@ Artisan::command('files:prune-presence', function () {
 
 Schedule::command('files:prune-presence')->everyThirtyMinutes();
 
+/*
+ * Pull every connected SharePoint library on a timer.
+ *
+ * Without this, sync only ever happens when somebody runs the command by hand —
+ * which is exactly how the mailbox ended up looking like it was losing mail.
+ * Queued so a large library cannot hold up the scheduler, and non-overlapping
+ * because two runs would process the same delta cursor twice.
+ */
+Schedule::command('sharepoint:sync --queue')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
 
 /*
  * Message attachments are uploaded and staged the moment they are chosen, so a
