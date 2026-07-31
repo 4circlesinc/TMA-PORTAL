@@ -183,6 +183,9 @@
         ? 'Version ' + info.version
         : 'No build published yet';
     });
+
+    var note = (root || document).querySelector('[data-desktop-note]');
+    if (note) note.hidden = !(data && data.mac && data.mac.available);
   }
 
   function mountPromo(root) {
@@ -209,7 +212,15 @@
       '<p class="tma-dash__account-promo-title">Have you tried<br>new macOS / Windows Application?</p>' +
       '<div class="tma-dash__account-promo-actions">' +
       DESKTOP_PLATFORMS.map(renderDownloadBtn).join('') +
-      '</div></div>' +
+      '</div>' +
+      // The build carries no Developer ID yet, so macOS blocks the first launch
+      // and offers no obvious way through. Without this line that warning reads
+      // as a broken download, and people bin the app instead of opening it.
+      // Not "right-click → Open": macOS 15 removed that bypass for unsigned
+      // apps, and Privacy & Security is the only route left on 15 and later.
+      '<p class="tma-dash__account-promo-note" data-desktop-note hidden>' +
+      'macOS blocks the first launch — allow it in System Settings → Privacy &amp; Security.</p>' +
+      '</div>' +
       '<img class="tma-dash__account-promo-art" src="' + ILLUSTRATIONS + 'Illustration18.svg" alt="" width="100" height="75" decoding="async">' +
       '</section>';
   }

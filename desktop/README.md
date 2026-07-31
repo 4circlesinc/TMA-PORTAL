@@ -124,7 +124,8 @@ extraction — against whatever is in `release/`, over a local server.
 
 ## Signing
 
-Set these before `npm run dist` and the build signs and notarizes itself:
+Set these before `npm run dist`, **and delete `mac.identity: null` from
+package.json**, and the build signs and notarizes itself:
 
 ```
 export CSC_LINK=/path/to/DeveloperID.p12
@@ -134,7 +135,68 @@ export APPLE_APP_SPECIFIC_PASSWORD=…
 export APPLE_TEAM_ID=…
 ```
 
-Without them the build is unsigned, and first launch needs right-click → Open.
+That is the only way to make the app open without a warning. It needs a
+**Developer ID Application** certificate, which requires a paid Apple Developer
+Program membership. Nothing below is a substitute for it.
+
+### Why `identity: null` and `adhoc-sign.js` exist
+
+Two ways to ship an app macOS refuses to open, both of which shipped once:
+
+1. **No certificate at all.** electron-builder sees `hardenedRuntime: true`,
+   finds nothing to sign with, and silently skips signing — leaving the bundle
+   as the linker left it (`Sealed Resources=none`, `Info.plist=not bound`).
+   That is a *broken* signature, not a missing one, and macOS says
+   "…is damaged and can't be opened. You should move it to the Trash."
+   There is no way past that dialog. Release 0.7.0 shipped like this.
+
+2. **The wrong certificate.** With auto-discovery on, electron-builder grabs
+   whatever it finds in the keychain — here an **Apple Development** cert,
+   which is for running builds on your own registered machines and is not valid
+   for distribution. This one was also revoked, so `spctl` returned
+   `CSSMERR_TP_CERT_REVOKED`: same unbypassable "damaged" dialog.
+
+3. **Hardened runtime on an ad-hoc signature.** The first attempt at the fix
+   below signed ad-hoc but kept `--options runtime`. Hardened runtime enables
+   *library validation*, which requires every loaded library to share the main
+   process's Team ID — and ad-hoc has no Team ID. The app died in dyld:
+
+   ```
+   Library not loaded: @rpath/Electron Framework.framework/Electron Framework
+   … mapping process and mapped file (non-platform) have different Team IDs
+   ```
+
+   macOS shows that as "cannot be opened because of a problem". Shipped as 0.8.0.
+
+So `identity: null` stops electron-builder picking up a keychain cert on its
+own, and the `afterPack` hook in `adhoc-sign.js` signs the bundle ad-hoc,
+innermost-first, sealing resources and binding the Info.plist — with **no**
+hardened runtime and no entitlements, both of which only bite outside a real
+Developer ID build.
+
+### Verifying a build
+
+`codesign --verify --deep --strict` is **not sufficient** — failure 3 above
+passes it and still cannot launch. Check all three:
+
+```
+codesign --verify --deep --strict "release/mac-arm64/TM ANTOINE Portal.app"
+codesign -dv --verbose=2 "release/mac-arm64/TM ANTOINE Portal.app"   # want flags=0x2(adhoc)
+"release/mac-arm64/TM ANTOINE Portal.app/Contents/MacOS/TM ANTOINE Portal"
+```
+
+The third is the one that matters: run the binary directly and confirm it stays
+up with helper processes. `open` will *not* start an ad-hoc build — Gatekeeper
+blocks it — so `open` failing tells you nothing about whether the bundle works.
+The hook fails the build if the `runtime` flag is ever set again.
+
+### What users see on macOS 15 and later
+
+Right-click → Open no longer bypasses Gatekeeper for unsigned apps; Apple
+removed that in Sequoia. The only route is **System Settings → Privacy &
+Security → Open Anyway**, which the account page now tells people. Every user
+must do this once, on every macOS from 15 up. A Developer ID certificate is the
+only thing that removes the step.
 
 ## Builds are Apple Silicon only
 
