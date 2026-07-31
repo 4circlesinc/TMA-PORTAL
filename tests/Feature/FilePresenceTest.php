@@ -147,7 +147,8 @@ class FilePresenceTest extends TestCase
     public function test_someone_without_access_can_neither_join_nor_read_the_roster(): void
     {
         $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
-        $stranger = $this->user('Employee', 'sam@example.com', 'Sam Stranger');
+        // Firm-wide default means a colleague has access; a client does not.
+        $stranger = $this->user('Client', 'sam@example.com', 'Sam Stranger');
 
         $file = FileItem::create([
             'uuid' => (string) Str::uuid(), 'name' => 'Private.pdf', 'extension' => 'pdf',
@@ -164,7 +165,7 @@ class FilePresenceTest extends TestCase
     public function test_a_viewer_who_loses_access_leaves_the_roster(): void
     {
         $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
-        $guest = $this->user('Employee', 'gus@example.com', 'Gus Guest');
+        $guest = $this->user('Client', 'gus@example.com', 'Gus Guest');
 
         $file = FileItem::create([
             'uuid' => (string) Str::uuid(), 'name' => 'Private.pdf', 'extension' => 'pdf',

@@ -338,7 +338,8 @@ class FileWorkflowTest extends TestCase
     public function test_a_request_cannot_be_sent_to_someone_who_cannot_open_the_file(): void
     {
         $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
-        $stranger = $this->user('Employee', 'sam@example.com', 'Sam Stranger');
+        // A client cannot open an internal file, so cannot be asked to approve.
+        $stranger = $this->user('Client', 'sam@example.com', 'Sam Stranger');
 
         // A private file, not the org-shared one.
         $this->actingAs($owner)->post('/portal/files/files', [

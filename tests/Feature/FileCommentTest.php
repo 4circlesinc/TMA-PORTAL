@@ -126,8 +126,10 @@ class FileCommentTest extends TestCase
     public function test_a_mention_of_someone_without_access_is_dropped_silently(): void
     {
         $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
-        $file = $this->file($owner);                       // private to the owner
-        $stranger = $this->user('Employee', 'stranger@example.com', 'Sam Stranger');
+        $file = $this->file($owner);
+        // A client, not a colleague: files are firm-wide by default now, so a
+        // colleague is no longer an example of somebody without access.
+        $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
 
         $this->actingAs($owner)->postJson("/portal/files/files/{$file->uuid}/comments", [
             'body' => 'Sam Stranger take a look',
@@ -277,7 +279,7 @@ class FileCommentTest extends TestCase
     public function test_someone_without_file_access_cannot_read_or_write_comments(): void
     {
         $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
-        $stranger = $this->user('Employee', 'stranger@example.com', 'Sam Stranger');
+        $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $file = $this->file($owner);
 
         $this->actingAs($stranger)->getJson("/portal/files/files/{$file->uuid}/comments")->assertForbidden();
@@ -360,7 +362,7 @@ class FileCommentTest extends TestCase
     {
         $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
         $file = $this->file($owner);
-        $this->user('Employee', 'stranger@example.com', 'Sam Stranger');
+        $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $admin = $this->user('Administrator', 'admin@example.com', 'Ada Admin');
 
         $res = $this->actingAs($owner)

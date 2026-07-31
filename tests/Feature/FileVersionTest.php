@@ -307,7 +307,8 @@ class FileVersionTest extends TestCase
     public function test_a_stranger_cannot_read_version_history(): void
     {
         $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
-        $stranger = $this->user('Employee', 'stranger@example.com', 'Sam Stranger');
+        // A client: colleagues can read firm-wide files by default now.
+        $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $file = $this->uploadFile($owner);
 
         $this->actingAs($stranger)->getJson("/portal/files/files/{$file->uuid}/versions")->assertForbidden();
