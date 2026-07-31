@@ -173,7 +173,7 @@
       navId: 'folders-all',
       view: 'folders',
       title: it ? it.name : 'All Files',
-      crumb: it ? 'Folders / ' + it.name : 'Folders / All Files',
+      crumb: it ? 'File Library / ' + it.name : 'File Library / All Files',
       folderId: folderId,
     });
   }

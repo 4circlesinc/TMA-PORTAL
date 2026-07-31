@@ -75,5 +75,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('signing', function (Request $request) {
             return Limit::perMinute(60)->by($request->ip());
         });
+
+        // Invitation links are unauthenticated and one of them can create an
+        // account, so they are capped tighter than signing. A real invitee
+        // loads the page and submits once; anything past this is someone
+        // walking tokens.
+        RateLimiter::for('invitations', function (Request $request) {
+            return Limit::perMinute(20)->by($request->ip());
+        });
     }
 }

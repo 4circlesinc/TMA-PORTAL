@@ -3,129 +3,96 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
-use App\Models\ClientInvite;
-use App\Models\User;
+use App\Models\Invitation;
 use App\Support\Access\Role;
-use App\Support\Mail\Postcards;
+use App\Support\Activity\ActivityLogger;
+use App\Support\Invitations\Invitations;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Illuminate\View\View;
 
 /**
- * The client-connect flow: a staff member invites an existing client (who has
- * no login) to create a portal account, and the client accepts through a public
- * link that creates the account and links it to their client record + files.
+ * "Invite to portal" on a client record.
+ *
+ * This is a shortcut into the same machinery as InvitationController: the
+ * client hub already knows the name, email and client record, so the button
+ * only has to say which client. Everything else — the token, the email, the
+ * delivery record, the audit entry — is the shared invitation flow.
  */
 class ClientInviteController extends Controller
 {
-    private const STAFF = ['Administrator', 'Employee'];
-
-    private const EXPIRES_DAYS = 14;
-
-    /** Staff: create (or refresh) an invite for a client and email it. */
+    /** Create (or chase) the invitation for a client and email it. */
     public function send(Request $request, string $uid): JsonResponse
     {
-        abort_unless(Role::can($request->user(), 'clients.invite'), 403, 'Staff only.');
+        Role::authorize($request->user(), 'clients.invite');
 
         $client = Client::where('uid', $uid)->firstOrFail();
 
         abort_if($client->user_id !== null, 422, 'This client already has a portal account.');
-        abort_if(! $client->email, 422, 'Add an email to this client before inviting them.');
 
-        $invite = ClientInvite::firstOrNew([
+        $email = Str::lower(trim((string) ($request->input('email') ?: $client->email)));
+        abort_if($email === '', 422, 'Add an email to this client before inviting them.');
+
+        $existing = Invitation::query()
+            ->where('client_id', $client->id)
+            ->whereIn('status', Invitation::LIVE_STATUSES)
+            ->whereNull('accepted_at')
+            ->whereNull('cancelled_at')
+            ->first();
+
+        // A second press of the same button is a reminder, not a fresh ask.
+        $reminder = $existing !== null && $existing->send_count > 0;
+
+        [$invitation] = Invitations::issue([
+            'type' => $client->company_id ? Invitation::TYPE_COMPANY_MEMBER : Invitation::TYPE_CLIENT,
+            'email' => $email,
+            'name' => $client->name,
             'client_id' => $client->id,
-            'accepted_at' => null,
+            'company_id' => $client->company_id,
+            'role' => Role::CLIENT,
+            'invited_by' => $request->user()->id,
         ]);
-        // A second send of an existing invite is a reminder, not a first ask.
-        $isReminder = $invite->exists;
 
-        $invite->fill([
-            'email' => Str::lower($client->email),
-            'token' => $invite->token ?: ClientInvite::freshToken(),
-            'expires_at' => now()->addDays(self::EXPIRES_DAYS),
-            'last_sent_at' => now(),
-            'created_by' => $request->user()->id,
-        ])->save();
+        Invitations::send($invitation, $reminder);
 
-        $postcard = $isReminder
-            ? Postcards::clientInviteReminder($client->name, $this->url($invite))
-            : Postcards::clientInvite($client->name, $this->url($invite), $request->user()->name);
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'client.invitation',
+            'description' => $request->user()->name.($reminder ? ' resent the invitation to ' : ' invited ').$email
+                .($reminder ? '' : ' to the portal'),
+            'subject' => $invitation,
+            'client' => $client,
+            'metadata' => [
+                'invitationId' => $invitation->uuid,
+                'action' => $reminder ? 'resent' : 'sent',
+            ],
+        ]);
 
-        Mail::to($invite->email)->queue($postcard);
+        $fresh = $invitation->fresh();
 
-        return response()->json(['status' => 'ok']);
-    }
-
-    /** Public: the create-account page for a pending invite. */
-    public function show(string $token): View|RedirectResponse
-    {
-        $invite = ClientInvite::where('token', $token)->with('client')->first();
-
-        if (! $invite || ! $invite->isPending()) {
-            return redirect('/auth/login')->with('notice', 'invite-invalid');
-        }
-
-        return view('client-invite', [
-            'invite' => $invite,
-            'name' => $invite->client?->name,
-            'email' => $invite->email,
+        return response()->json([
+            'status' => 'ok',
+            'reminder' => $reminder,
+            'invitation' => Invitations::toRecord($fresh),
         ]);
     }
 
-    /** Public: accept the invite — create the account and link the client. */
-    public function store(Request $request, string $token): RedirectResponse
+    /** The live invitation for a client, for the client hub to show its state. */
+    public function status(Request $request, string $uid): JsonResponse
     {
-        $invite = ClientInvite::where('token', $token)->with('client')->first();
+        Role::authorize($request->user(), 'clients.view');
 
-        if (! $invite || ! $invite->isPending() || ! $invite->client) {
-            return redirect('/auth/login')->with('notice', 'invite-invalid');
-        }
+        $client = Client::where('uid', $uid)->firstOrFail();
 
-        $data = $request->validate([
-            'password' => ['required', 'confirmed', 'min:8'],
+        $invitation = Invitation::query()
+            ->where('client_id', $client->id)
+            ->with(['client', 'company', 'inviter'])
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            'hasAccount' => $client->user_id !== null,
+            'invitation' => $invitation ? Invitations::toRecord($invitation) : null,
         ]);
-
-        // A client may not already have an account, and the email must be free.
-        if ($invite->client->user_id || User::where('email', $invite->email)->exists()) {
-            return redirect('/auth/login')->with('notice', 'invite-invalid');
-        }
-
-        $name = $invite->client->name ?: $invite->email;
-        $parts = preg_split('/\s+/', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $first = array_shift($parts) ?: $name;
-        $last = count($parts) ? array_pop($parts) : null;
-
-        $user = new User([
-            'name' => $name,
-            'first_name' => $first,
-            'middle_name' => count($parts) ? implode(' ', $parts) : null,
-            'last_name' => $last,
-            'email' => $invite->email,
-            'password' => $data['password'],
-        ]);
-        $user->forceFill([
-            'email_verified_at' => now(),
-            'status' => 'approved',
-            'account_type' => 'Client',
-            'approved_at' => now(),
-        ])->save();
-
-        $invite->client->forceFill(['user_id' => $user->id])->save();
-        $invite->forceFill(['accepted_at' => now()])->save();
-
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect('/');
-    }
-
-    private function url(ClientInvite $invite): string
-    {
-        return url('/client-invite/'.$invite->token);
     }
 }

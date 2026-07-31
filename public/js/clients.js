@@ -76,7 +76,10 @@
 
   var PROFILE_TABS = [
     { id: 'info', label: 'Client info' },
-    { id: 'folders', label: 'Folders' },
+    // The panel lists this client's files, so it is labelled for its content.
+    // The id stays `folders` — it keys the panel, the tab state and the
+    // File Library folder it opens onto.
+    { id: 'folders', label: 'Documents' },
     { id: 'assigned', label: 'Assigned' },
   ];
 
@@ -302,7 +305,7 @@
       navId: 'folders-all',
       view: 'folders',
       title: contact ? contact.name : 'Client folder',
-      crumb: 'Folders / ' + (contact ? contact.name : 'Client'),
+      crumb: 'File Library / ' + (contact ? contact.name : 'Client'),
       folderId: uuid,
     });
   }
@@ -1747,7 +1750,7 @@
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="folders" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
       '<div class="tma-dash__clients-folders-head">' +
-      '<span class="tma-dash__clients-folders-title" data-clients-folder-crumbs>Client folder</span>' +
+      '<span class="tma-dash__clients-folders-title" data-clients-folder-crumbs>Client documents</span>' +
       (uuid
         ? '<div class="tma-dash__clients-folders-actions">' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-new>' +
@@ -1926,7 +1929,7 @@
     // Start a fresh drill path when opening a different client's folder; keep it
     // (so a switch to Client info and back stays put) for the same client.
     if (!clientFolderNav || clientFolderNav.rootUuid !== rootUuid) {
-      clientFolderNav = { rootUuid: rootUuid, path: [{ uuid: rootUuid, name: 'Client folder' }] };
+      clientFolderNav = { rootUuid: rootUuid, path: [{ uuid: rootUuid, name: 'Client documents' }] };
     }
     wrap.setAttribute('data-folder-uuid', clientFolderNav.path[clientFolderNav.path.length - 1].uuid);
     renderFolderCrumbs(root);

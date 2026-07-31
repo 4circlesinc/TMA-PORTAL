@@ -2301,7 +2301,7 @@
         activate(item.navId || 'folders-all', {
           view: 'folders',
           title: item.label || item.title || 'Files',
-          crumb: item.subtitle ? ('Folders / ' + item.subtitle) : 'Folders / All Files',
+          crumb: item.subtitle ? ('File Library / ' + item.subtitle) : 'File Library / All Files',
           folderId: item.folderId || null,
           fileId: item.fileId || null,
           keepDrawer: navOpts.keepDrawer,

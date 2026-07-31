@@ -424,6 +424,15 @@ node tests/Browser/notify-toasts.mjs
   actually measured, and none may be left at the em-dash the client falls back
   to when the metrics request fails. Needs the KPI fixture below — with an empty
   database the cards are *correctly* empty and the run proves nothing.
+- **`dashboard-messages.mjs`** — the home dashboard's Messages tile: the five
+  rows it shows have to be the *first five* the conversations API returns
+  (checked against the API in the same session, not against a fixture), each
+  carrying a name, an avatar — an initials tile where there is no photo, never a
+  stock face — and no row wider than the tile it sits in. It then turns the tile
+  off through Edit Dashboard, confirms it leaves the board, turns it back on,
+  and clicks a row: the Messages view must open *on that conversation*, which is
+  the whole point of the tile. Needs a staff account with a few conversations —
+  the messaging seed at the end of this file provides them.
 - **`sidebar-logo.mjs`** — which logo the sidebar shows. The rule is one
   sentence (open = wordmark, collapsed rail = mark) but there are four states
   across two sidebar styles, and the hover overlay was showing the mark while

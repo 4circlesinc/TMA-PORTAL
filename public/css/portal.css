@@ -1356,12 +1356,25 @@
   padding: 0 4px;
 }
 
-.tma-portal-panel--email > .tma-portal-panel__body {
+/* Messages — five rows, so it never needs to scroll. */
+.tma-portal-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-x: hidden;
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.tma-portal-panel--email > .tma-portal-panel__body,
+.tma-portal-panel--messages > .tma-portal-panel__body {
   min-height: 0;
 }
 
-/* Recent email rows on the home dashboard */
-.tma-portal-email-row {
+/* Recent email + recent chat rows on the home dashboard */
+.tma-portal-email-row,
+.tma-portal-chat-row {
   display: flex;
   align-items: flex-start;
   gap: var(--space-12);
@@ -1378,10 +1391,16 @@
   flex-shrink: 0;
 }
 
-.tma-portal-email-row:hover { background: var(--color-hover); }
+.tma-portal-email-row:hover,
+.tma-portal-chat-row:hover { background: var(--color-hover); }
 
-.tma-portal-email-row.is-unread .tma-portal-email-row__subject {
+.tma-portal-email-row.is-unread .tma-portal-email-row__subject,
+.tma-portal-chat-row.is-unread .tma-portal-chat-row__preview {
   font-weight: 700;
+}
+
+.tma-portal-chat-row.is-unread .tma-portal-chat-row__preview {
+  color: var(--color-black);
 }
 
 .tma-portal-email-row__avatar {
@@ -1393,7 +1412,54 @@
   background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
 }
 
-.tma-portal-email-row__meta {
+/* Wrapper, not the image itself: it carries the presence dot the Employees
+   board uses, so an online contact reads the same in both tiles. */
+.tma-portal-chat-row__avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.tma-portal-chat-row__avatar img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
+}
+
+.tma-portal-chat-row__avatar.is-online::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22a06b;
+  box-shadow: 0 0 0 2px var(--color-bg-card, #fff);
+}
+
+/* Same darker brand blue the Messages inbox counts use. */
+.tma-portal-chat-row__unread {
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-primary-dark);
+  color: var(--color-text-white);
+  font-size: var(--text-size-12);
+  line-height: 16px;
+}
+
+.tma-portal-email-row__meta,
+.tma-portal-chat-row__meta {
   min-width: 0;
   flex: 1;
   display: flex;
@@ -1401,7 +1467,8 @@
   gap: 2px;
 }
 
-.tma-portal-email-row__top {
+.tma-portal-email-row__top,
+.tma-portal-chat-row__top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -1409,7 +1476,8 @@
   min-width: 0;
 }
 
-.tma-portal-email-row__sender {
+.tma-portal-email-row__sender,
+.tma-portal-chat-row__name {
   font-size: var(--text-size-13, 13px);
   font-weight: 600;
   color: var(--color-black);
@@ -1419,14 +1487,16 @@
   min-width: 0;
 }
 
-.tma-portal-email-row__time {
+.tma-portal-email-row__time,
+.tma-portal-chat-row__time {
   flex-shrink: 0;
   font-size: 11px;
   color: var(--color-text-secondary);
 }
 
 .tma-portal-email-row__subject,
-.tma-portal-email-row__snippet {
+.tma-portal-email-row__snippet,
+.tma-portal-chat-row__preview {
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   white-space: nowrap;
@@ -1436,6 +1506,7 @@
 
 .tma-portal-email-row__subject { color: var(--color-black); }
 .tma-portal-email-row__snippet { color: var(--color-text-secondary); }
+.tma-portal-chat-row__preview { color: var(--color-text-secondary); }
 
 .tma-portal-employee {
   display: flex;
@@ -1540,7 +1611,8 @@
   color: var(--color-text-secondary);
 }
 
-:root[data-theme="dark"] .tma-portal-employee__avatar.is-online::after {
+:root[data-theme="dark"] .tma-portal-employee__avatar.is-online::after,
+:root[data-theme="dark"] .tma-portal-chat-row__avatar.is-online::after {
   box-shadow: 0 0 0 2px var(--color-bg-card, #1a1a1a);
 }
 :root[data-theme="dark"] .tma-portal-employee__badge--online,

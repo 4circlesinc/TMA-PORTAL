@@ -130,7 +130,7 @@
       openFolder(it.folder.id);
       return;
     }
-    navigate({ navId: 'folders-recent', view: 'folders', title: 'Recent', crumb: 'Folders / Recent' });
+    navigate({ navId: 'folders-recent', view: 'folders', title: 'Recent', crumb: 'File Library / Recent' });
   }
 
   /* ── default folders cards ─────────────────────────── */

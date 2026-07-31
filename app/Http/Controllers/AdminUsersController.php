@@ -6,11 +6,13 @@ use App\Models\AuthEvent;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\Folder;
+use App\Models\Invitation;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\WorkDay;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Invitations\Invitations;
 use App\Support\AvatarService;
 use App\Support\DeviceName;
 use App\Support\Files\FolderProvisioner;
@@ -128,6 +130,15 @@ class AdminUsersController extends Controller
         return response()->json(['count' => $count]);
     }
 
+    /**
+     * Invite someone to the portal.
+     *
+     * This used to create a live, approved account immediately and email a
+     * password-reset link, which meant the user directory filled with accounts
+     * belonging to people who had never accepted — with no way to see that, to
+     * chase it, or to withdraw it. It now issues a real Invitation: no account
+     * exists until the invitation is accepted.
+     */
     public function store(Request $request): JsonResponse
     {
         abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can invite users.');
@@ -137,38 +148,56 @@ class AdminUsersController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'account_type' => ['required', Rule::in(self::ACCOUNT_TYPES)],
             'phone' => ['nullable', 'string', 'max:32'],
+            'job_title' => ['nullable', 'string', 'max:120'],
+            'department' => ['nullable', 'string', 'max:120'],
+        ], [
+            'email.unique' => 'That email address already has an account.',
         ]);
 
-        $parts = preg_split('/\s+/', trim($data['name']), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $first = array_shift($parts) ?: $data['name'];
-        $last = count($parts) ? array_pop($parts) : null;
+        $email = Str::lower($data['email']);
 
-        $user = new User([
+        $duplicate = Invitation::query()
+            ->where('email', $email)
+            ->whereIn('status', Invitation::LIVE_STATUSES)
+            ->whereNull('accepted_at')
+            ->whereNull('cancelled_at')
+            ->exists();
+
+        abort_if($duplicate, 422, 'There is already a pending invitation for this address.');
+
+        [$invitation] = Invitations::issue([
+            'type' => $data['account_type'] === Role::CLIENT
+                ? Invitation::TYPE_CLIENT
+                : Invitation::TYPE_STAFF,
+            'email' => $email,
             'name' => $data['name'],
-            'first_name' => $first,
-            'middle_name' => count($parts) ? implode(' ', $parts) : null,
-            'last_name' => $last,
-            'email' => Str::lower($data['email']),
-            'phone' => $data['phone'] ?? null,
-            'password' => Str::password(32),
+            'role' => $data['account_type'],
+            'access' => array_filter([
+                'jobTitle' => $data['job_title'] ?? null,
+                'department' => $data['department'] ?? null,
+                'phone' => $data['phone'] ?? null,
+            ]),
+            'invited_by' => $request->user()->id,
         ]);
-        // Invited by an admin: pre-approved, address vouched for. They set
-        // their own password through the emailed invite (reset) link.
-        $user->forceFill([
-            'email_verified_at' => now(),
-            'password_auto' => true,
-            'status' => 'approved',
-            'account_type' => $data['account_type'],
-            'approved_at' => now(),
-            'approved_by' => $request->user()->id,
-        ])->save();
 
-        Password::broker()->sendResetLink(['email' => $user->email]);
+        Invitations::send($invitation);
 
-        $this->record($user->id, 'user_invited');
-        $this->maybeProvisionStaffFolder($user, $request->user());
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'user.invited',
+            'description' => $request->user()->name.' invited '.$email.' as '.$data['account_type'],
+            'subject' => $invitation,
+            'metadata' => [
+                'invitationId' => $invitation->uuid,
+                'role' => $data['account_type'],
+                'action' => 'sent',
+            ],
+        ]);
 
-        return response()->json(['status' => 'ok']);
+        return response()->json([
+            'status' => 'ok',
+            'invitation' => Invitations::toRecord($invitation->fresh()),
+        ]);
     }
 
     public function update(Request $request, User $user): JsonResponse

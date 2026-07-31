@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="css/table-b-sessions.css">
   <link rel="stylesheet" href="css/table.css">
   <link rel="stylesheet" href="css/table-a.css">
-  <link rel="stylesheet" href="css/portal.css?v=10">
+  <link rel="stylesheet" href="css/portal.css?v=11">
   <link rel="stylesheet" href="css/portal-files.css?v=5">
   <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=11">
   <link rel="stylesheet" href="css/feed.css?v=2">
@@ -105,17 +105,17 @@
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="folders" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--foldernotch" aria-hidden="true"></span>
-          <span>Folders</span>
+          <span>File Library</span>
         </button>
         <div class="tma-dash__subnav" data-subnav="folders" hidden>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/all" data-nav="folders-all" data-title="All Files" data-crumb="Folders / All Files" data-view="folders">All Files</a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/personal" data-nav="folders-personal" data-title="Personal Folders" data-crumb="Folders / Personal Folders" data-view="folders">Personal Folders</a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/shared" data-nav="folders-shared" data-title="Shared Folders" data-crumb="Folders / Shared Folders" data-view="folders">Shared Folders</a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/shared-with-me" data-nav="folders-sharedwithme" data-title="Shared with me" data-crumb="Folders / Shared with me" data-view="folders">Shared with me</a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/favorites" data-nav="folders-favorites" data-title="Favorites" data-crumb="Folders / Favorites" data-view="folders">Favorites</a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recent" data-nav="folders-recent" data-title="Recent" data-crumb="Folders / Recent" data-view="folders">Recent</a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/filebox" data-nav="folders-filebox" data-title="File Box" data-crumb="Folders / File Box" data-view="folders">File Box</a>
-          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recycle" data-nav="folders-recycle" data-title="Recycle Bin" data-crumb="Folders / Recycle Bin" data-view="folders">Recycle Bin</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/all" data-nav="folders-all" data-title="All Files" data-crumb="File Library / All Files" data-view="folders">All Files</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/personal" data-nav="folders-personal" data-title="Personal Folders" data-crumb="File Library / Personal Folders" data-view="folders">Personal Folders</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/shared" data-nav="folders-shared" data-title="Shared Folders" data-crumb="File Library / Shared Folders" data-view="folders">Shared Folders</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/shared-with-me" data-nav="folders-sharedwithme" data-title="Shared with me" data-crumb="File Library / Shared with me" data-view="folders">Shared with me</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/favorites" data-nav="folders-favorites" data-title="Favorites" data-crumb="File Library / Favorites" data-view="folders">Favorites</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recent" data-nav="folders-recent" data-title="Recent" data-crumb="File Library / Recent" data-view="folders">Recent</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/filebox" data-nav="folders-filebox" data-title="File Box" data-crumb="File Library / File Box" data-view="folders">File Box</a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/folders/recycle" data-nav="folders-recycle" data-title="Recycle Bin" data-crumb="File Library / Recycle Bin" data-view="folders">Recycle Bin</a>
         </div>
       </div>
 
@@ -424,8 +424,8 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="signatures" data-title="Signature requests" data-crumb="Signatures" data-view="signatures">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Signature.svg" alt=""><span>Signatures</span>
         </button>
-        <button type="button" class="tma-dash__mrow" data-mrow data-nav="folders-personal" data-title="Personal Folders" data-crumb="Folders / Personal Folders" data-view="folders">
-          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/FolderNotch.svg" alt=""><span>Folders</span>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="folders-personal" data-title="Personal Folders" data-crumb="File Library / Personal Folders" data-view="folders">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/FolderNotch.svg" alt=""><span>File Library</span>
         </button>
       </div>
 
@@ -534,7 +534,7 @@
     <script src="js/tabbar-indicator.js"></script>
   <script src="js/portal-data.js"></script>
   <script src="js/portal-views.js?v=2"></script>
-  <script src="js/portal-home.js?v=16"></script>
+  <script src="js/portal-home.js?v=17"></script>
   <script src="js/portal-projects.js"></script>
   <script src="js/portal-folders.js?v=2"></script>
   <script src="js/portal-work.js"></script>

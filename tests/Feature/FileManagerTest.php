@@ -19,9 +19,15 @@ class FileManagerTest extends TestCase
     {
         parent::setUp();
         // Isolate the file vault to a throwaway temp dir for the test run.
+        // `files_disk` must be pinned too: production now writes to R2
+        // (FILES_DISK=s3), and without this the vault assertions below look at
+        // a local root nothing was ever written to.
         $this->vaultRoot = sys_get_temp_dir().'/tma-vault-'.uniqid();
         @mkdir($this->vaultRoot, 0775, true);
-        config(['filesystems.disks.local.root' => $this->vaultRoot]);
+        config([
+            'filesystems.disks.local.root' => $this->vaultRoot,
+            'filesystems.files_disk' => 'local',
+        ]);
     }
 
     protected function tearDown(): void

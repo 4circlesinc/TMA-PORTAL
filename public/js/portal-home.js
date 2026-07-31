@@ -31,8 +31,8 @@
     { id: 'share-files', label: 'Share Files', icon: 'Share' },
     { id: 'request-files', label: 'Request Files', icon: 'DownloadSimple' },
     { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlus' },
-    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'Folders / Shared Folders' } },
-    { id: 'favorites', label: 'Favorites', icon: 'Star', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'Folders / Favorites' } },
+    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
+    { id: 'favorites', label: 'Favorites', icon: 'Star', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
     { id: 'feedback-approval', label: 'Feedback and Approval', icon: 'Checks', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Approval', crumb: 'Workflows / Feedback and Approval' } },
     { id: 'send-signature', label: 'Send for Signature', icon: 'Signature', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
   ];
@@ -450,6 +450,152 @@
     }
   }
 
+  /* Recent chats for the home dashboard — the top of the Messages list. */
+  var HOME_CHAT_LIMIT = 5;
+  var homeChatsLoaded = false;
+  var homeChats = null;
+  var homeChatsInflight = null;
+  var homeChatsTimer = null;
+
+  // Real photos only; where a conversation has none the initials tile stands
+  // in, exactly as the Messages list does.
+  function chatAvatarSrc(c) {
+    if (c.photo) return c.photo;
+    if (window.TMACurrentUser && window.TMACurrentUser.initialsFor) {
+      return window.TMACurrentUser.initialsFor(c.name || '?');
+    }
+    return '';
+  }
+
+  // What the row says under the name, in the order the Messages list uses:
+  // an unsent draft, then a reaction, then the last message itself.
+  function chatPreview(c) {
+    if (c.draft) return 'Draft: ' + c.draft;
+    if (c.reactionNote) return c.reactionNote;
+    return c.preview || '';
+  }
+
+  function renderChats() {
+    if (!homeChatsLoaded) {
+      return tileShell(
+        'messages', 'panel-messages', 'Messages', panelHead('Messages'),
+        skeletonFileRows(4), 'tma-portal-panel--messages', true
+      );
+    }
+
+    var chats = (homeChats && homeChats.chats) || [];
+    var unreadTotal = chats.reduce(function (n, c) {
+      return n + Math.max(0, parseInt(c.unread, 10) || 0);
+    }, 0);
+
+    var rows = chats.map(function (c) {
+      var unread = Math.max(0, parseInt(c.unread, 10) || 0);
+      var online = !!(c.presence && c.presence.online);
+      return '<button type="button" class="tma-portal-chat-row' +
+        (unread || c.markedUnread ? ' is-unread' : '') + '"' +
+        ' data-key="chat-' + ui().esc(c.id) + '"' +
+        ' data-home-chat="' + ui().esc(c.id) + '">' +
+        '<span class="tma-portal-chat-row__avatar' + (online ? ' is-online' : '') + '">' +
+        '<img src="' + ui().esc(chatAvatarSrc(c)) + '" alt="" width="32" height="32" loading="lazy">' +
+        '</span>' +
+        '<span class="tma-portal-chat-row__meta">' +
+        '<span class="tma-portal-chat-row__top">' +
+        '<span class="tma-portal-chat-row__name">' + ui().esc(c.name || 'Chat') + '</span>' +
+        '<span class="tma-portal-chat-row__time">' + ui().esc(c.time || '') + '</span>' +
+        '</span>' +
+        '<span class="tma-portal-chat-row__preview">' + ui().esc(chatPreview(c)) + '</span>' +
+        '</span>' +
+        (unread
+          ? '<span class="tma-portal-chat-row__unread">' + (unread > 99 ? '99+' : unread) + '</span>'
+          : '') +
+        '</button>';
+    }).join('');
+
+    return tileShell(
+      'messages', 'panel-messages', 'Messages',
+      panelHead('Messages', unreadTotal ? unreadTotal + ' unread' : ''),
+      rows
+        ? '<div class="tma-portal-chat-list">' + rows + '</div>'
+        : '<p class="tma-portal-panel__note">No conversations yet.</p>' +
+          '<button type="button" class="tma-portal-link" data-home-chat-open>Open Messages</button>',
+      'tma-portal-panel--messages'
+    );
+  }
+
+  function chatsPayloadSignature(payload) {
+    if (!payload) return '';
+    return (payload.chats || []).map(function (c) {
+      return [
+        c.id, c.unread || 0, c.markedUnread ? 1 : 0, c.time || '',
+        chatPreview(c), (c.presence && c.presence.online) ? 1 : 0,
+      ].join(':');
+    }).join('|');
+  }
+
+  function loadHomeChats(el, opts) {
+    opts = opts || {};
+    if (homeChatsInflight) return;
+
+    function finish(payload) {
+      homeChatsInflight = null;
+      var changed = !homeChatsLoaded ||
+        chatsPayloadSignature(payload) !== chatsPayloadSignature(homeChats);
+      homeChatsLoaded = true;
+      homeChats = payload;
+      if (changed && el && el.isConnected) mount(el, { fromLoad: true });
+    }
+
+    homeChatsInflight = fetch('/portal/messaging/conversations', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (json) {
+        if (!json || !Array.isArray(json.conversations)) {
+          // A failed refresh keeps the rows already on screen rather than
+          // blanking the tile.
+          finish({ chats: (homeChats && homeChats.chats) || [] });
+          return;
+        }
+        // Archived chats are off the Messages list, so they are off this tile
+        // too. The server already sorts pinned first, then by recency.
+        finish({
+          chats: json.conversations.filter(function (c) { return !c.archived; })
+            .slice(0, HOME_CHAT_LIMIT),
+        });
+      })
+      .catch(function () {
+        homeChatsInflight = null;
+        if (!homeChatsLoaded) {
+          homeChatsLoaded = true;
+          homeChats = { chats: [] };
+          if (el && el.isConnected) mount(el, { fromLoad: true });
+        }
+      });
+
+    // Messaging has no shell-wide realtime listener — only the Messages view
+    // subscribes — so the tile polls while the dashboard is open.
+    if (!homeChatsTimer && !opts.skipTimer) {
+      homeChatsTimer = setInterval(function () {
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        if (document.visibilityState === 'hidden') return;
+        if (homeChatsInflight) return;
+        loadHomeChats(mountEl, { skipTimer: true });
+      }, 60000);
+    }
+
+    if (!window.__tmaHomeChatsLiveBound) {
+      window.__tmaHomeChatsLiveBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return;
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        loadHomeChats(mountEl, { skipTimer: true });
+      });
+    }
+  }
+
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
     return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road tma-portal-tile--third"' +
@@ -461,6 +607,7 @@
   function renderHomeGrid(s, show) {
     var renderers = {
       email: function () { return show.email !== false ? renderEmail() : ''; },
+      messages: function () { return show.messages !== false ? renderChats() : ''; },
       recentFiles: function () { return show.recentFiles ? renderRecentFiles(s) : ''; },
       shortcuts: function () { return show.shortcuts ? renderShortcuts() : ''; },
       employees: function () { return show.employees !== false ? renderEmployees() : ''; },
@@ -623,6 +770,7 @@
   var DASH_TILES = [
     { id: 'recentFiles', label: 'Recent Files', desc: 'Files you last accessed across all of your devices.', preview: 'files' },
     { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email' },
+    { id: 'messages', label: 'Messages', desc: 'Your five most recent chats, with unread counts.', preview: 'messages' },
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
     { id: 'favorites', label: 'Favorites', desc: 'Files and folders you marked as favorite.', preview: 'favorites' },
@@ -634,8 +782,9 @@
   //   Recent Files → Favorites
   //   Recent Email → What's on the road?
   //   Shortcuts → Employees
+  // Messages then lands in whichever column is shortest.
   // Tutorials stays off by default.
-  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees', 'tutorials'];
+  var DEFAULT_TILE_ORDER = ['recentFiles', 'email', 'shortcuts', 'favorites', 'road', 'employees', 'messages', 'tutorials'];
 
   // Every tile is one column of the 3-up board — nothing spans full width.
   var TILE_SPAN = {
@@ -643,6 +792,7 @@
     favorites: 'third',
     employees: 'third',
     email: 'third',
+    messages: 'third',
     tutorials: 'third',
     shortcuts: 'third',
     road: 'third',
@@ -952,7 +1102,7 @@
 
   // Bump when the shipped default board changes. Applies once per browser, then
   // the account save keeps every other browser in sync.
-  var DASHBOARD_LAYOUT_GEN = 10;
+  var DASHBOARD_LAYOUT_GEN = 11;
 
   function ensureLocalDefaultLayout() {
     var s = data().state();
@@ -962,7 +1112,7 @@
     s.dashboardTileOrder = DEFAULT_TILE_ORDER.slice();
     s.dashboardTiles = Object.assign({}, s.dashboardTiles || {}, {
       recentFiles: true, email: true, shortcuts: true, employees: true,
-      favorites: true, road: true, tutorials: false,
+      favorites: true, road: true, messages: true, tutorials: false,
     });
     s.dashboardLayoutGen = DASHBOARD_LAYOUT_GEN;
     data().save();
@@ -1039,6 +1189,7 @@
     }
     if (s.dashboardTiles.employees == null) s.dashboardTiles.employees = true;
     if (s.dashboardTiles.email == null) s.dashboardTiles.email = true;
+    if (s.dashboardTiles.messages == null) s.dashboardTiles.messages = true;
     if (s.dashboardTiles.road == null) s.dashboardTiles.road = true;
     return s.dashboardTiles;
   }
@@ -1075,7 +1226,7 @@
         '<span class="tma-portal-tilerow__preview-grid">' +
         new Array(8 + 1).join('<span class="tma-portal-tilerow__preview-circle"></span>') +
         '</span>';
-    } else if (kind === 'employees' || kind === 'email') {
+    } else if (kind === 'employees' || kind === 'email' || kind === 'messages') {
       inner = '<span class="tma-portal-tilerow__preview-bar tma-portal-tilerow__preview-bar--title"></span>';
       for (var e = 0; e < 3; e++) {
         inner += '<span class="tma-portal-tilerow__preview-line">' +
@@ -1498,7 +1649,7 @@
         var folderId = b.getAttribute('data-home-file-folder');
         navigate(folderId
           ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
-          : { navId: 'folders-filebox', view: 'folders', title: 'File Box', crumb: 'Folders / File Box' });
+          : { navId: 'folders-filebox', view: 'folders', title: 'File Box', crumb: 'File Library / File Box' });
       });
     });
 
@@ -1513,7 +1664,7 @@
           var folderId = b.getAttribute('data-home-favorite-folder');
           navigate(folderId
             ? { navId: 'folders-all', view: 'folders', title: 'Folders', crumb: 'Folders', folderId: folderId }
-            : { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'Folders / Favorites' });
+            : { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' });
         }
       });
     });
@@ -1547,6 +1698,25 @@
       });
     });
 
+    pick('[data-home-chat]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-home-chat');
+        navigate({
+          navId: 'so-messages',
+          view: 'messages',
+          title: 'Messages',
+          crumb: 'Messages',
+          openConversationId: id || null,
+        });
+      });
+    });
+
+    pick('[data-home-chat-open]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        navigate({ navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' });
+      });
+    });
+
     /* The greeting and avatar are rendered directly in the markup above when
      * TMACurrentUser is ready. When it isn't yet, the skeleton stands until
      * current-user.js's own listener fires and re-renders this view — no
@@ -1567,6 +1737,7 @@
       loadHomeMetrics(el);
       loadHomeStaff(el);
       loadHomeEmail(el);
+      loadHomeChats(el);
       if (window.TMAPortalHomeLibrary) {
         // Always force-refresh defaults when the dashboard is (re)opened so
         // newly adopted organization folders show up immediately.

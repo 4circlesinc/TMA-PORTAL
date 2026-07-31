@@ -84,7 +84,7 @@
                 <div style="font-size:15px;line-height:22px;color:{{ $INK }};text-align:left;">{!! $bodyHtml !!}</div>
               @endisset
 
-              @isset($details)
+              @if (! empty($details))
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
                   @foreach ($details as $row)
                     <tr>
@@ -93,7 +93,7 @@
                     </tr>
                   @endforeach
                 </table>
-              @endisset
+              @endif
 
               @isset($files)
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
@@ -135,6 +135,10 @@
                   <a href="{{ $helpUrl }}" style="color:{{ $BLUE }};text-decoration:none;">{{ $helpUrl }}</a>
                 </p>
               @endif
+
+              @isset($footNote)
+                <p style="margin:12px 0 0;font-size:13px;line-height:18px;color:{{ $MUTED }};">{!! $footNote !!}</p>
+              @endisset
 
               {{-- Footer --}}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:32px 0 0;border-top:1px solid {{ $LINE }};">

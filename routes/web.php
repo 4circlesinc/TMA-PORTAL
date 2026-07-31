@@ -11,6 +11,8 @@ use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientInviteController;
+use App\Http\Controllers\InvitationAcceptController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\CompaniesController;
 use App\Http\Controllers\ConnectorsController;
@@ -306,6 +308,22 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/{uid}/duplicate', [ClientsController::class, 'duplicate'])->name('duplicate');
         // Invite a client (with no login) to create a portal account.
         Route::post('/{uid}/invite', [ClientInviteController::class, 'send'])->name('invite');
+        Route::get('/{uid}/invite', [ClientInviteController::class, 'status'])->name('invite.status');
+    });
+
+    /*
+     * Invitation management: every outstanding, accepted, expired, failed and
+     * cancelled invitation, with the actions staff need to chase them.
+     */
+    Route::prefix('portal/invitations')->name('invitations.')->group(function () {
+        Route::get('/', [InvitationController::class, 'index'])->name('index');
+        Route::post('/', [InvitationController::class, 'store'])->name('store');
+        Route::get('/{uuid}', [InvitationController::class, 'show'])->name('show');
+        Route::post('/{uuid}/resend', [InvitationController::class, 'resend'])->name('resend');
+        Route::post('/{uuid}/link', [InvitationController::class, 'link'])->name('link');
+        Route::post('/{uuid}/cancel', [InvitationController::class, 'cancel'])->name('cancel');
+        Route::patch('/{uuid}/recipient', [InvitationController::class, 'updateRecipient'])->name('recipient');
+        Route::delete('/{uuid}', [InvitationController::class, 'destroy'])->name('destroy');
     });
 
     Route::prefix('portal/companies')->name('companies.')->group(function () {
@@ -784,13 +802,30 @@ Route::get('/s/{token}/download', [PublicShareController::class, 'download'])->n
 Route::get('/s/{token}/file/{fileUuid}', [PublicShareController::class, 'file'])->name('share.file');
 
 /*
- * Client-connect: the public create-account flow from an emailed invite. No
- * login (that's the point); the token in the link is the only key.
+ * Invitations: the public accept flow from an emailed link. No login (that's
+ * the point) — the token in the link is the only key, and the controller
+ * re-checks it on every action. Throttled like the other public token routes,
+ * since these are unauthenticated and can create an account.
  */
-Route::get('/client-invite/{token}', [ClientInviteController::class, 'show'])
+Route::middleware('throttle:invitations')->group(function () {
+    Route::get('/invite/{token}', [InvitationAcceptController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]+')->name('invite.show');
+    Route::post('/invite/{token}', [InvitationAcceptController::class, 'register'])
+        ->where('token', '[A-Za-z0-9]+')->name('invite.register');
+    Route::post('/invite/{token}/accept', [InvitationAcceptController::class, 'accept'])
+        ->where('token', '[A-Za-z0-9]+')->name('invite.accept');
+    Route::post('/invite/{token}/decline', [InvitationAcceptController::class, 'decline'])
+        ->where('token', '[A-Za-z0-9]+')->name('invite.decline');
+    Route::post('/invite/{token}/signin', [InvitationAcceptController::class, 'signin'])
+        ->where('token', '[A-Za-z0-9]+')->name('invite.signin');
+});
+
+/*
+ * The address the first generation of client invitations was sent to. Kept so
+ * any link already in somebody's inbox still lands somewhere useful.
+ */
+Route::get('/client-invite/{token}', fn (string $token) => redirect('/invite/'.$token))
     ->where('token', '[A-Za-z0-9]+')->name('client-invite.show');
-Route::post('/client-invite/{token}', [ClientInviteController::class, 'store'])
-    ->where('token', '[A-Za-z0-9]+')->name('client-invite.store');
 
 /*
  * Email postcard gallery. A staff-only documentation site that renders every

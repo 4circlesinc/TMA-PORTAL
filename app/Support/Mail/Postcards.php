@@ -218,31 +218,193 @@ class Postcards
 
     // ------------------------------------------------------------- client invite
 
-    public static function clientInvite(?string $name, string $url, ?string $inviter = null): Postcard
-    {
-        return new Postcard('Connect to your files with '.self::SITE, [
-            'preheader' => 'Create your account to see the files we\'re working on together.',
+    /**
+     * The invitation a client receives when they are added to the portal.
+     *
+     * @param  bool  $hasAccount  true when the address already has a login, so
+     *                            the ask is "sign in and accept", not "sign up"
+     */
+    public static function clientInvite(
+        ?string $name,
+        string $url,
+        ?string $inviter = null,
+        ?\DateTimeInterface $expiresAt = null,
+        bool $hasAccount = false,
+    ): Postcard {
+        return new Postcard('You have been invited to the '.self::SITE.' portal', [
+            'preheader' => $hasAccount
+                ? 'Sign in to accept your invitation to the portal.'
+                : 'Create your account to see the files we\'re working on together.',
             'eyebrow' => 'You\'re invited',
-            'greeting' => $name ? "Hi {$name}," : 'Hello,',
-            'title' => 'Connect to your files',
-            'lead' => self::SITE.' has set up a secure space for you.',
-            'bodyHtml' => '<p>Create your account to see the files we\'re working on together, message us directly, and follow along as things progress — all in one place.</p>'
-                .'<p>Creating your account links it to your existing records with us automatically.</p>'
-                .($inviter ? '<p>This invitation was set up for you by '.e($inviter).'.</p>' : ''),
-            'button' => ['label' => 'Create your account', 'url' => $url],
+            'greeting' => $name ? "Hello {$name}," : 'Hello,',
+            'title' => $hasAccount ? 'Accept your invitation' : 'Connect to your files',
+            'lead' => ($inviter ? e($inviter).' has added you' : 'You have been added')
+                .' to the '.self::SITE.' portal.',
+            'bodyHtml' => '<p>Through the portal you can reach your bookings, events, files, documents, contracts, invoices and updates — all in one place.</p>'
+                .($hasAccount
+                    ? '<p>You already have an account with this email address, so just sign in and the invitation will be added to it.</p>'
+                    : '<p>Creating your account links it to your existing records with us automatically.</p>'),
+            'details' => self::expiryDetails($expiresAt),
+            'button' => [
+                'label' => $hasAccount ? 'Sign in and accept' : 'Create your account',
+                'url' => $url,
+            ],
+            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
         ]);
     }
 
-    public static function clientInviteReminder(?string $name, string $url): Postcard
-    {
-        return new Postcard('Reminder: finish connecting to your files', [
+    public static function clientInviteReminder(
+        ?string $name,
+        string $url,
+        ?\DateTimeInterface $expiresAt = null,
+    ): Postcard {
+        return new Postcard('Reminder: your '.self::SITE.' invitation is waiting', [
             'preheader' => 'Your invitation is still waiting — it takes about a minute.',
-            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+            'greeting' => $name ? "Hello {$name}," : 'Hello,',
             'title' => 'Your invitation is still waiting',
             'lead' => 'Setting up your account takes about a minute.',
             'bodyHtml' => '<p>A little while ago we invited you to connect to your files with '.self::SITE.'. Your secure space is ready whenever you are.</p>',
+            'details' => self::expiryDetails($expiresAt),
             'button' => ['label' => 'Finish setting up', 'url' => $url],
         ]);
+    }
+
+    /** The invitation a new staff member receives. */
+    public static function staffInvite(
+        ?string $name,
+        string $url,
+        string $role,
+        ?string $inviter = null,
+        ?\DateTimeInterface $expiresAt = null,
+        ?string $department = null,
+        bool $hasAccount = false,
+    ): Postcard {
+        $details = [['Role', e($role)]];
+        if ($department) {
+            $details[] = ['Department', e($department)];
+        }
+        $details = array_merge($details, self::expiryDetails($expiresAt));
+
+        return new Postcard('You have been invited to join '.self::SITE, [
+            'preheader' => 'Set up your account to get started.',
+            'eyebrow' => 'You\'re invited',
+            'greeting' => $name ? "Hello {$name}," : 'Hello,',
+            'title' => 'Join the '.self::SITE.' team',
+            'lead' => ($inviter ? e($inviter).' has invited you' : 'You have been invited')
+                .' to join '.self::SITE.' on the portal.',
+            'bodyHtml' => '<p>The portal is where the team works with clients — files, documents, signatures, calendars, messages and email in one place.</p>'
+                .($hasAccount
+                    ? '<p>You already have an account with this email address, so just sign in and your new access will be added to it.</p>'
+                    : '<p>Use the button below to set up your account and choose a password.</p>'),
+            'details' => $details,
+            'button' => [
+                'label' => $hasAccount ? 'Sign in and accept' : 'Set up your account',
+                'url' => $url,
+            ],
+            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
+        ]);
+    }
+
+    /** The invitation someone receives when added to a company account. */
+    public static function companyMemberInvite(
+        ?string $name,
+        string $companyName,
+        string $url,
+        string $companyRole,
+        ?string $inviter = null,
+        ?\DateTimeInterface $expiresAt = null,
+        bool $hasAccount = false,
+    ): Postcard {
+        return new Postcard('You have been added to '.$companyName.' on '.self::SITE, [
+            'preheader' => 'Your company access is ready.',
+            'eyebrow' => 'Company access',
+            'greeting' => $name ? "Hello {$name}," : 'Hello,',
+            'title' => 'You have been added to '.$companyName,
+            'lead' => ($inviter ? e($inviter).' has added you' : 'You have been added')
+                .' as a member of '.e($companyName).' on the '.self::SITE.' portal.',
+            'bodyHtml' => '<p>Your access may include company bookings, events, files, contracts, invoices and updates, based on the permissions set for your role.</p>'
+                .($hasAccount
+                    ? '<p>You already have an account with this email address, so just sign in and this company will be added to it.</p>'
+                    : '<p>Use the button below to create your account and get started.</p>'),
+            'details' => array_merge(
+                [['Company', e($companyName)], ['Your role', e($companyRole)]],
+                self::expiryDetails($expiresAt),
+            ),
+            'button' => ['label' => 'Access company portal', 'url' => $url],
+            'footNote' => 'If you weren\'t expecting this invitation you can ignore this email, or contact us at support@tmantoine.com.',
+        ]);
+    }
+
+    /** Told to a staff member when they are assigned to a client. */
+    public static function staffAssignedToClient(
+        string $staffName,
+        string $clientName,
+        string $roleLabel,
+        ?string $assigner,
+        string $url,
+        bool $isPrimary = false,
+    ): Postcard {
+        return new Postcard('You have been assigned to '.$clientName, [
+            'preheader' => 'A client has been assigned to you.',
+            'eyebrow' => 'Client assignment',
+            'greeting' => "Hello {$staffName},",
+            'title' => 'You are now working with '.$clientName,
+            'lead' => ($assigner ? e($assigner).' assigned you' : 'You have been assigned')
+                .' to '.e($clientName).'.',
+            'details' => array_filter([
+                ['Client', e($clientName)],
+                ['Your role', e($roleLabel)],
+                $isPrimary ? ['Primary contact', 'Yes'] : null,
+            ]),
+            'button' => ['label' => 'Open the client', 'url' => $url],
+        ]);
+    }
+
+    /** Told to a client when a staff member becomes their contact. */
+    public static function clientStaffAssigned(
+        ?string $clientName,
+        string $staffName,
+        ?string $staffTitle,
+        string $url,
+    ): Postcard {
+        return new Postcard($staffName.' is now your contact at '.self::SITE, [
+            'preheader' => 'Say hello to your point of contact.',
+            'eyebrow' => 'Your team',
+            'greeting' => $clientName ? "Hello {$clientName}," : 'Hello,',
+            'title' => 'Meet your point of contact',
+            'lead' => e($staffName).' will be looking after your work with '.self::SITE.'.',
+            'bodyHtml' => '<p>You can reach them through the portal at any time — messages, files and updates all stay in one place.</p>',
+            'details' => array_filter([
+                ['Contact', e($staffName)],
+                $staffTitle ? ['Role', e($staffTitle)] : null,
+            ]),
+            'button' => ['label' => 'Open the portal', 'url' => $url],
+        ]);
+    }
+
+    /** Told to the inviter once someone accepts. */
+    public static function invitationAccepted(
+        string $recipientName,
+        string $whoAccepted,
+        string $whatFor,
+        string $url,
+    ): Postcard {
+        return new Postcard($whoAccepted.' has joined the portal', [
+            'preheader' => 'Your invitation was accepted.',
+            'eyebrow' => 'Invitation accepted',
+            'greeting' => "Hello {$recipientName},",
+            'title' => $whoAccepted.' has joined',
+            'lead' => e($whoAccepted).' accepted their invitation and now has access to '.e($whatFor).'.',
+            'button' => ['label' => 'Open the portal', 'url' => $url],
+        ]);
+    }
+
+    /** The "expires on" row shared by every invitation email. */
+    private static function expiryDetails(?\DateTimeInterface $expiresAt): array
+    {
+        return $expiresAt
+            ? [['Expires', $expiresAt->format('j M Y, g:i A')]]
+            : [];
     }
 
     // --------------------------------------------------------------------- files
