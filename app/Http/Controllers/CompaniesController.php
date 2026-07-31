@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -123,6 +124,8 @@ class CompaniesController extends Controller
         $this->authorizeStaff($request);
 
         $company = Company::where('uid', $uid)->firstOrFail();
+        // Settle the access first, while the company still exists to log it.
+        AccessSync::companyArchived($company, $request->user());
         // People stay; they just become unattached.
         $company->clients()->update(['company_id' => null]);
         $company->delete();

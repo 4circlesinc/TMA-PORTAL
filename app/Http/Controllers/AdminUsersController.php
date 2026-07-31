@@ -10,6 +10,7 @@ use App\Models\Invitation;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\WorkDay;
+use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
@@ -463,6 +464,10 @@ class AdminUsersController extends Controller
 
         // End their sessions immediately.
         DB::table('sessions')->where('user_id', $user->id)->delete();
+
+        // …and every grant that hangs off the account. Ending the session only
+        // stops the current visit; the assignments would still be waiting.
+        AccessSync::userSuspended($user, $request->user());
 
         $this->record($user->id, 'account_suspended');
 

@@ -134,10 +134,49 @@ class PeopleController extends Controller
     {
         $user = $this->authorizeView($request);
 
+        // `status` turns this screen into the full invitation management area:
+        // by default it answers its original question ("who hasn't activated?"),
+        // and a status filter opens up the accepted, expired, failed and
+        // cancelled invitations that used to be invisible here.
+        $status = (string) $request->query('status', 'waiting');
+
         return response()->json([
-            'prospects' => $this->prospectRecords()->values(),
+            'prospects' => $this->prospectRecords($status)->values(),
+            'counts' => $this->invitationCounts(),
             'capabilities' => $this->capabilities($user),
         ]);
+    }
+
+    /** How many invitations sit in each state, for the filter chips. */
+    private function invitationCounts(): array
+    {
+        $rows = Invitation::query()
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $n = fn (string $k) => (int) ($rows[$k] ?? 0);
+
+        // Counted the same way the filters select, so a chip never disagrees
+        // with the list it opens.
+        $lapsed = Invitation::query()
+            ->whereNull('accepted_at')->whereNull('cancelled_at')
+            ->whereNotNull('expires_at')->where('expires_at', '<', now())
+            ->count();
+
+        $live = Invitation::query()
+            ->whereNull('accepted_at')->whereNull('cancelled_at')
+            ->whereIn('status', Invitation::LIVE_STATUSES)
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
+            ->count();
+
+        return [
+            'waiting' => $live,
+            'accepted' => $n('accepted'),
+            'expired' => $lapsed + $n('expired'),
+            'failed' => $n('failed'),
+            'cancelled' => $n('cancelled'),
+        ];
     }
 
     /**
@@ -311,14 +350,37 @@ class PeopleController extends Controller
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function prospectRecords(): Collection
+    private function prospectRecords(string $status = 'waiting'): Collection
     {
-        $invites = Invitation::query()
-            ->whereNull('accepted_at')
-            ->whereNull('cancelled_at')
-            ->with('client:id,name,company,email')
-            ->orderByDesc('id')
-            ->get()
+        $query = Invitation::query()
+            ->with(['client:id,name,company,email', 'inviter:id,name'])
+            ->orderByDesc('id');
+
+        // `waiting` is this screen's original question: still outstanding.
+        // Everything else asks for one settled state.
+        // Expiry is a date, not an event: an invitation lapses without anything
+        // running, so `status` may still read `sent` on a row that is long past
+        // its date. Both filters therefore ask about the date, not the column,
+        // and syncExpiry() below settles the stored value afterwards.
+        $lapsed = fn ($q) => $q->whereNotNull('expires_at')->where('expires_at', '<', now());
+        $unsettled = fn ($q) => $q->whereNull('accepted_at')->whereNull('cancelled_at');
+
+        match ($status) {
+            'accepted' => $query->where('status', Invitation::STATUS_ACCEPTED),
+            'expired' => $query->where($unsettled)->where(function ($q) use ($lapsed) {
+                $q->where('status', Invitation::STATUS_EXPIRED)->orWhere($lapsed);
+            }),
+            'failed' => $query->where('status', Invitation::STATUS_FAILED),
+            'cancelled' => $query->where('status', Invitation::STATUS_CANCELLED),
+            'all' => null,
+            default => $query->where($unsettled)
+                ->whereIn('status', Invitation::LIVE_STATUSES)
+                // A lapsed invitation is no longer "still waiting".
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>=', now())),
+        };
+
+        $invites = $query->get()
+            ->each(fn (Invitation $i) => $i->syncExpiry())
             ->map(fn (Invitation $invite) => [
                 'id' => 'invite:'.$invite->id,
                 'source' => 'invite',
@@ -332,6 +394,21 @@ class PeopleController extends Controller
                 // A send that failed is the one thing this screen could never
                 // show before, and it is the reason most invitations stall.
                 'failed' => $invite->status === Invitation::STATUS_FAILED,
+                // Everything the management area needs to act on this row.
+                'invitationId' => $invite->uuid,
+                'status' => $invite->status,
+                'lastError' => $invite->last_error,
+                'sendCount' => $invite->send_count,
+                'expiresAt' => $invite->expires_at?->toIso8601String(),
+                'acceptedAt' => $invite->accepted_at?->toIso8601String(),
+                'cancelledAt' => $invite->cancelled_at?->toIso8601String(),
+                'invitedBy' => $invite->inviter?->name,
+                'canResend' => $invite->isAcceptable() || in_array(
+                    $invite->status,
+                    [Invitation::STATUS_EXPIRED, Invitation::STATUS_CANCELLED],
+                    true,
+                ),
+                'canCancel' => $invite->isAcceptable(),
             ]);
 
         $candidates = User::query()
@@ -365,7 +442,11 @@ class PeopleController extends Controller
                 'awaitingApproval' => $u->status === User::STATUS_PENDING,
             ]);
 
-        return $invites->concat($accounts)->values();
+        // The unused-account half only belongs to the outstanding view — an
+        // "accepted invitations" list should not be padded with dormant logins.
+        return in_array($status, ['waiting', 'all'], true)
+            ? $invites->concat($accounts)->values()
+            : $invites->values();
     }
 
     /** Never signed in: no login event has ever been recorded for them. */

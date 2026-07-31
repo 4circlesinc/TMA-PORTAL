@@ -59,6 +59,8 @@
     alpha: 'All',
     search: '',
     statusFilter: 'All employees',
+    // Which invitation states the Invitations screen is showing.
+    inviteView: 'waiting',
     selected: {},
     caps: { manageUsers: false, viewClients: false, manageGroups: false, viewGroups: false },
   };
@@ -126,8 +128,8 @@
         return { items: d.contacts || [] };
       }, force);
     } else if (key === 'prospects') {
-      load('prospects', '/portal/people/prospects', function (d) {
-        return { items: d.prospects || [] };
+      load('prospects', '/portal/people/prospects?status=' + encodeURIComponent(state.inviteView || 'waiting'), function (d) {
+        return { items: d.prospects || [], counts: d.counts || {} };
       }, force);
     } else if (key === 'shared' || key === 'personal') {
       var scope = key === 'shared' ? 'shared' : 'personal';
@@ -251,7 +253,7 @@
   var HOME_LINKS = [
     { nav: 'people-employees', screen: 'employees', title: 'Browse employees', desc: 'Manage employee accounts, permissions and personal folders.', icon: 'UserList', count: 'employees' },
     { nav: 'people-clients', screen: 'clients', title: 'Browse client contacts', desc: 'The client accounts that can sign in to the portal.', icon: 'AddressBook', count: 'clientContacts', cap: 'viewClients' },
-    { nav: 'people-prospects', screen: 'prospects', title: 'Browse prospects', desc: 'People invited to the portal who have not activated yet.', icon: 'UserCirclePlus', count: 'prospects', cap: 'viewClients' },
+    { nav: 'people-prospects', screen: 'prospects', title: 'Browse prospects', desc: 'Invitations and the people who have not activated yet.', icon: 'UserCirclePlus', count: 'prospects', cap: 'viewClients' },
     { nav: 'people-shared-address', screen: 'shared-address', title: 'Shared address book', desc: 'Account-wide contacts available to every employee.', icon: 'BookOpen', count: 'sharedContacts' },
     { nav: 'people-personal-address', screen: 'personal-address', title: 'Personal address book', desc: 'Your private contacts.', icon: 'Book', count: 'personalContacts' },
     { nav: 'people-groups', screen: 'groups', title: 'Distribution groups', desc: 'Send and share with many people at once.', icon: 'UsersThree', count: 'groups', cap: 'viewGroups' },
@@ -408,13 +410,70 @@
     );
   }
 
-  /* ── prospects ──────────────────────────────────── */
+  /* One call for every invitation action. `person.invitationId` is the uuid;
+     rows that are unused accounts rather than invitations never reach here. */
+  function invitationAction(person, path, method, body) {
+    var base = '/portal/invitations/' + encodeURIComponent(person.invitationId);
+    return net(base + (path ? '/' + path : ''), {
+      method: method,
+      body: body ? JSON.stringify(body) : undefined,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    });
+  }
+
+  /* ── prospects / invitation management ──────────── */
+
+  /* The states an invitation can be looked at in. `waiting` is this screen's
+     original question — who has not activated — and the rest open up the
+     settled invitations that used to be invisible here entirely. */
+  var INVITE_VIEWS = [
+    { value: 'waiting', label: 'Still waiting' },
+    { value: 'accepted', label: 'Accepted' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'failed', label: 'Failed to send' },
+    { value: 'cancelled', label: 'Cancelled' },
+    { value: 'all', label: 'All invitations' },
+  ];
+
+  var INVITE_STATUS_LABEL = {
+    pending: 'Queued',
+    sent: 'Sent',
+    delivered: 'Delivered',
+    opened: 'Opened',
+    accepted: 'Accepted',
+    expired: 'Expired',
+    cancelled: 'Cancelled',
+    failed: 'Failed to send',
+  };
+
+  function inviteStatusChip(p) {
+    if (p.source !== 'invite') {
+      return p.awaitingApproval ? chip('Awaiting approval') : chip('Never signed in');
+    }
+    if (p.expired) return chip('Expired');
+    return chip(INVITE_STATUS_LABEL[p.status] || p.status || 'Invited');
+  }
+
+  function shortDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
 
   function renderProspects() {
     var f = store.prospects;
+    var counts = f.counts || {};
 
-    var chrome = head('Browse prospects', 'Invited to the portal, not activated yet.') +
-      feedProblem(f) + ui().alphaFilter(state.alpha) + toolbar('Search prospects');
+    var right = '<span class="tma-portal-subtitle">Showing</span>' +
+      ui().select(INVITE_VIEWS.map(function (v) {
+        var n = counts[v.value];
+        return { value: v.value, label: v.label + (n ? ' (' + n + ')' : '') };
+      }), state.inviteView || 'waiting', 'data-people-invite-view', 'Invitation status');
+
+    // Titled to match the sidebar, which says Browse prospects in all 13 shells.
+    var chrome = head('Browse prospects', 'Everyone invited, and how far each invitation got.') +
+      feedProblem(f) + ui().alphaFilter(state.alpha) + toolbar('Search invitations', right);
 
     if (!f.loaded) return chrome + ui().loading({ count: 5 });
     if (f.error) return chrome;
@@ -423,23 +482,31 @@
     if (!list.length) {
       return chrome + ui().emptyState({
         illustration: 'Illustration14',
-        title: f.items.length ? 'No prospects match these filters' : 'Nobody is waiting to activate',
+        title: f.items.length ? 'Nothing matches these filters' : 'No invitations here',
         subtitle: f.items.length
-          ? 'Try a different letter or search.'
-          : 'People you invite appear here until they sign in for the first time.',
+          ? 'Try a different letter, search or status.'
+          : 'People you invite appear here with the state of their invitation.',
       });
     }
 
     var rows = list.map(function (p) {
-      var badge = p.expired
-        ? chip('Invitation expired')
-        : p.awaitingApproval ? chip('Awaiting approval') : chip('Invited');
+      // A failed send is the single most useful thing this screen can say, so
+      // the reason sits under the address rather than behind a menu.
+      var emailCell = esc(p.email) +
+        (p.status === 'failed' && p.lastError
+          ? '<br><span class="tma-portal-table__muted">' + esc(p.lastError) + '</span>'
+          : '');
+      var when = p.status === 'accepted'
+        ? (shortDate(p.acceptedAt) || p.invited || '—')
+        : (p.invited || '—');
+
       return '<tr data-people-row="' + esc(p.id) + '">' +
         nameCell(p) +
-        '<td class="tma-portal-table__muted">' + esc(p.email) + '</td>' +
+        '<td class="tma-portal-table__muted">' + emailCell + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(p.company || p.accountType || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(p.invited || '—') + '</td>' +
-        '<td>' + badge + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(p.invitedBy || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(when) + '</td>' +
+        '<td>' + inviteStatusChip(p) + '</td>' +
         (state.caps.manageUsers
           ? '<td>' + menuBtn('data-people-prospect-menu', p.id, 'Manage invitation for ' + (p.name || p.email)) + '</td>'
           : '<td></td>') +
@@ -447,7 +514,8 @@
     }).join('');
 
     return chrome + ui().table(
-      ['Name', 'Email', 'Company', 'Invited', 'Status', { html: '<span class="tma-portal-row-actions">Manage</span>' }],
+      ['Name', 'Email', 'Company', 'Invited by', 'When', 'Status',
+        { html: '<span class="tma-portal-row-actions">Manage</span>' }],
       rows
     );
   }
@@ -950,6 +1018,18 @@
       state.search = value;
       render();
     });
+    var inviteView = MORPH.unwiredOne(el, '[data-people-invite-view]');
+    if (inviteView) {
+      inviteView.addEventListener('change', function () {
+        state.inviteView = inviteView.value;
+        // The server decides which invitations belong to each view, so the
+        // list is refetched rather than filtered in the browser.
+        store.prospects.loaded = false;
+        reload('prospects');
+        render();
+      });
+    }
+
     var status = el.querySelector('[data-people-status]');
     MORPH.on(status, 'change', function () {
       state.statusFilter = status.value;
@@ -1050,10 +1130,50 @@
       var id = b.getAttribute('data-people-prospect-menu');
       var person = findPerson('prospects', id);
       if (!person) return;
-      ui().wireMenu(b, [
-        { label: person.source === 'invite' ? 'Resend invitation' : 'Resend activation email', action: 'welcome' },
-        { label: person.source === 'invite' ? 'Cancel invitation' : 'Remove account', action: 'cancel' },
-      ], function (item) {
+      var items = [];
+      if (person.source === 'invite') {
+        if (person.canResend !== false) items.push({ label: 'Resend invitation', action: 'welcome' });
+        if (person.canCancel) items.push({ label: 'Copy invitation link', action: 'link' });
+        if (person.canCancel) items.push({ label: 'Change email address', action: 'recipient' });
+        if (person.canCancel) items.push({ label: 'Cancel invitation', action: 'cancel' });
+        if (!person.canCancel) items.push({ label: 'Delete this record', action: 'purge' });
+      } else {
+        items.push({ label: 'Resend activation email', action: 'welcome' });
+        items.push({ label: 'Remove account', action: 'cancel' });
+      }
+
+      ui().wireMenu(b, items, function (item) {
+        if (item.action === 'link') {
+          invitationAction(person, 'link', 'POST').then(function (res) {
+            var url = res && res.url;
+            if (!url) return;
+            var done = function () { ui().toast('Link copied — it replaces any link already sent'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(url).then(done, function () { window.prompt('Invitation link', url); });
+            } else {
+              window.prompt('Invitation link', url);
+            }
+          }).catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t create a link.')); });
+          return;
+        }
+
+        if (item.action === 'recipient') {
+          var next = window.prompt('Send this invitation to a different address:', person.email);
+          if (!next || next === person.email) return;
+          invitationAction(person, 'recipient', 'PATCH', { email: next })
+            .then(function () { ui().toast('Invitation resent to ' + next); reload('prospects'); })
+            .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t change the address.')); });
+          return;
+        }
+
+        if (item.action === 'purge') {
+          if (!window.confirm('Delete the invitation record for ' + person.email + '?')) return;
+          invitationAction(person, '', 'DELETE')
+            .then(function () { ui().toast('Record deleted'); reload('prospects'); reload('summary'); })
+            .catch(function (e) { ui().toastError(errMsg(e, 'Couldn’t delete that.')); });
+          return;
+        }
+
         if (item.action === 'welcome') {
           sendWelcome(person.email).then(function () { reload('prospects'); }).catch(function () {});
         } else {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Access\AccessSync;
 use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
@@ -124,6 +125,9 @@ class ClientsController extends Controller
             'subject' => $client,
             'client' => $client,
         ]);
+        // Settle the access before the record goes: a soft-deleted client must
+        // not leave live assignments or an invitation somebody could accept.
+        AccessSync::clientArchived($client, $request->user());
         $client->delete();
 
         return response()->json(['status' => 'ok']);
