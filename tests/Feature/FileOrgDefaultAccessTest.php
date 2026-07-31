@@ -89,7 +89,11 @@ class FileOrgDefaultAccessTest extends TestCase
             'nor must one nested inside a client folder');
     }
 
-    public function test_a_personal_staff_folder_stays_private(): void
+    /**
+     * Decided by the firm: staff folders are a filing convenience, not a
+     * privacy boundary. They are firm-wide like everything else.
+     */
+    public function test_a_personal_staff_folder_is_also_firm_wide(): void
     {
         $olive = $this->user('Employee', 'olive@example.com');
         $ben = $this->user('Employee', 'ben@example.com');
@@ -99,17 +103,17 @@ class FileOrgDefaultAccessTest extends TestCase
         ]);
         $file = $this->file($olive, $personal);
 
-        $this->assertNull(FileAccess::fileRole($ben, $file));
+        $this->assertSame('downloader', FileAccess::fileRole($ben, $file));
     }
 
-    public function test_an_unfiled_upload_is_a_draft_not_a_publication(): void
+    public function test_an_unfiled_file_box_upload_is_also_firm_wide(): void
     {
         $olive = $this->user('Employee', 'olive@example.com');
         $ben = $this->user('Employee', 'ben@example.com');
 
         $file = $this->file($olive, null);   // File Box
 
-        $this->assertNull(FileAccess::fileRole($ben, $file));
+        $this->assertSame('downloader', FileAccess::fileRole($ben, $file));
     }
 
     /** Clients are staff-excluded, so this can never widen what they see. */

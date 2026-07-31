@@ -229,15 +229,15 @@ class AccessSources
         return $total === 1 ? 'Only you' : $total.' people';
     }
 
-    /** Mirrors FileAccess::organizationDefaultRole — same exclusions. */
+    /** Mirrors FileAccess::organizationDefaultRole — client folders only. */
     private static function orgDefaultApplies(FileItem $file): bool
     {
-        if (! \App\Models\FileLibrarySetting::defaultOrgAccess() || $file->folder_id === null) {
+        if (! \App\Models\FileLibrarySetting::defaultOrgAccess()) {
             return false;
         }
 
         foreach (self::chain($file->folder_id) as $folder) {
-            if (in_array($folder->folder_type, [Folder::TYPE_CLIENT, Folder::TYPE_STAFF], true)) {
+            if ($folder->folder_type === Folder::TYPE_CLIENT) {
                 return false;
             }
         }

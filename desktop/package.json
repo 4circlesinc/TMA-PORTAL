@@ -49,6 +49,7 @@
       ],
       "hardenedRuntime": true,
       "identity": null,
+      "minimumSystemVersion": "11.0",
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
       "extendInfo": {

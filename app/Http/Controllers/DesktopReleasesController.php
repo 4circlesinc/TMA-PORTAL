@@ -32,6 +32,19 @@ class DesktopReleasesController extends Controller
         'windows' => ['exe', 'msi', 'zip'],
     ];
 
+    /**
+     * Lowest OS each build runs on, so the download button can say so rather
+     * than letting someone install a app their Mac will refuse to open.
+     *
+     * Mirrors `mac.minimumSystemVersion` in desktop/package.json, which is what
+     * electron-builder writes into the bundle's LSMinimumSystemVersion — change
+     * both together. Reading it back out would mean opening a 94 MB DMG.
+     */
+    private const MIN_OS = [
+        'mac' => '11',
+        'windows' => '10',
+    ];
+
     private const TTL = 300;
 
     public function index(): JsonResponse
@@ -44,6 +57,7 @@ class DesktopReleasesController extends Controller
                 ? [
                     'available' => true,
                     'version' => $release['version'],
+                    'minOs' => self::MIN_OS[$platform],
                     'url' => route('desktop.download', $platform),
                 ]
                 : ['available' => false];

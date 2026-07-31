@@ -119,15 +119,29 @@ class FileViewerPanelTest extends TestCase
         $this->assertSame([], array_intersect($firstIds, $secondIds), 'a row appeared on both pages');
     }
 
-    public function test_a_user_without_access_cannot_read_activity_or_access(): void
+    /**
+     * Files are firm-wide by default now, so a colleague CAN read these — that
+     * is the intended behaviour. A client account still cannot, and that is the
+     * boundary worth guarding.
+     */
+    public function test_a_client_cannot_read_activity_or_access(): void
     {
         $owner = $this->user('Employee', 'owner@example.com');
-        $stranger = $this->user('Employee', 'stranger@example.com');
+        $client = $this->user('Client', 'client@example.com');
         $file = $this->file($owner);
 
-        $this->actingAs($stranger)->getJson("/portal/files/files/{$file->uuid}/activity")->assertForbidden();
-        $this->actingAs($stranger)->getJson("/portal/files/files/{$file->uuid}/access")->assertForbidden();
-        $this->actingAs($stranger)->getJson("/portal/files/files/{$file->uuid}/details")->assertForbidden();
+        $this->actingAs($client)->getJson("/portal/files/files/{$file->uuid}/activity")->assertForbidden();
+        $this->actingAs($client)->getJson("/portal/files/files/{$file->uuid}/access")->assertForbidden();
+        $this->actingAs($client)->getJson("/portal/files/files/{$file->uuid}/details")->assertForbidden();
+    }
+
+    public function test_a_colleague_can_read_a_firm_wide_file(): void
+    {
+        $owner = $this->user('Employee', 'owner@example.com');
+        $colleague = $this->user('Employee', 'colleague@example.com');
+        $file = $this->file($owner);
+
+        $this->actingAs($colleague)->getJson("/portal/files/files/{$file->uuid}/details")->assertOk();
     }
 
     public function test_access_reports_an_organization_folder_as_one_source_not_many_users(): void
@@ -224,7 +238,9 @@ class FileViewerPanelTest extends TestCase
 
         $emails = array_column($res->json('shared.all'), 'email');
         $this->assertSame(array_unique($emails), $emails, 'one face per person');
-        $this->assertSame('Only you', $res->json('shared.summary'));
+        // Firm-wide by default, so the summary names the firm rather than
+        // claiming the file is private.
+        $this->assertStringContainsString('Everyone in', $res->json('shared.summary'));
     }
 
     public function test_access_lists_specific_people_and_links_separately(): void

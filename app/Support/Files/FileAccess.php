@@ -75,18 +75,19 @@ class FileAccess
      * somebody remembers to share it is what pushes documents back into email.
      * Administrators can turn this off in File Library settings.
      *
-     * Three kinds of file are deliberately EXCLUDED, and this is the part that
-     * matters — getting it wrong would expose confidential material to the
-     * whole firm:
+     * Scope, decided by the firm (2026-07-31): **everything is firm-wide**,
+     * including personal staff folders and unfiled File Box uploads. Staff
+     * folders are a filing convenience here, not a privacy boundary.
+     *
+     * Exactly TWO things are still excluded, and both are load-bearing:
      *
      *  - **Clients are never covered.** `isStaff` excludes them, so this can
-     *    never widen what a client sees.
+     *    never widen what a client account sees.
      *  - **Anything under a client folder** stays limited to that client's
-     *    assigned team. A client's contracts are not firm-wide reading.
-     *  - **Anything under a personal staff folder** stays private to its owner.
-     *
-     * A file in the File Box (no folder at all) is also skipped: an unfiled
-     * upload is a draft, not a published document.
+     *    assigned team. §2 and §21 are explicit that client-private documents
+     *    are not shared with every organization member unless chosen, and a
+     *    client's contracts leaking firm-wide is a different order of mistake
+     *    from a colleague seeing a draft early.
      */
     private static function organizationDefaultRole(User $user, FileItem $file): ?string
     {
@@ -94,13 +95,8 @@ class FileAccess
             return null;
         }
 
-        // Unfiled uploads are drafts; they stay with their owner.
-        if ($file->folder_id === null) {
-            return null;
-        }
-
         foreach (self::chainFolders($file->folder_id) as $folder) {
-            if (in_array($folder->folder_type, [Folder::TYPE_CLIENT, Folder::TYPE_STAFF], true)) {
+            if ($folder->folder_type === Folder::TYPE_CLIENT) {
                 return null;
             }
         }

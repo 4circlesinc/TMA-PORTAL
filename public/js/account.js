@@ -170,18 +170,29 @@
       // four colours and would lose them to a mask, and Apple ships light grey
       // so it reads on the black pill.
       '<img class="tma-dash__account-promo-btn-icon" src="' + BRANDS + p.logo + '.svg" alt="" width="16" height="16">' +
-      '<span>' + esc(p.label) + '</span></a>';
+      // The OS floor is appended once the server answers, so the pill reads
+      // plainly if that fetch fails rather than claiming a version it guessed.
+      '<span data-desktop-label>' + esc(p.label) + '</span></a>';
   }
 
   function applyDesktopReleases(root, data) {
     (root || document).querySelectorAll('[data-desktop-download]').forEach(function (btn) {
-      var info = data && data[btn.getAttribute('data-desktop-download')];
+      var key = btn.getAttribute('data-desktop-download');
+      var info = data && data[key];
       var ready = !!(info && info.available);
+      var platform = DESKTOP_PLATFORMS.filter(function (p) { return p.key === key; })[0];
       btn.classList.toggle('is-disabled', !ready);
       btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
       btn.title = ready
-        ? 'Version ' + info.version
+        ? 'Version ' + info.version + ' — needs ' + platform.label + ' ' + info.minOs + ' or later'
         : 'No build published yet';
+
+      var label = btn.querySelector('[data-desktop-label]');
+      if (label && platform) {
+        label.textContent = ready && info.minOs
+          ? platform.label + ' ' + info.minOs + '+'
+          : platform.label;
+      }
     });
 
     var note = (root || document).querySelector('[data-desktop-note]');
