@@ -89,7 +89,35 @@ const ADMIN_ONLY = [
 const PERSONAL = ['profile', 'theme', 'time', 'notifications', 'privacy',
   'account-security', 'payment', 'plugins', 'connectors'];
 
+// Every nav item still in the sidebar, by its data-nav id. portal-access.js
+// *removes* the nodes rather than hiding them, so this is the real list.
+async function sidebarNav(page) {
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.waitForFunction(
+    () => document.documentElement.getAttribute('data-tma-access') === 'ready',
+    { timeout: 10000 },
+  );
+  await page.waitForTimeout(400);
+  return page.$$eval('.tma-dash__sidebar [data-nav]',
+    (els) => els.map((e) => e.getAttribute('data-nav')));
+}
+
 try {
+  /* ── the sidebar ────────────────────────────────────────────────── */
+  step(0, 'The Users page is gone from the employee sidebar');
+  const emp0 = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+  await signIn(emp0, EMPLOYEE);
+  const empNav = await sidebarNav(emp0);
+  // The account-management table — status, sign-in history, approve/suspend/
+  // delete per row. Employees browse colleagues through People instead.
+  check(!empNav.includes('users'), `"Users" is not in the sidebar (has: ${empNav.join(', ')})`);
+  check(!empNav.includes('dash-project-overview'), '"Admin Overview" is not in the sidebar');
+  check(empNav.includes('people-employees'), 'People → Browse employees survives the split');
+  check(empNav.includes('people-shared-address'), 'People → Shared address book survives the split');
+  check(empNav.includes('clients') && empNav.includes('email'),
+    'the staff tooling they do run is untouched');
+  await emp0.close();
+
   /* ── administrators keep everything ─────────────────────────────── */
   step(1, 'An administrator still sees the whole rail');
   const admin = await browser.newPage({ viewport: { width: 1500, height: 950 } });
@@ -184,6 +212,27 @@ try {
   await openSettings(client, 'account-security');
   const secBody = await client.locator('.tma-portal-admin__content').innerText();
   check(/password/i.test(secBody), 'Account security still renders for a client');
+
+  step(11, 'An administrator keeps the Users page and the directory search');
+  const adminNav = await sidebarNav(admin);
+  check(adminNav.includes('users'), '"Users" is still in the administrator sidebar');
+  check(adminNav.includes('dash-project-overview'), '"Admin Overview" is still there');
+
+  step(12, 'Searching for a colleague still works for both');
+  // People results used to be read from /admin/users, which is now closed to
+  // employees — the index has to fall back to the People directory or the
+  // search box quietly stops finding anyone.
+  for (const [who, page] of [['an employee', employee], ['an administrator', admin]]) {
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(800);
+    await page.click('[data-action="open-search"]');
+    await page.waitForSelector('[data-search-input]', { timeout: 5000 });
+    await page.fill('[data-search-input]', 'Test Admin');
+    await page.waitForTimeout(1200);
+    const hits = await page.locator('[data-search-body]').innerText();
+    check(/Test Admin/i.test(hits), `${who} can still find a colleague by name`);
+    await page.keyboard.press('Escape');
+  }
 } catch (e) {
   failures.push('threw: ' + e.message);
   log('\n!! ' + e.stack);

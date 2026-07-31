@@ -97,6 +97,17 @@ Artisan::command('files:workflow-maintenance', function () {
 
 Schedule::command('files:workflow-maintenance')->hourly()->withoutOverlapping();
 
+/*
+ * Drop file-presence rows whose tab stopped renewing. Staleness is already
+ * derived on read, so this is only about keeping the table small — the roster
+ * is correct with or without it.
+ */
+Artisan::command('files:prune-presence', function () {
+    $this->info('Removed '.App\Support\Files\Presence::prune().' stale presence session(s).');
+})->purpose('Remove file presence sessions that stopped sending heartbeats');
+
+Schedule::command('files:prune-presence')->everyThirtyMinutes();
+
 
 /*
  * Message attachments are uploaded and staged the moment they are chosen, so a

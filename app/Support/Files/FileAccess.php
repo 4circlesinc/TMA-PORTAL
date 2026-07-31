@@ -100,7 +100,11 @@ class FileAccess
         if ($folder->folder_type === Folder::TYPE_CLIENT
             && $folder->client_id !== null
             && self::isStaff($user)) {
-            $assignment = ClientAssignment::where('client_id', $folder->client_id)
+            // Ended assignments are kept as history, so this must ask for the
+            // live one — without the scope an expired row could be picked up
+            // and hand back access that was taken away.
+            $assignment = ClientAssignment::live()
+                ->where('client_id', $folder->client_id)
                 ->where('user_id', $user->id)
                 ->first();
 
@@ -130,7 +134,7 @@ class FileAccess
             ->pluck('id')->all();
 
         $clientIds = Folder::where('folder_type', Folder::TYPE_CLIENT)
-            ->whereIn('client_id', ClientAssignment::where('user_id', $user->id)->pluck('client_id'))
+            ->whereIn('client_id', ClientAssignment::live()->where('user_id', $user->id)->pluck('client_id'))
             ->pluck('id')->all();
 
         return array_values(array_unique([...$orgIds, ...$staffIds, ...$clientIds]));

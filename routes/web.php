@@ -37,6 +37,7 @@ use App\Http\Controllers\Files\BulkController;
 use App\Http\Controllers\Files\FavoriteController;
 use App\Http\Controllers\Files\FileCommentController;
 use App\Http\Controllers\Files\FileController;
+use App\Http\Controllers\Files\FilePresenceController;
 use App\Http\Controllers\Files\FileVersionController;
 use App\Http\Controllers\Files\FileViewerController;
 use App\Http\Controllers\Files\FileWorkflowController;
@@ -281,6 +282,12 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/files/{uuid}/workflows/{workflow}/delegate', [FileWorkflowController::class, 'delegate'])->name('workflows.delegate');
         Route::get('/files/{uuid}/workflows/{workflow}/history', [FileWorkflowController::class, 'history'])->name('workflows.history');
 
+        // Active viewers. Presence is a heartbeat, never an inference from
+        // past activity — see App\Support\Files\Presence.
+        Route::get('/files/{uuid}/presence', [FilePresenceController::class, 'index'])->name('presence.index');
+        Route::post('/files/{uuid}/presence', [FilePresenceController::class, 'store'])->name('presence.store');
+        Route::delete('/files/{uuid}/presence', [FilePresenceController::class, 'destroy'])->name('presence.destroy');
+
         Route::post('/uploads', [UploadController::class, 'init'])->name('uploads.init');
         Route::post('/uploads/{uuid}/chunk', [UploadController::class, 'chunk'])->name('uploads.chunk');
         Route::get('/uploads/{uuid}/status', [UploadController::class, 'status'])->name('uploads.status');
@@ -339,6 +346,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/assigned-to-me', [ClientAssignmentController::class, 'mine'])->name('assigned-to-me');
         Route::get('/{uid}/assignments', [ClientAssignmentController::class, 'index'])->name('assignments.index');
         Route::post('/{uid}/assignments', [ClientAssignmentController::class, 'store'])->name('assignments.store');
+        Route::patch('/{uid}/assignments/{userId}', [ClientAssignmentController::class, 'update'])->name('assignments.update');
+        Route::post('/{uid}/assignments/{userId}/reassign', [ClientAssignmentController::class, 'reassign'])->name('assignments.reassign');
         Route::delete('/{uid}/assignments/{userId}', [ClientAssignmentController::class, 'destroy'])->name('assignments.destroy');
         Route::get('/{uid}', [ClientsController::class, 'show'])->name('show');
         Route::patch('/{uid}', [ClientsController::class, 'update'])->name('update');

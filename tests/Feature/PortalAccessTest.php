@@ -60,10 +60,88 @@ class PortalAccessTest extends TestCase
         $this->assertTrue(Role::can($employee, 'mail.use'));
         $this->assertTrue(Role::can($employee, 'signatures.create'));
 
+        $this->assertFalse(Role::can($employee, 'users.view'));
+        $this->assertFalse(Role::can($employee, 'directory.view'));
+        $this->assertFalse(Role::can($employee, 'presence.view'));
+        $this->assertFalse(Role::can($employee, 'clients.viewAll'));
         $this->assertFalse(Role::can($employee, 'users.manage'));
         $this->assertFalse(Role::can($employee, 'clients.assign'));
         $this->assertFalse(Role::can($employee, 'settings.security'));
         $this->assertFalse(Role::can($employee, 'recyclebin.admin'));
+    }
+
+    /* ── the Users page ──────────────────────────────────────────────── */
+
+    public function test_the_users_page_is_administrators_only(): void
+    {
+        // It is the account-management table: every account's status and
+        // sign-in history, with approve / suspend / reset / delete on each
+        // row. `users.view` used to be granted to Employee *and* used to gate
+        // the People section, so closing one closed the other.
+        $this->actingAs($this->user(Role::EMPLOYEE))->get('/users')->assertNotFound();
+        $this->actingAs($this->user(Role::CLIENT))->get('/users')->assertNotFound();
+        $this->actingAs($this->user(Role::ADMINISTRATOR))->get('/users')->assertOk();
+    }
+
+    public function test_an_employee_cannot_read_the_account_table_through_the_api(): void
+    {
+        // The page 404s; this is the check that makes it more than cosmetic.
+        $this->actingAs($this->user(Role::EMPLOYEE))
+            ->getJson('/admin/users')
+            ->assertForbidden();
+
+        $this->actingAs($this->user(Role::ADMINISTRATOR))
+            ->getJson('/admin/users')
+            ->assertOk();
+    }
+
+    public function test_the_people_directory_is_administrators_only(): void
+    {
+        // Every screen in the section, including the two that carry a second
+        // capability — reopening `clients.view` must not reopen People.
+        foreach ([Role::EMPLOYEE, Role::CLIENT] as $accountType) {
+            $user = $this->user($accountType);
+
+            foreach (['people', 'people/employees', 'people/clients',
+                'people/prospects', 'people/shared-address-book',
+                'people/personal-address-book', 'people/distribution-groups'] as $page) {
+                $this->actingAs($user)->get('/'.$page)
+                    ->assertNotFound('/'.$page.' should be closed to a '.$accountType);
+            }
+
+            $this->actingAs($user)->getJson('/portal/people/employees')->assertForbidden();
+            $this->actingAs($user)->getJson('/portal/contacts')->assertForbidden();
+        }
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $this->actingAs($admin)->get('/people')->assertOk();
+        $this->actingAs($admin)->getJson('/portal/people/employees')->assertOk();
+    }
+
+    public function test_a_page_needing_two_capabilities_needs_both(): void
+    {
+        // people/clients is ['directory.view', 'clients.view']. An employee
+        // holds the second and not the first, which is exactly the case a
+        // single-capability map got wrong.
+        $this->assertSame(
+            ['directory.view', 'clients.view'],
+            Role::pageCapabilities('people/clients')
+        );
+
+        $employee = $this->user(Role::EMPLOYEE);
+        $this->assertTrue(Role::can($employee, 'clients.view'));
+        $this->assertFalse(Role::canViewPage($employee, 'people/clients'));
+    }
+
+    public function test_an_employee_no_longer_sees_colleague_presence(): void
+    {
+        // Degrades rather than 403s — the dashboard asks for this on every
+        // load, so a hard refusal would surface as a broken widget.
+        $this->actingAs($this->user(Role::EMPLOYEE))
+            ->getJson('/portal/dashboard/staff')
+            ->assertOk()
+            ->assertJsonPath('staff', false)
+            ->assertJsonPath('employees', []);
     }
 
     /* ── the account settings rail ───────────────────────────────────── */
@@ -175,7 +253,9 @@ class PortalAccessTest extends TestCase
     {
         $employee = $this->user(Role::EMPLOYEE);
 
-        foreach (['clients', 'users', 'email'] as $page) {
+        // 'users' is deliberately absent — that is the account-management
+        // table, not staff tooling. See the Users page tests above.
+        foreach (['clients', 'email', 'social/feed'] as $page) {
             $this->actingAs($employee)->get('/'.$page)->assertOk();
         }
     }

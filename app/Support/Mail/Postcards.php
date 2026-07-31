@@ -509,7 +509,9 @@ class Postcards
             'eyebrow' => 'Calendar',
             'greeting' => $name ? "Hi {$name}," : null,
             'details' => $details ?: null,
-            'quote' => ! empty($p['description']) ? e($p['description']) : null,
+            // Raw: the postcard template escapes `quote` itself now, so
+            // escaping here as well would show visitors "&amp;" and "&lt;".
+            'quote' => ! empty($p['description']) ? $p['description'] : null,
         ];
 
         [$payload['title'], $payload['lead'], $label] = match ($kind) {

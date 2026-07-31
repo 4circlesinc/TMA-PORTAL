@@ -173,6 +173,7 @@
   var contactsPromise = null;
   var usersCache = null;
   var usersPromise = null;
+  var usersCacheUrl = null;
 
   function mapClients(data) {
     return ((data && data.clients) || []).slice(0, 40).map(function (c) {
@@ -248,8 +249,27 @@
     });
   }
 
-  function mapUsers(data) {
-    return ((data && data.users) || []).map(function (u) {
+  /* People results come from whichever list the account may actually read.
+     `/admin/users` is the account-management table and `/portal/people/*` is
+     the directory; both are administration now, so an account holding neither
+     gets no colleague results rather than a row that 403s when opened. Client
+     results are unaffected — they come from /portal/clients, which scopes
+     itself to the reader's assignments. */
+  function usersSource() {
+    var access = window.TMAPortalAccess;
+    var can = access && access.can ? access.can : function () { return true; };
+
+    if (can('users.view')) {
+      return { url: '/admin/users', key: 'users', navId: 'users', view: 'users', href: '/users' };
+    }
+    if (can('directory.view')) {
+      return { url: '/portal/people/employees', key: 'employees', navId: 'people-employees', view: 'people', href: '/people/employees' };
+    }
+    return null;
+  }
+
+  function mapUsers(data, source) {
+    return ((data && data[source.key]) || []).map(function (u) {
       return {
         type: 'user',
         label: u.name || u.email || 'User',
@@ -257,21 +277,27 @@
         subtitle: u.email || u.jobTitle || 'User',
         avatarUrl: u.avatar || '',
         userId: u.id,
-        navId: 'users',
-        view: 'users',
-        href: '/users',
+        navId: source.navId,
+        view: source.view,
+        href: source.href,
         keywords: [u.name, u.email, u.jobTitle, u.accountType, 'user', 'users'].filter(Boolean),
       };
     });
   }
 
   function loadUsers() {
-    if (usersCache) return Promise.resolve(usersCache);
-    if (usersPromise) return usersPromise;
+    var source = usersSource();
+    if (!source) return Promise.resolve([]);
+    /* Keyed by source, not just "loaded": a search run before /me answers
+       reads nothing (nobody holds a capability yet), and an administrator must
+       not be stuck with that answer afterwards. */
+    if (usersCache && usersCacheUrl === source.url) return Promise.resolve(usersCache);
+    if (usersPromise && usersCacheUrl === source.url) return usersPromise;
     var a = api();
     if (!a || typeof a.api !== 'function') return Promise.resolve([]);
-    usersPromise = a.api(root() + '/admin/users').then(function (data) {
-      usersCache = mapUsers(data);
+    usersCacheUrl = source.url;
+    usersPromise = a.api(root() + source.url).then(function (data) {
+      usersCache = mapUsers(data, source);
       usersPromise = null;
       return usersCache;
     }).catch(function () {

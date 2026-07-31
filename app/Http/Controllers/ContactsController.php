@@ -114,7 +114,7 @@ class ContactsController extends Controller
     private function authorizeBooks(Request $request): User
     {
         $user = $request->user();
-        abort_unless(Role::can($user, 'users.view'), 403, 'Only staff can use the address books.');
+        abort_unless(Role::can($user, 'directory.view'), 403, 'Only staff can use the address books.');
 
         return $user;
     }

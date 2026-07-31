@@ -92,6 +92,17 @@
     { value: 'full', label: 'Full access' },
   ];
 
+  /* What the staff member does for the client, as opposed to what they may
+     open. Mirrors ClientAssignment::ROLES — the server refuses anything else. */
+  var ASSIGNMENT_ROLES = [
+    { value: 'account_manager', label: 'Account manager' },
+    { value: 'booking_coordinator', label: 'Booking coordinator' },
+    { value: 'finance', label: 'Finance contact' },
+    { value: 'contract_manager', label: 'Contract manager' },
+    { value: 'event_coordinator', label: 'Event coordinator' },
+    { value: 'general', label: 'Assigned staff' },
+  ];
+
   function assignmentLevelLabel(level) {
     for (var i = 0; i < ASSIGNMENT_LEVELS.length; i++) {
       if (ASSIGNMENT_LEVELS[i].value === level) return ASSIGNMENT_LEVELS[i].label;
@@ -2039,23 +2050,65 @@
     });
   }
 
+  function assignmentEndsLabel(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return ' · until ' + d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
   function renderAssignedStaffRow(person) {
-    var level = assignmentLevelLabel(person.level);
-    var primary = person.primary ? ' · Primary' : '';
+    // The role is what they do; the level is what they can open. Both are
+    // shown because either alone is misleading.
+    var meta = [
+      person.roleLabel || assignmentLevelLabel(person.level),
+      assignmentLevelLabel(person.level),
+    ];
+    if (person.primary) meta.unshift('Primary');
+    var line = meta.join(' · ') + assignmentEndsLabel(person.endsAt);
+
     return (
       '<div class="tma-dash__clients-assigned" data-clients-assigned-user="' + esc(String(person.userId)) + '">' +
       '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(person) + '</span>' +
       '<span class="tma-dash__clients-assigned-main">' +
       '<span class="tma-dash__clients-assigned-title">' + esc(person.name || 'Staff') + '</span>' +
-      '<span class="tma-dash__clients-assigned-meta">' + esc(level + primary) +
+      '<span class="tma-dash__clients-assigned-meta">' + esc(line) +
       (person.email ? ' · ' + esc(person.email) : '') + '</span>' +
       '</span>' +
       (isClientsAdmin()
         ? '<button type="button" class="tma-dash__clients-row-remove" data-clients-unassign="' +
-          esc(String(person.userId)) + '" aria-label="Remove assignment">' +
+          esc(String(person.userId)) + '" aria-label="End assignment">' +
           '<img src="' + ICONS.Trash + '" alt=""></button>'
         : '') +
       '</div>'
+    );
+  }
+
+  /* Who used to look after this client. Read-only — ending an assignment keeps
+     the record rather than deleting it, and this is where that record shows. */
+  function renderAssignmentHistory(history) {
+    if (!history || !history.length) return '';
+    return (
+      '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Previously assigned</span></div>' +
+      '<div class="tma-dash__clients-assigned-list">' +
+      history.map(function (p) {
+        var when = p.endedAt ? new Date(p.endedAt) : null;
+        var label = (p.roleLabel || 'Assigned staff') +
+          (when && !isNaN(when.getTime())
+            ? ' · until ' + when.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+            : '');
+        return (
+          '<div class="tma-dash__clients-assigned">' +
+          '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(p) + '</span>' +
+          '<span class="tma-dash__clients-assigned-main">' +
+          '<span class="tma-dash__clients-assigned-title">' + esc(p.name || 'Staff') + '</span>' +
+          '<span class="tma-dash__clients-assigned-meta">' + esc(label) + '</span>' +
+          '</span></div>'
+        );
+      }).join('') +
+      '</div></div>'
     );
   }
 
@@ -2177,7 +2230,13 @@
         '<div class="tma-dash__clients-assign-form">' +
         '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-assign-user>' +
         '<option value="">Assign staff…</option>' + options + '</select>' +
-        '<select class="tma-dash__clients-field-select" data-clients-assign-level>' +
+        '<select class="tma-dash__clients-field-select" data-clients-assign-role aria-label="Assignment role">' +
+        ASSIGNMENT_ROLES.map(function (r) {
+          return '<option value="' + esc(r.value) + '"' + (r.value === 'general' ? ' selected' : '') + '>' +
+            esc(r.label) + '</option>';
+        }).join('') +
+        '</select>' +
+        '<select class="tma-dash__clients-field-select" data-clients-assign-level aria-label="Permission level">' +
         ASSIGNMENT_LEVELS.map(function (l) {
           return '<option value="' + esc(l.value) + '"' + (l.value === 'editor' ? ' selected' : '') + '>' +
             esc(l.label) + '</option>';
@@ -2201,6 +2260,7 @@
         : (items.length
           ? '<div class="tma-dash__clients-assigned-list">' + items.map(renderAssignedStaffRow).join('') + '</div>'
           : '<div class="tma-dash__clients-assigned-empty">No staff assigned to this client yet.</div>')) +
+      (loading ? '' : renderAssignmentHistory(state.assignmentHistory)) +
       '</div>'
     );
   }
@@ -3007,8 +3067,10 @@
           clientsToast('Choose a staff member to assign', 'negative');
           return;
         }
+        var roleSel = root.querySelector('[data-clients-assign-role]');
         ClientsAPI.assign(state.selectedId, {
           userId: userId,
+          role: roleSel ? roleSel.value : 'general',
           level: levelSel ? levelSel.value : 'editor',
         }).then(function (res) {
           state.assignments = (res && res.assignments) || [];
@@ -3030,10 +3092,11 @@
     MORPH.unwired(root, '[data-clients-unassign]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var userId = btn.getAttribute('data-clients-unassign');
-        if (!userId || !window.confirm('Remove this staff assignment?')) return;
+        if (!userId || !window.confirm('End this staff assignment? Their access is removed, but the record is kept.')) return;
         ClientsAPI.unassign(state.selectedId, userId).then(function (res) {
           state.assignments = (res && res.assignments) || [];
-          clientsToast('Assignment removed', 'positive');
+          state.assignmentHistory = (res && res.history) || state.assignmentHistory;
+          clientsToast('Assignment ended', 'positive');
           ClientsAPI.assignments(state.selectedId).then(function (data) {
             state.assignable = (data && data.assignable) || [];
             if (usesPagedClientsFlow(state)) render();
@@ -3169,6 +3232,7 @@
       if (state.assignmentsLoadedFor !== state.selectedId) return;
       state.assignments = (data && data.assignments) || [];
       state.assignable = (data && data.assignable) || [];
+      state.assignmentHistory = (data && data.history) || [];
       state.assignmentsLoading = false;
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
@@ -3212,6 +3276,7 @@
       profileTab: 'info',
       assignments: [],
       assignable: [],
+      assignmentHistory: [],
       assignmentsLoading: false,
       assignmentsLoadedFor: null,
       invitation: null,
@@ -3266,6 +3331,7 @@
         state.profileTab = 'info';
         state.assignmentsLoadedFor = null;
         state.assignments = [];
+        state.assignmentHistory = [];
         state.inviteLoadedFor = null;
         state.invitation = null;
       }

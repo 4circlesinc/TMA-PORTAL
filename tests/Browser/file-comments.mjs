@@ -53,9 +53,7 @@ async function openFile(page) {
   await page.waitForTimeout(400);
   await page.click('[data-nav="folders-all"]');
   await page.waitForTimeout(1600);
-  await page.locator('tr[data-type="folder"]:visible', { hasText: 'Contracts' }).first().dblclick();
-  await page.waitForTimeout(1600);
-  await page.locator('tr[data-type="file"]:visible', { hasText: 'TMA Contract.pdf' }).first().dblclick();
+  await page.locator('tr[data-type="file"]:visible', { hasText: FILE_NAME }).first().dblclick();
   await page.waitForSelector('.tma-portal-viewer', { timeout: 8000 });
   await page.waitForTimeout(1200);
 }
@@ -73,7 +71,7 @@ async function openSharedFile(page) {
   await page.waitForTimeout(400);
   await page.click('[data-nav="folders-sharedwithme"]');
   await page.waitForTimeout(1800);
-  await page.locator('tr[data-type="file"]:visible', { hasText: 'TMA Contract.pdf' }).first().dblclick();
+  await page.locator('tr[data-type="file"]:visible', { hasText: FILE_NAME }).first().dblclick();
   await page.waitForSelector('.tma-portal-viewer', { timeout: 8000 });
   await page.waitForTimeout(1200);
 }
@@ -83,33 +81,42 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/403|404/.test(m.text())) errors.push('console: ' + m.text()); });
 
 const stamp = Date.now();
+const FILE_NAME = `Comments ${stamp}.txt`;
 const BODY = 'Phase two comment ' + stamp;
 const REPLY = 'A reply ' + stamp;
 
 try {
-  step(1, 'Open the file and share it with the second account');
+  step(1, 'Create a file this run owns, and share it with the second account');
   await signIn(page, 'e2e@example.com');
-  await openFile(page);
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(800);
 
-  // Both accounts must be able to see the file for the live test to mean
-  // anything, so grant the staff account access through the real share API.
-  const shared = await page.evaluate(async (base) => {
+  // A fresh file per run. Reusing one seeded file accumulated 20+ threads
+  // across runs, which paginated the panel and made this script flaky for
+  // reasons that had nothing to do with commenting.
+  const shared = await page.evaluate(async ([base, name]) => {
     const csrf = decodeURIComponent((document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/) || [])[1] || '');
-    const row = document.querySelector('tr[data-type="file"]');
-    const fileId = row && row.getAttribute('data-id');
+    const h = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': csrf };
+    const form = new FormData();
+    form.append('file', new File(['comment probe'], name, { type: 'text/plain' }));
+    const created = await fetch(base + '/portal/files/files', {
+      method: 'POST', credentials: 'same-origin', headers: h, body: form,
+    }).then((r) => r.json());
+    const fileId = created.id;
     const res = await fetch(base + '/portal/files/shares', {
       method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json',
-        'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': csrf },
       // ShareController wants `mode`, not `kind` — the wrong key 422s and the
       // second account silently never gets access, which then looks like a
       // broken mention list and a broken notification.
+      headers: { ...h, 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'file', id: fileId, mode: 'invite', email: 'bea@example.com', role: 'editor' }),
     });
     return { status: res.status, body: await res.text(), fileId };
-  }, BASE);
+  }, [BASE, FILE_NAME]);
   check(shared.status === 200 || shared.status === 201,
     `the file was shared with the second account (HTTP ${shared.status}) ${shared.status >= 400 ? shared.body : ''}`);
+
+  await openFile(page);
 
   step(2, 'The Comments tab exists and starts honest');
   await page.click('[data-lb-act="comments"]');
@@ -198,6 +205,23 @@ try {
   for (let i = 0; i < 24 && !isResolved; i++) {
     await page.waitForTimeout(500);
     isResolved = (await resolvedThread.count()) > 0;
+  }
+  if (!isResolved) {
+    // Self-explaining failure: this check has been intermittently red and
+    // guessing at it wastes runs.
+    const diag = await page.evaluate((body) => {
+      const threads = [...document.querySelectorAll('.tma-portal-viewer__thread')];
+      const mine = threads.find((n) => n.textContent.includes(body));
+      return {
+        threadCount: threads.length,
+        mineFound: !!mine,
+        mineClass: mine ? mine.className : null,
+        resolveButtons: mine ? [...mine.querySelectorAll('[data-lb-resolve]')]
+          .map((b) => b.textContent + '/' + b.getAttribute('data-resolved')) : [],
+        panelHead: document.querySelector('.tma-portal-viewer__panel-body')?.textContent.slice(0, 120),
+      };
+    }, BODY);
+    log('    diagnostic: ' + JSON.stringify(diag));
   }
   check(isResolved, 'the thread this run created is marked resolved');
   check(/Resolved/.test(await page.textContent('.tma-portal-viewer__panel-body')),

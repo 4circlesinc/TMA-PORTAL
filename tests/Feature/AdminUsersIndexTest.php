@@ -33,16 +33,19 @@ class AdminUsersIndexTest extends TestCase
             ->assertJsonCount(2, 'users');
     }
 
-    public function test_employee_can_list_users_read_only(): void
+    public function test_employee_cannot_list_users(): void
     {
+        // This table is the account administration: every account's status and
+        // sign-in history, with approve / suspend / reset / delete per row.
+        // Employees used to get it read-only, which meant the Users page was
+        // in their sidebar. They browse colleagues through People instead —
+        // see PortalAccessTest.
         $employee = $this->staff('Employee');
         $this->staff('Administrator');
 
         $this->actingAs($employee)
             ->getJson('/admin/users')
-            ->assertOk()
-            ->assertJsonPath('canManage', false)
-            ->assertJsonCount(2, 'users');
+            ->assertForbidden();
     }
 
     public function test_client_cannot_list_users(): void

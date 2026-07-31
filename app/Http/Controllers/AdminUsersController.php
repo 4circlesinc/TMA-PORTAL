@@ -32,13 +32,15 @@ class AdminUsersController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        // Staff directory is readable by Employees and Administrators; write
-        // actions on this controller stay admin-only.
+        // The account-management table: every account's status, sign-in
+        // history and the controls to approve, suspend, reset and delete.
+        // Administrators only. Employees browse colleagues through the People
+        // section instead (`directory.view`), which carries no such controls.
         $viewer = $request->user();
         abort_unless(
             Role::can($viewer, 'users.view'),
             403,
-            'Only staff can view the user directory.'
+            'Only administrators can view the account directory.'
         );
 
         $lastSeen = DB::table('sessions')

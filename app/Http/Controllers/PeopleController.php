@@ -446,7 +446,7 @@ class PeopleController extends Controller
     private function authorizeView(Request $request): User
     {
         $user = $request->user();
-        abort_unless(Role::can($user, 'users.view'), 403, 'Only staff can browse the directory.');
+        abort_unless(Role::can($user, 'directory.view'), 403, 'Only staff can browse the directory.');
 
         return $user;
     }

@@ -1066,7 +1066,116 @@
 
       paintPanel();
       subscribeToFile(f);
+      startPresence(f);
+      // Fetch the badge up front: §20 puts the approval status in the centre
+      // header, which must not wait for the reader to open a tab.
+      if (!entry(f).approvals) loadApprovals(f);
       if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
+    }
+
+    /* ── active viewers (presence) ───────────────────── */
+
+    /* One id per TAB, not per person: the same file open twice must count as
+     * two sessions, or closing one wrongly announces that they left. */
+    var sessionId = 'vw-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    var presenceTimer = null;
+
+    /* Announce departure immediately rather than letting the heartbeat lapse:
+     * 45 seconds of a ghost avatar reads as the feature being broken. */
+    lb._leave = function () {
+      stopPresence();
+      var f = current();
+      if (!f) return;
+      var url = net().url('/files/' + encodeURIComponent(f.id) + '/presence');
+      var body = JSON.stringify({ session: sessionId });
+      // sendBeacon survives the page going away; fetch does not.
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url + '?_method=DELETE&session=' + encodeURIComponent(sessionId));
+      }
+      net().fetchJSON(url, { method: 'DELETE', json: { session: sessionId } }).catch(function () {});
+    };
+
+    window.addEventListener('beforeunload', function () { if (lb && lb._leave) lb._leave(); });
+
+    function startPresence(f) {
+      stopPresence();
+      beat(f);
+      // Comfortably inside the 45s staleness window, so a missed beat does not
+      // make someone flicker out of everyone else's stack.
+      presenceTimer = setInterval(function () { if (lb) beat(current()); }, 20000);
+    }
+
+    function stopPresence() {
+      if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
+    }
+
+    function currentAction() {
+      // What the reader is actually doing, not merely which tab is selected.
+      var box = lb && lb.querySelector('[data-lb-input]');
+      if (box && box.value.trim()) return 'commenting';
+      return 'viewing';
+    }
+
+    function beat(f) {
+      if (!f) return;
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/presence'), {
+        method: 'POST', json: { session: sessionId, action: currentAction() },
+      })
+        .then(function (data) { paintPresence(f, data); })
+        .catch(function () { /* presence is never worth an error toast */ });
+    }
+
+    function loadPresence(f) {
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/presence'))
+        .then(function (data) { paintPresence(f, data); })
+        .catch(function () {});
+    }
+
+    function paintPresence(f, data) {
+      if (!lb || current().id !== f.id) return;
+      f.presence = data;
+      var host = lb.querySelector('[data-lb-presence]');
+      if (host) host.innerHTML = presenceHtml(data);
+    }
+
+    function presenceHtml(data) {
+      var people = (data && data.viewers) || [];
+      if (!people.length) return '';
+
+      var faces = people.map(function (p) {
+        return '<img class="tma-portal-viewer__avatar tma-portal-viewer__avatar--stack" ' +
+          'src="' + esc(avatarFor(p)) + '" alt="" width="26" height="26" ' +
+          'title="' + esc([p.name, p.email, p.role, p.label].filter(Boolean).join(' · ')) + '">';
+      }).join('');
+
+      var extra = data.extra > 0
+        ? '<span class="tma-portal-viewer__avatar-more">+' + data.extra + '</span>'
+        : '';
+
+      return '<button type="button" class="tma-portal-viewer__presence" data-lb-presence-open ' +
+        'aria-label="' + data.total + ' people have this open">' + faces + extra + '</button>';
+    }
+
+    function openPresenceList() {
+      var data = current().presence;
+      var people = (data && data.all) || [];
+      if (!people.length) { ui().toast('Nobody else has this open'); return; }
+
+      var host = ui().openModal({
+        title: 'Active viewers',
+        body: '<div class="tma-portal-viewer__source-members">' +
+          people.map(function (p) {
+            return '<div class="tma-portal-viewer__member">' +
+              '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(p)) + '" alt="" width="28" height="28">' +
+              '<span class="tma-portal-viewer__member-text">' +
+                '<strong>' + esc(p.name) + (p.isSelf ? ' (you)' : '') + '</strong>' +
+                '<span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span>' +
+              '</span>' +
+              '<span class="tma-portal-viewer__member-role">' + esc(p.label) + '</span>' +
+            '</div>';
+          }).join('') + '</div>',
+      });
+      if (lb && host) host.style.zIndex = '700';
     }
 
     /* ── header: identity, status, toolbar ───────────── */
@@ -1080,6 +1189,8 @@
             '<span class="tma-portal-viewer__sub">' + headMetaHtml(f) + '</span>' +
           '</div>' +
         '</div>' +
+        '<div class="tma-portal-viewer__presence-wrap" data-lb-presence>' +
+          presenceHtml(f.presence) + '</div>' +
         '<div class="tma-portal-viewer__tools">' + toolbarHtml(f) + '</div>' +
       '</header>';
     }
@@ -1337,6 +1448,11 @@
       if (lb._channel) rt.leave(lb._channel);
       lb._channel = name;
 
+      rt.listen(name, 'file.presence.changed', function (payload) {
+        if (!lb || !payload || payload.fileId !== current().id) return;
+        loadPresence(current());
+      });
+
       rt.listen(name, 'file.comment.changed', function (payload) {
         if (!lb || !payload || payload.fileId !== current().id) return;
         var e = entry(current());
@@ -1411,19 +1527,21 @@
         ? '<button type="button" class="tma-portal-viewer__more-btn" data-lb-more-comments>Show earlier comments</button>'
         : '';
 
-      html += threads.map(function (t) {
-        var replies = (t.replies || []).map(function (r) {
-          return '<div class="tma-portal-viewer__reply">' + commentHtml(r, e) + '</div>';
-        }).join('');
-
-        return '<div class="tma-portal-viewer__thread' + (t.resolved ? ' is-resolved' : '') + '" data-thread="' + esc(t.id) + '">' +
-          commentHtml(t, e) +
-          replies +
-          (t.can.reply ? replyControlHtml(t, e) : '') +
-        '</div>';
-      }).join('');
+      html += threads.map(function (t) { return threadHtml(t, e); }).join('');
 
       return html;
+    }
+
+    function threadHtml(t, e) {
+      var replies = (t.replies || []).map(function (r) {
+        return '<div class="tma-portal-viewer__reply">' + commentHtml(r, e) + '</div>';
+      }).join('');
+
+      return '<div class="tma-portal-viewer__thread' + (t.resolved ? ' is-resolved' : '') + '" data-thread="' + esc(t.id) + '">' +
+        commentHtml(t, e) +
+        replies +
+        (t.can.reply ? replyControlHtml(t, e) : '') +
+      '</div>';
     }
 
     function commentHtml(c, e) {
@@ -1610,7 +1728,29 @@
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments/' + encodeURIComponent(commentId) + '/resolve'), {
         method: 'POST', json: { resolved: !resolved },
       })
-        .then(function () { e.comments = null; loadComments(f); })
+        .then(function (updated) {
+          // Patch the one thread rather than rebuilding the list. A wholesale
+          // repaint replaces every node, so in a long list the row somebody is
+          // interacting with is swapped out from under them.
+          if (e.comments) {
+            e.comments.threads = e.comments.threads.map(function (th) {
+              return th.id === commentId
+                ? Object.assign({}, th, updated, { replies: th.replies })
+                : th;
+            });
+            e.comments.openCount += updated.resolved ? -1 : 1;
+            var node = lb.querySelector('.tma-portal-viewer__thread[data-thread="' + commentId + '"]');
+            var fresh = e.comments.threads.filter(function (th) { return th.id === commentId; })[0];
+            if (node && fresh) {
+              node.outerHTML = threadHtml(fresh, e);
+              refreshCommentCount(e.comments);
+
+              return;
+            }
+          }
+          e.comments = null;
+          loadComments(f);
+        })
         .catch(function (err) { ui().toast((err && err.message) || 'Could not update that thread'); });
     }
 
@@ -2358,6 +2498,7 @@
       var head = lb.querySelector('.tma-portal-viewer__head');
       if (head) head.outerHTML = viewerHead(f);
       repaintStage(f);
+      startPresence(f);
       var foot = lb.querySelector('[data-lb-foot]');
       if (foot) foot.innerHTML = footHtml(f);
       var rail = lb.querySelector('[data-lb-rail]');
@@ -2474,6 +2615,7 @@
         return;
       }
 
+      if (e.target.closest('[data-lb-presence-open]')) { openPresenceList(); return; }
       if (e.target.closest('[data-lb-close]')) { closeLightbox(); return; }
 
       var act = e.target.closest('[data-lb-act]');
@@ -2674,6 +2816,7 @@
   function closeLightbox() {
     if (!lb) return;
     if (lb._key) document.removeEventListener('keydown', lb._key);
+    if (lb._leave) lb._leave();
     // Leave the file's channel, or every file opened this session keeps a
     // subscription alive for the rest of the page's life.
     if (lb._channel && window.TMAMessagingRealtime) {

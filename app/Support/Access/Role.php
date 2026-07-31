@@ -47,9 +47,11 @@ class Role
         // Reach the Clients hub at all.
         'clients.view' => [self::EMPLOYEE],
         // See every client record, rather than only the ones you are assigned
-        // to. Move this to [] to scope employees to their own assignments —
-        // client_assignments already drives folder access, so the data is there.
-        'clients.viewAll' => [self::EMPLOYEE],
+        // to. Employees are scoped to their live assignments — the same rows
+        // that drive folder access, so what they can open and what they can
+        // find agree. Enforced by App\Support\Access\ClientScope, which every
+        // client query goes through; this row on its own decides nothing.
+        'clients.viewAll' => [],
         // Create, edit, duplicate and delete client records.
         'clients.manage' => [self::EMPLOYEE],
         // Invite a client to create a portal account.
@@ -58,12 +60,22 @@ class Role
         'clients.assign' => [],
 
         /* ── People and users ────────────────────────────────────────── */
-        // Read the user directory (the Users page, the People section).
-        'users.view' => [self::EMPLOYEE],
+        // The Users page — the account-management table. It lists every
+        // account with its status, sign-in history and the approve / suspend /
+        // reset / delete controls, so it is administration, not a directory.
+        // This used to be granted to Employee and to gate the People section
+        // as well, which is why it could not be closed without taking the
+        // staff address book away too. Those are `directory.view` now.
+        'users.view' => [],
         // Create, approve, suspend, delete and re-type accounts.
         'users.manage' => [],
+        // The People section: browse colleagues, the shared and personal
+        // address books. Split out of `users.view` so the Users page could be
+        // closed without taking the directory with it, then closed too — an
+        // employee has no need to enumerate the firm.
+        'directory.view' => [],
         // See colleagues' online/away presence and their work plans.
-        'presence.view' => [self::EMPLOYEE],
+        'presence.view' => [],
 
         /* ── Communication ───────────────────────────────────────────── */
         // Use the portal mailbox (Gmail/Graph). Clients talk via Messages.
@@ -164,14 +176,18 @@ class Role
         'email/templates' => 'mail.use',
         'overview' => 'overview.view',
         // The People section, screen by screen. These mirror portal-access.js
-        // exactly: the sidebar hides what the server would refuse.
-        'people' => 'users.view',
-        'people/employees' => 'users.view',
-        'people/clients' => 'clients.view',
-        'people/prospects' => 'clients.view',
-        'people/shared-address-book' => 'users.view',
-        'people/personal-address-book' => 'users.view',
-        'people/distribution-groups' => 'groups.view',
+        // exactly: the sidebar hides what the server would refuse. A screen
+        // may list several capabilities, and then *all* of them are required —
+        // reaching People at all is `directory.view`, and the client screens
+        // additionally need the capability that governs client data, so
+        // reopening one does not silently reopen the other.
+        'people' => 'directory.view',
+        'people/employees' => 'directory.view',
+        'people/clients' => ['directory.view', 'clients.view'],
+        'people/prospects' => ['directory.view', 'clients.view'],
+        'people/shared-address-book' => 'directory.view',
+        'people/personal-address-book' => 'directory.view',
+        'people/distribution-groups' => ['directory.view', 'groups.view'],
         'people/resend-welcome-emails' => 'users.manage',
         'social/feed' => 'feed.view',
         'users' => 'users.view',
@@ -249,18 +265,27 @@ class Role
         return $capability === null || self::can($user, $capability);
     }
 
-    /** The capability a portal page needs, or null when it is open to all. */
-    public static function pageCapability(string $page): ?string
+    /**
+     * The capabilities a portal page needs — all of them — or an empty list
+     * when it is open to every approved account.
+     *
+     * @return list<string>
+     */
+    public static function pageCapabilities(string $page): array
     {
-        return self::PAGE_CAPABILITIES[$page] ?? null;
+        return (array) (self::PAGE_CAPABILITIES[$page] ?? []);
     }
 
     /** May this user load the given portal page? */
     public static function canViewPage(?User $user, string $page): bool
     {
-        $capability = self::pageCapability($page);
+        foreach (self::pageCapabilities($page) as $capability) {
+            if (! self::can($user, $capability)) {
+                return false;
+            }
+        }
 
-        return $capability === null || self::can($user, $capability);
+        return true;
     }
 
     public static function of(?User $user): ?string

@@ -702,6 +702,21 @@
   margin-top: var(--space-8); font-size: var(--text-size-13); color: var(--color-text-primary);
 }
 
+/* Active viewers ----------------------------------------------------- */
+.tma-portal-viewer__presence-wrap { display: flex; align-items: center; flex: 0 0 auto; margin-left: auto; }
+.tma-portal-viewer__presence {
+  display: inline-flex; align-items: center; padding: var(--space-2) var(--space-4);
+  border: 0; border-radius: 999px; background: transparent; cursor: pointer;
+}
+.tma-portal-viewer__presence:hover { background: rgba(255, 255, 255, 0.12); }
+/* In the dark header the ring around each face has to read against the header,
+   not against the white panel these avatars are also used in. */
+.tma-portal-viewer__presence .tma-portal-viewer__avatar--stack { border-color: #17181a; }
+.tma-portal-viewer__presence .tma-portal-viewer__avatar-more {
+  border-color: #17181a; background: rgba(255, 255, 255, 0.22); color: #fff;
+}
+@media (max-width: 760px) { .tma-portal-viewer__presence-wrap { display: none; } }
+
 /* Responsive: the panel becomes a drawer, the rail goes away ---------- */
 @media (max-width: 1100px) {
   .tma-portal-viewer__panel {

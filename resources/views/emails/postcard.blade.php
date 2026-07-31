@@ -114,8 +114,16 @@
               @endisset
 
               @isset($quote)
+                {{--
+                  Escaped, NOT raw. This block carries text a user typed — the
+                  message on a signature request, an invitation note — and it
+                  goes out to external recipients. Rendering it unescaped let a
+                  sender put markup (or a <script> tag) into somebody else's
+                  inbox. Line breaks are the only formatting it needs, and
+                  nl2br on an escaped string gives exactly that.
+                --}}
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;"><tr>
-                  <td style="border-left:3px solid {{ $LINE }};padding:2px 0 2px 14px;font-size:15px;line-height:22px;color:#374151;">{!! $quote !!}</td>
+                  <td style="border-left:3px solid {{ $LINE }};padding:2px 0 2px 14px;font-size:15px;line-height:22px;color:#374151;">{!! nl2br(e($quote)) !!}</td>
                 </tr></table>
               @endisset
 

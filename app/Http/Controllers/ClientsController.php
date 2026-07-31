@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\User;
+use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Files\FolderProvisioner;
@@ -27,7 +28,8 @@ class ClientsController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $clients = Client::with(['folder', 'companyRecord'])
+        $clients = ClientScope::query($request->user())
+            ->with(['folder', 'companyRecord'])
             ->orderBy('name')
             ->get()
             ->map->toRecord()
@@ -76,7 +78,10 @@ class ClientsController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $client = Client::with(['folder', 'companyRecord'])->where('uid', $uid)->firstOrFail();
+        $client = ClientScope::query($request->user())
+            ->with(['folder', 'companyRecord'])
+            ->where('uid', $uid)
+            ->firstOrFail();
 
         return response()->json(['client' => $client->toRecord()]);
     }
@@ -85,7 +90,7 @@ class ClientsController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $client = Client::where('uid', $uid)->firstOrFail();
+        $client = ClientScope::findOrFail($request->user(), $uid);
         $data = $this->validated($request, requireUid: false);
 
         $client->fill($this->columns($uid, $data, $client->creator));
@@ -111,7 +116,7 @@ class ClientsController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $client = Client::where('uid', $uid)->firstOrFail();
+        $client = ClientScope::findOrFail($request->user(), $uid);
         ActivityLogger::log([
             'actor' => $request->user(),
             'type' => 'client.deleted',
@@ -133,7 +138,9 @@ class ClientsController extends Controller
             'uids.*' => ['string'],
         ]);
 
-        $deleted = Client::whereIn('uid', $data['uids'])->delete();
+        $deleted = ClientScope::query($request->user())
+            ->whereIn('uid', $data['uids'])
+            ->delete();
 
         return response()->json(['deleted' => $deleted]);
     }
@@ -142,7 +149,7 @@ class ClientsController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $source = Client::where('uid', $uid)->firstOrFail();
+        $source = ClientScope::findOrFail($request->user(), $uid);
 
         $copy = $source->replicate(['uid', 'name']);
         $copy->uid = $this->uniqueUid($source->uid.'-copy');

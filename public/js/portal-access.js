@@ -33,13 +33,17 @@
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',
     'workflows-feedback': 'workflows.view',
-    'people-home': 'users.view',
-    'people-employees': 'users.view',
-    'people-clients': 'clients.view',
-    'people-prospects': 'clients.view',
-    'people-shared-address': 'users.view',
-    'people-personal-address': 'users.view',
-    'people-groups': 'groups.view',
+    'people-home': 'directory.view',
+    'people-employees': 'directory.view',
+    /* The client and group screens live inside People, so reaching People at
+       all is the first requirement — see Role::PAGE_CAPABILITIES, where these
+       carry both capabilities. Listing the narrower one here would leave the
+       row in a section the account cannot open. */
+    'people-clients': 'directory.view',
+    'people-prospects': 'directory.view',
+    'people-shared-address': 'directory.view',
+    'people-personal-address': 'directory.view',
+    'people-groups': 'directory.view',
     'people-resend': 'users.manage',
   };
 

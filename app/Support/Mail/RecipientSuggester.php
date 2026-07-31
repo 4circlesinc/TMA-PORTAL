@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\User;
+use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 
 /**
@@ -48,7 +49,7 @@ final class RecipientSuggester
         }
 
         if (Role::isStaff($viewer)) {
-            foreach (self::clients($term) as $row) {
+            foreach (self::clients($viewer, $term) as $row) {
                 self::put($byEmail, $row);
             }
             foreach (self::groups($viewer, $term) as $row) {
@@ -228,9 +229,12 @@ final class RecipientSuggester
     /**
      * @return list<array<string, mixed>>
      */
-    private static function clients(string $term): array
+    private static function clients(User $viewer, string $term): array
     {
-        $rows = Client::query()
+        // Only the clients this account may see: an employee scoped to their
+        // assignments must not be able to enumerate the rest by typing into
+        // the To: field.
+        $rows = ClientScope::query($viewer)
             ->with(['user:id,email,avatar_url,provider_avatar_url'])
             ->when($term !== '', function ($q) use ($term) {
                 $needle = '%'.$term.'%';
