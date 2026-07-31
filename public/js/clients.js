@@ -92,6 +92,25 @@
     { value: 'full', label: 'Full access' },
   ];
 
+  /* Company roles, mirroring App\Support\Companies\CompanyRoles. A role seeds
+     the permission flags; the flags are what the server actually checks. */
+  var COMPANY_ROLES = [
+    { value: 'primary', label: 'Primary contact' },
+    { value: 'finance', label: 'Finance contact' },
+    { value: 'event', label: 'Event contact' },
+    { value: 'signatory', label: 'Contract signatory' },
+    { value: 'viewer', label: 'Viewer' },
+    { value: 'member', label: 'Company member' },
+  ];
+
+  /* How far a staff assignment reaches. Company-only is the default on purpose
+     — the wider options are shown with what they will cover before they apply. */
+  var COMPANY_SCOPES = [
+    { value: 'company_only', label: 'The company only' },
+    { value: 'existing', label: 'The company and its current contacts' },
+    { value: 'existing_future', label: 'The company and all its contacts, now and in future' },
+  ];
+
   /* What the staff member does for the client, as opposed to what they may
      open. Mirrors ClientAssignment::ROLES — the server refuses anything else. */
   var ASSIGNMENT_ROLES = [
@@ -217,6 +236,49 @@
     },
     inviteStatus: function (uid) {
       return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/invite');
+    },
+  };
+
+  var CompanyMembersAPI = {
+    list: function (uid) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/members');
+    },
+    add: function (uid, payload) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/members', {
+        method: 'POST', json: payload,
+      });
+    },
+    invite: function (uid, memberId) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
+        '/members/' + encodeURIComponent(memberId) + '/invite', { method: 'POST' });
+    },
+    update: function (uid, memberId, payload) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
+        '/members/' + encodeURIComponent(memberId), { method: 'PATCH', json: payload });
+    },
+    remove: function (uid, memberId) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
+        '/members/' + encodeURIComponent(memberId), { method: 'DELETE' });
+    },
+  };
+
+  var CompanyStaffAPI = {
+    list: function (uid) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/staff');
+    },
+    preview: function (uid, appliesToClients) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/staff/preview', {
+        method: 'POST', json: { appliesToClients: appliesToClients },
+      });
+    },
+    assign: function (uid, payload) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/staff', {
+        method: 'POST', json: payload,
+      });
+    },
+    remove: function (uid, userId) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
+        '/staff/' + encodeURIComponent(userId), { method: 'DELETE' });
     },
   };
 
@@ -1145,7 +1207,7 @@
       .join(' · ');
   }
 
-  function renderContactProfileToolbar(c) {
+  function renderContactProfileToolbar(c, state) {
     if (!c) return '';
     var subtitle = contactProfileSubtitle(c);
     return (
@@ -1160,12 +1222,31 @@
         ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
         : '') +
+      inviteToolbarBtn(c, state) +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
       '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
       '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span></button>' +
       '</div></div>'
     );
+  }
+
+  /* Invite / resend, right next to Edit and Message.
+     This used to live only inside the Assigned tab, which meant the one action
+     staff reach for when a client says "I never got the email" was three clicks
+     down a tab nobody opens. It belongs on the toolbar. */
+  function inviteToolbarBtn(c, state) {
+    // Nothing to offer if they can already sign in, or if we have no address
+    // to send to. Reaching the client hub at all already means `clients.invite`
+    // — and the server re-checks it regardless.
+    if (!c || c.hasLogin || !c.email) return '';
+
+    var inv = state ? state.invitation : null;
+    var pending = inv && inv.status !== 'accepted' && (inv.canResend || inv.canCancel);
+
+    return '<button type="button" class="tma-dash__clients-message-btn" data-clients-invite-toolbar>' +
+      '<img src="' + ICONS.EnvelopeSimple + '" alt=""><span>' +
+      (pending ? 'Resend invite' : 'Invite to portal') + '</span></button>';
   }
 
   function renderCompanyProfileToolbar(company) {
@@ -1226,7 +1307,7 @@
   function renderElevatedDetailChrome(state) {
     var toolbar = '';
     if (state.screen === 'detail' && state.selectedId) {
-      toolbar = renderContactProfileToolbar(contactFor(state.selectedId));
+      toolbar = renderContactProfileToolbar(contactFor(state.selectedId), state);
     } else if (state.screen === 'company' && state.companyId) {
       toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
     } else if (state.screen === 'add' || state.screen === 'edit') {
@@ -1591,10 +1672,147 @@
       (company.notes
         ? '<p class="tma-dash__clients-company-notes">' + esc(company.notes) + '</p>'
         : '') +
+      renderCompanyDetails(company) +
       '<div class="tma-dash__clients-assigned-head"><span class="tma-dash__clients-assigned-count">People</span></div>' +
       peopleHtml +
+      renderCompanyMembersBlock(state, company) +
+      renderCompanyStaffBlock(state, company) +
       '</div></div>'
     );
+  }
+
+  /* The account details that belong to the organization rather than to any one
+     contact. Only rows that are filled in are shown — an empty grid of labels
+     tells the reader nothing. */
+  function renderCompanyDetails(company) {
+    var rows = [
+      { icon: ICONS.Buildings, label: 'Type', value: company.companyTypeLabel },
+      { icon: ICONS.Briefcase, label: 'Industry', value: company.industry },
+      { icon: ICONS.EnvelopeSimple, label: 'Email', value: company.email },
+      { icon: ICONS.Phone, label: 'Phone', value: company.phone },
+      { icon: ICONS.User, label: 'Registration', value: company.registrationNumber },
+    ].filter(function (r) { return !!r.value; });
+
+    if (!rows.length) return '';
+
+    return '<div class="tma-dash__clients-profile-body">' +
+      '<ul class="tma-dash__clients-list tma-dash__clients-list--profile" role="list">' +
+      rows.map(function (r) {
+        return renderListItem({ icon: r.icon, label: r.label, value: r.value });
+      }).join('') +
+      '</ul></div>';
+  }
+
+  function companyRoleLabel(role) {
+    for (var i = 0; i < COMPANY_ROLES.length; i++) {
+      if (COMPANY_ROLES[i].value === role) return COMPANY_ROLES[i].label;
+    }
+    return 'Company member';
+  }
+
+  /* Who at the company can reach its records, and how far each has got. */
+  function renderCompanyMembersBlock(state, company) {
+    var members = state.companyMembers || [];
+    var loading = !!state.companyMembersLoading;
+    var admin = isClientsAdmin();
+
+    var form = admin && !loading
+      ? '<div class="tma-dash__clients-assign-form">' +
+        '<input class="tma-dash__clients-field-input" type="email" placeholder="Email address" data-company-member-email aria-label="Member email">' +
+        '<select class="tma-dash__clients-field-select" data-company-member-role aria-label="Company role">' +
+        COMPANY_ROLES.map(function (r) {
+          return '<option value="' + esc(r.value) + '"' + (r.value === 'member' ? ' selected' : '') + '>' +
+            esc(r.label) + '</option>';
+        }).join('') +
+        '</select>' +
+        '<button type="button" class="tma-dash__clients-message-btn" data-company-member-add>Add</button>' +
+        '</div>'
+      : '';
+
+    var list = members.length
+      ? '<div class="tma-dash__clients-assigned-list">' + members.map(function (m) {
+          var meta = [companyRoleLabel(m.role)];
+          if (m.primary) meta.unshift('Primary');
+          meta.push(m.hasAccount ? 'Has access' : (m.status === 'invited' ? 'Invited' : 'No account yet'));
+          return '<div class="tma-dash__clients-assigned">' +
+            '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(m) + '</span>' +
+            '<span class="tma-dash__clients-assigned-main">' +
+            '<span class="tma-dash__clients-assigned-title">' + esc(m.name || m.email || 'Member') + '</span>' +
+            '<span class="tma-dash__clients-assigned-meta">' + esc(meta.join(' · ')) +
+            (m.email ? ' · ' + esc(m.email) : '') + '</span>' +
+            '</span>' +
+            (admin && !m.hasAccount && m.email
+              ? '<button type="button" class="tma-dash__clients-message-btn" data-company-member-invite="' +
+                esc(m.id) + '">Invite</button>'
+              : '') +
+            (admin
+              ? '<button type="button" class="tma-dash__clients-row-remove" data-company-member-remove="' +
+                esc(m.id) + '" aria-label="Remove member"><img src="' + ICONS.Trash + '" alt=""></button>'
+              : '') +
+            '</div>';
+        }).join('') + '</div>'
+      : '<div class="tma-dash__clients-assigned-empty">' +
+        (loading ? 'Loading members…' : 'Nobody at this company has portal access yet.') + '</div>';
+
+    return '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Company access</span></div>' +
+      form + list + '</div>';
+  }
+
+  /* The firm's own people looking after this company. */
+  function renderCompanyStaffBlock(state, company) {
+    if (!isClientsAdmin()) return '';
+
+    var items = state.companyStaff || [];
+    var assignable = state.companyStaffAssignable || [];
+    var loading = !!state.companyStaffLoading;
+
+    var options = assignable.map(function (u) {
+      return '<option value="' + esc(String(u.id)) + '">' + esc(u.name) + '</option>';
+    }).join('');
+
+    var form = !loading
+      ? '<div class="tma-dash__clients-assign-form">' +
+        '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-company-staff-user>' +
+        '<option value="">Assign staff…</option>' + options + '</select>' +
+        '<select class="tma-dash__clients-field-select" data-company-staff-level aria-label="Permission level">' +
+        ASSIGNMENT_LEVELS.map(function (l) {
+          return '<option value="' + esc(l.value) + '"' + (l.value === 'editor' ? ' selected' : '') + '>' +
+            esc(l.label) + '</option>';
+        }).join('') +
+        '</select>' +
+        '<select class="tma-dash__clients-field-select" data-company-staff-scope aria-label="How far this reaches">' +
+        COMPANY_SCOPES.map(function (sc) {
+          return '<option value="' + esc(sc.value) + '">' + esc(sc.label) + '</option>';
+        }).join('') +
+        '</select>' +
+        '<button type="button" class="tma-dash__clients-message-btn" data-company-staff-add>Assign</button>' +
+        '</div>'
+      : '';
+
+    var list = items.length
+      ? '<div class="tma-dash__clients-assigned-list">' + items.map(function (a) {
+          var meta = [a.roleLabel || 'Assigned staff', assignmentLevelLabel(a.level)];
+          if (a.primary) meta.unshift('Primary');
+          if (a.appliesLabel) meta.push(a.appliesLabel);
+          return '<div class="tma-dash__clients-assigned">' +
+            '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(a) + '</span>' +
+            '<span class="tma-dash__clients-assigned-main">' +
+            '<span class="tma-dash__clients-assigned-title">' + esc(a.name || 'Staff') + '</span>' +
+            '<span class="tma-dash__clients-assigned-meta">' + esc(meta.join(' · ')) + '</span>' +
+            '</span>' +
+            '<button type="button" class="tma-dash__clients-row-remove" data-company-staff-remove="' +
+            esc(String(a.userId)) + '" aria-label="End assignment"><img src="' + ICONS.Trash + '" alt=""></button>' +
+            '</div>';
+        }).join('') + '</div>'
+      : '<div class="tma-dash__clients-assigned-empty">' +
+        (loading ? 'Loading…' : 'No staff assigned to this company yet.') + '</div>';
+
+    return '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Assigned staff</span></div>' +
+      form + list + '</div>';
   }
 
   function renderListItem(opts) {
@@ -2270,7 +2488,7 @@
     var c = contactFor(state.selectedId);
     var activeTab = state.profileTab || 'info';
     var listItems = buildProfileListItems(c);
-    var toolbar = opts.elevateToolbar ? '' : renderContactProfileToolbar(c);
+    var toolbar = opts.elevateToolbar ? '' : renderContactProfileToolbar(c, state);
 
     return (
       '<div class="tma-dash__clients-detail">' +
@@ -3121,6 +3339,151 @@
       redraw();
     }
 
+    /* ------------------------------------------------ company members */
+
+    function refreshCompanyPanels() {
+      state.companyPanelsFor = null;
+      ensureCompanyPanelsLoaded(state, render);
+    }
+
+    var memberAdd = MORPH.unwiredOne(root, '[data-company-member-add]');
+    if (memberAdd) {
+      memberAdd.addEventListener('click', function () {
+        var emailEl = root.querySelector('[data-company-member-email]');
+        var roleEl = root.querySelector('[data-company-member-role]');
+        var email = emailEl && emailEl.value ? emailEl.value.trim() : '';
+        if (!email) {
+          clientsToast('Enter an email address', 'negative');
+          return;
+        }
+        memberAdd.disabled = true;
+        CompanyMembersAPI.add(state.companyId, {
+          email: email,
+          role: roleEl ? roleEl.value : 'member',
+        }).then(function () {
+          clientsToast('Member added', 'positive');
+          refreshCompanyPanels();
+        }).catch(function (err) {
+          memberAdd.disabled = false;
+          clientsToast((err && err.message) || 'Could not add that person', 'negative');
+        });
+      });
+    }
+
+    MORPH.unwired(root, '[data-company-member-invite]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        CompanyMembersAPI.invite(state.companyId, btn.getAttribute('data-company-member-invite'))
+          .then(function () {
+            clientsToast('Invitation sent', 'positive');
+            refreshCompanyPanels();
+          }).catch(function (err) {
+            btn.disabled = false;
+            clientsToast((err && err.message) || 'Could not send the invitation', 'negative');
+          });
+      });
+    });
+
+    MORPH.unwired(root, '[data-company-member-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!window.confirm('Remove this person’s access to the company?')) return;
+        CompanyMembersAPI.remove(state.companyId, btn.getAttribute('data-company-member-remove'))
+          .then(function () {
+            clientsToast('Access removed', 'positive');
+            refreshCompanyPanels();
+          }).catch(function (err) {
+            clientsToast((err && err.message) || 'Could not remove them', 'negative');
+          });
+      });
+    });
+
+    /* -------------------------------------------- company staff */
+
+    var staffAdd = MORPH.unwiredOne(root, '[data-company-staff-add]');
+    if (staffAdd) {
+      staffAdd.addEventListener('click', function () {
+        var userEl = root.querySelector('[data-company-staff-user]');
+        var levelEl = root.querySelector('[data-company-staff-level]');
+        var scopeEl = root.querySelector('[data-company-staff-scope]');
+        var userId = userEl && userEl.value ? parseInt(userEl.value, 10) : 0;
+        var scope = scopeEl ? scopeEl.value : 'company_only';
+
+        if (!userId) {
+          clientsToast('Choose a staff member to assign', 'negative');
+          return;
+        }
+
+        var apply = function () {
+          staffAdd.disabled = true;
+          CompanyStaffAPI.assign(state.companyId, {
+            userId: userId,
+            level: levelEl ? levelEl.value : 'editor',
+            appliesToClients: scope,
+          }).then(function () {
+            clientsToast('Staff assigned', 'positive');
+            refreshCompanyPanels();
+          }).catch(function (err) {
+            staffAdd.disabled = false;
+            clientsToast((err && err.message) || 'Could not assign staff', 'negative');
+          });
+        };
+
+        // Anything wider than the company itself is confirmed against what it
+        // will actually cover — the spec forbids granting broad access without
+        // showing the administrator the consequence first.
+        if (scope === 'company_only') {
+          apply();
+          return;
+        }
+
+        CompanyStaffAPI.preview(state.companyId, scope).then(function (res) {
+          var p = (res && res.preview) || {};
+          var n = p.contactsCovered || 0;
+          var msg = 'This also gives access to ' + n + ' contact' + (n === 1 ? '' : 's') +
+            ' at ' + (p.companyName || 'this company') +
+            (p.includesFuture ? ', and any added later' : '') + '.\n\nContinue?';
+          if (window.confirm(msg)) apply();
+        }).catch(function () {
+          // Preview unavailable — ask plainly rather than assigning silently.
+          if (window.confirm('This reaches beyond the company record. Continue?')) apply();
+        });
+      });
+    }
+
+    MORPH.unwired(root, '[data-company-staff-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!window.confirm('End this assignment? Any access it granted is removed.')) return;
+        CompanyStaffAPI.remove(state.companyId, btn.getAttribute('data-company-staff-remove'))
+          .then(function () {
+            clientsToast('Assignment ended', 'positive');
+            refreshCompanyPanels();
+          }).catch(function (err) {
+            clientsToast((err && err.message) || 'Could not end the assignment', 'negative');
+          });
+      });
+    });
+
+    // The toolbar button. Sends the first invitation, or chases an outstanding
+    // one — which is the case staff actually hit ("they never got the email").
+    var inviteToolbar = MORPH.unwiredOne(root, '[data-clients-invite-toolbar]');
+    if (inviteToolbar) {
+      inviteToolbar.addEventListener('click', function () {
+        inviteToolbar.disabled = true;
+        ClientsAPI.invite(state.selectedId).then(function (res) {
+          applyInvitation(res);
+          clientsToast(
+            res && res.reminder
+              ? 'Invitation resent — the previous link no longer works'
+              : 'Invitation sent',
+            'positive'
+          );
+        }).catch(function (err) {
+          inviteToolbar.disabled = false;
+          clientsToast((err && err.message) || 'Could not send the invitation', 'negative');
+        });
+      });
+    }
+
     var inviteBtn = MORPH.unwiredOne(root, '[data-clients-invite]');
     if (inviteBtn) {
       inviteBtn.addEventListener('click', function () {
@@ -3185,7 +3548,6 @@
         state.profileTab = btn.getAttribute('data-clients-tab');
         if (state.profileTab === 'assigned' && state.selectedId) {
           ensureAssignmentsLoaded(state, render);
-          ensureInvitationLoaded(state, render);
         }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
@@ -3196,6 +3558,50 @@
   /* The client's invitation, loaded alongside their assigned staff. Kept
      separate from ensureAssignmentsLoaded so a client hub without the
      assignments capability still shows portal access. */
+  /* Members and assigned staff for the open company. Guarded per company so
+     re-rendering does not refetch. */
+  function ensureCompanyPanelsLoaded(state, render) {
+    if (!state.companyId) return;
+    if (state.companyPanelsFor === state.companyId) return;
+    state.companyPanelsFor = state.companyId;
+    state.companyMembersLoading = true;
+    state.companyStaffLoading = true;
+
+    var redraw = function () {
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    };
+    var stale = function () { return state.companyPanelsFor !== state.companyId; };
+
+    CompanyMembersAPI.list(state.companyId).then(function (d) {
+      if (stale()) return;
+      state.companyMembers = (d && d.members) || [];
+      state.companyMembersLoading = false;
+      redraw();
+    }).catch(function () {
+      if (stale()) return;
+      state.companyMembers = [];
+      state.companyMembersLoading = false;
+      redraw();
+    });
+
+    // Staff assignment is administrator-only; a 403 here is expected for an
+    // employee and must not surface as an error.
+    CompanyStaffAPI.list(state.companyId).then(function (d) {
+      if (stale()) return;
+      state.companyStaff = (d && d.assignments) || [];
+      state.companyStaffAssignable = (d && d.assignable) || [];
+      state.companyStaffLoading = false;
+      redraw();
+    }).catch(function () {
+      if (stale()) return;
+      state.companyStaff = [];
+      state.companyStaffAssignable = [];
+      state.companyStaffLoading = false;
+      redraw();
+    });
+  }
+
   function ensureInvitationLoaded(state, render) {
     if (!state.selectedId) return;
     if (state.inviteLoadedFor === state.selectedId && !state.inviteLoading) return;
@@ -3206,8 +3612,12 @@
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
     };
-    redraw();
 
+    // Deliberately no redraw here. This is called from applyScreen, which is
+    // still setting the screen up — rendering mid-way would paint a
+    // half-configured state, and re-entering while `inviteLoading` is true
+    // would recurse. The caller's own render shows the loading state; the
+    // callbacks below paint the answer.
     ClientsAPI.inviteStatus(state.selectedId).then(function (data) {
       if (state.inviteLoadedFor !== state.selectedId) return;
       state.invitation = (data && data.invitation) || null;
@@ -3282,6 +3692,12 @@
       invitation: null,
       inviteLoading: false,
       inviteLoadedFor: null,
+      companyMembers: [],
+      companyStaff: [],
+      companyStaffAssignable: [],
+      companyMembersLoading: false,
+      companyStaffLoading: false,
+      companyPanelsFor: null,
       listScrollTop: 0,
       search: '',
       searchFocused: false,
@@ -3334,6 +3750,19 @@
         state.assignmentHistory = [];
         state.inviteLoadedFor = null;
         state.invitation = null;
+      }
+
+      // Portal access is loaded whenever a client is opened, not only when the
+      // Assigned tab is, because the toolbar button needs to know whether this
+      // is a first invitation or a chase-up.
+      // Both flows show the profile: 'contact' in the split view, 'detail'
+      // in the paged/mobile one.
+      if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
+        ensureInvitationLoaded(state, render);
+      }
+
+      if (state.screen === 'company' && state.companyId) {
+        ensureCompanyPanelsLoaded(state, render);
       }
 
       if (screen === 'add') {
