@@ -150,6 +150,24 @@ class ActivityFeed
             'permission' => isset($meta['role']) ? 'changed a permission to '.$meta['role'] : 'changed a permission',
             'colour' => 'changed the colour',
             'icon' => 'changed the icon',
+            'comment' => 'commented on this file',
+            'comment-reply' => 'replied to a comment',
+            'comment-resolved' => 'resolved a comment thread',
+            'version' => isset($meta['version'])
+                ? 'uploaded version '.$meta['version']
+                : 'uploaded a new version',
+            'version-restored' => isset($meta['from'], $meta['version'])
+                ? 'restored version '.$meta['from'].' as version '.$meta['version']
+                : 'restored an earlier version',
+            'approval-sent' => isset($meta['type'])
+                ? 'sent this file for '.$meta['type']
+                : 'sent this file for review',
+            'approved' => 'approved this file',
+            'declined' => 'declined this file',
+            'changes-requested' => 'requested changes',
+            'signature-sent' => 'sent this file for signature',
+            'signed' => 'completed signing this file',
+            'signature-declined' => 'declined to sign this file',
             default => str_replace('-', ' ', $activity->action),
         };
     }
@@ -159,6 +177,9 @@ class ActivityFeed
     {
         return match ($action) {
             'upload', 'version' => 'ArrowLineUp',
+            'signed', 'signature-sent', 'signature-declined' => 'PenNib',
+            'approval-sent', 'approved', 'declined', 'changes-requested' => 'Clipboard',
+            'comment', 'comment-reply', 'comment-resolved' => 'ChatCircle',
             'download', 'zip' => 'ArrowLineDown',
             'share', 'link' => 'ShareNetwork',
             'rename' => 'PencilSimple',

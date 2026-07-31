@@ -29,6 +29,76 @@ Artisan::command('files:cleanup-uploads', function () {
 Schedule::command('files:cleanup-uploads')->hourly();
 
 /*
+ * Due dates and reminders on file review/approval requests.
+ *
+ * Both live here rather than in the request path because neither can be driven
+ * by a user action: a request expires because time passed, and a reminder is
+ * owed precisely when nobody has done anything. Without the scheduler running,
+ * requests simply stay open — they never silently resolve themselves.
+ */
+Artisan::command('files:workflow-maintenance', function () {
+    $expired = 0;
+    App\Models\FileWorkflow::query()
+        ->whereNotIn('status', App\Support\Files\Workflow\Status::TERMINAL)
+        ->whereNotNull('due_at')
+        ->where('due_at', '<', now())
+        ->each(function (App\Models\FileWorkflow $workflow) use (&$expired) {
+            $workflow->update(['status' => App\Support\Files\Workflow\Status::EXPIRED, 'completed_at' => now()]);
+            App\Support\Files\Workflow\Engine::log($workflow, null, 'expired', 'The due date passed.');
+            App\Support\Notifications\Notifier::send([
+                'user' => $workflow->created_by,
+                'type' => 'file.approval_decision',
+                'title' => $workflow->file->name.' — request expired',
+                'subject' => $workflow->file,
+            ]);
+            $expired++;
+        });
+
+    $reminded = 0;
+    App\Models\FileWorkflow::query()
+        ->whereNotIn('status', App\Support\Files\Workflow\Status::TERMINAL)
+        ->whereNotNull('reminder_days')
+        ->with('file')
+        ->each(function (App\Models\FileWorkflow $workflow) use (&$reminded) {
+            $cutoff = now()->subDays(max(1, (int) $workflow->reminder_days));
+
+            $workflow->steps()
+                ->whereIn('status', ['invited'])
+                ->whereNotNull('invited_at')
+                ->where(function ($q) use ($cutoff) {
+                    // Never reminded yet, or last reminded long enough ago.
+                    $q->where(function ($w) use ($cutoff) {
+                        $w->whereNull('last_reminded_at')->where('invited_at', '<', $cutoff);
+                    })->orWhere('last_reminded_at', '<', $cutoff);
+                })
+                ->each(function (App\Models\FileWorkflowStep $step) use ($workflow, &$reminded) {
+                    if (! $step->user_id) {
+                        return;
+                    }
+                    App\Support\Notifications\Notifier::send([
+                        'user' => $step->user_id,
+                        'actor' => $workflow->sender,
+                        'type' => 'file.approval_reminder',
+                        'title' => 'Still waiting on you: '.$workflow->file->name,
+                        'message' => $workflow->message,
+                        'subject' => $workflow->file,
+                    ]);
+                    $step->update([
+                        'last_reminded_at' => now(),
+                        'reminder_count' => $step->reminder_count + 1,
+                    ]);
+                    App\Support\Files\Workflow\Engine::log($workflow, null, 'reminded', null, ['step' => $step->uuid]);
+                    $reminded++;
+                });
+        });
+
+    $this->info("Expired {$expired} request(s), sent {$reminded} reminder(s).");
+})->purpose('Expire overdue file requests and send approval reminders');
+
+Schedule::command('files:workflow-maintenance')->hourly()->withoutOverlapping();
+
+
+/*
  * Message attachments are uploaded and staged the moment they are chosen, so a
  * composer that is abandoned - tab closed, message never sent - leaves rows
  * with no message and bytes with no owner. This removes both.

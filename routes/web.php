@@ -11,6 +11,7 @@ use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientInviteController;
+use App\Http\Controllers\ClientOnboardingController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\CompaniesController;
 use App\Http\Controllers\ConnectorsController;
@@ -38,6 +39,7 @@ use App\Http\Controllers\Files\FileCommentController;
 use App\Http\Controllers\Files\FileController;
 use App\Http\Controllers\Files\FileVersionController;
 use App\Http\Controllers\Files\FileViewerController;
+use App\Http\Controllers\Files\FileWorkflowController;
 use App\Http\Controllers\Files\FolderController;
 use App\Http\Controllers\Files\PublicShareController;
 use App\Http\Controllers\Files\RecycleBinController;
@@ -269,6 +271,15 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/files/{uuid}/versions/{version}/download', [FileVersionController::class, 'download'])->name('versions.download');
         Route::get('/files/{uuid}/versions/{version}/preview', [FileVersionController::class, 'preview'])->name('versions.preview');
         Route::post('/files/{uuid}/versions/{version}/restore', [FileVersionController::class, 'restore'])->name('versions.restore');
+
+        // Review / approval / acknowledgement requests. A request is pinned to
+        // the version it was sent on and never silently follows the file.
+        Route::get('/files/{uuid}/workflows', [FileWorkflowController::class, 'index'])->name('workflows.index');
+        Route::post('/files/{uuid}/workflows', [FileWorkflowController::class, 'store'])->name('workflows.store');
+        Route::post('/files/{uuid}/workflows/{workflow}/respond', [FileWorkflowController::class, 'respond'])->name('workflows.respond');
+        Route::post('/files/{uuid}/workflows/{workflow}/cancel', [FileWorkflowController::class, 'cancel'])->name('workflows.cancel');
+        Route::post('/files/{uuid}/workflows/{workflow}/delegate', [FileWorkflowController::class, 'delegate'])->name('workflows.delegate');
+        Route::get('/files/{uuid}/workflows/{workflow}/history', [FileWorkflowController::class, 'history'])->name('workflows.history');
 
         Route::post('/uploads', [UploadController::class, 'init'])->name('uploads.init');
         Route::post('/uploads/{uuid}/chunk', [UploadController::class, 'chunk'])->name('uploads.chunk');
@@ -731,6 +742,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
  * The security checklist: shown once, after an administrator approves the
  * account. Sits outside the 'onboarded' gate so it can't redirect to itself.
  */
+/*
+ * Guided client onboarding. Sits outside both 'profile.complete' and
+ * 'onboarded' — it is the screen those two redirect *to* for a client, and
+ * gating it on either would loop. It collects everything profile-setup asks
+ * for, which is why a client never sees that screen.
+ */
+Route::middleware(['auth', 'verified', 'account.approved'])->group(function () {
+    Route::get('/onboarding', [ClientOnboardingController::class, 'index'])->name('onboarding.index');
+    Route::get('/onboarding/{step}', [ClientOnboardingController::class, 'show'])
+        ->where('step', '[a-z-]+')->name('onboarding.show');
+    Route::post('/onboarding/{step}', [ClientOnboardingController::class, 'store'])
+        ->where('step', '[a-z-]+')->name('onboarding.store');
+    Route::post('/onboarding/{step}/back', [ClientOnboardingController::class, 'back'])
+        ->where('step', '[a-z-]+')->name('onboarding.back');
+    Route::post('/onboarding-complete', [ClientOnboardingController::class, 'complete'])->name('onboarding.complete');
+});
+
 Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved'])->group(function () {
     Route::get('/auth/getting-started', [GettingStartedController::class, 'show'])->name('getting-started');
     Route::post('/auth/getting-started', [GettingStartedController::class, 'finish'])->name('getting-started.finish');

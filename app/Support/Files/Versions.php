@@ -110,6 +110,10 @@ class Versions
             return $version;
         });
 
+        // An open workflow reviewed a specific revision. It is never moved onto
+        // the new one silently — it is marked superseded and its sender told.
+        \App\Support\Files\Workflow\Engine::noteNewVersion($file, $version);
+
         Activity::forFile($author->id, $file, $restoredFrom ? 'version-restored' : 'version', [
             'version' => $version->version_number,
             'from' => $restoredFrom?->version_number,
@@ -171,7 +175,24 @@ class Versions
      */
     public static function canAddVersion(User $user, FileItem $file): bool
     {
+        // A workflow that locked the file refuses new content outright — that
+        // is what "lock during review" means. Reported separately from
+        // permission so the UI can explain which one applies.
+        if (\App\Support\Files\Workflow\Engine::isLocked($file)) {
+            return false;
+        }
+
         return FileAccess::can($user, 'upload', $file);
+    }
+
+    /** Why versions are refused right now, for the message the user sees. */
+    public static function lockReason(FileItem $file): ?string
+    {
+        $lock = \App\Support\Files\Workflow\Engine::isLocked($file);
+
+        return $lock
+            ? 'This file is locked while a '.$lock->type.' request is open.'
+            : null;
     }
 
     /** Restoring changes what everyone else sees, so it needs the same bar. */

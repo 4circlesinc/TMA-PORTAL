@@ -1013,6 +1013,7 @@
     { id: 'details', label: 'Details' },
     { id: 'comments', label: 'Comments' },
     { id: 'versions', label: 'Versions' },
+    { id: 'approvals', label: 'Approvals' },
     { id: 'activity', label: 'Activity' },
     { id: 'access', label: 'Access' },
   ];
@@ -1037,7 +1038,7 @@
 
     function current() { return gallery[idx] || file; }
     function entry(f) {
-      if (!cache[f.id]) cache[f.id] = { details: null, activity: null, access: null, comments: null, versions: null,
+      if (!cache[f.id]) cache[f.id] = { details: null, activity: null, access: null, comments: null, versions: null, approvals: null,
         expanded: {}, draft: '', pendingMentions: [], editing: null, replyingTo: null };
       return cache[f.id];
     }
@@ -1094,7 +1095,17 @@
       if (f.sizeLabel) bits.push(esc(f.sizeLabel));
       if (f.modifiedAt) bits.push('Modified ' + esc(fmtDate(f.modifiedAt)));
       if (f.folder) bits.push('in ' + esc(f.folder.name));
-      return bits.join(' &middot; ');
+
+      var line = bits.join(' &middot; ');
+      var b = f.workflowBadge;
+      if (b) {
+        // A badge on a file whose content has moved on since the decision must
+        // say which version it describes, or it reads as approving the file as
+        // it stands today.
+        line += ' <span class="tma-portal-status tma-portal-status--' + esc(b.tone) + '">' + esc(b.label) +
+          (b.stale && b.appliesToVersion ? ' (v' + b.appliesToVersion + ')' : '') + '</span>';
+      }
+      return line;
     }
 
     function toolBtnHtml(icon, action, label, opts) {
@@ -1120,6 +1131,8 @@
       if (perm(f, 'delete')) html += toolBtnHtml('Trash', 'delete', 'Delete');
       html += toolBtnHtml('ChatCircle', 'comments', 'Comments',
         { active: viewerPrefs.panel && viewerPrefs.tab === 'comments' });
+      html += toolBtnHtml('Clipboard', 'approvals', 'Reviews and approvals',
+        { active: viewerPrefs.panel && viewerPrefs.tab === 'approvals' });
       html += toolBtnHtml('ClockCounterClockwise', 'versions', 'Version history',
         { active: viewerPrefs.panel && viewerPrefs.tab === 'versions' });
       html += toolBtnHtml('Info', 'panel', 'File details', { pressed: viewerPrefs.panel, active: viewerPrefs.panel });
@@ -1192,6 +1205,7 @@
       if (viewerPrefs.tab === 'details') return paintDetails(host);
       if (viewerPrefs.tab === 'comments') return paintComments(host);
       if (viewerPrefs.tab === 'versions') return paintVersions(host);
+      if (viewerPrefs.tab === 'approvals') return paintApprovals(host);
       if (viewerPrefs.tab === 'activity') return paintActivity(host);
       return paintAccess(host);
     }
@@ -1811,6 +1825,333 @@
         '/versions/' + encodeURIComponent(versionId) + '/' + action);
     }
 
+    /* Approvals ------------------------------------------------------- */
+
+    function paintApprovals(host) {
+      var f = current();
+      var e = entry(f);
+
+      host.innerHTML = '<div data-lb-approvals>' +
+        (e.approvals ? approvalsHtml(e.approvals) : ui().loading({ count: 3 })) + '</div>';
+
+      loadApprovals(f);
+    }
+
+    function loadApprovals(f) {
+      var e = entry(f);
+      var seq = e.approvalsSeq = (e.approvalsSeq || 0) + 1;
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/workflows'))
+        .then(function (data) {
+          if (seq !== e.approvalsSeq) return;
+          e.approvals = data;
+          if (current().id !== f.id) return;
+          if (viewerPrefs.tab === 'approvals') {
+            var slot = lb.querySelector('[data-lb-approvals]');
+            if (slot) slot.innerHTML = approvalsHtml(data);
+          }
+          // The header badge belongs to the file, not to this tab.
+          f.workflowBadge = data.badge;
+          var head = lb.querySelector('.tma-portal-viewer__head');
+          if (head) head.outerHTML = viewerHead(f);
+        })
+        .catch(function (err) { panelError('[data-lb-approvals]', err, 'requests'); });
+    }
+
+    function approvalsHtml(data) {
+      var list = (data && data.workflows) || [];
+      var html = '';
+
+      if (data.canSend) {
+        html += '<div class="tma-portal-viewer__send-row">' +
+          '<button type="button" class="tma-portal-viewer__btn" data-lb-send-wf="approval">Send for approval</button>' +
+          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-wf="feedback">Feedback</button>' +
+          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-wf="review">Review</button>' +
+          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-wf="acknowledgement">Acknowledge</button>' +
+          (canSignHere(current())
+            ? '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-signature>Send for signature</button>'
+            : '') +
+        '</div>';
+      }
+
+      if (data.lockReason) {
+        html += '<p class="tma-portal-viewer__lock">' + esc(data.lockReason) + '</p>';
+      }
+
+      if (!list.length) {
+        return html + '<p class="tma-portal-viewer__empty">This file hasn’t been sent for review.</p>';
+      }
+
+      return html + list.map(workflowHtml).join('');
+    }
+
+    function workflowHtml(w) {
+      var steps = (w.steps || []).map(function (s) {
+        return '<div class="tma-portal-viewer__member">' +
+          '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(s)) + '" alt="" width="24" height="24">' +
+          '<span class="tma-portal-viewer__member-text">' +
+            '<strong>' + esc(s.name || s.email || 'Someone') + '</strong>' +
+            (s.comment ? '<span class="tma-portal-viewer__member-email">“' + esc(s.comment) + '”</span>' : '') +
+          '</span>' +
+          '<span class="tma-portal-viewer__member-role">' + esc(s.statusLabel) +
+            (s.delegatedFrom ? ' (delegated)' : '') + '</span>' +
+        '</div>';
+      }).join('');
+
+      // Whatever this viewer is being asked to do about it, right now.
+      var mine = '';
+      if (w.myStep && w.isOpen) {
+        mine = '<div class="tma-portal-viewer__respond" data-wf="' + esc(w.id) + '">' +
+          '<textarea class="tma-portal-viewer__input" data-lb-wf-comment rows="2" placeholder="' +
+            (w.requireComment ? 'A comment is required' : 'Add a comment (optional)') + '"></textarea>' +
+          '<div class="tma-portal-viewer__composer-actions">' +
+            w.myActions.map(function (a) {
+              var label = { approve: 'Approve', decline: 'Decline', request_changes: 'Request changes',
+                acknowledge: 'Acknowledge', submit_feedback: 'Send feedback' }[a] || a;
+              var cls = a === 'approve' || a === 'acknowledge' || a === 'submit_feedback'
+                ? 'tma-portal-viewer__btn' : 'tma-portal-viewer__btn-ghost';
+              return '<button type="button" class="' + cls + '" data-lb-wf-act="' + esc(a) +
+                '" data-wf="' + esc(w.id) + '">' + label + '</button>';
+            }).join('') +
+          '</div>' +
+        '</div>';
+      }
+
+      var notes = [];
+      if (w.version) notes.push('Reviewing version ' + w.version);
+      if (w.ordered) notes.push('One at a time');
+      if (!w.requireAll) notes.push('Any one response settles it');
+      if (w.lockFile) notes.push('File locked');
+      if (w.reminderDays) notes.push('Reminders every ' + w.reminderDays + 'd');
+
+      return '<div class="tma-portal-viewer__workflow">' +
+        '<div class="tma-portal-viewer__comment-head">' +
+          statusBadgeHtml(w.status, w.statusLabel, w.tone) +
+          '<strong>' + esc(cap(w.type)) + '</strong>' +
+          '<time datetime="' + esc(w.sentAt) + '">' + esc(fmtDateTime(w.sentAt)) + '</time>' +
+          (w.overdue ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--warn">Overdue</span>' : '') +
+        '</div>' +
+        (w.message ? '<p class="tma-portal-viewer__version-note">' + esc(w.message) + '</p>' : '') +
+        // §6: when a newer version exists, say so rather than letting the
+        // badge imply the file as it stands today was approved.
+        (w.supersededBy
+          ? '<p class="tma-portal-viewer__lock">Version ' + w.supersededBy +
+            ' has been uploaded since this was sent. This request still refers to version ' + w.version + '.</p>'
+          : '') +
+        (w.dueAt ? '<p class="tma-portal-viewer__version-meta">Due ' + esc(fmtDateTime(w.dueAt)) + '</p>' : '') +
+        (notes.length ? '<p class="tma-portal-viewer__version-meta">' + esc(notes.join(' · ')) + '</p>' : '') +
+        '<div class="tma-portal-viewer__source-members">' + steps + '</div>' +
+        (w.signedFile
+          ? '<p class="tma-portal-viewer__version-meta">Signed copy: ' +
+            '<a href="' + esc(w.signedFile.downloadUrl) + '" download>' + esc(w.signedFile.name) + '</a>' +
+            ' — the original is unchanged.</p>'
+          : '') +
+        mine +
+        (w.canManage && w.isOpen
+          ? '<div class="tma-portal-viewer__comment-actions">' +
+            '<button type="button" class="tma-portal-viewer__comment-act" data-lb-wf-cancel="' + esc(w.id) + '">Cancel request</button>' +
+            '</div>'
+          : '') +
+      '</div>';
+    }
+
+    /* Signing needs fields placed on the rendered document, which only the
+     * signature editor can do. Rather than pretending otherwise, the viewer
+     * creates the request and hands over to that editor. */
+    function canSignHere(f) {
+      return !!(window.TMAPortalSignatures
+        && window.TMAPortalSignatures.isSignableName
+        && window.TMAPortalSignatures.isSignableName(f.name));
+    }
+
+    function startSignature() {
+      var f = current();
+      if (!canSignHere(f)) { ui().toast('Only PDF and image files can be signed'); return; }
+
+      confirmModal({
+        title: 'Send for signature',
+        message: 'This opens the signature editor, where you add recipients and place ' +
+          'the signature fields on the document. The original file is never changed — ' +
+          'the signed copy is filed alongside it.',
+        confirmLabel: 'Open signature editor',
+        onConfirm: function () {
+          closeLightbox();
+          window.TMAPortalSignatures.sendFileForSignature(f.id).catch(function () {});
+        },
+      });
+    }
+
+    function statusBadgeHtml(status, label, tone) {
+      return '<span class="tma-portal-status tma-portal-status--' + esc(tone) + '">' + esc(label) + '</span>';
+    }
+
+    function respondToWorkflow(workflowId, action) {
+      var f = current();
+      var e = entry(f);
+      var box = lb.querySelector('.tma-portal-viewer__respond[data-wf="' + workflowId + '"] [data-lb-wf-comment]');
+      var comment = box ? box.value.trim() : '';
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/workflows/' + encodeURIComponent(workflowId) + '/respond'), {
+        method: 'POST', json: { action: action, comment: comment },
+      })
+        .then(function (w) {
+          ui().toast(w.statusLabel);
+          e.approvals = null;
+          loadApprovals(f);
+        })
+        .catch(function (err) { ui().toast((err && err.message) || 'Could not record that response'); });
+    }
+
+    function cancelWorkflow(workflowId) {
+      var f = current();
+      var e = entry(f);
+      confirmModal({
+        title: 'Cancel request',
+        message: 'Cancel this request? The people asked will no longer be able to respond.',
+        confirmLabel: 'Cancel request', danger: true,
+        onConfirm: function () {
+          net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/workflows/' + encodeURIComponent(workflowId) + '/cancel'), { method: 'POST' })
+            .then(function () { e.approvals = null; loadApprovals(f); })
+            .catch(function (err) { ui().toast((err && err.message) || 'Could not cancel that request'); });
+        },
+      });
+    }
+
+    /**
+     * The send dialog. Everything §6 asks to be configurable is here, and every
+     * one of these settings is re-checked server-side when responses arrive —
+     * "comments required" in particular is enforced, not merely suggested.
+     */
+    function openSendWorkflow(type) {
+      var f = current();
+      var e = entry(f);
+      var chosen = [];
+
+      var labels = {
+        approval: 'Send for approval', feedback: 'Send for feedback',
+        review: 'Send for review', acknowledgement: 'Request acknowledgement',
+      };
+
+      var host = ui().openModal({
+        title: labels[type] || 'Send for review',
+        body: '<div class="tma-portal-wf-form">' +
+          '<label class="tma-portal-modal__label">Who should respond?</label>' +
+          '<input type="text" class="tma-portal-viewer__input tma-portal-modal__input" data-wf-search ' +
+            'placeholder="Search people who can open this file">' +
+          '<div class="tma-portal-viewer__mention-pop" data-wf-results hidden></div>' +
+          '<div class="tma-portal-wf-chosen" data-wf-chosen></div>' +
+
+          '<label class="tma-portal-modal__label" for="wf-msg">Message (optional)</label>' +
+          '<textarea id="wf-msg" class="tma-portal-viewer__input" rows="2" data-wf-message ' +
+            'placeholder="Anything they should know"></textarea>' +
+
+          '<label class="tma-portal-modal__label" for="wf-due">Due date (optional)</label>' +
+          '<input type="date" id="wf-due" class="tma-portal-viewer__input tma-portal-modal__input" data-wf-due>' +
+
+          '<label class="tma-portal-modal__label" for="wf-rem">Remind every (days, optional)</label>' +
+          '<input type="number" id="wf-rem" min="1" max="60" class="tma-portal-viewer__input tma-portal-modal__input" data-wf-remind>' +
+
+          '<label class="tma-portal-wf-check"><input type="checkbox" data-wf-all checked> Everyone must respond</label>' +
+          '<label class="tma-portal-wf-check"><input type="checkbox" data-wf-ordered> Ask one person at a time, in order</label>' +
+          '<label class="tma-portal-wf-check"><input type="checkbox" data-wf-comment> A comment is required</label>' +
+          '<label class="tma-portal-wf-check"><input type="checkbox" data-wf-lock> Lock the file while this is open</label>' +
+
+          '<div class="tma-portal-modal__foot">' +
+            '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-wf-cancel>Cancel</button>' +
+            '<button type="button" class="tma-no-data__btn" data-wf-send>Send</button>' +
+          '</div>' +
+        '</div>',
+        onMount: function (host) {
+          var search = host.querySelector('[data-wf-search]');
+          var results = host.querySelector('[data-wf-results]');
+          var chosenBox = host.querySelector('[data-wf-chosen]');
+
+          function paintChosen() {
+            chosenBox.innerHTML = chosen.map(function (p, i) {
+              return '<span class="tma-portal-wf-chip">' +
+                (chosen.length > 1 ? '<b>' + (i + 1) + '.</b> ' : '') + esc(p.name) +
+                '<button type="button" data-wf-remove="' + p.id + '" aria-label="Remove">×</button></span>';
+            }).join('');
+          }
+
+          search.addEventListener('input', function () {
+            var q = search.value.trim();
+            // Reuses the mention endpoint: the same "people who can open this
+            // file" rule, so a request can never be sent to someone who would
+            // be unable to act on it.
+            net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/mentionable?q=' + encodeURIComponent(q)))
+              .then(function (data) {
+                var people = (data && data.people) || [];
+                if (!people.length) { results.hidden = true; return; }
+                results.innerHTML = people.map(function (p) {
+                  return '<button type="button" class="tma-portal-viewer__mention-item" data-wf-pick="' + p.id +
+                    '" data-name="' + esc(p.name) + '">' +
+                    '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(p)) + '" alt="" width="22" height="22">' +
+                    '<span><strong>' + esc(p.name) + '</strong>' +
+                    '<span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span></span></button>';
+                }).join('');
+                results.hidden = false;
+              })
+              .catch(function () { results.hidden = true; });
+          });
+
+          host.addEventListener('click', function (ev) {
+            var pick = ev.target.closest('[data-wf-pick]');
+            if (pick) {
+              var id = parseInt(pick.getAttribute('data-wf-pick'), 10);
+              if (!chosen.some(function (c) { return c.id === id; })) {
+                chosen.push({ id: id, name: pick.getAttribute('data-name') });
+                paintChosen();
+              }
+              results.hidden = true;
+              search.value = '';
+              return;
+            }
+            var rm = ev.target.closest('[data-wf-remove]');
+            if (rm) {
+              var rid = parseInt(rm.getAttribute('data-wf-remove'), 10);
+              chosen = chosen.filter(function (c) { return c.id !== rid; });
+              paintChosen();
+              return;
+            }
+            if (ev.target.closest('[data-wf-cancel]')) { ui().closeModal(); return; }
+            if (ev.target.closest('[data-wf-send]')) {
+              if (!chosen.length) { ui().toast('Choose at least one person'); return; }
+              var due = host.querySelector('[data-wf-due]').value;
+              var remind = parseInt(host.querySelector('[data-wf-remind]').value, 10);
+
+              net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/workflows'), {
+                method: 'POST',
+                json: {
+                  type: type,
+                  // Position is the order they were picked in, which is what
+                  // the chips show — so an ordered flow matches the list.
+                  recipients: chosen.map(function (c, i) { return { userId: c.id, position: i + 1 }; }),
+                  message: host.querySelector('[data-wf-message]').value.trim() || null,
+                  dueAt: due || null,
+                  requireAll: host.querySelector('[data-wf-all]').checked,
+                  ordered: host.querySelector('[data-wf-ordered]').checked,
+                  requireComment: host.querySelector('[data-wf-comment]').checked,
+                  lockFile: host.querySelector('[data-wf-lock]').checked,
+                  reminderDays: remind > 0 ? remind : null,
+                },
+              })
+                .then(function () {
+                  ui().closeModal();
+                  ui().toast('Request sent');
+                  e.approvals = null;
+                  viewerPrefs.tab = 'approvals';
+                  paintPanel();
+                })
+                .catch(function (err) { ui().toast((err && err.message) || 'Could not send that request'); });
+            }
+          });
+        },
+      });
+
+      if (lb && host) host.style.zIndex = '700';
+    }
+
     /* Activity ------------------------------------------------------- */
 
     function paintActivity(host) {
@@ -2070,6 +2411,15 @@
       if (e.target.closest('[data-lb-more-activity]')) { loadActivity(f, true); return; }
       if (e.target.closest('[data-lb-more-comments]')) { loadComments(f, true); return; }
 
+      /* ── approvals ────────────────────────────────── */
+      if (e.target.closest('[data-lb-send-signature]')) { startSignature(); return; }
+      var wfSend = e.target.closest('[data-lb-send-wf]');
+      if (wfSend) { openSendWorkflow(wfSend.getAttribute('data-lb-send-wf')); return; }
+      var wfAct = e.target.closest('[data-lb-wf-act]');
+      if (wfAct) { respondToWorkflow(wfAct.getAttribute('data-wf'), wfAct.getAttribute('data-lb-wf-act')); return; }
+      var wfCancel = e.target.closest('[data-lb-wf-cancel]');
+      if (wfCancel) { cancelWorkflow(wfCancel.getAttribute('data-lb-wf-cancel')); return; }
+
       /* ── versions ─────────────────────────────────── */
       if (e.target.closest('[data-lb-newversion]')) { pickNewVersion(); return; }
       var vPrev = e.target.closest('[data-lb-vpreview]');
@@ -2142,6 +2492,15 @@
           var head2 = lb.querySelector('.tma-portal-viewer__head');
           if (head2) head2.outerHTML = viewerHead(current());
           if (viewerPrefs.panel) paintPanel();
+          return;
+        case 'approvals':
+          viewerPrefs.tab = 'approvals';
+          viewerPrefs.panel = true;
+          var apanel = lb.querySelector('[data-lb-panel]');
+          if (apanel) apanel.hidden = false;
+          var ahead = lb.querySelector('.tma-portal-viewer__head');
+          if (ahead) ahead.outerHTML = viewerHead(current());
+          paintPanel();
           return;
         case 'versions':
           viewerPrefs.tab = 'versions';

@@ -11,6 +11,25 @@
   function ui() { return window.TMAPortalUI; }
   function data() { return window.TMAPortalData; }
 
+  /* Which sections this account may open. The rail is one static list shared
+     by every account type, so without this an employee or a client was offered
+     the firm's security policy, branding, billing and Advanced Preferences
+     alongside their own profile. The map lives in portal-access.js next to the
+     sidebar's; the server enforces the same capabilities again on every
+     endpoint these pages call.
+
+     Until /me answers, can() is false and only the personal sections render —
+     the admin ones appear a beat later, the same beat the rail already waits
+     for to show the reader's name. A missing access module (a shell that never
+     loaded it) opens everything rather than stranding an administrator with no
+     settings at all. */
+  function access() { return window.TMAPortalAccess; }
+
+  function allowed(pageId) {
+    var a = access();
+    return !a || !a.canSettingsPage || a.canSettingsPage(pageId);
+  }
+
   var state = { el: null, page: 'profile', expanded: {} };
 
   /* Personal sections reuse the real panels from settings.js */
@@ -2451,19 +2470,24 @@
       '</span></button>';
   }
 
-  function renderNav() {
+  function renderNav(pageId) {
     return NAV.map(function (n) {
       if (!n.items) {
-        if (n.id === 'profile') return renderNavUser(state.page === n.id);
-        return '<button type="button" class="tma-portal-admin__nav-item' + (state.page === n.id ? ' is-active' : '') + '" data-admin-nav="' + n.id + '">' + navIcon(n.icon) + ui().esc(n.label) + '</button>';
+        if (!allowed(n.id)) return '';
+        if (n.id === 'profile') return renderNavUser(pageId === n.id);
+        return '<button type="button" class="tma-portal-admin__nav-item' + (pageId === n.id ? ' is-active' : '') + '" data-admin-nav="' + n.id + '">' + navIcon(n.icon) + ui().esc(n.label) + '</button>';
       }
+      /* A group whose every section is closed to this account should not leave
+         an empty disclosure behind. */
+      var items = n.items.filter(function (it) { return allowed(it.id); });
+      if (!items.length) return '';
       var open = !!state.expanded[n.group];
       return '<button type="button" class="tma-portal-admin__nav-item" data-admin-group="' + n.group + '" aria-expanded="' + open + '">' + navIcon(n.icon) + ui().esc(n.label) +
         '<img class="tma-portal-admin__caret" src="images/icons/phosphor/CaretRight.svg" alt=""></button>' +
         (open
           ? '<div class="tma-portal-admin__subnav">' +
-            n.items.map(function (it) {
-              return '<button type="button" class="tma-portal-admin__nav-item' + (state.page === it.id ? ' is-active' : '') + '" data-admin-nav="' + it.id + '">' + ui().esc(it.label) + '</button>';
+            items.map(function (it) {
+              return '<button type="button" class="tma-portal-admin__nav-item' + (pageId === it.id ? ' is-active' : '') + '" data-admin-nav="' + it.id + '">' + ui().esc(it.label) + '</button>';
             }).join('') +
             '</div>'
           : '');
@@ -2481,7 +2505,12 @@
     var el = state.el;
     if (!el) return;
     var s = data().state();
-    var page = PAGES[state.page];
+    /* state.page is what was *asked* for — a deep link, a search result, a
+       stale bookmark. What actually renders is resolved here, every time, so a
+       section this account may not open falls back to their profile instead of
+       drawing an admin panel. */
+    var pageId = allowed(state.page) ? state.page : 'profile';
+    var page = PAGES[pageId];
 
     /* the rail is rebuilt on every page change - keep the reader where they
        were instead of snapping back to the top of the list */
@@ -2490,9 +2519,9 @@
 
     el.innerHTML =
       '<div class="tma-portal-page"><div class="tma-portal-admin">' +
-      '<nav class="tma-portal-admin__nav" aria-label="Settings sections">' + renderNav() + '</nav>' +
+      '<nav class="tma-portal-admin__nav" aria-label="Settings sections">' + renderNav(pageId) + '</nav>' +
       '<div class="tma-portal-admin__content">' +
-      (page.hideTitle ? '' : '<h2 class="tma-portal-admin__page-title">' + ui().esc(pageTitle(state.page)) + '</h2>') +
+      (page.hideTitle ? '' : '<h2 class="tma-portal-admin__page-title">' + ui().esc(pageTitle(pageId)) + '</h2>') +
       page.render(s) +
       '</div></div></div>';
 
@@ -2514,12 +2543,13 @@
   }
 
   var meWatched = false;
+  var accessWatched = false;
 
   function refreshNavUser() {
     if (!state.el) return;
     var btn = state.el.querySelector('.tma-portal-admin__nav-user');
     if (!btn) return;
-    btn.outerHTML = renderNavUser(state.page === 'profile');
+    btn.outerHTML = renderNavUser(!allowed(state.page) || state.page === 'profile');
     var fresh = state.el.querySelector('.tma-portal-admin__nav-user');
     if (fresh) fresh.addEventListener('click', function () { setPage('profile'); });
   }
@@ -2530,6 +2560,12 @@
     if (!meWatched && window.TMACurrentUser) {
       meWatched = true;
       window.TMACurrentUser.onChange(refreshNavUser);
+    }
+    /* so do the capabilities: the first paint shows only the personal
+       sections, and the administration appears once /me has answered. */
+    if (!accessWatched && access() && access().ready) {
+      accessWatched = true;
+      access().ready().then(function () { if (state.el) render(); });
     }
     /* deep link: /settings?page=profile */
     try {

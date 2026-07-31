@@ -788,18 +788,29 @@
     return Object.keys(state.selected || {}).length;
   }
 
+  /* Employees work in the hub; how it is shaped — who may reach it, the
+     service teams, the custom fields every record inherits — is the
+     administrator's call, and these three open exactly those settings
+     sections. Hidden rather than left to 404 in the rail. */
+  function canManageClientHub() {
+    var access = window.TMAPortalAccess;
+    return !access || !access.canSettingsPage || access.canSettingsPage('clienthub-access');
+  }
+
   function renderClientsHeadActions() {
     return (
-      '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
-      '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--secondary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
-      'Manage client hub' +
-      '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
-      '</button>' +
-      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--start" data-head-dropdown-menu hidden role="menu" aria-label="Manage client hub">' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:clienthub-access">Manage client hub access</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:service-teams">Manage service teams</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:custom-fields">Manage custom fields</button>' +
-      '</div></div>' +
+      (canManageClientHub()
+        ? '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
+          '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--secondary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
+          'Manage client hub' +
+          '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
+          '</button>' +
+          '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--start" data-head-dropdown-menu hidden role="menu" aria-label="Manage client hub">' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:clienthub-access">Manage client hub access</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:service-teams">Manage service teams</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:custom-fields">Manage custom fields</button>' +
+          '</div></div>'
+        : '') +
       '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
       '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
       'Create client' +
@@ -827,9 +838,22 @@
       if (window.TMAHeadDropdown) window.TMAHeadDropdown.closeAll();
       return;
     }
-    if (!slot.querySelector('[data-head-dropdown-toggle]')) {
-      slot.innerHTML = renderClientsHeadActions();
-    }
+    refreshClientsHeadActions(slot);
+  }
+
+  /* Rendered once per access state, not once per mount: on a hard refresh at
+     /clients the actions are drawn before /me has answered, so an
+     administrator would otherwise be left without the hub controls until they
+     navigated away and back. Re-rendering only when the answer changes keeps
+     an open dropdown from being torn out from under the reader. */
+  function refreshClientsHeadActions(slot) {
+    slot = slot || document.querySelector('[data-clients-page-actions]');
+    if (!slot || slot.hidden) return;
+    var hub = canManageClientHub() ? '1' : '0';
+    if (slot.getAttribute('data-clients-hub-actions') === hub
+      && slot.querySelector('[data-head-dropdown-toggle]')) return;
+    slot.innerHTML = renderClientsHeadActions();
+    slot.setAttribute('data-clients-hub-actions', hub);
   }
 
   function renderBulkToolBtn(action, icon, label) {
@@ -2644,7 +2668,8 @@
 
   function navigateToClientsAdminPage(adminPage) {
     var meta = CLIENTS_ADMIN_PAGES[adminPage];
-    if (!meta || !window.TMADashboard || !window.TMADashboard.navigate) return;
+    if (!meta || !canManageClientHub()) return;
+    if (!window.TMADashboard || !window.TMADashboard.navigate) return;
     window.TMADashboard.navigate({
       navId: 'account-settings',
       view: 'admin',
@@ -2658,6 +2683,11 @@
     if (clientsHeadActionsWired) return;
     clientsHeadActionsWired = true;
     if (window.TMAHeadDropdown) window.TMAHeadDropdown.mount();
+
+    var access = window.TMAPortalAccess;
+    if (access && access.ready) {
+      access.ready().then(function () { refreshClientsHeadActions(); });
+    }
 
     document.addEventListener('head-dropdown:select', function (event) {
       var wrap = event.detail && event.detail.wrap;

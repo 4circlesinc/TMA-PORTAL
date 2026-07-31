@@ -111,6 +111,39 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/people.mjs
   ```
 
+- **`settings-access.mjs`** — who the account settings rail offers what to.
+  `/account-settings` is the one settings home, so *every* account loads it —
+  but the rail it draws is a single static list in `portal-admin.js` and
+  nothing pruned it, so employees and clients were offered Admin Overview, the
+  security and sign-in policies, DLP, company branding, billing, storage and
+  the whole Advanced Preferences group beside their own profile.
+
+  `PortalAccessTest` can check the matrix; only a browser can check what the
+  rail *paints*. It reads every section each account type is offered (expanding
+  the collapsed groups first — their children aren't in the DOM otherwise),
+  then checks the three ways in that don't go through the rail: a deep link
+  (`?settings-page=security-policy` must fall back to the reader's profile,
+  not render the panel), global search, and the "Manage client hub" dropdown
+  on the Clients page.
+
+  Two timing traps it exists to catch, both of which show up as an
+  *administrator* losing access rather than an employee gaining it:
+
+  - The rail paints before `/me` answers, so nobody holds a capability yet.
+    Both the rail and the Clients dropdown have to repaint once the answer
+    lands. Wait on `document.documentElement[data-tma-access="ready"]` rather
+    than a fixed beat.
+  - The search index is built at boot for the same reason, so the allowed
+    sections are pushed into it afterwards — and the palette used to snapshot
+    the array with `.concat`, which quietly threw those away. Step 6 is that
+    check; it failed on the first run of this script.
+
+  Needs the three standard accounts:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/settings-access.mjs
+  ```
+
 - **`calendar-sync.mjs`** — Phase 4 (Google/Microsoft). Real providers can't be
   reached from a test, so the seed supplies a `google`-source calendar carrying
   one conflicted event (its `conflict_snapshot` holds the overwritten local

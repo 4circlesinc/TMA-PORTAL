@@ -66,6 +66,84 @@ class PortalAccessTest extends TestCase
         $this->assertFalse(Role::can($employee, 'recyclebin.admin'));
     }
 
+    /* ── the account settings rail ───────────────────────────────────── */
+
+    public function test_the_settings_rail_keeps_the_firms_administration_to_administrators(): void
+    {
+        // /account-settings is the one settings home, so everybody loads it —
+        // but the rail it draws also held the firm's security policy,
+        // branding, billing, storage and Advanced Preferences, offered to
+        // employees and clients alike because it is one static list.
+        $employee = $this->user(Role::EMPLOYEE);
+        $client = $this->user(Role::CLIENT);
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        $administration = [
+            'admin-overview', 'background-ops', 'reporting', 'notification-history',
+            'branding', 'billing-convert', 'billing-cancel', 'clienthub-access',
+            'service-teams', 'custom-fields', 'security-policy', 'signin-policy',
+            'dlp', 'super-users', 'connection-manager', 'storage-usage',
+            'ai-settings', 'permissions', 'tools', 'default-folders',
+        ];
+
+        foreach ($administration as $section) {
+            $this->assertFalse(Role::canViewSettingsPage($employee, $section), $section.' should be closed to employees');
+            $this->assertFalse(Role::canViewSettingsPage($client, $section), $section.' should be closed to clients');
+            $this->assertTrue(Role::canViewSettingsPage($admin, $section), $section.' should be open to administrators');
+        }
+    }
+
+    public function test_everyone_keeps_their_own_settings(): void
+    {
+        // The point of the rail is still personal settings — gating must not
+        // take a client's own password or theme away from them.
+        $personal = ['profile', 'theme', 'time', 'notifications', 'privacy',
+            'account-security', 'payment', 'plugins', 'connectors'];
+
+        foreach ([Role::CLIENT, Role::EMPLOYEE] as $accountType) {
+            $user = $this->user($accountType);
+            foreach ($personal as $section) {
+                $this->assertTrue(
+                    Role::canViewSettingsPage($user, $section),
+                    $section.' should stay open to a '.$accountType
+                );
+            }
+        }
+    }
+
+    public function test_every_settings_section_asks_for_a_capability_that_exists(): void
+    {
+        // A typo here would fail closed for everyone but administrators, who
+        // hold every capability — so it would ship looking fine.
+        foreach (Role::settingsPageCapabilities() as $section => $capability) {
+            $this->assertContains(
+                $capability,
+                Role::capabilityNames(),
+                $section.' asks for an unknown capability: '.$capability
+            );
+        }
+    }
+
+    public function test_the_browser_mirror_of_the_settings_rail_matches_the_server(): void
+    {
+        // portal-access.js hides what the server would refuse. When the two
+        // disagree the portal offers a page it then cannot serve, which is the
+        // failure this whole class exists to prevent.
+        $js = file_get_contents(public_path('js/portal-access.js'));
+        $this->assertIsString($js);
+
+        preg_match('/var SETTINGS_CAPABILITIES = \{(.*?)\n  \};/s', $js, $block);
+        $this->assertNotEmpty($block, 'SETTINGS_CAPABILITIES not found in portal-access.js');
+
+        preg_match_all("/'([^']+)':\s*'([^']+)'/", $block[1], $pairs, PREG_SET_ORDER);
+        $mirror = [];
+        foreach ($pairs as $pair) {
+            $mirror[$pair[1]] = $pair[2];
+        }
+
+        $this->assertSame(Role::settingsPageCapabilities(), $mirror);
+    }
+
     public function test_an_unknown_capability_is_denied_rather_than_assumed(): void
     {
         // A typo must fail closed. Administrators are the deliberate exception:

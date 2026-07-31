@@ -662,6 +662,46 @@
 }
 .tma-portal-modal__input { min-height: 0; }
 
+/* Approvals ---------------------------------------------------------- */
+.tma-portal-viewer__send-row { display: flex; flex-wrap: wrap; gap: var(--space-6); margin-bottom: var(--space-12); }
+.tma-portal-viewer__workflow { padding: var(--space-10) 0; border-bottom: 1px solid var(--color-border); }
+.tma-portal-viewer__workflow:last-child { border-bottom: 0; }
+.tma-portal-viewer__respond { margin-top: var(--space-8); }
+.tma-portal-viewer__lock {
+  margin: var(--space-6) 0; padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-8); background: color-mix(in srgb, #f59e0b 14%, transparent);
+  font-size: var(--text-size-12); color: var(--color-text-primary);
+}
+.tma-portal-viewer__comment-flag--warn { background: color-mix(in srgb, #f59e0b 22%, transparent); }
+
+/* Status badge. Tones only — never a bespoke colour per status. */
+.tma-portal-status {
+  display: inline-flex; align-items: center; padding: 1px var(--space-8);
+  border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.tma-portal-status--success { background: color-mix(in srgb, #16a34a 16%, transparent); color: #15803d; }
+.tma-portal-status--danger  { background: color-mix(in srgb, #dc2626 16%, transparent); color: #b91c1c; }
+.tma-portal-status--pending { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #b45309; }
+.tma-portal-status--neutral { background: var(--color-hover); color: var(--color-text-secondary); }
+/* In the viewer header the surrounding text is white-on-dark, so the badge
+   needs its own opaque backing to stay readable. */
+.tma-portal-viewer__sub .tma-portal-status { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+/* Send-for-review dialog */
+.tma-portal-wf-form { display: block; }
+.tma-portal-wf-form .tma-portal-viewer__mention-pop { position: static; margin: var(--space-4) 0 0; max-height: 180px; }
+.tma-portal-wf-chosen { display: flex; flex-wrap: wrap; gap: var(--space-6); margin-top: var(--space-8); }
+.tma-portal-wf-chip {
+  display: inline-flex; align-items: center; gap: var(--space-4);
+  padding: 2px var(--space-8); border-radius: 999px;
+  background: var(--color-hover); font-size: var(--text-size-12);
+}
+.tma-portal-wf-chip button { border: 0; background: none; cursor: pointer; font-size: 14px; line-height: 1; color: var(--color-text-secondary); }
+.tma-portal-wf-check {
+  display: flex; align-items: center; gap: var(--space-8);
+  margin-top: var(--space-8); font-size: var(--text-size-13); color: var(--color-text-primary);
+}
+
 /* Responsive: the panel becomes a drawer, the rail goes away ---------- */
 @media (max-width: 1100px) {
   .tma-portal-viewer__panel {

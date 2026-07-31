@@ -48,6 +48,45 @@
     email: 'mail.use',
   };
 
+  /* Account settings rail (portal-admin.js): section id => capability.
+     Anything absent is personal — profile, theme, time, notifications,
+     privacy, account security, payment, plugins, and linking your own storage
+     account. Everything here is the firm's administration, which the rail used
+     to offer to every account because it is one static list.
+     Mirrors Role::SETTINGS_PAGE_CAPABILITIES; PortalAccessTest holds the two
+     together. */
+  var SETTINGS_CAPABILITIES = {
+    'admin-overview': 'overview.view',
+    'background-ops': 'settings.operations',
+    'reporting': 'settings.reporting',
+    'notification-history': 'settings.reporting',
+    'branding': 'settings.branding',
+    'billing-convert': 'settings.billing',
+    'billing-cancel': 'settings.billing',
+    'clienthub-access': 'settings.clientHub',
+    'service-teams': 'settings.clientHub',
+    'custom-fields': 'settings.clientHub',
+    'security-insights': 'settings.security',
+    'dlp': 'settings.security',
+    'signin-policy': 'settings.security',
+    'security-policy': 'settings.security',
+    'alert-settings': 'settings.security',
+    'device-security': 'settings.security',
+    'super-users': 'settings.security',
+    'quarantined': 'settings.security',
+    'connection-manager': 'settings.connectors',
+    'storage-usage': 'settings.storage',
+    'ai-settings': 'settings.advanced',
+    'email-settings': 'settings.advanced',
+    'permissions': 'settings.advanced',
+    'tools': 'settings.advanced',
+    'file-settings': 'files.settings',
+    'default-folders': 'files.settings',
+    'folder-templates': 'files.settings',
+    'upload-forms': 'files.settings',
+    'file-drops': 'files.settings',
+  };
+
   var caps = null;
   var readyResolve;
   var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
@@ -177,6 +216,8 @@
 
   window.TMAPortalAccess = {
     can: can,
+    canSettingsPage: function (pageId) { return can(SETTINGS_CAPABILITIES[pageId]); },
+    settingsCapabilities: function () { return SETTINGS_CAPABILITIES; },
     apply: apply,
     ready: function () { return readyPromise; },
     capabilities: function () { return caps ? caps.slice() : []; },

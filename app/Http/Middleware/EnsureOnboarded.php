@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access\Role;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,7 +25,12 @@ class EnsureOnboarded
             && ! $request->is('settings', 'account-settings')
             && ! $request->routeIs('social.*')
         ) {
-            return redirect()->route('getting-started');
+            // Two flows: clients get the guided wizard, staff get the security
+            // checklist. Staff onboarding is a later phase and keeps its
+            // existing screen until then.
+            return Role::isClient($user)
+                ? redirect()->route('onboarding.index')
+                : redirect()->route('getting-started');
         }
 
         return $next($request);

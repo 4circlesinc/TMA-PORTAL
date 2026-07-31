@@ -101,8 +101,18 @@
     );
   }
 
-  function settingsIndex() {
-    var personal = SETTINGS_PAGES.map(function (page) {
+  /* Search reads the sidebar out of the DOM, so a nav item portal-access.js
+     pruned drops out of the index for free. The settings rail has no such
+     luck — it is a static list in portal-admin.js — so without this an
+     employee searching "security policy" was handed a result that opened the
+     firm's policy page. */
+  function allowedAdminPage(page) {
+    var access = window.TMAPortalAccess;
+    return !access || !access.canSettingsPage || access.canSettingsPage(page.id);
+  }
+
+  function personalSettingsEntries() {
+    return SETTINGS_PAGES.map(function (page) {
       return {
         type: 'page',
         label: page.label,
@@ -115,7 +125,10 @@
         keywords: ['settings', page.label, page.id, 'preferences', 'account'],
       };
     });
-    var admin = ADMIN_PAGES.map(function (page) {
+  }
+
+  function adminSettingsEntries() {
+    return ADMIN_PAGES.filter(allowedAdminPage).map(function (page) {
       return {
         type: 'page',
         label: page.label,
@@ -128,11 +141,32 @@
         keywords: ['settings', 'admin', page.label, page.id, page.group || '', 'preferences', 'security', 'storage'],
       };
     });
-    return personal.concat(admin);
+  }
+
+  function settingsIndex() {
+    return personalSettingsEntries().concat(adminSettingsEntries());
   }
 
   function buildStaticIndex(rootEl) {
-    return navLeavesFrom(rootEl).concat(settingsIndex());
+    var index = navLeavesFrom(rootEl).concat(settingsIndex());
+
+    /* The index is built once, at boot, before /me has answered — so at this
+       point nobody holds any capability and every admin section is filtered
+       out, administrators included. The search popup keeps this array, not a
+       copy, so the sections an account really may reach are pushed into it in
+       place once the capabilities land. */
+    var access = window.TMAPortalAccess;
+    if (access && access.ready) {
+      access.ready().then(function () {
+        var known = {};
+        index.forEach(function (entry) { if (entry.adminPage) known[entry.adminPage] = true; });
+        adminSettingsEntries().forEach(function (entry) {
+          if (!known[entry.adminPage]) index.push(entry);
+        });
+      });
+    }
+
+    return index;
   }
 
   var contactsCache = null;

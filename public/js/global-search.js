@@ -919,7 +919,12 @@
   function mountSearchController(mount, options = {}) {
     const overlay = options.overlay || null;
     const sidebarEmbed = !!options.sidebarEmbed;
-    const index = DEFAULT_INDEX.concat(options.index || window.TMAGlobalSearchIndex || []);
+    /* Read on every search, not captured once. The caller's index is built at
+       boot, before /me answers, so the settings sections an account may reach
+       are appended to it a beat later (portal-search-index.js) — a snapshot
+       taken here would be the empty-handed version forever, and an
+       administrator would never find their own admin pages. */
+    const sourceIndex = () => DEFAULT_INDEX.concat(options.index || window.TMAGlobalSearchIndex || []);
     if (!mount) return null;
 
     const state = {
@@ -1013,7 +1018,7 @@
     }
 
     function portalGroups() {
-      return portalInitialGroups(index, state.contacts);
+      return portalInitialGroups(sourceIndex(), state.contacts);
     }
 
     function bindPopupEvents(popup) {
@@ -1143,7 +1148,7 @@
       }
 
       pushRecentSearch(query);
-      const pageHits = filterIndex(index, q);
+      const pageHits = filterIndex(sourceIndex(), q);
       const contactHits = filterIndex(state.contacts, q);
       state.results = mergeResults([pageHits, contactHits]);
       state.selectedIndex = 0;
@@ -1157,7 +1162,7 @@
           if (seq !== state._searchSeq || !state.open) return;
           state.loading = false;
           state.results = mergeResults([
-            filterIndex(index, state.query.trim()),
+            filterIndex(sourceIndex(), state.query.trim()),
             filterIndex(state.contacts, state.query.trim()),
             live,
           ]);

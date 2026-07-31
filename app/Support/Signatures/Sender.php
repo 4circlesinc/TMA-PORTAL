@@ -50,6 +50,10 @@ class Sender
             'expiresAt' => $expiresAt->toIso8601String(),
         ]);
 
+        // Mirror into the File Library so the document's own viewer shows the
+        // request. Never allowed to affect sending — see SignatureBridge.
+        \App\Support\Files\Workflow\SignatureBridge::sync($request->fresh());
+
         // Only the first group is invited; later signers are emailed when
         // their turn arrives, so a link can't sit in an inbox before it works.
         foreach (SigningFlow::currentGroup($request->fresh()) as $recipient) {
@@ -92,11 +96,13 @@ class Sender
             // already recorded, and the copy can be regenerated.
             $signed = Completer::finalize($request);
             self::notifyCompleted($request->fresh(), $signed);
+            \App\Support\Files\Workflow\SignatureBridge::sync($request->fresh());
 
             return $status;
         }
 
         $request->forceFill(['status' => $status])->save();
+        \App\Support\Files\Workflow\SignatureBridge::sync($request->fresh());
 
         foreach (SigningFlow::currentGroup($request) as $recipient) {
             // Only chase people who haven't been told yet.

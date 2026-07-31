@@ -130,6 +130,23 @@ class Role
         'settings.security' => [],
         // Google/Microsoft connectors, enabled org-wide.
         'settings.connectors' => [],
+        // The queue of long-running jobs for the whole firm.
+        'settings.operations' => [],
+        // Usage reports and the firm-wide notification history.
+        'settings.reporting' => [],
+        // The company name, logo and colours every account sees.
+        'settings.branding' => [],
+        // The plan, the trial and cancellation.
+        'settings.billing' => [],
+        // Who may reach the client hub, the service teams, the custom fields
+        // every client record inherits. Employees *use* the hub; deciding how
+        // it is shaped is a different thing.
+        'settings.clientHub' => [],
+        // Firm-wide storage usage against the licence.
+        'settings.storage' => [],
+        // Advanced Preferences — AI, org email, the permission defaults and
+        // which portal tools are switched on at all.
+        'settings.advanced' => [],
     ];
 
     /**
@@ -161,10 +178,75 @@ class Role
         'users/new' => 'users.manage',
     ];
 
+    /**
+     * Account settings rail section => the capability needed to open it.
+     *
+     * /account-settings is the one settings home, so every account may load
+     * it — their profile, theme, notifications, password and two-factor all
+     * live there. The rail it renders, however, also carried the firm's
+     * administration: security policy, connectors, branding, billing, storage
+     * and the Advanced Preferences. Those were offered to employees and
+     * clients alike, because the rail is one static list in portal-admin.js
+     * and nothing pruned it. Sections absent from this map are personal.
+     *
+     * The browser mirror lives in portal-access.js and is held to this map by
+     * PortalAccessTest, so the two cannot drift apart unnoticed.
+     */
+    private const SETTINGS_PAGE_CAPABILITIES = [
+        'admin-overview' => 'overview.view',
+        'background-ops' => 'settings.operations',
+        'reporting' => 'settings.reporting',
+        'notification-history' => 'settings.reporting',
+        'branding' => 'settings.branding',
+        'billing-convert' => 'settings.billing',
+        'billing-cancel' => 'settings.billing',
+        'clienthub-access' => 'settings.clientHub',
+        'service-teams' => 'settings.clientHub',
+        'custom-fields' => 'settings.clientHub',
+        // "Account security" is the reader's own password and 2FA and stays
+        // open; everything else under Security is firm-wide policy.
+        'security-insights' => 'settings.security',
+        'dlp' => 'settings.security',
+        'signin-policy' => 'settings.security',
+        'security-policy' => 'settings.security',
+        'alert-settings' => 'settings.security',
+        'device-security' => 'settings.security',
+        'super-users' => 'settings.security',
+        'quarantined' => 'settings.security',
+        // "Connectors" stays open — it is where anyone links their own
+        // OneDrive, and it already shows the org-wide switches to admins only.
+        // The Connection Manager lists what the firm has enabled.
+        'connection-manager' => 'settings.connectors',
+        'storage-usage' => 'settings.storage',
+        'ai-settings' => 'settings.advanced',
+        'email-settings' => 'settings.advanced',
+        'permissions' => 'settings.advanced',
+        'tools' => 'settings.advanced',
+        'file-settings' => 'files.settings',
+        'default-folders' => 'files.settings',
+        'folder-templates' => 'files.settings',
+        'upload-forms' => 'files.settings',
+        'file-drops' => 'files.settings',
+    ];
+
     /** Every capability name the portal knows about. */
     public static function capabilityNames(): array
     {
         return array_keys(self::MATRIX);
+    }
+
+    /** Settings section => capability, for the browser mirror to be held to. */
+    public static function settingsPageCapabilities(): array
+    {
+        return self::SETTINGS_PAGE_CAPABILITIES;
+    }
+
+    /** May this user open the given account settings section? */
+    public static function canViewSettingsPage(?User $user, string $page): bool
+    {
+        $capability = self::SETTINGS_PAGE_CAPABILITIES[$page] ?? null;
+
+        return $capability === null || self::can($user, $capability);
     }
 
     /** The capability a portal page needs, or null when it is open to all. */
