@@ -81,6 +81,9 @@
     // File Library folder it opens onto.
     { id: 'folders', label: 'Documents' },
     { id: 'assigned', label: 'Assigned' },
+    // Can this client sign in, and what have they done since. Before an
+    // account exists this is where the invitation lives.
+    { id: 'access', label: 'Portal access' },
   ];
 
   var ASSIGNMENT_LEVELS = [
@@ -236,6 +239,9 @@
     },
     inviteStatus: function (uid) {
       return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/invite');
+    },
+    access: function (uid) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/access');
     },
   };
 
@@ -1239,7 +1245,7 @@
     // Nothing to offer if they can already sign in, or if we have no address
     // to send to. Reaching the client hub at all already means `clients.invite`
     // — and the server re-checks it regardless.
-    if (!c || c.hasLogin || !c.email) return '';
+    if (!c || c.hasLogin || !clientPrimaryEmail(c)) return '';
 
     var inv = state ? state.invitation : null;
     var pending = inv && inv.status !== 'accepted' && (inv.canResend || inv.canCancel);
@@ -1701,6 +1707,20 @@
         return renderListItem({ icon: r.icon, label: r.label, value: r.value });
       }).join('') +
       '</ul></div>';
+  }
+
+  /* The address an invitation would go to.
+     The contact object carries `emails: [{type, value}]`, never a top-level
+     `email` — reading `c.email` silently yields undefined and makes every
+     client look like it has no address. */
+  function clientPrimaryEmail(c) {
+    if (!c) return '';
+    if (c.email) return c.email;
+    var rows = c.emails || (c.profile && c.profile.emails) || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] && rows[i].value) return rows[i].value;
+    }
+    return '';
   }
 
   function companyRoleLabel(role) {
@@ -2363,7 +2383,7 @@
   function renderPortalAccessBlock(state, c) {
     if (!c) return '';
     var inv = state.invitation;
-    var loading = !!state.inviteLoading;
+    var loading = !!state.accessLoading;
 
     if (c.hasLogin) {
       return (
@@ -2381,11 +2401,11 @@
     } else if (!inv || inv.status === 'accepted') {
       body =
         '<div class="tma-dash__clients-assigned-empty">' +
-        (c.email
+        (clientPrimaryEmail(c)
           ? 'No portal access yet. Invite them to create an account.'
           : 'Add an email address to this client before inviting them.') +
         '</div>' +
-        (c.email
+        (clientPrimaryEmail(c)
           ? '<div class="tma-dash__clients-assign-form">' +
             '<button type="button" class="tma-dash__clients-message-btn" data-clients-invite>' +
             '<img src="' + ICONS.EnvelopeSimple + '" alt=""><span>Invite to portal</span></button></div>'
@@ -2430,6 +2450,102 @@
     );
   }
 
+  var LOGIN_EVENT_LABEL = {
+    login: 'Signed in',
+    logout: 'Signed out',
+    login_failed: 'Failed sign-in',
+    lockout: 'Locked out',
+  };
+
+  /* The Portal access tab.
+
+     Two mutually exclusive halves, which is the point of the tab: until the
+     client has an account the only useful thing is the invitation, and once
+     they do the invitation is history and what staff want is "when did they
+     last get in". */
+  function renderAccessPanel(state, c, hidden) {
+    var d = state.access;
+    var loading = !!state.accessLoading;
+
+    var body;
+    if (loading || !d) {
+      body = '<div class="tma-dash__clients-assigned-empty">Loading…</div>';
+    } else if (!d.hasAccount) {
+      // No account yet: the invitation is the whole story.
+      body = renderPortalAccessBlock(state, c);
+    } else {
+      body = renderAccountSummary(d.account) +
+        renderLoginLog(d.logins || []) +
+        renderAccountActivity(d.activity || []);
+    }
+
+    return (
+      '<div class="tma-dash__clients-profile-panel" data-clients-panel="access" role="tabpanel"' +
+      (hidden ? ' hidden' : '') + '>' + body + '</div>'
+    );
+  }
+
+  function renderAccountSummary(a) {
+    if (!a) return '';
+    var bits = [a.accountType || 'Client'];
+    if (a.status) bits.push(a.status === 'approved' ? 'Active' : a.status);
+    if (a.twoFactor) bits.push('Two-factor on');
+    if (a.onboardedAt) bits.push('Onboarding complete');
+
+    return '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Account</span></div>' +
+      '<div class="tma-dash__clients-assigned">' +
+      '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(a) + '</span>' +
+      '<span class="tma-dash__clients-assigned-main">' +
+      '<span class="tma-dash__clients-assigned-title">' + esc(a.name || a.email || 'Account') + '</span>' +
+      '<span class="tma-dash__clients-assigned-meta">' + esc(bits.join(' · ')) +
+      (a.email ? ' · ' + esc(a.email) : '') + '</span>' +
+      '</span></div></div>';
+  }
+
+  function renderLoginLog(rows) {
+    var list = rows.length
+      ? '<div class="tma-dash__clients-assigned-list">' + rows.map(function (r) {
+          var meta = [r.when || ''];
+          if (r.device) meta.push(r.device);
+          if (r.ip) meta.push(r.ip);
+          return '<div class="tma-dash__clients-assigned">' +
+            '<span class="tma-dash__clients-assigned-main">' +
+            '<span class="tma-dash__clients-assigned-title">' +
+            esc(LOGIN_EVENT_LABEL[r.event] || r.event) + '</span>' +
+            '<span class="tma-dash__clients-assigned-meta">' +
+            esc(meta.filter(Boolean).join(' · ')) + '</span>' +
+            '</span></div>';
+        }).join('') + '</div>'
+      : '<div class="tma-dash__clients-assigned-empty">No sign-ins recorded yet.</div>';
+
+    return '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Sign-in history</span></div>' +
+      list + '</div>';
+  }
+
+  function renderAccountActivity(rows) {
+    if (!rows.length) {
+      return '<div class="tma-dash__clients-access-block">' +
+        '<div class="tma-dash__clients-assigned-head">' +
+        '<span class="tma-dash__clients-assigned-count">Activity</span></div>' +
+        '<div class="tma-dash__clients-assigned-empty">Nothing recorded yet.</div></div>';
+    }
+
+    return '<div class="tma-dash__clients-access-block">' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Activity</span></div>' +
+      '<div class="tma-dash__clients-assigned-list">' + rows.map(function (r) {
+        return '<div class="tma-dash__clients-assigned">' +
+          '<span class="tma-dash__clients-assigned-main">' +
+          '<span class="tma-dash__clients-assigned-title">' + esc(r.description || r.type) + '</span>' +
+          '<span class="tma-dash__clients-assigned-meta">' + esc(r.when || '') + '</span>' +
+          '</span></div>';
+      }).join('') + '</div></div>';
+  }
+
   function renderAssignedPanel(state, contactId, hidden) {
     var items = state.assignments || [];
     var assignable = state.assignable || [];
@@ -2467,7 +2583,6 @@
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="assigned" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
-      renderPortalAccessBlock(state, contactFor(contactId || state.selectedId)) +
       '<div class="tma-dash__clients-assigned-head">' +
       '<span class="tma-dash__clients-assigned-count">' +
       (loading ? 'Loading…' : (items.length + ' assigned staff member' + (items.length === 1 ? '' : 's'))) +
@@ -2501,6 +2616,7 @@
       renderContactInfoPanel(c, listItems, activeTab !== 'info') +
       renderFoldersPanel(c.id, activeTab !== 'folders') +
       renderAssignedPanel(state, c.id, activeTab !== 'assigned') +
+      renderAccessPanel(state, c, activeTab !== 'access') +
       '</div></div>'
     );
   }
@@ -3336,6 +3452,10 @@
     // Fold a fresh invitation record into state and repaint.
     function applyInvitation(res) {
       state.invitation = (res && res.invitation) || null;
+      // The panel reads state.access, so re-pull it rather than letting the
+      // tab show a stale invitation next to a fresh toolbar button.
+      state.accessLoadedFor = null;
+      ensureAccessLoaded(state, render);
       redraw();
     }
 
@@ -3549,6 +3669,9 @@
         if (state.profileTab === 'assigned' && state.selectedId) {
           ensureAssignmentsLoaded(state, render);
         }
+        if (state.profileTab === 'access' && state.selectedId) {
+          ensureAccessLoaded(state, render);
+        }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
       });
@@ -3602,31 +3725,34 @@
     });
   }
 
-  function ensureInvitationLoaded(state, render) {
+  /* Everything the Portal access tab shows. One call: the invitation when
+     there is no account, the sign-in log and activity once there is. */
+  function ensureAccessLoaded(state, render) {
     if (!state.selectedId) return;
-    if (state.inviteLoadedFor === state.selectedId && !state.inviteLoading) return;
-    state.inviteLoading = true;
-    state.inviteLoadedFor = state.selectedId;
+    if (state.accessLoadedFor === state.selectedId) return;
+    state.accessLoadedFor = state.selectedId;
+    state.accessLoading = true;
 
     var redraw = function () {
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
     };
+    var stale = function () { return state.accessLoadedFor !== state.selectedId; };
 
-    // Deliberately no redraw here. This is called from applyScreen, which is
-    // still setting the screen up — rendering mid-way would paint a
-    // half-configured state, and re-entering while `inviteLoading` is true
-    // would recurse. The caller's own render shows the loading state; the
-    // callbacks below paint the answer.
-    ClientsAPI.inviteStatus(state.selectedId).then(function (data) {
-      if (state.inviteLoadedFor !== state.selectedId) return;
-      state.invitation = (data && data.invitation) || null;
-      state.inviteLoading = false;
+    // No redraw before the request: this is called from applyScreen, which is
+    // still setting the screen up.
+    ClientsAPI.access(state.selectedId).then(function (d) {
+      if (stale()) return;
+      state.access = d || null;
+      // The toolbar button reads this to choose Invite vs Resend.
+      state.invitation = (d && d.invitation) || null;
+      state.accessLoading = false;
       redraw();
     }).catch(function () {
-      if (state.inviteLoadedFor !== state.selectedId) return;
-      state.inviteLoading = false;
+      if (stale()) return;
+      state.access = null;
       state.invitation = null;
+      state.accessLoading = false;
       redraw();
     });
   }
@@ -3690,8 +3816,9 @@
       assignmentsLoading: false,
       assignmentsLoadedFor: null,
       invitation: null,
-      inviteLoading: false,
-      inviteLoadedFor: null,
+      access: null,
+      accessLoading: false,
+      accessLoadedFor: null,
       companyMembers: [],
       companyStaff: [],
       companyStaffAssignable: [],
@@ -3748,7 +3875,8 @@
         state.assignmentsLoadedFor = null;
         state.assignments = [];
         state.assignmentHistory = [];
-        state.inviteLoadedFor = null;
+        state.accessLoadedFor = null;
+        state.access = null;
         state.invitation = null;
       }
 
@@ -3758,7 +3886,7 @@
       // Both flows show the profile: 'contact' in the split view, 'detail'
       // in the paged/mobile one.
       if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
-        ensureInvitationLoaded(state, render);
+        ensureAccessLoaded(state, render);
       }
 
       if (state.screen === 'company' && state.companyId) {

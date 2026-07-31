@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\Postcard;
+use App\Models\AuthEvent;
 use App\Models\Client;
 use App\Models\Invitation;
 use App\Models\User;
@@ -170,5 +171,62 @@ class ClientHubInviteTest extends TestCase
             ->assertJsonPath('invitation.canResend', true);
 
         $this->assertStringContainsString('mailbox unavailable', Invitation::first()->last_error);
+    }
+
+    // ------------------------------------------- the Portal access tab
+
+    public function test_the_access_tab_shows_the_invitation_before_an_account_exists(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        $client = $this->client();
+        $this->actingAs($staff)->postJson("/portal/clients/{$client->uid}/invite")->assertOk();
+
+        $this->actingAs($staff)->getJson("/portal/clients/{$client->uid}/access")
+            ->assertOk()
+            ->assertJsonPath('hasAccount', false)
+            ->assertJsonPath('account', null)
+            ->assertJsonPath('invitation.email', 'owner@acme.test')
+            // No account means no history to show.
+            ->assertJsonCount(0, 'logins')
+            ->assertJsonCount(0, 'activity');
+    }
+
+    public function test_the_access_tab_swaps_to_logins_once_they_have_an_account(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        $account = User::factory()->create([
+            'status' => 'approved', 'account_type' => 'Client',
+            'email' => 'owner@acme.test', 'onboarding_completed_at' => now(),
+        ]);
+        $client = $this->client(['user_id' => $account->id]);
+
+        AuthEvent::create([
+            'user_id' => $account->id, 'event' => 'login',
+            'ip' => '203.0.113.9', 'user_agent' => 'Mozilla/5.0 (Macintosh) Chrome/120',
+            // auth_events keeps no updated_at and sets no timestamps itself.
+            'created_at' => now(),
+        ]);
+
+        $body = $this->actingAs($staff)->getJson("/portal/clients/{$client->uid}/access")
+            ->assertOk()
+            ->assertJsonPath('hasAccount', true)
+            ->assertJsonPath('account.email', 'owner@acme.test')
+            ->json();
+
+        $this->assertCount(1, $body['logins']);
+        $this->assertSame('login', $body['logins'][0]['event']);
+        $this->assertSame('203.0.113.9', $body['logins'][0]['ip']);
+        $this->assertNotEmpty($body['logins'][0]['device']);
+    }
+
+    public function test_a_client_account_cannot_read_the_access_tab(): void
+    {
+        $client = $this->client();
+
+        $this->actingAs($this->staff('Client'))
+            ->getJson("/portal/clients/{$client->uid}/access")
+            ->assertForbidden();
     }
 }

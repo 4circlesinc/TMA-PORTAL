@@ -358,6 +358,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Invite a client (with no login) to create a portal account.
         Route::post('/{uid}/invite', [ClientInviteController::class, 'send'])->name('invite');
         Route::get('/{uid}/invite', [ClientInviteController::class, 'status'])->name('invite.status');
+        // The Portal access tab: invitation, or the account's logins and activity.
+        Route::get('/{uid}/access', [ClientInviteController::class, 'access'])->name('access');
     });
 
     /*

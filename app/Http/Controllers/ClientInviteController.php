@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
+use App\Models\AuthEvent;
 use App\Models\Client;
 use App\Models\Invitation;
+use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\DeviceName;
 use App\Support\Invitations\Invitations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,6 +79,79 @@ class ClientInviteController extends Controller
             'reminder' => $reminder,
             'invitation' => Invitations::toRecord($fresh),
         ]);
+    }
+
+    /**
+     * Everything the Portal access tab shows: whether they can sign in, the
+     * invitation if they cannot, and — once they can — their sign-in history
+     * and account activity.
+     *
+     * The two halves are deliberately exclusive. Before an account exists the
+     * only useful thing is the invitation; afterwards the invitation is history
+     * and what staff want is "when did they last get in".
+     */
+    public function access(Request $request, string $uid): JsonResponse
+    {
+        Role::authorize($request->user(), 'clients.view');
+
+        $client = Client::where('uid', $uid)->firstOrFail();
+        $account = $client->user;
+
+        $invitation = Invitation::query()
+            ->where('client_id', $client->id)
+            ->with(['client', 'company', 'inviter'])
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            'hasAccount' => $account !== null,
+            'account' => $account ? [
+                'name' => $account->name,
+                'email' => $account->email,
+                'status' => $account->status,
+                'accountType' => $account->account_type,
+                'avatar' => $account->photoUrl(),
+                'createdAt' => $account->created_at?->toIso8601String(),
+                'onboardedAt' => $account->onboarding_completed_at?->toIso8601String(),
+                'twoFactor' => $account->hasTwoFactorEnabled(),
+            ] : null,
+            'invitation' => $invitation ? Invitations::toRecord($invitation) : null,
+            'logins' => $account ? $this->loginHistory($account) : [],
+            'activity' => $account ? $this->accountActivity($client, $account) : [],
+        ]);
+    }
+
+    /** Recent sign-ins for a linked account. */
+    private function loginHistory(User $account): array
+    {
+        return AuthEvent::where('user_id', $account->id)
+            ->whereIn('event', ['login', 'logout', 'login_failed', 'lockout'])
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (AuthEvent $event) => [
+                'event' => $event->event,
+                'atIso' => $event->created_at?->toIso8601String(),
+                'when' => $event->created_at?->diffForHumans(),
+                'ip' => $event->ip,
+                'device' => DeviceName::describe((string) $event->user_agent),
+            ])->values()->all();
+    }
+
+    /** What has happened on this client record and its account. */
+    private function accountActivity(Client $client, User $account): array
+    {
+        return ActivityLog::query()
+            ->where(fn ($q) => $q->where('client_id', $client->id)->orWhere('actor_id', $account->id))
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (ActivityLog $log) => [
+                'type' => $log->activity_type,
+                'description' => $log->description,
+                'atIso' => $log->created_at?->toIso8601String(),
+                'when' => $log->created_at?->diffForHumans(),
+            ])->values()->all();
     }
 
     /** The live invitation for a client, for the client hub to show its state. */
