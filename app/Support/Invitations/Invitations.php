@@ -11,6 +11,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Companies\CompanyMembers;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
@@ -276,6 +277,12 @@ final class Invitations
             if (Role::isStaff($user->fresh()) && FileLibrarySetting::autoCreateStaffFolder()) {
                 FolderProvisioner::provisionStaffFolder($user->fresh(), $invitation->inviter ?? $user);
             }
+        }
+
+        // A company-member invitation also activates their membership, which is
+        // what turns the company's `can_*` flags on for this account.
+        if ($invitation->type === Invitation::TYPE_COMPANY_MEMBER) {
+            CompanyMembers::linkAcceptedUser($invitation, $user);
         }
 
         // Client and company-member invitations both hang off a client record —

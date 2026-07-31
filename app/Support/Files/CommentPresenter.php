@@ -3,6 +3,7 @@
 namespace App\Support\Files;
 
 use App\Models\FileComment;
+use App\Models\FileCommentMention;
 use App\Models\FileItem;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -121,7 +122,7 @@ class CommentPresenter
         }
 
         $map = [];
-        \App\Models\FileCommentMention::query()
+        FileCommentMention::query()
             ->whereIn('comment_id', $commentIds)
             ->with('user:id,name')
             ->get()

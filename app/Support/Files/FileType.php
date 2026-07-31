@@ -2,8 +2,6 @@
 
 namespace App\Support\Files;
 
-use RuntimeException;
-
 /**
  * Classifies a file by BOTH its extension and its sniffed MIME type, and
  * rejects dangerous uploads (renamed executables / scripts, MIME spoofing).
@@ -18,34 +16,34 @@ class FileType
 
     /** extension => [category, icon-key]. Icon keys are resolved by file-icons.js. */
     private const MAP = [
-        'pdf'  => ['pdf', 'FilePdf'],
-        'doc'  => ['word', 'FileDoc'],    'docx' => ['word', 'FileDoc'],
-        'rtf'  => ['word', 'FileDoc'],    'odt'  => ['word', 'FileDoc'],
-        'xls'  => ['excel', 'FileXls'],   'xlsx' => ['excel', 'FileXls'],
-        'ods'  => ['excel', 'FileXls'],
-        'csv'  => ['excel', 'FileCsv'],
-        'ppt'  => ['powerpoint', 'FilePpt'], 'pptx' => ['powerpoint', 'FilePpt'],
-        'odp'  => ['powerpoint', 'FilePpt'],
-        'jpg'  => ['image', 'FileImage'], 'jpeg' => ['image', 'FileImage'],
-        'png'  => ['image', 'FileImage'], 'gif'  => ['image', 'FileImage'],
-        'webp' => ['image', 'FileImage'], 'bmp'  => ['image', 'FileImage'],
-        'tiff' => ['image', 'FileImage'], 'tif'  => ['image', 'FileImage'],
+        'pdf' => ['pdf', 'FilePdf'],
+        'doc' => ['word', 'FileDoc'],    'docx' => ['word', 'FileDoc'],
+        'rtf' => ['word', 'FileDoc'],    'odt' => ['word', 'FileDoc'],
+        'xls' => ['excel', 'FileXls'],   'xlsx' => ['excel', 'FileXls'],
+        'ods' => ['excel', 'FileXls'],
+        'csv' => ['excel', 'FileCsv'],
+        'ppt' => ['powerpoint', 'FilePpt'], 'pptx' => ['powerpoint', 'FilePpt'],
+        'odp' => ['powerpoint', 'FilePpt'],
+        'jpg' => ['image', 'FileImage'], 'jpeg' => ['image', 'FileImage'],
+        'png' => ['image', 'FileImage'], 'gif' => ['image', 'FileImage'],
+        'webp' => ['image', 'FileImage'], 'bmp' => ['image', 'FileImage'],
+        'tiff' => ['image', 'FileImage'], 'tif' => ['image', 'FileImage'],
         'heic' => ['image', 'FileImage'], 'heif' => ['image', 'FileImage'],
-        'avif' => ['image', 'FileImage'], 'ico'  => ['image', 'FileImage'],
-        'svg'  => ['image', 'FileImage'],
-        'mp4'  => ['video', 'FileVideo'], 'mov'  => ['video', 'FileVideo'],
-        'webm' => ['video', 'FileVideo'], 'mkv'  => ['video', 'FileVideo'],
-        'avi'  => ['video', 'FileVideo'], 'm4v'  => ['video', 'FileVideo'],
-        'mp3'  => ['audio', 'FileAudio'], 'wav'  => ['audio', 'FileAudio'],
-        'ogg'  => ['audio', 'FileAudio'], 'm4a'  => ['audio', 'FileAudio'],
-        'flac' => ['audio', 'FileAudio'], 'aac'  => ['audio', 'FileAudio'],
-        'zip'  => ['archive', 'FileZip'], 'rar'  => ['archive', 'FileZip'],
-        '7z'   => ['archive', 'FileZip'], 'tar'  => ['archive', 'FileZip'],
-        'gz'   => ['archive', 'FileZip'],
-        'txt'  => ['text', 'FileText'],   'md'   => ['text', 'FileText'],
-        'log'  => ['text', 'FileText'],
-        'json' => ['code', 'FileCode'],   'xml'  => ['code', 'FileCode'],
-        'html' => ['code', 'FileCode'],   'css'  => ['code', 'FileCode'],
+        'avif' => ['image', 'FileImage'], 'ico' => ['image', 'FileImage'],
+        'svg' => ['image', 'FileImage'],
+        'mp4' => ['video', 'FileVideo'], 'mov' => ['video', 'FileVideo'],
+        'webm' => ['video', 'FileVideo'], 'mkv' => ['video', 'FileVideo'],
+        'avi' => ['video', 'FileVideo'], 'm4v' => ['video', 'FileVideo'],
+        'mp3' => ['audio', 'FileAudio'], 'wav' => ['audio', 'FileAudio'],
+        'ogg' => ['audio', 'FileAudio'], 'm4a' => ['audio', 'FileAudio'],
+        'flac' => ['audio', 'FileAudio'], 'aac' => ['audio', 'FileAudio'],
+        'zip' => ['archive', 'FileZip'], 'rar' => ['archive', 'FileZip'],
+        '7z' => ['archive', 'FileZip'], 'tar' => ['archive', 'FileZip'],
+        'gz' => ['archive', 'FileZip'],
+        'txt' => ['text', 'FileText'],   'md' => ['text', 'FileText'],
+        'log' => ['text', 'FileText'],
+        'json' => ['code', 'FileCode'],   'xml' => ['code', 'FileCode'],
+        'html' => ['code', 'FileCode'],   'css' => ['code', 'FileCode'],
     ];
 
     /** Extensions we refuse outright — server- or OS-executable. */

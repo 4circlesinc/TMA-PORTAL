@@ -13,26 +13,43 @@ namespace App\Support\Files\Workflow;
 final class Status
 {
     public const DRAFT = 'draft';
+
     public const FEEDBACK_REQUESTED = 'feedback_requested';
+
     public const UNDER_REVIEW = 'under_review';
+
     public const AWAITING_APPROVAL = 'awaiting_approval';
+
     public const AWAITING_ACKNOWLEDGEMENT = 'awaiting_acknowledgement';
+
     public const AWAITING_SIGNATURE = 'awaiting_signature';
+
     public const PARTIALLY_SIGNED = 'partially_signed';
 
     public const CHANGES_REQUESTED = 'changes_requested';
+
     public const APPROVED = 'approved';
+
     public const DECLINED = 'declined';
+
     public const SIGNED = 'signed';
+
     public const ACKNOWLEDGED = 'acknowledged';
+
     public const COMPLETED = 'completed';
+
     public const CANCELLED = 'cancelled';
+
     public const EXPIRED = 'expired';
 
     public const TYPE_FEEDBACK = 'feedback';
+
     public const TYPE_REVIEW = 'review';
+
     public const TYPE_APPROVAL = 'approval';
+
     public const TYPE_ACKNOWLEDGEMENT = 'acknowledgement';
+
     public const TYPE_SIGNATURE = 'signature';
 
     public const TYPES = [

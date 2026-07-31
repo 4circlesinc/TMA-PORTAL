@@ -18,19 +18,19 @@ function check(ok, m) { log(`    ${ok ? '✓' : '✗'} ${m}`); if (!ok) failures
 const browser = await chromium.launch();
 
 async function signIn(page, email) {
-  await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/auth/login`, { waitUntil: 'domcontentloaded' });
   await page.click('text=Sign in with Email');
   await page.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', 'password12345');
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
     page.click('button[type="submit"]:visible'),
   ]);
   await page.waitForTimeout(600);
   if (page.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
       page.click('text=Yes, stay signed in'),
     ]);
     await page.waitForTimeout(600);
@@ -39,7 +39,8 @@ async function signIn(page, email) {
 }
 
 async function openVia(page, navId, name) {
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-expand="folders"]', { timeout: 15000 });
   await page.waitForTimeout(800);
   await page.click('[data-expand="folders"]');
   await page.waitForTimeout(400);
@@ -60,7 +61,8 @@ let other;
 try {
   step(1, 'Create a file both accounts can open');
   await signIn(page, 'e2e@example.com');
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-expand="folders"]', { timeout: 15000 });
   await page.waitForTimeout(800);
 
   const setup = await page.evaluate(async ([base, name]) => {

@@ -239,7 +239,7 @@ class FolderTree
     public static function zip(Folder $folder): string
     {
         $zipPath = tempnam(sys_get_temp_dir(), 'tmazip_').'.zip';
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
 
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             throw new FileValidationException('The ZIP file could not be created.');

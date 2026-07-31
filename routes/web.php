@@ -14,6 +14,8 @@ use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientOnboardingController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\CompaniesController;
+use App\Http\Controllers\CompanyMemberController;
+use App\Http\Controllers\CompanyStaffController;
 use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\ContactsController;
 use App\Http\Controllers\DashboardController;
@@ -379,6 +381,20 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/{uid}', [CompaniesController::class, 'show'])->name('show');
         Route::patch('/{uid}', [CompaniesController::class, 'update'])->name('update');
         Route::delete('/{uid}', [CompaniesController::class, 'destroy'])->name('destroy');
+
+        // The people at the company who may reach its records.
+        Route::get('/{uid}/members', [CompanyMemberController::class, 'index'])->name('members.index');
+        Route::post('/{uid}/members', [CompanyMemberController::class, 'store'])->name('members.store');
+        Route::post('/{uid}/members/{member}/invite', [CompanyMemberController::class, 'invite'])->name('members.invite');
+        Route::patch('/{uid}/members/{member}', [CompanyMemberController::class, 'update'])->name('members.update');
+        Route::delete('/{uid}/members/{member}', [CompanyMemberController::class, 'destroy'])->name('members.destroy');
+
+        // The firm's own staff looking after the company.
+        Route::get('/{uid}/staff', [CompanyStaffController::class, 'index'])->name('staff.index');
+        // What an assignment would cover, before it is made.
+        Route::post('/{uid}/staff/preview', [CompanyStaffController::class, 'preview'])->name('staff.preview');
+        Route::post('/{uid}/staff', [CompanyStaffController::class, 'store'])->name('staff.store');
+        Route::delete('/{uid}/staff/{userId}', [CompanyStaffController::class, 'destroy'])->name('staff.destroy');
     });
 
     /*

@@ -92,7 +92,9 @@ const PERSONAL = ['profile', 'theme', 'time', 'notifications', 'privacy',
 // Every nav item still in the sidebar, by its data-nav id. portal-access.js
 // *removes* the nodes rather than hiding them, so this is the real list.
 async function sidebarNav(page) {
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  // 'domcontentloaded', not 'networkidle': the dashboard falls back to polling
+  // for messages when Reverb is not running, so the network never goes idle.
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
     () => document.documentElement.getAttribute('data-tma-access') === 'ready',
     { timeout: 10000 },
@@ -112,11 +114,30 @@ try {
   // delete per row. Employees browse colleagues through People instead.
   check(!empNav.includes('users'), `"Users" is not in the sidebar (has: ${empNav.join(', ')})`);
   check(!empNav.includes('dash-project-overview'), '"Admin Overview" is not in the sidebar');
-  check(empNav.includes('people-employees'), 'People → Browse employees survives the split');
-  check(empNav.includes('people-shared-address'), 'People → Shared address book survives the split');
+  // The whole People section is administration now — the directory and both
+  // address books included.
+  check(!empNav.some((id) => id.startsWith('people-')), 'no People screen is in the sidebar');
   check(empNav.includes('clients') && empNav.includes('email'),
     'the staff tooling they do run is untouched');
   await emp0.close();
+
+  step('0b', 'An employee sees only the clients they are assigned to');
+  const emp1 = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+  await signIn(emp1, EMPLOYEE);
+  await emp1.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  // Wait for the list to paint rather than a fixed beat — it arrives from the
+  // API well after DOMContentLoaded.
+  await emp1.waitForSelector('text=Acme Corp', { timeout: 15000 }).catch(() => {});
+  const clientList = await emp1.locator('body').innerText();
+  check(/Acme Corp/.test(clientList), 'their assigned client is listed');
+  check(!/Rival Ltd/.test(clientList), 'a client they are not assigned to is not');
+
+  // The list is filtered; the URL is the way past it.
+  const direct = await emp1.evaluate(() => fetch('/portal/clients/rival', {
+    credentials: 'same-origin', headers: { Accept: 'application/json' },
+  }).then((r) => r.status));
+  check(direct === 404, `opening an unassigned client by uid gives 404 (got ${direct})`);
+  await emp1.close();
 
   /* ── administrators keep everything ─────────────────────────────── */
   step(1, 'An administrator still sees the whole rail');
@@ -184,7 +205,7 @@ try {
   await admin.keyboard.press('Escape');
 
   step(7, 'The Clients page hides the client-hub management menu from employees');
-  await employee.goto(`${BASE}/clients`, { waitUntil: 'networkidle' });
+  await employee.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
   await employee.waitForTimeout(1200);
   const empHub = await employee.locator('[data-clients-page-actions] :text("Manage client hub")').count();
   check(empHub === 0, 'the "Manage client hub" dropdown is absent');
@@ -192,7 +213,7 @@ try {
   check(empCreate > 0, 'the "Create client" dropdown is still there — employees still run the hub');
 
   step(8, 'An administrator keeps the client-hub management menu');
-  await admin.goto(`${BASE}/clients`, { waitUntil: 'networkidle' });
+  await admin.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
   await admin.waitForTimeout(1200);
   check(await admin.locator('[data-clients-page-actions] :text("Manage client hub")').count() > 0,
     'the "Manage client hub" dropdown is present for an administrator');
@@ -213,26 +234,57 @@ try {
   const secBody = await client.locator('.tma-portal-admin__content').innerText();
   check(/password/i.test(secBody), 'Account security still renders for a client');
 
-  step(11, 'An administrator keeps the Users page and the directory search');
+  step(11, 'An administrator keeps the Users page, People and every client');
   const adminNav = await sidebarNav(admin);
   check(adminNav.includes('users'), '"Users" is still in the administrator sidebar');
   check(adminNav.includes('dash-project-overview'), '"Admin Overview" is still there');
+  check(adminNav.includes('people-employees'), 'People is still there');
+
+  await admin.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await admin.waitForSelector('text=Rival Ltd', { timeout: 15000 }).catch(() => {});
+  const adminClients = await admin.locator('body').innerText();
+  check(/Acme Corp/.test(adminClients) && /Rival Ltd/.test(adminClients),
+    'an administrator still sees every client');
 
   step(12, 'Searching for a colleague still works for both');
   // People results used to be read from /admin/users, which is now closed to
   // employees — the index has to fall back to the People directory or the
   // search box quietly stops finding anyone.
+  // Both still find colleagues, by different routes, and that is correct: the
+  // employee's hit comes from *messaging* search (`messaging.contactAll` is
+  // still theirs, or they could not message anyone) and opens Messages. The
+  // directory index they lost was the one that opened People / Users.
   for (const [who, page] of [['an employee', employee], ['an administrator', admin]]) {
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(800);
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1500);
     await page.click('[data-action="open-search"]');
     await page.waitForSelector('[data-search-input]', { timeout: 5000 });
     await page.fill('[data-search-input]', 'Test Admin');
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1500);
     const hits = await page.locator('[data-search-body]').innerText();
-    check(/Test Admin/i.test(hits), `${who} can still find a colleague by name`);
+    check(/Test Admin/i.test(hits), `${who} can still reach a colleague through search`);
     await page.keyboard.press('Escape');
   }
+
+  step(13, 'Search does not hand an employee a client they are not assigned to');
+  await employee.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await employee.waitForTimeout(1500);
+  await employee.click('[data-action="open-search"]');
+  await employee.waitForSelector('[data-search-input]', { timeout: 5000 });
+  await employee.fill('[data-search-input]', 'Rival');
+  await employee.waitForTimeout(1500);
+  const rivalHits = await employee.locator('[data-search-body]').innerText();
+  check(!/Rival Ltd/.test(rivalHits), '"Rival Ltd" is not offered');
+  await employee.keyboard.press('Escape');
+
+  await admin.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await admin.waitForTimeout(1500);
+  await admin.click('[data-action="open-search"]');
+  await admin.waitForSelector('[data-search-input]', { timeout: 5000 });
+  await admin.fill('[data-search-input]', 'Rival');
+  await admin.waitForTimeout(1500);
+  check(/Rival Ltd/.test(await admin.locator('[data-search-body]').innerText()),
+    'an administrator still finds it');
 } catch (e) {
   failures.push('threw: ' + e.message);
   log('\n!! ' + e.stack);

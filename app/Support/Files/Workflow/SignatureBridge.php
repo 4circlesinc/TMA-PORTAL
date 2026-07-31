@@ -3,10 +3,12 @@
 namespace App\Support\Files\Workflow;
 
 use App\Models\FileItem;
+use App\Models\FileVersion;
 use App\Models\FileWorkflow;
 use App\Models\FileWorkflowStep;
 use App\Models\SignatureRecipient;
 use App\Models\SignatureRequest;
+use App\Models\User;
 use App\Support\Files\Activity;
 use App\Support\Files\Versions;
 use App\Support\Signatures\Status as SigStatus;
@@ -162,7 +164,7 @@ class SignatureBridge
                     'uuid' => (string) Str::uuid(),
                     'workflow_id' => $workflow->id,
                     'email' => $recipient->email,
-                    'user_id' => \App\Models\User::where('email', $recipient->email)->value('id'),
+                    'user_id' => User::where('email', $recipient->email)->value('id'),
                 ]);
             }
         }
@@ -197,7 +199,7 @@ class SignatureBridge
         ]);
 
         if ($workflow->file_version_id) {
-            \App\Models\FileVersion::where('id', $workflow->file_version_id)
+            FileVersion::where('id', $workflow->file_version_id)
                 ->update(['approval_status' => $status]);
         }
     }

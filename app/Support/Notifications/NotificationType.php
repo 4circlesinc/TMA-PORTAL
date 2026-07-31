@@ -95,6 +95,14 @@ final class NotificationType
         'client.unassigned' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO,   'icon' => 'AddressBook', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => null],
         'client.assignment_changed' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO,   'icon' => 'UserGear',    'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Review client'],
         'client.primary_changed' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO,   'icon' => 'UserGear',    'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Review client'],
+
+        // ── Companies ──────────────────────────────────────────
+        'company.member_added' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'Buildings', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open company'],
+        'company.member_removed' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'Buildings', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => null],
+        'company.member_invited' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'EnvelopeSimple', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => null],
+        'company.role_changed' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'UserGear', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open company'],
+        'company.staff_assigned' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'Buildings', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open company'],
+        'company.staff_removed' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'Buildings', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => null],
         'client.created' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO,     'icon' => 'UserPlus',    'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Review client'],
         'client.updated' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO,     'icon' => 'AddressBook', 'priority' => 'low',    'pref' => 'clients', 'action_label' => 'Review client'],
         'client.status_changed' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO,     'icon' => 'AddressBook', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Review client'],

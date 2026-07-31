@@ -15,13 +15,13 @@ function check(ok, m) { log(`    ${ok ? '✓' : '✗'} ${m}`); if (!ok) failures
 const browser = await chromium.launch();
 
 async function signIn(page, email) {
-  await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/auth/login`, { waitUntil: 'domcontentloaded' });
   await page.click('text=Sign in with Email');
   await page.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', 'password12345');
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
     page.click('button[type="submit"]:visible'),
   ]);
   await page.waitForTimeout(500);
@@ -59,12 +59,13 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 try {
   step(1, 'Log in and set up an assigned client + an organization folder');
   await signIn(page, EMAIL);
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-expand="folders"]', { timeout: 15000 });
   await page.waitForTimeout(600);
   await apiSetup(page, BASE, UID, NAME, ORG);
 
   step(2, 'Folder Shortcuts tab shows the labelled auto-groups');
-  await page.reload({ waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(600);
   await page.click('.tma-dash__sidebar .tma-dash__tab:has-text("Folder Shortcuts")');
   await page.waitForSelector('[data-shortcuts]', { timeout: 8000 });
@@ -80,7 +81,8 @@ try {
   check(shortcutText.includes(ORG), 'organization folder is listed by name');
 
   step(3, 'Client profile has an Open-folder action that reaches the File Library');
-  await page.goto(`${BASE}/clients`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1500);
   await page.waitForTimeout(900);
   // Open this client's detail (search narrows the table first).
   await page.evaluate((n) => {

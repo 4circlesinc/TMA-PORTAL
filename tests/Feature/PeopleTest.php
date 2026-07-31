@@ -69,17 +69,21 @@ class PeopleTest extends TestCase
         $this->actingAs($client)->get('/people/employees')->assertNotFound();
     }
 
-    public function test_an_employee_may_browse_but_not_manage(): void
+    public function test_an_employee_reaches_none_of_the_people_section(): void
     {
+        // The section is `directory.view`, administrators only — an employee
+        // has no need to enumerate the firm. It used to be readable by any
+        // employee, along with both address books.
         $employee = $this->user('Employee');
 
-        $this->actingAs($employee)->getJson('/portal/people/employees')
-            ->assertOk()
-            ->assertJsonPath('capabilities.manageUsers', false);
-
+        $this->actingAs($employee)->getJson('/portal/people/employees')->assertForbidden();
+        $this->actingAs($employee)->getJson('/portal/people/summary')->assertForbidden();
+        $this->actingAs($employee)->getJson('/portal/contacts')->assertForbidden();
         $this->actingAs($employee)->getJson('/portal/people/welcome-candidates')->assertForbidden();
         $this->actingAs($employee)->postJson('/portal/people/welcome', ['email' => 'x@example.com'])
             ->assertForbidden();
+
+        $this->actingAs($employee)->get('/people')->assertNotFound();
     }
 
     /* ── the lists ────────────────────────────────────────────────── */
@@ -224,8 +228,10 @@ class PeopleTest extends TestCase
 
     public function test_the_shared_book_is_account_wide_and_a_personal_book_is_private(): void
     {
-        $mine = $this->user('Employee');
-        $theirs = $this->user('Employee');
+        // Both books are `directory.view` — administrators. What these check
+        // is ownership: shared is account-wide, personal is not.
+        $mine = $this->user('Administrator');
+        $theirs = $this->user('Administrator');
 
         $this->actingAs($mine)->postJson('/portal/contacts', [
             'scope' => 'shared', 'first_name' => 'Lucius', 'last_name' => 'Fox', 'email' => 'lucius@example.com',
@@ -253,7 +259,7 @@ class PeopleTest extends TestCase
 
     public function test_someone_elses_personal_contact_cannot_be_edited_or_deleted(): void
     {
-        $owner = $this->user('Employee');
+        $owner = $this->user('Administrator');
         $other = $this->user('Administrator');
 
         $contact = Contact::create([
@@ -274,10 +280,18 @@ class PeopleTest extends TestCase
             ->assertJsonPath('contact.firstName', 'Alfred J.');
     }
 
-    public function test_a_shared_entry_is_removed_by_its_author_but_not_by_another_employee(): void
+    public function test_a_shared_entry_is_removed_by_its_author_or_an_administrator(): void
     {
-        $author = $this->user('Employee');
-        $colleague = $this->user('Employee');
+        // The rule is "your own entry, or anyone's if you administer the
+        // account" (ContactsController::mayWrite). Closing the address books
+        // to employees collapsed the interesting half of it: everyone who can
+        // now reach the shared book holds `users.manage`, so nobody sees
+        // canEdit: false. The rule is still enforced — it would matter again
+        // if `directory.view` were reopened to employees — so this pins both
+        // halves at the unit the collapse cannot hide.
+        $author = $this->user('Administrator');
+        $colleague = $this->user('Administrator');
+        $employee = $this->user('Employee');
 
         $contact = Contact::create([
             'uuid' => (string) Str::uuid(),
@@ -287,21 +301,25 @@ class PeopleTest extends TestCase
         ]);
 
         // The list says so up front, so it never offers an action that 403s.
+        $this->actingAs($author)->getJson('/portal/contacts?scope=shared')
+            ->assertOk()
+            ->assertJsonPath('contacts.0.canEdit', true);
         $this->actingAs($colleague)->getJson('/portal/contacts?scope=shared')
             ->assertOk()
-            ->assertJsonPath('contacts.0.canEdit', false);
-        $this->actingAs($author)->getJson('/portal/contacts?scope=shared')
             ->assertJsonPath('contacts.0.canEdit', true);
 
-        $this->actingAs($colleague)->deleteJson('/portal/contacts/'.$contact->uuid)->assertForbidden();
+        // An employee is refused before authorship is ever consulted.
+        $this->actingAs($employee)->deleteJson('/portal/contacts/'.$contact->uuid)
+            ->assertForbidden();
+
         $this->actingAs($author)->deleteJson('/portal/contacts/'.$contact->uuid)->assertOk();
         $this->assertSoftDeleted('contacts', ['id' => $contact->id]);
     }
 
     public function test_bulk_remove_only_touches_the_callers_own_book(): void
     {
-        $owner = $this->user('Employee');
-        $other = $this->user('Employee');
+        $owner = $this->user('Administrator');
+        $other = $this->user('Administrator');
 
         $mine = Contact::create([
             'uuid' => (string) Str::uuid(), 'scope' => 'personal',

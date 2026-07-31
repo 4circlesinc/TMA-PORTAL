@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Models\Company;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Companies\CompanyRoles;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Sharing;
@@ -41,9 +43,12 @@ class ShareController extends BaseFilesController
         $data = $request->validate([
             'type' => ['required', 'in:file,folder'],
             'id' => ['required', 'string'],
-            'mode' => ['required', 'in:invite,link'],
+            'mode' => ['required', 'in:invite,link,company'],
             'role' => ['required', 'in:'.implode(',', Sharing::ROLES)],
             'email' => ['required_if:mode,invite', 'nullable', 'email'],
+            'companyUid' => ['required_if:mode,company', 'nullable', 'string', 'max:96'],
+            // Null covers every member; a role narrows it to, say, finance contacts.
+            'companyRole' => ['nullable', 'string', 'max:24'],
             'expiresAt' => ['nullable', 'date'],
             'password' => ['nullable', 'string', 'min:1', 'max:128'],
             'allowDownload' => ['nullable', 'boolean'],
@@ -55,6 +60,8 @@ class ShareController extends BaseFilesController
 
         if ($data['mode'] === 'invite') {
             $this->invite($user, $item, $data['type'], $data);
+        } elseif ($data['mode'] === 'company') {
+            $this->shareWithCompany($user, $item, $data['type'], $data);
         } else {
             $this->link($user, $item, $data['type'], $data);
         }
@@ -203,6 +210,49 @@ class ShareController extends BaseFilesController
         return [$share, $item, $share->item_type];
     }
 
+    /**
+     * Share with a company rather than with a list of people.
+     *
+     * One row covers every current member, so joining the company grants
+     * access and being removed takes it away — there are no per-person share
+     * rows to keep in step. `companyRole` narrows it to one kind of member.
+     */
+    private function shareWithCompany(User $user, FileItem|Folder $item, string $type, array $data): void
+    {
+        $company = Company::where('uid', $data['companyUid'])->firstOrFail();
+
+        $role = $data['companyRole'] ?? null;
+        abort_if(
+            $role !== null && ! CompanyRoles::exists($role),
+            422,
+            'That company role does not exist.',
+        );
+
+        $share = Share::firstOrNew([
+            'item_type' => $type,
+            'item_id' => $item->id,
+            'kind' => 'company',
+            'target_company_id' => $company->id,
+            'target_company_role' => $role,
+        ]);
+
+        $share->forceFill([
+            'uuid' => $share->uuid ?: (string) Str::uuid(),
+            'token' => $share->token ?: Sharing::token(),
+            'shared_by' => $user->id,
+            'role' => Sharing::normalizeRole($data['role']),
+            'allow_download' => $data['allowDownload'] ?? true,
+            'expires_at' => $data['expiresAt'] ?? null,
+            'revoked_at' => null,
+        ])->save();
+
+        Activity::log($user->id, $type, $item->id, 'permission', [
+            'shared_with_company' => $company->uid,
+            'company_role' => $role,
+            'role' => $share->role,
+        ]);
+    }
+
     private function item(string $type, ?string $uuid, ?int $id = null): FileItem|Folder
     {
         $model = $type === 'folder' ? Folder::query() : FileItem::query();
@@ -216,7 +266,7 @@ class ShareController extends BaseFilesController
         $shares = Share::query()
             ->where('item_type', $type)->where('item_id', $item->id)
             ->whereNull('revoked_at')
-            ->with('targetUser:id,name,email,avatar_url')
+            ->with(['targetUser:id,name,email,avatar_url', 'targetCompany:id,uid,name'])
             ->get()
             ->filter(fn (Share $s) => $s->isActive());
 
@@ -226,6 +276,9 @@ class ShareController extends BaseFilesController
         return [
             'owner' => $owner ? ['name' => $owner->name, 'email' => $owner->email, 'avatar' => $owner->avatar_url] : null,
             'people' => $shares->whereIn('kind', ['user', 'email'])->map(fn (Share $s) => Sharing::present($s))->values(),
+            // Inherited access, shown as its source rather than as the people
+            // it happens to cover today.
+            'companies' => $shares->where('kind', 'company')->map(fn (Share $s) => Sharing::present($s))->values(),
             'link' => $link ? Sharing::present($link) : null,
             'roles' => Sharing::ROLES,
         ];

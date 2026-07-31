@@ -7,6 +7,7 @@ use App\Models\FileWorkflow;
 use App\Models\FileWorkflowEvent;
 use App\Models\FileWorkflowStep;
 use App\Models\User;
+use App\Support\Files\Versions;
 
 class WorkflowPresenter
 {
@@ -36,7 +37,7 @@ class WorkflowPresenter
         return [
             'canSend' => Engine::canSend($viewer, $file),
             'badge' => self::badge($file),
-            'lockReason' => \App\Support\Files\Versions::lockReason($file),
+            'lockReason' => Versions::lockReason($file),
             'workflows' => $workflows->map(fn (FileWorkflow $w) => self::workflow($w, $viewer))->values(),
         ];
     }

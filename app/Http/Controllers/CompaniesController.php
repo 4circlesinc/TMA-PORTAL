@@ -38,16 +38,24 @@ class CompaniesController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'website' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'logoUrl' => ['nullable', 'string', 'max:2048'],
+            'companyType' => ['nullable', 'string', 'max:32'],
+            'registrationNumber' => ['nullable', 'string', 'max:64'],
+            'taxNumber' => ['nullable', 'string', 'max:64'],
+            'industry' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:64'],
+            'address' => ['nullable', 'array'],
+            'billing' => ['nullable', 'array'],
+            'status' => ['nullable', 'in:active,prospect,archived'],
         ]);
 
         $base = $data['uid'] ?? Str::slug($data['name']);
-        $company = Company::create([
+        $company = Company::create(array_merge([
             'uid' => $this->uniqueUid($base ?: 'company'),
             'name' => $data['name'],
-            'website' => $data['website'] ?? null,
-            'notes' => $data['notes'] ?? null,
             'created_by' => $request->user()->id,
-        ]);
+        ], $this->profileColumns($data)));
 
         return response()->json([
             'company' => $company->load(['clients' => fn ($q) => $q->orderBy('name')])->toRecord(),
@@ -74,9 +82,22 @@ class CompaniesController extends Controller
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'website' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'logoUrl' => ['nullable', 'string', 'max:2048'],
+            'companyType' => ['nullable', 'string', 'max:32'],
+            'registrationNumber' => ['nullable', 'string', 'max:64'],
+            'taxNumber' => ['nullable', 'string', 'max:64'],
+            'industry' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:64'],
+            'address' => ['nullable', 'array'],
+            'billing' => ['nullable', 'array'],
+            'status' => ['nullable', 'in:active,prospect,archived'],
         ]);
 
-        $company->fill($data);
+        if (array_key_exists('name', $data)) {
+            $company->name = $data['name'];
+        }
+        $company->forceFill($this->profileColumns($data));
         $company->save();
 
         // Keep denormalised company name on linked contacts in sync.
@@ -120,6 +141,41 @@ class CompaniesController extends Controller
         }
 
         return $uid;
+    }
+
+    /**
+     * Map the posted camelCase profile fields onto columns. Only keys that were
+     * actually sent are touched, so a form that edits one section never blanks
+     * the rest of the company record.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function profileColumns(array $data): array
+    {
+        $map = [
+            'website' => 'website',
+            'notes' => 'notes',
+            'logoUrl' => 'logo_url',
+            'companyType' => 'company_type',
+            'registrationNumber' => 'registration_number',
+            'taxNumber' => 'tax_number',
+            'industry' => 'industry',
+            'email' => 'email',
+            'phone' => 'phone',
+            'address' => 'address',
+            'billing' => 'billing',
+            'status' => 'status',
+        ];
+
+        $columns = [];
+        foreach ($map as $input => $column) {
+            if (array_key_exists($input, $data)) {
+                $columns[$column] = $data[$input];
+            }
+        }
+
+        return $columns;
     }
 
     private function authorizeStaff(Request $request): void

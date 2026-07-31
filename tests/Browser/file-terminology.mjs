@@ -15,13 +15,13 @@ const page = await browser.newPage();
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 
 async function signIn(email) {
-  await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/auth/login`, { waitUntil: 'domcontentloaded' });
   await page.click('text=Sign in with Email');
   await page.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', 'password12345');
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
     page.click('button[type="submit"]:visible'),
   ]);
   await page.waitForTimeout(600);
@@ -29,7 +29,7 @@ async function signIn(email) {
   // scripts predate it and simply stall here with an empty portal shell.
   if (page.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
       page.click('text=Yes, stay signed in'),
     ]);
     await page.waitForTimeout(600);
@@ -40,7 +40,8 @@ async function signIn(email) {
 try {
   step(1, 'Sign in as the administrator');
   await signIn('e2e@example.com');
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-expand="folders"]', { timeout: 15000 });
   await page.waitForTimeout(800);
 
   step(2, 'Sidebar section reads "File Library", not "Folders"');
@@ -85,7 +86,8 @@ try {
     return res.status;
   }, BASE);
   check(created === 201 || created === 200, `client created (HTTP ${created})`);
-  await page.goto(`${BASE}/clients`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1500);
   await page.waitForTimeout(1500);
   const row = await page.$('text=Phase Zero Client');
   check(!!row, 'client row rendered');

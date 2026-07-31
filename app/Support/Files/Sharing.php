@@ -6,6 +6,7 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Companies\CompanyRoles;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -52,12 +53,33 @@ class Sharing
             'person' => $share->kind === 'user'
                 ? ['name' => $share->targetUser?->name, 'email' => $share->targetUser?->email, 'avatar' => $share->targetUser?->avatar_url]
                 : ($share->kind === 'email' ? ['name' => $share->target_email, 'email' => $share->target_email, 'avatar' => null] : null),
+            // A company share names the group it covers rather than a person —
+            // "Everyone at Acme Group", "Acme Group finance contacts" — which
+            // is what stops the Manage Access panel listing forty names.
+            'company' => $share->kind === 'company' ? [
+                'id' => $share->targetCompany?->uid,
+                'name' => $share->targetCompany?->name,
+                'role' => $share->target_company_role,
+                'label' => self::companyLabel($share),
+            ] : null,
             'allowDownload' => (bool) $share->allow_download,
             'hasPassword' => $share->password_hash !== null,
             'expiresAt' => optional($share->expires_at)->toIso8601String(),
             'link' => self::linkUrl($share),
             'createdAt' => optional($share->created_at)->toIso8601String(),
         ];
+    }
+
+    /** How a company share describes itself in the Manage Access panel. */
+    public static function companyLabel(Share $share): string
+    {
+        $name = $share->targetCompany?->name ?? 'the company';
+
+        if (! $share->target_company_role) {
+            return 'Everyone at '.$name;
+        }
+
+        return $name.' — '.CompanyRoles::label($share->target_company_role).'s';
     }
 
     public static function verifyPassword(Share $share, ?string $password): bool

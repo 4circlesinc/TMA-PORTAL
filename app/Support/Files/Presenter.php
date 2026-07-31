@@ -16,18 +16,21 @@ use App\Models\User;
 class Presenter
 {
     private array $favFile = [];
+
     private array $favFolder = [];
+
     /** item_id => array of assignee display names */
     private array $assignFile = [];
+
     private array $assignFolder = [];
+
     /** folder_id => viewer's personal ['colour'=>?, 'iconName'=>?] preference (user-type folders only) */
     private array $prefRows = [];
+
     /** id => Folder, all non-trashed folders, lazily loaded once for path-building. */
     private ?array $folderIndex = null;
 
-    public function __construct(private User $viewer)
-    {
-    }
+    public function __construct(private User $viewer) {}
 
     /**
      * @param  FileItem[]  $files

@@ -2,12 +2,16 @@
 
 namespace App\Support\Files;
 
+use App\Models\Client;
 use App\Models\ClientAssignment;
+use App\Models\CompanyMember;
+use App\Models\CompanyStaffAssignment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Companies\CompanyAccess;
 use Illuminate\Support\Collection;
 
 /**
@@ -108,7 +112,12 @@ class FileAccess
                 ->where('user_id', $user->id)
                 ->first();
 
-            return $assignment?->fileRole();
+            // Staff assigned to the whole company reach the folders of the
+            // contacts beneath it, when their assignment says it should.
+            return self::highest(array_filter([
+                $assignment?->fileRole(),
+                self::companyStaffRole($user, $folder->client_id),
+            ]));
         }
 
         return null;
@@ -133,11 +142,55 @@ class FileAccess
             ->where('subject_user_id', $user->id)
             ->pluck('id')->all();
 
+        // Directly assigned clients, plus the ones reached through a company
+        // assignment that covers the contacts beneath it.
+        $reachable = array_unique(array_merge(
+            ClientAssignment::live()->where('user_id', $user->id)->pluck('client_id')->all(),
+            CompanyAccess::clientIdsThroughCompanies($user),
+        ));
+
         $clientIds = Folder::where('folder_type', Folder::TYPE_CLIENT)
-            ->whereIn('client_id', ClientAssignment::live()->where('user_id', $user->id)->pluck('client_id'))
+            ->whereIn('client_id', $reachable)
             ->pluck('id')->all();
 
         return array_values(array_unique([...$orgIds, ...$staffIds, ...$clientIds]));
+    }
+
+    /**
+     * The role a staff member holds over a client's folder because they are
+     * assigned to the company that client belongs to.
+     */
+    private static function companyStaffRole(User $user, int $clientId): ?string
+    {
+        if (! self::isStaff($user)) {
+            return null;
+        }
+
+        $companyId = Client::whereKey($clientId)->value('company_id');
+
+        if (! $companyId) {
+            return null;
+        }
+
+        $assignment = CompanyStaffAssignment::live()
+            ->where('company_id', $companyId)
+            ->where('user_id', $user->id)
+            ->first();
+
+        // An assignment scoped to the company alone stops at the company's own
+        // files — it is not a way to read every contact's folder.
+        if (! $assignment || ! $assignment->reachesClients()) {
+            return null;
+        }
+
+        if (! $assignment->reachesFutureClients()) {
+            $addedAt = Client::whereKey($clientId)->value('created_at');
+            if ($addedAt !== null && $addedAt > $assignment->created_at) {
+                return null;
+            }
+        }
+
+        return $assignment->fileRole();
     }
 
     public static function can(User $user, string $ability, FileItem|Folder $item): bool
@@ -187,7 +240,65 @@ class FileAccess
             ->get()
             ->first(fn (Share $s) => $s->isActive());
 
-        return $share?->role;
+        return self::highest(array_filter([
+            $share?->role,
+            self::companyShareRole($user, $type, $id),
+        ]));
+    }
+
+    /**
+     * Access that comes from being at a company the item was shared with.
+     *
+     * This is what makes company sharing worth having: one share row covers
+     * everyone at the company, so joining grants access and being removed takes
+     * it away with no share rows to maintain. A share may narrow itself to a
+     * single company role — "Company finance contacts" — via
+     * `target_company_role`; null means every member.
+     */
+    private static function companyShareRole(User $user, string $type, int $id): ?string
+    {
+        $memberships = CompanyMember::active()->where('user_id', $user->id)->get();
+
+        if ($memberships->isEmpty()) {
+            return null;
+        }
+
+        $shares = Share::where('kind', 'company')
+            ->whereIn('target_company_id', $memberships->pluck('company_id'))
+            ->where('item_type', $type)
+            ->where('item_id', $id)
+            ->whereNull('revoked_at')
+            ->get()
+            ->filter(fn (Share $s) => $s->isActive());
+
+        $roles = [];
+
+        foreach ($shares as $share) {
+            $member = $memberships->firstWhere('company_id', $share->target_company_id);
+
+            if (! $member) {
+                continue;
+            }
+
+            // Scoped to one company role, and this person does not hold it.
+            if ($share->target_company_role && $member->role !== $share->target_company_role) {
+                continue;
+            }
+
+            // A company share still respects the member's own permissions: a
+            // viewer does not become an editor because the folder was shared
+            // with everyone.
+            if (! $member->can('can_view_files')) {
+                continue;
+            }
+
+            $roles[] = ($share->role === 'editor' || $share->role === 'full')
+                && ! $member->can('can_upload_files')
+                ? 'downloader'
+                : $share->role;
+        }
+
+        return self::highest(array_filter($roles));
     }
 
     private static function activeUserShares(User $user, string $type)

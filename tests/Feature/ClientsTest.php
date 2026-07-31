@@ -160,11 +160,23 @@ class ClientsTest extends TestCase
         $this->actingAs($client)->postJson('/portal/clients', $this->payload())->assertForbidden();
     }
 
-    public function test_employees_can_manage_the_directory(): void
+    public function test_employees_can_create_a_client_but_only_list_their_own(): void
     {
+        // Employees are scoped to their live assignments now, so a client they
+        // create is not automatically theirs to see — assignment is a separate,
+        // administrator-held decision (`clients.assign`). See ClientScopeTest.
         $employee = $this->staff(['account_type' => 'Employee']);
 
         $this->actingAs($employee)->postJson('/portal/clients', $this->payload())->assertOk();
+        $this->actingAs($employee)->getJson('/portal/clients')->assertOk()->assertJsonCount(0, 'clients');
+
+        \App\Models\ClientAssignment::create([
+            'client_id' => \App\Models\Client::firstOrFail()->id,
+            'user_id' => $employee->id,
+            'permission_level' => 'editor',
+            'assigned_by' => $this->staff()->id,
+        ]);
+
         $this->actingAs($employee)->getJson('/portal/clients')->assertOk()->assertJsonCount(1, 'clients');
     }
 }

@@ -2,10 +2,13 @@
 
 namespace App\Support\Files;
 
+use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\FileVersion;
 use App\Models\User;
+use App\Support\Files\Workflow\Engine;
 use App\Support\Notifications\Notifier;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -112,7 +115,7 @@ class Versions
 
         // An open workflow reviewed a specific revision. It is never moved onto
         // the new one silently — it is marked superseded and its sender told.
-        \App\Support\Files\Workflow\Engine::noteNewVersion($file, $version);
+        Engine::noteNewVersion($file, $version);
 
         Activity::forFile($author->id, $file, $restoredFrom ? 'version-restored' : 'version', [
             'version' => $version->version_number,
@@ -153,7 +156,7 @@ class Versions
         );
     }
 
-    /** @return \Illuminate\Support\Collection<int, FileVersion> newest first */
+    /** @return Collection<int, FileVersion> newest first */
     public static function history(FileItem $file)
     {
         self::recordInitial($file);
@@ -178,7 +181,7 @@ class Versions
         // A workflow that locked the file refuses new content outright — that
         // is what "lock during review" means. Reported separately from
         // permission so the UI can explain which one applies.
-        if (\App\Support\Files\Workflow\Engine::isLocked($file)) {
+        if (Engine::isLocked($file)) {
             return false;
         }
 
@@ -188,7 +191,7 @@ class Versions
     /** Why versions are refused right now, for the message the user sees. */
     public static function lockReason(FileItem $file): ?string
     {
-        $lock = \App\Support\Files\Workflow\Engine::isLocked($file);
+        $lock = Engine::isLocked($file);
 
         return $lock
             ? 'This file is locked while a '.$lock->type.' request is open.'
@@ -210,7 +213,7 @@ class Versions
 
             // The owner, and anyone already talking about this file — the
             // people for whom the content changing under them actually matters.
-            $ids = \App\Models\FileComment::where('file_id', $file->id)
+            $ids = FileComment::where('file_id', $file->id)
                 ->distinct()->pluck('author_id')
                 ->push($file->owner_id)
                 ->unique()

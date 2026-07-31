@@ -22,19 +22,19 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/403|404/.test(m.text())) errors.push('console: ' + m.text()); });
 
 async function signIn(email) {
-  await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/auth/login`, { waitUntil: 'domcontentloaded' });
   await page.click('text=Sign in with Email');
   await page.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', 'password12345');
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
     page.click('button[type="submit"]:visible'),
   ]);
   await page.waitForTimeout(600);
   if (page.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
       page.click('text=Yes, stay signed in'),
     ]);
     await page.waitForTimeout(600);
@@ -43,7 +43,8 @@ async function signIn(email) {
 }
 
 async function openLibrary() {
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-expand="folders"]', { timeout: 15000 });
   await page.waitForTimeout(800);
   await page.click('[data-expand="folders"]');
   await page.waitForTimeout(400);

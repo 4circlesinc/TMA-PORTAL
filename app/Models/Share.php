@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'uuid', 'token', 'item_type', 'item_id', 'shared_by', 'kind', 'target_user_id',
-    'target_email', 'role', 'capabilities', 'allow_download', 'password_hash',
-    'expires_at', 'revoked_at',
+    'target_email', 'target_company_id', 'target_company_role', 'role', 'capabilities',
+    'allow_download', 'password_hash', 'expires_at', 'revoked_at',
 ])]
 #[Hidden(['password_hash'])]
 class Share extends Model
@@ -33,6 +33,12 @@ class Share extends Model
     public function targetUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'target_user_id');
+    }
+
+    /** The company a `kind = company` share covers. */
+    public function targetCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'target_company_id');
     }
 
     /** A share is usable only if it hasn't been revoked or expired. */
