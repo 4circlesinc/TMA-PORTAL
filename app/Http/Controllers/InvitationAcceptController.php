@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Invitation;
 use App\Support\Invitations\Invitations;
+use App\Support\Mail\Postcards;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -148,7 +149,7 @@ class InvitationAcceptController extends Controller
             'name' => $invitation?->name ?: $invitation?->client?->name,
             'email' => $invitation?->email,
             'inviter' => $invitation?->inviter?->name,
-            'organisation' => config('app.name'),
+            'organisation' => Postcards::site(),
             'target' => $invitation ? Invitations::targetLabel($invitation) : null,
             'offer' => $invitation?->offerLabel(),
             'expiresAt' => $invitation?->expires_at,

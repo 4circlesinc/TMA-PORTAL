@@ -961,44 +961,1079 @@
     openLightbox(file);
   }
 
-  /* ── lightbox preview ───────────────────────────────── */
+  /* ── collaboration viewer ───────────────────────────────
+   *
+   * Three regions, per the SharePoint reference: a thumbnail rail for moving
+   * between the files in the current view, the preview stage, and a details
+   * panel carrying metadata, activity and access.
+   *
+   * The shell is painted ONCE per open. Only the region that actually changed
+   * repaints — rebuilding the whole subtree would reset the preview's scroll
+   * and zoom, drop the panel's scroll position, and re-collapse whatever the
+   * reader had expanded, which §29 of the spec forbids.
+   *
+   * Panels fetch on first view, not on open: a firm-wide access roll-up or a
+   * long history must never delay the preview.
+   */
 
   var lb = null;
 
+  /* The websocket details come from /me, the same place notifications and
+   * messaging read them. Fetched once per page and remembered — including a
+   * negative answer, so a portal with no socket configured does not re-ask on
+   * every file that is opened. */
+  var rtConfig = null;
+  var rtPending = null;
+
+  function realtimeConfig(cb) {
+    if (rtConfig !== null) { cb(rtConfig); return; }
+    if (rtPending) { rtPending.push(cb); return; }
+    rtPending = [cb];
+
+    fetch((window.__TMA_SITE_ROOT || '') + '/me', {
+      headers: { Accept: 'application/json' }, credentials: 'same-origin',
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (me) { settleRealtime((me && me.realtime) || false); })
+      .catch(function () { settleRealtime(false); });
+  }
+
+  function settleRealtime(cfg) {
+    rtConfig = cfg;
+    var waiting = rtPending || [];
+    rtPending = null;
+    waiting.forEach(function (fn) { fn(cfg); });
+  }
+
+  // Panel choice, activity filter and panel visibility outlive a single file:
+  // stepping through a folder keeps the reader where they were.
+  var viewerPrefs = { panel: true, tab: 'details', filter: 'all' };
+
+  var VIEWER_TABS = [
+    { id: 'details', label: 'Details' },
+    { id: 'comments', label: 'Comments' },
+    { id: 'versions', label: 'Versions' },
+    { id: 'activity', label: 'Activity' },
+    { id: 'access', label: 'Access' },
+  ];
+
   function openLightbox(file) {
     closeLightbox();
+
     var gallery = items().filter(function (it) { return it.type === 'file'; });
     var idx = gallery.findIndex(function (f) { return f.id === file.id; });
     if (idx < 0) { gallery = [file]; idx = 0; }
-    var showInfo = false;
+
+    // Per-file caches, so flipping back to a file doesn't re-fetch it.
+    var cache = {};
 
     lb = document.createElement('div');
-    lb.className = 'tma-portal-lightbox';
+    lb.className = 'tma-portal-viewer';
     lb.setAttribute('role', 'dialog');
     lb.setAttribute('aria-modal', 'true');
+    lb.setAttribute('aria-label', 'File viewer');
     document.body.appendChild(lb);
     document.body.style.overflow = 'hidden';
 
-    function paint() {
-      var f = gallery[idx] || file;
-      var many = gallery.length > 1;
+    function current() { return gallery[idx] || file; }
+    function entry(f) {
+      if (!cache[f.id]) cache[f.id] = { details: null, activity: null, access: null, comments: null, versions: null,
+        expanded: {}, draft: '', pendingMentions: [], editing: null, replyingTo: null };
+      return cache[f.id];
+    }
+
+    /* ── the shell, painted once ─────────────────────── */
+
+    function paintShell() {
+      var f = current();
       lb.innerHTML =
-        '<div class="tma-portal-lightbox__backdrop" data-lb-close></div>' +
-        '<div class="tma-portal-lightbox__head">' +
-          '<span class="tma-portal-lightbox__title" title="' + esc(f.name) + '">' +
-            '<img src="' + esc(fileIconSrc(f)) + '" alt="" width="18" height="18">' + esc(f.name) + '</span>' +
-          '<div class="tma-portal-lightbox__head-actions">' +
-            (perm(f, 'download') ? '<button type="button" class="tma-portal-tool" data-lb-download><img src="images/icons/phosphor/ArrowLineDown.svg" alt="" width="16" height="16"><span>Download</span></button>' : '') +
-            '<button type="button" class="tma-portal-tool tma-portal-tool--icon' + (showInfo ? ' is-active' : '') + '" data-lb-details aria-label="Details" aria-pressed="' + showInfo + '"><img src="images/icons/phosphor/Info.svg" alt="" width="16" height="16"></button>' +
-            '<button type="button" class="tma-portal-tool tma-portal-tool--icon" data-lb-close aria-label="Close"><img src="images/icons/phosphor/X.svg" alt="" width="16" height="16"></button>' +
+        '<div class="tma-portal-viewer__backdrop" data-lb-close></div>' +
+        '<div class="tma-portal-viewer__frame">' +
+          viewerHead(f) +
+          '<div class="tma-portal-viewer__body">' +
+            (gallery.length > 1 ? '<div class="tma-portal-viewer__rail" data-lb-rail>' + railHtml() + '</div>' : '') +
+            '<div class="tma-portal-viewer__main">' +
+              '<div class="tma-portal-viewer__stage" data-lb-stage>' + lightboxBody(f) + '</div>' +
+              '<div class="tma-portal-viewer__foot" data-lb-foot>' + footHtml(f) + '</div>' +
+            '</div>' +
+            '<aside class="tma-portal-viewer__panel" data-lb-panel' + (viewerPrefs.panel ? '' : ' hidden') + '>' +
+              panelChromeHtml() +
+              '<div class="tma-portal-viewer__panel-body" data-lb-panel-body></div>' +
+            '</aside>' +
+          '</div>' +
+        '</div>';
+
+      paintPanel();
+      subscribeToFile(f);
+      if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
+    }
+
+    /* ── header: identity, status, toolbar ───────────── */
+
+    function viewerHead(f) {
+      return '<header class="tma-portal-viewer__head">' +
+        '<div class="tma-portal-viewer__identity">' +
+          '<img class="tma-portal-viewer__filetype" src="' + esc(fileIconSrc(f)) + '" alt="" width="28" height="28">' +
+          '<div class="tma-portal-viewer__namewrap">' +
+            '<span class="tma-portal-viewer__name" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+            '<span class="tma-portal-viewer__sub">' + headMetaHtml(f) + '</span>' +
           '</div>' +
         '</div>' +
-        (many ? '<button type="button" class="tma-portal-lightbox__nav tma-portal-lightbox__nav--prev" data-lb-prev aria-label="Previous"><img src="images/icons/phosphor/CaretLeft.svg" alt="" width="24" height="24"></button>' : '') +
-        (many ? '<button type="button" class="tma-portal-lightbox__nav tma-portal-lightbox__nav--next" data-lb-next aria-label="Next"><img src="images/icons/phosphor/CaretRight.svg" alt="" width="24" height="24"></button>' : '') +
-        '<div class="tma-portal-lightbox__stage" data-lb-stage>' + lightboxBody(f) + '</div>' +
-        (showInfo ? '<div class="tma-portal-lightbox__details">' + lightboxDetails(f) + '</div>' : '') +
-        '<div class="tma-portal-lightbox__foot">' + (many ? (idx + 1) + ' of ' + gallery.length + ' &middot; ' : '') + esc(f.sizeLabel || '') + '</div>';
+        '<div class="tma-portal-viewer__tools">' + toolbarHtml(f) + '</div>' +
+      '</header>';
+    }
 
+    // Compact status line under the file name. Only facts we actually hold —
+    // version, sync and approval badges arrive with the phases that own them.
+    function headMetaHtml(f) {
+      var bits = [];
+      if (f.category) bits.push(esc(cap(f.category)));
+      // Only worth stating once there is history to state — "Version 1" on
+      // every file is noise.
+      if (f.versionNumber > 1) bits.push('Version ' + f.versionNumber);
+      if (f.sizeLabel) bits.push(esc(f.sizeLabel));
+      if (f.modifiedAt) bits.push('Modified ' + esc(fmtDate(f.modifiedAt)));
+      if (f.folder) bits.push('in ' + esc(f.folder.name));
+      return bits.join(' &middot; ');
+    }
+
+    function toolBtnHtml(icon, action, label, opts) {
+      opts = opts || {};
+      return '<button type="button" class="tma-portal-viewer__tool' + (opts.active ? ' is-active' : '') + '"' +
+        ' data-lb-act="' + action + '" aria-label="' + esc(label) + '" title="' + esc(label) + '"' +
+        (opts.pressed !== undefined ? ' aria-pressed="' + opts.pressed + '"' : '') + '>' +
+        '<img src="images/icons/phosphor/' + icon + '.svg" alt="" width="18" height="18">' +
+        '</button>';
+    }
+
+    /**
+     * Only actions the viewer may actually perform are rendered — and every
+     * one of them is re-checked server-side when it runs. Hiding a button is
+     * a courtesy, never the control.
+     */
+    function toolbarHtml(f) {
+      var html = '';
+      if (perm(f, 'download')) html += toolBtnHtml('ArrowLineDown', 'download', 'Download');
+      html += favouriteToolHtml(f);
+      if (perm(f, 'preview')) html += toolBtnHtml('Printer', 'print', 'Print');
+      if (perm(f, 'share')) html += toolBtnHtml('ShareNetwork', 'share', 'Share');
+      if (perm(f, 'delete')) html += toolBtnHtml('Trash', 'delete', 'Delete');
+      html += toolBtnHtml('ChatCircle', 'comments', 'Comments',
+        { active: viewerPrefs.panel && viewerPrefs.tab === 'comments' });
+      html += toolBtnHtml('ClockCounterClockwise', 'versions', 'Version history',
+        { active: viewerPrefs.panel && viewerPrefs.tab === 'versions' });
+      html += toolBtnHtml('Info', 'panel', 'File details', { pressed: viewerPrefs.panel, active: viewerPrefs.panel });
+      html += toolBtnHtml('DotsThree', 'more', 'More actions');
+      html += '<span class="tma-portal-viewer__tool-sep"></span>';
+      html += toolBtnHtml('X', 'close', 'Close');
+      return html;
+    }
+
+    /* Same inline star as the file list: an <img> can only be dimmed, so the
+     * "on" state has to be drawn to read as a filled yellow star. */
+    function favouriteToolHtml(f) {
+      var on = !!f.favorite;
+      var path = 'M10 1.6l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.2l-4.94 2.6.94-5.5-4-3.9 5.53-.8z';
+      var label = on ? 'Remove from favourites' : 'Add to favourites';
+      return '<button type="button" class="tma-portal-viewer__tool' + (on ? ' is-active' : '') + '"' +
+        ' data-lb-act="favorite" aria-label="' + esc(label) + '" title="' + esc(label) + '" aria-pressed="' + on + '">' +
+        '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">' +
+        '<path d="' + path + '" ' + (on ? 'fill="#ffcc00" stroke="#e0ac00"' : 'fill="none" stroke="currentColor"') +
+        ' stroke-width="1.3" stroke-linejoin="round"/></svg></button>';
+    }
+
+    /* ── left rail: the other files in this view ─────── */
+
+    function railHtml() {
+      return gallery.map(function (g, i) {
+        var thumb = g.thumbUrl
+          ? '<img src="' + esc(g.thumbUrl) + '" alt="" loading="lazy">'
+          : '<img class="tma-portal-viewer__rail-icon" src="' + esc(fileIconSrc(g)) + '" alt="">';
+        return '<button type="button" class="tma-portal-viewer__rail-item' + (i === idx ? ' is-current' : '') + '"' +
+          ' data-lb-go="' + i + '" title="' + esc(g.name) + '" aria-current="' + (i === idx) + '">' +
+          thumb + '<span class="tma-portal-viewer__rail-name">' + esc(g.name) + '</span></button>';
+      }).join('');
+    }
+
+    function footHtml(f) {
+      var pos = gallery.length > 1 ? (idx + 1) + ' of ' + gallery.length : '';
+      return (pos ? '<span>' + pos + '</span>' : '') +
+        (f.sizeLabel ? '<span>' + esc(f.sizeLabel) + '</span>' : '');
+    }
+
+    /* ── right panel ─────────────────────────────────── */
+
+    function panelChromeHtml() {
+      return '<div class="tma-portal-viewer__panel-head">' +
+        '<div class="tma-portal-viewer__tabs" role="tablist">' +
+          VIEWER_TABS.map(function (t) {
+            return '<button type="button" role="tab" class="tma-portal-viewer__tab' +
+              (viewerPrefs.tab === t.id ? ' is-active' : '') + '" data-lb-tab="' + t.id + '"' +
+              ' aria-selected="' + (viewerPrefs.tab === t.id) + '">' + esc(t.label) + '</button>';
+          }).join('') +
+        '</div>' +
+        '<button type="button" class="tma-portal-viewer__panel-close" data-lb-act="panel" aria-label="Hide details">' +
+          '<img src="images/icons/phosphor/X.svg" alt="" width="16" height="16"></button>' +
+      '</div>';
+    }
+
+    // Repaints ONLY the panel body, so the stage keeps its scroll and zoom.
+    function paintPanel() {
+      var host = lb.querySelector('[data-lb-panel-body]');
+      if (!host) return;
+
+      var tabs = lb.querySelector('.tma-portal-viewer__tabs');
+      if (tabs) tabs.innerHTML = VIEWER_TABS.map(function (t) {
+        return '<button type="button" role="tab" class="tma-portal-viewer__tab' +
+          (viewerPrefs.tab === t.id ? ' is-active' : '') + '" data-lb-tab="' + t.id + '"' +
+          ' aria-selected="' + (viewerPrefs.tab === t.id) + '">' + esc(t.label) + '</button>';
+      }).join('');
+
+      if (viewerPrefs.tab === 'details') return paintDetails(host);
+      if (viewerPrefs.tab === 'comments') return paintComments(host);
+      if (viewerPrefs.tab === 'versions') return paintVersions(host);
+      if (viewerPrefs.tab === 'activity') return paintActivity(host);
+      return paintAccess(host);
+    }
+
+    /* Details -------------------------------------------------------- */
+
+    function paintDetails(host) {
+      var f = current();
+      var e = entry(f);
+
+      // What we already hold renders instantly; the fuller metadata block
+      // arrives from the server underneath it.
+      host.innerHTML =
+        '<section class="tma-portal-viewer__section">' +
+          '<h4 class="tma-portal-viewer__section-title">File</h4>' +
+          detailRow('Name', f.name) +
+          detailRow('Type', f.category ? cap(f.category) : 'File') +
+          detailRow('Size', f.sizeLabel) +
+          detailRow('Location', f.folder ? f.folder.name : 'File Box') +
+          detailRow('Owner', f.owner ? f.owner.name : null) +
+          detailRow('Modified', f.modifiedAt ? fmtDate(f.modifiedAt) : null) +
+        '</section>' +
+        '<div data-lb-more>' + (e.details ? moreDetailsHtml(e.details) : ui().loading({ count: 3 })) + '</div>';
+
+      if (e.details) return;
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/details'))
+        .then(function (data) {
+          e.details = data;
+          if (current().id !== f.id || viewerPrefs.tab !== 'details') return;
+          var slot = lb.querySelector('[data-lb-more]');
+          if (slot) slot.innerHTML = moreDetailsHtml(data);
+        })
+        .catch(function (err) { panelError('[data-lb-more]', err, 'details'); });
+    }
+
+    function detailRow(label, value) {
+      if (value == null || value === '') return '';
+      return '<div class="tma-portal-viewer__row">' +
+        '<span class="tma-portal-viewer__row-label">' + esc(label) + '</span>' +
+        '<span class="tma-portal-viewer__row-value">' + esc(value) + '</span></div>';
+    }
+
+    // "More details" is collapsed by default: §30 says the panel must not
+    // dump every field on open.
+    function moreDetailsHtml(data) {
+      var groups = (data && data.groups) || [];
+      if (!groups.length) return '';
+      return '<details class="tma-portal-viewer__more">' +
+        '<summary class="tma-portal-viewer__more-summary">More details</summary>' +
+        groups.map(function (g) {
+          return '<section class="tma-portal-viewer__section">' +
+            '<h4 class="tma-portal-viewer__section-title">' + esc(g.title) + '</h4>' +
+            g.rows.map(function (r) { return detailRow(r.label, r.value); }).join('') +
+          '</section>';
+        }).join('') +
+      '</details>';
+    }
+
+    /* Repaints only the comment list — the composer keeps its text and caret. */
+    function repaintComments(e) {
+      var slot = lb.querySelector('[data-lb-comments]');
+      if (slot && e.comments) slot.innerHTML = commentsHtml(e.comments, e);
+    }
+
+    /**
+     * Emoji insertion, built from the portal's own emoji data rather than a
+     * second picker implementation. Comments are plain text, so an emoji is
+     * simply a character typed at the caret.
+     */
+    function openEmojiPicker() {
+      var data = window.TMAEmojiData;
+      if (!data) { ui().toast('Emoji are unavailable'); return; }
+
+      var existing = lb.querySelector('[data-lb-emojipop]');
+      if (existing) { existing.remove(); return; }
+
+      var pop = document.createElement('div');
+      pop.className = 'tma-portal-viewer__emoji-pop';
+      pop.setAttribute('data-lb-emojipop', '');
+      pop.innerHTML = (data.groups || []).slice(0, 4).map(function (g) {
+        return '<div class="tma-portal-viewer__emoji-group">' +
+          '<h6>' + esc(g.label) + '</h6>' +
+          (g.items || []).slice(0, 48).map(function (it) {
+            return '<button type="button" class="tma-portal-viewer__emoji" data-lb-emojichar="' +
+              esc(it.c) + '" title="' + esc(it.n) + '">' + esc(it.c) + '</button>';
+          }).join('') +
+        '</div>';
+      }).join('');
+
+      pop.addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-lb-emojichar]');
+        if (!b) return;
+        insertAtCaret(b.getAttribute('data-lb-emojichar'));
+        pop.remove();
+      });
+
+      var composer = lb.querySelector('[data-lb-composer]');
+      if (composer) composer.appendChild(pop);
+    }
+
+    function insertAtCaret(text) {
+      var input = lb.querySelector('[data-lb-input]');
+      if (!input) return;
+      var pos = input.selectionStart;
+      input.value = input.value.slice(0, pos) + text + input.value.slice(input.selectionEnd);
+      input.focus();
+      input.setSelectionRange(pos + text.length, pos + text.length);
+      entry(current()).draft = input.value;
+    }
+
+    /**
+     * Live comments from other people.
+     *
+     * The event carries no body — only that something changed — so the panel
+     * refetches the thread and patches it in. Nothing reloads, and the reader's
+     * scroll, open composer and half-typed reply all survive (§29).
+     */
+    function subscribeToFile(f) {
+      realtimeConfig(function (cfg) {
+        var rt = window.TMAMessagingRealtime;
+        if (!lb || !rt || !cfg || !rt.start(cfg)) return;
+        bindFileChannel(rt, f);
+      });
+    }
+
+    function bindFileChannel(rt, f) {
+      var name = 'private-file.' + f.id;
+      if (lb._channel === name) return;
+      if (lb._channel) rt.leave(lb._channel);
+      lb._channel = name;
+
+      rt.listen(name, 'file.comment.changed', function (payload) {
+        if (!lb || !payload || payload.fileId !== current().id) return;
+        var e = entry(current());
+        e.comments = null;
+        if (viewerPrefs.tab === 'comments') loadComments(current());
+        else refreshOpenCountOnly(current());
+      });
+    }
+
+    // Keeps the tab's badge honest while the reader is on another tab.
+    function refreshOpenCountOnly(f) {
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'))
+        .then(function (data) { entry(f).comments = data; refreshCommentCount(data); })
+        .catch(function () {});
+    }
+
+    /* Comments ------------------------------------------------------- */
+
+    function paintComments(host) {
+      var f = current();
+      var e = entry(f);
+      var stale = e.comments;
+
+      host.innerHTML =
+        '<div data-lb-comments>' + (stale ? commentsHtml(stale, e) : ui().loading({ count: 3 })) + '</div>' +
+        composerHtml(f, e);
+
+      // Always refetch: someone else may have commented since this was cached.
+      // The stale copy stays on screen meanwhile, so there is no flicker.
+      loadComments(f);
+      restoreDraft(e);
+    }
+
+    function loadComments(f, append) {
+      var e = entry(f);
+      var q = append && e.comments && e.comments.nextCursor ? '?before=' + e.comments.nextCursor : '';
+      var seq = e.commentsSeq = (e.commentsSeq || 0) + 1;
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments' + q))
+        .then(function (data) {
+          // A response that has been overtaken is thrown away: applying it
+          // would undo whatever the newer request already showed.
+          if (seq !== e.commentsSeq) return;
+          if (append && e.comments) {
+            data.threads = data.threads.concat(e.comments.threads);
+          }
+          e.comments = data;
+          if (current().id !== f.id || viewerPrefs.tab !== 'comments') return;
+          var slot = lb.querySelector('[data-lb-comments]');
+          if (slot) slot.innerHTML = commentsHtml(data, e);
+          refreshCommentCount(data);
+        })
+        .catch(function (err) { panelError('[data-lb-comments]', err, 'comments'); });
+    }
+
+    // The tab label carries the open-thread count, so an unread discussion is
+    // visible without opening the panel.
+    function refreshCommentCount(data) {
+      var tab = lb.querySelector('[data-lb-tab="comments"]');
+      if (!tab) return;
+      var n = data && data.openCount;
+      tab.textContent = n ? 'Comments (' + n + ')' : 'Comments';
+    }
+
+    function commentsHtml(data, e) {
+      var threads = (data && data.threads) || [];
+      if (!threads.length) {
+        return '<p class="tma-portal-viewer__empty">No comments yet. Start the discussion below.</p>';
+      }
+
+      var html = data.nextCursor
+        ? '<button type="button" class="tma-portal-viewer__more-btn" data-lb-more-comments>Show earlier comments</button>'
+        : '';
+
+      html += threads.map(function (t) {
+        var replies = (t.replies || []).map(function (r) {
+          return '<div class="tma-portal-viewer__reply">' + commentHtml(r, e) + '</div>';
+        }).join('');
+
+        return '<div class="tma-portal-viewer__thread' + (t.resolved ? ' is-resolved' : '') + '" data-thread="' + esc(t.id) + '">' +
+          commentHtml(t, e) +
+          replies +
+          (t.can.reply ? replyControlHtml(t, e) : '') +
+        '</div>';
+      }).join('');
+
+      return html;
+    }
+
+    function commentHtml(c, e) {
+      if (c.deleted) {
+        return '<div class="tma-portal-viewer__comment is-deleted">' +
+          '<p class="tma-portal-viewer__comment-body"><em>This comment was deleted.</em></p></div>';
+      }
+
+      var editing = e.editing === c.id;
+      var who = c.author ? (c.author.isSelf ? 'You' : c.author.name) : 'Someone';
+
+      var actions = '';
+      if (!editing) {
+        if (c.can.resolve) {
+          actions += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-resolve="' + esc(c.id) + '"' +
+            ' data-resolved="' + c.resolved + '">' + (c.resolved ? 'Reopen' : 'Resolve') + '</button>';
+        }
+        if (c.can.edit) actions += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-edit="' + esc(c.id) + '">Edit</button>';
+        if (c.can.delete) actions += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-del="' + esc(c.id) + '">Delete</button>';
+      }
+
+      var body = editing
+        ? '<div class="tma-portal-viewer__editbox">' +
+            '<textarea class="tma-portal-viewer__input" data-lb-editinput rows="3">' + esc(c.body || '') + '</textarea>' +
+            '<div class="tma-portal-viewer__composer-actions">' +
+              '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-editcancel>Cancel</button>' +
+              '<button type="button" class="tma-portal-viewer__btn" data-lb-editsave="' + esc(c.id) + '">Save</button>' +
+            '</div>' +
+          '</div>'
+        : '<p class="tma-portal-viewer__comment-body">' + decorateMentions(c) + '</p>';
+
+      return '<div class="tma-portal-viewer__comment" data-comment="' + esc(c.id) + '">' +
+        '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(c.author)) + '" alt="" width="28" height="28">' +
+        '<div class="tma-portal-viewer__comment-main">' +
+          '<div class="tma-portal-viewer__comment-head">' +
+            '<strong>' + esc(who) + '</strong>' +
+            '<time datetime="' + esc(c.createdAt) + '">' + esc(fmtDateTime(c.createdAt)) + '</time>' +
+            (c.editedAt ? '<span class="tma-portal-viewer__comment-flag">edited</span>' : '') +
+            (c.resolved ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok">Resolved' +
+              (c.resolvedBy ? ' by ' + esc(c.resolvedBy) : '') + '</span>' : '') +
+          '</div>' +
+          body +
+          (actions ? '<div class="tma-portal-viewer__comment-actions">' + actions + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    /**
+     * Escape first, then wrap the mentioned names.
+     *
+     * The body is plain text from the server and is escaped here before any
+     * markup is added, so a comment can never inject HTML into someone else's
+     * viewer — the highlight is applied to the *escaped* string.
+     */
+    function decorateMentions(c) {
+      var text = esc(c.body || '');
+      (c.mentions || []).forEach(function (m) {
+        var safe = esc(m.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        text = text.replace(new RegExp('@?' + safe, 'g'),
+          '<span class="tma-portal-viewer__mention">@' + esc(m.name) + '</span>');
+      });
+      return text.replace(/\n/g, '<br>');
+    }
+
+    function replyControlHtml(t, e) {
+      if (e.replyingTo === t.id) {
+        return '<div class="tma-portal-viewer__reply tma-portal-viewer__replybox">' +
+          '<textarea class="tma-portal-viewer__input" data-lb-replyinput rows="2" placeholder="Write a reply…"></textarea>' +
+          '<div class="tma-portal-viewer__composer-actions">' +
+            '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-replycancel>Cancel</button>' +
+            '<button type="button" class="tma-portal-viewer__btn" data-lb-replysend="' + esc(t.id) + '">Reply</button>' +
+          '</div>' +
+        '</div>';
+      }
+      return '<button type="button" class="tma-portal-viewer__comment-act tma-portal-viewer__reply-open" data-lb-replyopen="' + esc(t.id) + '">Reply</button>';
+    }
+
+    function composerHtml(f, e) {
+      if (e.comments && e.comments.canComment === false) {
+        return '<p class="tma-portal-viewer__empty">You can view this discussion but not add to it.</p>';
+      }
+
+      return '<div class="tma-portal-viewer__composer" data-lb-composer>' +
+        '<textarea class="tma-portal-viewer__input" data-lb-input rows="3" ' +
+          'placeholder="Add a comment. Use @ to mention someone."></textarea>' +
+        '<div class="tma-portal-viewer__mention-pop" data-lb-mentions hidden></div>' +
+        '<div class="tma-portal-viewer__composer-actions">' +
+          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-emoji title="Insert emoji" aria-label="Insert emoji">🙂</button>' +
+          '<span class="tma-portal-viewer__composer-spacer"></span>' +
+          // Cancel and Send sit in a row with a gap — §16 asks specifically
+          // that the clear control never overlap the send control.
+          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-clear>Cancel</button>' +
+          '<button type="button" class="tma-portal-viewer__btn" data-lb-send>Comment</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Draft survives a tab switch — losing half a typed comment because you
+     * checked the file's details is exactly what §29 is about. */
+    function restoreDraft(e) {
+      var input = lb.querySelector('[data-lb-input]');
+      if (input && e.draft) input.value = e.draft;
+    }
+
+    function sendComment() {
+      var f = current();
+      var e = entry(f);
+      var input = lb.querySelector('[data-lb-input]');
+      if (!input) return;
+
+      var body = input.value.trim();
+      if (!body) return;
+
+      var mentions = (e.pendingMentions || []).filter(function (m) {
+        return body.indexOf(m.name) !== -1;
+      });
+
+      input.value = '';
+      e.draft = '';
+      e.pendingMentions = [];
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'), {
+        method: 'POST',
+        json: { body: body, mentions: mentions.map(function (m) { return m.id; }) },
+      })
+        .then(function () { e.comments = null; loadComments(f); })
+        .catch(function (err) {
+          // Give the words back rather than losing them to a failed request.
+          input.value = body;
+          e.draft = body;
+          ui().toast((err && err.message) || 'Could not post that comment');
+        });
+    }
+
+    function sendReply(threadId) {
+      var f = current();
+      var e = entry(f);
+      var input = lb.querySelector('[data-lb-replyinput]');
+      if (!input) return;
+      var body = input.value.trim();
+      if (!body) return;
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments'), {
+        method: 'POST',
+        json: { body: body, parent: threadId },
+      })
+        .then(function () { e.replyingTo = null; e.comments = null; loadComments(f); })
+        .catch(function (err) { ui().toast((err && err.message) || 'Could not post that reply'); });
+    }
+
+    function saveEdit(commentId) {
+      var f = current();
+      var e = entry(f);
+      var input = lb.querySelector('[data-lb-editinput]');
+      if (!input) return;
+      var body = input.value.trim();
+      if (!body) return;
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments/' + encodeURIComponent(commentId)), {
+        method: 'PATCH', json: { body: body },
+      })
+        .then(function () { e.editing = null; e.comments = null; loadComments(f); })
+        .catch(function (err) { ui().toast((err && err.message) || 'Could not save that edit'); });
+    }
+
+    function deleteComment(commentId) {
+      var f = current();
+      var e = entry(f);
+      confirmModal({
+        title: 'Delete comment',
+        message: 'Delete this comment? Replies to it stay in the thread.',
+        confirmLabel: 'Delete', danger: true,
+        onConfirm: function () {
+          net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments/' + encodeURIComponent(commentId)), { method: 'DELETE' })
+            .then(function () { e.comments = null; loadComments(f); })
+            .catch(function (err) { ui().toast((err && err.message) || 'Could not delete that comment'); });
+        },
+      });
+    }
+
+    function toggleResolve(commentId, resolved) {
+      var f = current();
+      var e = entry(f);
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/comments/' + encodeURIComponent(commentId) + '/resolve'), {
+        method: 'POST', json: { resolved: !resolved },
+      })
+        .then(function () { e.comments = null; loadComments(f); })
+        .catch(function (err) { ui().toast((err && err.message) || 'Could not update that thread'); });
+    }
+
+    /* ── @mention autocomplete ───────────────────────── */
+
+    function onComposerInput(input) {
+      var f = current();
+      var e = entry(f);
+      e.draft = input.value;
+
+      var upto = input.value.slice(0, input.selectionStart);
+      var m = /@([\w' -]{0,40})$/.exec(upto);
+      var pop = lb.querySelector('[data-lb-mentions]');
+      if (!pop) return;
+
+      if (!m) { pop.hidden = true; return; }
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/mentionable?q=' + encodeURIComponent(m[1])))
+        .then(function (data) {
+          var people = (data && data.people) || [];
+          if (!people.length) { pop.hidden = true; return; }
+          pop.innerHTML = people.map(function (p) {
+            return '<button type="button" class="tma-portal-viewer__mention-item" data-lb-mention="' + p.id + '"' +
+              ' data-name="' + esc(p.name) + '">' +
+              '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(p)) + '" alt="" width="22" height="22">' +
+              '<span><strong>' + esc(p.name) + '</strong><span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span></span>' +
+            '</button>';
+          }).join('');
+          pop.hidden = false;
+        })
+        .catch(function () { pop.hidden = true; });
+    }
+
+    function insertMention(id, name) {
+      var f = current();
+      var e = entry(f);
+      var input = lb.querySelector('[data-lb-input]');
+      var pop = lb.querySelector('[data-lb-mentions]');
+      if (!input) return;
+
+      var pos = input.selectionStart;
+      var before = input.value.slice(0, pos).replace(/@([\w' -]{0,40})$/, '');
+      var after = input.value.slice(pos);
+      input.value = before + '@' + name + ' ' + after;
+      input.focus();
+      var caret = (before + '@' + name + ' ').length;
+      input.setSelectionRange(caret, caret);
+
+      e.pendingMentions = (e.pendingMentions || []).concat([{ id: parseInt(id, 10), name: name }]);
+      e.draft = input.value;
+      if (pop) pop.hidden = true;
+    }
+
+    /* Versions -------------------------------------------------------- */
+
+    function paintVersions(host) {
+      var f = current();
+      var e = entry(f);
+
+      host.innerHTML = '<div data-lb-versions>' +
+        (e.versions ? versionsHtml(e.versions, f) : ui().loading({ count: 3 })) + '</div>';
+
+      loadVersions(f);
+    }
+
+    function loadVersions(f) {
+      var e = entry(f);
+      var seq = e.versionsSeq = (e.versionsSeq || 0) + 1;
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/versions'))
+        .then(function (data) {
+          if (seq !== e.versionsSeq) return;
+          e.versions = data;
+          if (current().id !== f.id || viewerPrefs.tab !== 'versions') return;
+          var slot = lb.querySelector('[data-lb-versions]');
+          if (slot) slot.innerHTML = versionsHtml(data, f);
+        })
+        .catch(function (err) { panelError('[data-lb-versions]', err, 'version history'); });
+    }
+
+    function versionsHtml(data, f) {
+      var list = (data && data.versions) || [];
+      if (!list.length) return '<p class="tma-portal-viewer__empty">No version history for this file.</p>';
+
+      var head = data.canAddVersion
+        ? '<button type="button" class="tma-portal-viewer__btn tma-portal-viewer__version-add" data-lb-newversion>' +
+            'Upload new version</button>' +
+          '<input type="file" hidden data-lb-versionfile>'
+        : '';
+
+      return head + list.map(function (v) {
+        var who = v.uploadedBy ? v.uploadedBy.name : 'Someone';
+        var acts = '';
+        // The current version is downloaded through the file's own toolbar, so
+        // only older ones carry their own actions.
+        if (!v.isCurrent && v.can.preview) acts += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-vpreview="' + esc(v.id) + '">Preview</button>';
+        if (!v.isCurrent && v.can.download) acts += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-vdownload="' + esc(v.id) + '">Download</button>';
+        if (v.can.restore) acts += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-vrestore="' + esc(v.id) + '" data-num="' + v.number + '">Restore</button>';
+
+        return '<div class="tma-portal-viewer__version' + (v.isCurrent ? ' is-current' : '') + '">' +
+          '<div class="tma-portal-viewer__version-mark">v' + v.number + '</div>' +
+          '<div class="tma-portal-viewer__version-main">' +
+            '<div class="tma-portal-viewer__comment-head">' +
+              '<strong>' + esc(who) + '</strong>' +
+              '<time datetime="' + esc(v.uploadedAt) + '">' + esc(fmtDateTime(v.uploadedAt)) + '</time>' +
+              (v.isCurrent ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok">Current</span>' : '') +
+              (v.restoredFrom ? '<span class="tma-portal-viewer__comment-flag">restored from v' + v.restoredFrom + '</span>' : '') +
+              (v.approvalStatus ? '<span class="tma-portal-viewer__comment-flag">' + esc(v.approvalStatus) + '</span>' : '') +
+            '</div>' +
+            (v.note ? '<p class="tma-portal-viewer__version-note">' + esc(v.note) + '</p>' : '') +
+            '<p class="tma-portal-viewer__version-meta">' + esc(v.sizeLabel) +
+              (v.checksum ? ' &middot; ' + esc(v.checksum) : '') + '</p>' +
+            (acts ? '<div class="tma-portal-viewer__comment-actions">' + acts + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    /**
+     * Uploading a new version. The note is asked for BEFORE the bytes go up,
+     * because §5 wants the reason recorded — and asking afterwards means a
+     * large upload finishes with nothing to say about it.
+     */
+    function pickNewVersion() {
+      var input = lb.querySelector('[data-lb-versionfile]');
+      if (input) input.click();
+    }
+
+    function uploadNewVersion(file) {
+      var f = current();
+      var e = entry(f);
+
+      confirmModal({
+        title: 'Upload new version',
+        message: 'Add “' + file.name + '” as the next version of “' + f.name + '”? ' +
+          'The current version is kept and stays downloadable.',
+        prompt: { label: 'Why is this version being uploaded? (optional)', placeholder: 'e.g. Client asked for clause 4 to change' },
+        confirmLabel: 'Upload version',
+        onConfirm: function (note) {
+          var form = new FormData();
+          form.append('file', file);
+          if (note) form.append('note', note);
+
+          ui().toast('Uploading new version…');
+          net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/versions'), {
+            method: 'POST', body: form,
+          })
+            .then(function (res) {
+              ui().toast('Version ' + res.version + ' uploaded');
+              e.versions = null;
+              // The file's own row and the header both changed (size, modified,
+              // version), so refresh what we hold rather than guessing.
+              if (res.file) {
+                updateItem(f.id, res.file);
+                Object.assign(f, res.file);
+              }
+              var head = lb.querySelector('.tma-portal-viewer__head');
+              if (head) head.outerHTML = viewerHead(f);
+              bustPreview(f, res.version);
+              repaintStage(f);
+              loadVersions(f);
+            })
+            .catch(function (err) { ui().toast((err && err.message) || 'Could not upload that version'); });
+        },
+      });
+    }
+
+    function restoreVersion(versionId, number) {
+      var f = current();
+      var e = entry(f);
+
+      confirmModal({
+        title: 'Restore version ' + number,
+        message: 'This adds version ' + number + '’s content as a NEW current version. ' +
+          'Nothing is deleted — every later version stays in the history.',
+        prompt: { label: 'Note (optional)', placeholder: 'Why are you restoring this?' },
+        confirmLabel: 'Restore',
+        onConfirm: function (note) {
+          net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/versions/' + encodeURIComponent(versionId) + '/restore'), {
+            method: 'POST', json: note ? { note: note } : {},
+          })
+            .then(function (res) {
+              ui().toast('Restored as version ' + res.version);
+              e.versions = null;
+              if (res.file) {
+                updateItem(f.id, res.file);
+                Object.assign(f, res.file);
+              }
+              var head = lb.querySelector('.tma-portal-viewer__head');
+              if (head) head.outerHTML = viewerHead(f);
+              bustPreview(f, res.version);
+              repaintStage(f);
+              loadVersions(f);
+            })
+            .catch(function (err) { ui().toast((err && err.message) || 'Could not restore that version'); });
+        },
+      });
+    }
+
+    /* The preview and thumbnail URLs do not change when the content does, so
+     * without a cache-buster the viewer keeps showing the previous version's
+     * bytes after an upload — which reads as the upload having failed. */
+    function bustPreview(f, version) {
+      ['previewUrl', 'thumbUrl'].forEach(function (key) {
+        if (!f[key]) return;
+        f[key] = f[key].split('?')[0] + '?v=' + version;
+      });
+    }
+
+    function versionUrl(versionId, action) {
+      return net().url('/files/' + encodeURIComponent(current().id) +
+        '/versions/' + encodeURIComponent(versionId) + '/' + action);
+    }
+
+    /* Activity ------------------------------------------------------- */
+
+    function paintActivity(host) {
+      var f = current();
+      var e = entry(f);
+      var stale = e.activity && e.activity.filter === viewerPrefs.filter ? e.activity : null;
+
+      host.innerHTML =
+        '<div class="tma-portal-viewer__filter">' +
+          '<label class="tma-portal-viewer__filter-label" for="lb-activity-filter">View:</label>' +
+          '<select class="tma-portal-viewer__filter-select" id="lb-activity-filter" data-lb-filter>' +
+            activityFilterOptions(e.activity) +
+          '</select>' +
+        '</div>' +
+        '<div data-lb-activity>' + (stale ? activityHtml(stale) : ui().loading({ count: 4 })) + '</div>';
+
+      // Always refetch. Downloading, sharing or favouriting from this very
+      // toolbar appends rows, so a cached page is wrong the moment the reader
+      // does anything. The cached rows stay on screen while it reloads, so
+      // there is no flicker and no scroll jump.
+      loadActivity(f, false);
+    }
+
+    function activityFilterOptions(loaded) {
+      var opts = (loaded && loaded.filters) || [
+        { value: 'all', label: 'All activity' },
+      ];
+      return opts.map(function (o) {
+        return '<option value="' + esc(o.value) + '"' +
+          (o.value === viewerPrefs.filter ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+      }).join('');
+    }
+
+    function loadActivity(f, append) {
+      var e = entry(f);
+      var q = '?filter=' + encodeURIComponent(viewerPrefs.filter);
+      if (append && e.activity && e.activity.nextCursor) q += '&before=' + e.activity.nextCursor;
+      var seq = e.activitySeq = (e.activitySeq || 0) + 1;
+
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/activity' + q))
+        .then(function (data) {
+          if (seq !== e.activitySeq) return;
+          if (append && e.activity) {
+            data.entries = e.activity.entries.concat(data.entries);
+          }
+          e.activity = data;
+          if (current().id !== f.id || viewerPrefs.tab !== 'activity') return;
+          var slot = lb.querySelector('[data-lb-activity]');
+          if (slot) slot.innerHTML = activityHtml(data);
+          // The server owns the filter list. On first paint we only had the
+          // fallback single option, so repopulate once it arrives — guarding
+          // on "no options" left the dropdown stuck at just "All activity".
+          var sel = lb.querySelector('[data-lb-filter]');
+          if (sel && data.filters && sel.options.length !== data.filters.length) {
+            sel.innerHTML = activityFilterOptions(data);
+          }
+        })
+        .catch(function (err) { panelError('[data-lb-activity]', err, 'activity'); });
+    }
+
+    function activityHtml(data) {
+      var entries = (data && data.entries) || [];
+      if (!entries.length) {
+        return '<p class="tma-portal-viewer__empty">' +
+          (viewerPrefs.filter === 'all'
+            ? 'No activity recorded for this file yet.'
+            : 'No activity of this kind yet.') + '</p>';
+      }
+
+      var html = '';
+      var band = null;
+      entries.forEach(function (a) {
+        if (a.group !== band) {
+          band = a.group;
+          html += '<h5 class="tma-portal-viewer__band">' + esc(band) + '</h5>';
+        }
+        html += activityRow(a);
+      });
+
+      if (data.nextCursor) {
+        html += '<button type="button" class="tma-portal-viewer__more-btn" data-lb-more-activity>Show older activity</button>';
+      }
+      return html;
+    }
+
+    function activityRow(a) {
+      // The sentence says "You"; the face stays the person's own, so their
+      // initials don't collapse to a "Y".
+      var who = a.actor ? (a.actor.isSelf ? 'You' : a.actor.name) : 'Someone';
+      var face = a.actor
+        ? '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(a.actor)) + '" alt="" width="28" height="28">'
+        : '<span class="tma-portal-viewer__avatar tma-portal-viewer__avatar--icon">' +
+            '<img src="images/icons/phosphor/' + esc(a.icon || 'ClockCounterClockwise') + '.svg" alt="" width="14" height="14"></span>';
+
+      return '<div class="tma-portal-viewer__event">' +
+        face +
+        '<div class="tma-portal-viewer__event-body">' +
+          '<p class="tma-portal-viewer__event-text"><strong>' + esc(who) + '</strong> ' + esc(a.text) + '</p>' +
+          '<time class="tma-portal-viewer__event-time" datetime="' + esc(a.at) + '">' + esc(fmtDateTime(a.at)) + '</time>' +
+        '</div>' +
+      '</div>';
+    }
+
+    /* Access --------------------------------------------------------- */
+
+    function paintAccess(host) {
+      var f = current();
+      var e = entry(f);
+
+      host.innerHTML = '<div data-lb-access>' +
+        (e.access ? accessHtml(e.access, e) : ui().loading({ count: 3 })) + '</div>';
+
+      if (e.access) return;
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/access'))
+        .then(function (data) {
+          e.access = data;
+          if (current().id !== f.id || viewerPrefs.tab !== 'access') return;
+          var slot = lb.querySelector('[data-lb-access]');
+          if (slot) slot.innerHTML = accessHtml(data, e);
+        })
+        .catch(function (err) { panelError('[data-lb-access]', err, 'access'); });
+    }
+
+    /**
+     * Access is shown as the *reasons* people can reach the file, each
+     * expandable. Listing every member of staff individually would be hundreds
+     * of rows that go stale on the next hire.
+     */
+    function accessHtml(data, e) {
+      var sources = (data && data.sources) || [];
+      if (!sources.length) return '<p class="tma-portal-viewer__empty">Only you can see this file.</p>';
+
+      var html = sources.map(function (s) {
+        var open = !!e.expanded[s.key];
+        var faces = (s.members || []).slice(0, 5).map(function (m) {
+          return '<img class="tma-portal-viewer__avatar tma-portal-viewer__avatar--stack" src="' + esc(avatarFor(m)) +
+            '" alt="" width="24" height="24" title="' + esc(personTitle(m)) + '">';
+        }).join('');
+        var overflow = s.total > 5
+          ? '<span class="tma-portal-viewer__avatar-more">+' + (s.total - 5) + '</span>'
+          : '';
+
+        return '<div class="tma-portal-viewer__source">' +
+          '<button type="button" class="tma-portal-viewer__source-head" data-lb-expand="' + esc(s.key) + '"' +
+            ' aria-expanded="' + open + '">' +
+            '<img class="tma-portal-viewer__source-icon" src="images/icons/phosphor/' + esc(s.icon) + '.svg" alt="" width="18" height="18">' +
+            '<span class="tma-portal-viewer__source-text">' +
+              '<strong>' + esc(s.label) + '</strong>' +
+              '<span class="tma-portal-viewer__source-detail">' + esc(s.detail) +
+                (s.role ? ' &middot; ' + esc(s.role) : '') + '</span>' +
+            '</span>' +
+            '<span class="tma-portal-viewer__faces">' + faces + overflow + '</span>' +
+          '</button>' +
+          (open ? '<div class="tma-portal-viewer__source-members">' +
+            (s.members || []).map(memberRow).join('') +
+            (s.truncated ? '<p class="tma-portal-viewer__empty">Showing the first ' + (s.members || []).length +
+              ' of ' + s.total + '.</p>' : '') +
+          '</div>' : '') +
+          (s.origin ? '<p class="tma-portal-viewer__source-origin">' + esc(s.origin) + '</p>' : '') +
+        '</div>';
+      }).join('');
+
+      return html;
+    }
+
+    function memberRow(m) {
+      return '<div class="tma-portal-viewer__member" title="' + esc(personTitle(m)) + '">' +
+        '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(m)) + '" alt="" width="24" height="24">' +
+        '<span class="tma-portal-viewer__member-text">' +
+          '<strong>' + esc(m.name || m.email || 'Someone') + '</strong>' +
+          (m.email ? '<span class="tma-portal-viewer__member-email">' + esc(m.email) + '</span>' : '') +
+        '</span>' +
+        (m.role ? '<span class="tma-portal-viewer__member-role">' + esc(m.role) + '</span>' : '') +
+      '</div>';
+    }
+
+    // Hover reveals name, email, role and permission — §19.
+    function personTitle(m) {
+      return [m.name, m.email, m.jobTitle || m.accountType, m.role]
+        .filter(Boolean).join(' · ');
+    }
+
+    function panelError(selector, err, what) {
+      var slot = lb && lb.querySelector(selector);
+      if (!slot) return;
+      slot.innerHTML = '<p class="tma-portal-viewer__empty">' +
+        esc((err && err.message) || ('Could not load ' + what + '.')) + '</p>';
+    }
+
+    /* ── moving between files ────────────────────────── */
+
+    function go(delta) {
+      var next = idx + delta;
+      if (next < 0 || next >= gallery.length) return;
+      showAt(next);
+    }
+
+    function showAt(next) {
+      idx = next;
+      var f = current();
+
+      // Only the regions that depend on the file change; the panel keeps its
+      // tab and the reader keeps their place in the shell.
+      var head = lb.querySelector('.tma-portal-viewer__head');
+      if (head) head.outerHTML = viewerHead(f);
+      repaintStage(f);
+      var foot = lb.querySelector('[data-lb-foot]');
+      if (foot) foot.innerHTML = footHtml(f);
+      var rail = lb.querySelector('[data-lb-rail]');
+      if (rail) rail.innerHTML = railHtml();
+
+      paintPanel();
+      subscribeToFile(f);
+      if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
+    }
+
+    /* Repainting the stage is never just innerHTML: a text preview renders a
+     * placeholder that only loadText() fills in, so replacing the markup
+     * without re-running it leaves a permanent "Loading…". */
+    function repaintStage(f) {
+      var stage = lb.querySelector('[data-lb-stage]');
+      if (!stage) return;
+      stage.innerHTML = lightboxBody(f);
       if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
     }
 
@@ -1011,31 +2046,243 @@
         .catch(function () { pre.textContent = 'Could not load this file.'; });
     }
 
-    function go(delta) {
-      var next = idx + delta;
-      if (next < 0 || next >= gallery.length) return;
-      idx = next;
-      paint();
-    }
+    /* ── interaction ─────────────────────────────────── */
 
     lb.addEventListener('click', function (e) {
+      var f = current();
+
+      var goBtn = e.target.closest('[data-lb-go]');
+      if (goBtn) { showAt(parseInt(goBtn.getAttribute('data-lb-go'), 10) || 0); return; }
+
+      var tab = e.target.closest('[data-lb-tab]');
+      if (tab) { viewerPrefs.tab = tab.getAttribute('data-lb-tab'); paintPanel(); return; }
+
+      var expand = e.target.closest('[data-lb-expand]');
+      if (expand) {
+        var key = expand.getAttribute('data-lb-expand');
+        var en = entry(f);
+        en.expanded[key] = !en.expanded[key];
+        var slot = lb.querySelector('[data-lb-access]');
+        if (slot && en.access) slot.innerHTML = accessHtml(en.access, en);
+        return;
+      }
+
+      if (e.target.closest('[data-lb-more-activity]')) { loadActivity(f, true); return; }
+      if (e.target.closest('[data-lb-more-comments]')) { loadComments(f, true); return; }
+
+      /* ── versions ─────────────────────────────────── */
+      if (e.target.closest('[data-lb-newversion]')) { pickNewVersion(); return; }
+      var vPrev = e.target.closest('[data-lb-vpreview]');
+      if (vPrev) { window.open(versionUrl(vPrev.getAttribute('data-lb-vpreview'), 'preview'), '_blank'); return; }
+      var vDown = e.target.closest('[data-lb-vdownload]');
+      if (vDown) { window.location.href = versionUrl(vDown.getAttribute('data-lb-vdownload'), 'download'); return; }
+      var vRest = e.target.closest('[data-lb-vrestore]');
+      if (vRest) { restoreVersion(vRest.getAttribute('data-lb-vrestore'), vRest.getAttribute('data-num')); return; }
+
+      /* ── comments ─────────────────────────────────── */
+      var en = entry(f);
+      var mention = e.target.closest('[data-lb-mention]');
+      if (mention) {
+        insertMention(mention.getAttribute('data-lb-mention'), mention.getAttribute('data-name'));
+        return;
+      }
+      if (e.target.closest('[data-lb-send]')) { sendComment(); return; }
+      if (e.target.closest('[data-lb-clear]')) {
+        var box = lb.querySelector('[data-lb-input]');
+        if (box) box.value = '';
+        en.draft = '';
+        en.pendingMentions = [];
+        var pop = lb.querySelector('[data-lb-mentions]');
+        if (pop) pop.hidden = true;
+        return;
+      }
+      if (e.target.closest('[data-lb-emoji]')) { openEmojiPicker(); return; }
+
+      var replyOpen = e.target.closest('[data-lb-replyopen]');
+      if (replyOpen) {
+        en.replyingTo = replyOpen.getAttribute('data-lb-replyopen');
+        repaintComments(en);
+        return;
+      }
+      if (e.target.closest('[data-lb-replycancel]')) { en.replyingTo = null; repaintComments(en); return; }
+      var replySend = e.target.closest('[data-lb-replysend]');
+      if (replySend) { sendReply(replySend.getAttribute('data-lb-replysend')); return; }
+
+      var editBtn = e.target.closest('[data-lb-edit]');
+      if (editBtn) { en.editing = editBtn.getAttribute('data-lb-edit'); repaintComments(en); return; }
+      if (e.target.closest('[data-lb-editcancel]')) { en.editing = null; repaintComments(en); return; }
+      var editSave = e.target.closest('[data-lb-editsave]');
+      if (editSave) { saveEdit(editSave.getAttribute('data-lb-editsave')); return; }
+
+      var delBtn = e.target.closest('[data-lb-del]');
+      if (delBtn) { deleteComment(delBtn.getAttribute('data-lb-del')); return; }
+
+      var resolveBtn = e.target.closest('[data-lb-resolve]');
+      if (resolveBtn) {
+        toggleResolve(resolveBtn.getAttribute('data-lb-resolve'),
+          resolveBtn.getAttribute('data-resolved') === 'true');
+        return;
+      }
+
       if (e.target.closest('[data-lb-close]')) { closeLightbox(); return; }
-      if (e.target.closest('[data-lb-prev]')) { go(-1); return; }
-      if (e.target.closest('[data-lb-next]')) { go(1); return; }
-      if (e.target.closest('[data-lb-download]')) { downloadItem(gallery[idx]); return; }
-      if (e.target.closest('[data-lb-details]')) { showInfo = !showInfo; paint(); return; }
+
+      var act = e.target.closest('[data-lb-act]');
+      if (!act) return;
+      switch (act.getAttribute('data-lb-act')) {
+        case 'close': return closeLightbox();
+        case 'download': return downloadItem(f);
+        case 'print': return printFile(f);
+        case 'share': return openShareModal(f);
+        case 'delete': return deleteFromViewer(f);
+        case 'favorite': return favoriteFromViewer(f);
+        case 'panel':
+          viewerPrefs.panel = !viewerPrefs.panel;
+          var panel = lb.querySelector('[data-lb-panel]');
+          if (panel) panel.hidden = !viewerPrefs.panel;
+          var head2 = lb.querySelector('.tma-portal-viewer__head');
+          if (head2) head2.outerHTML = viewerHead(current());
+          if (viewerPrefs.panel) paintPanel();
+          return;
+        case 'versions':
+          viewerPrefs.tab = 'versions';
+          viewerPrefs.panel = true;
+          var vpanel = lb.querySelector('[data-lb-panel]');
+          if (vpanel) vpanel.hidden = false;
+          var vhead = lb.querySelector('.tma-portal-viewer__head');
+          if (vhead) vhead.outerHTML = viewerHead(current());
+          paintPanel();
+          return;
+        case 'comments':
+          viewerPrefs.tab = 'comments';
+          viewerPrefs.panel = true;
+          var cpanel = lb.querySelector('[data-lb-panel]');
+          if (cpanel) cpanel.hidden = false;
+          var chead = lb.querySelector('.tma-portal-viewer__head');
+          if (chead) chead.outerHTML = viewerHead(current());
+          paintPanel();
+          return;
+        case 'more': return openViewerMenu(act, f);
+      }
+    });
+
+    lb.addEventListener('input', function (e) {
+      if (e.target.closest('[data-lb-input]')) onComposerInput(e.target);
+    });
+
+    // Enter sends, Shift+Enter makes a new line — §16.
+    lb.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.shiftKey) return;
+      if (e.target.closest('[data-lb-input]')) { e.preventDefault(); sendComment(); }
+      else if (e.target.closest('[data-lb-replyinput]')) {
+        var box = e.target.closest('.tma-portal-viewer__thread');
+        if (box) { e.preventDefault(); sendReply(box.getAttribute('data-thread')); }
+      }
+    });
+
+    lb.addEventListener('change', function (e) {
+      var vfile = e.target.closest('[data-lb-versionfile]');
+      if (vfile) {
+        if (vfile.files && vfile.files[0]) uploadNewVersion(vfile.files[0]);
+        vfile.value = '';
+        return;
+      }
+      if (!e.target.closest('[data-lb-filter]')) return;
+      viewerPrefs.filter = e.target.value;
+      var en = entry(current());
+      en.activity = null;
+      var slot = lb.querySelector('[data-lb-activity]');
+      if (slot) slot.innerHTML = ui().loading({ count: 4 });
+      loadActivity(current(), false);
     });
 
     lb._key = function (e) {
-      // A details modal opened on top of the lightbox owns the keyboard.
+      // Anything opened on top of the viewer owns the keyboard. Without the
+      // context-menu case, Escape dismissed the menu AND closed the viewer
+      // behind it in the same keypress.
       if (document.querySelector('.tma-portal-modal')) return;
+      if (document.querySelector('.tma-portal-context-menu')) return;
       if (e.key === 'Escape') closeLightbox();
       else if (e.key === 'ArrowLeft') go(-1);
       else if (e.key === 'ArrowRight') go(1);
     };
     document.addEventListener('keydown', lb._key);
 
-    paint();
+    /* ── toolbar actions that need the viewer's own state ── */
+
+    // Reuses the list's own star handler, so the optimistic flip, the busy
+    // guard and the favourites-view removal all behave identically here.
+    //
+    // toggleStar() already flips `favorite` on the very object the viewer is
+    // holding — they are the same reference. Flipping it again here turned the
+    // button straight back to its old state.
+    function favoriteFromViewer(f) {
+      toggleStar(f.id);
+      var head = lb.querySelector('.tma-portal-viewer__head');
+      if (head) head.outerHTML = viewerHead(f);
+    }
+
+    // Reuses the list's delete flow — same confirmation wording, same recycle
+    // semantics — then closes, since the file is no longer where we are.
+    function deleteFromViewer(f) {
+      if (!perm(f, 'delete')) { ui().toast('You can’t delete this file'); return; }
+      closeLightbox();
+      deleteItem(f);
+    }
+
+    /**
+     * The three-dot menu is the SAME menu the file list uses, so the actions,
+     * icons, ordering and styling can never drift apart — it just adds the
+     * entries that only make sense inside the viewer.
+     */
+    function openViewerMenu(anchor, f) {
+      var list = contextItems(f).filter(function (it) {
+        // "Preview" is meaningless here: the file is already open.
+        return it.label !== 'Preview';
+      });
+      list.push({ sep: true });
+      list.push({
+        label: 'View activity', icon: 'ClockCounterClockwise',
+        fn: function () {
+          viewerPrefs.tab = 'activity';
+          viewerPrefs.panel = true;
+          var panel = lb.querySelector('[data-lb-panel]');
+          if (panel) panel.hidden = false;
+          var head = lb.querySelector('.tma-portal-viewer__head');
+          if (head) head.outerHTML = viewerHead(current());
+          paintPanel();
+        },
+      });
+
+      var box = anchor.getBoundingClientRect();
+      openContextMenu(box.right, box.bottom + 4, f, list);
+    }
+
+    paintShell();
+  }
+
+  /* Printing goes through the same authorized preview stream the viewer uses;
+   * there is no separate print URL, so an unprintable type simply opens. */
+  function printFile(f) {
+    if (!f.previewUrl) { ui().toast('This file type can’t be printed from the portal'); return; }
+    var w = window.open(f.previewUrl, '_blank');
+    if (!w) { ui().toast('Allow pop-ups to print this file'); return; }
+    w.addEventListener('load', function () { try { w.print(); } catch (e) { /* user can print manually */ } });
+  }
+
+  function avatarFor(person) {
+    var name = (person && person.name) || (person && person.email) || '?';
+    var avatar = person && person.avatar;
+    return (window.TMACurrentUser && window.TMACurrentUser.avatarSrc)
+      ? window.TMACurrentUser.avatarSrc(avatar, name)
+      : (avatar || '');
+  }
+
+  function fmtDateTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
   }
 
   function lightboxBody(f) {
@@ -1044,53 +2291,35 @@
     if (f.previewUrl && perm(f, 'preview')) {
       switch (f.category) {
         case 'image':
-          return '<img class="tma-portal-lightbox__img" src="' + esc(f.previewUrl) + '" alt="' + esc(f.name) + '">';
+          return '<img class="tma-portal-viewer__img" src="' + esc(f.previewUrl) + '" alt="' + esc(f.name) + '">';
         case 'pdf':
-          return '<iframe class="tma-portal-lightbox__frame" src="' + esc(f.previewUrl) + '" title="' + esc(f.name) + '"></iframe>';
+          return '<iframe class="tma-portal-viewer__frame-doc" src="' + esc(f.previewUrl) + '" title="' + esc(f.name) + '"></iframe>';
         case 'video':
-          return '<video class="tma-portal-lightbox__media" src="' + esc(f.previewUrl) + '" controls autoplay playsinline></video>';
+          return '<video class="tma-portal-viewer__media" src="' + esc(f.previewUrl) + '" controls autoplay playsinline></video>';
         case 'audio':
-          return '<div class="tma-portal-lightbox__audio"><img src="' + esc(fileIconSrc(f)) + '" alt="" width="64" height="64">' +
+          return '<div class="tma-portal-viewer__audio"><img src="' + esc(fileIconSrc(f)) + '" alt="" width="64" height="64">' +
             '<audio src="' + esc(f.previewUrl) + '" controls autoplay></audio></div>';
         case 'text':
-          return '<pre class="tma-portal-lightbox__text" data-lb-text>Loading…</pre>';
+          return '<pre class="tma-portal-viewer__text" data-lb-text>Loading…</pre>';
       }
     }
     // Office docs, archives, and anything we can't render safely.
-    return '<div class="tma-portal-lightbox__nopreview">' +
+    return '<div class="tma-portal-viewer__nopreview">' +
       '<img src="' + esc(fileIconSrc(f)) + '" alt="" width="72" height="72">' +
-      '<p class="tma-portal-lightbox__nopreview-title">' + esc(f.name) + '</p>' +
-      '<p class="tma-portal-lightbox__nopreview-text">No in-browser preview for this file type.</p>' +
-      (perm(f, 'download') ? '<button type="button" class="tma-no-data__btn" data-lb-download><img class="tma-no-data__btn-icon" src="images/icons/phosphor/ArrowLineDown.svg" alt="" width="16" height="16"><span>Download</span></button>' : '') +
+      '<p class="tma-portal-viewer__nopreview-title">' + esc(f.name) + '</p>' +
+      '<p class="tma-portal-viewer__nopreview-text">No in-browser preview for this file type.</p>' +
+      (perm(f, 'download') ? '<button type="button" class="tma-no-data__btn" data-lb-act="download"><img class="tma-no-data__btn-icon" src="images/icons/phosphor/ArrowLineDown.svg" alt="" width="16" height="16"><span>Download</span></button>' : '') +
       '</div>';
-  }
-
-  // Details panel shown inside the lightbox (built from the item we already
-  // have — no fetch, always renders above the preview).
-  function lightboxDetails(f) {
-    function row(label, value) {
-      return '<div class="tma-portal-details__row"><span class="tma-portal-details__label">' + esc(label) + '</span><span class="tma-portal-details__value">' + esc(value == null || value === '' ? '—' : value) + '</span></div>';
-    }
-    var shared = f.assignedTo && f.assignedTo.length;
-    return '<h4>Details</h4>' +
-      row('Name', f.name) +
-      row('Type', f.category ? cap(f.category) : 'File') +
-      row('Extension', f.extension ? '.' + f.extension : '—') +
-      row('MIME type', f.mime) +
-      row('Size', f.sizeLabel) +
-      row('Location', f.folder ? f.folder.name : 'File Box') +
-      row('Uploaded', fmtDate(f.uploadedAt)) +
-      row('Modified', fmtDate(f.modifiedAt)) +
-      row('Uploaded by', f.uploadedBy ? f.uploadedBy.name : '—') +
-      row('Owner', f.owner ? f.owner.name : '—') +
-      row('Assigned to', shared ? f.assignedTo.join(', ') : 'No one') +
-      row('Sharing', shared ? 'Shared' : 'Private') +
-      row('Favourite', f.favorite ? 'Yes' : 'No');
   }
 
   function closeLightbox() {
     if (!lb) return;
     if (lb._key) document.removeEventListener('keydown', lb._key);
+    // Leave the file's channel, or every file opened this session keeps a
+    // subscription alive for the rest of the page's life.
+    if (lb._channel && window.TMAMessagingRealtime) {
+      window.TMAMessagingRealtime.leave(lb._channel);
+    }
     lb.remove();
     lb = null;
     document.body.style.overflow = '';
@@ -1459,19 +2688,38 @@
     body.insertBefore(div, body.firstChild);
   }
 
+  /**
+   * `opts.prompt` adds a single free-text field and passes its value to
+   * onConfirm — used for version notes, where §5 asks that the reason a
+   * version exists is recorded at the moment it is created.
+   */
   function confirmModal(opts) {
-    ui().openModal({
+    var host = ui().openModal({
       title: opts.title,
       body: '<p class="tma-portal-modal__text">' + esc(opts.message) + '</p>' +
+        (opts.prompt
+          ? '<label class="tma-portal-modal__label" for="tma-confirm-note">' + esc(opts.prompt.label) + '</label>' +
+            '<input type="text" id="tma-confirm-note" class="tma-portal-viewer__input tma-portal-modal__input" ' +
+            'data-confirm-note placeholder="' + esc(opts.prompt.placeholder || '') + '" maxlength="2000">'
+          : '') +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-confirm-cancel>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn' + (opts.danger ? ' tma-portal-btn--danger' : '') + '" data-confirm-ok>' + esc(opts.confirmLabel || 'Confirm') + '</button>' +
         '</div>',
       onMount: function (host) {
+        var note = host.querySelector('[data-confirm-note]');
+        if (note) note.focus();
         host.querySelector('[data-confirm-cancel]').addEventListener('click', ui().closeModal);
-        host.querySelector('[data-confirm-ok]').addEventListener('click', function () { ui().closeModal(); opts.onConfirm(); });
+        host.querySelector('[data-confirm-ok]').addEventListener('click', function () {
+          var value = note ? note.value.trim() : undefined;
+          ui().closeModal();
+          opts.onConfirm(value);
+        });
       },
     });
+    // Opened from inside the viewer (z-index 600) it must sit in front of it,
+    // the same lift the details modal and context menu already take.
+    if (lb && host) host.style.zIndex = '700';
   }
 
   function toggleStar(id) {
@@ -1981,12 +3229,17 @@
     return list;
   }
 
-  function openContextMenu(x, y, item) {
+  /**
+   * `list` overrides the default item menu. The file viewer passes its own so
+   * the three-dot menu is this exact component — same actions, icons, keyboard
+   * handling and styling — rather than a second menu that drifts out of sync.
+   */
+  function openContextMenu(x, y, item, list) {
     closeContextMenu();
     // Right-clicking an item selects just it, matching common file managers.
     if (!state.selected[item.id]) { /* keep multi-select if already selected */ }
 
-    var list = contextItems(item);
+    list = list || contextItems(item);
     ctxEl = document.createElement('div');
     ctxEl.className = 'tma-portal-context-menu';
     ctxEl.setAttribute('role', 'menu');
@@ -2002,6 +3255,11 @@
     var top = Math.min(y, window.innerHeight - h - 8);
     ctxEl.style.left = Math.max(8, left) + 'px';
     ctxEl.style.top = Math.max(8, top) + 'px';
+
+    // The menu is z-index 500, the file viewer is 600 — opened from inside the
+    // viewer it lands *behind* it: in the DOM, readable, and entirely
+    // invisible. Same lift the details modal already does from here.
+    if (lb) ctxEl.style.zIndex = '700';
 
     ctxEl.addEventListener('click', function (e) {
       var b = e.target.closest('[data-ctx]');

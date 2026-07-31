@@ -6,6 +6,7 @@ use App\Jobs\GenerateFileThumbnail;
 use App\Models\UploadSession;
 use App\Support\Files\ChunkedUpload;
 use App\Support\Files\FileAccess;
+use App\Support\Files\Versions;
 use App\Support\Files\Thumbnail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,11 +25,26 @@ class UploadController extends BaseFilesController
             'folder' => ['nullable', 'string'],
             'chunkSize' => ['nullable', 'integer', 'min:1'],
             'mime' => ['nullable', 'string', 'max:191'],
+            // Set to make this upload a new VERSION of an existing file rather
+            // than a new file — the only route large files have to a version.
+            'versionOf' => ['nullable', 'string', 'max:64'],
+            'versionNote' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $user = $this->user($request);
-        $folder = $this->resolveTarget($request, 'folder');
-        abort_unless(FileAccess::canUploadTo($user, $folder), 403, 'Permission denied.');
+
+        $versionOf = null;
+        if ($request->filled('versionOf')) {
+            $versionOf = $this->findFile($request->input('versionOf'));
+            abort_unless(Versions::canAddVersion($user, $versionOf), 403, 'You can’t add a version to that file.');
+        }
+
+        // A version upload inherits its target's folder; only a new file needs
+        // an upload-permission check on a destination.
+        $folder = $versionOf ? null : $this->resolveTarget($request, 'folder');
+        if (! $versionOf) {
+            abort_unless(FileAccess::canUploadTo($user, $folder), 403, 'Permission denied.');
+        }
 
         $session = ChunkedUpload::init(
             $user,
@@ -37,6 +53,8 @@ class UploadController extends BaseFilesController
             $folder,
             (int) $request->input('chunkSize', 0),
             $request->input('mime'),
+            $versionOf,
+            $request->input('versionNote'),
         );
 
         return response()->json([

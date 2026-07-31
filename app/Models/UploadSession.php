@@ -7,8 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'uuid', 'user_id', 'folder_id', 'filename', 'size', 'mime_declared', 'chunk_size',
-    'total_chunks', 'received_count', 'checksum', 'status', 'temp_path', 'conflict', 'expires_at',
+    'uuid', 'user_id', 'folder_id', 'version_of_file_id', 'version_note', 'filename', 'size',
+    'mime_declared', 'chunk_size', 'total_chunks', 'received_count', 'checksum', 'status',
+    'temp_path', 'conflict', 'expires_at',
 ])]
 class UploadSession extends Model
 {

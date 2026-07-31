@@ -23,8 +23,16 @@ class ChunkedUpload
     /** Sessions expire after 24h of inactivity and get cleaned up. */
     public const TTL_HOURS = 24;
 
-    public static function init(User $user, string $filename, int $size, ?Folder $folder, int $chunkSize = 0, ?string $mime = null): UploadSession
-    {
+    public static function init(
+        User $user,
+        string $filename,
+        int $size,
+        ?Folder $folder,
+        int $chunkSize = 0,
+        ?string $mime = null,
+        ?FileItem $versionOf = null,
+        ?string $versionNote = null,
+    ): UploadSession {
         $filename = Naming::assertValid($filename);
 
         if ($size < 0) {
@@ -53,6 +61,11 @@ class ChunkedUpload
             'uuid' => $uuid,
             'user_id' => $user->id,
             'folder_id' => $folder?->id,
+            // Set when this upload is a new version of an existing file rather
+            // than a new file. Without it, replacing a file larger than the
+            // direct-upload limit would be impossible.
+            'version_of_file_id' => $versionOf?->id,
+            'version_note' => $versionNote,
             'filename' => $filename,
             'size' => $size,
             'mime_declared' => $mime,
@@ -127,7 +140,10 @@ class ChunkedUpload
 
         // Detect a name conflict BEFORE assembling/storing, so the client can
         // choose Replace / Keep both / Rename with the chunks still intact.
-        if ($conflict === null) {
+        //
+        // A version upload is exempt: it deliberately carries the name of the
+        // file it is replacing, so this check would refuse every one of them.
+        if ($conflict === null && ! $session->version_of_file_id) {
             $clean = Naming::clean($session->filename);
             if (self::existingQuery($session, $clean)->exists()) {
                 throw new UploadConflictException(
@@ -170,6 +186,13 @@ class ChunkedUpload
         // Re-validate the real, assembled bytes (extension + MIME + size).
         $meta = FileType::inspect($assembled, $session->filename);
 
+        // A version upload skips naming entirely: it replaces the content of a
+        // file that already has a name, and renaming it here would silently
+        // rename the file for everyone.
+        if ($session->version_of_file_id) {
+            return self::completeAsVersion($session, $dir, $assembled, $meta);
+        }
+
         $desiredName = self::resolveName($session, $conflict, $newName);
 
         $stored = Vault::store($assembled, $meta['extension']);
@@ -204,9 +227,39 @@ class ChunkedUpload
         ]);
         self::removeDir($dir);
 
+        Versions::recordInitial($file, $session->user_id);
+
         Activity::forFile($session->user_id, $file, 'upload', ['size' => $file->size]);
 
         return $file;
+    }
+
+    /**
+     * Finish a chunked upload that targets an existing file, as its next
+     * version. Permission is re-checked here and not merely at init: a session
+     * can outlive the access that started it.
+     */
+    private static function completeAsVersion(UploadSession $session, string $dir, string $assembled, array $meta): FileItem
+    {
+        $file = FileItem::find($session->version_of_file_id);
+        $user = User::find($session->user_id);
+
+        if (! $file || ! $user || ! Versions::canAddVersion($user, $file)) {
+            self::removeDir($dir);
+            $session->update(['status' => UploadSession::STATUS_FAILED]);
+            throw new FileValidationException('You can no longer add a version to that file.');
+        }
+
+        $stored = Vault::store($assembled, $meta['extension']);
+        Versions::addStored($file, $user, $stored, $meta, $session->version_note);
+
+        $session->update([
+            'status' => UploadSession::STATUS_COMPLETED,
+            'received_count' => $session->total_chunks,
+        ]);
+        self::removeDir($dir);
+
+        return $file->fresh();
     }
 
     public static function abort(UploadSession $session): void

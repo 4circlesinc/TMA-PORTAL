@@ -4,16 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\AuthEvent;
 use App\Models\Client;
-use App\Models\ClientInvite;
 use App\Models\Contact;
 use App\Models\Group;
+use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Invitations\Invitations;
 use App\Support\Mail\Postcards;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -26,8 +28,8 @@ use Illuminate\Support\Str;
  *
  * These screens read the real directory rather than keeping their own list:
  * employees and client contacts are `users` rows, and a prospect is someone
- * who has been invited but has not signed in yet — either a pending
- * `client_invites` row or an account that still holds the automatic password
+ * who has been invited but has not signed in yet — either a live `invitations`
+ * row or an account that still holds the automatic password
  * it was created with. Writes are deliberately not duplicated here: creating,
  * editing and deleting accounts stays in {@see AdminUsersController}, so there
  * is one place where those rules live.
@@ -176,8 +178,11 @@ class PeopleController extends Controller
         $note = $data['message'] ?? null;
 
         $user = User::where('email', $email)->first();
-        $invite = $user ? null : ClientInvite::whereRaw('LOWER(email) = ?', [$email])
+        $invite = $user ? null : Invitation::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->whereIn('status', Invitation::LIVE_STATUSES)
             ->whereNull('accepted_at')
+            ->whereNull('cancelled_at')
             ->latest('id')
             ->first();
 
@@ -214,15 +219,12 @@ class PeopleController extends Controller
         abort_unless($id !== null && ctype_digit((string) $id), 404);
 
         if ($kind === 'invite') {
-            $invite = ClientInvite::whereNull('accepted_at')->findOrFail((int) $id);
-            $invite->delete();
+            $invite = Invitation::whereNull('accepted_at')->findOrFail((int) $id);
 
-            ActivityLogger::log([
-                'actor' => $actor,
-                'type' => 'client.invite_cancelled',
-                'module' => 'account',
-                'description' => $actor->name.' cancelled the invitation to '.$invite->email,
-            ]);
+            // Cancelled rather than deleted: withdrawing an invitation is a
+            // thing that happened, and the management screen has to be able to
+            // show that it did.
+            Invitations::cancel($invite, $actor);
 
             return response()->json(['status' => 'ok']);
         }
@@ -311,21 +313,25 @@ class PeopleController extends Controller
      */
     private function prospectRecords(): Collection
     {
-        $invites = ClientInvite::query()
+        $invites = Invitation::query()
             ->whereNull('accepted_at')
+            ->whereNull('cancelled_at')
             ->with('client:id,name,company,email')
             ->orderByDesc('id')
             ->get()
-            ->map(fn (ClientInvite $invite) => [
+            ->map(fn (Invitation $invite) => [
                 'id' => 'invite:'.$invite->id,
                 'source' => 'invite',
-                'name' => $invite->client?->name ?: $invite->email,
+                'name' => $invite->name ?: $invite->client?->name ?: $invite->email,
                 'email' => $invite->email,
                 'company' => $invite->client?->company,
-                'accountType' => Role::CLIENT,
+                'accountType' => $invite->role ?: Role::CLIENT,
                 'invitedIso' => ($invite->last_sent_at ?? $invite->created_at)?->toIso8601String(),
                 'invited' => $this->humanTime($invite->last_sent_at ?? $invite->created_at),
-                'expired' => $invite->expires_at !== null && $invite->expires_at->isPast(),
+                'expired' => $invite->isExpired(),
+                // A send that failed is the one thing this screen could never
+                // show before, and it is the reason most invitations stall.
+                'failed' => $invite->status === Invitation::STATUS_FAILED,
             ]);
 
         $candidates = User::query()
@@ -368,17 +374,18 @@ class PeopleController extends Controller
         return ! AuthEvent::where('user_id', $user->id)->where('event', 'login')->exists();
     }
 
-    private function resendInvite(ClientInvite $invite, User $actor): string
+    private function resendInvite(Invitation $invite, User $actor): string
     {
-        $invite->forceFill([
-            'token' => $invite->token ?: ClientInvite::freshToken(),
-            'expires_at' => now()->addDays(14),
-            'last_sent_at' => now(),
-        ])->save();
+        // A lapsed invitation is revived rather than refused — this screen
+        // exists precisely to chase the ones that went cold.
+        if ($invite->isExpired()) {
+            $invite->forceFill([
+                'status' => Invitation::STATUS_PENDING,
+                'expires_at' => now()->addDays(Invitations::EXPIRY_DAYS),
+            ])->save();
+        }
 
-        Mail::to($invite->email)->queue(
-            Postcards::clientInviteReminder($invite->client?->name, url('/client-invite/'.$invite->token))
-        );
+        Invitations::send($invite, reminder: true);
 
         ActivityLogger::log([
             'actor' => $actor,
@@ -432,7 +439,7 @@ class PeopleController extends Controller
             return null;
         }
 
-        return ($value instanceof \DateTimeInterface ? \Illuminate\Support\Carbon::instance($value) : \Illuminate\Support\Carbon::parse($value))
+        return ($value instanceof \DateTimeInterface ? Carbon::instance($value) : Carbon::parse($value))
             ->diffForHumans();
     }
 

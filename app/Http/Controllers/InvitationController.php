@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\Invitation;
-use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Invitations\Invitations;

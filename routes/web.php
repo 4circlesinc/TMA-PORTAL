@@ -11,8 +11,6 @@ use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientInviteController;
-use App\Http\Controllers\InvitationAcceptController;
-use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\CompaniesController;
 use App\Http\Controllers\ConnectorsController;
@@ -23,7 +21,6 @@ use App\Http\Controllers\Design\MailPreviewController;
 use App\Http\Controllers\DesktopAuthController;
 use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
-use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\Feed\FeedAnalyticsController;
 use App\Http\Controllers\Feed\FeedAttachmentController;
@@ -37,7 +34,10 @@ use App\Http\Controllers\FileLibraryController;
 use App\Http\Controllers\Files\BrowserController;
 use App\Http\Controllers\Files\BulkController;
 use App\Http\Controllers\Files\FavoriteController;
+use App\Http\Controllers\Files\FileCommentController;
 use App\Http\Controllers\Files\FileController;
+use App\Http\Controllers\Files\FileVersionController;
+use App\Http\Controllers\Files\FileViewerController;
 use App\Http\Controllers\Files\FolderController;
 use App\Http\Controllers\Files\PublicShareController;
 use App\Http\Controllers\Files\RecycleBinController;
@@ -47,6 +47,8 @@ use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
 use App\Http\Controllers\GettingStartedController;
 use App\Http\Controllers\GroupsController;
+use App\Http\Controllers\InvitationAcceptController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LegacyPageController;
 use App\Http\Controllers\MailController;
 use App\Http\Controllers\MeController;
@@ -64,6 +66,7 @@ use App\Http\Controllers\Signatures\SignatureFieldController;
 use App\Http\Controllers\Signatures\SignatureRequestController;
 use App\Http\Controllers\SignInActivityController;
 use App\Http\Controllers\SocialAuthController;
+use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\StaySignedInController;
 use App\Http\Controllers\WorkPlanController;
 use Illuminate\Http\Request;
@@ -242,6 +245,30 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/files/{uuid}/download', [FileController::class, 'download'])->name('download');
         Route::get('/files/{uuid}/preview', [FileController::class, 'preview'])->name('preview');
         Route::get('/files/{uuid}/thumb', [ThumbnailController::class, 'show'])->name('thumb');
+
+        // The collaboration viewer's right-hand panel. Split so opening a file
+        // never waits on history or a firm-wide access roll-up.
+        Route::get('/files/{uuid}/activity', [FileViewerController::class, 'activity'])->name('activity');
+        Route::get('/files/{uuid}/access', [FileViewerController::class, 'access'])->name('access');
+        Route::get('/files/{uuid}/details', [FileViewerController::class, 'details'])->name('details');
+
+        // Comment threads. A comment is always addressed within its file, so a
+        // uuid from one file can never reach another's thread.
+        Route::get('/files/{uuid}/comments', [FileCommentController::class, 'index'])->name('comments.index');
+        Route::get('/files/{uuid}/mentionable', [FileCommentController::class, 'mentionable'])->name('comments.mentionable');
+        Route::post('/files/{uuid}/comments', [FileCommentController::class, 'store'])->name('comments.store');
+        Route::patch('/files/{uuid}/comments/{comment}', [FileCommentController::class, 'update'])->name('comments.update');
+        Route::delete('/files/{uuid}/comments/{comment}', [FileCommentController::class, 'destroy'])->name('comments.destroy');
+        Route::post('/files/{uuid}/comments/{comment}/resolve', [FileCommentController::class, 'resolve'])->name('comments.resolve');
+
+        // Version history. Nothing under here deletes stored bytes: uploading
+        // a version appends, and restoring appends too.
+        Route::get('/files/{uuid}/versions', [FileVersionController::class, 'index'])->name('versions.index');
+        Route::post('/files/{uuid}/versions', [FileVersionController::class, 'store'])->name('versions.store');
+        Route::patch('/files/{uuid}/versions/{version}', [FileVersionController::class, 'update'])->name('versions.update');
+        Route::get('/files/{uuid}/versions/{version}/download', [FileVersionController::class, 'download'])->name('versions.download');
+        Route::get('/files/{uuid}/versions/{version}/preview', [FileVersionController::class, 'preview'])->name('versions.preview');
+        Route::post('/files/{uuid}/versions/{version}/restore', [FileVersionController::class, 'restore'])->name('versions.restore');
 
         Route::post('/uploads', [UploadController::class, 'init'])->name('uploads.init');
         Route::post('/uploads/{uuid}/chunk', [UploadController::class, 'chunk'])->name('uploads.chunk');

@@ -71,6 +71,9 @@ class Presenter
             'previewable' => FileType::isPreviewable($ext),
             'size' => (int) $file->size,
             'sizeLabel' => self::humanSize((int) $file->size),
+            // Denormalised on the row, so a listing of 200 files costs no
+            // extra queries to show which have been revised.
+            'versionNumber' => (int) ($file->version_number ?: 1),
             'folder' => $file->folder ? ['id' => $file->folder->uuid, 'name' => $file->folder->name] : null,
             'path' => $this->folderPath($file->folder),
             'createdAt' => optional($file->created_at)->toIso8601String(),

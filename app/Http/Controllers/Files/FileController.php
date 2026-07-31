@@ -9,6 +9,7 @@ use App\Support\Files\FileAccess;
 use App\Support\Files\FileType;
 use App\Support\Files\Naming;
 use App\Support\Files\Vault;
+use App\Support\Files\Versions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +62,10 @@ class FileController extends BaseFilesController
                 'uploaded_by' => $user->id,
             ]);
         });
+
+        // The bytes just stored are version 1: history starts at creation, so
+        // a file's current content is always inside its own version list.
+        Versions::recordInitial($file, $user->id);
 
         Activity::forFile($user->id, $file, 'upload', ['size' => $file->size]);
 

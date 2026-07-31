@@ -33,6 +33,12 @@
       'X-Requested-With': 'XMLHttpRequest',
     };
     if (opts.method && opts.method !== 'GET') headers['X-XSRF-TOKEN'] = csrf();
+    // Broadcasts from these endpoints go out with toOthers(), which needs the
+    // sender's socket id to know which connection to skip. Without it the
+    // author's own browser receives its own event and renders the change a
+    // second time, on top of the copy it already drew optimistically.
+    var rt = window.TMAMessagingRealtime;
+    if (rt && rt.socketId) headers['X-Socket-ID'] = rt.socketId;
     if (opts.json !== undefined) {
       headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(opts.json);

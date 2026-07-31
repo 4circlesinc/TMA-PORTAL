@@ -20,12 +20,18 @@ class FileAccess
 {
     private const RANK = ['viewer' => 1, 'downloader' => 2, 'editor' => 3, 'full' => 4];
 
+    /**
+     * `comment` is held by every role, including viewer: if you can open a file
+     * you can say something about it. Discussion is not a privileged action,
+     * and withholding it from the people asked to look at something is what
+     * pushes that conversation into email where nobody else can find it.
+     */
     private const CAPS = [
-        'viewer' => ['view', 'preview'],
-        'downloader' => ['view', 'preview', 'download'],
-        'editor' => ['view', 'preview', 'download', 'upload', 'rename', 'move', 'copy'],
+        'viewer' => ['view', 'preview', 'comment'],
+        'downloader' => ['view', 'preview', 'download', 'comment'],
+        'editor' => ['view', 'preview', 'download', 'upload', 'rename', 'move', 'copy', 'comment'],
         'full' => ['view', 'preview', 'download', 'upload', 'rename', 'move', 'copy',
-            'delete', 'restore', 'share', 'assign', 'link'],
+            'delete', 'restore', 'share', 'assign', 'link', 'comment'],
     ];
 
     public static function isAdmin(User $user): bool

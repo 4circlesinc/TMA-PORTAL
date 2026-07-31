@@ -28,28 +28,40 @@ final class Deliveries
      *
      * @param  Model|null  $related  what the mail is about (an Invitation, a Client…)
      * @param  string|null  $template  the Postcards helper that built it
+     * @param  bool  $immediate  send inline instead of queueing — for mail that
+     *                           must not wait on a worker (see Invitations::send)
      */
     public static function send(
         Postcard $postcard,
         string $recipient,
         ?Model $related = null,
         ?string $template = null,
+        bool $immediate = false,
     ): ?EmailDelivery {
         $delivery = self::record($recipient, $postcard->subjectLine, $related, $template);
 
         $postcard->deliveryUuid = $delivery?->uuid;
 
         try {
-            Mail::to($recipient)->queue($postcard);
+            // sendNow, not send: Postcard is a ShouldQueue mailable, so send()
+            // would put it back on the queue we are deliberately avoiding.
+            $immediate
+                ? Mail::to($recipient)->sendNow($postcard)
+                : Mail::to($recipient)->queue($postcard);
         } catch (Throwable $e) {
-            // Failing to even reach the queue is itself a delivery failure.
-            $delivery?->forceFill([
+            // A refused transport is a delivery failure, not an exception the
+            // caller has to handle: the row carries the reason, and the caller
+            // reads it off the returned delivery. Without a row there is
+            // nowhere to put the reason, so then it does have to throw.
+            if (! $delivery) {
+                throw $e;
+            }
+
+            $delivery->forceFill([
                 'status' => EmailDelivery::STATUS_FAILED,
                 'error' => mb_substr($e->getMessage(), 0, 2000),
                 'failed_at' => now(),
             ])->save();
-
-            throw $e;
         }
 
         return $delivery;

@@ -16625,6 +16625,40 @@
   overflow-y: auto;
 }
 
+/* Portal access — can this client sign in, and where has their invitation
+   got to. Sits above the assigned-staff list in the Assigned tab, so "who
+   looks after them" and "can they get in" read as one section. */
+.tma-dash__clients-access-block {
+  padding: 0 0 var(--space-16);
+  margin: 0 0 var(--space-16);
+  border-bottom: 1px solid var(--color-overlay-4);
+}
+
+/* The buttons here are a plain strip. The same class lays out the three-column
+   staff picker further down the panel, so it is re-declared rather than shared. */
+.tma-dash__clients-access-block .tma-dash__clients-assign-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin: var(--space-12) 0 0;
+}
+
+.tma-dash__clients-access-state--negative {
+  color: var(--color-red);
+}
+
+.tma-dash__clients-access-state--positive {
+  color: var(--color-green);
+}
+
+.tma-dash__clients-access-error {
+  display: inline-block;
+  margin-top: var(--space-4);
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
 .tma-dash__clients-assigned {
   display: flex;
   align-items: center;

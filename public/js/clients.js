@@ -135,6 +135,7 @@
   var CLIENTS_ROOT = window.__TMA_SITE_ROOT || '';
   var CLIENTS_BASE = CLIENTS_ROOT + '/portal/clients';
   var COMPANIES_BASE = CLIENTS_ROOT + '/portal/companies';
+  var INVITATIONS_BASE = CLIENTS_ROOT + '/portal/invitations';
   var COMPANIES = [];
 
   function clientsCsrf() {
@@ -199,6 +200,24 @@
         CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/assignments/' + encodeURIComponent(userId),
         { method: 'DELETE' }
       );
+    },
+    invite: function (uid) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/invite', { method: 'POST' });
+    },
+    inviteStatus: function (uid) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/invite');
+    },
+  };
+
+  var InvitationsAPI = {
+    resend: function (id) {
+      return clientsFetch(INVITATIONS_BASE + '/' + encodeURIComponent(id) + '/resend', { method: 'POST' });
+    },
+    cancel: function (id) {
+      return clientsFetch(INVITATIONS_BASE + '/' + encodeURIComponent(id) + '/cancel', { method: 'POST' });
+    },
+    link: function (id) {
+      return clientsFetch(INVITATIONS_BASE + '/' + encodeURIComponent(id) + '/link', { method: 'POST' });
     },
   };
 
@@ -2016,6 +2035,106 @@
     );
   }
 
+  /* ---------------------------------------------------------- portal access
+     Whether this client can sign in, and where their invitation has got to.
+     Rendered above the assigned-staff list so "who looks after them" and "can
+     they actually get in" read as one section. */
+
+  var INVITE_STATUS_TEXT = {
+    pending: 'Invitation created, not sent yet',
+    sent: 'Invitation sent',
+    delivered: 'Invitation delivered',
+    opened: 'Invitation opened',
+    accepted: 'Invitation accepted',
+    expired: 'Invitation expired',
+    cancelled: 'Invitation withdrawn',
+    failed: 'Invitation could not be sent',
+  };
+
+  function inviteStatusTone(status) {
+    if (status === 'accepted') return 'positive';
+    if (status === 'failed' || status === 'expired') return 'negative';
+    if (status === 'cancelled') return 'neutral';
+    return 'info';
+  }
+
+  function formatInviteDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function renderPortalAccessBlock(state, c) {
+    if (!c) return '';
+    var inv = state.invitation;
+    var loading = !!state.inviteLoading;
+
+    if (c.hasLogin) {
+      return (
+        '<div class="tma-dash__clients-access-block" data-clients-access>' +
+        '<div class="tma-dash__clients-assigned-head">' +
+        '<span class="tma-dash__clients-assigned-count">Portal access</span></div>' +
+        '<div class="tma-dash__clients-assigned-empty">This client has a portal account and can sign in.</div>' +
+        '</div>'
+      );
+    }
+
+    var body;
+    if (loading) {
+      body = '<div class="tma-dash__clients-assigned-empty">Checking…</div>';
+    } else if (!inv || inv.status === 'accepted') {
+      body =
+        '<div class="tma-dash__clients-assigned-empty">' +
+        (c.email
+          ? 'No portal access yet. Invite them to create an account.'
+          : 'Add an email address to this client before inviting them.') +
+        '</div>' +
+        (c.email
+          ? '<div class="tma-dash__clients-assign-form">' +
+            '<button type="button" class="tma-dash__clients-message-btn" data-clients-invite>' +
+            '<img src="' + ICONS.EnvelopeSimple + '" alt=""><span>Invite to portal</span></button></div>'
+          : '');
+    } else {
+      var sent = formatInviteDate(inv.sentAt);
+      var expires = formatInviteDate(inv.expiresAt);
+      var detail = [];
+      if (inv.invitedBy) detail.push('by ' + inv.invitedBy);
+      if (sent) detail.push('on ' + sent);
+      if (expires && inv.canCancel) detail.push('expires ' + expires);
+
+      body =
+        '<div class="tma-dash__clients-assigned-empty tma-dash__clients-access-state--' +
+        esc(inviteStatusTone(inv.status)) + '">' +
+        esc(INVITE_STATUS_TEXT[inv.status] || inv.status) +
+        (detail.length ? ' ' + esc(detail.join(', ')) : '') +
+        (inv.status === 'failed' && inv.lastError
+          ? '<br><span class="tma-dash__clients-access-error">' + esc(inv.lastError) + '</span>'
+          : '') +
+        '</div>' +
+        '<div class="tma-dash__clients-assign-form">' +
+        (inv.canResend
+          ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-invite-resend="' +
+            esc(inv.id) + '">' + (inv.status === 'failed' ? 'Try again' : 'Resend') + '</button>'
+          : '') +
+        (inv.canCancel
+          ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-invite-link="' +
+            esc(inv.id) + '">Copy link</button>' +
+            '<button type="button" class="tma-dash__clients-message-btn" data-clients-invite-cancel="' +
+            esc(inv.id) + '">Cancel</button>'
+          : '') +
+        '</div>';
+    }
+
+    return (
+      '<div class="tma-dash__clients-access-block" data-clients-access>' +
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Portal access</span></div>' +
+      body +
+      '</div>'
+    );
+  }
+
   function renderAssignedPanel(state, contactId, hidden) {
     var items = state.assignments || [];
     var assignable = state.assignable || [];
@@ -2047,6 +2166,7 @@
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="assigned" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
+      renderPortalAccessBlock(state, contactFor(contactId || state.selectedId)) +
       '<div class="tma-dash__clients-assigned-head">' +
       '<span class="tma-dash__clients-assigned-count">' +
       (loading ? 'Loading…' : (items.length + ' assigned staff member' + (items.length === 1 ? '' : 's'))) +
@@ -2895,15 +3015,116 @@
       });
     });
 
+    /* ------------------------------------------------ portal invitations */
+
+    function redraw() {
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    }
+
+    // Fold a fresh invitation record into state and repaint.
+    function applyInvitation(res) {
+      state.invitation = (res && res.invitation) || null;
+      redraw();
+    }
+
+    var inviteBtn = MORPH.unwiredOne(root, '[data-clients-invite]');
+    if (inviteBtn) {
+      inviteBtn.addEventListener('click', function () {
+        inviteBtn.disabled = true;
+        ClientsAPI.invite(state.selectedId).then(function (res) {
+          applyInvitation(res);
+          clientsToast(res && res.reminder ? 'Reminder sent' : 'Invitation sent', 'positive');
+        }).catch(function (err) {
+          inviteBtn.disabled = false;
+          clientsToast((err && err.message) || 'Could not send the invitation', 'negative');
+        });
+      });
+    }
+
+    MORPH.unwired(root, '[data-clients-invite-resend]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        InvitationsAPI.resend(btn.getAttribute('data-clients-invite-resend')).then(function (res) {
+          applyInvitation(res);
+          // Resending mints a new link, so any link already sent stops working.
+          clientsToast('Invitation resent — the previous link no longer works', 'positive');
+        }).catch(function (err) {
+          btn.disabled = false;
+          clientsToast((err && err.message) || 'Could not resend the invitation', 'negative');
+        });
+      });
+    });
+
+    MORPH.unwired(root, '[data-clients-invite-cancel]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!window.confirm('Cancel this invitation? The link will stop working.')) return;
+        InvitationsAPI.cancel(btn.getAttribute('data-clients-invite-cancel')).then(function (res) {
+          applyInvitation(res);
+          clientsToast('Invitation cancelled', 'positive');
+        }).catch(function (err) {
+          clientsToast((err && err.message) || 'Could not cancel the invitation', 'negative');
+        });
+      });
+    });
+
+    MORPH.unwired(root, '[data-clients-invite-link]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        InvitationsAPI.link(btn.getAttribute('data-clients-invite-link')).then(function (res) {
+          var url = res && res.url;
+          if (!url) return;
+          var done = function () {
+            clientsToast('Link copied — it replaces any link already sent', 'positive');
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done, function () { window.prompt('Invitation link', url); });
+          } else {
+            window.prompt('Invitation link', url);
+          }
+        }).catch(function (err) {
+          clientsToast((err && err.message) || 'Could not create a link', 'negative');
+        });
+      });
+    });
+
     MORPH.unwired(root, '[data-clients-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.profileTab = btn.getAttribute('data-clients-tab');
         if (state.profileTab === 'assigned' && state.selectedId) {
           ensureAssignmentsLoaded(state, render);
+          ensureInvitationLoaded(state, render);
         }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
       });
+    });
+  }
+
+  /* The client's invitation, loaded alongside their assigned staff. Kept
+     separate from ensureAssignmentsLoaded so a client hub without the
+     assignments capability still shows portal access. */
+  function ensureInvitationLoaded(state, render) {
+    if (!state.selectedId) return;
+    if (state.inviteLoadedFor === state.selectedId && !state.inviteLoading) return;
+    state.inviteLoading = true;
+    state.inviteLoadedFor = state.selectedId;
+
+    var redraw = function () {
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    };
+    redraw();
+
+    ClientsAPI.inviteStatus(state.selectedId).then(function (data) {
+      if (state.inviteLoadedFor !== state.selectedId) return;
+      state.invitation = (data && data.invitation) || null;
+      state.inviteLoading = false;
+      redraw();
+    }).catch(function () {
+      if (state.inviteLoadedFor !== state.selectedId) return;
+      state.inviteLoading = false;
+      state.invitation = null;
+      redraw();
     });
   }
 
@@ -2963,6 +3184,9 @@
       assignable: [],
       assignmentsLoading: false,
       assignmentsLoadedFor: null,
+      invitation: null,
+      inviteLoading: false,
+      inviteLoadedFor: null,
       listScrollTop: 0,
       search: '',
       searchFocused: false,
@@ -3012,6 +3236,8 @@
         state.profileTab = 'info';
         state.assignmentsLoadedFor = null;
         state.assignments = [];
+        state.inviteLoadedFor = null;
+        state.invitation = null;
       }
 
       if (screen === 'add') {

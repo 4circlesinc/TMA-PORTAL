@@ -3,6 +3,7 @@
 namespace App\Support\Files;
 
 use App\Models\FileItem;
+use App\Models\FileVersion;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -127,6 +128,83 @@ class Vault
         }
 
         return ['uuid' => $uuid, 'disk' => self::diskName(), 'path' => $relPath];
+    }
+
+    /**
+     * Copy an older version's bytes to a fresh vault path.
+     *
+     * Restoring gets its own blob rather than pointing a second version row at
+     * the same path: one version owns exactly one blob, so purging any version
+     * can never blank another.
+     *
+     * @return array{uuid:string, disk:string, path:string}
+     */
+    public static function duplicateVersion(FileVersion $version): array
+    {
+        $srcDisk = Storage::disk($version->disk ?: self::diskName());
+        if (! $version->storage_path || ! $srcDisk->exists($version->storage_path)) {
+            throw new FileValidationException('That version’s file is no longer in storage.');
+        }
+
+        $uuid = (string) Str::uuid();
+        $relPath = self::relPath($uuid, $version->extension ?: '');
+
+        if (($version->disk ?: self::diskName()) === self::diskName()
+            && $srcDisk->copy($version->storage_path, $relPath)) {
+            return ['uuid' => $uuid, 'disk' => self::diskName(), 'path' => $relPath];
+        }
+
+        $in = $srcDisk->readStream($version->storage_path);
+        if ($in === false || $in === null) {
+            throw new FileValidationException('Storage unavailable — that version could not be copied.');
+        }
+        try {
+            $ok = self::disk()->writeStream($relPath, $in);
+        } finally {
+            if (is_resource($in)) {
+                fclose($in);
+            }
+        }
+        if (! $ok) {
+            throw new FileValidationException('Storage unavailable — that version could not be copied.');
+        }
+
+        return ['uuid' => $uuid, 'disk' => self::diskName(), 'path' => $relPath];
+    }
+
+    /** Stream one specific version, by download or inline preview. */
+    public static function downloadVersion(FileVersion $version, string $name): StreamedResponse
+    {
+        return self::streamVersion($version, $name, 'attachment');
+    }
+
+    public static function previewVersion(FileVersion $version, string $name): StreamedResponse
+    {
+        return self::streamVersion($version, $name, 'inline');
+    }
+
+    private static function streamVersion(FileVersion $version, string $name, string $disposition): StreamedResponse
+    {
+        $disk = Storage::disk($version->disk ?: self::diskName());
+
+        abort_unless($version->storage_path && $disk->exists($version->storage_path), 404, 'That version is no longer in storage.');
+
+        return response()->stream(function () use ($disk, $version) {
+            $stream = $disk->readStream($version->storage_path);
+            if ($stream === false || $stream === null) {
+                return;
+            }
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $version->mime_type ?: 'application/octet-stream',
+            'Content-Length' => (string) $version->size,
+            'Content-Disposition' => $disposition.'; filename="'.addslashes($name).'"',
+            // A version is immutable once written, so it can be cached hard.
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
     }
 
     /** Permanently remove the physical bytes for a file. */

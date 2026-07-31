@@ -24,7 +24,11 @@
     $INK = '#000000';
     $MUTED = 'rgba(0,0,0,0.40)';
     $LINE = 'rgba(0,0,0,0.10)';
-    $portal = 'https://portal.tmantoine.com/';
+    // The live portal is portal.tmantoine*law*.com — the hardcoded
+    // portal.tmantoine.com this used to carry does not resolve (NXDOMAIN), so
+    // the unsubscribe and fallback links in every email were dead. Taken from
+    // APP_URL instead, which is correct in production and follows the app.
+    $portal = url('/');
     $help = $help ?? isset($button);
     $helpUrl = $helpUrl ?? ($button['url'] ?? $portal);
     $socials = [

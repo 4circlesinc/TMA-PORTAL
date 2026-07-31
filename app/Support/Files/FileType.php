@@ -88,6 +88,35 @@ class FileType
         return self::MAP[strtolower($ext)][1] ?? 'File';
     }
 
+    /**
+     * How the type reads to a person: "PDF document", "PNG image", "File".
+     * The details panel shows this rather than the bare category, which on its
+     * own ("image") does not distinguish a PNG from a RAW.
+     */
+    public static function label(string $ext): string
+    {
+        $ext = strtolower($ext);
+
+        if ($ext === '') {
+            return 'File';
+        }
+
+        $noun = match (self::category($ext)) {
+            'image' => 'image',
+            'video' => 'video',
+            'audio' => 'audio file',
+            'pdf', 'word' => 'document',
+            'excel' => 'spreadsheet',
+            'powerpoint' => 'presentation',
+            'text' => 'text file',
+            'archive' => 'archive',
+            'code' => 'source file',
+            default => 'file',
+        };
+
+        return strtoupper($ext).' '.$noun;
+    }
+
     public static function isExtensionBlocked(string $ext): bool
     {
         return $ext !== '' && in_array(strtolower($ext), self::BLOCKED_EXT, true);

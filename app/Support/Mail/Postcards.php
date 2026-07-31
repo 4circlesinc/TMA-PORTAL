@@ -3,6 +3,7 @@
 namespace App\Support\Mail;
 
 use App\Mail\Postcard;
+use App\Models\User;
 
 /**
  * The copy for every transactional email, one factory method each. Each returns
@@ -13,6 +14,19 @@ use App\Mail\Postcard;
 class Postcards
 {
     private const SITE = 'TM ANTOINE Advisory';
+
+    /**
+     * The firm's name as anyone outside it should see it.
+     *
+     * Not config('app.name'): APP_NAME is unset on Laravel Cloud, where it falls
+     * back to "tma-portal" — which is what an invited client would otherwise be
+     * told the organization is called. The emails have always used this
+     * constant, so screens that sit alongside them read it from here too.
+     */
+    public static function site(): string
+    {
+        return self::SITE;
+    }
 
     // ---------------------------------------------------------- account / auth
 
@@ -43,7 +57,7 @@ class Postcards
     }
 
     /** Build the "password changed" email for a user from the current request. */
-    public static function passwordChangedFor(\App\Models\User $user): Postcard
+    public static function passwordChangedFor(User $user): Postcard
     {
         $details = [['When', now()->format('j M Y, g:i A')]];
         if ($device = self::deviceLabel(request()?->userAgent())) {

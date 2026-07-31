@@ -334,7 +334,354 @@
 .tma-portal-upload__item--failed .tma-portal-upload__meta { color: var(--color-red); }
 .tma-portal-upload__item--cancelled { opacity: 0.6; }
 
-/* ── lightbox (full-screen file preview) ───────────── */
+/* ── collaboration viewer (full-screen file preview) ─
+ *
+ * Three regions: a thumbnail rail, the preview stage, and the details panel.
+ * The panel is a real column on desktop and an overlay drawer below 1100px, so
+ * the preview is never squeezed to nothing on a laptop or phone.
+ */
+.tma-portal-viewer { position: fixed; inset: 0; z-index: 600; display: flex; }
+.tma-portal-viewer__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.82); border: 0; cursor: zoom-out; }
+.tma-portal-viewer__frame {
+  position: relative; z-index: 1; display: flex; flex-direction: column;
+  flex: 1; min-width: 0; min-height: 0;
+}
+
+/* Header ------------------------------------------------------------- */
+/* Solid, not translucent: the backdrop only dims the page to 82%, so a
+ * transparent header let the portal's own top bar ghost through directly
+ * behind the viewer's toolbar — two rows of icons in the same band. */
+.tma-portal-viewer__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-16); padding: var(--space-12) var(--space-16); color: #fff; flex: 0 0 auto;
+  background: #17181a;
+}
+.tma-portal-viewer__identity { display: flex; align-items: center; gap: var(--space-10); min-width: 0; }
+.tma-portal-viewer__filetype { border-radius: 4px; flex: 0 0 auto; }
+.tma-portal-viewer__namewrap { display: flex; flex-direction: column; min-width: 0; }
+.tma-portal-viewer__name {
+  font-size: var(--text-size-14); font-weight: 600; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tma-portal-viewer__sub {
+  font-size: var(--text-size-12); color: rgba(255, 255, 255, 0.68); line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tma-portal-viewer__tools { display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
+.tma-portal-viewer__tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-8);
+  background: transparent; color: rgba(255, 255, 255, 0.85); cursor: pointer;
+}
+.tma-portal-viewer__tool:hover { background: rgba(255, 255, 255, 0.14); }
+.tma-portal-viewer__tool img { filter: brightness(0) invert(1); opacity: 0.82; }
+.tma-portal-viewer__tool:hover img,
+.tma-portal-viewer__tool.is-active img { opacity: 1; }
+.tma-portal-viewer__tool.is-active { background: rgba(255, 255, 255, 0.18); }
+.tma-portal-viewer__tool-sep { width: 1px; height: 20px; margin: 0 var(--space-4); background: rgba(255, 255, 255, 0.22); }
+
+/* Body: rail | stage | panel ----------------------------------------- */
+.tma-portal-viewer__body { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.tma-portal-viewer__main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+
+.tma-portal-viewer__rail {
+  flex: 0 0 132px; overflow-y: auto; overflow-x: hidden;
+  padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-6);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+.tma-portal-viewer__rail-item {
+  display: flex; flex-direction: column; gap: var(--space-4); align-items: center;
+  padding: var(--space-6); border: 1px solid transparent; border-radius: var(--radius-8);
+  background: rgba(255, 255, 255, 0.06); cursor: pointer; color: #fff;
+}
+.tma-portal-viewer__rail-item:hover { background: rgba(255, 255, 255, 0.14); }
+.tma-portal-viewer__rail-item.is-current { border-color: var(--color-primary); background: rgba(255, 255, 255, 0.18); }
+.tma-portal-viewer__rail-item img { width: 100%; height: 64px; object-fit: cover; border-radius: var(--radius-4); background: rgba(0, 0, 0, 0.25); }
+.tma-portal-viewer__rail-item img.tma-portal-viewer__rail-icon { object-fit: contain; padding: var(--space-8); }
+.tma-portal-viewer__rail-name {
+  font-size: 11px; line-height: 1.3; width: 100%; text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, 0.8);
+}
+
+.tma-portal-viewer__stage {
+  flex: 1; min-height: 0; overflow: auto;
+  display: flex; align-items: center; justify-content: center; padding: 0 var(--space-16) var(--space-8);
+}
+.tma-portal-viewer__img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-8); box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5); }
+.tma-portal-viewer__frame-doc { width: 100%; height: 100%; min-height: 60vh; border: 0; border-radius: var(--radius-8); background: #fff; }
+.tma-portal-viewer__media { max-width: 100%; max-height: 100%; border-radius: var(--radius-8); background: #000; }
+.tma-portal-viewer__audio { display: flex; flex-direction: column; align-items: center; gap: var(--space-16); color: #fff; }
+.tma-portal-viewer__text {
+  width: 100%; max-height: 100%; overflow: auto; margin: 0; align-self: stretch;
+  background: #fff; color: var(--color-text-primary); border-radius: var(--radius-8);
+  padding: var(--space-16); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+.tma-portal-viewer__nopreview {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-12);
+  background: var(--color-white); border-radius: var(--radius-12); padding: var(--space-32); text-align: center; max-width: 90%;
+}
+.tma-portal-viewer__nopreview-title { font-weight: 600; color: var(--color-text-primary); margin: 0; word-break: break-word; }
+.tma-portal-viewer__nopreview-text { color: var(--color-text-secondary); margin: 0; font-size: var(--text-size-14); }
+.tma-portal-viewer__foot {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: var(--space-8);
+  color: rgba(255, 255, 255, 0.75); font-size: var(--text-size-12); padding: 0 0 var(--space-12);
+}
+
+/* Panel -------------------------------------------------------------- */
+.tma-portal-viewer__panel {
+  flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0;
+  background: var(--color-white); border-left: 1px solid var(--color-border);
+}
+.tma-portal-viewer__panel[hidden] { display: none; }
+.tma-portal-viewer__panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-8);
+  padding: var(--space-8) var(--space-12); border-bottom: 1px solid var(--color-border); flex: 0 0 auto;
+}
+/* The tab row scrolls rather than wraps: "Comments (12)" is wide enough to
+ * push the row onto two lines, which shifts the whole panel down. */
+.tma-portal-viewer__tabs {
+  display: flex; gap: var(--space-2); min-width: 0;
+  overflow-x: auto; scrollbar-width: none;
+}
+.tma-portal-viewer__tabs::-webkit-scrollbar { display: none; }
+.tma-portal-viewer__tab {
+  padding: var(--space-6) var(--space-8); border: 0; border-radius: var(--radius-8);
+  background: transparent; color: var(--color-text-secondary);
+  font-size: var(--text-size-13); font-weight: 500; cursor: pointer;
+  white-space: nowrap; flex: 0 0 auto;
+}
+.tma-portal-viewer__tab:hover { background: var(--color-hover); }
+.tma-portal-viewer__tab.is-active { background: var(--color-hover); color: var(--color-text-primary); font-weight: 600; }
+.tma-portal-viewer__panel-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 0; border-radius: var(--radius-8);
+  background: transparent; cursor: pointer; flex: 0 0 auto;
+}
+.tma-portal-viewer__panel-close:hover { background: var(--color-hover); }
+
+/* Scrolls independently of the preview — §14. */
+.tma-portal-viewer__panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-12) var(--space-16) var(--space-24); }
+
+.tma-portal-viewer__section { margin: 0 0 var(--space-16); }
+.tma-portal-viewer__section-title {
+  margin: 0 0 var(--space-8); font-size: var(--text-size-12); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-secondary);
+}
+.tma-portal-viewer__row { display: flex; gap: var(--space-12); padding: var(--space-4) 0; font-size: var(--text-size-13); }
+.tma-portal-viewer__row-label { flex: 0 0 118px; color: var(--color-text-secondary); }
+.tma-portal-viewer__row-value { flex: 1; min-width: 0; color: var(--color-text-primary); word-break: break-word; }
+.tma-portal-viewer__more { margin-top: var(--space-8); }
+.tma-portal-viewer__more-summary {
+  cursor: pointer; font-size: var(--text-size-13); font-weight: 600;
+  color: var(--color-primary-dark); padding: var(--space-6) 0; list-style: none;
+}
+.tma-portal-viewer__more-summary::-webkit-details-marker { display: none; }
+.tma-portal-viewer__more-summary::before { content: '▸ '; }
+.tma-portal-viewer__more[open] .tma-portal-viewer__more-summary::before { content: '▾ '; }
+.tma-portal-viewer__empty { color: var(--color-text-secondary); font-size: var(--text-size-13); margin: var(--space-8) 0; }
+
+/* Activity ----------------------------------------------------------- */
+.tma-portal-viewer__filter { display: flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-12); }
+.tma-portal-viewer__filter-label { font-size: var(--text-size-13); color: var(--color-text-secondary); flex: 0 0 auto; }
+.tma-portal-viewer__filter-select {
+  flex: 1; min-width: 0; padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--color-border); border-radius: var(--radius-8);
+  background: var(--color-white); color: var(--color-text-primary); font-size: var(--text-size-13);
+}
+.tma-portal-viewer__band {
+  margin: var(--space-16) 0 var(--space-8); font-size: var(--text-size-12); font-weight: 600;
+  color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.tma-portal-viewer__band:first-child { margin-top: 0; }
+.tma-portal-viewer__event { display: flex; gap: var(--space-10); padding: var(--space-6) 0; }
+.tma-portal-viewer__event-body { min-width: 0; flex: 1; }
+.tma-portal-viewer__event-text { margin: 0; font-size: var(--text-size-13); color: var(--color-text-primary); line-height: 1.45; }
+.tma-portal-viewer__event-time { font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-portal-viewer__avatar { border-radius: 50%; flex: 0 0 auto; object-fit: cover; background: var(--color-hover); }
+.tma-portal-viewer__avatar--icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; background: var(--color-hover);
+}
+.tma-portal-viewer__more-btn {
+  width: 100%; margin-top: var(--space-12); padding: var(--space-8);
+  border: 1px solid var(--color-border); border-radius: var(--radius-8);
+  background: var(--color-white); color: var(--color-text-primary);
+  font-size: var(--text-size-13); cursor: pointer;
+}
+.tma-portal-viewer__more-btn:hover { background: var(--color-hover); }
+
+/* Access ------------------------------------------------------------- */
+.tma-portal-viewer__source { border-bottom: 1px solid var(--color-border); padding: var(--space-4) 0; }
+.tma-portal-viewer__source:last-child { border-bottom: 0; }
+.tma-portal-viewer__source-head {
+  display: flex; align-items: center; gap: var(--space-10); width: 100%;
+  padding: var(--space-8) 0; border: 0; background: transparent; cursor: pointer; text-align: left;
+}
+.tma-portal-viewer__source-icon { flex: 0 0 auto; opacity: 0.7; }
+.tma-portal-viewer__source-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tma-portal-viewer__source-text strong { font-size: var(--text-size-13); color: var(--color-text-primary); }
+.tma-portal-viewer__source-detail { font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-portal-viewer__source-origin { margin: 0 0 var(--space-8) 28px; font-size: var(--text-size-12); color: var(--color-text-secondary); }
+.tma-portal-viewer__faces { display: flex; align-items: center; flex: 0 0 auto; }
+.tma-portal-viewer__avatar--stack { margin-left: -8px; border: 2px solid var(--color-white); }
+.tma-portal-viewer__avatar--stack:first-child { margin-left: 0; }
+.tma-portal-viewer__avatar-more {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; margin-left: -8px; padding: 0 var(--space-4);
+  border: 2px solid var(--color-white); border-radius: 999px;
+  background: var(--color-hover); color: var(--color-text-secondary); font-size: 11px; font-weight: 600;
+}
+.tma-portal-viewer__source-members { padding: 0 0 var(--space-8) 28px; display: flex; flex-direction: column; gap: var(--space-6); }
+.tma-portal-viewer__member { display: flex; align-items: center; gap: var(--space-8); }
+.tma-portal-viewer__member-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tma-portal-viewer__member-text strong { font-size: var(--text-size-13); color: var(--color-text-primary); }
+.tma-portal-viewer__member-email {
+  font-size: var(--text-size-12); color: var(--color-text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tma-portal-viewer__member-role { font-size: var(--text-size-12); color: var(--color-text-secondary); flex: 0 0 auto; }
+
+/* Comments ----------------------------------------------------------- */
+.tma-portal-viewer__thread { padding: var(--space-8) 0; border-bottom: 1px solid var(--color-border); }
+.tma-portal-viewer__thread:last-of-type { border-bottom: 0; }
+.tma-portal-viewer__thread.is-resolved { opacity: 0.68; }
+.tma-portal-viewer__comment { display: flex; gap: var(--space-10); padding: var(--space-4) 0; }
+.tma-portal-viewer__comment.is-deleted { padding-left: 38px; color: var(--color-text-secondary); font-size: var(--text-size-13); }
+.tma-portal-viewer__comment-main { flex: 1; min-width: 0; }
+.tma-portal-viewer__comment-head {
+  display: flex; align-items: baseline; gap: var(--space-8); flex-wrap: wrap;
+  font-size: var(--text-size-12); color: var(--color-text-secondary);
+}
+.tma-portal-viewer__comment-head strong { font-size: var(--text-size-13); color: var(--color-text-primary); }
+.tma-portal-viewer__comment-flag {
+  padding: 1px var(--space-6); border-radius: 999px;
+  background: var(--color-hover); font-size: 11px;
+}
+.tma-portal-viewer__comment-flag--ok { background: color-mix(in srgb, var(--color-primary) 14%, transparent); color: var(--color-primary-dark); }
+.tma-portal-viewer__comment-body {
+  margin: var(--space-2) 0 0; font-size: var(--text-size-13); line-height: 1.5;
+  color: var(--color-text-primary); word-break: break-word; white-space: pre-wrap;
+}
+.tma-portal-viewer__mention { color: var(--color-primary-dark); font-weight: 600; }
+.tma-portal-viewer__comment-actions { display: flex; gap: var(--space-10); margin-top: var(--space-4); }
+.tma-portal-viewer__comment-act {
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  font-size: var(--text-size-12); color: var(--color-text-secondary); font-weight: 500;
+}
+.tma-portal-viewer__comment-act:hover { color: var(--color-primary-dark); text-decoration: underline; }
+.tma-portal-viewer__reply { margin-left: 38px; }
+.tma-portal-viewer__reply-open { margin-left: 38px; margin-top: var(--space-4); }
+.tma-portal-viewer__replybox, .tma-portal-viewer__editbox { margin-top: var(--space-6); }
+
+.tma-portal-viewer__composer { position: relative; margin-top: var(--space-16); padding-top: var(--space-12); border-top: 1px solid var(--color-border); }
+.tma-portal-viewer__input {
+  width: 100%; resize: vertical; min-height: 64px;
+  padding: var(--space-8) var(--space-10);
+  border: 1px solid var(--color-border); border-radius: var(--radius-8);
+  background: var(--color-white); color: var(--color-text-primary);
+  font-family: inherit; font-size: var(--text-size-13); line-height: 1.5;
+}
+.tma-portal-viewer__input:focus { outline: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent); outline-offset: 1px; }
+/* Cancel and Send are separate buttons in a row with a real gap — the spec
+ * calls out that the clear control must never overlap the send control. */
+.tma-portal-viewer__composer-actions { display: flex; align-items: center; gap: var(--space-8); margin-top: var(--space-8); }
+.tma-portal-viewer__composer-spacer { flex: 1; }
+.tma-portal-viewer__btn {
+  padding: var(--space-6) var(--space-14); border: 0; border-radius: var(--radius-8);
+  background: var(--color-primary-dark); color: #fff;
+  font-size: var(--text-size-13); font-weight: 600; cursor: pointer;
+}
+.tma-portal-viewer__btn:hover { filter: brightness(1.08); }
+.tma-portal-viewer__btn-ghost {
+  padding: var(--space-6) var(--space-10); border: 1px solid var(--color-border);
+  border-radius: var(--radius-8); background: var(--color-white);
+  color: var(--color-text-primary); font-size: var(--text-size-13); cursor: pointer;
+}
+.tma-portal-viewer__btn-ghost:hover { background: var(--color-hover); }
+
+.tma-portal-viewer__mention-pop {
+  position: absolute; left: 0; right: 0; bottom: 100%; z-index: 3;
+  max-height: 240px; overflow-y: auto; margin-bottom: var(--space-4);
+  border: 1px solid var(--color-border); border-radius: var(--radius-8);
+  background: var(--color-white); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+.tma-portal-viewer__mention-pop[hidden] { display: none; }
+.tma-portal-viewer__mention-item {
+  display: flex; align-items: center; gap: var(--space-8); width: 100%;
+  padding: var(--space-6) var(--space-10); border: 0; background: transparent;
+  cursor: pointer; text-align: left; font-size: var(--text-size-13);
+}
+.tma-portal-viewer__mention-item:hover { background: var(--color-hover); }
+.tma-portal-viewer__mention-item span { display: flex; flex-direction: column; min-width: 0; }
+
+.tma-portal-viewer__emoji-pop {
+  position: absolute; left: 0; right: 0; bottom: 100%; z-index: 3;
+  max-height: 260px; overflow-y: auto; margin-bottom: var(--space-4); padding: var(--space-8);
+  border: 1px solid var(--color-border); border-radius: var(--radius-8);
+  background: var(--color-white); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+.tma-portal-viewer__emoji-group h6 {
+  margin: var(--space-6) 0 var(--space-4); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--color-text-secondary);
+}
+.tma-portal-viewer__emoji {
+  width: 30px; height: 30px; border: 0; border-radius: var(--radius-4);
+  background: transparent; cursor: pointer; font-size: 18px; line-height: 1;
+}
+.tma-portal-viewer__emoji:hover { background: var(--color-hover); }
+
+/* Versions ----------------------------------------------------------- */
+.tma-portal-viewer__version-add { width: 100%; margin-bottom: var(--space-12); }
+.tma-portal-viewer__version {
+  display: flex; gap: var(--space-10); padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.tma-portal-viewer__version:last-child { border-bottom: 0; }
+.tma-portal-viewer__version-mark {
+  flex: 0 0 auto; min-width: 34px; height: 26px; padding: 0 var(--space-6);
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-8); background: var(--color-hover);
+  font-size: var(--text-size-12); font-weight: 600; color: var(--color-text-secondary);
+}
+.tma-portal-viewer__version.is-current .tma-portal-viewer__version-mark {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--color-primary-dark);
+}
+.tma-portal-viewer__version-main { flex: 1; min-width: 0; }
+.tma-portal-viewer__version-note {
+  margin: var(--space-2) 0 0; font-size: var(--text-size-13); line-height: 1.45;
+  color: var(--color-text-primary); word-break: break-word;
+}
+.tma-portal-viewer__version-meta { margin: var(--space-2) 0 0; font-size: var(--text-size-12); color: var(--color-text-secondary); }
+
+/* Note field inside a confirm dialog (version notes). */
+.tma-portal-modal__label {
+  display: block; margin: var(--space-12) 0 var(--space-4);
+  font-size: var(--text-size-13); color: var(--color-text-secondary);
+}
+.tma-portal-modal__input { min-height: 0; }
+
+/* Responsive: the panel becomes a drawer, the rail goes away ---------- */
+@media (max-width: 1100px) {
+  .tma-portal-viewer__panel {
+    position: absolute; top: 0; right: 0; bottom: 0; z-index: 4;
+    flex-basis: 340px; max-width: 88vw; box-shadow: -8px 0 30px rgba(0, 0, 0, 0.35);
+  }
+}
+@media (max-width: 760px) {
+  .tma-portal-viewer__rail { display: none; }
+  .tma-portal-viewer__panel { flex-basis: 100%; max-width: 100%; }
+  .tma-portal-viewer__sub { display: none; }
+}
+
+/* ── attachment lightbox (shared with the mailbox) ───
+ *
+ * The File Library's own preview is now .tma-portal-viewer (above). These
+ * rules stay because public/js/email.js renders its attachment preview with
+ * these exact class names — deleting them silently breaks the mailbox, which
+ * has no styles of its own for it.
+ */
 .tma-portal-lightbox { position: fixed; inset: 0; z-index: 600; display: flex; flex-direction: column; }
 .tma-portal-lightbox__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.82); border: 0; cursor: zoom-out; }
 .tma-portal-lightbox__head {

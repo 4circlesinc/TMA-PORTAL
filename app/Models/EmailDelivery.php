@@ -23,12 +23,19 @@ use Illuminate\Support\Str;
 class EmailDelivery extends Model
 {
     public const STATUS_QUEUED = 'queued';
+
     public const STATUS_SENT = 'sent';
+
     public const STATUS_DELIVERED = 'delivered';
+
     public const STATUS_OPENED = 'opened';
+
     public const STATUS_CLICKED = 'clicked';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_BOUNCED = 'bounced';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     /** Statuses that mean the message did not get out. */

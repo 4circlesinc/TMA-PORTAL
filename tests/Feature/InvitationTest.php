@@ -3,12 +3,13 @@
 namespace Tests\Feature;
 
 use App\Mail\Postcard;
+use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\EmailDelivery;
 use App\Models\Invitation;
 use App\Models\User;
-use App\Support\Invitations\Invitations;
+use App\Support\Mail\Postcards;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -53,7 +54,7 @@ class InvitationTest extends TestCase
     private function inviteAndCaptureToken(Client $client, User $by): string
     {
         $token = null;
-        Mail::assertQueued(Postcard::class, function (Postcard $mail) use (&$token) {
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use (&$token) {
             if (preg_match('#/invite/([A-Za-z0-9]+)#', $mail->payload['button']['url'] ?? '', $m)) {
                 $token = $m[1];
             }
@@ -75,7 +76,8 @@ class InvitationTest extends TestCase
         $this->actingAs($staff)->postJson("/portal/clients/{$client->uid}/invite")
             ->assertOk()
             ->assertJsonPath('status', 'ok')
-            ->assertJsonPath('invitation.status', 'sent');
+            // Queued, not yet handed to a transport — see the queued-vs-sent test.
+            ->assertJsonPath('invitation.status', 'pending');
 
         $invitation = Invitation::first();
         $this->assertNotNull($invitation);
@@ -123,7 +125,8 @@ class InvitationTest extends TestCase
         $this->get("/invite/{$token}")
             ->assertOk()
             ->assertSee('Dana Reed')
-            ->assertSee(config('app.name'))
+            // The firm's name, not APP_NAME — which is "tma-portal" in production.
+            ->assertSee(Postcards::site())
             ->assertSee('Client portal access')
             ->assertSee('owner@acme.test');
     }
@@ -317,7 +320,7 @@ class InvitationTest extends TestCase
 
         $this->actingAs($someoneElse)->get("/invite/{$token}")
             ->assertOk()
-            ->assertSee("signed in as someone else");
+            ->assertSee('signed in as someone else');
 
         $this->actingAs($someoneElse)->post("/invite/{$token}/accept");
 
@@ -359,7 +362,7 @@ class InvitationTest extends TestCase
         ]);
 
         $token = null;
-        Mail::assertQueued(Postcard::class, function (Postcard $mail) use (&$token) {
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use (&$token) {
             if (preg_match('#/invite/([A-Za-z0-9]+)#', $mail->payload['button']['url'] ?? '', $m)) {
                 $token = $m[1];
             }
@@ -417,7 +420,7 @@ class InvitationTest extends TestCase
         $this->actingAs($admin)->getJson('/portal/invitations')
             ->assertOk()
             ->assertJsonPath('invitations.0.email', 'owner@acme.test')
-            ->assertJsonPath('invitations.0.status', 'sent')
+            ->assertJsonPath('invitations.0.status', 'pending')
             ->assertJsonPath('invitations.0.typeLabel', 'Client')
             ->assertJsonPath('counts.pending', 1);
     }
@@ -430,7 +433,7 @@ class InvitationTest extends TestCase
         $this->actingAs($admin)->postJson("/portal/clients/{$client->uid}/invite");
 
         $tokens = [];
-        Mail::assertQueued(Postcard::class, function (Postcard $mail) use (&$tokens) {
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use (&$tokens) {
             if (preg_match('#/invite/([A-Za-z0-9]+)#', $mail->payload['button']['url'] ?? '', $m)) {
                 $tokens[] = $m[1];
             }
@@ -443,7 +446,7 @@ class InvitationTest extends TestCase
         $this->actingAs($admin)->postJson("/portal/invitations/{$uuid}/resend")->assertOk();
 
         $tokens = [];
-        Mail::assertQueued(Postcard::class, function (Postcard $mail) use (&$tokens) {
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use (&$tokens) {
             if (preg_match('#/invite/([A-Za-z0-9]+)#', $mail->payload['button']['url'] ?? '', $m)) {
                 $tokens[] = $m[1];
             }
@@ -493,7 +496,7 @@ class InvitationTest extends TestCase
         ])->assertOk()->assertJsonPath('invitation.email', 'correct@acme.test');
 
         $this->assertSame(1, Invitation::count());
-        Mail::assertQueued(Postcard::class);
+        Mail::assertSent(Postcard::class);
     }
 
     public function test_a_second_invitation_for_the_same_person_is_refused(): void
@@ -546,13 +549,33 @@ class InvitationTest extends TestCase
         $this->assertNotNull($delivery->message_id);
     }
 
+    /**
+     * "Sent" must mean a transport accepted the message. Mail::fake() stands in
+     * for mail that never reached one, and nothing may claim it did.
+     */
+    public function test_mail_that_never_reached_a_transport_is_not_reported_as_sent(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $client = $this->client();
+
+        $this->actingAs($admin)->postJson("/portal/clients/{$client->uid}/invite")->assertOk();
+
+        $this->assertSame('pending', Invitation::first()->status);
+        $this->assertSame('queued', EmailDelivery::first()->status);
+
+        // It was still handed over, and that is recorded separately.
+        $this->assertNotNull(Invitation::first()->last_sent_at);
+        $this->assertSame(1, Invitation::first()->send_count);
+    }
+
     public function test_a_send_failure_leaves_the_invitation_live_and_records_the_error(): void
     {
         $admin = $this->admin();
         $client = $this->client();
 
         // Make the transport fail the way a real outage would.
-        Mail::shouldReceive('to->queue')->andThrow(new \RuntimeException('SMTP refused the connection'));
+        Mail::shouldReceive('to->sendNow')->andThrow(new \RuntimeException('SMTP refused the connection'));
 
         $this->actingAs($admin)->postJson("/portal/clients/{$client->uid}/invite")->assertOk();
 
@@ -561,6 +584,37 @@ class InvitationTest extends TestCase
         $this->assertStringContainsString('SMTP refused', $invitation->last_error);
 
         // Failed to send, but still acceptable — the link must work if it lands.
+        $this->assertTrue($invitation->isAcceptable());
+    }
+
+    /**
+     * A transport that fails once and then works — exactly what a mailbox
+     * mid-provisioning does. The successful attempt has to clear the earlier
+     * failure, or the invitation reads "failed" for ever while the recipient
+     * is holding a working link.
+     */
+    public function test_a_successful_resend_clears_an_earlier_failure(): void
+    {
+        $admin = $this->admin();
+        $client = $this->client();
+
+        $this->actingAs($admin)->postJson("/portal/clients/{$client->uid}/invite")->assertOk();
+        $invitation = Invitation::first();
+
+        // The state a refused transport leaves behind (observed in production
+        // against a mailbox that was still being provisioned).
+        $invitation->forceFill([
+            'status' => Invitation::STATUS_FAILED,
+            'last_error' => 'Microsoft Graph sendMail failed (404): The mailbox is either inactive…',
+            'send_count' => 1,
+        ])->save();
+
+        $this->actingAs($admin)->postJson("/portal/invitations/{$invitation->uuid}/resend")->assertOk();
+
+        $invitation->refresh();
+        $this->assertSame('sent', $invitation->status, 'a working resend left the invitation failed');
+        $this->assertNull($invitation->last_error);
+        $this->assertSame(2, $invitation->send_count);
         $this->assertTrue($invitation->isAcceptable());
     }
 
@@ -581,11 +635,11 @@ class InvitationTest extends TestCase
             'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
         ]);
 
-        $accepted = \App\Models\ActivityLog::where('description', 'like', '%accepted their invitation%')->first();
+        $accepted = ActivityLog::where('description', 'like', '%accepted their invitation%')->first();
         $this->assertNotNull($accepted);
 
         // No invitation token may appear anywhere in the trail.
-        foreach (\App\Models\ActivityLog::all() as $row) {
+        foreach (ActivityLog::all() as $row) {
             $this->assertStringNotContainsString($token, json_encode($row->toArray()));
         }
     }
@@ -624,7 +678,7 @@ class InvitationTest extends TestCase
         $this->assertSame('company_member', $invitation->type);
         $this->assertSame($company->id, $invitation->company_id);
 
-        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => str_contains($mail->subjectLine, 'Acme Group'));
+        Mail::assertSent(Postcard::class, fn (Postcard $mail) => str_contains($mail->subjectLine, 'Acme Group'));
     }
 
     // -------------------------------------------------------- legacy support

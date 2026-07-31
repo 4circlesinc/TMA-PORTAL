@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Mail\Postcard;
 use App\Models\EmailDelivery;
+use App\Models\Invitation;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -31,20 +32,44 @@ class MailTrackingServiceProvider extends ServiceProvider
             }
 
             try {
-                EmailDelivery::where('uuid', $uuid)
+                $delivery = EmailDelivery::where('uuid', $uuid)
                     ->where('status', EmailDelivery::STATUS_QUEUED)
-                    ->first()?->forceFill([
-                        'status' => EmailDelivery::STATUS_SENT,
-                        'sent_at' => now(),
-                        // The transport's id, so a later bounce webhook can
-                        // find this row without guessing from the address.
-                        'message_id' => $event->sent?->getMessageId(),
-                        'error' => null,
-                    ])->save();
+                    ->first();
+
+                if (! $delivery) {
+                    return;
+                }
+
+                $delivery->forceFill([
+                    'status' => EmailDelivery::STATUS_SENT,
+                    'sent_at' => now(),
+                    // The transport's id, so a later bounce webhook can find
+                    // this row without guessing from the address.
+                    'message_id' => $event->sent?->getMessageId(),
+                    'error' => null,
+                ])->save();
+
+                self::promoteInvitation($delivery);
             } catch (Throwable $e) {
                 Log::warning('Could not mark an email as sent: '.$e->getMessage());
             }
         });
+    }
+
+    /**
+     * An invitation only becomes "sent" once its email really went out. Until
+     * then it stays pending, so a stalled queue shows up on the invitation
+     * screen instead of being reported as delivered.
+     */
+    private static function promoteInvitation(EmailDelivery $delivery): void
+    {
+        if ($delivery->related_type !== Invitation::class) {
+            return;
+        }
+
+        Invitation::where('id', $delivery->related_id)
+            ->where('status', Invitation::STATUS_PENDING)
+            ->update(['status' => Invitation::STATUS_SENT]);
     }
 
     /** The delivery id carried on the message, if this is one of ours. */

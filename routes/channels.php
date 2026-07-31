@@ -2,8 +2,10 @@
 
 use App\Models\Conversation;
 use App\Models\FeedChannel;
+use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Feed\FeedAccess;
+use App\Support\Files\FileAccess;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
@@ -42,6 +44,20 @@ Broadcast::channel('messaging.user.{id}', function (User $user, string $id) {
  * event payload carries no content, the pattern of activity is itself
  * information.
  */
+/**
+ * Live updates for one file: comments, and later presence and workflow.
+ *
+ * The websocket half of the same rule FileAccess enforces on every HTTP
+ * endpoint — a user may only subscribe to a file they can actually open.
+ * Without it, knowing a uuid would be enough to watch a client-private
+ * document's discussion.
+ */
+Broadcast::channel('file.{uuid}', function (User $user, string $uuid) {
+    $file = FileItem::query()->withTrashed()->where('uuid', $uuid)->first();
+
+    return $file !== null && FileAccess::can($user, 'view', $file);
+});
+
 Broadcast::channel('feed.channel.{uuid}', function (User $user, string $uuid) {
     $channel = FeedChannel::query()->where('uuid', $uuid)->first();
 

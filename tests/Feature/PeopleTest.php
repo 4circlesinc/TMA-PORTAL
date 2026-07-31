@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\AuthEvent;
 use App\Models\Client;
-use App\Models\ClientInvite;
 use App\Models\Contact;
+use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -131,13 +131,14 @@ class PeopleTest extends TestCase
             'uid' => 'selina-kyle', 'name' => 'Selina Kyle',
             'email' => 'selina@example.com', 'data' => [],
         ]);
-        ClientInvite::create([
-            'client_id' => $client->id,
-            'email' => 'selina@example.com',
-            'token' => ClientInvite::freshToken(),
-            'expires_at' => now()->addDays(14),
+        $invitation = new Invitation(['client_id' => $client->id, 'email' => 'selina@example.com']);
+        $invitation->issueToken();
+        $invitation->forceFill([
+            'type' => Invitation::TYPE_CLIENT,
+            'status' => Invitation::STATUS_SENT,
+            'expires_at' => now()->addDays(7),
             'last_sent_at' => now(),
-        ]);
+        ])->save();
 
         $prospects = collect($this->actingAs($admin)->getJson('/portal/people/prospects')->assertOk()->json('prospects'));
 
@@ -196,17 +197,20 @@ class PeopleTest extends TestCase
             'uid' => 'selina-kyle', 'name' => 'Selina Kyle',
             'email' => 'selina@example.com', 'data' => [],
         ]);
-        $invite = ClientInvite::create([
-            'client_id' => $client->id,
-            'email' => 'selina@example.com',
-            'token' => ClientInvite::freshToken(),
-            'expires_at' => now()->addDays(14),
-        ]);
+        $invite = new Invitation(['client_id' => $client->id, 'email' => 'selina@example.com']);
+        $invite->issueToken();
+        $invite->forceFill([
+            'type' => Invitation::TYPE_CLIENT,
+            'status' => Invitation::STATUS_SENT,
+            'expires_at' => now()->addDays(7),
+        ])->save();
         $unused = $this->user('Employee', ['password_auto' => true]);
         $active = $this->signedInOnce($this->user('Employee', ['password_auto' => true]));
 
         $this->actingAs($admin)->deleteJson('/portal/people/prospects/invite:'.$invite->id)->assertOk();
-        $this->assertDatabaseMissing('client_invites', ['id' => $invite->id]);
+        // Withdrawing cancels the invitation rather than erasing the record.
+        $this->assertDatabaseHas('invitations', ['id' => $invite->id, 'status' => 'cancelled']);
+        $this->assertNotNull($invite->fresh()->cancelled_at);
 
         $this->actingAs($admin)->deleteJson('/portal/people/prospects/user:'.$unused->id)->assertOk();
         $this->assertDatabaseMissing('users', ['id' => $unused->id]);

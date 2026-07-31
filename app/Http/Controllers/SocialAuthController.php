@@ -34,6 +34,18 @@ class SocialAuthController extends Controller
     {
         abort_unless(in_array($provider, self::PROVIDERS, true), 404);
 
+        // Remember where the user came from *before* anything can fail.
+        // These used to be written further down, after the configuration
+        // check, so a provider with no client id fell back to the default
+        // return of 'security-settings' — which is why "Connect Google" on the
+        // onboarding screen dumped people in Account settings instead of
+        // leaving them on onboarding with the reason.
+        $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
+        $request->session()->put(
+            'social.return',
+            in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email'], true) ? $request->query('return') : 'security-settings',
+        );
+
         if (! config("services.{$provider}.client_id")) {
             return $this->fail($request, ucfirst($provider).' sign-in is not configured yet.');
         }
@@ -56,12 +68,6 @@ class SocialAuthController extends Controller
 
             return redirect()->away('http://'.$callbackHost.($port ? ':'.$port : '').$request->getRequestUri());
         }
-
-        $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
-        $request->session()->put(
-            'social.return',
-            in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email'], true) ? $request->query('return') : 'security-settings',
-        );
 
         // Data sync opt-in (email, calendar, OneDrive, SharePoint). Only
         // requests extra scopes when the provider's sync is configured;

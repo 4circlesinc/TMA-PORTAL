@@ -88,12 +88,27 @@ final class Invitations
      * Email an invitation. Rotates the token, so the link in this message is
      * the only one that works from now on.
      *
+     * Sent inline rather than queued. Invitations are low-volume and the whole
+     * point of one is that it arrives; this portal's queue has sat undrained
+     * for days at a time, and an invitation stuck behind a stalled worker is
+     * indistinguishable from a broken portal to the person waiting for it.
+     * Sending inline costs a second on the request and, in exchange, the
+     * outcome is known before the staff member sees the response.
+     *
      * @param  bool  $reminder  a chase-up rather than a first ask
      */
     public static function send(Invitation $invitation, bool $reminder = false): ?EmailDelivery
     {
         $token = $invitation->issueToken();
-        $invitation->save();
+
+        // Reset to pending *before* the send, for two reasons: a retry after a
+        // failure must not stay stuck on `failed` when this attempt works, and
+        // an inline send fires MessageSent during the call below — so the row
+        // has to already say `pending` for the tracker to promote it.
+        $invitation->forceFill([
+            'status' => Invitation::STATUS_PENDING,
+            'last_error' => null,
+        ])->save();
 
         $delivery = null;
 
@@ -103,17 +118,25 @@ final class Invitations
                 $invitation->email,
                 $invitation,
                 self::templateName($invitation, $reminder),
+                immediate: true,
             );
 
-            $invitation->forceFill([
-                'status' => Invitation::STATUS_SENT,
-                'last_sent_at' => now(),
-                'send_count' => $invitation->send_count + 1,
-                'last_error' => null,
-            ])->save();
+            // Success is deliberately *not* written here. Handing a mailable
+            // over is not delivery — "sent" has to mean a transport accepted
+            // it, so MailTrackingServiceProvider sets that from MessageSent.
+            // Only the counters are ours to record.
+            //
+            // The invitation stays live whatever the transport did: it is the
+            // send that failed, not the invitation, and staff can retry it or
+            // copy the link out of the management screen.
+            $invitation->forceFill(array_merge(
+                ['send_count' => $invitation->send_count + 1],
+                $delivery?->hasFailed()
+                    ? ['status' => Invitation::STATUS_FAILED, 'last_error' => $delivery->error]
+                    : ['last_sent_at' => now()],
+            ))->save();
         } catch (\Throwable $e) {
-            // The invitation stays live — only the send failed, and staff can
-            // retry it or copy the link out of the management screen.
+            // Nowhere to record it — no delivery row was written at all.
             $invitation->forceFill([
                 'status' => Invitation::STATUS_FAILED,
                 'last_error' => mb_substr($e->getMessage(), 0, 2000),

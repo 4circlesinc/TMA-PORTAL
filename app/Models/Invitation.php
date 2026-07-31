@@ -27,18 +27,27 @@ use Illuminate\Support\Str;
 class Invitation extends Model
 {
     public const TYPE_CLIENT = 'client';
+
     public const TYPE_STAFF = 'staff';
+
     public const TYPE_COMPANY_MEMBER = 'company_member';
 
     public const TYPES = [self::TYPE_CLIENT, self::TYPE_STAFF, self::TYPE_COMPANY_MEMBER];
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_SENT = 'sent';
+
     public const STATUS_DELIVERED = 'delivered';
+
     public const STATUS_OPENED = 'opened';
+
     public const STATUS_ACCEPTED = 'accepted';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_CANCELLED = 'cancelled';
+
     public const STATUS_FAILED = 'failed';
 
     /**
