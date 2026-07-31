@@ -717,6 +717,22 @@
 }
 @media (max-width: 760px) { .tma-portal-viewer__presence-wrap { display: none; } }
 
+/* Shared-with face stack --------------------------------------------- */
+.tma-portal-viewer__shared {
+  display: flex; align-items: center; gap: var(--space-10);
+  padding: var(--space-8) 0 var(--space-12);
+  border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-8);
+}
+.tma-portal-viewer__shared-stack {
+  display: inline-flex; align-items: center; border: 0; padding: 0;
+  background: transparent; cursor: pointer; flex: 0 0 auto;
+}
+.tma-portal-viewer__shared-text { display: flex; flex-direction: column; min-width: 0; }
+.tma-portal-viewer__shared-text strong { font-size: var(--text-size-13); color: var(--color-text-primary); }
+.tma-portal-viewer__avatar-more--lg {
+  min-width: 30px; height: 30px; font-size: var(--text-size-12);
+}
+
 /* Responsive: the panel becomes a drawer, the rail goes away ---------- */
 @media (max-width: 1100px) {
   .tma-portal-viewer__panel {

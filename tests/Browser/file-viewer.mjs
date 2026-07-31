@@ -154,6 +154,23 @@ try {
   const memberTitle = await page.$eval('.tma-portal-viewer__member', (e) => e.getAttribute('title')).catch(() => '');
   check(/@/.test(memberTitle || ''), `hovering a member reveals their email (title="${memberTitle}")`);
 
+  step(8.5, 'The Access tab leads with a shared-with face stack');
+  const stack = await page.$('[data-lb-shared-open]');
+  check(!!stack, 'the face stack is present');
+  if (stack) {
+    const faces = await page.$$eval('.tma-portal-viewer__shared-stack img', (n) => n.length);
+    check(faces >= 1 && faces <= 5, `it shows up to five faces (${faces})`);
+    const summary = await page.textContent('.tma-portal-viewer__shared-text');
+    check(/Shared with/.test(summary), `it says who with (“${summary.trim().replace(/\s+/g, ' ')}”)`);
+
+    await stack.click();
+    await page.waitForTimeout(700);
+    const list = await page.textContent('.tma-portal-modal').catch(() => '');
+    check(/@/.test(list), 'clicking it opens a list of the actual people');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+  }
+
   step(9, 'Toolbar shows only permitted actions');
   const tools = await page.$$eval('[data-lb-act]', (n) => n.map((x) => x.getAttribute('data-lb-act')));
   check(tools.includes('download'), 'Download is offered (admin may download)');

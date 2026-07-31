@@ -83,7 +83,29 @@ class AccessSources
             }
         }
 
-        // 4. Explicit shares: named people, and links.
+        // 4. The firm-wide default, when it applies to this file. Reported as
+        //    one source with a head-count, never as a list of every employee.
+        if (self::orgDefaultApplies($file)) {
+            $staff = User::query()
+                ->whereIn('account_type', Role::STAFF)
+                ->where('status', User::STATUS_APPROVED)
+                ->orderBy('name')
+                ->get(['id', 'name', 'email', 'job_title', 'account_type', 'avatar_url', 'provider_avatar_url']);
+
+            if ($staff->isNotEmpty()) {
+                $sources[] = self::source(
+                    key: 'organization:default',
+                    label: 'Everyone in '.config('app.name', 'the organization'),
+                    detail: self::count($staff->count(), 'person', 'people'),
+                    role: \App\Models\FileLibrarySetting::defaultOrgRole(),
+                    icon: 'Buildings',
+                    members: $staff->map(fn (User $u) => self::person($u))->all(),
+                    origin: 'Shared with the firm by default',
+                );
+            }
+        }
+
+        // 5. Explicit shares: named people, and links.
         $shares = Share::query()
             ->where('item_type', 'file')
             ->where('item_id', $file->id)
@@ -127,7 +149,100 @@ class AccessSources
         return [
             'sources' => $sources,
             'canManage' => FileAccess::can($viewer, 'share', $file),
+            // The face stack: everyone with access, flattened across sources
+            // and de-duplicated, so somebody who is both an administrator and
+            // on the client team is one face rather than two.
+            'shared' => self::faceStack($sources),
         ];
+    }
+
+    /** Faces shown before the stack collapses to "+N". */
+    public const FACES = 5;
+
+    /**
+     * One flat, de-duplicated roster across every source.
+     *
+     * The panel leads with this because it answers the question people actually
+     * ask — "who can see this?" — in one glance. The grouped sources below it
+     * answer the follow-up, "and why?".
+     *
+     * @return array{faces: list<array>, all: list<array>, total: int, extra: int, summary: string}
+     */
+    private static function faceStack(array $sources): array
+    {
+        $byEmail = [];
+        $summaryParts = [];
+
+        foreach ($sources as $source) {
+            // Sources carry only a preview of their members, so the count has
+            // to come from `total`, not from the preview array's length.
+            if ($source['total'] > count($source['members'])) {
+                $summaryParts[] = $source['label'];
+            }
+
+            foreach ($source['members'] as $member) {
+                $key = $member['email'] ?? $member['name'] ?? null;
+                if ($key === null || isset($byEmail[$key])) {
+                    continue;
+                }
+                $byEmail[$key] = $member + ['via' => $source['label']];
+            }
+        }
+
+        $people = array_values($byEmail);
+
+        // The true head-count is the widest source, not the number of distinct
+        // faces we happened to preview — an org of 200 must not read as "8".
+        $total = 0;
+        foreach ($sources as $source) {
+            $total = max($total, (int) $source['total']);
+        }
+        $total = max($total, count($people));
+
+        return [
+            'faces' => array_slice($people, 0, self::FACES),
+            'all' => $people,
+            'total' => $total,
+            'extra' => max(0, $total - self::FACES),
+            'summary' => self::summaryFor($sources, $total),
+        ];
+    }
+
+    /** "Everyone in TM ANTOINE Advisory · 42 people" — the one-line answer. */
+    private static function summaryFor(array $sources, int $total): string
+    {
+        foreach ($sources as $source) {
+            if (str_starts_with($source['key'], 'organization:')) {
+                return $source['label'];
+            }
+        }
+
+        foreach ($sources as $source) {
+            if (str_starts_with($source['key'], 'client:')) {
+                return 'The assigned client team';
+            }
+            if (str_starts_with($source['key'], 'staff:')) {
+                return $source['label'];
+            }
+        }
+
+        return $total === 1 ? 'Only you' : $total.' people';
+    }
+
+    /** Mirrors FileAccess::organizationDefaultRole — same exclusions. */
+    private static function orgDefaultApplies(FileItem $file): bool
+    {
+        if (! \App\Models\FileLibrarySetting::defaultOrgAccess() || $file->folder_id === null) {
+            return false;
+        }
+
+        foreach (self::chain($file->folder_id) as $folder) {
+            if (in_array($folder->folder_type, [Folder::TYPE_CLIENT, Folder::TYPE_STAFF], true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

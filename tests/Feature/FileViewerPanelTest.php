@@ -183,6 +183,50 @@ class FileViewerPanelTest extends TestCase
         $this->assertSame(['assigned@example.com'], array_column($team['members'], 'email'));
     }
 
+    /**
+     * The face stack: five real pictures then "+N", de-duplicated across
+     * sources, with a head-count that reflects the widest source rather than
+     * however many faces happened to be previewed.
+     */
+    public function test_the_shared_with_stack_shows_faces_and_a_plus_count(): void
+    {
+        $admin = $this->user('Administrator', 'admin@example.com');
+        for ($i = 1; $i <= 9; $i++) {
+            $this->user('Employee', "staff{$i}@example.com");
+        }
+
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Policies',
+            'owner_id' => $admin->id, 'created_by' => $admin->id,
+            'folder_type' => Folder::TYPE_ORGANIZATION, 'audience' => 'all_staff',
+            'audience_role' => 'viewer',
+        ]);
+        $file = $this->file($admin, $folder);
+
+        $res = $this->actingAs($admin)->getJson("/portal/files/files/{$file->uuid}/access")->assertOk();
+
+        $shared = $res->json('shared');
+        $this->assertCount(5, $shared['faces'], 'exactly five faces before the +N');
+        $this->assertSame(10, $shared['total'], '1 admin + 9 employees');
+        $this->assertSame(5, $shared['extra'], 'the +N covers the rest');
+        // By default an organization file is shared with the whole firm, and
+        // the summary says so rather than listing ten names.
+        $this->assertStringContainsString('Everyone in', $shared['summary']);
+    }
+
+    public function test_the_stack_does_not_show_the_same_person_twice(): void
+    {
+        // An administrator is both the owner AND in the Administrators source.
+        $admin = $this->user('Administrator', 'admin@example.com');
+        $file = $this->file($admin);
+
+        $res = $this->actingAs($admin)->getJson("/portal/files/files/{$file->uuid}/access")->assertOk();
+
+        $emails = array_column($res->json('shared.all'), 'email');
+        $this->assertSame(array_unique($emails), $emails, 'one face per person');
+        $this->assertSame('Only you', $res->json('shared.summary'));
+    }
+
     public function test_access_lists_specific_people_and_links_separately(): void
     {
         $owner = $this->user('Administrator', 'owner@example.com');

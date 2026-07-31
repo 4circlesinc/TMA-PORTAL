@@ -50,6 +50,27 @@ class FileLibrarySetting extends Model
         return array_values(array_filter(array_map('trim', is_array($names) ? $names : [])));
     }
 
+    /**
+     * Whether an ordinary file is visible to the whole organization by default.
+     *
+     * On by default: the firm's shared library is meant to be shared, and
+     * making every upload private-until-shared is what drives people back to
+     * email. Client folders and personal staff folders are NEVER covered by
+     * this — see FileAccess::organizationDefaultRole for exactly what it skips.
+     */
+    public static function defaultOrgAccess(): bool
+    {
+        return (bool) (self::current()['defaultOrgAccess'] ?? true);
+    }
+
+    /** What that default grants: viewer, downloader or editor. */
+    public static function defaultOrgRole(): string
+    {
+        $role = self::current()['defaultOrgRole'] ?? 'downloader';
+
+        return in_array($role, ['viewer', 'downloader', 'editor'], true) ? $role : 'downloader';
+    }
+
     public static function autoCreateStaffFolder(): bool
     {
         return (bool) (self::current()['autoCreateStaffFolder'] ?? false);

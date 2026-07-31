@@ -2424,7 +2424,11 @@
       var sources = (data && data.sources) || [];
       if (!sources.length) return '<p class="tma-portal-viewer__empty">Only you can see this file.</p>';
 
-      var html = sources.map(function (s) {
+      // Lead with the faces: "who can see this?" answered in one glance, with
+      // the grouped sources below answering "and why?".
+      var html = sharedStackHtml(data.shared);
+
+      html += sources.map(function (s) {
         var open = !!e.expanded[s.key];
         var faces = (s.members || []).slice(0, 5).map(function (m) {
           return '<img class="tma-portal-viewer__avatar tma-portal-viewer__avatar--stack" src="' + esc(avatarFor(m)) +
@@ -2455,6 +2459,65 @@
       }).join('');
 
       return html;
+    }
+
+    /**
+     * The shared-with face stack: up to five real profile pictures, then a
+     * "+N" circle. Clicking anywhere on it opens the full list.
+     */
+    function sharedStackHtml(shared) {
+      if (!shared || !shared.total) return '';
+
+      var faces = (shared.faces || []).map(function (p) {
+        return '<img class="tma-portal-viewer__avatar tma-portal-viewer__avatar--stack" ' +
+          'src="' + esc(avatarFor(p)) + '" alt="" width="30" height="30" ' +
+          'title="' + esc([p.name, p.email, p.role, p.via].filter(Boolean).join(' · ')) + '">';
+      }).join('');
+
+      var extra = shared.extra > 0
+        ? '<span class="tma-portal-viewer__avatar-more tma-portal-viewer__avatar-more--lg">+' + shared.extra + '</span>'
+        : '';
+
+      return '<div class="tma-portal-viewer__shared">' +
+        '<button type="button" class="tma-portal-viewer__shared-stack" data-lb-shared-open ' +
+          'aria-label="Shared with ' + shared.total + ' people">' + faces + extra + '</button>' +
+        '<div class="tma-portal-viewer__shared-text">' +
+          '<strong>Shared with</strong>' +
+          '<span class="tma-portal-viewer__source-detail">' + esc(shared.summary) + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function openSharedList() {
+      var e = entry(current());
+      var shared = e.access && e.access.shared;
+      var people = (shared && shared.all) || [];
+
+      if (!people.length) { ui().toast('Nobody else has access yet'); return; }
+
+      // When access comes from a rule rather than a list — everyone on staff,
+      // the client team — say so, and be honest that the faces are a sample
+      // rather than pretending the list is complete.
+      var note = shared.total > people.length
+        ? '<p class="tma-portal-viewer__empty">' + esc(shared.summary) + ' — showing ' +
+          people.length + ' of ' + shared.total + '.</p>'
+        : '<p class="tma-portal-viewer__empty">' + esc(shared.summary) + '</p>';
+
+      var host = ui().openModal({
+        title: 'Shared with',
+        body: note + '<div class="tma-portal-viewer__source-members">' +
+          people.map(function (p) {
+            return '<div class="tma-portal-viewer__member">' +
+              '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(p)) + '" alt="" width="28" height="28">' +
+              '<span class="tma-portal-viewer__member-text">' +
+                '<strong>' + esc(p.name || p.email) + '</strong>' +
+                '<span class="tma-portal-viewer__member-email">' + esc(p.email || '') + '</span>' +
+              '</span>' +
+              '<span class="tma-portal-viewer__member-role">' + esc(p.role || p.via || '') + '</span>' +
+            '</div>';
+          }).join('') + '</div>',
+      });
+      if (lb && host) host.style.zIndex = '700';
     }
 
     function memberRow(m) {
@@ -2615,6 +2678,7 @@
         return;
       }
 
+      if (e.target.closest('[data-lb-shared-open]')) { openSharedList(); return; }
       if (e.target.closest('[data-lb-presence-open]')) { openPresenceList(); return; }
       if (e.target.closest('[data-lb-close]')) { closeLightbox(); return; }
 

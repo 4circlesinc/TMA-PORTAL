@@ -7,6 +7,7 @@ use App\Models\ClientAssignment;
 use App\Models\CompanyMember;
 use App\Models\CompanyStaffAssignment;
 use App\Models\FileItem;
+use App\Models\FileLibrarySetting;
 use App\Models\Folder;
 use App\Models\Share;
 use App\Models\User;
@@ -62,7 +63,49 @@ class FileAccess
             $roles[] = self::systemFolderRole($user, $folder);
         }
 
+        $roles[] = self::organizationDefaultRole($user, $file);
+
         return self::highest(array_filter($roles));
+    }
+
+    /**
+     * The firm-wide default: ordinary files are visible to everyone on staff.
+     *
+     * The library is meant to be shared, and making every upload private until
+     * somebody remembers to share it is what pushes documents back into email.
+     * Administrators can turn this off in File Library settings.
+     *
+     * Three kinds of file are deliberately EXCLUDED, and this is the part that
+     * matters — getting it wrong would expose confidential material to the
+     * whole firm:
+     *
+     *  - **Clients are never covered.** `isStaff` excludes them, so this can
+     *    never widen what a client sees.
+     *  - **Anything under a client folder** stays limited to that client's
+     *    assigned team. A client's contracts are not firm-wide reading.
+     *  - **Anything under a personal staff folder** stays private to its owner.
+     *
+     * A file in the File Box (no folder at all) is also skipped: an unfiled
+     * upload is a draft, not a published document.
+     */
+    private static function organizationDefaultRole(User $user, FileItem $file): ?string
+    {
+        if (! self::isStaff($user) || ! FileLibrarySetting::defaultOrgAccess()) {
+            return null;
+        }
+
+        // Unfiled uploads are drafts; they stay with their owner.
+        if ($file->folder_id === null) {
+            return null;
+        }
+
+        foreach (self::chainFolders($file->folder_id) as $folder) {
+            if (in_array($folder->folder_type, [Folder::TYPE_CLIENT, Folder::TYPE_STAFF], true)) {
+                return null;
+            }
+        }
+
+        return FileLibrarySetting::defaultOrgRole();
     }
 
     /** Effective role a user holds over a folder (null = no access). */
