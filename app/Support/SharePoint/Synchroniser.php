@@ -55,7 +55,7 @@ class Synchroniser
             // Inbound writes must never bounce back out as outbound pushes.
             Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats) {
             for ($page = 0; $page < self::MAX_PAGES; $page++) {
-                $batch = Drive::delta($connection->drive_id, $link);
+                $batch = Drive::delta($connection->drive_id, $link, $connection->root_item_id);
                 $stats['pages']++;
 
                 foreach ($batch['items'] as $item) {
@@ -170,8 +170,9 @@ class Synchroniser
         }
 
         // The drive root arrives in delta but is not content — it is the
-        // library itself, already represented by the connection's folder.
-        if (isset($item['root'])) {
+        // library itself, already represented by the connection's folder. The
+        // same is true of the folder a scoped connection starts from.
+        if (isset($item['root']) || $graphId === $connection->root_item_id) {
             return;
         }
 
@@ -350,7 +351,7 @@ class Synchroniser
     private static function resolveParentFolder(SharePointConnection $connection, array $item): ?Folder
     {
         $parentId = $item['parentReference']['id'] ?? null;
-        if (! $parentId) {
+        if (! $parentId || $parentId === $connection->root_item_id) {
             return $connection->folder;
         }
 

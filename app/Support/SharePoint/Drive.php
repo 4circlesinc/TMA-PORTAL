@@ -33,11 +33,17 @@ class Drive
      *
      * @return array{items: array<int, array>, next: ?string, delta: ?string}
      */
-    public static function delta(string $driveId, ?string $link = null): array
+    public static function delta(string $driveId, ?string $link = null, ?string $rootItemId = null): array
     {
+        // Delta works against any folder, which is what lets a connection sync
+        // one folder of a personal OneDrive instead of the whole drive.
+        $start = $rootItemId
+            ? "/drives/{$driveId}/items/{$rootItemId}/delta"
+            : "/drives/{$driveId}/root/delta";
+
         $response = $link
             ? GraphClient::get($link)
-            : GraphClient::get("/drives/{$driveId}/root/delta", ['$top' => self::PAGE]);
+            : GraphClient::get($start, ['$top' => self::PAGE]);
 
         return [
             'items' => $response['value'] ?? [],
