@@ -150,6 +150,8 @@
   /* ── data loading ──────────────────────────────────── */
 
   function load(silent) {
+    // Status is cheap and answers "where are my files?" before anyone asks.
+    if (!silent) loadSyncStatus();
     if (!silent) {
       state.loading = true;
       render();
@@ -360,6 +362,7 @@
       '<div><h2 class="tma-portal-page__title">' + esc(meta.title) + '</h2></div></div>';
 
     html += renderBreadcrumb();
+    html += '<div data-sync-host>' + syncStatusHtml() + '</div>';
     html += renderToolbar();
 
     html += '<div class="tma-portal-files__body" data-files-body>';
@@ -665,6 +668,7 @@
   }
 
   function onClick(e) {
+    if (e.target.closest('[data-sync-retry]')) { retrySync(); return; }
     var actionEl = e.target.closest('[data-files-action]');
     if (actionEl && !actionEl.disabled) { e.preventDefault(); handleAction(actionEl.getAttribute('data-files-action')); return; }
 
@@ -940,6 +944,93 @@
   }
 
   function clearSelection() { state.selected = {}; render(); }
+
+  /* ── library sync status ─────────────────────────────
+   *
+   * The mailbox shows whether it is syncing; the File Library did not, so an
+   * import in progress was indistinguishable from missing files. This renders
+   * a small strip above the list and polls only while something is happening.
+   */
+
+  var syncState = null;
+  var syncTimer = null;
+
+  function loadSyncStatus() {
+    net().fetchJSON(net().url('/sync-status'))
+      .then(function (data) {
+        var wasBusy = syncState && syncState.syncing;
+        syncState = data;
+        paintSyncStatus();
+
+        // Poll while syncing, then stop. A finished import refreshes the list
+        // once so the newly imported files appear without a manual reload.
+        if (data.syncing) {
+          if (!syncTimer) syncTimer = setInterval(loadSyncStatus, 5000);
+        } else {
+          if (syncTimer) { clearInterval(syncTimer); syncTimer = null; }
+          if (wasBusy) load(true);
+        }
+      })
+      .catch(function () { /* never worth an error toast */ });
+  }
+
+  function syncStatusHtml() {
+    var d = syncState;
+    if (!d || !d.connections || !d.connections.length) return '';
+
+    var busy = d.connections.filter(function (c) { return c.status === 'syncing'; });
+    var failed = d.connections.filter(function (c) { return c.status === 'error' || c.failedItems > 0; });
+
+    if (busy.length) {
+      var c = busy[0];
+      return '<div class="tma-portal-sync tma-portal-sync--busy" data-sync-strip>' +
+        '<span class="tma-portal-sync__spinner"></span>' +
+        '<span>' + esc(c.initialImport ? 'Importing ' + c.name + '…' : 'Syncing ' + c.name + '…') +
+        (c.items ? ' <b>' + c.items + '</b> items so far' : '') + '</span>' +
+      '</div>';
+    }
+
+    if (failed.length) {
+      var f = failed[0];
+      return '<div class="tma-portal-sync tma-portal-sync--error" data-sync-strip>' +
+        '<img src="images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16">' +
+        '<span>' + esc(f.name) + ' — ' +
+          esc(f.lastError ? 'sync failed' : f.failedItems + ' item(s) could not sync') + '</span>' +
+        (isAdminUser() ? '<button type="button" class="tma-portal-sync__btn" data-sync-retry>Retry</button>' : '') +
+      '</div>';
+    }
+
+    // Quiet, and only worth a line when there is something connected.
+    var newest = d.connections.filter(function (c) { return c.lastSuccessAt; })
+      .sort(function (a, b) { return new Date(b.lastSuccessAt) - new Date(a.lastSuccessAt); })[0];
+    if (!newest) return '';
+
+    return '<div class="tma-portal-sync" data-sync-strip>' +
+      '<img src="images/icons/phosphor/CloudCheck.svg" alt="" width="16" height="16">' +
+      '<span>' + esc(newest.name) + ' synced ' + esc(relativeTime(newest.lastSuccessAt)) + '</span>' +
+      (d.conflicts ? '<span class="tma-portal-sync__flag">' + d.conflicts + ' conflict(s)</span>' : '') +
+    '</div>';
+  }
+
+  function paintSyncStatus() {
+    if (!state.el) return;
+    var host = state.el.querySelector('[data-sync-host]');
+    if (host) host.innerHTML = syncStatusHtml();
+  }
+
+  function relativeTime(iso) {
+    var secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (secs < 60) return 'just now';
+    if (secs < 3600) return Math.round(secs / 60) + ' min ago';
+    if (secs < 86400) return Math.round(secs / 3600) + 'h ago';
+    return Math.round(secs / 86400) + 'd ago';
+  }
+
+  function retrySync() {
+    net().fetchJSON(net().url('/sync-status/retry'), { method: 'POST', json: {} })
+      .then(function () { ui().toast('Sync queued'); loadSyncStatus(); })
+      .catch(function (err) { ui().toast((err && err.message) || 'Could not start a sync'); });
+  }
 
   /* ── navigation ─────────────────────────────────────── */
 

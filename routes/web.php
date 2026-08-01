@@ -48,6 +48,7 @@ use App\Http\Controllers\Files\PublicShareController;
 use App\Http\Controllers\Files\RecycleBinController;
 use App\Http\Controllers\Files\ShareController;
 use App\Http\Controllers\Files\ShortcutController;
+use App\Http\Controllers\Files\SyncStatusController;
 use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
 use App\Http\Controllers\GettingStartedController;
@@ -295,6 +296,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/uploads/{uuid}/status', [UploadController::class, 'status'])->name('uploads.status');
         Route::post('/uploads/{uuid}/complete', [UploadController::class, 'complete'])->name('uploads.complete');
         Route::delete('/uploads/{uuid}', [UploadController::class, 'abort'])->name('uploads.abort');
+
+        // Library sync state, so "where are my files?" has a visible answer.
+        Route::get('/sync-status', SyncStatusController::class)->name('sync-status');
+        Route::post('/sync-status/retry', [SyncStatusController::class, 'retry'])->name('sync-status.retry');
 
         Route::get('/shortcuts', [ShortcutController::class, 'index'])->name('shortcuts.index');
         Route::post('/shortcuts', [ShortcutController::class, 'store'])->name('shortcuts.store');

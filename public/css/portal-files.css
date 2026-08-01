@@ -811,6 +811,32 @@
 .tma-portal-lightbox__nav--next { right: var(--space-16); }
 .tma-portal-lightbox__foot { position: relative; z-index: 2; text-align: center; color: rgba(255, 255, 255, 0.75); font-size: var(--text-size-12); padding: 0 0 var(--space-16); }
 
+/* ── library sync strip ────────────────────────────── */
+.tma-portal-sync {
+  display: flex; align-items: center; gap: var(--space-8);
+  margin-top: var(--space-10); padding: var(--space-6) var(--space-10);
+  border-radius: var(--radius-8); background: var(--color-hover);
+  font-size: var(--text-size-13); color: var(--color-text-secondary);
+}
+.tma-portal-sync b { color: var(--color-text-primary); }
+.tma-portal-sync--busy { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.tma-portal-sync--error { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
+.tma-portal-sync__spinner {
+  width: 14px; height: 14px; flex: 0 0 auto; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-top-color: var(--color-primary);
+  animation: tma-files-spin 0.8s linear infinite;
+}
+.tma-portal-sync__btn {
+  margin-left: auto; padding: 2px var(--space-10);
+  border: 1px solid currentColor; border-radius: var(--radius-pill);
+  background: transparent; color: inherit; font-size: var(--text-size-12); cursor: pointer;
+}
+.tma-portal-sync__flag {
+  margin-left: auto; padding: 1px var(--space-8); border-radius: 999px;
+  background: color-mix(in srgb, #f59e0b 22%, transparent); color: #b45309; font-size: 11px;
+}
+
 /* ── full-window drag-and-drop upload overlay ──────── */
 .tma-portal-dropzone {
   position: fixed; inset: 0; z-index: 550;
