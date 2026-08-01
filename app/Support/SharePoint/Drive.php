@@ -71,7 +71,10 @@ class Drive
             throw new GraphException('Microsoft Graph is not configured.');
         }
 
+        // A download can legitimately take a while, but never forever.
         $response = Http::withToken($token)
+            ->connectTimeout(15)
+            ->timeout(600)
             ->withOptions(['stream' => true])
             ->get("https://graph.microsoft.com/v1.0/drives/{$driveId}/items/{$itemId}/content");
 
@@ -89,8 +92,26 @@ class Drive
 
         try {
             $body = $response->toPsrResponse()->getBody();
+            $idle = 0;
+
             while (! $body->eof()) {
-                fwrite($out, $body->read(1024 * 512));
+                $chunk = $body->read(1024 * 512);
+
+                // eof() can stay false while read() returns nothing on a
+                // stalled connection, which spins this loop for ever. Give up
+                // after a run of empty reads rather than hang the sync.
+                if ($chunk === '') {
+                    if (++$idle > 50) {
+                        throw new GraphException('Download stalled for item '.$itemId);
+                    }
+
+                    usleep(100_000);
+
+                    continue;
+                }
+
+                $idle = 0;
+                fwrite($out, $chunk);
             }
         } finally {
             fclose($out);
@@ -121,6 +142,8 @@ class Drive
         $path = "/drives/{$driveId}/items/{$parentItemId}:/".rawurlencode($name).':/content';
 
         $response = Http::withToken($token)
+            ->connectTimeout(15)
+            ->timeout(300)
             ->withBody(file_get_contents($sourcePath), 'application/octet-stream')
             ->put('https://graph.microsoft.com/v1.0'.$path);
 
@@ -169,7 +192,8 @@ class Drive
                 $response = Http::withHeaders([
                     'Content-Length' => (string) $length,
                     'Content-Range' => "bytes {$offset}-{$end}/{$size}",
-                ])->withBody($bytes, 'application/octet-stream')->put($url);
+                ])->connectTimeout(15)->timeout(300)
+                    ->withBody($bytes, 'application/octet-stream')->put($url);
 
                 if (! in_array($response->status(), [200, 201, 202], true)) {
                     throw new GraphException(

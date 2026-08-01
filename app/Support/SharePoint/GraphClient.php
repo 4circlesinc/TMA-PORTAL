@@ -45,7 +45,7 @@ class GraphClient
         return Cache::remember(self::TOKEN_CACHE_KEY, now()->addMinutes(50), function () {
             $tenant = config('services.microsoft.graph_tenant_id');
 
-            $response = Http::asForm()->post(
+            $response = Http::asForm()->connectTimeout(10)->timeout(30)->post(
                 "https://login.microsoftonline.com/{$tenant}/oauth2/v2.0/token",
                 [
                     'client_id' => config('services.microsoft.client_id'),
@@ -83,7 +83,14 @@ class GraphClient
 
         $url = str_starts_with($path, 'http') ? $path : self::BASE.$path;
 
-        $request = Http::withToken($token)->acceptJson();
+        // Timeouts are not optional here. Without them a stalled Graph
+        // response hangs the sync process for ever — observed on a real drive,
+        // where one request froze the whole import with no error and no
+        // progress. Better to fail an item and retry it than to wedge.
+        $request = Http::withToken($token)
+            ->connectTimeout(15)
+            ->timeout(120)
+            ->acceptJson();
 
         $response = $method === 'GET'
             ? $request->get($url, $query)

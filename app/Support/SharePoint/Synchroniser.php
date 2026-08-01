@@ -39,10 +39,36 @@ class Synchroniser
     /** Safety valve: pages per run, so one job cannot walk forever. */
     private const MAX_PAGES = 50;
 
+    /** How long a run may hold the lock before another may take over. */
+    private const LOCK_MINUTES = 30;
+
     public static function sync(SharePointConnection $connection): array
     {
         if (! $connection->sync_enabled) {
             return ['skipped' => true];
+        }
+
+        /*
+         * One run at a time per connection.
+         *
+         * Two concurrent runs share a delta cursor, so they process the same
+         * pages twice and race each other's writes — observed for real when a
+         * manual run overlapped the scheduled one.
+         *
+         * The lock is the status column plus a staleness window rather than a
+         * cache lock, because the failure that matters is a run that DIED
+         * mid-sync: that leaves `syncing` set for ever and would block the
+         * connection permanently. After the window, a new run takes over.
+         */
+        if ($connection->status === SharePointConnection::STATUS_SYNCING) {
+            $startedAt = $connection->last_synced_at;
+
+            if ($startedAt && $startedAt->gt(now()->subMinutes(self::LOCK_MINUTES))) {
+                return ['skipped' => true, 'reason' => 'already running'];
+            }
+
+            self::log($connection, 'lock-recovered', 'warning', null,
+                'A previous run did not finish; taking over.');
         }
 
         $connection->update(['status' => SharePointConnection::STATUS_SYNCING, 'last_synced_at' => now()]);
@@ -363,20 +389,30 @@ class Synchroniser
         return $mapping?->folder ?? $connection->folder;
     }
 
+    /**
+     * updateOrCreate, not create.
+     *
+     * The unique key on (connection, graph_item_id) is the anti-duplicate
+     * guarantee, and it did its job — but hitting it should not cost an item.
+     * The same id can legitimately reach here twice: an item can appear in two
+     * delta pages, and re-scoping a connection replays ids that are already
+     * mapped. Writing idempotently makes the second arrival a no-op instead of
+     * a constraint violation.
+     */
     private static function mapFile(SharePointConnection $connection, array $item, FileItem $file): SharePointItem
     {
-        return SharePointItem::create(self::mappingAttributes($connection, $item) + [
-            'item_type' => 'file',
-            'file_id' => $file->id,
-        ]);
+        return SharePointItem::updateOrCreate(
+            ['connection_id' => $connection->id, 'graph_item_id' => $item['id']],
+            self::mappingAttributes($connection, $item) + ['item_type' => 'file', 'file_id' => $file->id],
+        );
     }
 
     private static function mapFolder(SharePointConnection $connection, array $item, Folder $folder): SharePointItem
     {
-        return SharePointItem::create(self::mappingAttributes($connection, $item) + [
-            'item_type' => 'folder',
-            'folder_id' => $folder->id,
-        ]);
+        return SharePointItem::updateOrCreate(
+            ['connection_id' => $connection->id, 'graph_item_id' => $item['id']],
+            self::mappingAttributes($connection, $item) + ['item_type' => 'folder', 'folder_id' => $folder->id],
+        );
     }
 
     private static function mappingAttributes(SharePointConnection $connection, array $item): array

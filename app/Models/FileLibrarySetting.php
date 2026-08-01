@@ -21,7 +21,16 @@ class FileLibrarySetting extends Model
     }
 
     private const DEFAULTS = [
-        'clientSubfolders' => ['Documents', 'Contracts', 'Invoices', 'Signed Documents'],
+        /*
+         * No subfolders are created inside a new client's folder.
+         *
+         * This used to seed Documents / Contracts / Invoices / Signed
+         * Documents. The firm chose against it (2026-08-01): a scaffold of
+         * empty folders on every client is clutter to scroll past, and it
+         * quietly dictates how people file things. An administrator can add
+         * defaults back in Account settings → Default Folders.
+         */
+        'clientSubfolders' => [],
         'autoCreateStaffFolder' => false,
     ];
 

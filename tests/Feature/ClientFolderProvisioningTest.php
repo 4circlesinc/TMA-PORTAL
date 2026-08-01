@@ -38,7 +38,7 @@ class ClientFolderProvisioningTest extends TestCase
         ];
     }
 
-    public function test_creating_a_client_provisions_a_linked_folder_with_default_subfolders(): void
+    public function test_creating_a_client_provisions_a_linked_folder_with_no_subfolders(): void
     {
         $admin = $this->user('Administrator');
 
@@ -56,11 +56,9 @@ class ClientFolderProvisioningTest extends TestCase
         // Lives under the "Client Files" root.
         $this->assertSame(FolderProvisioner::ROOT_CLIENTS, $folder->parent->name);
 
-        // Configured default subfolders were created.
-        $subs = Folder::where('parent_id', $folder->id)->pluck('name')->all();
-        foreach (['Documents', 'Contracts', 'Invoices', 'Signed Documents'] as $expected) {
-            $this->assertContains($expected, $subs);
-        }
+        // No scaffold of empty folders: the firm turned that off, so a new
+        // client folder starts bare and people file things where they like.
+        $this->assertSame([], Folder::where('parent_id', $folder->id)->pluck('name')->all());
     }
 
     public function test_configured_default_subfolders_are_honoured(): void
@@ -94,6 +92,19 @@ class ClientFolderProvisioningTest extends TestCase
         $this->assertSame('Vernon A. Francis', Folder::find($folderId)->name, 'visible name follows the client');
     }
 
+    public function test_configured_subfolders_are_still_created_when_an_admin_sets_them(): void
+    {
+        \App\Models\FileLibrarySetting::put(['clientSubfolders' => ['Contracts', 'Invoices']]);
+
+        $admin = $this->user('Administrator');
+        $this->actingAs($admin)->postJson('/portal/clients', $this->payload('acme-co', 'Acme Co'))->assertOk();
+
+        $client = Client::where('uid', 'acme-co')->first();
+        $subs = Folder::where('parent_id', $client->folder_id)->pluck('name')->all();
+
+        $this->assertEqualsCanonicalizing(['Contracts', 'Invoices'], $subs);
+    }
+
     public function test_assigned_staff_get_folder_access_at_the_configured_level_and_others_do_not(): void
     {
         $admin = $this->user('Administrator');
@@ -103,7 +114,12 @@ class ClientFolderProvisioningTest extends TestCase
         $this->actingAs($admin)->postJson('/portal/clients', $this->payload('vernon-francis', 'Vernon Francis'))->assertOk();
         $client = Client::where('uid', 'vernon-francis')->first();
         $folder = Folder::find($client->folder_id);
-        $sub = Folder::where('parent_id', $folder->id)->first();
+        // Client folders start bare now, so this test makes the subfolder it
+        // needs rather than relying on a scaffold that no longer exists.
+        $sub = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Matter A', 'parent_id' => $folder->id,
+            'owner_id' => $admin->id, 'created_by' => $admin->id,
+        ]);
 
         $this->actingAs($admin)->postJson('/portal/clients/vernon-francis/assignments', [
             'userId' => $assigned->id, 'level' => 'editor',
@@ -132,8 +148,15 @@ class ClientFolderProvisioningTest extends TestCase
         $client->forceFill(['user_id' => $clientUser->id])->save();
 
         $folder = Folder::find($client->folder_id);
-        $subs = Folder::where('parent_id', $folder->id)->get();
-        $shared = $subs->first();
+        // Two subfolders of our own: one to share, one that must stay hidden.
+        $shared = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Shared With Client', 'parent_id' => $folder->id,
+            'owner_id' => $admin->id, 'created_by' => $admin->id,
+        ]);
+        $private = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Internal Only', 'parent_id' => $folder->id,
+            'owner_id' => $admin->id, 'created_by' => $admin->id,
+        ]);
 
         // No automatic access to their own client folder.
         $this->assertFalse(FileAccess::can($clientUser->fresh(), 'view', $folder));
@@ -147,7 +170,7 @@ class ClientFolderProvisioningTest extends TestCase
 
         $this->assertTrue(FileAccess::can($clientUser->fresh(), 'view', $shared));
         // Sibling folders stay invisible.
-        $this->assertFalse(FileAccess::can($clientUser->fresh(), 'view', $subs->last()));
+        $this->assertFalse(FileAccess::can($clientUser->fresh(), 'view', $private));
     }
 
     public function test_organization_folder_reaches_all_staff_but_never_clients(): void

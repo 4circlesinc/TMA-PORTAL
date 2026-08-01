@@ -22,13 +22,15 @@ class FileLibrarySettingsTest extends TestCase
         ]);
     }
 
-    public function test_admin_sees_settings_with_default_subfolders_and_org_folders(): void
+    public function test_admin_sees_settings_with_no_default_subfolders_and_org_folders(): void
     {
         $admin = $this->user('Administrator');
 
         $this->actingAs($admin)->getJson('/portal/file-library/settings')
             ->assertOk()
-            ->assertJsonPath('settings.clientSubfolders', ['Documents', 'Contracts', 'Invoices', 'Signed Documents'])
+            // The firm turned the client-subfolder scaffold off, so the
+            // settings screen reports none rather than stale defaults.
+            ->assertJsonPath('settings.clientSubfolders', [])
             ->assertJsonPath('settings.autoCreateStaffFolder', false)
             ->assertJsonPath('organizationFolders', []);
     }
