@@ -2,9 +2,9 @@
  * Preferences that belong to the app rather than the account.
  *
  * Everything the portal knows about a person already syncs server-side through
- * /me/preferences. These three are different: they are about this Mac — whether
- * the app launches with it, whether closing the window leaves it running, and
- * whether a call rings in its own window. They stay local.
+ * /me/preferences. These three are different: they are about this machine —
+ * whether the app launches with it, whether closing the window leaves it
+ * running, and whether a call rings in its own window. They stay local.
  */
 const { app } = require('electron');
 const path = require('node:path');

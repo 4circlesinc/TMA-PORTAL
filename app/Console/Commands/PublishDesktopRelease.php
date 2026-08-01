@@ -6,14 +6,20 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Uploads a built macOS release to object storage, where DesktopUpdateController
- * serves it from. Run after `npm run dist` in desktop/:
+ * Uploads a built desktop release to object storage, where
+ * DesktopUpdateController serves it from. Run after a build in desktop/:
  *
+ *   npm run release      # macOS  → latest-mac.yml
+ *   npm run release:win  # Windows → latest.yml
  *   php artisan desktop:publish
  *
- * latest-mac.yml goes last, on purpose: it is what tells every installed app
- * that a new version exists, so it must not point at a build that is still
+ * Manifests go last, on purpose: they are what tell every installed app that a
+ * new version exists, so they must not point at a build that is still
  * uploading.
+ *
+ * Both platforms share one bucket prefix and one command. Whichever manifests
+ * are present get published, so building only one platform leaves the other's
+ * release alone rather than retracting it.
  */
 class PublishDesktopRelease extends Command
 {
@@ -34,18 +40,21 @@ class PublishDesktopRelease extends Command
             return self::FAILURE;
         }
 
-        $manifest = $dir.'/latest-mac.yml';
+        $manifests = collect(['latest-mac.yml', 'latest.yml'])
+            ->map(fn (string $name) => $dir.'/'.$name)
+            ->filter(fn (string $f) => is_file($f))
+            ->values();
 
-        if (! is_file($manifest)) {
-            $this->error('latest-mac.yml is missing — that build was made without a publish config.');
+        if ($manifests->isEmpty()) {
+            $this->error('No latest-mac.yml or latest.yml — that build was made without a publish config.');
 
             return self::FAILURE;
         }
 
-        // Everything the updater may ask for, manifest last.
-        $files = collect(glob($dir.'/*.{zip,dmg,pkg,blockmap}', GLOB_BRACE))
+        // Everything the updater may ask for, manifests last.
+        $files = collect(glob($dir.'/*.{zip,dmg,pkg,exe,blockmap}', GLOB_BRACE))
             ->filter(fn (string $f) => is_file($f))
-            ->push($manifest)
+            ->merge($manifests)
             ->values();
 
         if ($this->option('dry-run')) {

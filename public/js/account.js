@@ -152,6 +152,25 @@
   ];
   var desktopReleasesPromise = null;
 
+  /*
+   * What the OS will say the first time the app is opened, and how to get past
+   * it. Both builds are unsigned, so both platforms object — but they object
+   * differently and the ways through share nothing, so guessing wrong is worse
+   * than saying nothing. Not "right-click → Open" on the Mac: macOS 15 removed
+   * that bypass for unsigned apps, leaving Privacy & Security as the only route.
+   */
+  function firstLaunchHint() {
+    var ua = navigator.userAgent || '';
+
+    if (/Windows/i.test(ua)) {
+      return 'Windows warns on first launch — choose More info, then Run anyway.';
+    }
+    if (/Mac OS X|Macintosh/i.test(ua)) {
+      return 'macOS blocks the first launch — allow it in System Settings → Privacy & Security.';
+    }
+    return 'Your computer may block the first launch — allow the app and open it again.';
+  }
+
   function desktopReleases() {
     if (!desktopReleasesPromise) {
       desktopReleasesPromise = fetch(ROOT + '/desktop/releases', {
@@ -196,7 +215,8 @@
     });
 
     var note = (root || document).querySelector('[data-desktop-note]');
-    if (note) note.hidden = !(data && data.mac && data.mac.available);
+    var anyBuild = !!(data && ((data.mac && data.mac.available) || (data.windows && data.windows.available)));
+    if (note) note.hidden = !anyBuild;
   }
 
   function mountPromo(root) {
@@ -224,13 +244,11 @@
       '<div class="tma-dash__account-promo-actions">' +
       DESKTOP_PLATFORMS.map(renderDownloadBtn).join('') +
       '</div>' +
-      // The build carries no Developer ID yet, so macOS blocks the first launch
-      // and offers no obvious way through. Without this line that warning reads
-      // as a broken download, and people bin the app instead of opening it.
-      // Not "right-click → Open": macOS 15 removed that bypass for unsigned
-      // apps, and Privacy & Security is the only route left on 15 and later.
+      // Neither build is code-signed yet, so both operating systems block the
+      // first launch. Without this line that warning reads as a broken
+      // download, and people bin the app instead of opening it.
       '<p class="tma-dash__account-promo-note" data-desktop-note hidden>' +
-      'macOS blocks the first launch — allow it in System Settings → Privacy &amp; Security.</p>' +
+      esc(firstLaunchHint()) + '</p>' +
       '</div>' +
       '<img class="tma-dash__account-promo-art" src="' + ILLUSTRATIONS + 'Illustration18.svg" alt="" width="100" height="75" decoding="async">' +
       '</section>';

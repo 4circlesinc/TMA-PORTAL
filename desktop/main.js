@@ -10,6 +10,7 @@ const HOST_BRIDGE = require('./host-bridge');
 const updater = require('./updater');
 const { installCloseToBackground } = require('./window-policy');
 const callWindow = require('./call-window');
+const tray = require('./tray');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
@@ -21,6 +22,8 @@ const PORTAL_URL = process.env.TMA_PORTAL_URL || 'https://portal.tmantoinelaw.co
 const PORTAL_ORIGIN = new URL(PORTAL_URL).origin;
 
 const PROTOCOL = 'tmaportal';
+
+const IS_MAC = process.platform === 'darwin';
 
 // Identity providers, for the one flow that still runs in-app: connecting a
 // mailbox or calendar from Settings, where the session already belongs to a
@@ -100,6 +103,9 @@ function createWindow() {
     show: false,
     backgroundColor: '#ffffff',
     title: 'TM ANTOINE Portal',
+    // macOS takes the window icon from the bundle. Windows takes it from the
+    // exe once packaged, but an unpackaged run would show Electron's default.
+    ...(IS_MAC ? {} : { icon: path.join(__dirname, 'assets', 'icon.ico') }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -137,7 +143,13 @@ function revealWindow({ steal }) {
   if (mainWindow.isMinimized()) mainWindow.restore();
   if (steal) {
     mainWindow.show();
-    app.focus({ steal: true });
+    // `steal` is a macOS-only option; on Windows the window itself has to be
+    // focused, and a flashing taskbar button has to be told to stop.
+    if (IS_MAC) app.focus({ steal: true });
+    else {
+      mainWindow.flashFrame(false);
+      mainWindow.focus();
+    }
   } else if (!mainWindow.isVisible()) {
     // A ringing call should surface without yanking the keyboard away from
     // whatever the user is typing in another app.
@@ -223,7 +235,7 @@ function showLoadError(win, description, url) {
   const page = `
     <meta charset="utf-8">
     <style>
-      body { font: 15px/1.5 -apple-system, system-ui, sans-serif; color: #1c1c1c;
+      body { font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; color: #1c1c1c;
              display: grid; place-content: center; height: 100vh; margin: 0;
              text-align: center; gap: 12px; background: #fff; }
       h1 { font-size: 17px; margin: 0; }
@@ -320,11 +332,50 @@ function claimBrowserSession(deepLink) {
   loadPortal(mainWindow, url.toString());
 }
 
-/* ------------------------------------------------------------------ dock badge */
+/* ----------------------------------------------------------------- unread badge */
+
+/**
+ * Windows has no dock badge. `app.setBadgeCount` is macOS and Linux only and
+ * returns false here without doing anything, so the count is drawn as a
+ * taskbar overlay icon instead — the same convention Mail and Teams use.
+ */
+function taskbarOverlay(count) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  if (count <= 0) {
+    mainWindow.setOverlayIcon(null, '');
+    return;
+  }
+
+  const label = count > 99 ? '99+' : String(count);
+  const size = 32;
+  const font = label.length > 2 ? 13 : 18;
+
+  // An SVG data URL keeps this to one file with no extra image assets, and
+  // scales cleanly to whatever the taskbar asks for.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+    <circle cx="16" cy="16" r="15" fill="#d21c1c"/>
+    <text x="16" y="16" fill="#fff" font-family="Segoe UI, sans-serif" font-size="${font}"
+      font-weight="600" text-anchor="middle" dominant-baseline="central">${label}</text>
+  </svg>`;
+
+  const image = nativeImage.createFromDataURL(
+    `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
+  );
+
+  mainWindow.setOverlayIcon(image, `${label} unread`);
+}
 
 function applyBadge(count) {
   const n = Number.isFinite(count) && count > 0 ? Math.min(Math.round(count), 999) : 0;
-  app.setBadgeCount(n);
+
+  if (IS_MAC) {
+    app.setBadgeCount(n);
+    return;
+  }
+
+  taskbarOverlay(n);
+  tray.setTooltipCount(n);
 }
 
 /* ----------------------------------------------------------------------- calling
@@ -384,19 +435,24 @@ function applyCallPhase(phase) {
   if (phase === 'ringing') {
     ringPanel();
 
-    if (process.platform === 'darwin' && bounceId == null) {
+    if (IS_MAC && bounceId == null) {
       // 'critical' bounces until the app is activated — the whole point of a
       // ring you can hear from another Space.
       bounceId = app.dock.bounce('critical');
+    } else if (!IS_MAC && mainWindow && !mainWindow.isDestroyed()) {
+      // Windows has no dock to bounce; the taskbar button flashes instead, and
+      // keeps flashing until the window is brought forward.
+      mainWindow.flashFrame(true);
     }
   } else {
     // Answered elsewhere, cancelled, or over.
     callWindow.close();
 
     if (bounceId != null) {
-      if (process.platform === 'darwin') app.dock.cancelBounce(bounceId);
+      if (IS_MAC) app.dock.cancelBounce(bounceId);
       bounceId = null;
     }
+    if (!IS_MAC && mainWindow && !mainWindow.isDestroyed()) mainWindow.flashFrame(false);
   }
 
   const onCall = phase === 'ringing' || phase === 'active';
@@ -417,7 +473,7 @@ function applyCallPhase(phase) {
  * no device. Asked once; the answer is remembered by the OS.
  */
 async function ensureMediaAccess() {
-  if (process.platform !== 'darwin') return true;
+  if (!IS_MAC) return true;
 
   const granted = await Promise.all(['microphone', 'camera'].map(async (kind) => {
     if (systemPreferences.getMediaAccessStatus(kind) === 'granted') return true;
@@ -483,7 +539,7 @@ async function signOutOfThisDevice() {
     buttons: ['Cancel', 'Clear Session'],
     defaultId: 1,
     cancelId: 0,
-    message: 'Clear the saved session on this Mac?',
+    message: `Clear the saved session on this ${IS_MAC ? 'Mac' : 'PC'}?`,
     detail: 'You will be asked to sign in again the next time you open the app.',
   });
 
@@ -522,58 +578,88 @@ function toggle(label, key, detail) {
   };
 }
 
+/**
+ * The three app preferences, as a submenu. Lives under the app menu on macOS
+ * and under File on Windows, where there is no app menu to put it in.
+ */
+function appSettingsMenu() {
+  return {
+    label: 'Desktop App Settings',
+    submenu: [
+      toggle('Launch at Login', 'launchAtLogin',
+        `Start the portal when you log in to this ${IS_MAC ? 'Mac' : 'PC'}.`),
+      toggle('Keep Running When Window Closes', 'backgroundOnClose',
+        IS_MAC
+          ? 'Closing the window keeps messages and calls arriving. Off makes the red button quit.'
+          : 'Closing the window keeps messages and calls arriving in the notification area. Off makes the X quit.'),
+      toggle('Ring Calls in a Separate Window', 'ringPanel',
+        'Incoming calls appear in a small panel instead of opening the app.'),
+      { type: 'separator' },
+      { label: `Version ${APP_VERSION}`, enabled: false },
+      checkForUpdatesItem(),
+    ],
+  };
+}
+
 function buildMenu() {
-  const template = [
-    {
-      role: 'appMenu',
-      submenu: [
-        { role: 'about' },
-        checkForUpdatesItem(),
-        { type: 'separator' },
+  // `role: 'appMenu'` and everything under it — services, hide, hideOthers,
+  // unhide — exist only on macOS. Windows convention puts About and Quit at
+  // the bottom of File and settings alongside them, so the two platforms get
+  // genuinely different first menus rather than a Mac menu with holes in it.
+  const macAppMenu = {
+    role: 'appMenu',
+    submenu: [
+      { role: 'about' },
+      checkForUpdatesItem(),
+      { type: 'separator' },
+      {
+        // Named for what it opens. The submenu below is this app's own
+        // settings, and two items called "Settings" is one too many.
+        label: 'Portal Settings…',
+        accelerator: 'CmdOrCtrl+,',
+        click: () => go('/account-settings'),
+      },
+      appSettingsMenu(),
+      { type: 'separator' },
+      { role: 'services' },
+      { type: 'separator' },
+      { role: 'hide' },
+      { role: 'hideOthers' },
+      { role: 'unhide' },
+      { type: 'separator' },
+      { role: 'quit' },
+    ],
+  };
+
+  const fileMenu = {
+    label: 'File',
+    submenu: [
+      { label: 'New Message', accelerator: 'CmdOrCtrl+N', click: () => go('/social/messages') },
+      { label: 'New Event', accelerator: 'CmdOrCtrl+Shift+N', click: () => go('/calendar') },
+      { type: 'separator' },
+      { label: 'Open Portal in Browser', click: () => shell.openExternal(PORTAL_URL) },
+      { type: 'separator' },
+      { label: 'Sign Out of This Device', click: signOutOfThisDevice },
+      { type: 'separator' },
+      ...(IS_MAC ? [{ role: 'close' }] : [
         {
-          // Named for what it opens. The submenu below is this app's own
-          // settings, and two items called "Settings" is one too many.
-          label: 'Portal Settings…',
+          label: 'Portal Settings',
           accelerator: 'CmdOrCtrl+,',
           click: () => go('/account-settings'),
         },
-        {
-          label: 'Desktop App Settings',
-          submenu: [
-            toggle('Launch at Login', 'launchAtLogin',
-              'Start the portal when you log in to this Mac.'),
-            toggle('Keep Running When Window Closes', 'backgroundOnClose',
-              'Closing the window keeps messages and calls arriving. Off makes the red button quit.'),
-            toggle('Ring Calls in a Separate Window', 'ringPanel',
-              'Incoming calls appear in a small panel instead of opening the app.'),
-            { type: 'separator' },
-            { label: `Version ${APP_VERSION}`, enabled: false },
-            checkForUpdatesItem(),
-          ],
-        },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
-    },
-    {
-      label: 'File',
-      submenu: [
-        { label: 'New Message', accelerator: 'CmdOrCtrl+N', click: () => go('/social/messages') },
-        { label: 'New Event', accelerator: 'CmdOrCtrl+Shift+N', click: () => go('/calendar') },
-        { type: 'separator' },
-        { label: 'Open Portal in Browser', click: () => shell.openExternal(PORTAL_URL) },
-        { type: 'separator' },
-        { label: 'Sign Out of This Device', click: signOutOfThisDevice },
+        appSettingsMenu(),
         { type: 'separator' },
         { role: 'close' },
-      ],
-    },
+        // Quit, not close: on Windows closing the window backgrounds the app,
+        // so this is the only menu item that actually ends it.
+        { label: 'Exit', accelerator: 'Alt+F4', click: () => app.quit() },
+      ]),
+    ],
+  };
+
+  const template = [
+    ...(IS_MAC ? [macAppMenu] : []),
+    fileMenu,
     { role: 'editMenu' },
     {
       label: 'Go',
@@ -616,14 +702,15 @@ function buildMenu() {
       role: 'windowMenu',
       submenu: [
         { role: 'minimize' },
-        { role: 'zoom' },
+        // 'zoom' and 'front' are macOS-only roles; on Windows they render as
+        // dead entries, so the menu is just Minimise and Show there.
+        ...(IS_MAC ? [{ role: 'zoom' }] : []),
         {
           label: 'Show Portal',
           accelerator: 'CmdOrCtrl+Shift+H',
           click: () => revealWindow({ steal: true }),
         },
-        { type: 'separator' },
-        { role: 'front' },
+        ...(IS_MAC ? [{ type: 'separator' }, { role: 'front' }] : []),
       ],
     },
     {
@@ -640,6 +727,20 @@ function buildMenu() {
             `mailto:support@tmantoine.com?subject=${encodeURIComponent(`Portal desktop ${APP_VERSION}`)}`,
           ),
         },
+        // macOS puts About in the app menu; Windows has no app menu, and Help
+        // is where it belongs there.
+        ...(IS_MAC ? [] : [
+          { type: 'separator' },
+          {
+            label: 'About TM ANTOINE Portal',
+            click: () => dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              message: 'TM ANTOINE Portal',
+              detail: `Version ${APP_VERSION}\n${PORTAL_URL}`,
+              buttons: ['OK'],
+            }),
+          },
+        ]),
       ],
     },
   ];
@@ -662,10 +763,15 @@ if (!app.requestSingleInstanceLock()) {
     revealWindow({ steal: true });
   });
 
+  // macOS delivers the deep link as an event. Windows re-launches the exe with
+  // the URL as an argument instead, which `second-instance` covers for a
+  // running app — but not for a cold start, where it arrives in our own argv.
   app.on('open-url', (event, url) => {
     event.preventDefault();
     if (url.startsWith(`${PROTOCOL}://`)) claimBrowserSession(url);
   });
+
+  const argvDeepLink = () => process.argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
 
   app.whenReady().then(() => {
     if (app.isPackaged) {
@@ -680,10 +786,15 @@ if (!app.requestSingleInstanceLock()) {
 
     // Packaged builds get icon.icns; an unpackaged run would otherwise show
     // the stock Electron dock icon.
-    if (process.platform === 'darwin' && !app.isPackaged) {
+    if (IS_MAC && !app.isPackaged) {
       const logo = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon-master.png'));
       if (!logo.isEmpty()) app.dock.setIcon(logo);
     }
+
+    // Groups the window under one taskbar button and lets Windows match the
+    // running app to its Start-menu shortcut — without it, notifications are
+    // attributed to "electron.app.…" instead of the portal.
+    if (process.platform === 'win32') app.setAppUserModelId('com.tmantoinelaw.portal');
 
     applyPermissionPolicy();
     settings.apply();
@@ -701,9 +812,30 @@ if (!app.requestSingleInstanceLock()) {
 
     createWindow();
     buildMenu();
-    // Relabel the menu when an update is found and deferred.
-    updater.onStateChange(buildMenu);
+
+    // Off macOS this is the only thing left on screen once the window is
+    // closed, so it carries Show and Quit. Rebuilt alongside the menu bar so
+    // "Install Update x.y.z" appears in both.
+    const trayMenu = tray.install({
+      onShow: () => revealWindow({ steal: true }),
+      onQuit: () => app.quit(),
+      updateItem: checkForUpdatesItem,
+    });
+
+    const rebuildMenus = () => {
+      buildMenu();
+      if (trayMenu) trayMenu.rebuild();
+    };
+
+    // Relabel the menus when an update is found and deferred.
+    updater.onStateChange(rebuildMenus);
     updater.start();
+
+    // A cold start from a tmaportal:// link on Windows: the URL is in our argv
+    // rather than an open-url event, and only means anything once the window
+    // exists to load the claim into.
+    const cold = argvDeepLink();
+    if (cold) claimBrowserSession(cold);
 
     // Clicking the dock icon brings back the window we hid on close.
     app.on('activate', () => {
@@ -716,7 +848,11 @@ if (!app.requestSingleInstanceLock()) {
   // it so messages and calls keep arriving.
   app.on('before-quit', () => { quitting = true; });
 
+  // The usual "quit when the last window closes off macOS" would defeat the
+  // whole point here: with backgroundOnClose on, the window is hidden rather
+  // than destroyed, and the app is meant to keep taking messages and calls
+  // from the tray. Quitting is left to Exit, the tray, or Alt+F4 twice over.
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
+    if (!IS_MAC && !settings.get('backgroundOnClose')) app.quit();
   });
 }

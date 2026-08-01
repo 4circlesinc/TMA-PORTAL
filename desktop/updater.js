@@ -8,8 +8,12 @@
  * manifest, put the new bundle where the old one was, relaunch. Works signed
  * or unsigned, and keeps working if a certificate arrives later.
  *
- * The feed is the same latest-mac.yml electron-builder already generates, so
- * `npm run dist` + `php artisan desktop:publish` is unchanged.
+ * The feed is the same latest-mac.yml / latest.yml electron-builder already
+ * generates, so `npm run dist` + `php artisan desktop:publish` is unchanged.
+ *
+ * Windows takes the shorter road: NSIS installers already know how to replace
+ * a running install, so there the download is an .exe that gets verified and
+ * run, rather than a bundle swapped by hand.
  */
 const { app, dialog, shell, BrowserWindow } = require('electron');
 const path = require('node:path');
@@ -25,6 +29,12 @@ const { version: APP_VERSION } = require('./package.json');
 const FEED_URL = process.env.TMA_UPDATE_URL || 'https://portal.tmantoinelaw.com/desktop/';
 
 const CHECK_INTERVAL = 3600000; // hourly, so a deploy lands the same day
+
+const IS_MAC = process.platform === 'darwin';
+
+// electron-builder names the Windows manifest latest.yml and the macOS one
+// latest-mac.yml; both sit in the same bucket, so one feed serves both.
+const MANIFEST = IS_MAC ? 'latest-mac.yml' : 'latest.yml';
 
 /* ------------------------------------------------------------------- manifest */
 
@@ -64,7 +74,7 @@ function compareVersions(a, b) {
 }
 
 async function fetchManifest() {
-  const response = await fetch(new URL('latest-mac.yml', FEED_URL), {
+  const response = await fetch(new URL(MANIFEST, FEED_URL), {
     cache: 'no-store',
     headers: { 'Cache-Control': 'no-cache' },
   });
@@ -126,6 +136,9 @@ const unzip = (archive, into) => new Promise((resolve, reject) => {
  * Everything that can go wrong quietly — a truncated download, a corrupted or
  * substituted archive, a zip that is not an app — fails here, before anything
  * on disk is touched.
+ *
+ * On Windows there is nothing to unpack: the artifact is the NSIS installer,
+ * so a verified download is already the finished article.
  */
 async function stageRelease(release, onProgress = () => {}) {
   const { target, digest } = await download(release.file, onProgress);
@@ -134,6 +147,8 @@ async function stageRelease(release, onProgress = () => {}) {
     throw new Error('The downloaded update did not match its checksum.');
   }
 
+  if (!IS_MAC) return target;
+
   const extracted = path.join(path.dirname(target), 'unpacked');
   await unzip(target, extracted);
 
@@ -141,6 +156,20 @@ async function stageRelease(release, onProgress = () => {}) {
   if (!bundle) throw new Error('That update did not contain an app.');
 
   return path.join(extracted, bundle);
+}
+
+/**
+ * Hands the installer the job of replacing us.
+ *
+ * NSIS already knows how to shut down a running instance, swap the files and
+ * start the new one, which is the whole reason Windows does not need the
+ * hand-rolled swap below. `/S` keeps it silent so the update feels like the
+ * macOS one; `--force-run` is what electron-builder's installer reads to
+ * relaunch afterwards.
+ */
+function runInstaller(installer) {
+  spawn(installer, ['/S', '--force-run'], { detached: true, stdio: 'ignore' }).unref();
+  app.quit();
 }
 
 /**
@@ -201,17 +230,18 @@ async function runUpdate(release, parentWindow) {
   // An unwritable bundle means it was installed by the .pkg as root. Hand the
   // installer back to the OS rather than asking for a password we should not
   // be collecting.
-  if (!canReplaceBundle()) {
+  if (IS_MAC && !canReplaceBundle()) {
     await shell.openExternal(new URL(encodeURIComponent(release.file.replace(/-mac\.zip$/, '.pkg')), FEED_URL).toString());
     return;
   }
 
   try {
     progressBar(0);
-    const bundle = await stageRelease(release, progressBar);
+    const staged = await stageRelease(release, progressBar);
     progressBar(-1);
 
-    replaceAndRestart(bundle);
+    if (IS_MAC) replaceAndRestart(staged);
+    else runInstaller(staged);
   } catch (error) {
     progressBar(-1);
     dialog.showMessageBox(parentWindow, {

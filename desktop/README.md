@@ -86,9 +86,20 @@ Two things make that work, and both are easy to undo by accident:
 
 ```
 npm version patch          # or minor / major
-npm run dist               # builds release/ including latest-mac.yml
+npm run release            # macOS   → release/ + latest-mac.yml
+npm run release:win        # Windows → release/ + latest.yml
 cd .. && php artisan desktop:publish
 ```
+
+Both platforms share one bucket prefix and one publish command, which uploads
+whichever manifests it finds. Building only one platform therefore leaves the
+other's published release alone rather than retracting it — but it also means
+the two can drift to different versions, so bump and build both together.
+
+The Windows installer cross-compiles from macOS: electron-builder brings its
+own NSIS and needs no Wine. `--win` alone builds for the host architecture,
+which on an Apple Silicon Mac means an arm64 Windows build almost nobody can
+run, so `release:win` pins `--x64`.
 
 `desktop:publish` uploads the artifacts to object storage under `desktop/`,
 and `DesktopUpdateController` serves them at `/desktop/{file}` — which is the
@@ -99,6 +110,11 @@ Installed apps check ten seconds after launch and hourly after that. When a
 newer version is on the feed the user is asked, and on Update Now the app
 downloads it (progress shows on the dock icon), verifies it against the hash in
 the manifest, swaps the bundle and relaunches.
+
+Windows takes the shorter road. `latest.yml` names the NSIS installer, and NSIS
+already knows how to stop a running instance, replace the files and start the
+new one — so there the verified download is simply run with `/S --force-run`,
+and none of the hand-rolled swap below applies.
 
 `updater.js` does that swap itself rather than using electron-updater, which
 delegates to Squirrel — and Squirrel refuses to replace a bundle whose
@@ -198,10 +214,51 @@ Security → Open Anyway**, which the account page now tells people. Every user
 must do this once, on every macOS from 15 up. A Developer ID certificate is the
 only thing that removes the step.
 
-## Builds are Apple Silicon only
+## Windows
+
+One codebase, two shells. `IS_MAC` in main.js marks every place they diverge,
+and the differences are not cosmetic:
+
+- **The tray is load-bearing** (`tray.js`). macOS has the Dock, so an app with
+  no windows is still visible and still quittable. Windows has nothing of the
+  sort — close the window with `backgroundOnClose` on and the app would be
+  running with no icon anywhere and no way to reach or quit it. The tray is the
+  only reason the same close-to-background behaviour is safe to ship there.
+- **`window-all-closed` must not quit.** The usual Electron boilerplate quits
+  when the last window closes off macOS, which would defeat exactly that.
+- **The menu is genuinely different.** `role: 'appMenu'` and everything under it
+  — services, hide, hideOthers, unhide, front, zoom — are macOS-only and render
+  as dead entries elsewhere, so Windows gets About and Exit in File and Help
+  instead of a Mac menu with holes in it.
+- **The badge is a taskbar overlay.** `app.setBadgeCount` is macOS and Linux
+  only; Windows gets `setOverlayIcon` plus the count in the tray tooltip.
+- **A ringing call flashes the taskbar** rather than bouncing the Dock.
+- **Deep links arrive in `argv`,** not as an `open-url` event — and on a cold
+  start that argv belongs to this process, not to `second-instance`.
+
+Icons all come from `./build-icon.sh`: `icon.icns`, plus `icon.ico` and the
+tray PNGs. The .ico is cropped back to the artwork first, because Windows has
+no equivalent of Apple's icon grid and the margin the .icns needs would just
+make the app look smaller than its neighbours on the taskbar. `make-ico.js`
+packs the .ico by hand — there is no ImageMagick on the build machine and
+nothing in macOS emits .ico, but the container is a header and some PNGs.
+
+## macOS builds are Apple Silicon only
 
 `--mac` on an arm64 machine produces arm64. Intel Macs need `--mac --x64`, or
 `--mac --universal` for one build that runs on both (roughly double the size).
+The Windows build is pinned to x64 and runs on arm64 Windows under emulation.
+
+## The Windows build is unsigned too
+
+There is no code-signing certificate for Windows either, so SmartScreen shows
+"Windows protected your PC" on first run and the way through is **More info →
+Run anyway**. The account page prints whichever hint matches the visitor's OS.
+
+Windows signing is a separate purchase from the Apple one: an OV or EV
+code-signing certificate, set via `CSC_LINK` / `CSC_KEY_PASSWORD` the same way.
+An OV certificate stops the warning only after the download builds reputation;
+an EV certificate clears SmartScreen immediately.
 
 ## Sign-in
 

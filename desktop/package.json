@@ -11,6 +11,7 @@
     "pack": "electron-builder --mac --dir",
     "dist": "electron-builder --mac",
     "release": "env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never",
+    "release:win": "env -u ELECTRON_RUN_AS_NODE electron-builder --win --x64 --publish never",
     "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js",
     "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js",
     "test:call": "env -u ELECTRON_RUN_AS_NODE electron test-call-panel.js",
@@ -37,7 +38,11 @@
       "call-window.html",
       "call-preload.js",
       "settings.js",
-      "package.json"
+      "tray.js",
+      "package.json",
+      "assets/tray.png",
+      "assets/tray@2x.png",
+      "assets/icon.ico"
     ],
     "mac": {
       "icon": "assets/icon.icns",
@@ -56,6 +61,25 @@
         "NSCameraUsageDescription": "Camera access is required for video calls in the portal.",
         "NSMicrophoneUsageDescription": "Microphone access is required for voice and video calls in the portal."
       }
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TM ANTOINE Portal",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "uninstallDisplayName": "TM ANTOINE Portal"
     },
     "protocols": [
       {
