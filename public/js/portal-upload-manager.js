@@ -70,6 +70,134 @@
     url: function (path) { return BASE + path; },
   };
 
+
+  /* ── library sync panel ────────────────────────────────────────
+   *
+   * A corner panel that shows while a connected SharePoint library is being
+   * imported, using the same chrome as the upload panel and the mailbox's sync
+   * panel so all three read as one thing.
+   *
+   * It lives HERE, in the globally loaded script, rather than in
+   * portal-files.js: an import runs for minutes and the person who started it
+   * will not sit on the File Library waiting. Following them across the portal
+   * is the whole point — otherwise "is it still going?" has no answer unless
+   * you navigate back.
+   */
+
+  var syncPanel = null;
+  var syncTimer = null;
+  var syncDismissed = false;
+  var syncLastBusy = false;
+
+  function syncPoll() {
+    fetchJSON(BASE + '/sync-status')
+      .then(function (data) { renderSyncPanel(data); })
+      .catch(function () { /* never worth interrupting anyone over */ })
+      .finally(function () {
+        // Fast while something is happening, slow when idle. An idle portal
+        // must not sit polling every few seconds for no reason.
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(syncPoll, syncLastBusy ? 5000 : 60000);
+      });
+  }
+
+  function renderSyncPanel(data) {
+    var busy = (data.connections || []).filter(function (c) { return c.status === 'syncing'; });
+    var failed = (data.connections || []).filter(function (c) {
+      return c.status === 'error' || c.failedItems > 0;
+    });
+
+    syncLastBusy = busy.length > 0;
+
+    // Finished since last time: say so briefly, then get out of the way.
+    if (!busy.length && !failed.length) {
+      if (syncPanel && !syncPanel.dataset.done) {
+        syncPanel.dataset.done = '1';
+        syncPanel.innerHTML = syncPanelHtml('Library up to date', '', false, true);
+        setTimeout(hideSyncPanel, 4000);
+      } else if (!syncPanel) {
+        hideSyncPanel();
+      }
+
+      return;
+    }
+
+    if (syncDismissed && !failed.length) return;
+
+    var title, detail, isError = false;
+
+    if (busy.length) {
+      var c = busy[0];
+      title = (c.initialImport ? 'Importing ' : 'Syncing ') + c.name;
+      detail = c.items + ' items so far' +
+        (busy.length > 1 ? ' · ' + (busy.length - 1) + ' more queued' : '');
+    } else {
+      isError = true;
+      var f = failed[0];
+      title = f.name + ' — sync problem';
+      detail = f.lastError ? String(f.lastError).slice(0, 110)
+        : f.failedItems + ' item(s) could not sync';
+    }
+
+    ensureSyncPanel();
+    delete syncPanel.dataset.done;
+    syncPanel.innerHTML = syncPanelHtml(title, detail, isError, false);
+  }
+
+  function syncPanelHtml(title, detail, isError, done) {
+    return '<div class="tma-portal-upload__head">' +
+        '<span class="tma-portal-upload__title">' +
+          (done ? '' : (isError
+            ? '<img src="images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14"> '
+            : '<span class="tma-portal-sync__spinner"></span> ')) +
+          esc(title) + '</span>' +
+        '<div class="tma-portal-upload__head-actions">' +
+          (isError ? '<button type="button" class="tma-portal-upload__act" data-sync-retry>Retry</button>' : '') +
+          '<button type="button" class="tma-portal-upload__icon" data-sync-close aria-label="Hide">✕</button>' +
+        '</div>' +
+      '</div>' +
+      (detail ? '<div class="tma-portal-sync-panel__body">' + esc(detail) + '</div>' : '');
+  }
+
+  function ensureSyncPanel() {
+    if (syncPanel) return syncPanel;
+
+    syncPanel = document.createElement('div');
+    syncPanel.className = 'tma-portal-upload tma-portal-sync-panel';
+    syncPanel.setAttribute('role', 'status');
+    syncPanel.setAttribute('aria-live', 'polite');
+    document.body.appendChild(syncPanel);
+
+    syncPanel.addEventListener('click', function (e) {
+      if (e.target.closest('[data-sync-close]')) {
+        // Dismiss this run only — a NEW sync will show the panel again.
+        syncDismissed = true;
+        hideSyncPanel();
+
+        return;
+      }
+      if (e.target.closest('[data-sync-retry]')) {
+        fetchJSON(BASE + '/sync-status/retry', { method: 'POST', json: {} })
+          .then(function () { syncDismissed = false; syncPoll(); })
+          .catch(function () {});
+      }
+    });
+
+    return syncPanel;
+  }
+
+  function hideSyncPanel() {
+    if (syncPanel) { syncPanel.remove(); syncPanel = null; }
+  }
+
+  // Start once the page is up. Staff-only is enforced server-side: the
+  // endpoint returns an empty list for a client, so nothing ever renders.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(syncPoll, 2000); });
+  } else {
+    setTimeout(syncPoll, 2000);
+  }
+
   /* ── upload manager ───────────────────────────────────────────── */
 
   var jobs = [];        // active + finished jobs (session lifetime)

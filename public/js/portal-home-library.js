@@ -137,7 +137,19 @@
 
   function renderDefaultFolderCard(folder) {
     var files = folder.files || [];
-    var rows = files.slice(0, PREVIEW_FILES).map(function (f) {
+    var subfolders = folder.folders || [];
+
+    // Subfolders first, then files — the same order the library itself uses.
+    var rows = subfolders.slice(0, PREVIEW_FILES).map(function (sub) {
+      return '<button type="button" class="tma-portal-file-row" data-home-lib-open-folder="' + esc(sub.id) + '">' +
+        folderIconHtml(sub, 24) +
+        '<span class="tma-portal-file-row__meta">' +
+        '<span class="tma-portal-file-row__name">' + esc(sub.name) + '</span>' +
+        '<span class="tma-portal-file-row__path">' + esc(folderMeta(sub)) + '</span>' +
+        '</span></button>';
+    }).join('');
+
+    rows += files.slice(0, Math.max(0, PREVIEW_FILES - subfolders.length)).map(function (f) {
       return '<button type="button" class="tma-portal-file-row" data-home-lib-open-file="' + esc(f.id) + '"' +
         ' data-home-lib-open-folder="' + esc((f.folder && f.folder.id) || folder.id) + '">' +
         thumbOrIcon(f, 24) +
@@ -153,8 +165,27 @@
       '<span class="tma-portal-default-folder__name">' + esc(folder.name) + '</span>' +
       '</button>' +
       '<div class="tma-portal-default-folder__body">' +
-      (rows || '<p class="tma-portal-panel__note">No files in this folder yet.</p>') +
+      (rows || '<p class="tma-portal-panel__note">Nothing in this folder yet.</p>') +
+      (extraCount(folder) ? '<p class="tma-portal-panel__note">' + extraCount(folder) + '</p>' : '') +
       '</div></section>';
+  }
+
+  /** "3 files · 2 folders", or "Empty" — the same shape the library uses. */
+  function folderMeta(sub) {
+    var parts = [];
+    if (sub.fileCount) parts.push(sub.fileCount + (sub.fileCount === 1 ? ' file' : ' files'));
+    if (sub.folderCount) parts.push(sub.folderCount + (sub.folderCount === 1 ? ' folder' : ' folders'));
+
+    return parts.length ? parts.join(' · ') : 'Empty';
+  }
+
+  /** "+ 8 more" when the card shows only the first few. */
+  function extraCount(folder) {
+    var shown = Math.min((folder.folders || []).length, PREVIEW_FILES) +
+      Math.max(0, Math.min((folder.files || []).length, PREVIEW_FILES - (folder.folders || []).length));
+    var total = (folder.folderCount || 0) + (folder.fileCount || 0);
+
+    return total > shown ? '+ ' + (total - shown) + ' more' : '';
   }
 
   function renderDefaultFolders() {
@@ -359,7 +390,13 @@
     return net().fetchJSON(net().url('/?folder=' + encodeURIComponent(folder.id) + '&perPage=' + PREVIEW_FILES))
       .then(function (j) {
         folder.files = (j && j.files) || [];
+        // Subfolders matter as much as files. A synced library keeps its
+        // documents inside per-matter folders, so a card that only looked at
+        // direct files reported "No files in this folder yet" on a folder
+        // holding hundreds of them.
+        folder.folders = (j && j.folders) || [];
         folder.fileCount = j && j.counts ? j.counts.files : folder.files.length;
+        folder.folderCount = j && j.counts ? j.counts.folders : folder.folders.length;
         return folder;
       })
       .catch(function () { folder.files = folder.files || []; return folder; });

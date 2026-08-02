@@ -45,6 +45,12 @@ class SharePointSyncTest extends TestCase
 
     protected ?string $failContentFor = null;
 
+    /** Pages of delta items, when a test exercises a multi-page walk. */
+    protected ?array $deltaPages = null;
+
+    /** Every delta URL the fake was asked for, in order. */
+    protected array $deltaCalls = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -131,6 +137,12 @@ class SharePointSyncTest extends TestCase
                 return Http::response('slow down', 429, ['Retry-After' => '42']);
             }
             if (str_contains($url, '/root/delta')) {
+                $this->deltaCalls[] = $url;
+
+                if ($this->deltaPages !== null) {
+                    return Http::response($this->pageFor($url));
+                }
+
                 return Http::response([
                     'value' => $this->deltaItems,
                     '@odata.deltaLink' => 'https://graph.microsoft.com/v1.0/drives/drive-1/root/delta?token=NEXT',
@@ -169,6 +181,87 @@ class SharePointSyncTest extends TestCase
             'lastModifiedDateTime' => now()->toIso8601String(),
             'lastModifiedBy' => ['user' => ['displayName' => 'Someone']],
         ];
+    }
+
+    /**
+     * Serve the page the URL's $skiptoken asks for.
+     *
+     * Deliberately keyed off the token and NOT off a call counter: a counter
+     * would advance even when the token was stripped, which is the exact bug
+     * this exists to catch.
+     */
+    private function pageFor(string $url): array
+    {
+        $index = preg_match('/[?&]\$skiptoken=p(\d+)/', $url, $m) ? (int) $m[1] : 0;
+        $last = count($this->deltaPages) - 1;
+
+        return array_filter([
+            'value' => $this->deltaPages[$index] ?? [],
+            '@odata.nextLink' => $index < $last
+                ? 'https://graph.microsoft.com/v1.0/drives/drive-1/root/delta?$skiptoken=p'.($index + 1)
+                : null,
+            '@odata.deltaLink' => $index >= $last
+                ? 'https://graph.microsoft.com/v1.0/drives/drive-1/root/delta?token=FINAL'
+                : null,
+        ]);
+    }
+
+    /**
+     * A paged walk must follow the skiptoken, not re-read page one.
+     *
+     * This is the 24-hour bug. Http::get($url, []) REPLACES the URL's query
+     * string, so passing an empty query array threw away the $skiptoken Graph
+     * puts in @odata.nextLink and every "next page" fetch returned page one
+     * again. Live, that meant three libraries walking the same 200 items fifty
+     * times per run — 10,000 updates, 205 files, no cursor ever reached — and
+     * because there was no cursor, the next run started from zero. Forever.
+     *
+     * The old fake handed back a deltaLink on page one, so no test ever asked
+     * for a second page and nothing caught it.
+     */
+    public function test_a_paged_delta_walk_follows_the_skiptoken_to_the_end(): void
+    {
+        $this->deltaPages = [
+            [$this->fileItem('i-1', 'One.txt', 'c:1')],
+            [$this->fileItem('i-2', 'Two.txt', 'c:1')],
+            [$this->fileItem('i-3', 'Three.txt', 'c:1')],
+        ];
+        $this->children = [['id' => 'i-1'], ['id' => 'i-2'], ['id' => 'i-3']];
+
+        $stats = Synchroniser::sync($this->connection);
+
+        // Every page landed exactly once.
+        $this->assertSame(3, $stats['created']);
+        $this->assertSame(0, $stats['failed']);
+        $this->assertSame(3, $stats['pages']);
+        $this->assertEqualsCanonicalizing(
+            ['One.txt', 'Two.txt', 'Three.txt'],
+            FileItem::pluck('name')->all()
+        );
+
+        // The tokens were actually sent — the proof the query string survived.
+        $this->assertStringContainsString('$skiptoken=p1', $this->deltaCalls[1]);
+        $this->assertStringContainsString('$skiptoken=p2', $this->deltaCalls[2]);
+
+        // Reaching the end means holding a cursor, which is what makes the
+        // NEXT run incremental instead of another walk from zero.
+        $this->assertStringContainsString('token=FINAL', $this->connection->fresh()->delta_link);
+        $this->assertNotNull($this->connection->fresh()->last_success_at);
+    }
+
+    /** A walk that never reaches the end must not claim success. */
+    public function test_an_unfinished_walk_keeps_its_cursor_but_not_a_success_stamp(): void
+    {
+        $this->connection->update(['last_success_at' => null]);
+
+        // Throttled on the very first page: no cursor, no success.
+        $this->throttle = true;
+        Synchroniser::sync($this->connection);
+
+        $connection = $this->connection->fresh();
+        $this->assertNull($connection->delta_link);
+        $this->assertNull($connection->last_success_at);
+        $this->assertSame(SharePointConnection::STATUS_IDLE, $connection->status);
     }
 
     public function test_delta_imports_folders_and_files(): void

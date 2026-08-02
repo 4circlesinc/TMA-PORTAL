@@ -113,19 +113,38 @@ class Synchroniser
                     break;
                 }
                 $link = $batch['next'];
+
+                // Remember where we got to, so a run that hits the page cap
+                // resumes from there instead of starting over.
+                $connection->update(['delta_link' => $link]);
             }
 
             self::reconcileDeletions($connection, $changedFolders, $stats);
             });
 
+            /*
+             * A pass only counts as SUCCESS if it ended holding a delta cursor.
+             *
+             * Without this the walk could stop early — page cap reached, or the
+             * process killed — and still stamp last_success_at while leaving
+             * delta_link null. That reads as "synced" in the UI, and because
+             * there is no cursor the next run restarts from item one. The
+             * library never converges and nothing looks wrong. Observed on
+             * three real connections stuck at ~205 items for a day.
+             */
+            $complete = $connection->fresh()->delta_link !== null;
+
             $connection->update([
                 'status' => SharePointConnection::STATUS_IDLE,
-                'last_success_at' => now(),
-                'last_error' => null,
-                'error_count' => 0,
+                'last_success_at' => $complete ? now() : $connection->last_success_at,
+                'last_error' => $complete ? null : 'Import did not finish — more pages remain.',
+                'error_count' => $complete ? 0 : $connection->error_count,
             ]);
 
-            self::log($connection, 'sync-complete', 'info', null, json_encode($stats));
+            $stats['complete'] = $complete;
+
+            self::log($connection, $complete ? 'sync-complete' : 'sync-incomplete',
+                $complete ? 'info' : 'warning', null, json_encode($stats));
         } catch (GraphThrottledException $e) {
             // Not an error: Graph asked us to wait. Leave the cursor alone so
             // the next run resumes exactly where this one stopped.

@@ -92,8 +92,18 @@ class GraphClient
             ->timeout(120)
             ->acceptJson();
 
+        /*
+         * Only pass a query array when there IS one.
+         *
+         * Http::get($url, []) replaces the URL's own query string. Graph's
+         * delta nextLink carries its $skiptoken there, so passing an empty
+         * array stripped the token and every "next page" request returned
+         * page ONE — the walk processed the same 200 items fifty times, never
+         * reached the deltaLink, and restarted from scratch on every run. It
+         * looked like a hang; it was an infinite loop over the first page.
+         */
         $response = $method === 'GET'
-            ? $request->get($url, $query)
+            ? ($query === [] ? $request->get($url) : $request->get($url, $query))
             : $request->send($method, $url, ['json' => $body]);
 
         // 429 and 503 carry Retry-After; the caller decides whether to wait,
