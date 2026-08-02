@@ -192,6 +192,14 @@ field placement and drawing, and computed CSS only exist in a browser.
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
   the client profile's "Open folder" action lands in the File Library. Needs an
   administrator account.
+- **`library-sync-panel.mjs`** — where the SharePoint sync indicator actually
+  lands. It stubs `/sync-status` with a library mid-import, then *measures the
+  rendered box*: the panel must sit within 20px of the bottom-right corner, stay
+  there across a navigation, and stack with the upload panel rather than
+  overlap it. Geometry rather than CSS assertions, because the bug it exists for
+  was a hand-measured `bottom: calc(... + 92px)` that read as correct in the
+  stylesheet while putting the panel 108px up the right-hand edge whenever no
+  upload was running. Needs only the standard `e2e@example.com` account.
 - **`settings-personal-prefs.mjs`** — Settings Phase 1: Theme, Privacy and
   Plugins save to the account rather than to one browser. It drives the real
   panels (plus the header's own dark-mode toggle, which used to write

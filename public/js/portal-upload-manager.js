@@ -159,6 +159,23 @@
       (detail ? '<div class="tma-portal-sync-panel__body">' + esc(detail) + '</div>' : '');
   }
 
+  /**
+   * The shared bottom-right stack both panels live in.
+   *
+   * Created lazily and never removed: it holds no space of its own, and
+   * re-anchoring it on every panel open/close is how the two ended up
+   * overlapping in the first place.
+   */
+  function dock() {
+    var el = document.querySelector('.tma-portal-dock');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'tma-portal-dock';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
   function ensureSyncPanel() {
     if (syncPanel) return syncPanel;
 
@@ -166,7 +183,7 @@
     syncPanel.className = 'tma-portal-upload tma-portal-sync-panel';
     syncPanel.setAttribute('role', 'status');
     syncPanel.setAttribute('aria-live', 'polite');
-    document.body.appendChild(syncPanel);
+    dock().appendChild(syncPanel);
 
     syncPanel.addEventListener('click', function (e) {
       if (e.target.closest('[data-sync-close]')) {
@@ -539,7 +556,7 @@
     panel = document.createElement('section');
     panel.className = 'tma-portal-upload';
     panel.setAttribute('aria-label', 'Uploads');
-    document.body.appendChild(panel);
+    dock().appendChild(panel);
 
     panel.addEventListener('click', function (e) {
       var t = e.target.closest('[data-upload-action]');
