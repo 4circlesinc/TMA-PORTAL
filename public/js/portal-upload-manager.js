@@ -678,6 +678,10 @@
   }
 
   window.TMAUpload = {
+    // Exported so the mailbox panel can join the same stack: three panels
+    // that each pinned themselves to the corner is how they ended up
+    // overlapping and needing hand-measured offsets to escape each other.
+    dock: dock,
     add: add,
     cancel: cancel,
     retry: retry,

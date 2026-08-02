@@ -2450,7 +2450,11 @@
       if (action === 'close') { syncDismissed = true; stopSyncPolling(); hideSyncPanel(); }
       if (action === 'retry') { retryMailSync(btn); }
     });
-    document.body.appendChild(syncPanel);
+    // The shared bottom-right stack. Falls back to the body if the upload
+    // manager has not loaded, so the panel still shows rather than vanishing.
+    (window.TMAUpload && window.TMAUpload.dock
+      ? window.TMAUpload.dock()
+      : document.body).appendChild(syncPanel);
     return syncPanel;
   }
 

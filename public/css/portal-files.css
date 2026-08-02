@@ -895,7 +895,11 @@
 .tma-portal-breadcrumb__item.is-drop-into { background: var(--color-accent-bg); box-shadow: inset 0 0 0 1px var(--color-accent); }
 
 @media (max-width: 560px) {
-  .tma-portal-upload { right: var(--space-8); bottom: var(--space-8); left: var(--space-8); width: auto; }
+  /* The dock is what is positioned now, so the narrow-screen inset belongs on
+     it. Left on .tma-portal-upload these were dead declarations: the panels
+     stopped being `position: fixed` when they moved into the stack. */
+  .tma-portal-dock { right: var(--space-8); bottom: var(--space-8); left: var(--space-8); align-items: stretch; }
+  .tma-portal-dock > * { width: auto; max-width: none; }
   .tma-portal-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .tma-portal-lightbox__frame { width: 96vw; height: 78vh; }
 }
@@ -903,18 +907,14 @@
 /* Mailbox history download — same chrome as the upload panel, but it sits
    above it so a running upload and a running mail sync do not overlap. */
 .tma-mail-sync {
-  /* Sits in the corner like the uploader. It only moves up when an upload
-     panel is actually on screen (rule below), rather than floating clear of
-     one that usually isn't there. */
-  bottom: var(--space-20);
+  /* Docked like the others. It used to pin itself to the corner and then be
+     pushed up 108px by a :has() rule when an upload panel appeared — which
+     also fired for the LIBRARY sync panel, since that carries
+     .tma-portal-upload too, jumping the mailbox card for no reason. */
+  order: 3;
   /* A status card, not a file list: narrower and quieter than the uploader. */
   width: 300px;
   font-size: var(--text-size-12);
-}
-
-/* Both panels visible at once: stack the sync card above the uploader. */
-body:has(.tma-portal-upload:not(.tma-mail-sync)) .tma-mail-sync {
-  bottom: calc(var(--space-20) + 108px);
 }
 .tma-mail-sync .tma-portal-upload__title { font-size: var(--text-size-14); }
 .tma-mail-sync .tma-portal-upload__list { padding: var(--space-8) var(--space-12) var(--space-10); }
