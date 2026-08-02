@@ -30,7 +30,12 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 900 
 const page = await context.newPage();
 
 page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+// Reverb is not running in this harness and says so loudly; it has nothing to
+// do with where a panel sits.
+const IGNORE = /realtime disabled|Origin not allowed|4009/i;
+page.on('console', (m) => {
+  if (m.type() === 'error' && !IGNORE.test(m.text())) errors.push(m.text());
+});
 
 async function signIn() {
   await page.goto(`${BASE}/auth/login`, { waitUntil: 'domcontentloaded' });
@@ -136,11 +141,31 @@ try {
   check(vp.height - sync2.bottom <= 40, 'the sync panel still owns the corner');
   check(up.bottom <= sync2.top + 1, `the upload panel sits above it (${Math.round(up.bottom)} ≤ ${Math.round(sync2.top)})`);
 
-  step(5, 'No console errors');
+  step(5, 'The mailbox sync card joins the same stack');
+  // It carries .tma-portal-upload too, so it used to be pushed up 108px by a
+  // :has() rule that the LIBRARY panel also triggered. Same dock, no offsets.
+  await page.evaluate(() => {
+    document.querySelector('.tma-portal-dock').insertAdjacentHTML(
+      'beforeend',
+      '<section class="tma-portal-upload tma-mail-sync" aria-label="Mailbox sync">'
+      + '<div class="tma-portal-upload__head">'
+      + '<span class="tma-portal-upload__title">Syncing mailbox</span></div></section>');
+  });
+  await page.waitForTimeout(200);
+
+  const mail = await boxOf('.tma-mail-sync');
+  const sync3 = await boxOf('.tma-portal-sync-panel');
+  const up3 = await boxOf('.tma-portal-dock > .tma-portal-upload:not(.tma-portal-sync-panel):not(.tma-mail-sync)');
+  check(!!mail, 'the mailbox card is on screen');
+  check(vp.height - sync3.bottom <= 40, 'the library sync panel still owns the corner');
+  // Uploads on top, mailbox, then the library sync panel in the corner.
+  check(up3.bottom <= mail.top + 1 && mail.bottom <= sync3.top + 1,
+    'all three stack without overlapping');
+  await page.screenshot({ path: 'tests/Browser/library-sync-panel.png' });
+
+  step(6, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   if (errors.length) errors.slice(0, 5).forEach((e) => log('      ' + e));
-
-  await page.screenshot({ path: 'tests/Browser/library-sync-panel.png' });
 } catch (e) {
   failures.push('threw: ' + e.message);
   log('\nERROR ' + e.message);

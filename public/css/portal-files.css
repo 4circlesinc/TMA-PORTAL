@@ -854,7 +854,7 @@
    upload panel stacks above it. `order` rather than DOM order: either panel can
    be created first, and the layout must not depend on which. */
 .tma-portal-sync-panel {
-  order: 2;
+  order: 3;
   width: auto; min-width: 260px; max-width: 340px;
 }
 .tma-portal-dock > .tma-portal-upload:not(.tma-portal-sync-panel) { order: 1; }
@@ -911,7 +911,7 @@
      pushed up 108px by a :has() rule when an upload panel appeared — which
      also fired for the LIBRARY sync panel, since that carries
      .tma-portal-upload too, jumping the mailbox card for no reason. */
-  order: 3;
+  order: 2;
   /* A status card, not a file list: narrower and quieter than the uploader. */
   width: 300px;
   font-size: var(--text-size-12);
