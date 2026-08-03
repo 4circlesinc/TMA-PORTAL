@@ -20,9 +20,13 @@
  * grey box on top of it.
  */
 
-const HEIGHT = 38;
+const HEIGHT = 42;
 
 const IS_MAC = process.platform === 'darwin';
+
+// Traffic lights + back/forward/reload + separator + heading. The header is
+// padded by this much so its own contents start clear of them.
+const CONTROLS = IS_MAC ? 300 : 250;
 
 // --color-primary from public/css/tokens.css. The one the design system calls
 // primary, not --color-blue (#7dbbff), which is the lighter badge blue.
@@ -75,7 +79,8 @@ const CSS = `
 
   #tma-desktop-titlebar {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    top: 0; left: 0;
+    width: ${CONTROLS}px;
     height: ${HEIGHT}px;
     /*
      * Above ordinary content and scrims, deliberately below the portal's
@@ -86,7 +91,7 @@ const CSS = `
      * Letting them cover the bar instead costs nothing but the blue strip
      * while they are open, which is what a takeover is meant to do.
      */
-    z-index: 200;
+    z-index: 201;
     background: ${BLUE};
     color: #fff;
     display: flex;
@@ -144,18 +149,77 @@ const CSS = `
     stroke-linejoin: round;
   }
 
-  /* Centred on the window, not on what is left over beside the controls —
-     otherwise the title drifts as buttons enable and disable. */
+  #tma-desktop-titlebar .tma-tb-sep {
+    opacity: 0.45;
+    margin: 0 7px 0 10px;
+    font-weight: 400;
+  }
+
   #tma-desktop-titlebar .tma-tb-title {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: 52%;
+    max-width: 24vw;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    pointer-events: none;
   }
+
+  /* Centred on the window, not on what is left over beside the controls, so it
+     does not drift as the title changes length. */
+  #tma-desktop-titlebar .tma-tb-center,
+  #tma-desktop-titlebar .tma-tb-right { display: none; }
+
+  /*
+   * The portal's own header IS the bar.
+   *
+   * The first attempt moved the search and the toolbar icons into this element.
+   * They would not stay: the portal reconciles .tma-dash through TMAMorph,
+   * which knows nothing about nodes lifted out from under it and puts them
+   * straight back — and re-taking them every render is a tug-of-war, not a fix.
+   * Worse, hiding the emptied header took the search and every icon with it.
+   *
+   * So nothing moves. The header is restyled in place into the blue strip, and
+   * the window controls are drawn in a strip on top of its left end. Morph can
+   * rebuild the header as often as it likes; injected CSS applies to whatever
+   * it puts there.
+   */
+  .tma-dash--desktop-bar .tma-dash__header {
+    position: fixed !important;
+    top: 0; left: 0; right: 0;
+    height: ${HEIGHT}px !important;
+    min-height: ${HEIGHT}px !important;
+    z-index: 200;
+    background: ${BLUE} !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    /* Clears the window controls drawn over this end. */
+    padding: 0 14px 0 ${CONTROLS}px !important;
+    gap: 12px;
+  }
+
+  /* The heading lives in the controls strip, so the crumb is a duplicate. */
+  .tma-dash--desktop-bar .tma-dash__breadcrumb { display: none !important; }
+
+  .tma-dash--desktop-bar .tma-dash__search {
+    min-width: 260px;
+    background: rgba(255,255,255,0.16) !important;
+    border-color: transparent !important;
+  }
+  .tma-dash--desktop-bar .tma-dash__search:hover { background: rgba(255,255,255,0.24) !important; }
+  .tma-dash--desktop-bar .tma-dash__search-text,
+  .tma-dash--desktop-bar .tma-dash__kbd { color: rgba(255,255,255,0.9) !important; }
+  .tma-dash--desktop-bar .tma-dash__kbd { border-color: rgba(255,255,255,0.4) !important; }
+
+  .tma-dash--desktop-bar .tma-dash__header .tma-dash__icon-btn:hover {
+    background: rgba(255,255,255,0.18) !important;
+  }
+
+  /* Header artwork is dark; knocked out to white to sit on the blue. */
+  .tma-dash--desktop-bar .tma-dash__header img { filter: brightness(0) invert(1); }
+
+  /* Badge counts stay legible against the blue. */
+  .tma-dash--desktop-bar .tma-dash__header .tma-dash__icon-badge { box-shadow: 0 0 0 2px ${BLUE}; }
+
+  .tma-dash--desktop-bar .tma-dash__sidebar-logo { display: none !important; }
+  .tma-dash--desktop-bar .tma-dash__page-title { display: none !important; }
 `;
 
 const ICONS = {
@@ -193,20 +257,52 @@ function script({ canGoBack, canGoForward }) {
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'tma-desktop-titlebar';
-      document.body.appendChild(bar);
     }
+
+    /*
+     * Mounted inside .tma-dash, not on <body>. dashboard.js binds its handlers
+     * with root.querySelector(...) where root is .tma-dash — so chrome moved
+     * out of that subtree would keep its listeners but stop being found by
+     * anything that re-queries. Falls back to body on pages that have no shell,
+     * such as the "can't reach the portal" screen.
+     */
+    const host = document.querySelector('.tma-dash') || document.body;
+    if (bar.parentElement !== host) host.appendChild(bar);
 
     bar.innerHTML = ${JSON.stringify(
     '<div class="tma-tb-nav">'
       + button('back', 'Back', canGoBack).trim()
       + button('forward', 'Forward', canGoForward).trim()
       + button('reload', 'Reload', true).trim()
-      + '</div><span class="tma-tb-title"></span>',
+      + '</div>'
+      + '<span class="tma-tb-sep">|</span>'
+      + '<span class="tma-tb-title"></span>',
   )};
 
     const nav = bar.querySelector('.tma-tb-nav');
     const title = bar.querySelector('.tma-tb-title');
-    const paint = () => { title.textContent = document.title || 'TM ANTOINE Portal'; };
+
+    /*
+     * Nothing is moved out of the portal's header — see the CSS note. The class
+     * is all this needs to do: the header restyles itself into the blue strip,
+     * and morph can rebuild its contents as often as it likes.
+     */
+    const dash = document.querySelector('.tma-dash');
+    if (dash) dash.classList.add('tma-dash--desktop-bar');
+
+    /*
+     * The page's own heading, not document.title — that one is prefixed with
+     * the unread count ("(388) Dashboard"), which belongs on the badge rather
+     * than in the middle of the chrome.
+     */
+    const heading = () => {
+      const el = document.querySelector('[data-page-title]')
+        || document.querySelector('.tma-dash__crumb--current');
+      const text = el && el.textContent.trim();
+      return text || (document.title || '').replace(/^\(\d+\)\s*/, '') || 'TM ANTOINE Portal';
+    };
+
+    const paint = () => { title.textContent = heading(); };
     paint();
 
     nav.addEventListener('click', (e) => {
@@ -226,7 +322,7 @@ function script({ canGoBack, canGoForward }) {
       if (el) new MutationObserver(() => {
         const t = document.getElementById('tma-desktop-titlebar');
         const s = t && t.querySelector('.tma-tb-title');
-        if (s) s.textContent = document.title || 'TM ANTOINE Portal';
+        if (s) s.textContent = heading();
       }).observe(el, { childList: true });
     }
   })();

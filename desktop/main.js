@@ -13,6 +13,7 @@ const callWindow = require('./call-window');
 const titlebar = require('./titlebar');
 const tray = require('./tray');
 const notifications = require('./notifications');
+const splash = require('./splash');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
@@ -133,7 +134,14 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 
   attachNavigationRules(mainWindow);
-  loadPortal(mainWindow);
+
+  /*
+   * The loading screen is this window, not a panel in front of it: a separate
+   * splash is a second thing on the desktop that has to be positioned, kept on
+   * top and taken away again. Loading it here means the window opens with it
+   * already drawn, and the portal replaces it in place the moment it commits.
+   */
+  splash.showIn(mainWindow, () => loadPortal(mainWindow));
 }
 
 function loadPortal(win, url = PORTAL_URL) {

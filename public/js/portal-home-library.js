@@ -18,6 +18,9 @@
     tab: 'recent', // recent | shared
     recent: { folders: [], files: [] },
     shared: { folders: [], files: [] },
+    // Selected row ids, per tab. Kept apart so switching tabs cannot carry a
+    // selection onto rows the user never picked.
+    selected: { recent: {}, shared: {} },
   };
 
   function ui() { return window.TMAPortalUI; }
@@ -244,10 +247,121 @@
     return (pack.folders || []).concat(pack.files || []);
   }
 
+  function acts() { return window.TMAFileActions; }
+
+  /**
+   * Run a bulk action on the current selection.
+   *
+   * Delegates to the File Library rather than reimplementing any of it, so the
+   * destination picker, the confirm wording, the permission rules and the
+   * endpoints are all literally the same code. On completion the list is
+   * reloaded from the server — a move or delete changes what belongs in Recent
+   * Files, and guessing locally would leave a row that no longer exists.
+   */
+  function runBulk(action) {
+    var picked = selectedItems();
+    if (!picked.length || !acts()) return;
+
+    if (action === 'download') {
+      picked.forEach(function (it) { acts().download(it); });
+
+      return;
+    }
+
+    var done = function () {
+      clearSelection();
+      refresh();
+    };
+
+    if (action === 'delete') {
+      var n = picked.length;
+      acts().confirm({
+        title: 'Move to recycle bin',
+        message: 'Move ' + n + ' item' + (n === 1 ? '' : 's') + ' to the recycle bin?',
+        confirmLabel: 'Move to bin',
+        danger: true,
+        onConfirm: function () { acts().run('delete', picked, done); },
+      });
+
+      return;
+    }
+
+    acts().run(action, picked, done);
+  }
+
+  function sel() { return state.selected[state.tab] || (state.selected[state.tab] = {}); }
+
+  function selectedItems() {
+    var picked = sel();
+
+    // Resolved against the rows actually on screen, so an id left over from a
+    // refresh that dropped the row cannot be acted on.
+    return tableItems().filter(function (i) { return picked[i.id]; });
+  }
+
+  function setSelected(id, on) {
+    if (on) sel()[id] = true;
+    else delete sel()[id];
+    rerenderHome();
+  }
+
+  function selectAll(on) {
+    state.selected[state.tab] = {};
+    if (on) tableItems().forEach(function (i) { state.selected[state.tab][i.id] = true; });
+    rerenderHome();
+  }
+
+  function clearSelection() {
+    state.selected[state.tab] = {};
+  }
+
+  /**
+   * The bulk toolbar, mirroring the File Library's (and the Users table's).
+   *
+   * Same classes, same order, same hidden-until-selected behaviour — this is
+   * the documented component, not a second one that merely looks similar.
+   */
+  function bulkToolbar() {
+    var picked = selectedItems();
+    var n = picked.length;
+
+    if (!ui()) return '';
+
+    function btn(icon, action, label, disabled) {
+      return '<button type="button" class="tma-dash__tool-btn" data-home-lib-bulk="' + action + '"' +
+        (disabled ? ' disabled' : '') + ' title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
+        '<img src="images/icons/phosphor/' + icon + '.svg" alt="" width="16" height="16"></button>';
+    }
+
+    // Folders have no direct download URL in these lists, so offering it for a
+    // mixed selection would half-work. Everything else applies to both.
+    var onlyFiles = picked.every(function (i) { return i.type === 'file'; });
+
+    return '<div class="tma-dash__toolbar tma-dash__toolbar--selected tma-portal-home-library__toolbar"' +
+      (n === 0 ? ' hidden' : '') + ' data-home-lib-toolbar>' +
+      '<div class="tma-dash__toolbar-actions">' +
+      '<div class="tma-dash__toolbar-bulk">' +
+      '<span class="tma-dash__toolbar-selection" aria-live="polite">' + n + ' Selected</span>' +
+      btn('ArrowLineDown', 'download', 'Download', !onlyFiles) +
+      btn('ArrowsOutCardinal', 'move', 'Move') +
+      btn('Copy', 'copy', 'Copy') +
+      btn('Trash', 'delete', 'Delete') +
+      '</div></div></div>';
+  }
+
   function renderFilesTable() {
     var all = tableItems();
+    var picked = sel();
+    var allOn = all.length > 0 && all.every(function (i) { return picked[i.id]; });
+    var someOn = !allOn && all.some(function (i) { return picked[i.id]; });
+
     var headers = [
-      { html: '', attrs: ' class="tma-portal-cell--tight"' },
+      {
+        html: '<input type="checkbox" class="tma-dash__check" data-home-lib-all' +
+          (allOn ? ' checked' : '') + (someOn ? ' data-indeterminate="1"' : '') +
+          ' aria-label="Select all">',
+        attrs: ' class="tma-portal-cell--tight"',
+      },
       { html: '', attrs: ' class="tma-portal-cell--tight"' },
       'Name', 'Type', 'Size', 'Owner', 'Modified', 'Sharing',
       { html: '', attrs: ' class="tma-portal-cell--tight"' },
@@ -261,8 +375,10 @@
         ? '<span class="tma-portal-chip tma-portal-chip--shared">Shared</span>'
         : '<span class="tma-portal-table__muted">Private</span>';
 
-      return '<tr data-home-lib-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '">' +
-        '<td class="tma-portal-cell--tight"><input type="checkbox" class="tma-dash__check" aria-label="Select ' + esc(it.name) + '"></td>' +
+      return '<tr data-home-lib-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '"' +
+        (picked[it.id] ? ' class="is-selected"' : '') + '>' +
+        '<td class="tma-portal-cell--tight"><input type="checkbox" class="tma-dash__check" data-home-lib-check="' + esc(it.id) + '"' +
+        (picked[it.id] ? ' checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></td>' +
         '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' +
         '<td><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
         '<button type="button" class="tma-portal-file-link" data-home-lib-open="' + esc(it.id) + '">' + esc(it.name) + '</button>' +
@@ -311,6 +427,7 @@
           ], state.tab)
         : '') +
       '</div>' +
+      bulkToolbar() +
       '<div class="tma-portal-home-library__body" data-home-lib-table>' +
       (empty && !rows ? empty : tableHtml) +
       '</div></section>';
@@ -355,9 +472,23 @@
     if (dash && typeof dash._homeLibRerender === 'function') dash._homeLibRerender();
   }
 
+  /*
+   * "Some but not all selected" is a property, not an attribute.
+   *
+   * There is no HTML for it — `indeterminate` can only be set on the element —
+   * so the header box has to be corrected after every render or a partial
+   * selection renders as plain unchecked.
+   */
+  function syncIndeterminate(host) {
+    var box = host.querySelector('[data-home-lib-all]');
+    if (box) box.indeterminate = box.hasAttribute('data-indeterminate');
+  }
+
   function wire(root) {
     var host = root.querySelector('[data-key="home-below"]') || root;
     if (!host) return;
+
+    syncIndeterminate(host);
 
     // Bind once per element, via a property rather than an attribute: the strip
     // now survives re-renders, and morph strips any data-* attribute the fresh
@@ -398,12 +529,44 @@
         return;
       }
 
+      var rowMenu = e.target.closest('[data-home-lib-menu]');
+      if (rowMenu && host.contains(rowMenu)) {
+        e.preventDefault();
+        e.stopPropagation();
+        var menuItem = findItem(rowMenu.getAttribute('data-home-lib-menu'));
+        // The File Library owns the menu — same actions, same permissions.
+        if (menuItem && acts()) {
+          var r = rowMenu.getBoundingClientRect();
+          acts().menu(r.left, r.bottom + 4, menuItem);
+        }
+        return;
+      }
+
+      var bulkBtn = e.target.closest('[data-home-lib-bulk]');
+      if (bulkBtn && host.contains(bulkBtn) && !bulkBtn.disabled) {
+        e.preventDefault();
+        runBulk(bulkBtn.getAttribute('data-home-lib-bulk'));
+        return;
+      }
+
       var openBtn = e.target.closest('[data-home-lib-open], [data-home-lib-open-file]');
       if (openBtn && host.contains(openBtn)) {
         var id = openBtn.getAttribute('data-home-lib-open') || openBtn.getAttribute('data-home-lib-open-file');
         openItem(findItem(id));
       }
     }, 'homeLib');
+
+    // Checkboxes fire `change`, not `click` — binding click here would miss a
+    // keyboard toggle entirely.
+    bindOnce(host, 'change', function (e) {
+      var all = e.target.closest('[data-home-lib-all]');
+      if (all && host.contains(all)) { selectAll(all.checked); return; }
+
+      var box = e.target.closest('[data-home-lib-check]');
+      if (box && host.contains(box)) {
+        setSelected(box.getAttribute('data-home-lib-check'), box.checked);
+      }
+    }, 'homeLibSelect');
 
     // Keep underline chrome in sync for a11y; switching itself is delegated above.
     if (ui() && ui().wireTabs) {

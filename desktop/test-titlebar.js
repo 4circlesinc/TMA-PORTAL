@@ -109,7 +109,9 @@ app.whenReady().then(async () => {
         barHeight: bar ? Math.round(bar.getBoundingClientRect().height) : null,
         sidebarFixed: getComputedStyle(sidebar).position === 'fixed',
         sidebarTop: Math.round(sidebar.getBoundingClientRect().top),
-        logoTop: Math.round(logo.getBoundingClientRect().top),
+        // Hidden by design now: the bar carries the identity, so the rail's
+        // logo is a duplicate. Measured as "not visible" rather than "below".
+        logoHidden: !logo || logo.getBoundingClientRect().height === 0,
         // A page taller than the window means the shrink and the padding
         // disagree, and everything scrolls under the bar.
         overflow: doc.scrollHeight - doc.clientHeight,
@@ -121,7 +123,7 @@ app.whenReady().then(async () => {
   // at rest — and the state the logo bug appeared in.
   const expanded = await measure();
   check('expanded: bar is the declared height', expanded.barHeight, titlebar.HEIGHT);
-  check('expanded: logo sits below the bar', expanded.logoTop >= titlebar.HEIGHT, true);
+  check('expanded: the rail logo is hidden, not clipped', expanded.logoHidden, true);
   check('expanded: page does not scroll', expanded.overflow, 0);
 
   await win.webContents.executeJavaScript(
@@ -131,7 +133,7 @@ app.whenReady().then(async () => {
   const collapsed = await measure();
   check('collapsed: rail really is position:fixed', collapsed.sidebarFixed, true);
   check('collapsed: rail starts below the bar', collapsed.sidebarTop, titlebar.HEIGHT);
-  check('collapsed: logo is not clipped by the bar', collapsed.logoTop >= titlebar.HEIGHT, true);
+  check('collapsed: the rail logo is hidden, not clipped', collapsed.logoHidden, true);
   check('collapsed: page does not scroll', collapsed.overflow, 0);
 
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');

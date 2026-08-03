@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TM ANTOINE Portal</title>
+<style>
+  :root { color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    /* --color-primary-dark from public/css/tokens.css. */
+    background: #136da0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
+
+  .screen {
+    /* Frameless and undraggable: it is gone in a second and dragging it would
+       only move it away from where the window is about to appear. */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    padding: 0 56px;
+    border-radius: 12px;
+  }
+
+  /*
+   * The brand lockup is dark navy artwork, drawn for light backgrounds, and it
+   * all but disappears on this blue. There is no reversed version in the repo,
+   * so it is knocked out to solid white — the usual treatment for a dark
+   * background, and it keeps the whole lockup rather than falling back to the
+   * mark on its own.
+   */
+  .logo {
+    filter: brightness(0) invert(1);
+    width: 220px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    /* Fades up rather than appearing, so a fast machine does not flash it. */
+    animation: rise 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .track {
+    width: 180px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    overflow: hidden;
+  }
+
+  /*
+   * Indeterminate, and full-width rather than a travelling stripe: a stripe
+   * narrower than its track is completely outside it for part of every cycle,
+   * so the bar reads as empty exactly when it should read as working.
+   */
+  .fill {
+    height: 100%;
+    width: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,255,255,.35) 25%, #fff 50%, rgba(255,255,255,.35) 75%);
+    background-size: 220% 100%;
+    animation: sweep 1.3s linear infinite;
+  }
+
+  @keyframes sweep {
+    from { background-position: 220% 0; }
+    to   { background-position: -220% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .logo { animation: none; }
+    .fill { animation: none; background: #fff; }
+  }
+</style>
+</head>
+<body>
+  <div class="screen">
+    <img class="logo" src="assets/logo-full.png" alt="TM ANTOINE Advisory">
+    <div class="track"><div class="fill"></div></div>
+  </div>
+</body>
+</html>

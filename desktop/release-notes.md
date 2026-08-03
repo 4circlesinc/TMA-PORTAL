@@ -1,4 +1,4 @@
+- Fixes the search box and toolbar icons disappearing from the top of the window
+- A launch screen while the app starts, instead of a blank wait
 - The caller's photo now shows in the incoming call window
 - Asks permission to send notifications the first time you open the app
-- Adds Help → Send a Test Notification, to check notifications are getting through
-- Fixes an update that could fail with "that update couldn't be installed"

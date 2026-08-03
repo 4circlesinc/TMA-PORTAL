@@ -4108,4 +4108,49 @@
   if (window.TMAPortalViews) {
     window.TMAPortalViews.register('folders', mount);
   }
+
+  /*
+   * The file actions, for lists that live outside this view.
+   *
+   * The dashboard's Recent Files and Shared-with-me tables render the same rows
+   * with the same checkboxes and the same three-dot button, but they had no
+   * behaviour behind any of it — the controls were decoration. Rather than
+   * grow a second, drifting copy of download/move/copy/delete (with its own
+   * permission rules and its own destination picker), those tables drive the
+   * implementations here.
+   *
+   * Everything exposed takes its items EXPLICITLY. Nothing reads this view's
+   * own selection, so a caller's list can never be confused with whatever the
+   * File Library happens to have selected.
+   */
+  window.TMAFileActions = {
+    /** The row menu, anchored at a point, for one item. */
+    menu: function (x, y, item) { openContextMenu(x, y, item); },
+
+    /** Download one file or folder. */
+    download: downloadItem,
+
+    /** [{type, id}] for a list of items, the shape bulk endpoints expect. */
+    payload: function (items) {
+      return (items || []).map(function (i) { return { type: i.type, id: i.id }; });
+    },
+
+    /**
+     * Run a bulk action over an explicit list.
+     *
+     * `move` and `copy` open the destination picker themselves. onDone fires
+     * after the server confirms, so callers refresh from it rather than
+     * guessing when the list changed.
+     */
+    run: function (action, items, onDone) {
+      var payload = this.payload(items);
+      if (!payload.length) return;
+
+      var pickTarget = action === 'move' || action === 'copy';
+      bulkRun(action, payload, null, onDone || function () {}, pickTarget);
+    },
+
+    /** The shared confirm dialog, so destructive actions read identically. */
+    confirm: confirmModal,
+  };
 })();

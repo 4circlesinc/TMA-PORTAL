@@ -1743,33 +1743,7 @@
   background: var(--color-bg-tag);
 }
 
-/* Solid tile fills (see SHORTCUTS in portal-home.js for the assignment).
-   Blues carry the bulk — files, comms, people — and a handful of tiles take a
-   semantic accent so the panel has landmarks you can aim at without reading
-   the labels. Every accent is a deep, desaturated build, NOT the token
-   palette: --color-green #71dd8c and --color-yellow #ffcc00 are pastels that
-   would read as a toybox at this size. Literal hexes because the theme panel
-   rebinds --color-primary to the account's chosen accent. */
-.tma-portal-shortcut__icon--blue     { background: #03a5e9; }  /* file library + sharing */
-.tma-portal-shortcut__icon--deep     { background: #1d8ac9; }  /* email, feed */
-.tma-portal-shortcut__icon--navy     { background: #4a80a8; }  /* user administration */
-.tma-portal-shortcut__icon--green    { background: #19a97d; }  /* messages */
-.tma-portal-shortcut__icon--amber    { background: #e2a01f; }  /* favorites */
-.tma-portal-shortcut__icon--clay     { background: #e07555; }  /* calendar */
-.tma-portal-shortcut__icon--teal     { background: #14939f; }  /* feedback + approval */
-.tma-portal-shortcut__icon--graphite { background: #64798c; }  /* signatures */
-
 .tma-portal-shortcut__icon img { width: 20px; height: 20px; }
-
-/* Phosphor glyphs ship black; on a solid fill they have to become white. */
-.tma-portal-shortcut__icon--blue img,
-.tma-portal-shortcut__icon--deep img,
-.tma-portal-shortcut__icon--navy img,
-.tma-portal-shortcut__icon--green img,
-.tma-portal-shortcut__icon--amber img,
-.tma-portal-shortcut__icon--clay img,
-.tma-portal-shortcut__icon--teal img,
-.tma-portal-shortcut__icon--graphite img { filter: brightness(0) invert(1); }
 
 /* Count badge on a shortcut tile (Email / Calendar / Users).
    Grows with the number — exact totals like 27,000, never capped at 99+. */
@@ -3939,4 +3913,16 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-home-library__body {
   min-width: 0;
+}
+
+/* The bulk bar sits between the tabs and the table, and only exists while
+   something is selected — same component as the File Library and the Users
+   table, so it needs placement here rather than styling of its own. */
+.tma-portal-home-library__toolbar {
+  margin: var(--space-8) 0;
+}
+.tma-portal-home-library__toolbar[hidden] { display: none; }
+
+.tma-portal-home-library tr.is-selected > td {
+  background: var(--color-accent-bg);
 }
