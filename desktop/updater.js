@@ -22,7 +22,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawn, execFile } = require('node:child_process');
 const { pipeline } = require('node:stream/promises');
-const { Readable } = require('node:stream');
+const { Readable, Transform } = require('node:stream');
 
 const updateWindow = require('./update-window');
 const updateAvailable = require('./update-available');
@@ -132,19 +132,54 @@ async function download(fileName, onProgress) {
   const total = Number(response.headers.get('content-length')) || 0;
   const target = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tma-update-')), fileName);
 
-  const hash = crypto.createHash('sha512');
   let seen = 0;
 
-  const source = Readable.fromWeb(response.body);
-  source.on('data', (chunk) => {
-    hash.update(chunk);
-    seen += chunk.length;
-    if (total) onProgress(seen / total);
+  /*
+   * Progress only. Counting inside the pipeline rather than from a separate
+   * `source.on('data')` listener, because that listener is a second, competing
+   * reader of the same chunk buffers.
+   */
+  const meter = new Transform({
+    transform(chunk, _encoding, done) {
+      seen += chunk.length;
+      if (total) onProgress(seen / total);
+      done(null, chunk);
+    },
   });
 
-  await pipeline(source, fs.createWriteStream(target));
+  await pipeline(Readable.fromWeb(response.body), meter, fs.createWriteStream(target));
 
-  return { target, digest: hash.digest('base64') };
+  return { target, digest: await digestOf(target) };
+}
+
+/**
+ * The SHA-512 of the file as it actually sits on disk.
+ *
+ * This used to be accumulated from the download stream, which certified bytes
+ * that had passed through memory rather than bytes that landed. Those are not
+ * the same thing: hashing from an `on('data')` listener reads each chunk the
+ * moment it arrives, while the write of that same chunk completes later, and a
+ * buffer reused in between leaves the file holding something the hash never
+ * saw. It fails silently and looks impossible — the checksum passes and then
+ * the archive will not open.
+ *
+ * Seen in the wild on 0.8.6→0.8.7: two attempts, both exactly the right length,
+ * both diverging from the real artifact at a chunk boundary — 557056 in one,
+ * 1458176 in the other — and differing from each other. Verified downloads,
+ * corrupt files, "Couldn't read pkzip signature".
+ *
+ * The file is what ditto opens and what replaces the app, so the file is what
+ * has to be verified. One extra read of a 90 MB file is nothing against
+ * installing an archive nobody checked.
+ */
+function digestOf(file) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha512');
+    fs.createReadStream(file)
+      .on('error', reject)
+      .on('data', (chunk) => hash.update(chunk))
+      .on('end', () => resolve(hash.digest('base64')));
+  });
 }
 
 /* ---------------------------------------------------------------------- install */
