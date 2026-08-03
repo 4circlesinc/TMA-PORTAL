@@ -9,6 +9,7 @@ use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Models\User;
 use App\Support\SharePoint\Pusher;
+use App\Support\SharePoint\RemoteContent;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -175,7 +176,11 @@ class SharePointSyncTest extends TestCase
         return [
             'id' => $id, 'name' => $name,
             'file' => ['mimeType' => 'text/plain'],
-            'eTag' => '"'.$id.',1"', 'cTag' => $ctag,
+            // eTag moves on ANY change, cTag only on content. Deriving it from
+            // the cTag keeps that relationship true: a fixture that changed the
+            // content while holding the eTag still is a response Graph cannot
+            // produce, and it hid the "nothing changed, skip it" short-circuit.
+            'eTag' => '"'.$id.','.$ctag.'"', 'cTag' => $ctag,
             'size' => 10, 'webUrl' => 'https://example.sharepoint.com/'.$name,
             'parentReference' => ['id' => $parent],
             'lastModifiedDateTime' => now()->toIso8601String(),
@@ -313,6 +318,32 @@ class SharePointSyncTest extends TestCase
             ->where('item_type', 'folder')->sum('child_count'));
     }
 
+    /**
+     * A re-walk of an unchanged library must not write anything.
+     *
+     * Delta replays every item after a cursor reset. Each one used to cost an
+     * UPDATE recording that nothing had happened — thousands of pointless
+     * round-trips, which is most of the time a re-import took.
+     */
+    public function test_re_walking_an_unchanged_library_writes_nothing(): void
+    {
+        $items = [
+            ['id' => 'f-1', 'name' => 'Contracts', 'folder' => ['childCount' => 1],
+                'parentReference' => ['id' => 'root-1'], 'eTag' => '"f1"'],
+            $this->fileItem('i-1', 'Brief.txt', 'c:1', 'f-1'),
+        ];
+        $this->fakeGraph($items, [['id' => 'f-1'], ['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+
+        // Same cursor reset, same items, nothing touched in SharePoint.
+        $this->connection->update(['delta_link' => null]);
+        $stats = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(0, $stats['created']);
+        $this->assertSame(0, $stats['updated'], 'an unchanged item must not be rewritten');
+        $this->assertSame(2, $stats['unchanged'] ?? 0);
+    }
+
     public function test_delta_imports_folders_and_files(): void
     {
         $this->fakeGraph([
@@ -409,10 +440,66 @@ class SharePointSyncTest extends TestCase
         $this->assertFileExists($this->vaultRoot.'/'.$file->storage_path);
     }
 
+    /**
+     * A file whose bytes cannot be fetched fails on ACCESS, not on import.
+     *
+     * The import records structure only, so a file Graph will not hand over is
+     * imported happily and only goes wrong when somebody opens it. That is the
+     * better trade: one unreadable file no longer holds up the whole library.
+     */
+    public function test_a_file_whose_content_cannot_be_fetched_fails_when_opened(): void
+    {
+        $this->fakeGraph([$this->fileItem('bad', 'Broken.txt', 'c:1')], [['id' => 'bad']]);
+        $this->failContentFor = 'bad';
+
+        $stats = Synchroniser::sync($this->connection);
+
+        // The import itself is clean — nothing was downloaded to fail.
+        $this->assertSame(1, $stats['created']);
+        $this->assertSame(0, $stats['failed']);
+
+        $file = FileItem::where('name', 'Broken.txt')->firstOrFail();
+        $this->assertSame(RemoteContent::PENDING, $file->content_state);
+
+        // Opening it is where the problem surfaces, and it stays pending.
+        $this->assertFalse(RemoteContent::ensure($file));
+        $this->assertSame(RemoteContent::PENDING, $file->fresh()->content_state);
+    }
+
+    /** Bytes arrive on first access, and the file stops being a placeholder. */
+    public function test_opening_an_imported_file_fetches_its_content(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']], 'the real bytes');
+        Synchroniser::sync($this->connection);
+
+        $file = FileItem::where('name', 'Brief.txt')->firstOrFail();
+        $this->assertSame(RemoteContent::PENDING, $file->content_state);
+        $this->assertNull($file->storage_path);
+
+        $this->assertTrue(RemoteContent::ensure($file));
+
+        $file->refresh();
+        $this->assertNull($file->content_state, 'no longer a placeholder');
+        $this->assertNotNull($file->storage_path);
+        $this->assertSame('the real bytes', file_get_contents($this->vaultRoot.'/'.$file->storage_path));
+
+        // Version 1 was a placeholder alongside it and must be filled in too,
+        // or the version history 404s on a file that opens perfectly well.
+        $v1 = FileVersion::where('file_id', $file->id)->where('version_number', 1)->firstOrFail();
+        $this->assertNull($v1->content_state);
+        $this->assertSame($file->storage_path, $v1->storage_path);
+    }
+
+    /**
+     * One unfetchable file does not stop the others.
+     *
+     * This property used to live in the import, because the import downloaded
+     * everything. Now that content is fetched separately, the same guarantee
+     * has to hold there instead — otherwise one broken file in a library of
+     * thousands would stall every warm-up pass behind it.
+     */
     public function test_one_bad_item_does_not_stop_the_rest(): void
     {
-        // Only the first item's download fails.
-        $this->failContentFor = 'bad';
         $this->fakeGraph(
             [$this->fileItem('bad', 'Bad.txt', 'c:1'), $this->fileItem('good', 'Good.txt', 'c:1')],
             [['id' => 'bad'], ['id' => 'good']],
@@ -420,9 +507,20 @@ class SharePointSyncTest extends TestCase
 
         $stats = Synchroniser::sync($this->connection);
 
-        $this->assertSame(1, $stats['failed']);
-        $this->assertSame(1, $stats['created']);
-        $this->assertNotNull(FileItem::where('name', 'Good.txt')->first(), 'the healthy file still imported');
+        // Both import cleanly — no bytes were touched.
+        $this->assertSame(2, $stats['created']);
+        $this->assertSame(0, $stats['failed']);
+
+        // Only this one's content is unavailable.
+        $this->failContentFor = 'bad';
+
+        $bad = FileItem::where('name', 'Bad.txt')->firstOrFail();
+        $good = FileItem::where('name', 'Good.txt')->firstOrFail();
+
+        $this->assertFalse(RemoteContent::ensure($bad), 'the broken file reports failure');
+        $this->assertTrue(RemoteContent::ensure($good), 'the healthy file still fetches');
+        $this->assertNull($good->fresh()->content_state);
+        $this->assertSame(RemoteContent::PENDING, $bad->fresh()->content_state);
     }
 
     public function test_throttling_leaves_the_cursor_alone_so_the_next_run_resumes(): void
@@ -485,7 +583,10 @@ class SharePointSyncTest extends TestCase
         Synchroniser::sync($this->connection);
 
         $file = FileItem::first();
-        // The same collision, but this file was authored in the portal.
+        // The same collision, but this file was authored in the portal — which
+        // means its bytes are here. Materialise it the way opening it would:
+        // a file with no local content has nothing to push in the first place.
+        RemoteContent::ensure($file);
         $file->update(['origin' => 'portal']);
 
         $this->remoteItem = ['id' => 'i-1', 'cTag' => 'c:CHANGED'];

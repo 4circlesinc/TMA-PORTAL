@@ -3,6 +3,7 @@
 namespace App\Support\Files;
 
 use App\Models\FileItem;
+use App\Support\SharePoint\RemoteContent;
 use App\Models\FileVersion;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Storage;
@@ -185,6 +186,13 @@ class Vault
 
     private static function streamVersion(FileVersion $version, string $name, string $disposition): StreamedResponse
     {
+        // Version 1 of an imported file is a placeholder until the file
+        // itself is materialised, so pull the bytes through the file.
+        if ($version->content_state === RemoteContent::PENDING && $version->file) {
+            RemoteContent::ensure($version->file);
+            $version->refresh();
+        }
+
         $disk = Storage::disk($version->disk ?: self::diskName());
 
         abort_unless($version->storage_path && $disk->exists($version->storage_path), 404, 'That version is no longer in storage.');
@@ -227,6 +235,18 @@ class Vault
 
     private static function stream(FileItem $file, string $disposition): StreamedResponse
     {
+        /*
+         * A file imported from SharePoint has a record before it has bytes, so
+         * the first read is what pulls them across. Hooking it here rather than
+         * in the download controller means preview, signing, zipping and copy
+         * all inherit it — none of them should have to know a file arrived by
+         * reference.
+         */
+        if (RemoteContent::isPending($file) && ! RemoteContent::ensure($file)) {
+            throw new FileValidationException('That file could not be fetched from SharePoint.');
+        }
+
+        $file->refresh();
         $disk = self::diskFor($file);
 
         if (! $file->storage_path || ! $disk->exists($file->storage_path)) {

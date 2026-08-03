@@ -42,11 +42,55 @@ class Synchroniser
     /** How long a run may hold the lock before another may take over. */
     private const LOCK_MINUTES = 30;
 
+    /**
+     * This connection's mappings, keyed by Graph item id.
+     *
+     * Loaded once per run instead of a SELECT per item. Every item costs at
+     * least one lookup for itself and one for its parent, and against a
+     * database in another region — where a round-trip is ~380ms, not ~0.4ms —
+     * that alone is over an hour for a few thousand items.
+     *
+     * @var array<string, SharePointItem>|null
+     */
+    private static ?array $mappingIndex = null;
+
+    private static function loadMappingIndex(SharePointConnection $connection): void
+    {
+        self::$mappingIndex = SharePointItem::where('connection_id', $connection->id)
+            ->get()->keyBy('graph_item_id')->all();
+    }
+
+    private static function mappingFor(SharePointConnection $connection, string $graphId): ?SharePointItem
+    {
+        if (self::$mappingIndex === null) {
+            self::loadMappingIndex($connection);
+        }
+
+        return self::$mappingIndex[$graphId] ?? null;
+    }
+
+    private static function rememberMapping(SharePointItem $mapping): void
+    {
+        if (self::$mappingIndex !== null) {
+            self::$mappingIndex[$mapping->graph_item_id] = $mapping;
+        }
+    }
+
+    private static function forgetMapping(SharePointItem $mapping): void
+    {
+        if (self::$mappingIndex !== null) {
+            unset(self::$mappingIndex[$mapping->graph_item_id]);
+        }
+    }
+
     public static function sync(SharePointConnection $connection): array
     {
         if (! $connection->sync_enabled) {
             return ['skipped' => true];
         }
+
+        // Fresh per run — a long-lived worker syncs many connections.
+        self::$mappingIndex = null;
 
         /*
          * One run at a time per connection.
@@ -228,8 +272,7 @@ class Synchroniser
             return;
         }
 
-        $mapping = SharePointItem::where('connection_id', $connection->id)
-            ->where('graph_item_id', $graphId)->first();
+        $mapping = self::mappingFor($connection, $graphId);
 
         if (isset($item['deleted'])) {
             if ($mapping) {
@@ -243,6 +286,22 @@ class Synchroniser
         $isFolder = isset($item['folder']);
 
         if ($mapping) {
+            /*
+             * eTag covers ANY change — content, name, or move. If it matches
+             * what we stored, this item is byte-for-byte what we already have
+             * and there is nothing to write.
+             *
+             * A full re-walk (after a cursor reset, or a first pass that had to
+             * resume) replays every item in the library. Without this, each one
+             * cost an UPDATE to record that nothing had happened.
+             */
+            $etag = $item['eTag'] ?? null;
+            if ($etag !== null && $etag === $mapping->etag) {
+                $stats['unchanged'] = ($stats['unchanged'] ?? 0) + 1;
+
+                return;
+            }
+
             self::applyUpdate($connection, $mapping, $item, $isFolder, $stats);
 
             return;
@@ -266,14 +325,14 @@ class Synchroniser
                 'origin' => 'sharepoint',
             ]);
 
-            self::mapFolder($connection, $item, $folder);
+            self::rememberMapping(self::mapFolder($connection, $item, $folder));
             $stats['created']++;
 
             return;
         }
 
         $file = self::downloadIntoLibrary($connection, $item, $parentFolder, $name);
-        self::mapFile($connection, $item, $file);
+        self::rememberMapping(self::mapFile($connection, $item, $file));
         $stats['created']++;
     }
 
@@ -334,28 +393,40 @@ class Synchroniser
             $mapping->delete();
         });
 
+        self::forgetMapping($mapping);
+
         self::log($connection, 'deleted', 'info', $mapping->graph_item_id, $mapping->name);
     }
 
-    /** Fetch the bytes and file them as a brand-new portal file. */
+    /**
+     * Record a brand-new portal file WITHOUT moving its bytes.
+     *
+     * Downloading each file inline is what made a first import take hours: a
+     * few thousand items at a couple of megabytes each is gigabytes pulled from
+     * Graph and pushed to R2, one at a time, before anything at all showed up
+     * in the library. The structure is what people need first, and it arrives
+     * in a handful of delta pages.
+     *
+     * The bytes are fetched the first time someone opens the file, or ahead of
+     * time by `sharepoint:warm-content`.
+     */
     private static function downloadIntoLibrary(SharePointConnection $connection, array $item, ?Folder $parent, string $name): FileItem
     {
-        $temp = tempnam(sys_get_temp_dir(), 'sp-');
-        Drive::download($connection->drive_id, $item['id'], $temp);
-
         $ext = pathinfo($name, PATHINFO_EXTENSION) ?: '';
-        $stored = Vault::store($temp, strtolower($ext));
 
         $file = FileItem::create([
-            'uuid' => $stored['uuid'],
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
             'folder_id' => $parent?->id,
             'name' => $name,
             'extension' => strtolower($ext),
             'mime_type' => $item['file']['mimeType'] ?? null,
-            'size' => $stored['size'],
-            'disk' => $stored['disk'],
-            'storage_path' => $stored['path'],
-            'checksum' => $stored['checksum'],
+            // Graph's size, so the listing shows a real figure before the
+            // bytes arrive. Replaced with the stored size on materialisation.
+            'size' => $item['size'] ?? 0,
+            'disk' => null,
+            'storage_path' => null,
+            'checksum' => null,
+            'content_state' => RemoteContent::PENDING,
             'owner_id' => $connection->created_by,
             'uploaded_by' => $connection->created_by,
             'source_modified_at' => isset($item['lastModifiedDateTime'])
@@ -365,7 +436,9 @@ class Synchroniser
             'origin' => 'sharepoint',
         ]);
 
-        Versions::recordInitial($file, $connection->created_by, 'Imported from SharePoint');
+        // Version 1 is a placeholder too — RemoteContent fills both in together.
+        Versions::recordInitial($file, $connection->created_by, 'Imported from SharePoint')
+            ?->update(['content_state' => RemoteContent::PENDING]);
         Activity::forFile($connection->created_by, $file, 'upload', ['via' => 'sharepoint']);
 
         return $file;
@@ -407,12 +480,9 @@ class Synchroniser
             return $connection->folder;
         }
 
-        $mapping = SharePointItem::where('connection_id', $connection->id)
-            ->where('graph_item_id', $parentId)
-            ->whereNotNull('folder_id')
-            ->first();
+        $mapping = self::mappingFor($connection, $parentId);
 
-        return $mapping?->folder ?? $connection->folder;
+        return ($mapping && $mapping->folder_id) ? $mapping->folder : $connection->folder;
     }
 
     /**

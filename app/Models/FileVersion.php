@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * never serialized to the client, exactly as on FileItem.
  */
 #[Fillable([
-    'uuid', 'file_id', 'version_number', 'disk', 'storage_path', 'size', 'checksum',
+    'uuid', 'file_id', 'version_number', 'disk', 'storage_path', 'size', 'checksum', 'content_state',
     'mime_type', 'extension', 'uploaded_by', 'note', 'restored_from_id', 'is_current',
     'approval_status', 'graph_version_id',
 ])]

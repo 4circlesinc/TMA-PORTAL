@@ -141,6 +141,18 @@ class Pusher
                 return ['status' => 'no-parent'];
             }
 
+            /*
+             * A file imported by reference has no local bytes — and does not
+             * need any. SharePoint already holds the content; that is where we
+             * got the file from. Pushing it back would mean downloading the
+             * bytes purely to upload the identical bytes to where they came
+             * from, and before this check that download failed and marked a
+             * perfectly healthy file as a push failure.
+             */
+            if (RemoteContent::isPending($file)) {
+                return ['status' => 'content-remote'];
+            }
+
             // Vault::localCopy handles the case where durable bytes live on
             // object storage rather than the local disk.
             $local = Vault::localCopy($file);

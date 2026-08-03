@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Updating</title>
+<style>
+  :root { color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    /* --color-primary from public/css/tokens.css, the same blue as the title
+       bar, so the update reads as part of the app rather than a system dialog. */
+    background: #03a5e9;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #fff;
+    user-select: none;
+    cursor: default;
+  }
+
+  /* Frameless, so the whole surface drags. */
+  .screen {
+    -webkit-app-region: drag;
+    height: 100%;
+    padding: 30px 34px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 18px;
+  }
+
+  .mark {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.16);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .version {
+    font-size: 13px;
+    opacity: 0.85;
+    margin: -12px 0 0;
+  }
+
+  .track {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.25);
+    overflow: hidden;
+  }
+
+  .fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: #fff;
+    transition: width 180ms ease-out;
+  }
+
+  /*
+   * Unzipping and swapping the bundle report no progress, so the bar stops
+   * looking like it is working right when the app is busiest. A stripe that
+   * keeps moving says "still going" without claiming a percentage it does not
+   * have.
+   */
+  /*
+   * A shimmer across a full-width bar, not a stripe travelling through an empty
+   * one: a stripe narrower than the track spends part of every cycle completely
+   * outside it, so the bar reads as empty — exactly the wrong signal at the
+   * point the app is doing its heaviest work.
+   */
+  .track.is-indeterminate .fill {
+    width: 100% !important;
+    background: linear-gradient(90deg, rgba(255,255,255,.3) 25%, #fff 50%, rgba(255,255,255,.3) 75%);
+    background-size: 220% 100%;
+    animation: sweep 1.3s linear infinite;
+  }
+
+  @keyframes sweep {
+    from { background-position: 220% 0; }
+    to   { background-position: -220% 0; }
+  }
+
+  .status {
+    font-size: 13px;
+    opacity: 0.9;
+    margin: -8px 0 0;
+    min-height: 16px;
+  }
+
+  .note {
+    font-size: 12px;
+    opacity: 0.72;
+    margin: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fill { transition: none; }
+    .track.is-indeterminate .fill { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="screen">
+    <div class="mark" aria-hidden="true">TM</div>
+    <h1 class="title">Updating TM ANTOINE Portal</h1>
+    <p class="version" id="version"></p>
+
+    <div class="track" id="track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+      <div class="fill" id="fill"></div>
+    </div>
+
+    <p class="status" id="status">Starting…</p>
+    <p class="note">The app will restart on its own.</p>
+  </div>
+
+<script>
+  var track = document.getElementById('track');
+  var fill = document.getElementById('fill');
+  // Not `status`: window.status is a legacy string setter, so a top-level
+  // `var status` becomes a string and every textContent write vanishes.
+  var statusLine = document.getElementById('status');
+
+  var percent = 0;
+  var phase = 'downloading';
+
+  function paint() {
+    if (phase === 'downloading') {
+      track.classList.remove('is-indeterminate');
+      fill.style.width = percent + '%';
+      track.setAttribute('aria-valuenow', String(percent));
+      statusLine.textContent = 'Downloading… ' + percent + '%';
+      return;
+    }
+
+    // No number to show, so drop the value rather than leave a stale one.
+    track.classList.add('is-indeterminate');
+    track.removeAttribute('aria-valuenow');
+    statusLine.textContent = phase === 'installing' ? 'Installing…' : 'Restarting…';
+  }
+
+  window.TMAUpdate.onVersion(function (version) {
+    document.getElementById('version').textContent = version ? 'Version ' + version : '';
+  });
+
+  window.TMAUpdate.onPhase(function (next) {
+    phase = next;
+    paint();
+  });
+
+  window.TMAUpdate.onProgress(function (fraction) {
+    percent = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+    if (phase === 'downloading') paint();
+  });
+
+  paint();
+</script>
+</body>
+</html>

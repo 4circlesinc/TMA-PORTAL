@@ -43,6 +43,36 @@ const CSS = `
     min-height: calc(100vh - ${HEIGHT}px) !important;
   }
 
+  /*
+   * Body padding moves everything in normal flow, but position:fixed anchors to
+   * the viewport and ignores it. Parts of the shell become fixed at top:0 — and
+   * then sit *under* the bar. The sidebar was the visible one: its logo is the
+   * first thing in it, so the logo went half-missing.
+   *
+   * Each rule below mirrors the exact selector and breakpoint that makes the
+   * element fixed in dashboard.css. The offset cannot be set unconditionally,
+   * because these same elements are position:relative in their other states,
+   * where an offset would shove them down instead.
+   *
+   * Deliberately absent: .tma-dash__mmenu and .tma-dash__scrim. Those are
+   * takeovers and are supposed to cover the bar — see the note above.
+   */
+  @media (min-width: 1025px) {
+    /* Hover-style rail, collapsed — dashboard.css "held fixed in both states". */
+    .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard) .tma-dash__sidebar {
+      top: ${HEIGHT}px !important;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    /* Narrow window: the rail and rightbar become drawers and the header pins. */
+    .tma-dash__sidebar,
+    .tma-dash__rightbar,
+    .tma-dash__header {
+      top: ${HEIGHT}px !important;
+    }
+  }
+
   #tma-desktop-titlebar {
     position: fixed;
     top: 0; left: 0; right: 0;
@@ -222,20 +252,42 @@ function windowOptions() {
   };
 }
 
-/** Paints the bar into a portal page. Safe to call more than once. */
-async function apply(webContents) {
+/**
+ * Draws the bar, and re-draws it to pick up a changed Back/Forward state.
+ *
+ * Cheap enough to run on every navigation: it replaces one small subtree and
+ * touches no stylesheet.
+ */
+async function refresh(webContents) {
   try {
     const history = webContents.navigationHistory;
 
-    await webContents.insertCSS(CSS);
     await webContents.executeJavaScript(script({
       canGoBack: history.canGoBack(),
       canGoForward: history.canGoForward(),
     }), true);
   } catch {
     // A page that went away mid-injection is not worth reporting; the next
-    // load paints it again.
+    // navigation draws it again.
   }
 }
 
-module.exports = { apply, windowOptions, HEIGHT, BLUE };
+/**
+ * The full pass, for a freshly loaded document.
+ *
+ * insertCSS is deliberately *not* part of refresh(): a stylesheet inserted this
+ * way lives as long as the document does, so re-inserting it on every in-page
+ * navigation would stack a fresh copy each time — and the portal navigates by
+ * pushState, so that is most of them.
+ */
+async function apply(webContents) {
+  try {
+    await webContents.insertCSS(CSS);
+  } catch {
+    // As above — a page that went away takes its stylesheet with it.
+  }
+
+  await refresh(webContents);
+}
+
+module.exports = { apply, refresh, windowOptions, HEIGHT, BLUE };

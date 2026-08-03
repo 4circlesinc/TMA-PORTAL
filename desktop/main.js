@@ -224,7 +224,9 @@ function attachNavigationRules(win) {
 
   // The portal routes through pushState, which fires no load event. Without
   // this the bar survives the first screen and disappears on the second.
-  webContents.on('did-navigate-in-page', () => titlebar.apply(webContents));
+  // pushState only moves within the same document, so the stylesheet is still
+  // there — only the bar's Back/Forward state needs redrawing.
+  webContents.on('did-navigate-in-page', () => titlebar.refresh(webContents));
 
   webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame || errorCode === -3) return; // -3 = user aborted

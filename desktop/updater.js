@@ -24,6 +24,8 @@ const { spawn, execFile } = require('node:child_process');
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
 
+const updateWindow = require('./update-window');
+
 const { version: APP_VERSION } = require('./package.json');
 
 const FEED_URL = process.env.TMA_UPDATE_URL || 'https://portal.tmantoinelaw.com/desktop/';
@@ -140,12 +142,17 @@ const unzip = (archive, into) => new Promise((resolve, reject) => {
  * On Windows there is nothing to unpack: the artifact is the NSIS installer,
  * so a verified download is already the finished article.
  */
-async function stageRelease(release, onProgress = () => {}) {
+async function stageRelease(release, onProgress = () => {}, onPhase = () => {}) {
   const { target, digest } = await download(release.file, onProgress);
 
   if (digest !== release.sha512) {
     throw new Error('The downloaded update did not match its checksum.');
   }
+
+  // Past this point nothing reports a fraction — unzipping a 90 MB bundle and
+  // swapping it takes real time with no way to measure it, so the screen is
+  // told to stop pretending it knows how far along it is.
+  onPhase('installing');
 
   if (!IS_MAC) return target;
 
@@ -236,14 +243,28 @@ async function runUpdate(release, parentWindow) {
   }
 
   try {
+    // Downloading 90 MB used to happen with nothing on screen but the dock
+    // progress bar, and then the app vanished and came back — which on a slow
+    // connection is a long silence followed by what looks like a crash.
+    updateWindow.show(release.version);
     progressBar(0);
-    const staged = await stageRelease(release, progressBar);
+
+    const staged = await stageRelease(
+      release,
+      (fraction) => { progressBar(fraction); updateWindow.setProgress(fraction); },
+      (phase) => updateWindow.setPhase(phase),
+    );
+
     progressBar(-1);
+    updateWindow.setPhase('restarting');
 
     if (IS_MAC) replaceAndRestart(staged);
     else runInstaller(staged);
   } catch (error) {
     progressBar(-1);
+    // The screen says the app is restarting; it is not, so take it away before
+    // the error appears behind it.
+    updateWindow.close();
     dialog.showMessageBox(parentWindow, {
       type: 'error',
       message: "That update couldn't be installed",

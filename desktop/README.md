@@ -214,6 +214,42 @@ Security → Open Anyway**, which the account page now tells people. Every user
 must do this once, on every macOS from 15 up. A Developer ID certificate is the
 only thing that removes the step.
 
+## The updating screen
+
+`update-window.js` + `update-window.html`. An update used to run with nothing on
+screen but the dock progress bar, and then the app vanished and came back — on a
+slow connection, a long silence followed by what looks like a crash.
+
+It is a separate window rather than an overlay on the portal, for the same
+reason as the call panel: the page an overlay would sit on is about to be thrown
+away, and the swap happens after the main window has gone.
+
+Three phases, pushed from `updater.js`:
+
+| phase | bar | set when |
+|---|---|---|
+| `downloading` | real percentage | bytes arriving |
+| `installing` | indeterminate | checksum passed, unzip/swap starts |
+| `restarting` | indeterminate | staged, about to relaunch |
+
+Only the download can report a fraction. Unzipping 90 MB and swapping the bundle
+take real time with nothing to measure, so the bar stops claiming a percentage
+it does not have — and drops `aria-valuenow` rather than leaving a stale number
+a screen reader would still read out.
+
+Two things that bit, both now covered by `test-update-window.js`:
+
+- **Do not name a DOM variable `status`.** `window.status` is a legacy string
+  setter, so a top-level `var status = document.getElementById(…)` becomes a
+  *string* and every `textContent` write silently vanishes. The bar animated
+  perfectly while the words never changed once.
+- **An indeterminate stripe narrower than its track is invisible part of every
+  cycle**, which reads as a stalled empty bar at the exact moment the app is
+  busiest. It is a shimmer across a full-width bar instead.
+
+`npm run test:update-window -- --watch` steps through the phases slowly and
+leaves the window up to look at.
+
 ## When the portal is down
 
 Two different failures, and only one of them is a "load failure" to Chromium.
@@ -244,6 +280,53 @@ with `insertCSS` + `executeJavaScript`, so a browser never sees it and no portal
 CSS file can be broken by it. Re-applied on `did-navigate-in-page` as well as
 `did-finish-load`, because the portal routes through pushState and would
 otherwise lose the bar on the second screen.
+
+### Back / Forward / Reload
+
+The bar carries the three navigation controls. They call `history.back()`,
+`history.forward()` and `location.reload()` in the page rather than going
+through new IPC — that is the same session history `webContents` exposes, so
+Back on the bar and Back in the Go menu land in the same place, and `preload.js`
+keeps its deliberately tiny surface.
+
+Whether there is anywhere to go *to* cannot be worked out in the page
+(`history.length` counts entries, not position), so the main process reads
+`webContents.navigationHistory` and the bar is re-rendered with that state on
+every navigation. Buttons must carry `-webkit-app-region: no-drag` or the strip's
+drag region swallows their clicks.
+
+`refresh()` re-renders the bar; `apply()` is `refresh()` plus `insertCSS`. Only
+a freshly loaded document gets the full pass — a stylesheet inserted that way
+lives as long as the document, and the portal navigates by pushState, so calling
+`apply()` on every navigation would stack a new copy of the CSS each time.
+
+### position:fixed is the trap — run `npm test`
+
+Hiding the native bar means the web viewport starts at the very top of the
+window. `body { padding-top }` moves everything in normal flow down past the
+bar, but **`position: fixed` anchors to the viewport and ignores it**, so any
+part of the shell that goes fixed ends up underneath the bar. That shipped once:
+the hover-style rail is `position: fixed; top: 0` when collapsed, and the logo is
+the first thing in it, so the logo went half-missing.
+
+Every fixed element therefore needs an explicit offset, mirroring the exact
+selector and breakpoint that made it fixed in dashboard.css — the offset cannot
+be applied unconditionally, because those same elements are `position: relative`
+in their other states, where an offset shoves them down instead. Currently:
+
+| element | fixed when | offset |
+|---|---|---|
+| `.tma-dash__sidebar` | ≥1025px, collapsed, hover style | yes |
+| `.tma-dash__sidebar`, `.tma-dash__rightbar`, `.tma-dash__header` | ≤1024px | yes |
+| `.tma-dash__mmenu`, `.tma-dash__scrim` | takeovers | **no** — meant to cover the bar |
+
+`test-titlebar.js` (part of `npm test`) loads the *real* shell and stylesheets
+over a throwaway server, with scripts stripped so the page cannot sit polling
+`/me` and never finish loading, and asserts the rail and logo clear the bar in
+both sidebar states. It measures after two animation frames — reading in the
+same tick as a class change returns stale geometry and invents failures.
+
+If you add a fixed element to the shell, add it to that table and that test.
 
 The one thing to know: hiding the native bar means the web viewport now starts
 at the very top of the window. Ordinary content is pushed down by the body
