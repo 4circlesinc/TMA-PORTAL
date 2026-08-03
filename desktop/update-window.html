@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <title>Updating</title>
 <style>
-  :root { color-scheme: dark; }
+  /* Let the system decide; the glass behind this is light or dark to match. */
+  :root { color-scheme: light dark; }
 
   * { box-sizing: border-box; }
 
@@ -12,12 +13,11 @@
     margin: 0;
     height: 100%;
     overflow: hidden;
-    /* --color-primary from public/css/tokens.css, the same blue as the title
-       bar, so the update reads as part of the app rather than a system dialog. */
-    background: #03a5e9;
+    /* Transparent all the way down, or the window's vibrancy is painted over
+       and the glass turns into a flat rectangle. */
+    background: transparent;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    color: #fff;
     user-select: none;
     cursor: default;
   }
@@ -26,44 +26,33 @@
   .screen {
     -webkit-app-region: drag;
     height: 100%;
-    padding: 30px 34px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    text-align: center;
-    gap: 18px;
+    gap: 20px;
+    padding: 0 40px;
+    /* The window is transparent, so the corner has to be drawn here. Matched to
+       the radius macOS gives a panel this size. */
+    border-radius: 16px;
+    /* A hairline lift, the way AppKit separates a material from what is under
+       it. Barely visible, and the thing that stops the panel looking pasted on. */
+    box-shadow: inset 0 0 0 0.5px light-dark(rgba(0,0,0,.10), rgba(255,255,255,.12));
   }
 
   .mark {
-    width: 54px;
-    height: 54px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.16);
-    display: grid;
-    place-items: center;
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-  }
-
-  .title {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 0;
-  }
-
-  .version {
-    font-size: 13px;
-    opacity: 0.85;
-    margin: -12px 0 0;
+    width: 48px;
+    height: 48px;
+    display: block;
+    object-fit: contain;
   }
 
   .track {
     width: 100%;
-    height: 6px;
+    /* Thin, the way a system progress bar is. */
+    height: 4px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.25);
+    background: light-dark(rgba(0,0,0,.10), rgba(255,255,255,.16));
     overflow: hidden;
   }
 
@@ -71,25 +60,22 @@
     height: 100%;
     width: 0%;
     border-radius: 999px;
-    background: #fff;
+    background: #03a5e9;
     transition: width 180ms ease-out;
   }
 
   /*
-   * Unzipping and swapping the bundle report no progress, so the bar stops
-   * looking like it is working right when the app is busiest. A stripe that
-   * keeps moving says "still going" without claiming a percentage it does not
-   * have.
-   */
-  /*
+   * Unzipping and swapping the bundle report no progress, so there is no
+   * percentage to show at the point the app is busiest.
+   *
    * A shimmer across a full-width bar, not a stripe travelling through an empty
    * one: a stripe narrower than the track spends part of every cycle completely
-   * outside it, so the bar reads as empty — exactly the wrong signal at the
-   * point the app is doing its heaviest work.
+   * outside it, so the bar reads as empty and stalled — the opposite of what it
+   * is there to say.
    */
   .track.is-indeterminate .fill {
     width: 100% !important;
-    background: linear-gradient(90deg, rgba(255,255,255,.3) 25%, #fff 50%, rgba(255,255,255,.3) 75%);
+    background: linear-gradient(90deg, rgba(3,165,233,.35) 25%, #03a5e9 50%, rgba(3,165,233,.35) 75%);
     background-size: 220% 100%;
     animation: sweep 1.3s linear infinite;
   }
@@ -99,17 +85,14 @@
     to   { background-position: -220% 0; }
   }
 
-  .status {
-    font-size: 13px;
-    opacity: 0.9;
-    margin: -8px 0 0;
-    min-height: 16px;
-  }
-
-  .note {
-    font-size: 12px;
-    opacity: 0.72;
+  /* The only words on the screen. */
+  .caption {
     margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: light-dark(rgba(0,0,0,.55), rgba(255,255,255,.62));
+    min-height: 16px;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -120,24 +103,22 @@
 </head>
 <body>
   <div class="screen">
-    <div class="mark" aria-hidden="true">TM</div>
-    <h1 class="title">Updating TM ANTOINE Portal</h1>
-    <p class="version" id="version"></p>
+    <img class="mark" src="assets/logo-mark.png" alt="" aria-hidden="true" width="48" height="48">
 
     <div class="track" id="track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
       <div class="fill" id="fill"></div>
     </div>
 
-    <p class="status" id="status">Starting…</p>
-    <p class="note">The app will restart on its own.</p>
+    <p class="caption" id="caption">Updating</p>
   </div>
 
 <script>
   var track = document.getElementById('track');
   var fill = document.getElementById('fill');
-  // Not `status`: window.status is a legacy string setter, so a top-level
-  // `var status` becomes a string and every textContent write vanishes.
-  var statusLine = document.getElementById('status');
+  // Not `caption`-adjacent naming by accident: the element must not be called
+  // `status`, because window.status is a legacy string setter and a top-level
+  // `var status` would become a string, silently swallowing every write.
+  var caption = document.getElementById('caption');
 
   var percent = 0;
   var phase = 'downloading';
@@ -147,18 +128,21 @@
       track.classList.remove('is-indeterminate');
       fill.style.width = percent + '%';
       track.setAttribute('aria-valuenow', String(percent));
-      statusLine.textContent = 'Downloading… ' + percent + '%';
+      caption.textContent = 'Downloading ' + percent + '%';
       return;
     }
 
     // No number to show, so drop the value rather than leave a stale one.
     track.classList.add('is-indeterminate');
     track.removeAttribute('aria-valuenow');
-    statusLine.textContent = phase === 'installing' ? 'Installing…' : 'Restarting…';
+    caption.textContent = phase === 'installing' ? 'Installing' : 'Restarting';
   }
 
+  // The version is not on screen — it is one more thing to read for something
+  // nobody is choosing between. It goes to the window title, which is what
+  // VoiceOver announces and what the Window menu lists.
   window.TMAUpdate.onVersion(function (version) {
-    document.getElementById('version').textContent = version ? 'Version ' + version : '';
+    document.title = version ? 'Updating to ' + version : 'Updating';
   });
 
   window.TMAUpdate.onPhase(function (next) {

@@ -26,22 +26,24 @@ app.whenReady().then(async () => {
 
   const read = () => panel.webContents.executeJavaScript(`
     new Promise((resolve) => requestAnimationFrame(() => resolve({
-      version: document.getElementById('version').textContent,
-      status: document.getElementById('status').textContent,
+      title: document.title,
+      caption: document.getElementById('caption').textContent,
       width: document.getElementById('fill').style.width,
       indeterminate: document.getElementById('track').classList.contains('is-indeterminate'),
       value: document.getElementById('track').getAttribute('aria-valuenow'),
     })))
   `, true);
 
-  check('shows the version it was given', (await read()).version, 'Version 9.9.9');
+  // The version is deliberately not on screen — one less thing to read — so it
+  // has to still reach the window title, which is what VoiceOver announces.
+  check('version reaches the window title', (await read()).title, 'Updating to 9.9.9');
 
   updateWindow.setPhase('downloading');
   updateWindow.setProgress(0.42);
   await wait(WATCH ? 1500 : 250);
 
   const downloading = await read();
-  check('download: names a percentage', downloading.status, 'Downloading… 42%');
+  check('download: names a percentage', downloading.caption, 'Downloading 42%');
   check('download: bar matches it', downloading.width, '42%');
   check('download: bar is determinate', downloading.indeterminate, false);
   check('download: exposes the value', downloading.value, '42');
@@ -49,13 +51,13 @@ app.whenReady().then(async () => {
   // Rounding, not truncation — 0.999 must not read as "99%" then jump to done.
   updateWindow.setProgress(0.999);
   await wait(WATCH ? 1200 : 250);
-  check('download: rounds to 100%', (await read()).status, 'Downloading… 100%');
+  check('download: rounds to 100%', (await read()).caption, 'Downloading 100%');
 
   updateWindow.setPhase('installing');
   await wait(WATCH ? 2000 : 250);
 
   const installing = await read();
-  check('install: says so', installing.status, 'Installing…');
+  check('install: says so', installing.caption, 'Installing');
   check('install: bar goes indeterminate', installing.indeterminate, true);
   // A stale percentage under an indeterminate bar is a lie a screen reader
   // would still read out.
@@ -64,13 +66,13 @@ app.whenReady().then(async () => {
   // Progress arriving late must not drag it back to a percentage.
   updateWindow.setProgress(0.5);
   await wait(WATCH ? 800 : 250);
-  check('install: ignores late progress', (await read()).status, 'Installing…');
+  check('install: ignores late progress', (await read()).caption, 'Installing');
 
   updateWindow.setPhase('restarting');
   await wait(WATCH ? 2000 : 250);
 
   const restarting = await read();
-  check('restart: says so', restarting.status, 'Restarting…');
+  check('restart: says so', restarting.caption, 'Restarting');
   check('restart: stays indeterminate', restarting.indeterminate, true);
 
   check('close() really closes it', (updateWindow.close(), updateWindow.isOpen()), false);

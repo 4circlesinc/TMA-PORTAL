@@ -26,6 +26,8 @@
   /* Figma surface tints */
   --dash-card-1: var(--color-1);        /* #e6f6fd - tint of #03a5e9 */
   --dash-card-2: var(--color-2);        /* #e7f0f6 - tint of #136da0 */
+  --dash-kpi-1: var(--color-primary);      /* #03a5e9 - solid KPI fill */
+  --dash-kpi-2: var(--color-primary-dark); /* #136da0 - solid KPI fill */
   --dash-panel-bg: var(--color-bg-card);/* #f9f9fa - chart panels */
   --dash-border: var(--color-border-soft);
 
@@ -1316,8 +1318,27 @@
   min-width: 0;
   overflow: clip;
 }
-.tma-dash__card--blue   { background: var(--dash-card-1); }
-.tma-dash__card--purple { background: var(--dash-card-2); }
+/* Solid brand fills. The label, value, delta and both <img> glyphs are black by
+   default, so every one of them has to flip to white here or the card reads as
+   a smudge. */
+.tma-dash__card--blue   { background: var(--dash-kpi-1); }
+.tma-dash__card--purple { background: var(--dash-kpi-2); }
+.tma-dash__card--blue,
+.tma-dash__card--purple { color: #fff; }
+.tma-dash__card--blue .tma-dash__card-label,
+.tma-dash__card--purple .tma-dash__card-label,
+.tma-dash__card--blue .tma-dash__card-delta,
+.tma-dash__card--purple .tma-dash__card-delta { color: #fff; }
+.tma-dash__card--blue .tma-dash__card-ico,
+.tma-dash__card--purple .tma-dash__card-ico,
+.tma-dash__card--blue .tma-dash__card-delta img,
+.tma-dash__card--purple .tma-dash__card-delta img { filter: brightness(0) invert(1); }
+.tma-dash__card--blue .tma-skeleton,
+.tma-dash__card--purple .tma-skeleton { background: rgba(255, 255, 255, 0.3); }
+.tma-dash__card--blue .tma-skeleton::after,
+.tma-dash__card--purple .tma-skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+}
 .tma-dash__card-label {
   display: block;
   font-size: clamp(11px, 5.8cqi, var(--text-size-14));
@@ -3503,6 +3524,8 @@
   --color-overlay-40: rgba(255, 255, 255, 0.45);
   --dash-card-1: #1e2b38;
   --dash-card-2: #29243a;
+  --dash-kpi-1: #0286bd;
+  --dash-kpi-2: #10557c;
   --dash-panel-bg: #232325;
   --dash-border: rgba(255, 255, 255, 0.12);
   background: var(--color-white);

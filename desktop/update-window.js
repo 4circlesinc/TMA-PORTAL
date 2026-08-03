@@ -12,8 +12,39 @@
 const { BrowserWindow } = require('electron');
 const path = require('node:path');
 
-const WIDTH = 420;
-const HEIGHT = 280;
+const WIDTH = 340;
+const HEIGHT = 190;
+
+const IS_MAC = process.platform === 'darwin';
+
+/**
+ * The glass.
+ *
+ * `vibrancy` is what makes the panel a real system material rather than a
+ * painted-on approximation: macOS blurs and tints whatever is behind the
+ * window, so it picks up the desktop and follows light/dark on its own. It
+ * needs a transparent window — anything opaque, including a `backgroundColor`,
+ * is drawn *over* the material and flattens it back to a rectangle.
+ *
+ * `visualEffectState: 'active'` keeps it lively while the window is unfocused,
+ * which is the normal case here: an update runs while the user is in another
+ * app, and the default would grey the material out for the whole download.
+ *
+ * Windows has no vibrancy; `backgroundMaterial` is the equivalent (acrylic on
+ * Windows 11, ignored on 10, where the plain window is the fallback).
+ */
+function material() {
+  if (IS_MAC) {
+    return {
+      transparent: true,
+      backgroundColor: '#00000000',
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+    };
+  }
+
+  return { backgroundMaterial: 'acrylic' };
+}
 
 let panel = null;
 
@@ -37,7 +68,7 @@ function show(version) {
     // Nothing here is cancellable once it starts, so there is no reason to let
     // it end up behind the window it is replacing.
     alwaysOnTop: true,
-    backgroundColor: '#03a5e9',
+    ...material(),
     webPreferences: {
       preload: path.join(__dirname, 'update-preload.js'),
       contextIsolation: true,
