@@ -215,8 +215,16 @@ const CSS = `
   /* Header artwork is dark; knocked out to white to sit on the blue. */
   .tma-dash--desktop-bar .tma-dash__header img { filter: brightness(0) invert(1); }
 
-  /* Badge counts stay legible against the blue. */
-  .tma-dash--desktop-bar .tma-dash__header .tma-dash__icon-badge { box-shadow: 0 0 0 2px ${BLUE}; }
+  /*
+   * The unread counts. The class is .tma-dash__icon-btn-badge — a red pill with
+   * white text, and a <span>, so the white knock-out above (which is scoped to
+   * img) leaves it alone. A ring in the bar colour separates the pill from the
+   * blue the way it was separated from the white header it was drawn for.
+   */
+  .tma-dash--desktop-bar .tma-dash__header .tma-dash__icon-btn-badge {
+    box-shadow: 0 0 0 2px ${BLUE};
+    z-index: 2;
+  }
 
   .tma-dash--desktop-bar .tma-dash__sidebar-logo { display: none !important; }
   .tma-dash--desktop-bar .tma-dash__page-title { display: none !important; }
