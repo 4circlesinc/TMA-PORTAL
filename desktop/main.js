@@ -10,6 +10,7 @@ const HOST_BRIDGE = require('./host-bridge');
 const updater = require('./updater');
 const { installCloseToBackground } = require('./window-policy');
 const callWindow = require('./call-window');
+const titlebar = require('./titlebar');
 const tray = require('./tray');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
@@ -101,10 +102,12 @@ function createWindow() {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    backgroundColor: '#ffffff',
+    // Painted before the first frame arrives, so the window opens brand blue
+    // rather than flashing white on its way to the portal.
+    backgroundColor: titlebar.BLUE,
     title: 'TM ANTOINE Portal',
-    // macOS takes the window icon from the bundle. Windows takes it from the
-    // exe once packaged, but an unpackaged run would show Electron's default.
+    // Hides the native bar so titlebar.js can draw a blue one in its place.
+    ...titlebar.windowOptions(),
     ...(IS_MAC ? {} : { icon: path.join(__dirname, 'assets', 'icon.ico') }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -205,6 +208,10 @@ function attachNavigationRules(win) {
   });
 
   webContents.on('did-finish-load', () => {
+    // Before the portal check: the error page below is ours too, and it would
+    // otherwise render underneath the bar.
+    titlebar.apply(webContents);
+
     if (!isPortalUrl(webContents.getURL())) {
       applyBadge(0);
       applyCallPhase('');
@@ -214,6 +221,10 @@ function attachNavigationRules(win) {
       // A page that never exposed the stores just leaves the badge alone.
     });
   });
+
+  // The portal routes through pushState, which fires no load event. Without
+  // this the bar survives the first screen and disappears on the second.
+  webContents.on('did-navigate-in-page', () => titlebar.apply(webContents));
 
   webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame || errorCode === -3) return; // -3 = user aborted
