@@ -12,6 +12,7 @@ const { installCloseToBackground } = require('./window-policy');
 const callWindow = require('./call-window');
 const titlebar = require('./titlebar');
 const tray = require('./tray');
+const notifications = require('./notifications');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
@@ -754,6 +755,22 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Open Portal in Browser', click: () => shell.openExternal(PORTAL_URL) },
         {
+          // Notifications fail at three different layers — macOS, the app, and
+          // the portal's own per-account switch — and they are indistinguishable
+          // from "nothing happened". This answers the first of the three.
+          label: 'Send a Test Notification',
+          click: () => {
+            if (!notifications.test(() => revealWindow({ steal: true }))) {
+              dialog.showMessageBox(mainWindow, {
+                type: 'warning',
+                message: 'This system cannot show notifications',
+                detail: 'Nothing further to try here — the operating system is refusing them outright.',
+              });
+            }
+          },
+        },
+        { type: 'separator' },
+        {
           label: 'Report a Problem…',
           click: () => shell.openExternal(
             `mailto:support@tmantoine.com?subject=${encodeURIComponent(`Portal desktop ${APP_VERSION}`)}`,
@@ -844,6 +861,11 @@ if (!app.requestSingleInstanceLock()) {
 
     createWindow();
     buildMenu();
+
+    // A fresh install has never asked macOS for permission, so the app is not
+    // even listed in System Settings → Notifications. Posting one now puts the
+    // prompt in front of someone who is looking at the app they just installed.
+    notifications.primeOnFirstRun(() => revealWindow({ steal: true }));
 
     // Off macOS this is the only thing left on screen once the window is
     // closed, so it carries Show and Quit. Rebuilt alongside the menu bar so

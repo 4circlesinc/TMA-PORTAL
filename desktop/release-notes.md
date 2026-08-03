@@ -1,4 +1,4 @@
+- Asks permission to send notifications the first time you open the app
+- Adds Help → Send a Test Notification, to check notifications are getting through
 - Fixes an update that could fail with "that update couldn't be installed"
 - Failed downloads now retry on their own instead of asking you to reinstall
-- See what's changed before you install an update
-- Redesigned update window that follows the system's light and dark appearance

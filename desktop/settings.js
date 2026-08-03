@@ -17,6 +17,9 @@ const DEFAULTS = {
   backgroundOnClose: true,
   // Ring in a separate panel instead of pulling the whole app forward.
   ringPanel: true,
+  // Whether the OS has been asked to allow notifications. Set once, on the
+  // first launch after install — see notifications.js.
+  notificationsPrimed: false,
 };
 
 let cache = null;
