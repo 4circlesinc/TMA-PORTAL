@@ -537,7 +537,9 @@
         // The File Library owns the menu — same actions, same permissions.
         if (menuItem && acts()) {
           var r = rowMenu.getBoundingClientRect();
-          acts().menu(r.left, r.bottom + 4, menuItem);
+          // Reload when an action changes something — a rename or a delete
+          // leaves this row stale otherwise.
+          acts().menu(r.left, r.bottom + 4, menuItem, function () { refresh(); });
         }
         return;
       }

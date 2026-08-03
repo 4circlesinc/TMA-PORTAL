@@ -66,7 +66,8 @@ try {
   await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-home-lib-row]', { timeout: 20000 });
   const n = await rows().count();
-  check(n >= 3, `the recent files table has rows (${n})`);
+  // Two is the minimum this run needs: one to delete at the end, one to leave.
+  check(n >= 2, `the recent files table has rows (${n})`);
 
   check(await page.evaluate(() => !!window.TMAFileActions),
     'the File Library exposes its actions for other lists to use');
@@ -130,7 +131,32 @@ try {
   check(!!menu && menu.onScreen, 'it is actually on screen, not just in the DOM');
   check(!!menu && menu.items.length > 0, `it offers actions (${menu ? menu.items.join(', ') : 'none'})`);
 
-  step(8, 'Shared with me has the same controls');
+  step(8, 'A row-menu action runs from here, not just renders');
+  // The menu is the File Library's own. Its actions could still reach for that
+  // view's state (current folder, its selection) and quietly do nothing when
+  // driven from the dashboard — opening the menu proves only that it opened.
+  const favLabel = 'Add to favourites';
+  const clicked = await page.evaluate((label) => {
+    const el = document.querySelector('.tma-portal-context-menu');
+    if (!el) return false;
+    const btn = [...el.querySelectorAll('[data-ctx]')]
+      .find((b) => b.textContent.trim() === label);
+    if (!btn) return false;
+    btn.click();
+    return true;
+  }, favLabel);
+  check(clicked, `clicked "${favLabel}" in the row menu`);
+  await page.waitForTimeout(1500);
+
+  const favourited = await page.evaluate(async () => {
+    const r = await fetch('/portal/files/?section=favorites&perPage=40',
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const j = await r.json();
+    return ((j.files || []).concat(j.folders || [])).length;
+  });
+  check(favourited > 0, `the action reached the server (${favourited} favourite(s))`);
+
+  step(9, 'Shared with me has the same controls');
   await page.keyboard.press('Escape');
   await page.click('[data-tab-key="shared"]');
   await page.waitForTimeout(800);
@@ -139,7 +165,7 @@ try {
   // Switching tabs must not carry the recent selection across.
   check(!(await toolbarVisible()), 'the selection does not follow you to the other tab');
 
-  step(9, 'A bulk delete really deletes — dialog to server');
+  step(10, 'A bulk delete really deletes — dialog to server');
   // Reload for a clean selection. Earlier steps deliberately left rows picked
   // (the selection is per-tab and survives switching), so carrying that in
   // would delete more than the one row this step is about.
@@ -169,7 +195,7 @@ try {
     `one file left the library (${before.length} → ${after.length})`);
   check(!(await toolbarVisible()), 'the selection clears once the action lands');
 
-  step(10, 'No console errors');
+  step(11, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   errors.slice(0, 4).forEach((e) => log('      ' + e));
 

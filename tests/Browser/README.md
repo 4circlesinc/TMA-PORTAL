@@ -192,6 +192,19 @@ field placement and drawing, and computed CSS only exist in a browser.
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
   the client profile's "Open folder" action lands in the File Library. Needs an
   administrator account.
+- **`home-library-actions.mjs`** — bulk actions and the row menu on the
+  dashboard's Recent Files / Shared-with-me tables. Those tables rendered
+  checkboxes, a select-all header and a three-dot button with **nothing wired to
+  any of it**. The test drives the real controls and insists on consequences,
+  not appearances: the toolbar reveals on selection, the selection survives the
+  re-render each click triggers, a partial selection leaves the header box
+  *indeterminate* (a DOM property no markup can express), delete asks before
+  acting, and — the two that matter — a row-menu action and a bulk delete are
+  each followed back to the server. Opening the menu proved nothing on its own:
+  the actions come from the File Library and several re-look the row up by id,
+  which found nothing when driven from the dashboard, so every item was
+  clickable and did absolutely nothing. Needs a few files in Recent Files
+  (it deletes one, so re-seed between runs).
 - **`library-sync-panel.mjs`** — where the SharePoint sync indicator actually
   lands. It stubs `/sync-status` with a library mid-import, then *measures the
   rendered box*: the panel must sit within 20px of the bottom-right corner, stay

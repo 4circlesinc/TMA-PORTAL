@@ -131,7 +131,39 @@
   }
 
   function items() { return state.data.folders.concat(state.data.files); }
-  function findItem(id) { return items().filter(function (i) { return i.id === id; })[0]; }
+
+  /*
+   * Rows belonging to some OTHER list that is driving these actions.
+   *
+   * The dashboard's Recent Files and Shared-with-me tables open this view's row
+   * menu. Most actions take the item they were handed, but several re-look it
+   * up by id — toggleStar is one — and that lookup only ever searched this
+   * view's own data. Driven from the dashboard it found nothing and returned
+   * silently: the menu opened, every item was clickable, and choosing one did
+   * absolutely nothing.
+   *
+   * This view's own data is still checked first, so nothing here can be
+   * shadowed by a caller's stale copy of the same row.
+   */
+  var externalItems = [];
+  var externalOnChange = null;
+
+  function findItem(id) {
+    return items().filter(function (i) { return i.id === id; })[0]
+      || externalItems.filter(function (i) { return i.id === id; })[0];
+  }
+
+  /**
+   * Tell an external list its rows may have changed.
+   *
+   * Only when this view is not the one on screen — otherwise every ordinary
+   * re-render inside the File Library would also poke the dashboard.
+   */
+  function notifyExternal() {
+    if (!externalOnChange) return;
+    if (state.el && document.body.contains(state.el)) return;
+    externalOnChange();
+  }
   function selectedIds() { return Object.keys(state.selected); }
   function selectedItems() { return selectedIds().map(findItem).filter(Boolean); }
   function isRecycle() { return state.section === 'recycle'; }
@@ -280,6 +312,7 @@
     var top = sc ? sc.scrollTop : null;
     render();
     if (sc && top != null) sc.scrollTop = top;
+    notifyExternal();
   }
 
   /* ── instant new folder + inline rename ─────────────── */
@@ -4124,8 +4157,17 @@
    * File Library happens to have selected.
    */
   window.TMAFileActions = {
-    /** The row menu, anchored at a point, for one item. */
-    menu: function (x, y, item) { openContextMenu(x, y, item); },
+    /**
+     * The row menu, anchored at a point, for one item.
+     *
+     * `onChange` fires when an action has altered something, so the calling
+     * list can reload rather than sit on a stale row.
+     */
+    menu: function (x, y, item, onChange) {
+      externalItems = [item];
+      externalOnChange = onChange || null;
+      openContextMenu(x, y, item);
+    },
 
     /** Download one file or folder. */
     download: downloadItem,
