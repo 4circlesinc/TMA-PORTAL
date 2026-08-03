@@ -1,3 +1,4 @@
+- Fixes an update that could fail with "that update couldn't be installed"
+- Failed downloads now retry on their own instead of asking you to reinstall
 - See what's changed before you install an update
 - Redesigned update window that follows the system's light and dark appearance
-- Update progress no longer takes over the screen — close or minimise it any time

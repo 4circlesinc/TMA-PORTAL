@@ -147,7 +147,16 @@ async function download(fileName, onProgress) {
     },
   });
 
-  await pipeline(Readable.fromWeb(response.body), meter, fs.createWriteStream(target));
+  try {
+    await pipeline(Readable.fromWeb(response.body), meter, fs.createWriteStream(target));
+  } catch (error) {
+    // A connection dropped part-way ("terminated") still leaves whatever
+    // arrived on disk. Retrying starts a fresh directory, so without this the
+    // partial file is stranded — one abandoned attempt was found holding 38 MB,
+    // and an older one 323 MB.
+    discard(target);
+    throw error;
+  }
 
   return { target, digest: await digestOf(target) };
 }
@@ -214,9 +223,40 @@ const unzip = (archive, into) => new Promise((resolve, reject) => {
  * so a verified download is already the finished article.
  */
 async function stageRelease(release, onProgress = () => {}, onPhase = () => {}) {
+  let lastError = null;
+
+  /*
+   * Retried, because the failures worth surviving here are transient: a
+   * connection dropped part-way ("terminated"), or a file that arrives whole
+   * and wrong. Both are cured by asking again, and neither is the user's
+   * problem to solve — before this, one bad download meant an error dialog and
+   * a manual reinstall for something that would have worked on a second try.
+   */
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+    try {
+      onPhase('downloading');
+      return await stageOnce(release, onProgress, onPhase);
+    } catch (error) {
+      lastError = error;
+      if (attempt < ATTEMPTS) await wait(attempt * 2000);
+    }
+  }
+
+  throw lastError;
+}
+
+/** How many times the whole download is worth repeating before giving up. */
+const ATTEMPTS = 3;
+
+const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/** One go: download, verify, unpack. Cleans up after itself when it fails. */
+async function stageOnce(release, onProgress, onPhase) {
   const { target, digest } = await download(release.file, onProgress);
 
   if (digest !== release.sha512) {
+    // 90 MB per attempt, and these were piling up in /var/folders unnoticed.
+    discard(target);
     throw new Error('The downloaded update did not match its checksum.');
   }
 
@@ -228,12 +268,33 @@ async function stageRelease(release, onProgress = () => {}, onPhase = () => {}) 
   if (!IS_MAC) return target;
 
   const extracted = path.join(path.dirname(target), 'unpacked');
-  await unzip(target, extracted);
 
-  const bundle = fs.readdirSync(extracted).find((entry) => entry.endsWith('.app'));
-  if (!bundle) throw new Error('That update did not contain an app.');
+  try {
+    await unzip(target, extracted);
 
-  return path.join(extracted, bundle);
+    const bundle = fs.readdirSync(extracted).find((entry) => entry.endsWith('.app'));
+    if (!bundle) throw new Error('That update did not contain an app.');
+
+    return path.join(extracted, bundle);
+  } catch (error) {
+    discard(target);
+    throw error;
+  }
+}
+
+/**
+ * Throws away a failed attempt's temp directory.
+ *
+ * Each one holds a 90 MB archive plus whatever was unpacked before it failed,
+ * and nothing else ever removes them — a handful of failed updates had left
+ * most of a gigabyte sitting in /var/folders.
+ */
+function discard(target) {
+  try {
+    fs.rmSync(path.dirname(target), { recursive: true, force: true });
+  } catch {
+    // Temp is the OS's to reclaim; a failure to tidy is not worth surfacing.
+  }
 }
 
 /**
