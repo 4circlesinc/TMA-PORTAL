@@ -75,7 +75,7 @@ async function stubSyncing() {
     body: JSON.stringify({
       connections: [{
         name: 'Citizenship Applications', status: 'syncing',
-        items: 431, failedItems: 0, initialImport: true, lastError: null,
+        items: 985, itemsTotal: 5948, failedItems: 0, initialImport: true, lastError: null,
       }],
     }),
   }));
@@ -163,7 +163,66 @@ try {
     'all three stack without overlapping');
   await page.screenshot({ path: 'tests/Browser/library-sync-panel.png' });
 
-  step(6, 'No console errors');
+  step(6, 'Progress reads as a share of the library total');
+  const detailText = async () => (await page.textContent('.tma-portal-sync-panel__body')) || '';
+  check((await detailText()).includes('985 of 5,948 items'),
+    `shows "985 of 5,948 items" (got "${(await detailText()).trim()}")`);
+
+  // Graph gives no total until folders have been discovered; before then the
+  // panel must not invent one.
+  await context.unroute('**/sync-status');
+  await context.route('**/sync-status', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ connections: [{
+      name: 'Citizenship Applications', status: 'syncing',
+      items: 12, itemsTotal: null, failedItems: 0, initialImport: true, lastError: null,
+    }] }),
+  }));
+  await page.waitForFunction(
+    () => (document.querySelector('.tma-portal-sync-panel__body') || {}).textContent === '12 items so far',
+    { timeout: 20000 },
+  ).then(() => check(true, 'falls back to "12 items so far" with no total known'))
+    .catch(async () => check(false, `no-total fallback (got "${(await detailText()).trim()}")`));
+
+  await stubSyncing();
+
+  step(7, 'It can be minimised, and stays minimised across pages');
+  // Start from a clean panel: the earlier steps left injected siblings behind.
+  await page.evaluate(() => document.querySelectorAll(
+    '.tma-mail-sync, .tma-portal-dock > .tma-portal-upload:not(.tma-portal-sync-panel)'
+  ).forEach((n) => n.remove()));
+
+  const openBox = await boxOf('.tma-portal-sync-panel');
+  const detailVisible = () => page.isVisible('.tma-portal-sync-panel__body');
+  check(await detailVisible(), 'the detail line shows when open');
+
+  await page.click('[data-sync-collapse]');
+  await page.waitForTimeout(250);
+  const shutBox = await boxOf('.tma-portal-sync-panel');
+  check(!(await detailVisible()), 'minimising hides the detail line');
+  check(shutBox.h < openBox.h, `the panel actually shrank (${Math.round(shutBox.h)} < ${Math.round(openBox.h)})`);
+  check(await page.isVisible('.tma-portal-sync-panel .tma-portal-upload__title'),
+    'the title stays visible, so progress is still readable');
+  check(vp.height - shutBox.bottom <= 40, 'minimised, it stays in the corner');
+  // A long library name must not wrap the collapsed panel onto two lines.
+  check(shutBox.h <= 52, `minimised to a single line (${Math.round(shutBox.h)}px ≤ 52)`);
+  await page.screenshot({ path: 'tests/Browser/library-sync-panel-minimised.png' });
+
+  // The poll repaints every few seconds — it must not spring back open.
+  await page.waitForTimeout(6000);
+  check(!(await detailVisible()), 'a repaint does not re-expand it');
+
+  step(8, 'Minimised survives navigation, and it can be restored');
+  await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => !!window.TMAUpload, { timeout: 15000 });
+  await waitForSyncPanel();
+  check(!(await detailVisible()), 'still minimised on the next page');
+
+  await page.click('[data-sync-collapse]');
+  await page.waitForTimeout(250);
+  check(await detailVisible(), 'clicking again restores it');
+
+  step(9, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   if (errors.length) errors.slice(0, 5).forEach((e) => log('      ' + e));
 } catch (e) {

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'connection_id', 'graph_item_id', 'graph_parent_id', 'item_type', 'file_id', 'folder_id',
+    'connection_id', 'graph_item_id', 'graph_parent_id', 'item_type', 'child_count', 'file_id', 'folder_id',
     'etag', 'ctag', 'web_url', 'name', 'size', 'mime_type',
     'graph_created_at', 'graph_modified_at', 'graph_modified_by',
     'sync_status', 'conflict_reason', 'last_error', 'failure_count', 'last_synced_at',

@@ -264,6 +264,55 @@ class SharePointSyncTest extends TestCase
         $this->assertSame(SharePointConnection::STATUS_IDLE, $connection->status);
     }
 
+    /**
+     * The panel's "780 of 1,240 items" needs a total Graph will not give us.
+     *
+     * `$count` is rejected on this API, the list facet has no item count, and
+     * /root reports childCount for DIRECT children only. Every item has exactly
+     * one parent though, so the sum of folder child counts is the library size.
+     */
+    public function test_folder_child_counts_are_stored_so_a_total_can_be_shown(): void
+    {
+        $this->fakeGraph([
+            ['id' => 'root-1', 'name' => 'root', 'root' => new \stdClass, 'folder' => ['childCount' => 2]],
+            ['id' => 'f-1', 'name' => 'Contracts', 'folder' => ['childCount' => 7],
+                'parentReference' => ['id' => 'root-1'], 'eTag' => '"f1"'],
+            ['id' => 'f-2', 'name' => 'Invoices', 'folder' => ['childCount' => 3],
+                'parentReference' => ['id' => 'root-1'], 'eTag' => '"f2"'],
+            $this->fileItem('i-1', 'Brief.txt', 'c:1', 'f-1'),
+        ], [['id' => 'f-1'], ['id' => 'f-2'], ['id' => 'i-1']]);
+
+        Synchroniser::sync($this->connection);
+
+        // 7 + 3 from the mapped folders...
+        $this->assertSame(10, (int) SharePointItem::where('connection_id', $this->connection->id)
+            ->where('item_type', 'folder')->sum('child_count'));
+        // ...plus the root's own 2, which has no mapping to hang off.
+        $this->assertSame(2, (int) $this->connection->fresh()->root_child_count);
+
+        // A file mapping must not carry one, or it would be counted twice.
+        $this->assertNull(SharePointItem::where('graph_item_id', 'i-1')->first()->child_count);
+    }
+
+    /** Re-syncing a folder updates its count rather than adding to it. */
+    public function test_a_re_synced_folder_does_not_double_count(): void
+    {
+        $folder = ['id' => 'f-1', 'name' => 'Contracts', 'folder' => ['childCount' => 4],
+            'parentReference' => ['id' => 'root-1'], 'eTag' => '"f1"'];
+
+        $this->fakeGraph([$folder], [['id' => 'f-1']]);
+        Synchroniser::sync($this->connection);
+
+        // The same folder comes back with two more children in it.
+        $folder['folder']['childCount'] = 6;
+        $folder['eTag'] = '"f1-changed"';
+        $this->fakeGraph([$folder], [['id' => 'f-1']]);
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(6, (int) SharePointItem::where('connection_id', $this->connection->id)
+            ->where('item_type', 'folder')->sum('child_count'));
+    }
+
     public function test_delta_imports_folders_and_files(): void
     {
         $this->fakeGraph([

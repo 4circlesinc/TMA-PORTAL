@@ -199,7 +199,11 @@ field placement and drawing, and computed CSS only exist in a browser.
   overlap it. Geometry rather than CSS assertions, because the bug it exists for
   was a hand-measured `bottom: calc(... + 92px)` that read as correct in the
   stylesheet while putting the panel 108px up the right-hand edge whenever no
-  upload was running. Needs only the standard `e2e@example.com` account.
+  upload was running. It also covers minimising: the panel collapses to a
+  single line, keeps the title so progress is still readable, survives the
+  five-second repaint without springing back open, stays collapsed across a
+  navigation, and expands again on a second click. Needs only the standard
+  `e2e@example.com` account.
 - **`settings-personal-prefs.mjs`** — Settings Phase 1: Theme, Privacy and
   Plugins save to the account rather than to one browser. It drives the real
   panels (plus the header's own dark-mode toggle, which used to write

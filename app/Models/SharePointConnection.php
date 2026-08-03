@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'uuid', 'tenant_id', 'site_id', 'site_name', 'site_url', 'drive_id', 'drive_name',
-    'drive_kind', 'owner_upn', 'root_item_id', 'root_path',
+    'drive_kind', 'owner_upn', 'root_item_id', 'root_path', 'root_child_count',
     'folder_id', 'delta_link', 'status', 'sync_enabled', 'direction',
     'last_synced_at', 'last_success_at', 'last_error', 'error_count', 'created_by',
 ])]

@@ -218,6 +218,13 @@ class Synchroniser
         // library itself, already represented by the connection's folder. The
         // same is true of the folder a scoped connection starts from.
         if (isset($item['root']) || $graphId === $connection->root_item_id) {
+            // Not content, but it still knows how many items sit at the top
+            // level — and those are part of the library total. Without this the
+            // total is short by every loose file in the root.
+            if (isset($item['folder']['childCount'])) {
+                $connection->update(['root_child_count' => $item['folder']['childCount']]);
+            }
+
             return;
         }
 
@@ -430,7 +437,14 @@ class Synchroniser
     {
         return SharePointItem::updateOrCreate(
             ['connection_id' => $connection->id, 'graph_item_id' => $item['id']],
-            self::mappingAttributes($connection, $item) + ['item_type' => 'folder', 'folder_id' => $folder->id],
+            self::mappingAttributes($connection, $item) + [
+                'item_type' => 'folder',
+                'folder_id' => $folder->id,
+                // Graph offers no recursive total, but every item has exactly
+                // one parent — so the sum of these across folders IS the
+                // library's size. See the child_count migration.
+                'child_count' => $item['folder']['childCount'] ?? null,
+            ],
         );
     }
 
@@ -460,6 +474,9 @@ class Synchroniser
     {
         $mapping->update([
             'graph_parent_id' => $item['parentReference']['id'] ?? null,
+            // Folders grow and shrink; a stale count here would freeze the
+            // library total at whatever it was on the day of the first import.
+            'child_count' => $item['folder']['childCount'] ?? $mapping->child_count,
             'etag' => $item['eTag'] ?? null,
             'ctag' => $item['cTag'] ?? null,
             'web_url' => $item['webUrl'] ?? null,

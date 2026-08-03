@@ -89,6 +89,32 @@
   var syncDismissed = false;
   var syncLastBusy = false;
 
+  /*
+   * Minimised state, remembered across pages.
+   *
+   * The panel deliberately follows you around the portal, so a collapse that
+   * reset on every navigation would be worthless — you would re-minimise it on
+   * every page.
+   *
+   * sessionStorage rather than localStorage: it survives navigation inside the
+   * tab, which is the whole requirement, and it cannot carry one person's
+   * choice into the next account to sign in on a shared machine. This script is
+   * loaded on every shell and has no viewer id to key a localStorage entry
+   * with, so a per-account key here would silently be a shared one.
+   */
+  var SYNC_COLLAPSE_KEY = 'tma.fileSync.collapsed';
+
+  function syncCollapsed() {
+    try { return sessionStorage.getItem(SYNC_COLLAPSE_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function setSyncCollapsed(value) {
+    try {
+      if (value) sessionStorage.setItem(SYNC_COLLAPSE_KEY, '1');
+      else sessionStorage.removeItem(SYNC_COLLAPSE_KEY);
+    } catch (e) { /* private browsing — it still collapses for this page */ }
+  }
+
   function syncPoll() {
     fetchJSON(BASE + '/sync-status')
       .then(function (data) { renderSyncPanel(data); })
@@ -129,8 +155,20 @@
     if (busy.length) {
       var c = busy[0];
       title = (c.initialImport ? 'Importing ' : 'Syncing ') + c.name;
-      detail = c.items + ' items so far' +
-        (busy.length > 1 ? ' · ' + (busy.length - 1) + ' more queued' : '');
+      /*
+       * Show a total when we have one.
+       *
+       * The total is summed from folder child counts as folders are
+       * discovered, so early on it can be lower than the number already
+       * imported. Clamping keeps it from reading "780 of 500" — better a
+       * conservative total that catches up than an impossible one.
+       */
+      var done = c.items || 0;
+      var total = c.itemsTotal ? Math.max(c.itemsTotal, done) : 0;
+      detail = total
+        ? num(done) + ' of ' + num(total) + ' items'
+        : num(done) + ' items so far';
+      detail += (busy.length > 1 ? ' · ' + (busy.length - 1) + ' more queued' : '');
     } else {
       isError = true;
       var f = failed[0];
@@ -141,10 +179,19 @@
 
     ensureSyncPanel();
     delete syncPanel.dataset.done;
+    // The poll repaints every few seconds; without this the panel would pop
+    // back open on its own the moment someone minimised it.
+    syncPanel.classList.toggle('is-collapsed', syncCollapsed());
     syncPanel.innerHTML = syncPanelHtml(title, detail, isError, false);
   }
 
+  function num(value) {
+    try { return Number(value).toLocaleString(); } catch (e) { return String(value); }
+  }
+
   function syncPanelHtml(title, detail, isError, done) {
+    var collapsed = syncCollapsed();
+
     return '<div class="tma-portal-upload__head">' +
         '<span class="tma-portal-upload__title">' +
           (done ? '' : (isError
@@ -153,6 +200,14 @@
           esc(title) + '</span>' +
         '<div class="tma-portal-upload__head-actions">' +
           (isError ? '<button type="button" class="tma-portal-upload__act" data-sync-retry>Retry</button>' : '') +
+          // Minimise leaves the one line that answers "is it still going?".
+          // Close is a different promise, so the two stay separate controls.
+          (done ? '' :
+            '<button type="button" class="tma-portal-upload__icon tma-portal-sync-panel__toggle"' +
+              ' data-sync-collapse aria-expanded="' + (collapsed ? 'false' : 'true') + '"' +
+              ' aria-label="' + (collapsed ? 'Expand' : 'Minimise') + '">' +
+              '<img src="images/icons/phosphor/CaretDown.svg" alt="" width="12" height="12">' +
+            '</button>') +
           '<button type="button" class="tma-portal-upload__icon" data-sync-close aria-label="Hide">✕</button>' +
         '</div>' +
       '</div>' +
@@ -186,6 +241,19 @@
     dock().appendChild(syncPanel);
 
     syncPanel.addEventListener('click', function (e) {
+      if (e.target.closest('[data-sync-collapse]')) {
+        setSyncCollapsed(!syncCollapsed());
+        // Repaint from what is already on screen; waiting for the next poll
+        // would leave the button feeling dead for up to five seconds.
+        syncPanel.classList.toggle('is-collapsed', syncCollapsed());
+        var toggle = syncPanel.querySelector('[data-sync-collapse]');
+        if (toggle) {
+          toggle.setAttribute('aria-expanded', syncCollapsed() ? 'false' : 'true');
+          toggle.setAttribute('aria-label', syncCollapsed() ? 'Expand' : 'Minimise');
+        }
+
+        return;
+      }
       if (e.target.closest('[data-sync-close]')) {
         // Dismiss this run only — a NEW sync will show the panel again.
         syncDismissed = true;

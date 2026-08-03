@@ -45,6 +45,18 @@ class SyncStatusController extends BaseFilesController
                 'status' => $c->status,
                 'enabled' => (bool) $c->sync_enabled,
                 'items' => SharePointItem::where('connection_id', $c->id)->count(),
+                /*
+                 * How many items the library holds in total.
+                 *
+                 * Summed from the childCount Graph reports on every folder, so
+                 * it is exact once every folder has been discovered and a
+                 * rising lower bound before that. Null while no folder has been
+                 * seen yet, which the panel reads as "total still unknown"
+                 * rather than printing "780 of 0".
+                 */
+                'itemsTotal' => (SharePointItem::where('connection_id', $c->id)
+                    ->where('item_type', 'folder')
+                    ->sum('child_count') + (int) $c->root_child_count) ?: null,
                 'failedItems' => $failed,
                 'conflicts' => $conflicts,
                 'lastSuccessAt' => optional($c->last_success_at)->toIso8601String(),
