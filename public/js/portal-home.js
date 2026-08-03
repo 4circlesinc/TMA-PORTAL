@@ -27,18 +27,18 @@
   // portal.css. Grouping, rather than a colour per tile, is what keeps the
   // panel reading as one system instead of a box of crayons.
   var SHORTCUTS = [
-    { id: 'email', label: 'Email', icon: 'EnvelopeSimple', tone: 'comms', count: 'email', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
-    { id: 'messages', label: 'Messages', icon: 'ChatsCircle', tone: 'comms', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
-    { id: 'feed', label: 'Feed', icon: 'Newspaper', tone: 'comms', count: 'feed', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
-    { id: 'calendar', label: 'Calendar', icon: 'CalendarBlank', tone: 'comms', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
-    { id: 'users', label: 'Users', icon: 'Users', tone: 'people', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
-    { id: 'share-files', label: 'Share Files', icon: 'Share', tone: 'files' },
-    { id: 'request-files', label: 'Request Files', icon: 'DownloadSimple', tone: 'files' },
-    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlus', tone: 'people' },
-    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', tone: 'files', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
-    { id: 'favorites', label: 'Favorites', icon: 'Star', tone: 'files', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
-    { id: 'feedback-approval', label: 'Feedback and Approval', icon: 'Checks', tone: 'work', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Approval', crumb: 'Workflows / Feedback and Approval' } },
-    { id: 'send-signature', label: 'Send for Signature', icon: 'Signature', tone: 'work', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
+    { id: 'email', label: 'Email', icon: 'EnvelopeSimpleFill', tone: 'comms', count: 'email', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
+    { id: 'messages', label: 'Messages', icon: 'ChatsCircleFill', tone: 'comms', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
+    { id: 'feed', label: 'Feed', icon: 'NewspaperFill', tone: 'comms', count: 'feed', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
+    { id: 'calendar', label: 'Calendar', icon: 'CalendarBlankFill', tone: 'comms', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
+    { id: 'users', label: 'Users', icon: 'UsersThreeFill', tone: 'people', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
+    { id: 'share-files', label: 'Share Files', icon: 'ShareFill', tone: 'files' },
+    { id: 'request-files', label: 'Request Files', icon: 'DownloadSimpleFill', tone: 'files' },
+    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlusFill', tone: 'people' },
+    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUserFill', tone: 'files', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
+    { id: 'favorites', label: 'Favorites', icon: 'StarFilled', tone: 'files', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
+    { id: 'feedback-approval', label: 'Feedback and Approval', icon: 'ChecksFill', tone: 'work', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Approval', crumb: 'Workflows / Feedback and Approval' } },
+    { id: 'send-signature', label: 'Send for Signature', icon: 'SignatureFill', tone: 'work', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
   ];
 
   function navigate(nav) {
