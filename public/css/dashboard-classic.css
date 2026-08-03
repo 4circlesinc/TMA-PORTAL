@@ -17,8 +17,10 @@
   /* Figma surface tints */
   --dash-card-1: var(--color-1);        /* #e6f6fd - tint of #03a5e9 */
   --dash-card-2: var(--color-2);        /* #e7f0f6 - tint of #136da0 */
-  --dash-kpi-1: var(--color-primary);      /* #03a5e9 - solid KPI fill */
-  --dash-kpi-2: var(--color-primary-dark); /* #136da0 - solid KPI fill */
+  /* Solid KPI fills - literal hexes, not var(--color-primary): the theme panel
+     rebinds that token to the account accent. */
+  --dash-kpi-1: #03a5e9;
+  --dash-kpi-2: #136da0;
   --dash-panel-bg: var(--color-bg-card);/* #f9f9fa - chart panels */
   --dash-border: var(--color-border-soft);
 
