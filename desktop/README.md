@@ -214,6 +214,34 @@ Security → Open Anyway**, which the account page now tells people. Every user
 must do this once, on every macOS from 15 up. A Developer ID certificate is the
 only thing that removes the step.
 
+## The blue title bar
+
+`titlebar.js`. macOS will not tint a native title bar — `backgroundColor` only
+paints the web area before the page loads, and the frame is drawn by AppKit in
+the system appearance (tested: plain frame, `hidden`, and `hiddenInset` all
+refuse). The only route is hiding the native bar and drawing our own, in
+`--color-primary` (#03a5e9) from public/css/tokens.css.
+
+Nothing about this lives in the portal's stylesheets. It is injected at runtime
+with `insertCSS` + `executeJavaScript`, so a browser never sees it and no portal
+CSS file can be broken by it. Re-applied on `did-navigate-in-page` as well as
+`did-finish-load`, because the portal routes through pushState and would
+otherwise lose the bar on the second screen.
+
+The one thing to know: hiding the native bar means the web viewport now starts
+at the very top of the window. Ordinary content is pushed down by the body
+padding, but `position: fixed` elements ignore that, and this app has a lot of
+full-viewport overlays (`.tma-dash__scrim`, the command palette, the mobile
+menu, `.tma-portal-sig-wizard`). The bar therefore sits at **z-index 200** —
+above ordinary content, deliberately below those takeovers, so their headers and
+close buttons are never clipped. The cost is that the blue strip is hidden, and
+the top strip not draggable, while such an overlay is open.
+
+If that trade ever becomes the wrong one, the robust fix is to inset the web
+contents themselves — `BaseWindow` + `WebContentsView` with bounds starting at
+`HEIGHT` — so the viewport genuinely begins below the bar and fixed overlays
+behave exactly as they do in a browser, with no injection at all.
+
 ## Windows
 
 One codebase, two shells. `IS_MAC` in main.js marks every place they diverge,
