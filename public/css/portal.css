@@ -1751,13 +1751,13 @@
    would read as a toybox at this size. Literal hexes because the theme panel
    rebinds --color-primary to the account's chosen accent. */
 .tma-portal-shortcut__icon--blue     { background: #03a5e9; }  /* file library + sharing */
-.tma-portal-shortcut__icon--deep     { background: #136da0; }  /* email, feed */
-.tma-portal-shortcut__icon--navy     { background: #0b4a6f; }  /* user administration */
-.tma-portal-shortcut__icon--green    { background: #17795e; }  /* messages */
-.tma-portal-shortcut__icon--amber    { background: #c2871a; }  /* favorites */
-.tma-portal-shortcut__icon--clay     { background: #b45a3c; }  /* calendar */
-.tma-portal-shortcut__icon--teal     { background: #0f6e78; }  /* feedback + approval */
-.tma-portal-shortcut__icon--graphite { background: #3f5566; }  /* signatures */
+.tma-portal-shortcut__icon--deep     { background: #1d8ac9; }  /* email, feed */
+.tma-portal-shortcut__icon--navy     { background: #4a80a8; }  /* user administration */
+.tma-portal-shortcut__icon--green    { background: #19a97d; }  /* messages */
+.tma-portal-shortcut__icon--amber    { background: #e2a01f; }  /* favorites */
+.tma-portal-shortcut__icon--clay     { background: #e07555; }  /* calendar */
+.tma-portal-shortcut__icon--teal     { background: #14939f; }  /* feedback + approval */
+.tma-portal-shortcut__icon--graphite { background: #64798c; }  /* signatures */
 
 .tma-portal-shortcut__icon img { width: 20px; height: 20px; }
 
