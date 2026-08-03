@@ -33,6 +33,17 @@ class LegacyPageController extends Controller
         'clients',
         'email',
         'email/templates',
+        // The File Library, screen by screen. The sidebar links straight to
+        // these, so anything the SPA can push must also be servable — a hard
+        // refresh on /folders/all used to 404.
+        'folders/all',
+        'folders/personal',
+        'folders/shared',
+        'folders/shared-with-me',
+        'folders/favorites',
+        'folders/recent',
+        'folders/filebox',
+        'folders/recycle',
         'overview',
         // The People section. Every screen is a real URL, so hard-refreshing
         // (or opening a link to) one loads the shell instead of 404ing and
@@ -46,13 +57,19 @@ class LegacyPageController extends Controller
         'people/distribution-groups',
         'people/resend-welcome-emails',
         'projects',
+        'projects/all',
+        'projects/closed',
+        'projects/recently_deleted',
         'settings',
         'settings/change-email',
         'signatures',
         'social/feed',
         'social/messages',
+        'templates',
         'users',
         'users/new',
+        'workflows',
+        'workflows/feedback',
     ];
 
     /**

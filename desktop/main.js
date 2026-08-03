@@ -231,6 +231,25 @@ function attachNavigationRules(win) {
     showLoadError(win, errorDescription, validatedURL);
   });
 
+  /*
+   * A 5xx is a *successful* load as far as Chromium is concerned — bytes were
+   * asked for and bytes arrived — so did-fail-load never sees it and the body
+   * renders as the page. When the portal is between containers that body is the
+   * proxy's own, and the window fills with "upstream connect error or
+   * disconnect/reset before headers… connection refused", which reads like the
+   * app is broken rather than the server being briefly away.
+   */
+  webContents.on('did-navigate', (_event, url, httpResponseCode, httpStatusText) => {
+    if (httpResponseCode < 500) return;
+
+    showLoadError(
+      win,
+      'The portal is temporarily unavailable — it may be restarting. '
+      + `(${httpResponseCode}${httpStatusText ? ` ${httpStatusText}` : ''})`,
+      url,
+    );
+  });
+
   // An auth child window that lands back on the portal has done its job.
   app.on('browser-window-created', (_event, child) => {
     if (child === win) return;

@@ -214,6 +214,23 @@ Security → Open Anyway**, which the account page now tells people. Every user
 must do this once, on every macOS from 15 up. A Developer ID certificate is the
 only thing that removes the step.
 
+## When the portal is down
+
+Two different failures, and only one of them is a "load failure" to Chromium.
+
+- **No connection at all** (DNS, refused socket, offline) fires `did-fail-load`.
+- **A 5xx does not.** Bytes were requested and bytes arrived, so the load
+  succeeded and the body renders as the page. When the portal is between
+  containers that body is the proxy's, and the window fills with "upstream
+  connect error or disconnect/reset before headers… connection refused" — which
+  reads as a broken app rather than a server that stepped out.
+
+`did-navigate` carries the status code, so anything >= 500 is turned into the
+same friendly page with a Try again button. The error page itself navigates
+(a `data:` URL, status 0), which is below the threshold and cannot re-trigger
+it — verified against a local server that returns nothing but 503s: three hits
+total, then steady.
+
 ## The blue title bar
 
 `titlebar.js`. macOS will not tint a native title bar — `backgroundColor` only

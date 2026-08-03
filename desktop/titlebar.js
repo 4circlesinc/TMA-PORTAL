@@ -22,6 +22,8 @@
 
 const HEIGHT = 38;
 
+const IS_MAC = process.platform === 'darwin';
+
 // --color-primary from public/css/tokens.css. The one the design system calls
 // primary, not --color-blue (#7dbbff), which is the lighter badge blue.
 const BLUE = '#03a5e9';
@@ -59,22 +61,102 @@ const CSS = `
     color: #fff;
     display: flex;
     align-items: center;
-    justify-content: center;
-    font: 600 13px/1 -apple-system, system-ui, sans-serif;
+    /* Traffic lights sit at the left on macOS; Windows puts its caption
+       buttons at the right. Either way the controls need to clear them. */
+    padding: 0 ${IS_MAC ? '12px 0 84px' : '138px 0 8px'};
+    font: 600 13px/1 -apple-system, "Segoe UI", system-ui, sans-serif;
     letter-spacing: 0.01em;
     /* The whole strip is the drag handle, standing in for the frame we hid. */
     -webkit-app-region: drag;
     -webkit-user-select: none;
     user-select: none;
   }
+
+  #tma-desktop-titlebar .tma-tb-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    /* Carved out of the drag region, or the buttons swallow their own clicks. */
+    -webkit-app-region: no-drag;
+  }
+
+  #tma-desktop-titlebar .tma-tb-btn {
+    all: unset;
+    box-sizing: border-box;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    color: #fff;
+    opacity: 0.82;
+    transition: background-color 120ms ease, opacity 120ms ease;
+  }
+
+  #tma-desktop-titlebar .tma-tb-btn:hover { opacity: 1; background: rgba(255,255,255,0.18); }
+  #tma-desktop-titlebar .tma-tb-btn:active { background: rgba(255,255,255,0.28); }
+
+  #tma-desktop-titlebar .tma-tb-btn[disabled] {
+    opacity: 0.32;
+    pointer-events: none;
+  }
+
+  #tma-desktop-titlebar .tma-tb-btn svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Centred on the window, not on what is left over beside the controls —
+     otherwise the title drifts as buttons enable and disable. */
+  #tma-desktop-titlebar .tma-tb-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 52%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
 `;
+
+const ICONS = {
+  back: '<path d="M10 3 L5 8 L10 13"/>',
+  forward: '<path d="M6 3 L11 8 L6 13"/>',
+  // Circular arrow: an arc left open at the top right, with the head on it.
+  reload: '<path d="M13 8a5 5 0 1 1-1.7-3.7"/><path d="M13 2.5V5.4H10.1"/>',
+};
 
 /**
  * Re-asserted on every load and in-page navigation rather than done once: the
  * portal is a single-page app whose views reconcile through TMAMorph, and a
  * node it did not put there is not guaranteed to survive a re-render.
+ *
+ * Navigation runs through the page's own session history rather than new IPC.
+ * It is the same history the Go menu drives through webContents, so Back here
+ * and Back there land in the same place — and it keeps the preload's surface
+ * exactly as small as it is, which is the point of that file.
+ *
+ * Whether there is anywhere to go back or forward *to* is not knowable in the
+ * page (history.length counts entries, not position), so the main process
+ * passes it in and the buttons are rebuilt with it on every navigation.
  */
-const SCRIPT = `
+function script({ canGoBack, canGoForward }) {
+  const button = (name, label, enabled) => `
+    <button class="tma-tb-btn" data-tb="${name}" title="${label}" aria-label="${label}"
+      ${enabled ? '' : 'disabled'}>
+      <svg viewBox="0 0 16 16" aria-hidden="true">${ICONS[name]}</svg>
+    </button>`;
+
+  return `
   (() => {
     let bar = document.getElementById('tma-desktop-titlebar');
 
@@ -84,18 +166,42 @@ const SCRIPT = `
       document.body.appendChild(bar);
     }
 
-    const paint = () => { bar.textContent = document.title || 'TM ANTOINE Portal'; };
+    bar.innerHTML = ${JSON.stringify(
+    '<div class="tma-tb-nav">'
+      + button('back', 'Back', canGoBack).trim()
+      + button('forward', 'Forward', canGoForward).trim()
+      + button('reload', 'Reload', true).trim()
+      + '</div><span class="tma-tb-title"></span>',
+  )};
+
+    const nav = bar.querySelector('.tma-tb-nav');
+    const title = bar.querySelector('.tma-tb-title');
+    const paint = () => { title.textContent = document.title || 'TM ANTOINE Portal'; };
     paint();
 
+    nav.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tb]');
+      if (!btn) return;
+      const action = btn.getAttribute('data-tb');
+      if (action === 'back') history.back();
+      else if (action === 'forward') history.forward();
+      else location.reload();
+    });
+
     // The title carries the unread count — "(388) Dashboard" — so it changes
-    // without a navigation. Watch it once.
-    if (!bar.dataset.watching) {
-      bar.dataset.watching = '1';
-      const title = document.querySelector('title');
-      if (title) new MutationObserver(paint).observe(title, { childList: true });
+    // without a navigation. Watch the element, once per document.
+    if (!document.documentElement.dataset.tmaTbWatching) {
+      document.documentElement.dataset.tmaTbWatching = '1';
+      const el = document.querySelector('title');
+      if (el) new MutationObserver(() => {
+        const t = document.getElementById('tma-desktop-titlebar');
+        const s = t && t.querySelector('.tma-tb-title');
+        if (s) s.textContent = document.title || 'TM ANTOINE Portal';
+      }).observe(el, { childList: true });
     }
   })();
 `;
+}
 
 /**
  * Options for the BrowserWindow. On macOS the traffic lights are nudged to sit
@@ -119,8 +225,13 @@ function windowOptions() {
 /** Paints the bar into a portal page. Safe to call more than once. */
 async function apply(webContents) {
   try {
+    const history = webContents.navigationHistory;
+
     await webContents.insertCSS(CSS);
-    await webContents.executeJavaScript(SCRIPT, true);
+    await webContents.executeJavaScript(script({
+      canGoBack: history.canGoBack(),
+      canGoForward: history.canGoForward(),
+    }), true);
   } catch {
     // A page that went away mid-injection is not worth reporting; the next
     // load paints it again.

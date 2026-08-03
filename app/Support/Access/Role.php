@@ -174,6 +174,12 @@ class Role
         'clients' => 'clients.view',
         'email' => 'mail.use',
         'email/templates' => 'mail.use',
+        // The File Library. Only the two organization-wide views are gated —
+        // a client's own folders, what was shared with them, their favourites,
+        // recent and recycle bin are theirs. Mirrors portal-access.js, which
+        // hides exactly these two rows.
+        'folders/all' => 'files.viewOrg',
+        'folders/shared' => 'files.viewOrg',
         'overview' => 'overview.view',
         // The People section, screen by screen. These mirror portal-access.js
         // exactly: the sidebar hides what the server would refuse. A screen
@@ -190,8 +196,11 @@ class Role
         'people/distribution-groups' => ['directory.view', 'groups.view'],
         'people/resend-welcome-emails' => 'users.manage',
         'social/feed' => 'feed.view',
+        'templates' => 'templates.view',
         'users' => 'users.view',
         'users/new' => 'users.manage',
+        'workflows' => 'workflows.view',
+        'workflows/feedback' => 'workflows.view',
     ];
 
     /**

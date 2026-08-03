@@ -89,16 +89,25 @@ class EmployeeReachTest extends TestCase
         $this->assertSame([
             'account', 'account-info', 'account-settings', 'billing-details',
             'billing-details/card', 'calendar', 'choose-account-type',
-            'classic', 'clients', 'email', 'email/templates', 'projects',
+            'classic', 'clients', 'email', 'email/templates', 'folders/all',
+            'folders/favorites', 'folders/filebox', 'folders/personal',
+            'folders/recent', 'folders/recycle', 'folders/shared',
+            'folders/shared-with-me', 'projects', 'projects/all',
+            'projects/closed', 'projects/recently_deleted',
             'settings/change-email', 'signatures', 'social/feed',
-            'social/messages',
+            'social/messages', 'templates', 'workflows', 'workflows/feedback',
         ], $reach[Role::EMPLOYEE], 'the pages an employee reaches have changed');
 
+        // A client keeps their own File Library screens; the two
+        // organization-wide ones (All Files, Shared Folders) are staff.
         $this->assertSame([
             'account', 'account-info', 'account-settings', 'billing-details',
             'billing-details/card', 'calendar', 'choose-account-type',
-            'classic', 'projects', 'settings/change-email', 'signatures',
-            'social/messages',
+            'classic', 'folders/favorites', 'folders/filebox',
+            'folders/personal', 'folders/recent', 'folders/recycle',
+            'folders/shared-with-me', 'projects', 'projects/all',
+            'projects/closed', 'projects/recently_deleted',
+            'settings/change-email', 'signatures', 'social/messages',
         ], $reach[Role::CLIENT], 'the pages a client reaches have changed');
     }
 }
