@@ -1,6 +1,6 @@
 const {
   app, BrowserWindow, Menu, shell, session, dialog, nativeImage,
-  ipcMain, systemPreferences, powerSaveBlocker,
+  ipcMain, systemPreferences, powerSaveBlocker, net,
 } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -423,6 +423,54 @@ let bounceId = null;
 let powerBlockerId = null;
 
 /** Who is calling, straight from the page — see publishCallPhase(). */
+/**
+ * The caller's photo, as a data: URI the ring panel can actually display.
+ *
+ * The panel is a local file, and the portal publishes avatars as root-relative
+ * paths — so handing it "/media/avatars/x.jpg" resolves to file:///media/... and
+ * quietly fails, leaving the initials. Making the URL absolute is not enough
+ * either: that route is behind auth, and the session cookie is SameSite=Lax, so
+ * a file:// page requesting it is a cross-site subresource and sends no cookie.
+ * It would 302 to the sign-in page and the image would fail anyway.
+ *
+ * Fetching here sidesteps both: the main process has the session, and a data:
+ * URI carries no origin of its own. Anything that goes wrong returns empty,
+ * which is the initials the panel already falls back to.
+ */
+async function avatarDataUri(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  if (raw.startsWith('data:')) return raw;
+
+  let url;
+  try {
+    url = new URL(raw, PORTAL_ORIGIN).toString();
+  } catch {
+    return '';
+  }
+
+  // Somewhere else entirely — a provider photo on its own CDN, say. Those need
+  // no session, so the panel can load them directly.
+  if (!isPortalUrl(url)) return url;
+
+  try {
+    const response = await net.fetch(url, { session: session.defaultSession, credentials: 'include' });
+    if (!response.ok) return '';
+
+    const type = response.headers.get('content-type') || '';
+    // An expired session answers with the sign-in page, not a 401.
+    if (!type.startsWith('image/')) return '';
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    // A ring panel is 300px wide; anything this large is a mistake, and the
+    // data URI has to travel over IPC.
+    if (bytes.length > 3_000_000) return '';
+
+    return `data:${type};base64,${bytes.toString('base64')}`;
+  } catch {
+    return '';
+  }
+}
+
 async function readCallInfo() {
   const fallback = { name: 'Incoming call', avatar: '', media: 'audio' };
   if (!mainWindow) return fallback;
@@ -431,7 +479,10 @@ async function readCallInfo() {
     const raw = await mainWindow.webContents.executeJavaScript(
       "document.documentElement.getAttribute('data-tma-call-info')", true,
     );
-    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+    if (!raw) return fallback;
+
+    const info = { ...fallback, ...JSON.parse(raw) };
+    return { ...info, avatar: await avatarDataUri(info.avatar) };
   } catch {
     return fallback;
   }

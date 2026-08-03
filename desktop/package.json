@@ -1,6 +1,6 @@
 {
   "name": "tma-portal-desktop",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "private": true,
   "description": "TM ANTOINE Advisory portal — macOS desktop shell",
   "main": "main.js",
@@ -12,13 +12,14 @@
     "dist": "electron-builder --mac",
     "release": "env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never",
     "release:win": "env -u ELECTRON_RUN_AS_NODE electron-builder --win --x64 --publish never",
-    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js",
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js",
     "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js",
     "test:call": "env -u ELECTRON_RUN_AS_NODE electron test-call-panel.js",
     "test:notify": "env -u ELECTRON_RUN_AS_NODE electron test-notify.js",
     "test:titlebar": "env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js",
     "test:update-window": "env -u ELECTRON_RUN_AS_NODE electron test-update-window.js",
-    "test:update-available": "env -u ELECTRON_RUN_AS_NODE electron test-update-available.js"
+    "test:update-available": "env -u ELECTRON_RUN_AS_NODE electron test-update-available.js",
+    "test:call-avatar": "env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",

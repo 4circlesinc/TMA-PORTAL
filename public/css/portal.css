@@ -1743,7 +1743,22 @@
   background: var(--color-bg-tag);
 }
 
+/* Solid tile fills, one per function group (see SHORTCUTS in portal-home.js).
+   A cool ramp off the two brand blues — deliberately NOT the accent palette,
+   whose mint/pink/yellow would turn this panel into a toybox. Literal hexes
+   because the theme panel rebinds --color-primary to the account's accent. */
+.tma-portal-shortcut__icon--comms  { background: #136da0; }  /* email, chat, feed, calendar */
+.tma-portal-shortcut__icon--files  { background: #03a5e9; }  /* sharing + the file library */
+.tma-portal-shortcut__icon--people { background: #0b4a6f; }  /* user administration */
+.tma-portal-shortcut__icon--work   { background: #3f5566; }  /* approvals + signatures */
+
 .tma-portal-shortcut__icon img { width: 20px; height: 20px; }
+
+/* Phosphor glyphs ship black; on a solid fill they have to become white. */
+.tma-portal-shortcut__icon--comms img,
+.tma-portal-shortcut__icon--files img,
+.tma-portal-shortcut__icon--people img,
+.tma-portal-shortcut__icon--work img { filter: brightness(0) invert(1); }
 
 /* Count badge on a shortcut tile (Email / Calendar / Users).
    Grows with the number — exact totals like 27,000, never capped at 99+. */
