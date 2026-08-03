@@ -197,7 +197,12 @@
           (done ? '' : (isError
             ? '<img src="images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14"> '
             : '<span class="tma-portal-sync__spinner"></span> ')) +
-          esc(title) + '</span>' +
+          // The text needs its own element to truncate in. The title is a flex
+          // row (spinner + words), and text-overflow does nothing to a flex
+          // container's children — the name was being chopped mid-word with no
+          // ellipsis at all.
+          '<span class="tma-portal-sync-panel__label">' + esc(title) + '</span>' +
+        '</span>' +
         '<div class="tma-portal-upload__head-actions">' +
           (isError ? '<button type="button" class="tma-portal-upload__act" data-sync-retry>Retry</button>' : '') +
           // Minimise leaves the one line that answers "is it still going?".
@@ -206,7 +211,11 @@
             '<button type="button" class="tma-portal-upload__icon tma-portal-sync-panel__toggle"' +
               ' data-sync-collapse aria-expanded="' + (collapsed ? 'false' : 'true') + '"' +
               ' aria-label="' + (collapsed ? 'Expand' : 'Minimise') + '">' +
-              '<img src="images/icons/phosphor/CaretDown.svg" alt="" width="12" height="12">' +
+              // A masked span, not an <img>: an <img> paints the SVG's own
+              // colour, which put a hard black caret next to a soft grey ✕.
+              // Masking makes it inherit the button's colour like every other
+              // tinted icon in the portal.
+              '<span class="tma-portal-sync-panel__caret" aria-hidden="true"></span>' +
             '</button>') +
           '<button type="button" class="tma-portal-upload__icon" data-sync-close aria-label="Hide">✕</button>' +
         '</div>' +

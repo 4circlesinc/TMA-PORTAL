@@ -873,17 +873,30 @@
 .tma-portal-sync-panel.is-collapsed .tma-portal-upload__head { border-bottom: 0; }
 /* One line when minimised. A long library name wrapping to two defeats the
    point of collapsing it. */
-.tma-portal-sync-panel.is-collapsed .tma-portal-upload__title {
+.tma-portal-sync-panel.is-collapsed .tma-portal-upload__title { min-width: 0; }
+/* The ellipsis has to live on the text element itself. Putting it on the title
+   row clipped the name mid-word instead, because text-overflow does not reach
+   inside a flex container. */
+.tma-portal-sync-panel.is-collapsed .tma-portal-sync-panel__label {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 .tma-portal-sync-panel.is-collapsed .tma-portal-upload__head-actions { flex: 0 0 auto; }
 /* Truncating the title makes it fill the header, so the ellipsis ends up
    against the caret without this. */
 .tma-portal-sync-panel.is-collapsed .tma-portal-upload__head { gap: var(--space-8); }
-.tma-portal-sync-panel__toggle img {
-  display: block; transition: transform 0.15s ease;
+/* The minimise caret. Masked rather than an <img> so it takes the button's
+   colour and sits at the same weight as the ✕ beside it. */
+.tma-portal-sync-panel__toggle { display: inline-flex; align-items: center; justify-content: center; }
+.tma-portal-sync-panel__caret {
+  display: block; width: 12px; height: 12px; background: currentColor;
+  mask-image: url('../images/icons/phosphor/CaretDown.svg');
+  -webkit-mask-image: url('../images/icons/phosphor/CaretDown.svg');
+  mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
+  mask-position: center; -webkit-mask-position: center;
+  mask-size: contain; -webkit-mask-size: contain;
+  transition: transform 0.15s ease;
 }
-.tma-portal-sync-panel.is-collapsed .tma-portal-sync-panel__toggle img {
+.tma-portal-sync-panel.is-collapsed .tma-portal-sync-panel__caret {
   transform: rotate(180deg);
 }
 

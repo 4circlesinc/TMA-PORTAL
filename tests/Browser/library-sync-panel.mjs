@@ -186,7 +186,28 @@ try {
 
   await stubSyncing();
 
-  step(7, 'It can be minimised, and stays minimised across pages');
+  step(7, 'The minimise caret matches the close button, not a hard black glyph');
+  const chrome = await page.evaluate(() => {
+    const caret = document.querySelector('.tma-portal-sync-panel__caret');
+    const close = document.querySelector('.tma-portal-sync-panel [data-sync-close]');
+    if (!caret || !close) return null;
+    const cs = getComputedStyle(caret);
+    return {
+      // A masked span paints via background-color, so that IS the icon colour.
+      caretColour: cs.backgroundColor,
+      masked: (cs.maskImage || cs.webkitMaskImage || 'none') !== 'none',
+      closeColour: getComputedStyle(close).color,
+      box: caret.getBoundingClientRect().width,
+    };
+  });
+  check(!!chrome, 'the caret and close button are both present');
+  check(chrome.masked, 'the caret is a masked span, so it can be tinted');
+  check(chrome.caretColour === chrome.closeColour,
+    `caret matches the close button (${chrome.caretColour} vs ${chrome.closeColour})`);
+  check(chrome.box > 0 && chrome.box <= 16, `the caret is icon-sized (${chrome.box}px)`);
+  await page.screenshot({ path: 'tests/Browser/library-sync-panel.png' });
+
+  step(8, 'It can be minimised, and stays minimised across pages');
   // Start from a clean panel: the earlier steps left injected siblings behind.
   await page.evaluate(() => document.querySelectorAll(
     '.tma-mail-sync, .tma-portal-dock > .tma-portal-upload:not(.tma-portal-sync-panel)'
@@ -206,13 +227,25 @@ try {
   check(vp.height - shutBox.bottom <= 40, 'minimised, it stays in the corner');
   // A long library name must not wrap the collapsed panel onto two lines.
   check(shutBox.h <= 52, `minimised to a single line (${Math.round(shutBox.h)}px ≤ 52)`);
+  // A long name must end in an ellipsis, not be chopped mid-word. The title is
+  // a flex row, so the truncation has to be on the text element inside it.
+  const clip = await page.evaluate(() => {
+    const el = document.querySelector('.tma-portal-sync-panel__label');
+    if (!el) return null;
+    return {
+      ellipsis: getComputedStyle(el).textOverflow,
+      overflowing: el.scrollWidth > el.clientWidth,
+    };
+  });
+  check(!!clip && clip.ellipsis === 'ellipsis', 'the name truncates with an ellipsis');
+  check(!!clip && clip.overflowing, 'the long name really is being truncated here');
   await page.screenshot({ path: 'tests/Browser/library-sync-panel-minimised.png' });
 
   // The poll repaints every few seconds — it must not spring back open.
   await page.waitForTimeout(6000);
   check(!(await detailVisible()), 'a repaint does not re-expand it');
 
-  step(8, 'Minimised survives navigation, and it can be restored');
+  step(9, 'Minimised survives navigation, and it can be restored');
   await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.TMAUpload, { timeout: 15000 });
   await waitForSyncPanel();
@@ -222,7 +255,7 @@ try {
   await page.waitForTimeout(250);
   check(await detailVisible(), 'clicking again restores it');
 
-  step(9, 'No console errors');
+  step(10, 'No console errors');
   check(errors.length === 0, `no page errors (${errors.length})`);
   if (errors.length) errors.slice(0, 5).forEach((e) => log('      ' + e));
 } catch (e) {
