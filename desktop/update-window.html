@@ -30,8 +30,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 20px;
-    padding: 0 40px;
+    gap: 14px;
+    /* Top padding clears the traffic lights, which are drawn over the content. */
+    padding: 34px 40px 24px;
     /* The window is transparent, so the corner has to be drawn here. Matched to
        the radius macOS gives a panel this size. */
     border-radius: 16px;
@@ -85,14 +86,26 @@
     to   { background-position: -220% 0; }
   }
 
-  /* The only words on the screen. */
-  .caption {
+  /*
+   * Says what this window is. Without it the panel showed a logo, a bar and a
+   * percentage — accurate about the *state* and silent about the *reason*, so
+   * it could as easily have been a file transfer.
+   */
+  .heading {
     margin: 0;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: -0.01em;
-    color: light-dark(rgba(0,0,0,.55), rgba(255,255,255,.62));
-    min-height: 16px;
+    color: light-dark(rgba(0,0,0,.88), rgba(255,255,255,.92));
+  }
+
+  .caption {
+    margin: -6px 0 0;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    color: light-dark(rgba(0,0,0,.50), rgba(255,255,255,.58));
+    min-height: 15px;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -105,11 +118,13 @@
   <div class="screen">
     <img class="mark" src="assets/logo-mark.png" alt="" aria-hidden="true" width="48" height="48">
 
+    <h1 class="heading" id="heading">Updating TM ANTOINE Portal</h1>
+
     <div class="track" id="track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
       <div class="fill" id="fill"></div>
     </div>
 
-    <p class="caption" id="caption">Updating</p>
+    <p class="caption" id="caption">Starting</p>
   </div>
 
 <script>

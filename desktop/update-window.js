@@ -13,7 +13,7 @@ const { BrowserWindow } = require('electron');
 const path = require('node:path');
 
 const WIDTH = 340;
-const HEIGHT = 190;
+const HEIGHT = 230;
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -40,10 +40,19 @@ function material() {
       backgroundColor: '#00000000',
       vibrancy: 'under-window',
       visualEffectState: 'active',
+      // Hidden, not absent: the traffic lights stay, drawn over the glass, so
+      // this is an ordinary window you can close or send to the Dock rather
+      // than a panel that traps you until it decides to go.
+      titleBarStyle: 'hidden',
+      trafficLightPosition: { x: 13, y: 13 },
     };
   }
 
-  return { backgroundMaterial: 'acrylic' };
+  return {
+    backgroundMaterial: 'acrylic',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#00000000', symbolColor: '#8a8a8a', height: 34 },
+  };
 }
 
 let panel = null;
@@ -59,15 +68,21 @@ function show(version) {
     width: WIDTH,
     height: HEIGHT,
     show: false,
-    frame: false,
-    resizable: false,
-    maximizable: false,
-    minimizable: false,
-    fullscreenable: false,
     center: true,
-    // Nothing here is cancellable once it starts, so there is no reason to let
-    // it end up behind the window it is replacing.
-    alwaysOnTop: true,
+    resizable: false,
+    // Closable and minimisable — an update takes minutes and there is no reason
+    // to hold the screen hostage for them. Closing only dismisses the progress;
+    // the download carries on and the app still restarts when it is done.
+    closable: true,
+    minimizable: true,
+    // Full screen makes no sense for a fixed 340pt panel, and `maximizable`
+    // false is what greys out the green button rather than leaving it to zoom
+    // a window that cannot resize.
+    maximizable: false,
+    fullscreenable: false,
+    // Not always-on-top: that is for something you must deal with now, and this
+    // is something you watch or ignore.
+    alwaysOnTop: false,
     ...material(),
     webPreferences: {
       preload: path.join(__dirname, 'update-preload.js'),

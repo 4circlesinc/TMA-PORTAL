@@ -28,6 +28,7 @@ app.whenReady().then(async () => {
     new Promise((resolve) => requestAnimationFrame(() => resolve({
       title: document.title,
       caption: document.getElementById('caption').textContent,
+      heading: document.getElementById('heading').textContent,
       width: document.getElementById('fill').style.width,
       indeterminate: document.getElementById('track').classList.contains('is-indeterminate'),
       value: document.getElementById('track').getAttribute('aria-valuenow'),
@@ -37,6 +38,9 @@ app.whenReady().then(async () => {
   // The version is deliberately not on screen — one less thing to read — so it
   // has to still reach the window title, which is what VoiceOver announces.
   check('version reaches the window title', (await read()).title, 'Updating to 9.9.9');
+  // The panel must say what it is: a logo, a bar and a percentage describe the
+  // state but not the reason, and could as easily be a file transfer.
+  check('the panel says it is updating', (await read()).heading, 'Updating TM ANTOINE Portal');
 
   updateWindow.setPhase('downloading');
   updateWindow.setProgress(0.42);
