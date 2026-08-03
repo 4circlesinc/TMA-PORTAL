@@ -16,7 +16,7 @@ app.whenReady().then(async () => {
   // Capture what the store hands to the OS instead of really notifying.
   await win.webContents.executeJavaScript(`
     window.__raised = [];
-    window.Notification = function (title, opts) { window.__raised.push({ title, body: opts.body }); this.close = function(){}; };
+    window.Notification = function (title, opts) { window.__raised.push({ title, body: opts.body, silent: opts.silent }); this.close = function(){}; };
     window.Notification.permission = 'granted';
     window.Notification.requestPermission = function () { return Promise.resolve('granted'); };
     document.hasFocus = function () { return false; };   // backgrounded
@@ -45,6 +45,47 @@ app.whenReady().then(async () => {
   await raise('email', 'New email', 'secret subject');
   const quiet = await win.webContents.executeJavaScript('window.__raised[window.__raised.length-1]', true);
   check('preview off hides the subject', quiet.body, 'New email');
+
+  /*
+   * Sound. The banner used to be hard-coded silent because messages.js played
+   * the tone — which it only did for messages, and only for a conversation it
+   * had already loaded, so everything else arrived in silence.
+   */
+  const js = (expr) => win.webContents.executeJavaScript(expr, true);
+  const lastSilent = () => js('window.__raised[window.__raised.length-1].silent');
+
+  await js("window.TMADesktopNotify.applyPrefs({ enabled: true, preview: true })");
+
+  await raise('email', 'New email', 'Contract');
+  check('an email banner is not silenced', await lastSilent(), false);
+
+  await raise('calendar', 'Event moved', 'Tomorrow');
+  check('a calendar banner is not silenced', await lastSilent(), false);
+
+  check('willSound() while backgrounded', await js('window.TMADesktopNotify.willSound()'), true);
+
+  // Switching notification sounds off must silence the banner, not just the
+  // in-app tone — otherwise turning it off makes no difference in background.
+  await js('window.TMAMessagingSettings = { notificationSounds: false }');
+  await raise('email', 'New email', 'Contract');
+  check('sounds off silences the banner', await lastSilent(), true);
+  check('willSound() is false with sounds off', await js('window.TMADesktopNotify.willSound()'), false);
+
+  // Unset is on: someone who never opened the setting should still hear it.
+  await js('window.TMAMessagingSettings = {}');
+  await raise('email', 'New email', 'Contract');
+  check('unset preference still sounds', await lastSilent(), false);
+
+  // In the foreground the page owns the tone, so the banner must not claim it.
+  // Assignments must not evaluate to a function: executeJavaScript sends the
+  // result back over IPC, and a function cannot be cloned — the promise then
+  // never settles and the run hangs rather than failing.
+  await js('document.hasFocus = function () { return true; }; void 0;');
+  check('willSound() is false when in front', await js('window.TMADesktopNotify.willSound()'), false);
+
+  await js('document.hasFocus = function () { return false; }; void 0;');
+  await js("window.TMADesktopNotify.applyPrefs({ enabled: false, preview: true })");
+  check('willSound() is false when notifications are off', await js('window.TMADesktopNotify.willSound()'), false);
 
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASS');
   app.exit(failures ? 1 : 0);

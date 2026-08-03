@@ -6048,7 +6048,21 @@
     var row = findThread(conversationId);
     if (!row || row.muted) return;
 
-    if (STORE.settings.notificationSounds) playIncomingMessageSound();
+    /*
+     * The desktop banner carries the sound whenever it is going to make one —
+     * it is raised for every module and does not depend on this conversation
+     * being loaded, so it is the reliable announcer while the app is in the
+     * background. Playing here as well would be two sounds for one message.
+     *
+     * When it will not sound (app in front, notifications off or not granted,
+     * sounds switched off) this is still the only tone there is, so the check
+     * asks about *this* moment rather than assuming the background case.
+     */
+    var announced = !!(window.TMADesktopNotify
+      && typeof window.TMADesktopNotify.willSound === 'function'
+      && window.TMADesktopNotify.willSound());
+
+    if (STORE.settings.notificationSounds && !announced) playIncomingMessageSound();
 
     /*
      * The desktop banner is not raised here.

@@ -77,8 +77,14 @@ class SharePointConnect extends Command
 
         $folderName = $this->option('folder') ?: ($drive['name'] ?? 'SharePoint');
 
-        // The library appears as an organization folder: a shared library is
-        // firm-wide by nature, and this keeps it out of anyone's private area.
+        /*
+         * A site library appears as an organization folder: a shared library is
+         * firm-wide by nature, and this keeps it out of anyone's private area.
+         *
+         * This command only ever connects SITE libraries. Personal drives go
+         * through sharepoint:connect-onedrive, which deliberately does NOT type
+         * them this way — `all_staff` on somebody's OneDrive would publish it.
+         */
         $folder = Folder::create([
             'uuid' => (string) Str::uuid(),
             'name' => $folderName,

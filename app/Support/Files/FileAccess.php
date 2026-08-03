@@ -9,6 +9,7 @@ use App\Models\CompanyStaffAssignment;
 use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
 use App\Models\Folder;
+use App\Models\SharePointConnection;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -88,6 +89,11 @@ class FileAccess
      *    are not shared with every organization member unless chosen, and a
      *    client's contracts leaking firm-wide is a different order of mistake
      *    from a colleague seeing a draft early.
+     *  - **Anything synced from a personal OneDrive.** A SharePoint library is
+     *    shared by intent; somebody's OneDrive is not. It holds meeting
+     *    recordings, auto-saved chat attachments and drafts they never chose to
+     *    publish. The firm-wide default must never reach into one: the owner
+     *    decides who sees their own files, file by file.
      */
     private static function organizationDefaultRole(User $user, FileItem $file): ?string
     {
@@ -99,9 +105,32 @@ class FileAccess
             if ($folder->folder_type === Folder::TYPE_CLIENT) {
                 return null;
             }
+
+            if (self::isPersonalDriveFolder($folder)) {
+                return null;
+            }
         }
 
         return FileLibrarySetting::defaultOrgRole();
+    }
+
+    /**
+     * Is this folder the root of — or inside — a synced personal OneDrive?
+     *
+     * Checked against the CONNECTION rather than a flag on the folder, because
+     * the connection is what knows whose drive it is. A folder carries no
+     * memory of where it came from, and copying that fact onto every folder at
+     * import time would mean one missed write silently publishes a drive.
+     */
+    private static function isPersonalDriveFolder(Folder $folder): bool
+    {
+        // Deliberately not memoised in a static. Nothing else in this class
+        // caches, and a privacy answer held over from an earlier request — or
+        // an earlier test — fails OPEN, publishing a drive that was since
+        // connected. An extra indexed lookup is the cheaper mistake.
+        return SharePointConnection::where('drive_kind', 'onedrive')
+            ->where('folder_id', $folder->id)
+            ->exists();
     }
 
     /** Effective role a user holds over a folder (null = no access). */
@@ -132,7 +161,11 @@ class FileAccess
         if ($folder->folder_type === Folder::TYPE_ORGANIZATION
             && $folder->audience === 'all_staff'
             && self::isStaff($user)) {
-            return $folder->audience_role ?: 'viewer';
+            // A personal drive is never firm-wide, whatever it is typed as.
+            // The connect flow no longer types one this way, but this is the
+            // grant that would publish a whole OneDrive to every colleague, so
+            // it does not rely on that alone.
+            return self::isPersonalDriveFolder($folder) ? null : ($folder->audience_role ?: 'viewer');
         }
 
         if ($folder->folder_type === Folder::TYPE_STAFF

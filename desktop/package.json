@@ -12,7 +12,7 @@
     "dist": "electron-builder --mac",
     "release": "env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never",
     "release:win": "env -u ELECTRON_RUN_AS_NODE electron-builder --win --x64 --publish never",
-    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js",
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js",
     "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js",
     "test:call": "env -u ELECTRON_RUN_AS_NODE electron test-call-panel.js",
     "test:notify": "env -u ELECTRON_RUN_AS_NODE electron test-notify.js",

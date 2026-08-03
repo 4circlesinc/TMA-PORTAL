@@ -484,6 +484,27 @@
       return typeof document.hasFocus === 'function' ? !document.hasFocus() : false;
     }
 
+    /*
+     * The user's "Notification sounds" switch, published by messages.js onto
+     * window.TMAMessagingSettings — the same channel messaging-calls.js reads
+     * the ringtone from. Unset means on: someone who has never opened the
+     * setting should still hear their notifications.
+     */
+    function soundOn() {
+      var settings = window.TMAMessagingSettings || {};
+      return settings.notificationSounds !== false;
+    }
+
+    /*
+     * True when a banner raised right now would make a noise. messages.js asks
+     * before playing its own tone, so an arriving message is announced once:
+     * by the banner when the app is in the background, by the page when it is
+     * in front. Without the check, backgrounding the app would double it.
+     */
+    function willSound() {
+      return prefs.enabled && permission() === 'granted' && backgrounded() && soundOn();
+    }
+
     function seenRecently(key) {
       var now = Date.now();
       Object.keys(recent).forEach(function (k) {
@@ -537,9 +558,20 @@
           tag: 'tma-' + (item.id || 'notification'),
           renotify: true,
           icon: item.image || null,
-          // The tone is played by messages.js, which knows the user's choice;
-          // letting the OS play its own as well is two sounds for one message.
-          silent: true,
+          /*
+           * This used to be hard-coded silent, on the reasoning that messages.js
+           * plays the tone. It only ever did so for *messages*, and only for a
+           * conversation it had already loaded — so an email, a calendar change
+           * or a file update raised a banner with no sound at all, and a message
+           * in an unloaded thread did too.
+           *
+           * The banner is raised here, for every module, so the sound belongs
+           * here as well. The OS plays it: page audio is unreliable in exactly
+           * the case that matters, since a hidden window is where autoplay
+           * policy and background throttling apply. messages.js stands down
+           * while we are sounding — see playIncomingMessageSound's caller.
+           */
+          silent: !soundOn(),
         });
         note.onclick = function () {
           note.close();
@@ -601,6 +633,8 @@
       permission: permission,
       requestPermission: requestPermission,
       isSupported: supported,
+      // Asked by messages.js before it plays its arrival tone.
+      willSound: willSound,
     };
   })();
 

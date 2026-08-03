@@ -140,8 +140,11 @@
     var subfolders = folder.folders || [];
 
     // Subfolders first, then files — the same order the library itself uses.
+    // Every row carries a data-key so a background poll re-render reuses the
+    // existing node instead of rebuilding it (and re-requesting its thumbnail).
     var rows = subfolders.slice(0, PREVIEW_FILES).map(function (sub) {
-      return '<button type="button" class="tma-portal-file-row" data-home-lib-open-folder="' + esc(sub.id) + '">' +
+      return '<button type="button" class="tma-portal-file-row" data-key="home-lib-sub-' + esc(sub.id) + '"' +
+        ' data-home-lib-open-folder="' + esc(sub.id) + '">' +
         folderIconHtml(sub, 24) +
         '<span class="tma-portal-file-row__meta">' +
         '<span class="tma-portal-file-row__name">' + esc(sub.name) + '</span>' +
@@ -150,7 +153,8 @@
     }).join('');
 
     rows += files.slice(0, Math.max(0, PREVIEW_FILES - subfolders.length)).map(function (f) {
-      return '<button type="button" class="tma-portal-file-row" data-home-lib-open-file="' + esc(f.id) + '"' +
+      return '<button type="button" class="tma-portal-file-row" data-key="home-lib-file-' + esc(f.id) + '"' +
+        ' data-home-lib-open-file="' + esc(f.id) + '"' +
         ' data-home-lib-open-folder="' + esc((f.folder && f.folder.id) || folder.id) + '">' +
         thumbOrIcon(f, 24) +
         '<span class="tma-portal-file-row__meta">' +
@@ -165,8 +169,8 @@
       '<span class="tma-portal-default-folder__name">' + esc(folder.name) + '</span>' +
       '</button>' +
       '<div class="tma-portal-default-folder__body">' +
-      (rows || '<p class="tma-portal-panel__note">Nothing in this folder yet.</p>') +
-      (extraCount(folder) ? '<p class="tma-portal-panel__note">' + extraCount(folder) + '</p>' : '') +
+      (rows || '<p class="tma-portal-panel__note" data-key="home-lib-empty-' + esc(folder.id) + '">Nothing in this folder yet.</p>') +
+      (extraCount(folder) ? '<p class="tma-portal-panel__note" data-key="home-lib-more-' + esc(folder.id) + '">' + extraCount(folder) + '</p>' : '') +
       '</div></section>';
   }
 
@@ -195,10 +199,10 @@
 
     if (!state.loaded && !state.defaults.length) {
       return '<section class="tma-portal-home-defaults" data-key="home-defaults" aria-busy="true">' +
-        '<div class="tma-portal-home-defaults__head">' +
+        '<div class="tma-portal-home-defaults__head" data-key="home-defaults-head">' +
         '<h2 class="tma-portal-home-defaults__title">Default Folders</h2>' +
         '</div>' +
-        '<div class="tma-portal-home-defaults__grid">' +
+        '<div class="tma-portal-home-defaults__grid" data-key="home-defaults-skeleton">' +
         new Array(3).fill('<div class="tma-portal-default-folder tma-portal-default-folder--skeleton" aria-hidden="true"></div>').join('') +
         '</div></section>';
     }
@@ -211,18 +215,21 @@
         '</button>'
       : '';
 
+    // Each shape (skeleton / grid / empty) carries its own key, so a change of
+    // shape swaps that one block and everything else is reconciled in place.
     var body = state.defaults.length
-      ? ('<div class="tma-portal-home-defaults__grid">' + list.map(renderDefaultFolderCard).join('') + '</div>')
-      : (ui() && ui().emptyState
+      ? ('<div class="tma-portal-home-defaults__grid" data-key="home-defaults-grid">' +
+        list.map(renderDefaultFolderCard).join('') + '</div>')
+      : ('<div data-key="home-defaults-empty">' + (ui() && ui().emptyState
         ? ui().emptyState({
             illustration: 'Illustration07',
             title: 'No default folders yet',
             subtitle: 'Admins can open Folders, right‑click a top-level folder, and choose “Make default folder”.',
           })
-        : '<p class="tma-portal-panel__note">No default folders yet.</p>');
+        : '<p class="tma-portal-panel__note">No default folders yet.</p>') + '</div>');
 
     return '<section class="tma-portal-home-defaults" data-key="home-defaults">' +
-      '<div class="tma-portal-home-defaults__head">' +
+      '<div class="tma-portal-home-defaults__head" data-key="home-defaults-head">' +
       '<h2 class="tma-portal-home-defaults__title">Default Folders</h2>' +
       moreBtn +
       '</div>' +
@@ -310,9 +317,22 @@
   }
 
   function render() {
-    // Replace the whole strip on each remount so morph never keeps a stale
-    // empty defaults block after folders are adopted.
-    return '<div class="tma-portal-home-below" data-key="home-below" data-morph-replace>' +
+    /*
+     * Reconciled, never replaced.
+     *
+     * This strip used to carry data-morph-replace so a stale empty defaults
+     * block could not survive a folder being adopted. But the dashboard
+     * re-renders on three background polls (inbox, chats, presence), and each
+     * one then tore the whole strip out of the document and rebuilt it: every
+     * folder icon and thumbnail became a new <img>, and the container's height
+     * collapsed and came back within the same frame — which, mid-scroll, reads
+     * as the page refreshing under you.
+     *
+     * The stale-block problem is solved properly instead: each shape inside
+     * carries its own data-key (see renderDefaultFolders), so morph swaps the
+     * block that actually changed and leaves the rest alone.
+     */
+    return '<div class="tma-portal-home-below" data-key="home-below">' +
       renderDefaultFolders() +
       renderFilesTable() +
       '</div>';
@@ -339,48 +359,61 @@
     var host = root.querySelector('[data-key="home-below"]') || root;
     if (!host) return;
 
-    if (!host.dataset.homeLibWired) {
-      host.dataset.homeLibWired = '1';
-      host.addEventListener('click', function (e) {
-        // Tabs: delegate so morph can replace tab buttons without losing the
-        // handler (PortalTabGroup binds per-button and breaks after patch).
-        var tabBtn = e.target.closest('[data-tab-key]');
-        if (tabBtn && host.contains(tabBtn)) {
-          var key = tabBtn.getAttribute('data-tab-key');
-          if ((key === 'recent' || key === 'shared') && state.tab !== key) {
-            state.tab = key;
-            rerenderHome();
-          }
-          return;
-        }
+    // Bind once per element, via a property rather than an attribute: the strip
+    // now survives re-renders, and morph strips any data-* attribute the fresh
+    // markup doesn't repeat — a dataset flag would be wiped on every patch and
+    // stack a new click handler each time.
+    var bindOnce = window.TMAMorph
+      ? function (el, type, fn, tag) { window.TMAMorph.on(el, type, fn, tag); }
+      : function (el, type, fn, tag) {
+        var flag = '__homeLibOn:' + type + ':' + (tag || '');
+        if (el[flag]) return;
+        el[flag] = true;
+        el.addEventListener(type, fn);
+      };
 
-        var more = e.target.closest('[data-home-lib-defaults-more]');
-        if (more && host.contains(more)) {
-          state.showAllDefaults = !state.showAllDefaults;
+    bindOnce(host, 'click', function (e) {
+      // Tabs: delegate so morph can replace tab buttons without losing the
+      // handler (PortalTabGroup binds per-button and breaks after patch).
+      var tabBtn = e.target.closest('[data-tab-key]');
+      if (tabBtn && host.contains(tabBtn)) {
+        var key = tabBtn.getAttribute('data-tab-key');
+        if ((key === 'recent' || key === 'shared') && state.tab !== key) {
+          state.tab = key;
           rerenderHome();
-          return;
         }
+        return;
+      }
 
-        var folderBtn = e.target.closest('[data-home-lib-open-folder]');
-        if (folderBtn && host.contains(folderBtn) && !e.target.closest('[data-home-lib-open-file]')) {
-          openFolder(folderBtn.getAttribute('data-home-lib-open-folder'));
-          return;
-        }
+      var more = e.target.closest('[data-home-lib-defaults-more]');
+      if (more && host.contains(more)) {
+        state.showAllDefaults = !state.showAllDefaults;
+        rerenderHome();
+        return;
+      }
 
-        var openBtn = e.target.closest('[data-home-lib-open], [data-home-lib-open-file]');
-        if (openBtn && host.contains(openBtn)) {
-          var id = openBtn.getAttribute('data-home-lib-open') || openBtn.getAttribute('data-home-lib-open-file');
-          openItem(findItem(id));
-        }
-      });
-    }
+      var folderBtn = e.target.closest('[data-home-lib-open-folder]');
+      if (folderBtn && host.contains(folderBtn) && !e.target.closest('[data-home-lib-open-file]')) {
+        openFolder(folderBtn.getAttribute('data-home-lib-open-folder'));
+        return;
+      }
+
+      var openBtn = e.target.closest('[data-home-lib-open], [data-home-lib-open-file]');
+      if (openBtn && host.contains(openBtn)) {
+        var id = openBtn.getAttribute('data-home-lib-open') || openBtn.getAttribute('data-home-lib-open-file');
+        openItem(findItem(id));
+      }
+    }, 'homeLib');
 
     // Keep underline chrome in sync for a11y; switching itself is delegated above.
     if (ui() && ui().wireTabs) {
       var tabHost = host.querySelector('.tma-tab-group');
-      if (tabHost && !tabHost.dataset.homeLibTabs) {
-        tabHost.dataset.homeLibTabs = '1';
-        if (window.PortalTabGroup) window.PortalTabGroup.init(tabHost);
+      if (tabHost) {
+        var initFlag = '__homeLibTabs';
+        if (!tabHost[initFlag]) {
+          tabHost[initFlag] = true;
+          if (window.PortalTabGroup) window.PortalTabGroup.init(tabHost);
+        }
       }
     }
   }

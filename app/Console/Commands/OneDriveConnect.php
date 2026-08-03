@@ -112,14 +112,31 @@ class OneDriveConnect extends Command
         $folderName = $this->option('folder')
             ?: ($this->option('all') ? 'OneDrive — '.explode('@', $upn)[0] : $item['name']);
 
+        /*
+         * A personal OneDrive is PRIVATE. It is not firm property.
+         *
+         * This used to be created as an organization folder with
+         * `audience = all_staff` and `audience_role = editor`, which grants
+         * every colleague edit rights through systemFolderRole — a grant no
+         * file-level rule can undo. Connecting one drive would have published
+         * somebody's meeting recordings, chat attachments and unsent drafts to
+         * the whole firm, editable.
+         *
+         * It belongs to the person whose drive it is, and they share out of it
+         * one file at a time. Prefer the real owner over the connecting admin:
+         * `owner_id` is what grants 'full' in FileAccess, so getting this wrong
+         * hands someone else's drive to whoever ran the command.
+         */
+        $driveOwner = User::where('email', $upn)->first() ?: $owner;
+
         $portalFolder = Folder::create([
             'uuid' => (string) Str::uuid(),
             'name' => $folderName,
-            'owner_id' => $owner->id,
+            'owner_id' => $driveOwner->id,
             'created_by' => $owner->id,
-            'folder_type' => Folder::TYPE_ORGANIZATION,
-            'audience' => 'all_staff',
-            'audience_role' => 'editor',
+            'folder_type' => null,
+            'audience' => null,
+            'audience_role' => null,
             'origin' => 'sharepoint',
         ]);
 
