@@ -25,6 +25,7 @@ const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
 
 const updateWindow = require('./update-window');
+const updateAvailable = require('./update-available');
 
 const { version: APP_VERSION } = require('./package.json');
 
@@ -59,7 +60,42 @@ function parseManifest(text) {
 
   if (!version || !file || !sha512) return null;
 
-  return { version, file, sha512 };
+  return { version, file, sha512, notes: releaseNotes(text) };
+}
+
+/**
+ * The "What's new" bullets, from the releaseNotes electron-builder copies out
+ * of release-notes.md at build time.
+ *
+ * YAML gives it to us one of two ways depending on the content, and both turn
+ * up in practice, so both are read:
+ *
+ *   releaseNotes: |-        a block scalar, the lines indented beneath it
+ *     - one
+ *     - two
+ *
+ *   releaseNotes: "- one\n- two"    a quoted scalar with escaped newlines
+ *
+ * Missing notes are not an error — an older release has none, and the window
+ * simply hides its disclosure.
+ */
+function releaseNotes(text) {
+  const block = text.match(/^releaseNotes:[ \t]*[|>]-?[ \t]*\n((?:[ \t]+.*\n?)*)/m);
+
+  const raw = block
+    ? block[1].replace(/^[ \t]+/gm, '')
+    : (text.match(/^releaseNotes:[ \t]*(.+)$/m) || [])[1];
+
+  if (!raw) return [];
+
+  return String(raw)
+    .replace(/^['"]|['"]$/g, '')
+    // A quoted scalar carries its newlines escaped.
+    .replace(/\\n/g, '\n')
+    .split('\n')
+    // Markdown bullets, so strip the marker the file was written with.
+    .map((line) => line.trim().replace(/^[-*•]\s*/, '').trim())
+    .filter(Boolean);
 }
 
 /** Numeric semver compare; returns > 0 when `a` is newer than `b`. */
@@ -220,16 +256,17 @@ function progressBar(fraction) {
 }
 
 async function runUpdate(release, parentWindow) {
-  const { response } = await dialog.showMessageBox(parentWindow, {
-    type: 'info',
-    buttons: ['Later', 'Update Now'],
-    defaultId: 1,
-    cancelId: 0,
-    message: `Version ${release.version} is available`,
-    detail: "The app will download it, restart, and pick up where you left off.",
+  /*
+   * Was dialog.showMessageBox. A native message box cannot carry a disclosure,
+   * so the only thing it could say about an update was its version number —
+   * people were asked to accept a change they had no way to read.
+   */
+  const choice = await updateAvailable.show({
+    version: release.version,
+    notes: release.notes || [],
   });
 
-  if (response !== 1) {
+  if (choice !== 'update') {
     defer(release.version);
     return;
   }

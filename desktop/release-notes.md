@@ -1,0 +1,3 @@
+- See what's changed before you install an update
+- Redesigned update window that follows the system's light and dark appearance
+- Update progress no longer takes over the screen — close or minimise it any time

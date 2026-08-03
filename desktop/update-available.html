@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Update available</title>
+<style>
+  :root { color-scheme: light dark; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    /* Transparent all the way down, or the window's vibrancy is painted over. */
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
+
+  /*
+   * Fills the window so the corner and hairline are drawn at the window's size,
+   * whatever that currently is.
+   */
+  .screen {
+    -webkit-app-region: drag;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    /* Clears the traffic lights, which are drawn over the content. */
+    padding: 32px 26px 20px;
+    text-align: center;
+    border-radius: 16px;
+    box-shadow: inset 0 0 0 0.5px light-dark(rgba(0,0,0,.10), rgba(255,255,255,.12));
+  }
+
+  /*
+   * What gets measured, and the reason it is a separate element: .screen is
+   * pinned to the window by min-height, so measuring *it* reports the height
+   * the window already has. The panel could grow — content pushing past the
+   * window — but never shrink, because the measurement could never come back
+   * smaller than the thing it was trying to shrink. This wrapper takes its
+   * height from its content alone.
+   */
+  .content {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .mark { width: 44px; height: 44px; display: block; object-fit: contain; }
+
+  .title {
+    margin: 12px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: light-dark(rgba(0,0,0,.88), rgba(255,255,255,.92));
+  }
+
+  .subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: light-dark(rgba(0,0,0,.50), rgba(255,255,255,.58));
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+    /* Buttons must opt out of the drag region or their clicks are swallowed. */
+    -webkit-app-region: no-drag;
+  }
+
+  .btn {
+    all: unset;
+    min-width: 104px;
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    cursor: default;
+    transition: filter 120ms ease, background-color 120ms ease;
+  }
+
+  .btn--later {
+    background: light-dark(rgba(0,0,0,.06), rgba(255,255,255,.12));
+    color: light-dark(rgba(0,0,0,.85), rgba(255,255,255,.90));
+  }
+  .btn--later:hover { background: light-dark(rgba(0,0,0,.10), rgba(255,255,255,.18)); }
+
+  /* The default action, in the brand blue the rest of the app uses. */
+  .btn--update { background: #03a5e9; color: #fff; font-weight: 600; }
+  .btn--update:hover { filter: brightness(1.06); }
+  .btn--update:active { filter: brightness(0.94); }
+
+  .btn:focus-visible { outline: 2px solid #03a5e9; outline-offset: 2px; }
+
+  /* ── disclosure ─────────────────────────────────────────────── */
+
+  .disclosure {
+    all: unset;
+    -webkit-app-region: no-drag;
+    margin-top: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: light-dark(rgba(0,0,0,.55), rgba(255,255,255,.60));
+    cursor: default;
+  }
+  .disclosure:hover { color: light-dark(rgba(0,0,0,.80), rgba(255,255,255,.85)); }
+  .disclosure:focus-visible { outline: 2px solid #03a5e9; outline-offset: 3px; border-radius: 4px; }
+
+  /* Points right when closed, down when open — rotated rather than swapped, so
+     it turns instead of jumping. */
+  .chevron {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .disclosure[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+
+  .details {
+    width: 100%;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 0.5px solid light-dark(rgba(0,0,0,.10), rgba(255,255,255,.14));
+    text-align: left;
+  }
+  .details[hidden] { display: none; }
+
+  .whats-new {
+    margin: 0 0 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: light-dark(rgba(0,0,0,.40), rgba(255,255,255,.45));
+  }
+
+  .notes {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .notes li {
+    position: relative;
+    padding-left: 14px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: light-dark(rgba(0,0,0,.72), rgba(255,255,255,.78));
+  }
+
+  /* Drawn rather than a list marker, so it stays put against a wrapped line. */
+  .notes li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 7px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: light-dark(rgba(0,0,0,.30), rgba(255,255,255,.38));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chevron { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="screen" id="screen">
+   <div class="content" id="content">
+    <img class="mark" src="assets/logo-mark.png" alt="" aria-hidden="true" width="44" height="44">
+
+    <h1 class="title">A new version is available</h1>
+    <p class="subtitle" id="subtitle">TM ANTOINE Portal</p>
+
+    <div class="actions">
+      <button class="btn btn--later" id="later" type="button">Later</button>
+      <button class="btn btn--update" id="update" type="button">Update Now</button>
+    </div>
+
+    <button class="disclosure" id="disclosure" type="button" aria-expanded="false" aria-controls="details">
+      <svg class="chevron" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1.5 L7 5 L3.5 8.5"/></svg>
+      <span id="disclosure-label">More details</span>
+    </button>
+
+    <div class="details" id="details" hidden>
+      <p class="whats-new">What's new</p>
+      <ul class="notes" id="notes"></ul>
+    </div>
+   </div>
+  </div>
+
+<script>
+  var offer = window.TMAUpdateOffer;
+  var screenEl = document.getElementById('screen');
+  var contentEl = document.getElementById('content');
+  var disclosure = document.getElementById('disclosure');
+  var details = document.getElementById('details');
+  var notesEl = document.getElementById('notes');
+
+  /*
+   * Ask the window to match the content. The renderer measures because only it
+   * knows how far the notes wrapped.
+   *
+   * Measured on .content, never .screen: .screen is stretched to the window by
+   * min-height, so it can only ever report the size the window already is —
+   * which lets the panel grow and never collapse again.
+   */
+  function fit() {
+    requestAnimationFrame(function () {
+      var pad = getComputedStyle(screenEl);
+      var height = contentEl.getBoundingClientRect().height
+        + parseFloat(pad.paddingTop) + parseFloat(pad.paddingBottom);
+      offer.resize(Math.ceil(height));
+    });
+  }
+
+  offer.onRelease(function (release) {
+    document.getElementById('subtitle').textContent =
+      'TM ANTOINE Portal ' + (release.version || '');
+    document.title = 'Update to ' + (release.version || '');
+
+    var notes = (release.notes || []).filter(function (n) { return !!n; });
+
+    notes.forEach(function (note) {
+      var li = document.createElement('li');
+      li.textContent = note;
+      notesEl.appendChild(li);
+    });
+
+    // Nothing to disclose is worse than no disclosure: an empty drawer reads
+    // as a bug. Hide the control entirely when there are no notes.
+    if (!notes.length) disclosure.style.display = 'none';
+
+    fit();
+  });
+
+  disclosure.addEventListener('click', function () {
+    var open = disclosure.getAttribute('aria-expanded') === 'true';
+    disclosure.setAttribute('aria-expanded', open ? 'false' : 'true');
+    details.hidden = open;
+    document.getElementById('disclosure-label').textContent = open ? 'More details' : 'Hide details';
+    fit();
+  });
+
+  document.getElementById('later').addEventListener('click', function () { offer.choose('later'); });
+  document.getElementById('update').addEventListener('click', function () { offer.choose('update'); });
+
+  // Enter accepts, Escape defers — what the dialog this replaced did.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') offer.choose('update');
+    if (e.key === 'Escape') offer.choose('later');
+  });
+
+  window.addEventListener('resize', fit);
+</script>
+</body>
+</html>

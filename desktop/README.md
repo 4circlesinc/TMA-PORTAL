@@ -214,6 +214,48 @@ Security → Open Anyway**, which the account page now tells people. Every user
 must do this once, on every macOS from 15 up. A Developer ID certificate is the
 only thing that removes the step.
 
+## Release notes — edit these every release
+
+`release-notes.md`, one markdown bullet per line. `build.releaseInfo.releaseNotesFile`
+makes electron-builder copy it into `releaseNotes` in both manifests, `updater.js`
+parses it back out, and it becomes the **What's new** list in the update offer.
+
+**It is not generated.** Ship without editing it and the new version offers the
+*previous* version's notes, which is worse than none — so treat it as part of the
+version bump, not an afterthought. Empty is safe: no notes simply hides the
+disclosure rather than opening an empty drawer.
+
+Both YAML shapes are handled, because electron-builder picks between them by
+content: a `|` block scalar, and a quoted scalar with escaped newlines.
+
+## The update offer
+
+`update-available.js` + `update-available.html`. Replaced
+`dialog.showMessageBox`: a native message box cannot carry a disclosure, so the
+only thing it could say about an update was a version number — people were asked
+to accept a change they had no way to read.
+
+`show({version, notes})` resolves `'update'` or `'later'`, so it drops into
+`runUpdate` where the dialog was. Closing the window resolves `'later'` too;
+without that the promise never settles and the update hangs waiting for an answer
+that cannot arrive.
+
+Two things that bit, both covered by `test-update-available.js`:
+
+- **The panel grew and would not shrink.** The renderer measured `.screen`,
+  which `min-height: 100%` pins to the window — so the measurement could only
+  ever report the size the window already was. A separate `.content` wrapper,
+  sized by its content alone, is what gets measured now.
+- **The second offer went deaf.** Handlers read the module-level `panel`, and
+  opening a second offer reassigns it *before* the first window's `closed`
+  handler runs and nulls it — leaving the live window guarding against a null
+  and ignoring its own buttons. Every handler closes over its own `win` now.
+
+Also: resize is deliberately **not** animated. An animated `setContentSize` on a
+transparent vibrant window leaves the newly exposed strip unpainted on macOS —
+the window grows and the disclosed notes are simply not drawn, which reads as the
+drawer opening empty. `webContents.invalidate()` forces the missing frame.
+
 ## The updating screen
 
 `update-window.js` + `update-window.html`. An update used to run with nothing on
