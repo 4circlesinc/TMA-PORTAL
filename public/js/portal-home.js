@@ -22,23 +22,23 @@
     return 'images/icons/phosphor/File.svg';
   }
 
-  // `tone` groups a shortcut by what it does — communication, files, people,
-  // workflow — and each group shares one fill from the cool brand ramp in
-  // portal.css. Grouping, rather than a colour per tile, is what keeps the
-  // panel reading as one system instead of a box of crayons.
+  // `tone` picks the tile fill from the ramp in portal.css. Blues carry the
+  // routine tiles; the four accents (messages, calendar, favorites, approvals)
+  // are landmarks — the ones you hunt for by colour rather than by reading.
+  // Keep accents scarce: every tile coloured is the same as none coloured.
   var SHORTCUTS = [
-    { id: 'email', label: 'Email', icon: 'EnvelopeSimpleFill', tone: 'comms', count: 'email', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
-    { id: 'messages', label: 'Messages', icon: 'ChatsCircleFill', tone: 'comms', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
-    { id: 'feed', label: 'Feed', icon: 'NewspaperFill', tone: 'comms', count: 'feed', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
-    { id: 'calendar', label: 'Calendar', icon: 'CalendarBlankFill', tone: 'comms', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
-    { id: 'users', label: 'Users', icon: 'UsersThreeFill', tone: 'people', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
-    { id: 'share-files', label: 'Share Files', icon: 'ShareFill', tone: 'files' },
-    { id: 'request-files', label: 'Request Files', icon: 'DownloadSimpleFill', tone: 'files' },
-    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlusFill', tone: 'people' },
-    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUserFill', tone: 'files', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
-    { id: 'favorites', label: 'Favorites', icon: 'StarFilled', tone: 'files', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
-    { id: 'feedback-approval', label: 'Feedback and Approval', icon: 'ChecksFill', tone: 'work', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Approval', crumb: 'Workflows / Feedback and Approval' } },
-    { id: 'send-signature', label: 'Send for Signature', icon: 'SignatureFill', tone: 'work', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
+    { id: 'email', label: 'Email', icon: 'EnvelopeSimpleFill', tone: 'deep', count: 'email', nav: { navId: 'email', view: 'email', title: 'Email', crumb: 'Email' } },
+    { id: 'messages', label: 'Messages', icon: 'ChatsCircleFill', tone: 'green', count: 'messages', nav: { navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' } },
+    { id: 'feed', label: 'Feed', icon: 'NewspaperFill', tone: 'deep', count: 'feed', nav: { navId: 'so-feed', view: 'feed', title: 'Feed', crumb: 'Social / Feed' } },
+    { id: 'calendar', label: 'Calendar', icon: 'CalendarBlankFill', tone: 'clay', count: 'calendar', nav: { navId: 'calendar', view: 'calendar', title: 'Calendar', crumb: 'Calendar' } },
+    { id: 'users', label: 'Users', icon: 'UsersThreeFill', tone: 'navy', count: 'users', nav: { navId: 'users', view: 'users', title: 'Users', crumb: 'Users' } },
+    { id: 'share-files', label: 'Share Files', icon: 'ShareFill', tone: 'blue' },
+    { id: 'request-files', label: 'Request Files', icon: 'DownloadSimpleFill', tone: 'blue' },
+    { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlusFill', tone: 'navy' },
+    { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUserFill', tone: 'blue', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
+    { id: 'favorites', label: 'Favorites', icon: 'StarFilled', tone: 'amber', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
+    { id: 'feedback-approval', label: 'Feedback and Approval', icon: 'ChecksFill', tone: 'teal', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Approval', crumb: 'Workflows / Feedback and Approval' } },
+    { id: 'send-signature', label: 'Send for Signature', icon: 'SignatureFill', tone: 'graphite', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
   ];
 
   function navigate(nav) {
