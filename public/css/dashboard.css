@@ -656,6 +656,23 @@
   padding-bottom: var(--space-4);
 }
 
+/* Guide line down the left of an open submenu, so its rows read as one branch
+   off the parent instead of a second flat list. It sits on the caret's centre
+   line — the caret is 1em wide against the rail's fixed 14px rows, so 7px. */
+.tma-dash__sidebar-nav .tma-dash__subnav {
+  position: relative;
+}
+.tma-dash__sidebar-nav .tma-dash__subnav::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--space-2) + 7px);
+  top: var(--space-2);
+  bottom: calc(var(--space-4) + var(--space-2));
+  width: 1px;
+  background: var(--color-border-soft);
+  pointer-events: none;
+}
+
 .tma-dash__sidebar-nav .tma-dash__nav-item--nested {
   padding-top: var(--space-6);
   padding-bottom: var(--space-6);
@@ -663,8 +680,11 @@
      sets the `padding` shorthand at this same specificity, so the single-class
      --nested rules (here and in dashboard-tma-overrides.css) lose and the row
      collapses to a 2px left pad, hard against the sidebar edge.
-     Indent = caret column + gap, so labels align under the parent's icon. */
-  padding-left: calc(var(--space-2) + 1em + var(--space-10, 10px));
+     Indent = caret column + gap, so labels align under the parent's icon —
+     split between a margin that starts the hover pill clear of the guide line
+     and the padding that carries the label the rest of the way. */
+  margin-left: calc(var(--space-2) + 7px + var(--space-6));
+  padding-left: calc(var(--space-10, 10px) - var(--space-6) + 1em - 7px);
 }
 
 /* Folder Shortcuts tab - the user's pinned folders */
@@ -3996,6 +4016,14 @@
   .tma-dash__sidebar .tma-dash__nav-item--nested {
     padding-left: calc(var(--sidebar-mobile-nav-pad-x) + 1em + var(--space-12) + var(--space-12));
     min-height: 48px;
+    /* The drawer indents from its own gutter — the rail's pill inset would
+       stack on top of that and push every nested label out of line. */
+    margin-left: 0;
+  }
+
+  /* Caret is 20px in the drawer, so its centre line moves with the gutter. */
+  .tma-dash__sidebar-nav .tma-dash__subnav::before {
+    left: calc(var(--sidebar-mobile-nav-pad-x) + 10px);
   }
 
   .tma-dash__sidebar .tma-dash__nav-icon {

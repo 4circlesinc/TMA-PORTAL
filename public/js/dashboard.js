@@ -1455,7 +1455,7 @@
     var navEl = root.querySelector('.tma-dash__sidebar-nav');
     var NAV_GAP_BASE = 8;   // --space-8, the resting rhythm
     var NAV_GAP_TIGHT = 4;  // short window: tighten before making the rail scroll
-    var NAV_GAP_MAX = 32;   // past this the rows stop reading as one list
+    var NAV_GAP_MAX = 18;   // past this the rows stop reading as one list
     var navFitQueued = false;
 
     function isVisibleNavChild(el) {
