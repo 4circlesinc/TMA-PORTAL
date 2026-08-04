@@ -98,7 +98,7 @@ const CSS = `
     align-items: center;
     /* Traffic lights sit at the left on macOS; Windows puts its caption
        buttons at the right. Either way the controls need to clear them. */
-    padding: 0 ${IS_MAC ? '12px 0 84px' : '138px 0 8px'};
+    padding: 0 ${IS_MAC ? '12px 0 92px' : '138px 0 8px'};
     font: 600 13px/1 -apple-system, "Segoe UI", system-ui, sans-serif;
     letter-spacing: 0.01em;
     /* The whole strip is the drag handle, standing in for the frame we hid. */
@@ -118,9 +118,12 @@ const CSS = `
   #tma-desktop-titlebar .tma-tb-btn {
     all: unset;
     box-sizing: border-box;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
+    /* Matches .tma-dash__header .tma-dash__icon-btn — same size, same radius,
+       so the window controls and the header's own buttons sit on one line
+       rather than looking like two toolbars that happen to touch. */
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -139,8 +142,8 @@ const CSS = `
   }
 
   #tma-desktop-titlebar .tma-tb-btn svg {
-    width: 15px;
-    height: 15px;
+    width: 17px;
+    height: 17px;
     display: block;
     fill: none;
     stroke: currentColor;
@@ -357,7 +360,12 @@ function windowOptions() {
   if (process.platform === 'darwin') {
     return {
       titleBarStyle: 'hidden',
-      trafficLightPosition: { x: 14, y: 12 },
+      /*
+       * Derived, not a constant. These were left at the offsets that centred
+       * them in a 38px bar, so raising the bar to 52 left them sitting high of
+       * everything else in the row. A traffic light is 12px.
+       */
+      trafficLightPosition: { x: 18, y: Math.round((HEIGHT - 12) / 2) },
     };
   }
 
