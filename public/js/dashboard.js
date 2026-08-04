@@ -1441,6 +1441,94 @@
       var collapsed = root.classList.contains('is-sidebar-collapsed');
       var railOpen = isHoverRailOpen();
       applyRailTitles(collapsed && !railOpen);
+      queueNavFit();
+    }
+
+    /* ── sidebar rhythm: spread the menu to the window's height ──
+       The menu is a fixed set of rows, so on a tall window it ended well above
+       the profile block with a large dead gap under the last item. Measure
+       what's actually left under the last section and hand it back to the row
+       gaps: the rail breathes on a big monitor and tightens back to its
+       resting rhythm on a short one (or in the desktop app, whose title bar
+       eats height) rather than scrolling. Measured, not a vh formula, so role
+       pruning, an expanded submenu and the shortcuts tab all re-fit. */
+    var navEl = root.querySelector('.tma-dash__sidebar-nav');
+    var NAV_GAP_BASE = 8;   // --space-8, the resting rhythm
+    var NAV_GAP_TIGHT = 4;  // short window: tighten before making the rail scroll
+    var NAV_GAP_MAX = 32;   // past this the rows stop reading as one list
+    var navFitQueued = false;
+
+    function isVisibleNavChild(el) {
+      return !el.hidden && el.getClientRects().length > 0;
+    }
+
+    /* One unit per gap the leftover space is split across: every gap between
+       visible rows, plus the break above a divided section (it tracks the same
+       custom property). */
+    function countNavGapUnits(sections) {
+      var units = 0;
+      sections.forEach(function (section) {
+        var rows = Array.prototype.slice.call(section.children).filter(isVisibleNavChild);
+        if (!rows.length) return;
+        units += rows.length - 1;
+        if (section.classList.contains('tma-dash__nav-section--divided')) units += 1;
+      });
+      return units;
+    }
+
+    function fitNavSpacing() {
+      if (!navEl) return;
+      // The mobile drawer has its own tighter, scrolling rhythm.
+      if (isMobileSidebar()) { navEl.style.removeProperty('--dash-nav-gap'); return; }
+      // Always measure from the resting gap, never from whatever the last run
+      // grew it to, or each pass would compound the one before it.
+      navEl.style.setProperty('--dash-nav-gap', NAV_GAP_BASE + 'px');
+      var sections = Array.prototype.slice
+        .call(navEl.querySelectorAll('.tma-dash__nav-section'))
+        .filter(isVisibleNavChild);
+      var last = sections[sections.length - 1];
+      if (!last) return;
+      var units = countNavGapUnits(sections);
+      if (!units) return;
+      // scrollHeight floors at the client height, so it can't report a *short*
+      // content box — measure the last section's bottom edge instead.
+      var padBottom = parseFloat(window.getComputedStyle(navEl).paddingBottom) || 0;
+      var free = navEl.getBoundingClientRect().bottom - padBottom - last.getBoundingClientRect().bottom;
+      // Negative free space means the rows already overflow, so the same sum
+      // tightens them — a short window (or the desktop app's title bar taking
+      // its cut) buys a few more rows back before the rail has to scroll.
+      var gap = NAV_GAP_BASE + Math.floor(free / units);
+      gap = Math.max(NAV_GAP_TIGHT, Math.min(NAV_GAP_MAX, gap));
+      navEl.style.setProperty('--dash-nav-gap', gap + 'px');
+    }
+
+    function queueNavFit() {
+      if (navFitQueued) return;
+      navFitQueued = true;
+      requestAnimationFrame(function () {
+        navFitQueued = false;
+        fitNavSpacing();
+      });
+    }
+
+    if (navEl) {
+      // The nav box tracks the window's height, so one observer covers both a
+      // browser resize and the desktop app's window being dragged taller.
+      if (window.ResizeObserver) new ResizeObserver(queueNavFit).observe(navEl);
+      // Rows come and go after paint: /me prunes them by role, submenus open,
+      // the shortcuts tab renders. Never watch `style` here — that is what
+      // fitNavSpacing writes, and it would observe its own output.
+      if (window.MutationObserver) {
+        new MutationObserver(queueNavFit).observe(navEl, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['hidden', 'aria-expanded', 'class'],
+        });
+      }
+      queueNavFit();
+      // Inter landing changes every row's height.
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(queueNavFit);
     }
 
     /* Hover rail: when the overlay closes, collapse Folders/Projects/People

@@ -1,4 +1,4 @@
+- Taller title bar, with the search box properly centred
 - Fixes the search box and toolbar icons disappearing from the top of the window
 - A launch screen while the app starts, instead of a blank wait
 - The caller's photo now shows in the incoming call window
-- Asks permission to send notifications the first time you open the app

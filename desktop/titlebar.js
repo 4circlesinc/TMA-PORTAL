@@ -20,7 +20,7 @@
  * grey box on top of it.
  */
 
-const HEIGHT = 42;
+const HEIGHT = 52;
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -190,9 +190,20 @@ const CSS = `
     background: ${BLUE} !important;
     border: 0 !important;
     box-shadow: none !important;
-    /* Clears the window controls drawn over this end. */
-    padding: 0 14px 0 ${CONTROLS}px !important;
+    /*
+     * Symmetric padding, deliberately. The header is
+     * minmax(0,1fr) auto minmax(0,1fr), so its centre column is centred in
+     * the *content box* — padding the left side to clear the window controls
+     * shrank that box from one side and pushed the search right by half of it.
+     * The controls are cleared by insetting the left cell's contents instead,
+     * which leaves the 1fr tracks equal and the search on the window's centre.
+     */
+    padding: 0 14px !important;
     gap: 12px;
+  }
+
+  .tma-dash--desktop-bar .tma-dash__header-left {
+    padding-left: ${CONTROLS - 14}px;
   }
 
   /* The heading lives in the controls strip, so the crumb is a duplicate. */

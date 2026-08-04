@@ -200,6 +200,11 @@
   gap: var(--space-6);
   scrollbar-width: none;
   padding-bottom: var(--space-4);
+  /* Row rhythm. This is the resting value and the floor; dashboard.js
+     (fitNavSpacing) grows it to whatever the window's height can afford, so a
+     tall window spreads the menu instead of ending in dead space above the
+     profile block. */
+  --dash-nav-gap: var(--space-8);
   /* Slightly under the old 21px / 16px rail — readable, not oversized. */
   --dash-icon-md: 20px;
   --dash-nav-icon-inset: calc(var(--space-2) + 16px + var(--space-4));
@@ -209,7 +214,7 @@
 .tma-dash__nav-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--dash-nav-gap, var(--space-8));
   padding-bottom: var(--space-4);
   width: 100%;
   flex-shrink: 0;
@@ -223,7 +228,9 @@
 /* Quiet section break (replaces the old "Pages" label): extra space only —
    no border/rule — so the rail and expanded menu both read as two groups. */
 .tma-dash__nav-section--divided {
-  margin-top: var(--space-8);
+  /* Tracks the row gap so the group break keeps growing with it — otherwise a
+     spread-out rail reads as one long list again. */
+  margin-top: var(--dash-nav-gap, var(--space-8));
   padding-top: var(--space-4);
 }
 
