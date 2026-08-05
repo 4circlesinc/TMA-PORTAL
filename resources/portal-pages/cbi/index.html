@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CBI · TM ANTOINE Advisory</title>
+  <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/dashboard.css?v=98">
+  <link rel="stylesheet" href="css/input.css">
+  <link rel="stylesheet" href="css/status-badge.css">
+  <link rel="stylesheet" href="css/tag.css">
+  <link rel="stylesheet" href="css/badge.css">
+  <link rel="stylesheet" href="css/toast.css?v=8">
+  <link rel="stylesheet" href="css/no-data.css?v=2">
+  <link rel="stylesheet" href="css/portal.css?v=15">
+  <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=11">
+  <link rel="stylesheet" href="css/cbi.css?v=1">
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+    body { background: var(--color-bg-page); }
+  </style>
+</head>
+<body>
+  <!--
+    CBI development preview — served only at /dev/cbi (FEATURE_CBI + admin,
+    404 otherwise). Deliberately NOT part of the SPA shell: no sidebar, no
+    SPA_PAGES entry, nothing for search or quick actions to index. The
+    module inside follows the portal-view pattern, so promoting it into the
+    shell later is a data-view div + register() call, not a rewrite.
+  -->
+  <div class="cbi-shell">
+    <header class="cbi-shell__bar">
+      <a class="cbi-shell__brand" href="/dashboard" title="Back to the portal">
+        <img src="images/brand/tma/favicon.png" alt="" width="20" height="20">
+        <span>TM ANTOINE Advisory</span>
+      </a>
+      <span class="cbi-shell__flag">CBI · Development preview</span>
+    </header>
+    <main class="cbi-shell__main">
+      <div id="cbi-root" data-portal-mount></div>
+    </main>
+  </div>
+
+  <script src="js/dom-morph.js"></script>
+  <script src="js/toast-icons.js"></script>
+  <script src="js/toast.js"></script>
+  <script src="js/portal-views.js"></script>
+  <script src="js/cbi.js?v=1"></script>
+</body>
+</html>

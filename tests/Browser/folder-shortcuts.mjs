@@ -36,7 +36,7 @@ const tab = (page, name) => page.click(`.tma-dash__sidebar .tma-dash__tab:has-te
 async function openLibrary(page, section = 'All Files') {
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(700);
-  await tab(page, 'Main Menu');
+  await tab(page, 'Menu');
   const folders = page.locator('.tma-dash__sidebar [data-expand="folders"]');
   if ((await folders.getAttribute('aria-expanded')) !== 'true') await folders.click();
   await page.click(`.tma-dash__sidebar .tma-dash__nav-item--nested:has-text("${section}")`);
@@ -84,8 +84,8 @@ try {
   const tabs = await page.locator('.tma-dash__sidebar .tma-dash__tab').allTextContents();
   log('    tabs:', JSON.stringify(tabs));
   check(tabs.length === 2, 'exactly two tabs');
-  check(tabs[0].trim() === 'Main Menu', 'first tab is Main Menu');
-  check(tabs[1].trim() === 'Folder Shortcuts', 'second tab is Folder Shortcuts');
+  check(tabs[0].trim() === 'Menu', 'first tab is Menu');
+  check(tabs[1].trim() === 'Folders', 'second tab is Folders');
 
   // Both labels must be legible, not clipped by the 225px sidebar.
   for (const t of await page.locator('.tma-dash__sidebar .tma-dash__tab').all()) {
@@ -173,7 +173,7 @@ try {
   await openLibrary(page);
   await folderMenu(page, 'Contracts', 'Add to Folder Shortcuts');
 
-  await tab(page, 'Folder Shortcuts');
+  await tab(page, 'Folders');
   await page.waitForTimeout(600);
   check(await page.locator('.tma-dash__sidebar [data-shortcuts]').isVisible(), 'the shortcuts list shows on its tab');
   check(!(await page.locator('.tma-dash__sidebar [data-nav="dash-dashboard"]').isVisible()), 'the main menu hides on the shortcuts tab');
@@ -203,7 +203,7 @@ try {
   step(6, 'Nested and shared folders');
   await folderMenu(page, 'Contracts', 'Open');
   await folderMenu(page, 'Signed 2026', 'Add to Folder Shortcuts');
-  await tab(page, 'Folder Shortcuts');
+  await tab(page, 'Folders');
   await page.waitForTimeout(500);
   names = await shortcutNames(page);
   check(names.includes('Signed 2026'), 'a nested folder can be pinned');
@@ -214,7 +214,7 @@ try {
   // "Shared Docs" belongs to the other user and is shared with this one.
   await openLibrary(page, 'Shared with me');
   await folderMenu(page, 'Shared Docs', 'Add to Folder Shortcuts');
-  await tab(page, 'Folder Shortcuts');
+  await tab(page, 'Folders');
   await page.waitForTimeout(500);
   names = await shortcutNames(page);
   log('    shortcuts:', JSON.stringify(names));
@@ -230,7 +230,7 @@ try {
 
   // ── reorder ───────────────────────────────────────────
   step(8, 'Reordering by drag');
-  await tab(page, 'Folder Shortcuts');
+  await tab(page, 'Folders');
   await page.waitForTimeout(400);
   const before = await shortcutNames(page);
   log('    before:', JSON.stringify(before));
@@ -243,7 +243,7 @@ try {
 
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(900);
-  await tab(page, 'Folder Shortcuts');
+  await tab(page, 'Folders');
   await page.waitForTimeout(800);
   const persisted = await shortcutNames(page);
   log('    reloaded:', JSON.stringify(persisted));
@@ -279,7 +279,7 @@ try {
 
   // ── removal ───────────────────────────────────────────
   step(10, 'Removing a shortcut');
-  await tab(page, 'Folder Shortcuts');
+  await tab(page, 'Folders');
   await page.waitForTimeout(400);
   const target = page.locator('.tma-dash__sidebar [data-shortcut]:has-text("Signed 2026")');
   await target.hover();
@@ -295,7 +295,7 @@ try {
   await folderMenu(page, 'Contracts', 'Delete');
   await page.click('button:has-text("Move to bin"):visible');
   await page.waitForTimeout(1800);
-  await tab(page, 'Folder Shortcuts');
+  await tab(page, 'Folders');
   await page.waitForTimeout(900);
   names = await shortcutNames(page);
   log('    shortcuts:', JSON.stringify(names));
