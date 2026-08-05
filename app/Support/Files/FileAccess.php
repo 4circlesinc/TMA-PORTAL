@@ -54,6 +54,28 @@ class FileAccess
     /** Effective role a user holds over a file (null = no access). */
     public static function fileRole(User $user, FileItem $file): ?string
     {
+        // Checked BEFORE the admin short-circuit on purpose — see the method.
+        $driveOwner = self::personalDriveOwner($file->folder_id);
+        if ($driveOwner !== null) {
+            if ($driveOwner === $user->id) {
+                return 'full';
+            }
+
+            /*
+             * Everyone else gets EXACTLY what the owner handed out, and
+             * nothing else. Not the firm-wide default, not an all-staff folder
+             * grant, not administrator reach — but a share the owner chose to
+             * make still works, because choosing who sees your own files is
+             * the point of keeping the drive private in the first place.
+             */
+            $shared = [self::shareRole($user, 'file', $file->id)];
+            foreach (self::chainFolders($file->folder_id) as $folder) {
+                $shared[] = self::shareRole($user, 'folder', $folder->id);
+            }
+
+            return self::highest(array_filter($shared));
+        }
+
         if (self::isAdmin($user) || $file->owner_id === $user->id) {
             return 'full';
         }
@@ -122,6 +144,38 @@ class FileAccess
      * memory of where it came from, and copying that fact onto every folder at
      * import time would mean one missed write silently publishes a drive.
      */
+    /**
+     * Whose personal OneDrive this sits in, if it sits in one at all.
+     *
+     * Returns null for everything that is not inside a synced personal drive —
+     * which is almost everything — and the owner's id when it is.
+     *
+     * This runs ahead of the administrator short-circuit, which is the whole
+     * point. `isAdmin` grants 'full' over the entire library, so without this
+     * every administrator could read every colleague's OneDrive: their drafts,
+     * their meeting recordings, their auto-saved chat attachments. The firm's
+     * rule is that a personal drive is the owner's alone (2026-08-05), and
+     * "alone" has to mean alone or it means nothing.
+     *
+     * A leaving employee's files are still reachable — in Microsoft 365, by a
+     * tenant administrator, which is where that decision belongs. It is not
+     * something the portal should quietly grant.
+     */
+    private static function personalDriveOwner(?int $folderId): ?int
+    {
+        if ($folderId === null) {
+            return null;
+        }
+
+        foreach (self::chainFolders($folderId) as $folder) {
+            if (self::isPersonalDriveFolder($folder)) {
+                return $folder->owner_id;
+            }
+        }
+
+        return null;
+    }
+
     private static function isPersonalDriveFolder(Folder $folder): bool
     {
         // Deliberately not memoised in a static. Nothing else in this class
@@ -136,6 +190,21 @@ class FileAccess
     /** Effective role a user holds over a folder (null = no access). */
     public static function folderRole(User $user, Folder $folder): ?string
     {
+        $driveOwner = self::personalDriveOwner($folder->id);
+        if ($driveOwner !== null) {
+            if ($driveOwner === $user->id) {
+                return 'full';
+            }
+
+            // Same rule as fileRole: only an explicit share reaches inside.
+            $shared = [];
+            foreach (self::chainFolders($folder->id) as $f) {
+                $shared[] = self::shareRole($user, 'folder', $f->id);
+            }
+
+            return self::highest(array_filter($shared));
+        }
+
         if (self::isAdmin($user) || $folder->owner_id === $user->id) {
             return 'full';
         }

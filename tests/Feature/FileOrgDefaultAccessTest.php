@@ -124,6 +124,107 @@ class FileOrgDefaultAccessTest extends TestCase
             'the owner still has their own drive');
     }
 
+    /**
+     * Everyone reaches their OWN drive, in full.
+     *
+     * The privacy rule cuts both ways: locking colleagues out is only correct
+     * if it does not also lock the owner out of their own files. The drive
+     * belongs to whoever it belongs to, matched on the address it was synced
+     * from — not to the administrator who happened to run the connect command.
+     */
+    public function test_each_person_has_full_access_to_their_own_drive(): void
+    {
+        $olive = $this->user('Employee', 'olive@example.com');
+        $ben = $this->user('Employee', 'ben@example.com');
+
+        $oliveDrive = $this->folder($olive, "OneDrive — olive");
+        $benDrive = $this->folder($ben, "OneDrive — ben");
+        $oliveFile = $this->file($olive, $oliveDrive);
+        $benFile = $this->file($ben, $benDrive);
+
+        foreach ([[$oliveDrive, $olive], [$benDrive, $ben]] as [$folder, $owner]) {
+            \App\Models\SharePointConnection::create([
+                'uuid' => (string) Str::uuid(),
+                'site_id' => 'personal', 'drive_id' => 'drive-'.$owner->id,
+                'drive_kind' => 'onedrive', 'owner_upn' => $owner->email,
+                'folder_id' => $folder->id, 'created_by' => $owner->id,
+                'status' => 'idle', 'sync_enabled' => true, 'direction' => 'two-way',
+            ]);
+        }
+
+        // Each person, their own drive: everything.
+        $this->assertSame('full', FileAccess::folderRole($olive, $oliveDrive));
+        $this->assertSame('full', FileAccess::fileRole($olive, $oliveFile));
+        $this->assertSame('full', FileAccess::folderRole($ben, $benDrive));
+        $this->assertSame('full', FileAccess::fileRole($ben, $benFile));
+
+        // Each person, the other's drive: nothing.
+        $this->assertNull(FileAccess::folderRole($olive, $benDrive));
+        $this->assertNull(FileAccess::fileRole($olive, $benFile));
+        $this->assertNull(FileAccess::folderRole($ben, $oliveDrive));
+        $this->assertNull(FileAccess::fileRole($ben, $oliveFile));
+    }
+
+    /**
+     * Not even an administrator.
+     *
+     * `isAdmin` grants 'full' over the whole library and runs before every
+     * other rule, so an administrator could read every colleague's drafts and
+     * meeting recordings. "Nobody accesses anyone else's OneDrive" has to
+     * include the person with the keys, or it does not mean anything.
+     *
+     * Their files remain reachable in Microsoft 365 by a tenant admin — that
+     * is where the decision to open someone's drive belongs.
+     */
+    public function test_an_administrator_cannot_read_someone_elses_drive(): void
+    {
+        $olive = $this->user('Employee', 'olive@example.com');
+        $boss = $this->user('Administrator', 'boss@example.com');
+
+        $drive = $this->folder($olive, "OneDrive — olive");
+        $file = $this->file($olive, $drive);
+
+        \App\Models\SharePointConnection::create([
+            'uuid' => (string) Str::uuid(),
+            'site_id' => 'personal', 'drive_id' => 'drive-olive',
+            'drive_kind' => 'onedrive', 'owner_upn' => 'olive@example.com',
+            'folder_id' => $drive->id, 'created_by' => $boss->id,
+            'status' => 'idle', 'sync_enabled' => true, 'direction' => 'two-way',
+        ]);
+
+        $this->assertNull(FileAccess::fileRole($boss, $file),
+            'an administrator must not read a personal drive');
+        $this->assertNull(FileAccess::folderRole($boss, $drive),
+            'nor browse it');
+
+        // The admin keeps full reach over ordinary firm content.
+        $ordinary = $this->file($olive, null);
+        $this->assertSame('full', FileAccess::fileRole($boss, $ordinary));
+    }
+
+    /** Even the admin who ran the connect command owns nothing by doing so. */
+    public function test_connecting_someone_elses_drive_does_not_grant_the_connector_access(): void
+    {
+        $olive = $this->user('Employee', 'olive@example.com');
+        $boss = $this->user('Administrator', 'boss@example.com');
+
+        // owner_id is the drive's real owner, created_by the admin who linked it.
+        $drive = $this->folder($olive, "OneDrive — olive");
+        $drive->forceFill(['created_by' => $boss->id])->save();
+        $file = $this->file($olive, $drive);
+
+        \App\Models\SharePointConnection::create([
+            'uuid' => (string) Str::uuid(),
+            'site_id' => 'personal', 'drive_id' => 'drive-olive',
+            'drive_kind' => 'onedrive', 'owner_upn' => 'olive@example.com',
+            'folder_id' => $drive->id, 'created_by' => $boss->id,
+            'status' => 'idle', 'sync_enabled' => true, 'direction' => 'two-way',
+        ]);
+
+        $this->assertNull(FileAccess::fileRole($boss, $file));
+        $this->assertSame('full', FileAccess::fileRole($olive, $file));
+    }
+
     /** Nested just as private as the root — the whole tree is personal. */
     public function test_a_subfolder_of_a_personal_onedrive_is_private_too(): void
     {
