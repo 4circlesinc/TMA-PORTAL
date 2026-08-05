@@ -51,7 +51,9 @@ class SocialConnectReturnTest extends TestCase
             ->get('/auth/social/google/redirect?return=getting-started')
             ->assertOk()
             ->assertSee('Google sign-in is not configured yet.')
-            ->assertSee('Connect Microsoft');
+            // The connect step is on screen — either the one-consent Microsoft
+            // rows (Microsoft sync configured) or the legacy provider buttons.
+            ->assertSee('Connect');
     }
 
     public function test_a_configured_provider_goes_to_the_account_picker_not_the_portal(): void

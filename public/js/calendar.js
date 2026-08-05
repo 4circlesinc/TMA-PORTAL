@@ -1882,7 +1882,8 @@
             (a.canRead
               ? '<button type="button" class="tma-dash__calendar-panel-btn tma-dash__calendar-panel-btn--primary" data-connect-all="' +
                 esc(a.id) + '">Connect all</button>'
-              : '<span class="tma-dash__calendar-share-meta">Reconnect for calendar access</span>') +
+              : '<a class="tma-dash__calendar-panel-btn tma-dash__calendar-panel-btn--primary" href="/auth/social/' +
+                esc(a.provider) + '/redirect?sync_all=1&return=calendar">Reconnect</a>') +
             '</li>';
         }).join('') + '</ul>';
     }

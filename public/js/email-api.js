@@ -204,13 +204,13 @@
       return mailFetch(BASE + '/sign-out', { method: 'POST' });
     },
 
-    /* Where the sidebar's Reconnect button sends the user. Asking for mail
-     * scopes goes through the normal social-connect flow with sync_email on;
-     * return=email lands the user back on this page, where the progress
-     * panel picks the sync up immediately. */
+    /* Where the sidebar's Reconnect button sends the user. sync_all asks for
+     * every capability in one consent (mail, calendar, OneDrive) so a mailbox
+     * reconnect can never narrow the rest; return=email lands the user back
+     * on this page, where the progress panel picks the sync up immediately. */
     connectUrl: function (provider) {
       return ROOT + '/auth/social/' + encodeURIComponent(provider) +
-        '/redirect?sync_email=1&return=email';
+        '/redirect?sync_all=1&return=email';
     },
   };
 })();

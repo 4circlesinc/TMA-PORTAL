@@ -70,11 +70,60 @@ class Pusher
         return null;
     }
 
+    /**
+     * The connection for a file: a folder-linked library when any ancestor is
+     * connected, otherwise the personal root drive — the null-folder OneDrive
+     * connection that mirrors the top level of a person's own library.
+     */
+    public static function connectionForFile(FileItem $file): ?SharePointConnection
+    {
+        return self::connectionFor($file->folder) ?? self::personalRootConnection($file);
+    }
+
+    /**
+     * The owner's whole-drive OneDrive link, but only when the file really
+     * lives in a personal tree: every ancestor must be an ordinary user
+     * folder with one consistent owner. A client, organisation or staff
+     * folder must never leak into somebody's personal drive.
+     */
+    private static function personalRootConnection(FileItem $file): ?SharePointConnection
+    {
+        $driveOwner = $file->owner_id;
+
+        $seen = [];
+        for ($node = $file->folder; $node !== null && ! isset($seen[$node->id]); $node = $node->parent) {
+            $seen[$node->id] = true;
+
+            if ($node->folder_type !== Folder::TYPE_USER || ! $node->owner_id) {
+                return null;
+            }
+
+            // The tree's owner decides whose drive this is — a file someone
+            // else drops into my shared folder still mirrors to MY OneDrive.
+            $driveOwner = $node->owner_id;
+        }
+
+        if (! $driveOwner) {
+            return null;
+        }
+
+        $connection = SharePointConnection::whereNull('folder_id')
+            ->where('drive_kind', 'onedrive')
+            ->where('created_by', $driveOwner)
+            ->first();
+
+        return ($connection && $connection->pushesBack()) ? $connection : null;
+    }
+
     /** The Graph folder id a portal folder corresponds to. */
     private static function graphParentFor(SharePointConnection $connection, ?Folder $folder): ?string
     {
         if (! $folder || $folder->id === $connection->folder_id) {
-            return Drive::root($connection->drive_id)['id'] ?? null;
+            // A scoped connection starts at root_item_id, not the drive root —
+            // pushing to the drive root would scatter a connected subfolder's
+            // files across the whole drive.
+            return $connection->root_item_id
+                ?: (Drive::root($connection->drive_id)['id'] ?? null);
         }
 
         $mapping = SharePointItem::where('connection_id', $connection->id)
@@ -120,7 +169,7 @@ class Pusher
             return ['status' => 'skipped'];
         }
 
-        $connection = self::connectionFor($file->folder);
+        $connection = self::connectionForFile($file);
         if (! $connection) {
             return ['status' => 'not-linked'];
         }
@@ -301,7 +350,7 @@ class Pusher
             return ['status' => 'skipped'];
         }
 
-        $connection = self::connectionFor($file->folder) ?? self::connectionForMapping($file);
+        $connection = self::connectionForFile($file) ?? self::connectionForMapping($file);
         if (! $connection) {
             return ['status' => 'not-linked'];
         }

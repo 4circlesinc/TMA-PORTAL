@@ -55,7 +55,7 @@ class FileAccess
     public static function fileRole(User $user, FileItem $file): ?string
     {
         // Checked BEFORE the admin short-circuit on purpose — see the method.
-        $driveOwner = self::personalDriveOwner($file->folder_id);
+        $driveOwner = self::personalSpaceOwner($file->folder_id, $file->owner_id);
         if ($driveOwner !== null) {
             if ($driveOwner === $user->id) {
                 return 'full';
@@ -187,10 +187,71 @@ class FileAccess
             ->exists();
     }
 
+    /**
+     * Whose personal space this sits in, if anyone's.
+     *
+     * Two shapes of "personal OneDrive in the portal":
+     *
+     *  - **Folder-linked** (onedrive:connect): the drive appears as one portal
+     *    folder; anything under that folder is the drive owner's alone.
+     *  - **Root-mirrored** (connect via OAuth): the drive syncs into the top
+     *    of its owner's own library — the connection has no portal folder. The
+     *    personal space is then the owner's tree of ordinary user folders and
+     *    their unfiled root files, because that tree IS the drive's mirror,
+     *    and anything added to it flows back into the drive.
+     *
+     * Same consequence either way: owner gets full, everyone else — including
+     * administrators — gets exactly what an explicit share hands out.
+     */
+    private static function personalSpaceOwner(?int $folderId, ?int $ownerId): ?int
+    {
+        $viaDrive = self::personalDriveOwner($folderId);
+        if ($viaDrive !== null) {
+            return $viaDrive;
+        }
+
+        if ($folderId === null) {
+            return ($ownerId !== null && self::hasPersonalRootConnection($ownerId)) ? $ownerId : null;
+        }
+
+        $treeOwner = null;
+        foreach (self::chainFolders($folderId) as $folder) {
+            // Any system folder in the chain means this is firm structure,
+            // not a personal tree.
+            if ($folder->folder_type !== Folder::TYPE_USER || ! $folder->owner_id) {
+                return null;
+            }
+            $treeOwner = (int) $folder->owner_id; // ends at the topmost ancestor
+        }
+
+        return ($treeOwner !== null && self::hasPersonalRootConnection($treeOwner)) ? $treeOwner : null;
+    }
+
+    private static function hasPersonalRootConnection(int $userId): bool
+    {
+        // Same deliberate non-memoisation as isPersonalDriveFolder: a stale
+        // answer here fails OPEN.
+        return SharePointConnection::where('drive_kind', 'onedrive')
+            ->whereNull('folder_id')
+            ->where('created_by', $userId)
+            ->exists();
+    }
+
+    /** Users whose OneDrive mirrors into the root of their own library. */
+    public static function personalRootOwnerIds(): array
+    {
+        return SharePointConnection::where('drive_kind', 'onedrive')
+            ->whereNull('folder_id')
+            ->whereNotNull('created_by')
+            ->pluck('created_by')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     /** Effective role a user holds over a folder (null = no access). */
     public static function folderRole(User $user, Folder $folder): ?string
     {
-        $driveOwner = self::personalDriveOwner($folder->id);
+        $driveOwner = self::personalSpaceOwner($folder->id, $folder->owner_id);
         if ($driveOwner !== null) {
             if ($driveOwner === $user->id) {
                 return 'full';

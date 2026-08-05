@@ -926,7 +926,7 @@
           '</span>' +
           (d.google && d.google.connected
             ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="google"><span>Disconnect</span></button>'
-            : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect' + (d.syncAvailable && d.syncAvailable.google ? '?sync_email=1&sync_calendar=1' : '') + '"><span>Connect</span></a>') +
+            : '<a class="tma-auth__chip-btn" href="/auth/social/google/redirect' + (d.syncAvailable && d.syncAvailable.google ? '?sync_all=1' : '') + '"><span>Connect</span></a>') +
           '</div>' +
           '<div class="tma-security__row">' +
           '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Microsoft16.svg" alt=""></span>' +
@@ -937,7 +937,7 @@
           '</span>' +
           (d.microsoft && d.microsoft.connected
             ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="microsoft"><span>Disconnect</span></button>'
-            : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect' + (d.syncAvailable && d.syncAvailable.microsoft ? '?sync_email=1&sync_calendar=1' : '') + '"><span>Connect</span></a>') +
+            : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect' + (d.syncAvailable && d.syncAvailable.microsoft ? '?sync_all=1' : '') + '"><span>Connect</span></a>') +
           '</div></section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-phone">' +
@@ -1726,12 +1726,12 @@
     },
   };
 
+  // One Microsoft consent covers all three — each tile reflects a facet of
+  // the same connected account, so connecting any of them connects them all.
   var CONNECTOR_CATALOG = [
-    { id: 'box', name: 'Box', desc: 'Enable users to connect to their own Box account', brand: 'Box40' },
-    { id: 'dropbox', name: 'Dropbox', desc: 'Enable users to connect to their own Dropbox account', brand: 'DropboxBlue40' },
-    { id: 'googledrive', name: 'Google Drive', desc: 'Enable users to connect to their own Google Drive account', brand: 'GoogleDrive40' },
-    { id: 'onedrive', name: 'OneDrive', desc: 'Enable users to connect to their own OneDrive account', brand: 'OneDrive40' },
-    { id: 'sharepoint', name: 'SharePoint Online', desc: 'Enable users to connect to their own SharePoint Online account', brand: 'SharePoint40' },
+    { id: 'email', name: 'Outlook', desc: 'Read and send your mail in the portal', icon: 'images/icons/phosphor/MicrosoftOutlookLogo.svg' },
+    { id: 'calendar', name: 'Calendar', desc: 'Two-way sync with your Microsoft calendar', icon: 'images/icons/phosphor/Calendar.svg' },
+    { id: 'onedrive', name: 'OneDrive', desc: 'Your OneDrive files in the file library', icon: 'images/icons/brands/OneDrive40.svg' },
   ];
 
   PAGES['connectors'] = {
@@ -1748,73 +1748,52 @@
         var qs = new URLSearchParams(window.location.search);
         var notice = qs.get('notice');
         if (notice) {
-          if (notice === 'social-connected') ui().toast('Storage account connected');
+          if (notice === 'social-connected') ui().toast('Microsoft account connected');
           else if (notice === 'social-error') ui().toast(qs.get('reason') || "That connection didn't complete");
           qs.delete('notice'); qs.delete('reason'); qs.delete('settings-page');
           history.replaceState(null, '', window.location.pathname + (qs.toString() ? '?' + qs.toString() : ''));
         }
       } catch (e) {}
 
-      function scopeParam(id) {
-        return id === 'sharepoint' ? 'sync_sharepoint=1' : 'sync_onedrive=1';
-      }
+      var CONNECT_URL = '/auth/social/microsoft/redirect?sync_all=1&return=connectors';
 
       secApi('GET', '/admin/connectors').then(function (r) { return r.json(); }).then(function (d) {
-        var enabled = d.enabled || [];
-        var connectable = d.connectable || [];
-        var linked = d.linked || {};
+        var features = d.features || {};
 
         root.innerHTML =
-          '<h3 class="tma-portal-section__title">Storage connectors</h3>' +
-          '<p class="tma-portal-subtitle">' +
-          (d.isAdmin ? 'Enable a service org-wide, then everyone can link their own account. OneDrive &amp; SharePoint connect through Microsoft.'
-                     : 'Link your own storage accounts. OneDrive &amp; SharePoint are available.') + '</p>' +
+          '<h3 class="tma-portal-section__title">Connectors</h3>' +
+          '<p class="tma-portal-subtitle">Connect once — Outlook, Calendar and OneDrive link together.</p>' +
           '<div class="tma-portal-connector-list">' +
           CONNECTOR_CATALOG.map(function (c) {
-            var isOn = enabled.indexOf(c.id) !== -1;
-            var isMs = connectable.indexOf(c.id) !== -1;
-            var isLinked = !!linked[c.id];
+            var f = features[c.id] || {};
             var right = '';
 
-            if (d.isAdmin) {
-              right += isOn
-                ? '<span class="tma-portal-chip">Enabled</span>' + ui().btn({ label: 'Disable', variant: 'ghost', small: true, attrs: 'data-conn-toggle="' + c.id + '" data-conn-to="0"' })
-                : ui().btn({ label: 'Enable', small: true, attrs: 'data-conn-toggle="' + c.id + '" data-conn-to="1"' });
-            }
-
-            // per-user connect for enabled Microsoft connectors
-            if (isOn && isMs && d.microsoftReady) {
-              right += isLinked
-                ? '<span class="tma-portal-chip tma-portal-chip--ok" style="margin-left:8px">Connected</span>'
-                : '<a class="tma-auth__chip-btn" style="margin-left:8px" href="/auth/social/microsoft/redirect?' + scopeParam(c.id) + '&return=connectors"><span>Connect my account</span></a>';
-            } else if (isOn && isMs && !d.microsoftReady) {
-              right += '<span class="tma-portal-note" style="margin-left:8px">Needs Microsoft sync enabled</span>';
-            } else if (isOn && !isMs) {
-              right += '<span class="tma-portal-note" style="margin-left:8px">Linking coming soon</span>';
+            if (!d.microsoftReady) {
+              right = '<span class="tma-portal-note">Needs Microsoft sync enabled</span>';
+            } else if (f.linked && c.id === 'email' && !f.writable) {
+              right = '<span class="tma-portal-note">Read-only</span>' +
+                '<a class="tma-auth__chip-btn" style="margin-left:8px" href="' + CONNECT_URL + '"><span>Reconnect</span></a>';
+            } else if (f.linked && c.id === 'calendar' && !f.readable) {
+              right = '<a class="tma-auth__chip-btn" href="' + CONNECT_URL + '"><span>Reconnect</span></a>';
+            } else if (f.linked) {
+              right = '<span class="tma-portal-chip tma-portal-chip--ok">Connected</span>';
+            } else {
+              right = '<a class="tma-auth__chip-btn" href="' + CONNECT_URL + '"><span>Connect</span></a>';
             }
 
             return '<div class="tma-portal-connector">' +
-              '<span class="tma-portal-connector__logo"><img src="images/icons/brands/' + c.brand + '.svg" alt=""></span>' +
+              '<span class="tma-portal-connector__logo"><img src="' + c.icon + '" alt=""></span>' +
               '<div class="tma-portal-connector__body">' +
               '<span class="tma-portal-connector__name">' + esc(c.name) + '</span>' +
               '<span class="tma-portal-connector__desc">' + esc(c.desc) + '</span></div>' +
               '<div class="tma-portal-connector__actions" style="display:flex;align-items:center;gap:4px">' + right + '</div>' +
               '</div>';
           }).join('') +
-          '</div>';
-
-        root.querySelectorAll('[data-conn-toggle]').forEach(function (b) {
-          b.addEventListener('click', function () {
-            var id = b.getAttribute('data-conn-toggle');
-            var to = b.getAttribute('data-conn-to') === '1';
-            secApi('PUT', '/admin/connectors', { id: id, enabled: to }).then(function (res) {
-              return res.json().catch(function () { return {}; }).then(function (j) {
-                if (res.ok) { ui().toast('Saved'); window.TMAPortalAdmin.setPage('connectors'); }
-                else ui().toast((j && j.message) || 'Could not save');
-              });
-            });
-          });
-        });
+          '</div>' +
+          (d.connected
+            ? '<p class="tma-portal-note" style="margin-top:12px">Connected as ' + esc(d.email || '') +
+              ' · <a href="' + CONNECT_URL + '">Reconnect</a></p>'
+            : '');
       }).catch(function () {
         root.innerHTML = '<p class="tma-portal-note">Couldn\'t load connectors. Refresh to try again.</p>';
       });

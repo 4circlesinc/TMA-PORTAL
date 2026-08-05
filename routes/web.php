@@ -65,6 +65,7 @@ use App\Http\Controllers\MessagingGroupController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PeopleController;
 use App\Http\Controllers\PreferencesController;
+use App\Http\Controllers\MeSyncStatusController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
 use App\Http\Controllers\SecuritySettingsController;
@@ -151,6 +152,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::post('/me/avatar', [MeController::class, 'updateAvatar'])->name('me.avatar');
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
+    Route::get('/me/sync-status', [MeSyncStatusController::class, 'show'])->name('me.sync-status');
 
     // Notifications: the bell popup, the right-sidebar section, and the badge.
     Route::prefix('portal/notifications')->name('notifications.')->group(function () {
@@ -223,7 +225,6 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     });
 
     Route::get('/admin/connectors', [ConnectorsController::class, 'index'])->name('admin.connectors');
-    Route::put('/admin/connectors', [ConnectorsController::class, 'update'])->name('admin.connectors.update');
 
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])
         ->name('admin.security-policies');

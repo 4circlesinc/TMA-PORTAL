@@ -181,6 +181,16 @@ class BrowserController extends BaseFilesController
                 FileAccess::systemVisibleFolderIds($user),
             );
             $q->where(fn ($w) => $w->where('owner_id', $user->id)->orWhereIn('id', $ids ?: [0]));
+        })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
+            // Administrators see the whole library EXCEPT other people's
+            // root-mirrored OneDrive space: FileAccess denies opening it, so
+            // listing it would only advertise names nobody may click.
+            $hidden = array_values(array_diff(FileAccess::personalRootOwnerIds(), [$user->id]));
+            if ($hidden !== []) {
+                $q->whereNot(fn ($w) => $w->where('folder_type', Folder::TYPE_USER)
+                    ->whereIn('owner_id', $hidden)
+                    ->whereNotIn('id', FileAccess::sharedFolderIds($user) ?: [0]));
+            }
         });
     }
 
@@ -189,6 +199,15 @@ class BrowserController extends BaseFilesController
         return FileItem::query()->when(! FileAccess::isAdmin($user), function ($q) use ($user) {
             $ids = FileAccess::sharedFileIds($user);
             $q->where(fn ($w) => $w->where('owner_id', $user->id)->orWhereIn('id', $ids ?: [0]));
+        })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
+            // Mirror of the folder rule: unfiled root files of a root-mirrored
+            // OneDrive are that person's drive contents.
+            $hidden = array_values(array_diff(FileAccess::personalRootOwnerIds(), [$user->id]));
+            if ($hidden !== []) {
+                $q->whereNot(fn ($w) => $w->whereNull('folder_id')
+                    ->whereIn('owner_id', $hidden)
+                    ->whereNotIn('id', FileAccess::sharedFileIds($user) ?: [0]));
+            }
         });
     }
 

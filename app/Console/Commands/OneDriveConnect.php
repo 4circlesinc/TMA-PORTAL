@@ -129,12 +129,13 @@ class OneDriveConnect extends Command
          */
         $driveOwner = User::where('email', $upn)->first() ?: $owner;
 
+        // folder_type stays the 'user' default — the column is NOT NULL, and
+        // an explicit null here used to break folder creation on Postgres.
         $portalFolder = Folder::create([
             'uuid' => (string) Str::uuid(),
             'name' => $folderName,
             'owner_id' => $driveOwner->id,
             'created_by' => $owner->id,
-            'folder_type' => null,
             'audience' => null,
             'audience_role' => null,
             'origin' => 'sharepoint',

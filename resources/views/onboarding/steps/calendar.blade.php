@@ -14,7 +14,7 @@
       <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
     </div>
   @elseif (config('services.google.client_id'))
-    <a class="tma-auth__task" href="{{ route('social.redirect', ['provider' => 'google', 'return' => 'getting-started']) }}">
+    <a class="tma-auth__task" href="{{ route('social.redirect', ['provider' => 'google', 'sync_all' => 1, 'return' => 'onboarding']) }}">
       <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Google16.svg" alt="" width="16" height="16"></span>
       <span class="tma-auth__task-copy"><span class="tma-auth__task-name">Connect Google</span></span>
     </a>
@@ -30,7 +30,7 @@
       <span class="tma-auth__task-side"><span class="tma-auth__badge tma-auth__badge--done">Done</span></span>
     </div>
   @elseif (config('services.microsoft.client_id'))
-    <a class="tma-auth__task" href="{{ route('social.redirect', ['provider' => 'microsoft', 'return' => 'getting-started']) }}">
+    <a class="tma-auth__task" href="{{ route('social.redirect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'onboarding']) }}">
       <span class="tma-auth__task-icon" aria-hidden="true"><img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16"></span>
       <span class="tma-auth__task-copy"><span class="tma-auth__task-name">Connect Microsoft</span></span>
     </a>

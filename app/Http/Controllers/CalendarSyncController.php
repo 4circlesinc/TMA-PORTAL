@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\Calendar\CalendarAccess;
 use App\Support\Calendar\CalendarAudit;
 use App\Support\Calendar\CalendarColours;
+use App\Support\Calendar\CalendarImporter;
 use App\Support\Calendar\CalendarProvisioner;
 use App\Support\Calendar\Sync\CalendarSyncException;
 use App\Support\Calendar\Sync\ProviderFactory;
@@ -180,87 +181,28 @@ class CalendarSyncController extends Controller
             'monthsBack' => ['sometimes', 'integer', 'min:1', 'max:60'],
         ]);
 
-        $direction = $data['direction'] ?? 'two_way';
-        if (in_array($direction, ['two_way', 'export'], true) && ! $account->canWriteCalendar()) {
-            $direction = 'import';
-        }
-
         try {
-            $remote = ProviderFactory::for($account)->listCalendars();
+            $result = CalendarImporter::importAll(
+                $user,
+                $account,
+                $data['direction'] ?? 'two_way',
+                $data['monthsBack'] ?? 3,
+            );
         } catch (CalendarSyncException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $already = Calendar::where('connected_account_id', $account->id)
-            ->pluck('external_id')
-            ->all();
-
-        $palette = CalendarColours::keys();
-        $added = [];
-        $skipped = 0;
-        $failed = [];
-        $colourIndex = 0;
-
-        foreach ($remote as $remoteCal) {
-            $externalId = (string) ($remoteCal['id'] ?? '');
-            if ($externalId === '') {
-                continue;
-            }
-            if (in_array($externalId, $already, true)) {
-                $skipped++;
-
-                continue;
-            }
-
-            try {
-                $remoteCanWrite = ! empty($remoteCal['canWrite']);
-                $calendar = Calendar::create([
-                    'uuid' => (string) Str::uuid(),
-                    'name' => $remoteCal['name'] ?? 'Calendar',
-                    'colour' => $palette[$colourIndex % count($palette)] ?? CalendarColours::DEFAULT,
-                    'calendar_type' => Calendar::TYPE_PERSONAL,
-                    'owner_id' => $user->id,
-                    'created_by' => $user->id,
-                    'timezone' => CalendarProvisioner::defaultTimezone($user),
-                    'visibility' => 'private',
-                    'source' => $account->provider,
-                    'connected_account_id' => $account->id,
-                    'external_id' => $externalId,
-                    'sync_direction' => ($remoteCanWrite && $direction !== 'import')
-                        ? $direction
-                        : 'import',
-                    'remote_can_write' => $remoteCanWrite,
-                    'sync_window_start' => now()->subMonths($data['monthsBack'] ?? 3),
-                    'subscription_status' => 'syncing',
-                ]);
-
-                CalendarProvisioner::subscribe($user, $calendar);
-                CalendarAudit::record(
-                    CalendarAudit::CALENDAR_CONNECTED,
-                    $user,
-                    $calendar,
-                    context: ['provider' => $account->provider, 'bulk' => true],
-                );
-                SyncProviderCalendar::dispatch($calendar->id);
-
-                $added[] = $calendar->fresh(['owner', 'connectedAccount'])
-                    ->toRecord($user, CalendarAccess::ROLE_OWNER, null);
-                $already[] = $externalId;
-                $colourIndex++;
-            } catch (\Throwable $e) {
-                $failed[] = [
-                    'externalId' => $externalId,
-                    'name' => $remoteCal['name'] ?? 'Calendar',
-                    'error' => mb_substr($e->getMessage(), 0, 200),
-                ];
-            }
-        }
+        $added = array_map(
+            fn (Calendar $calendar) => $calendar->fresh(['owner', 'connectedAccount'])
+                ->toRecord($user, CalendarAccess::ROLE_OWNER, null),
+            $result['added'],
+        );
 
         return response()->json([
-            'calendarsFound' => count($remote),
+            'calendarsFound' => $result['found'],
             'calendarsAdded' => count($added),
-            'calendarsSkipped' => $skipped,
-            'calendarsFailed' => $failed,
+            'calendarsSkipped' => $result['skipped'],
+            'calendarsFailed' => $result['failed'],
             'calendars' => $added,
             'account' => [
                 'id' => $account->id,

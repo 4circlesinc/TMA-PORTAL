@@ -534,3 +534,183 @@
 .tma-toast-guidance__trigger:hover {
   background: rgba(0, 0, 0, 0.04);
 }
+
+/* Sync progress toasts — bottom-right stack shown while email, calendar and
+   OneDrive import after a Microsoft connect (sync-toasts.js). Deliberately a
+   separate host from the notification stack: these are always bottom-right,
+   whatever the notification-position preference says. */
+
+.tma-sync-toast-host {
+  position: fixed;
+  z-index: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  width: 344px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  right: 20px;
+}
+
+.tma-sync-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  background: var(--color-surface, #fff);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.08);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.tma-sync-toast--visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.tma-sync-toast--closing {
+  opacity: 0;
+  transform: translateX(16px);
+}
+
+.tma-sync-toast__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #e8f1fb;
+}
+
+.tma-sync-toast__icon img {
+  width: 18px;
+  height: 18px;
+}
+
+.tma-sync-toast--done .tma-sync-toast__icon { background: #e7f4e8; }
+.tma-sync-toast--error .tma-sync-toast__icon { background: #fdeaea; }
+
+.tma-sync-toast__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tma-sync-toast__title {
+  display: block;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text, #1a1d21);
+}
+
+.tma-sync-toast__detail {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-text-secondary, #5b616b);
+}
+
+.tma-sync-toast__track {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border, rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+}
+
+.tma-sync-toast__fill {
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--color-primary, #03a5e9);
+  transition: width 0.4s ease;
+}
+
+.tma-sync-toast--done .tma-sync-toast__fill { background: #2e9e44; }
+.tma-sync-toast--error .tma-sync-toast__fill { background: #d64545; }
+
+.tma-sync-toast__fill--indeterminate {
+  width: 40%;
+  animation: tma-sync-toast-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes tma-sync-toast-slide {
+  0% { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
+.tma-sync-toast__actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin: -4px -6px 0 0;
+}
+
+.tma-sync-toast__btn {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary, #5b616b);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.tma-sync-toast__btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text, #1a1d21);
+}
+
+/* Minimised: a compact chip — icon, short title, live progress bar. */
+.tma-sync-toast--min {
+  width: auto;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.tma-sync-toast--min .tma-sync-toast__icon {
+  width: 24px;
+  height: 24px;
+}
+
+.tma-sync-toast--min .tma-sync-toast__icon img {
+  width: 14px;
+  height: 14px;
+}
+
+.tma-sync-toast--min .tma-sync-toast__detail,
+.tma-sync-toast--min [data-sync-min] {
+  display: none;
+}
+
+.tma-sync-toast--min .tma-sync-toast__title {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.tma-sync-toast--min .tma-sync-toast__track {
+  margin-top: 4px;
+  width: 120px;
+}
+
+@media (max-width: 1024px) {
+  .tma-sync-toast-host {
+    bottom: calc(16px + var(--dash-tabbar-clearance, 64px) + env(safe-area-inset-bottom, 0px));
+  }
+}

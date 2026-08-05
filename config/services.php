@@ -81,7 +81,9 @@ return [
         // the two-way sync needs it. Existing Calendars.Read connections must
         // reconnect once; canWriteCalendar() detects the narrower grant.
         'scope_calendar' => 'Calendars.ReadWrite',
-        'scope_onedrive' => 'Files.Read',
+        // ReadWrite so uploads made in the portal can land back in the user's
+        // own OneDrive — the personal library is a two-way mirror.
+        'scope_onedrive' => 'Files.ReadWrite',
         'scope_sharepoint' => 'Sites.Read.All',
         // App-only Graph send for portal system mail (password resets, etc.).
         // Separate from MICROSOFT_TENANT=common used by interactive OAuth login.

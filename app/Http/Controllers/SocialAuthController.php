@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\AnalyzeMailbox;
+use App\Jobs\ImportProviderCalendars;
+use App\Jobs\ProvisionPersonalOneDrive;
 use App\Models\AuthEvent;
 use App\Models\ConnectedAccount;
 use App\Models\User;
@@ -44,7 +46,7 @@ class SocialAuthController extends Controller
         $request->session()->put('social.intent', $request->user() ? 'connect' : 'auth');
         $request->session()->put(
             'social.return',
-            in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email'], true) ? $request->query('return') : 'security-settings',
+            in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email', 'calendar', 'onboarding'], true) ? $request->query('return') : 'security-settings',
         );
 
         if (! config("services.{$provider}.client_id")) {
@@ -73,10 +75,19 @@ class SocialAuthController extends Controller
         // Data sync opt-in (email, calendar, OneDrive, SharePoint). Only
         // requests extra scopes when the provider's sync is configured;
         // otherwise this is a normal sign-in.
+        //
+        // One consent covers everything: sync_all expands to every capability
+        // the provider has scopes for, and a connect for one capability always
+        // re-includes whatever the account already syncs — so reconnecting the
+        // mailbox can never switch the calendar or OneDrive off again.
+        $account = $request->user()?->connectedAccount($provider);
+
         $extras = self::SYNC_EXTRAS;
+        $all = $request->boolean('sync_all');
         $wanted = [];
         foreach ($extras as $extra) {
-            $wanted[$extra] = $request->boolean("sync_{$extra}");
+            $wanted[$extra] = ($all || $request->boolean("sync_{$extra}") || (bool) $account?->{"sync_{$extra}"})
+                && (bool) config("services.{$provider}.scope_{$extra}");
             $request->session()->put("social.sync_{$extra}", $wanted[$extra]);
         }
 
@@ -92,6 +103,12 @@ class SocialAuthController extends Controller
                     $scopes = array_merge($scopes, preg_split('/\s+/', trim($configured)) ?: []);
                 }
             }
+
+            // prompt=consent replaces the old grant wholesale, so also
+            // re-request every scope the account was already granted —
+            // otherwise a narrow reconnect silently drops the rest.
+            $scopes = array_merge($scopes, $account?->scopes ?? []);
+
             $driver->scopes(array_values(array_unique(array_filter($scopes))));
 
             if ($provider === 'google') {
@@ -216,11 +233,13 @@ class SocialAuthController extends Controller
             ['provider' => $provider],
             array_merge(
                 ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
-                $this->syncPayload($request, $oauth),
+                $this->syncPayload($request, $oauth, $user->connectedAccount($provider)),
             ),
         );
 
         $this->startMailPipeline($account);
+        $this->startCalendarPipeline($account);
+        $this->startOneDrivePipeline($account);
 
         $this->rememberAvatar($user, $oauth, $provider);
 
@@ -303,11 +322,13 @@ class SocialAuthController extends Controller
             ['provider' => $provider],
             array_merge(
                 ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
-                $this->syncPayload($request, $oauth),
+                $this->syncPayload($request, $oauth, $user->connectedAccounts()->where('provider', $provider)->first()),
             ),
         );
 
         $this->startMailPipeline($account);
+        $this->startCalendarPipeline($account);
+        $this->startOneDrivePipeline($account);
 
         // A Google-verified matching email also settles our own verification.
         if (! $user->hasVerifiedEmail()) {
@@ -384,6 +405,42 @@ class SocialAuthController extends Controller
         }, report: false);
     }
 
+    /**
+     * Mirror every calendar the account can see as soon as calendar sync is
+     * (re)enabled — the user should never have to find a "Connect all"
+     * button. The import skips calendars that are already mirrored.
+     */
+    private function startCalendarPipeline(ConnectedAccount $account): void
+    {
+        if (! $account->sync_calendar || ! $account->token || ! $account->canReadCalendar()) {
+            return;
+        }
+
+        if ($account->wasRecentlyCreated || $account->wasChanged('sync_calendar') || $account->wasChanged('token')) {
+            rescue(function () use ($account) {
+                ImportProviderCalendars::dispatch($account->id);
+            }, report: false);
+        }
+    }
+
+    /**
+     * Link the person's own OneDrive into their file library the moment they
+     * connect Microsoft. The job is idempotent and quietly skips clients,
+     * personal (non-tenant) accounts, and drives that are already connected.
+     */
+    private function startOneDrivePipeline(ConnectedAccount $account): void
+    {
+        if ($account->provider !== 'microsoft' || ! $account->sync_onedrive || ! $account->token) {
+            return;
+        }
+
+        if ($account->wasRecentlyCreated || $account->wasChanged('sync_onedrive') || $account->wasChanged('token')) {
+            rescue(function () use ($account) {
+                ProvisionPersonalOneDrive::dispatch($account->id);
+            }, report: false);
+        }
+    }
+
     private function returnTo(string $return, bool $ok, string $message): RedirectResponse
     {
         if ($return === 'email') {
@@ -399,6 +456,16 @@ class SocialAuthController extends Controller
 
         if ($return === 'profile') {
             return redirect('/account-settings?page=profile'.($ok ? '&notice=photo-added' : '&notice=social-error&reason='.urlencode($message)));
+        }
+
+        if ($return === 'calendar') {
+            return redirect('/calendar?notice='.($ok ? 'social-connected' : 'social-error&reason='.urlencode($message)));
+        }
+
+        if ($return === 'onboarding') {
+            // Back into the client wizard, which resumes at the next
+            // unfinished step.
+            return redirect()->route('onboarding.index')->with($ok ? 'status' : 'social_error', $ok ? 'social-connected' : $message);
         }
 
         $route = $return === 'getting-started' ? 'getting-started' : 'security-settings';
@@ -431,8 +498,13 @@ class SocialAuthController extends Controller
     /**
      * Refresh token + granted scopes + sync flags to persist on the connected
      * account, only when the user opted into sync and we received a token.
+     *
+     * Merges with what the account already holds: a connect launched for one
+     * capability must never switch another one off, wipe the stored refresh
+     * token, or blank the granted scopes. Turning sync off is an explicit
+     * disconnect, not a side effect of connecting.
      */
-    private function syncPayload(Request $request, OAuthUser $oauth): array
+    private function syncPayload(Request $request, OAuthUser $oauth, ?ConnectedAccount $existing = null): array
     {
         $wanted = [];
         foreach (self::SYNC_EXTRAS as $extra) {
@@ -443,16 +515,29 @@ class SocialAuthController extends Controller
             return [];
         }
 
-        $granted = $oauth->accessTokenResponseBody['scope'] ?? '';
-
-        return [
-            'token' => $oauth->refreshToken ?: null,
-            'scopes' => $granted ? explode(' ', $granted) : null,
-            'sync_email' => $wanted['email'],
-            'sync_calendar' => $wanted['calendar'],
-            'sync_onedrive' => $wanted['onedrive'],
-            'sync_sharepoint' => $wanted['sharepoint'],
+        $payload = [
+            'sync_email' => $wanted['email'] || (bool) $existing?->sync_email,
+            'sync_calendar' => $wanted['calendar'] || (bool) $existing?->sync_calendar,
+            'sync_onedrive' => $wanted['onedrive'] || (bool) $existing?->sync_onedrive,
+            'sync_sharepoint' => $wanted['sharepoint'] || (bool) $existing?->sync_sharepoint,
         ];
+
+        // The granted scopes are the provider's word on what the new token can
+        // do — store them as-is when present (the redirect re-requested every
+        // previously held scope, so they only ever grow), keep the old list
+        // when the response omits them.
+        $granted = $oauth->accessTokenResponseBody['scope'] ?? '';
+        if ($granted) {
+            $payload['scopes'] = explode(' ', $granted);
+        }
+
+        // A consent that came back without a refresh token must not erase the
+        // one we hold.
+        if ($oauth->refreshToken) {
+            $payload['token'] = $oauth->refreshToken;
+        }
+
+        return $payload;
     }
 
     /**
