@@ -113,7 +113,10 @@ try {
   // The account-management table — status, sign-in history, approve/suspend/
   // delete per row. Employees browse colleagues through People instead.
   check(!empNav.includes('users'), `"Users" is not in the sidebar (has: ${empNav.join(', ')})`);
-  check(!empNav.includes('dash-project-overview'), '"Admin Overview" is not in the sidebar');
+  // The Overview page reopened to employees in Aug 2026 — the administration
+  // it carries (Users tab, Recycle Bin, the settings-rail Admin Overview
+  // panel) stays behind its own capabilities.
+  check(empNav.includes('dash-project-overview'), '"Overview" is in the employee sidebar');
   // The whole People section is administration now — the directory and both
   // address books included.
   check(!empNav.some((id) => id.startsWith('people-')), 'no People screen is in the sidebar');
@@ -237,7 +240,7 @@ try {
   step(11, 'An administrator keeps the Users page, People and every client');
   const adminNav = await sidebarNav(admin);
   check(adminNav.includes('users'), '"Users" is still in the administrator sidebar');
-  check(adminNav.includes('dash-project-overview'), '"Admin Overview" is still there');
+  check(adminNav.includes('dash-project-overview'), '"Overview" is still there');
   check(adminNav.includes('people-employees'), 'People is still there');
 
   await admin.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });

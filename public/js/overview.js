@@ -20,7 +20,12 @@
      Project Spendings table and the Add Target action — none of them were
      backed by anything, and the page reads as a real dashboard, so figures
      nobody entered are worse than absent sections. */
-  var BASE_TABS = ['Overview', 'Employees', 'Users', 'Files', 'Notifications', 'Activity'];
+  /* Employees (the presence board), Users (the account-management table) and
+     the Recycle Bin all ride on administrator-only data — an employee's tab
+     would be an empty board or a table of 403s. The server enforces each one
+     separately; hiding them here just keeps the offer honest. */
+  var BASE_TABS = ['Overview', 'Files', 'Notifications', 'Activity'];
+  var ADMIN_TABS = ['Overview', 'Employees', 'Users', 'Files', 'Notifications', 'Activity', 'Recycle Bin'];
 
   function isAdminUser() {
     var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
@@ -28,9 +33,7 @@
   }
 
   function visibleTabs() {
-    var tabs = BASE_TABS.slice();
-    if (isAdminUser()) tabs.push('Recycle Bin');
-    return tabs;
+    return (isAdminUser() ? ADMIN_TABS : BASE_TABS).slice();
   }
 
   function dateKeyOf(d) {
@@ -280,7 +283,7 @@
   function renderTabs(activeTab) {
     var current = activeTab || 'Overview';
     var tabs = visibleTabs();
-    if (current === 'Recycle Bin' && tabs.indexOf('Recycle Bin') === -1) current = 'Overview';
+    if (tabs.indexOf(current) === -1) current = 'Overview';
     var items = tabs.map(function (label) {
       var active = label === current;
       return '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" data-overview-tab="' + esc(label) + '">' +
@@ -291,9 +294,11 @@
     return '<div class="tma-dash__overview-toolbar">' +
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__overview-tabs" role="tablist">' + items + '</div>' +
       // Add Target and the overflow menu went with the Targets tab. Add User
-      // stays: it is the one action here that leads somewhere real.
+      // stays for administrators: inviting accounts is theirs alone.
       '<div class="tma-dash__overview-actions">' +
-      '<button type="button" class="tma-dash__overview-btn" data-overview-add-user><img src="' + ICON + 'Plus.svg" alt=""><span>Add User</span></button>' +
+      (isAdminUser()
+        ? '<button type="button" class="tma-dash__overview-btn" data-overview-add-user><img src="' + ICON + 'Plus.svg" alt=""><span>Add User</span></button>'
+        : '') +
       '</div></div>';
   }
 
@@ -498,11 +503,13 @@
   }
 
   function renderEmployeesTab(activeTab) {
+    if (!isAdminUser()) return '';
     return '<div class="tma-dash__overview-employees-tab"' + (activeTab !== 'Employees' ? ' hidden' : '') + '>' +
       '<div class="tma-dash__overview-employees-mount" data-employees-overview></div></div>';
   }
 
   function renderUsers(activeTab) {
+    if (!isAdminUser()) return '';
     return '<div class="tma-dash__overview-users" data-node-id="32546:96120"' + (activeTab !== 'Users' ? ' hidden' : '') + '>' +
       '<div class="tma-dash__users" data-users-overview></div></div>';
   }
@@ -513,6 +520,7 @@
   }
 
   function mountEmployeesTab(container) {
+    if (!isAdminUser()) return;
     var mountEl = container.querySelector('[data-employees-overview]');
     if (!mountEl || !window.TMAOverviewEmployees || typeof window.TMAOverviewEmployees.mount !== 'function') return;
     window.TMAOverviewEmployees.mount(mountEl);
@@ -535,6 +543,7 @@
   }
 
   function mountUsersTab(container) {
+    if (!isAdminUser()) return;
     var mountEl = container.querySelector('[data-users-overview]');
     if (!mountEl || !window.TMAUsers || typeof window.TMAUsers.mount !== 'function') return;
     window.TMAUsers.mount(mountEl, { context: 'overview' });
@@ -600,7 +609,7 @@
     if (!container) return;
     var overview = container.querySelector('.tma-dash__overview');
     if (!overview) return;
-    if (tab === 'Recycle Bin' && !isAdminUser()) tab = 'Overview';
+    if (visibleTabs().indexOf(tab) === -1) tab = 'Overview';
 
     overview.querySelectorAll('[role="tab"]').forEach(function (btn) {
       var isActive = btn.getAttribute('data-overview-tab') === tab;
@@ -960,7 +969,7 @@
     bindRoadWheel(root);
   }
 
-  function remountTabsForAdmin(container) {
+  function remountTabsForAdmin(container, requestedTab) {
     if (!container || !isAdminUser()) return;
     var overview = container.querySelector('.tma-dash__overview');
     if (!overview) return;
@@ -969,8 +978,19 @@
     var tab = (current && current.getAttribute('data-overview-tab')) || 'Overview';
     var toolbar = overview.querySelector('.tma-dash__overview-toolbar');
     if (toolbar) toolbar.outerHTML = renderTabs(tab);
+    if (!overview.querySelector('.tma-dash__overview-employees-tab')) {
+      overview.insertAdjacentHTML('beforeend', renderEmployeesTab(tab));
+    }
+    if (!overview.querySelector('.tma-dash__overview-users')) {
+      overview.insertAdjacentHTML('beforeend', renderUsers(tab));
+    }
     if (!overview.querySelector('.tma-dash__overview-recycle-tab')) {
       overview.insertAdjacentHTML('beforeend', renderRecycleTab(tab));
+    }
+    // A deep link to an admin tab that arrived before /me resolved was parked
+    // on Overview; honour it now that the tab exists.
+    if (requestedTab && tab !== requestedTab && visibleTabs().indexOf(requestedTab) !== -1) {
+      setActiveTab(container, requestedTab);
     }
   }
 
@@ -980,7 +1000,8 @@
       ? document.querySelector('.tma-dash')._pendingOverviewTab : null;
     var activeTab = (opts && opts.tab) || normalizeTab(pending) || tabFromUrl() || 'Overview';
     if (pending) { try { document.querySelector('.tma-dash')._pendingOverviewTab = null; } catch (e) {} }
-    if (activeTab === 'Recycle Bin' && !isAdminUser()) activeTab = 'Overview';
+    var requestedTab = activeTab;
+    if (visibleTabs().indexOf(activeTab) === -1) activeTab = 'Overview';
     container.innerHTML = render(activeTab);
     bindTabs(container);
     bindOverviewActions(container);
@@ -996,10 +1017,10 @@
 
     refreshOverviewData(container);
 
-    // /me may resolve after first paint — reveal the admin Recycle Bin tab then.
+    // /me may resolve after first paint — reveal the admin-only tabs then.
     if (window.TMACurrentUser && typeof window.TMACurrentUser.onChange === 'function') {
       window.TMACurrentUser.onChange(function () {
-        remountTabsForAdmin(container);
+        remountTabsForAdmin(container, requestedTab);
       });
     }
   }

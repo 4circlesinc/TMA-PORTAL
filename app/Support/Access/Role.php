@@ -115,10 +115,12 @@ class Role
         'templates.view' => [self::EMPLOYEE],
         // Automated workflows and the approval queue.
         'workflows.view' => [self::EMPLOYEE],
-        // The Admin Overview page (firm activity, storage, recycle bin).
-        // Administrators only — it reports on the firm as a whole, not on the
-        // work of whoever is reading it.
-        'overview.view' => [],
+        // The Overview page. Staff-wide: what it opens with — the metrics,
+        // the week planner, recent files, the firm's sign-ins — was built for
+        // employees too (see SignInActivityController). The administration it
+        // also carries (the Users tab, the Recycle Bin, the presence board)
+        // stays closed through its own capabilities, mirrored in overview.js.
+        'overview.view' => [self::EMPLOYEE],
         // Read the whole firm's audit trail rather than only your own.
         'activity.viewAll' => [],
 
@@ -136,6 +138,11 @@ class Role
         'groups.manage' => [],
 
         /* ── Administration ──────────────────────────────────────────── */
+        // The Admin Overview panel on the settings rail — the plan, the trial,
+        // the account limits. Split from `overview.view` when the Overview
+        // *page* opened to employees, so the page could travel without the
+        // firm's account summary going with it.
+        'settings.adminOverview' => [],
         // The firm-wide recycle bin.
         'recyclebin.admin' => [],
         // Password, session and two-factor policy for the whole portal.
@@ -218,7 +225,7 @@ class Role
      * PortalAccessTest, so the two cannot drift apart unnoticed.
      */
     private const SETTINGS_PAGE_CAPABILITIES = [
-        'admin-overview' => 'overview.view',
+        'admin-overview' => 'settings.adminOverview',
         'background-ops' => 'settings.operations',
         'reporting' => 'settings.reporting',
         'notification-history' => 'settings.reporting',

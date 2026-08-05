@@ -60,7 +60,7 @@
      Mirrors Role::SETTINGS_PAGE_CAPABILITIES; PortalAccessTest holds the two
      together. */
   var SETTINGS_CAPABILITIES = {
-    'admin-overview': 'overview.view',
+    'admin-overview': 'settings.adminOverview',
     'background-ops': 'settings.operations',
     'reporting': 'settings.reporting',
     'notification-history': 'settings.reporting',

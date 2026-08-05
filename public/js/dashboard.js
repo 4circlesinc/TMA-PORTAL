@@ -272,8 +272,8 @@
         return {
           navId: 'dash-project-overview',
           view: 'overview',
-          title: 'Admin Overview',
-          crumb: 'Admin Overview',
+          title: 'Overview',
+          crumb: 'Overview',
         };
       }
       if (p === '/account') {
@@ -1149,7 +1149,7 @@
 
       if (base === '/overview') {
         if (root.querySelector('.tma-dash__view[data-view="overview"]')) {
-          activate('dash-project-overview', { view: 'overview', title: 'Admin Overview', crumb: 'Admin Overview' });
+          activate('dash-project-overview', { view: 'overview', title: 'Overview', crumb: 'Overview' });
           if (params.tab) {
             if (window.TMAOverview && window.TMAOverview.selectTab) window.TMAOverview.selectTab(params.tab);
             else root._pendingOverviewTab = params.tab;

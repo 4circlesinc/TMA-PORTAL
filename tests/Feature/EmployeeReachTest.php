@@ -52,7 +52,7 @@ class EmployeeReachTest extends TestCase
     {
         $employee = $this->user(Role::EMPLOYEE);
 
-        foreach (['users', 'users/new', 'overview', 'people',
+        foreach (['users', 'users/new', 'people',
             'people/employees', 'people/clients', 'people/prospects',
             'people/shared-address-book', 'people/personal-address-book',
             'people/distribution-groups', 'people/resend-welcome-emails'] as $page) {
@@ -92,7 +92,7 @@ class EmployeeReachTest extends TestCase
             'classic', 'clients', 'email', 'email/templates', 'folders/all',
             'folders/favorites', 'folders/filebox', 'folders/personal',
             'folders/recent', 'folders/recycle', 'folders/shared',
-            'folders/shared-with-me', 'projects', 'projects/all',
+            'folders/shared-with-me', 'overview', 'projects', 'projects/all',
             'projects/closed', 'projects/recently_deleted',
             'settings/change-email', 'signatures', 'social/feed',
             'social/messages', 'templates', 'workflows', 'workflows/feedback',

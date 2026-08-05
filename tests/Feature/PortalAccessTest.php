@@ -59,6 +59,7 @@ class PortalAccessTest extends TestCase
         $this->assertTrue(Role::can($employee, 'clients.view'));
         $this->assertTrue(Role::can($employee, 'mail.use'));
         $this->assertTrue(Role::can($employee, 'signatures.create'));
+        $this->assertTrue(Role::can($employee, 'overview.view'));
 
         $this->assertFalse(Role::can($employee, 'users.view'));
         $this->assertFalse(Role::can($employee, 'directory.view'));
@@ -260,14 +261,22 @@ class PortalAccessTest extends TestCase
         }
     }
 
-    public function test_the_admin_overview_is_administrators_only(): void
+    public function test_the_overview_page_is_staff_but_its_administration_stays_closed(): void
     {
-        // It reports on the firm as a whole — storage, the recycle bin, every
-        // employee's activity — so an employee gets the same 404 a client does.
-        $this->actingAs($this->user(Role::EMPLOYEE))->get('/overview')->assertNotFound();
+        // The page itself is staff tooling — sign-ins, files, activity. The
+        // administration it also carries (the settings-rail Admin Overview
+        // panel; the Users and Recycle Bin tabs) is gated by its own
+        // capabilities, so opening the page must not have opened those.
+        $employee = $this->user(Role::EMPLOYEE);
+
+        $this->actingAs($employee)->get('/overview')->assertOk();
+        $this->actingAs($this->user(Role::CLIENT))->get('/overview')->assertNotFound();
         $this->actingAs($this->user(Role::ADMINISTRATOR))->get('/overview')->assertOk();
 
-        $this->assertFalse(Role::can($this->user(Role::EMPLOYEE), 'overview.view'));
+        $this->assertTrue(Role::can($employee, 'overview.view'));
+        $this->assertFalse(Role::canViewSettingsPage($employee, 'admin-overview'));
+        $this->assertFalse(Role::can($employee, 'users.view'));
+        $this->assertFalse(Role::can($employee, 'recyclebin.admin'));
     }
 
     /* ── the mailbox ─────────────────────────────────────────────────── */
