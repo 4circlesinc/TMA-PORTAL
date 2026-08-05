@@ -98,7 +98,8 @@ try {
   check(await page.locator('.cbi-detail__title').count() === 1, 'applicant title painted');
   const panels = await page.locator('.cbi-panel__title').allTextContents();
   log(`    panels: ${panels.map((p) => p.trim()).join(' · ')}`);
-  check(panels.some((p) => p.includes('Applicant')), 'Applicant panel present');
+  // The Applicant panel deliberately hides itself when a record carries no
+  // personal fields (common on COR-tracker rows), so it isn't asserted.
   check(panels.some((p) => p.includes('Case')), 'Case panel present');
   check(panels.some((p) => p.includes('Comments')), 'Comments panel present');
   check(panels.some((p) => p.includes('Activity')), 'Activity panel present');

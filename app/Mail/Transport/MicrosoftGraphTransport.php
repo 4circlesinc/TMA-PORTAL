@@ -122,6 +122,19 @@ class MicrosoftGraphTransport extends AbstractTransport
         }
 
         $address = $from[0];
+
+        // Never send as a domain this mailbox has no claim to. config/mail.php
+        // falls back to Laravel's stock `hello@example.com` when
+        // MAIL_FROM_ADDRESS is unset, and an environment that missed that one
+        // variable stamped every message From: example.com — which Graph still
+        // accepts, so nothing errors, but the receiving side sees a From domain
+        // outside our SPF record and bins it. That failure is invisible from
+        // here: the send is a success and the mail simply never lands. The
+        // mailbox we authenticate as is always a safe sender, so use it.
+        if (! $this->ownsDomain($address->getAddress())) {
+            $address = new Address($this->mailbox, $address->getName());
+        }
+
         $row = ['emailAddress' => ['address' => $address->getAddress()]];
         $name = $address->getName() !== ''
             ? $address->getName()
@@ -131,6 +144,18 @@ class MicrosoftGraphTransport extends AbstractTransport
         }
 
         return $row;
+    }
+
+    /**
+     * Whether a From address belongs to the same domain as the sending mailbox.
+     * Exchange will only send as itself or something it is delegated; anything
+     * else is a misconfiguration, not a deliberate sender.
+     */
+    private function ownsDomain(string $address): bool
+    {
+        $domain = fn (string $a) => mb_strtolower(trim((string) mb_strstr($a, '@')));
+
+        return $domain($address) !== '' && $domain($address) === $domain($this->mailbox);
     }
 
     /**
