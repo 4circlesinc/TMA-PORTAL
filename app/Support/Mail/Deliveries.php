@@ -86,7 +86,10 @@ final class Deliveries
         ])->save();
 
         $postcard->deliveryUuid = $fresh?->uuid;
-        Mail::to($delivery->recipient)->queue($postcard);
+        // sendNow: a retry is somebody clicking "send it again" and watching
+        // for the result, so it must not go back on the queue that lost the
+        // first attempt.
+        Mail::to($delivery->recipient)->sendNow($postcard);
 
         return $fresh;
     }

@@ -15,12 +15,12 @@ use App\Support\AvatarService;
 use App\Support\DeviceName;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
+use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -372,8 +372,15 @@ class AdminUsersController extends Controller
             'message' => 'Welcome to the portal — you now have full access.',
             'action_url' => '/',
         ]);
-        Mail::to($user->email)->queue(
-            Postcards::welcome($user->email, url('/'), $user->first_name ?: null)
+        // Inline, and tracked: a queued approval email is indistinguishable
+        // from no approval email at all when no worker is draining the queue,
+        // and this is the one message the account has been waiting on.
+        Deliveries::send(
+            Postcards::welcome($user->email, url('/'), $user->first_name ?: null),
+            $user->email,
+            $user,
+            'welcome',
+            immediate: true,
         );
         $this->clearPendingApprovalNotifications($user);
 
@@ -416,6 +423,16 @@ class AdminUsersController extends Controller
             'title' => 'Your access request was declined',
             'message' => $data['reason'] ?? null,
         ]);
+        // A denied account can never sign in, so the in-portal notification
+        // above is one nobody will ever see. Email is the only way the decision
+        // reaches them.
+        Deliveries::send(
+            Postcards::accountDenied($user->first_name ?: null, $data['reason'] ?? null),
+            $user->email,
+            $user,
+            'accountDenied',
+            immediate: true,
+        );
         $this->clearPendingApprovalNotifications($user);
 
         return response()->json(['status' => 'ok']);

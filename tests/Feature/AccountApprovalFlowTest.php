@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\ActivityLog;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -103,6 +105,65 @@ class AccountApprovalFlowTest extends TestCase
 
         // A denied (non-pending) account can't be denied again.
         $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/deny")->assertStatus(422);
+    }
+
+    /*
+     * The three emails the person outside the portal actually sees. They are
+     * sent inline rather than queued, and recorded as deliveries: a queued copy
+     * sends nothing at all while no worker is draining the queue, and an
+     * unrecorded one leaves nobody able to answer "did it go out?".
+     */
+
+    public function test_registering_emails_the_person_that_their_request_is_pending(): void
+    {
+        Mail::fake();
+        $this->admin();
+        $newbie = $this->pending();
+
+        event(new Registered($newbie));
+
+        Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
+            && $m->subjectLine === 'We\'ve received your request for access');
+        Mail::assertNothingQueued();
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => $newbie->email, 'template' => 'accountPending',
+        ]);
+    }
+
+    public function test_approving_emails_the_welcome_postcard(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $newbie = $this->pending();
+
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])
+            ->assertOk();
+
+        Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
+            && $m->subjectLine === 'Your account is ready');
+        Mail::assertNothingQueued();
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => $newbie->email, 'template' => 'welcome',
+        ]);
+    }
+
+    public function test_denying_emails_the_person_the_decision_and_the_reason(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+        $newbie = $this->pending();
+
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/deny", ['reason' => 'Unverified organisation'])
+            ->assertOk();
+
+        // A denied account can never sign in, so the in-portal notification is
+        // one they will never see — the email is the whole message.
+        Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
+            && $m->subjectLine === 'An update on your access request'
+            && str_contains($m->render(), 'Unverified organisation'));
+        $this->assertDatabaseHas('email_deliveries', [
+            'recipient' => $newbie->email, 'template' => 'accountDenied',
+        ]);
     }
 
     public function test_non_admins_cannot_approve_or_deny(): void

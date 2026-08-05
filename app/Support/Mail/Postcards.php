@@ -137,6 +137,41 @@ class Postcards
         ]));
     }
 
+    /**
+     * Sent the moment a self-registration lands. Without it the person hears
+     * nothing at all between signing up and an administrator getting round to
+     * them, which reads as a broken signup form.
+     */
+    public static function accountPending(string $email, ?string $name = null): Postcard
+    {
+        return new Postcard('We\'ve received your request for access', [
+            'preheader' => 'Your account request is with our team for review.',
+            'eyebrow' => 'Account request',
+            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+            'title' => 'We\'ve received your request',
+            'lead' => 'Thanks for signing up to '.self::SITE.'.',
+            'bodyHtml' => '<p>Your account for <strong>'.e($email).'</strong> has been created and is now waiting for an administrator to review it. You won\'t be able to sign in until it\'s approved.</p>'
+                .'<p>We\'ll email you as soon as a decision has been made — there\'s nothing else you need to do.</p>',
+        ]);
+    }
+
+    /**
+     * The other half of {@see self::welcome()}. $reason is the note the
+     * administrator typed on the deny dialog; it is shown only when given.
+     */
+    public static function accountDenied(?string $name = null, ?string $reason = null): Postcard
+    {
+        return new Postcard('An update on your access request', array_filter([
+            'preheader' => 'A decision has been made on your account request.',
+            'eyebrow' => 'Account request',
+            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+            'title' => 'We couldn\'t approve your request',
+            'bodyHtml' => '<p>Your request for access to the '.self::SITE.' portal has been reviewed and we\'re not able to approve it at this time.</p>'
+                .'<p>If you think this is a mistake, or you\'d like to know more, reply to this email or contact us at <a href="mailto:support@tmantoine.com" style="color:#03a5e9;text-decoration:none;">support@tmantoine.com</a>.</p>',
+            'quote' => $reason,
+        ]));
+    }
+
     public static function newLogin(array $details, string $reviewUrl): Postcard
     {
         return new Postcard('New sign-in to your account', [

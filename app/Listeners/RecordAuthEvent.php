@@ -5,6 +5,8 @@ namespace App\Listeners;
 use App\Models\AuthEvent;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Mail\Deliveries;
+use App\Support\Mail\Postcards;
 use App\Support\Messaging\PresenceService;
 use App\Support\Notifications\Notifier;
 use Illuminate\Auth\Events\Failed;
@@ -14,6 +16,8 @@ use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /*
  * Registered automatically by Laravel's event discovery: each public
@@ -47,6 +51,25 @@ class RecordAuthEvent
                 'action_url' => '/users',
                 'dedupe_key' => 'account.pending:'.$user->id,
             ]);
+            // …and tell the person who registered. They can't sign in yet, so
+            // nothing in the portal can reach them; without this they hear
+            // nothing between signing up and being approved.
+            //
+            // Deliveries::send already records a refused transport on the
+            // delivery row rather than throwing — this catch is for the case
+            // where it couldn't even write that row. The account exists by now,
+            // so a mail problem must not turn into a failed registration.
+            try {
+                Deliveries::send(
+                    Postcards::accountPending($user->email, $user->first_name ?: null),
+                    $user->email,
+                    $user,
+                    'accountPending',
+                    immediate: true,
+                );
+            } catch (Throwable $e) {
+                Log::warning('Could not email the pending-approval notice: '.$e->getMessage());
+            }
         }
     }
 

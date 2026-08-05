@@ -876,9 +876,12 @@
 
 .tma-auth__brand img {
   /* the horizontal logo PNG carries generous transparent padding */
-  height: 180px;
+  height: 120px;
   width: auto;
 }
+
+/* the dark-mode recolour lives with the other dark rules in auth-flow.css, which
+   loads after this file and outranks anything declared here */
 
 .tma-auth__panel-body {
   flex: 1 1 auto;
@@ -983,7 +986,7 @@
   }
 
   .tma-auth__brand img {
-    height: 96px;
+    height: 76px;
   }
 
   .tma-auth__form,

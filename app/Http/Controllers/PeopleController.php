@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Invitations\Invitations;
+use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +19,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
@@ -238,8 +238,12 @@ class PeopleController extends Controller
         }
 
         if ($request->boolean('copyToMe')) {
-            Mail::to($actor->email)->queue(
-                Postcards::welcome($email, url('/'), $actor->first_name ?: null, $note)
+            Deliveries::send(
+                Postcards::welcome($email, url('/'), $actor->first_name ?: null, $note),
+                $actor->email,
+                $actor,
+                'welcome',
+                immediate: true,
             );
         }
 
@@ -491,8 +495,12 @@ class PeopleController extends Controller
             Password::broker()->sendResetLink(['email' => $user->email]);
             $kind = 'activation';
         } else {
-            Mail::to($user->email)->queue(
-                Postcards::welcome($user->email, url('/'), $user->first_name ?: null, $note)
+            Deliveries::send(
+                Postcards::welcome($user->email, url('/'), $user->first_name ?: null, $note),
+                $user->email,
+                $user,
+                'welcome',
+                immediate: true,
             );
             $kind = 'welcome';
         }

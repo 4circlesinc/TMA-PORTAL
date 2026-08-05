@@ -11,6 +11,9 @@
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/auth-flow.css">
   <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  {{-- in <head> and render-blocking on purpose: its observer has to be live while the
+       body parses, or the stage art paints black for a frame before it swaps --}}
+  <script src="/js/illustration-theme.js?v=1"></script>
   <style>
     html, body { margin: 0; min-height: 100%; }
   </style>

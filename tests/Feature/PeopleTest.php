@@ -179,8 +179,9 @@ class PeopleTest extends TestCase
             'copyToMe' => true,
         ])->assertOk()->assertJsonPath('kind', 'welcome');
 
-        // One to them, one copy to the sender.
-        Mail::assertQueuedCount(2);
+        // One to them, one copy to the sender — sent inline, not queued, so a
+        // stalled worker can't swallow the email the screen just promised.
+        Mail::assertSentCount(2);
     }
 
     public function test_the_welcome_screen_refuses_addresses_that_are_not_in_the_account(): void

@@ -48,7 +48,7 @@ a.tma-auth__chip-btn {
   text-decoration: none;
 }
 
-/* the horizontal logo PNG is ~500px wide at its fixed 180px height in
+/* the horizontal logo PNG is ~210px wide at its fixed 120px height in
    auth.css — keep it inside narrow viewports without changing its box */
 .tma-auth__brand img {
   max-width: 100%;
@@ -1369,8 +1369,10 @@ a.tma-flowmap__name:hover {
   filter: invert(1) brightness(1.6);
 }
 
+/* the lockup is navy + cyan on transparent; brightness(0) flattens every opaque
+   pixel to black and invert(1) lifts it to white, leaving the alpha channel intact */
 [data-theme="dark"] .tma-auth .tma-auth__brand img {
-  filter: brightness(1.15);
+  filter: brightness(0) invert(1);
 }
 
 /* the split-layout stage tint mixes with the remapped card color */
