@@ -1,0 +1,156 @@
+import { chromium } from 'playwright';
+
+// The CBI development preview at /dev/cbi against a real server with real
+// synced data. What only a browser can check: the standalone shell paints,
+// the stage tabs filter, search narrows the table, an application opens into
+// the workspace view with its panels, a portal comment posts and survives a
+// reload, and — the module being dark — a non-admin gets a 404, not a page.
+// See README.md for the harness; needs the standard e2e@example.com admin
+// (and optionally emp@example.com to prove the 404).
+const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
+const log = (...a) => console.log(...a);
+const failures = [];
+const errors = [];
+
+function step(n, msg) { log(`\n[${n}] ${msg}`); }
+function check(ok, msg) {
+  log(`    ${ok ? '✓' : '✗'} ${msg}`);
+  if (!ok) failures.push(msg);
+}
+
+const browser = await chromium.launch();
+
+async function signIn(page, email) {
+  await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
+  await page.click('text=Sign in with Email');
+  await page.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
+  await page.fill('input[name="email"]', email);
+  await page.fill('input[name="password"]', 'password12345');
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+    page.click('button[type="submit"]:visible'),
+  ]);
+  await page.waitForTimeout(500);
+  // The "Stay signed in?" interstitial fronts the whole portal — even JSON
+  // APIs redirect until it is answered (memory: browser-testing gotchas).
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+      page.click('text=Yes, stay signed in'),
+    ]);
+    await page.waitForTimeout(500);
+  }
+  if (page.url().includes('/auth/login')) throw new Error('login failed for ' + email);
+}
+
+const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+page.on('console', (m) => {
+  if (m.type() === 'error' && !/403|404/.test(m.text())) errors.push('console: ' + m.text());
+});
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+
+try {
+  step(1, 'Logging in as admin and opening /dev/cbi');
+  await signIn(page, 'e2e@example.com');
+  await page.goto(`${BASE}/dev/cbi`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+  check(await page.locator('.cbi-head__title').count() === 1, 'page head painted');
+  check((await page.locator('.cbi-shell__flag').textContent() || '').includes('Development'), 'development-preview flag visible');
+
+  step(2, 'Applications table paints real rows');
+  await page.waitForSelector('.cbi-table tbody tr', { timeout: 15000 });
+  const rowCount = await page.locator('.cbi-table tbody tr').count();
+  check(rowCount > 0, `table shows ${rowCount} application row(s)`);
+  const total = await page.locator('.cbi-pagination span').textContent();
+  log(`    pagination: ${total?.trim()}`);
+  await page.screenshot({ path: 'tests/Browser/cbi-list.png', fullPage: false });
+
+  step(3, 'Stage tabs filter the list');
+  const stages = ['applications', 'assessment', 'tracker', 'closed'];
+  for (const s of stages) {
+    await page.click(`[data-cbi-stage="${s}"]`);
+    await page.waitForTimeout(900);
+    const chip = await page.locator(`[data-cbi-stage="${s}"][aria-pressed="true"]`).count();
+    check(chip === 1, `stage tab '${s}' activates`);
+  }
+  await page.click('[data-cbi-stage=""]');
+  await page.waitForTimeout(900);
+
+  step(4, 'Search narrows the table');
+  const firstName = (await page.locator('.cbi-app__name').first().textContent() || '').trim();
+  const needle = firstName.split(/\s+/)[0] || '';
+  if (needle.length > 2) {
+    await page.fill('[data-cbi-search]', needle);
+    await page.waitForTimeout(1200);
+    const names = await page.locator('.cbi-app__name').allTextContents();
+    check(names.length > 0 && names.every((n) => n.toLowerCase().includes(needle.toLowerCase())),
+      `every result matches '${needle}' (${names.length} rows)`);
+    await page.fill('[data-cbi-search]', '');
+    await page.waitForTimeout(1000);
+  } else {
+    log('    (skipped — first row has no usable name)');
+  }
+
+  step(5, 'Opening an application workspace');
+  await page.click('.cbi-table tbody tr');
+  await page.waitForSelector('.cbi-detail__title', { timeout: 10000 });
+  check(page.url().includes('#/app/'), 'hash route points at the application');
+  check(await page.locator('.cbi-detail__title').count() === 1, 'applicant title painted');
+  const panels = await page.locator('.cbi-panel__title').allTextContents();
+  log(`    panels: ${panels.map((p) => p.trim()).join(' · ')}`);
+  check(panels.some((p) => p.includes('Applicant')), 'Applicant panel present');
+  check(panels.some((p) => p.includes('Case')), 'Case panel present');
+  check(panels.some((p) => p.includes('Comments')), 'Comments panel present');
+  check(panels.some((p) => p.includes('Activity')), 'Activity panel present');
+  await page.screenshot({ path: 'tests/Browser/cbi-detail.png', fullPage: true });
+
+  step(6, 'Posting a portal comment');
+  const marker = 'E2E note ' + Date.now();
+  await page.fill('[data-cbi-comment-input]', marker);
+  await page.click('[data-cbi-action="post-comment"]');
+  await page.waitForTimeout(1200);
+  let bodies = await page.locator('.cbi-comment__body').allTextContents();
+  check(bodies.some((b) => b.includes(marker)), 'comment appears in the thread');
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.cbi-comment__body', { timeout: 10000 });
+  bodies = await page.locator('.cbi-comment__body').allTextContents();
+  check(bodies.some((b) => b.includes(marker)), 'comment survives a reload (server-backed)');
+
+  step(7, 'Back to the list via the hash route');
+  await page.click('[data-cbi-action="back"]');
+  await page.waitForSelector('.cbi-table tbody tr', { timeout: 10000 });
+  check(!page.url().includes('#/app/'), 'back returns to the list');
+
+  step(8, 'A non-admin gets a 404, not a page');
+  const emp = await browser.newPage();
+  const canTry = await (async () => {
+    try { await signIn(emp, 'emp@example.com'); return true; } catch { return false; }
+  })();
+  if (canTry) {
+    const res = await emp.goto(`${BASE}/dev/cbi`, { waitUntil: 'domcontentloaded' });
+    check(res.status() === 404, `employee sees ${res.status()} (expected 404)`);
+    const api = await emp.evaluate(async (base) => {
+      const r = await fetch(base + '/portal/cbi/summary', {
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+      });
+      return r.status;
+    }, BASE);
+    check(api === 404, `employee API status ${api} (expected 404)`);
+  } else {
+    log('    (skipped — no emp@example.com account seeded)');
+  }
+  await emp.close();
+} catch (e) {
+  failures.push('fatal: ' + e.message);
+} finally {
+  await browser.close();
+}
+
+log('\n────────────────────────────');
+if (errors.length) log('page errors:\n  ' + errors.join('\n  '));
+if (failures.length) {
+  log(`FAILED (${failures.length}):\n  ` + failures.join('\n  '));
+  process.exit(1);
+}
+log('CBI browser test: all checks passed');

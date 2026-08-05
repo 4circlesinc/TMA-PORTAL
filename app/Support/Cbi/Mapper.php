@@ -396,7 +396,11 @@ class Mapper
                 'extra' => $x['extra'] === [] ? null : json_encode($x['extra']),
                 'source_sheet_remote_id' => $sheet->remote_id,
                 'source_row_remote_id' => $remoteId,
-                'source_permalink' => $x['permalink'],
+                // Row permalinks aren't fetched (they made the sheet payload
+                // enormous); the sheet permalink with ?rowId= highlights the
+                // row just the same.
+                'source_permalink' => $x['permalink']
+                    ?? ($sheet->permalink ? $sheet->permalink.'?rowId='.$remoteId : null),
                 'source_modified_at' => $x['modified'],
                 'synced_at' => $now,
                 'first_imported_at' => $now, // insert path only; not in update list
@@ -513,7 +517,9 @@ class Mapper
         $attrs['stage'] = self::deriveStage($attrs, $authoritativeSheet);
         $attrs['source_sheet_remote_id'] = $authoritativeSheet?->remote_id;
         $attrs['source_row_remote_id'] = $authoritative?->remote_id;
-        $attrs['source_permalink'] = $authoritative?->permalink;
+        $attrs['source_permalink'] = $authoritative?->permalink
+            ?? ($authoritativeSheet?->permalink && $authoritative
+                ? $authoritativeSheet->permalink.'?rowId='.$authoritative->remote_id : null);
         $attrs['source_modified_at'] = $authoritative?->modified_at_remote;
         $attrs['synced_at'] = now();
 
@@ -574,7 +580,11 @@ class Mapper
     private static function dedupeKey(array $fields, SmartsheetSheet $sheet, $row): array
     {
         $number = strtoupper(preg_replace('/\s+/', '', (string) ($fields['applicant_number'] ?? '')));
-        if ($number !== '') {
+        // A placeholder "number" (N/A, TBD, a lone digit…) is shared by many
+        // unrelated rows; merging on it would collapse different applicants
+        // into one file. Too short or known-junk falls through to name+DOB.
+        $junk = ['N/A', 'NA', 'TBD', 'TBC', 'PENDING', 'NONE', 'X', 'XX', '-', '?'];
+        if (strlen($number) >= 3 && ! in_array($number, $junk, true)) {
             return ['key' => 'N:'.$number, 'needs_review' => false];
         }
 

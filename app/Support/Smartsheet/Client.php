@@ -33,8 +33,10 @@ class Client
             ->acceptJson()
             // Timeouts are mandatory — a single stalled response once wedged
             // an entire SharePoint import for the worker's whole lifetime.
+            // 300s because Smartsheet serves dense 210-column grids at a
+            // trickle (~8 KB/s observed); a 200-row page needs the headroom.
             ->connectTimeout(15)
-            ->timeout(120);
+            ->timeout(300);
 
         /*
          * Query only when non-empty: Laravel's Http::get($url, []) REPLACES

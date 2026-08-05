@@ -381,7 +381,9 @@ Schedule::command('feed:prune-attachments')->hourly();
  * 300 req/min budget. Everything is inert unless FEATURE_CBI is on and the
  * token is configured, so the schedule can ship dark.
  */
-Artisan::command('smartsheet:sync {--full : Re-fetch every sheet, ignoring version gates}', function () {
+Artisan::command('smartsheet:sync
+    {--queue : Dispatch per-sheet jobs instead of running inline}
+    {--full : Re-fetch every sheet, ignoring version gates}', function () {
     if (! config('services.smartsheet.cbi_enabled')) {
         $this->info('CBI is disabled (FEATURE_CBI).');
 
@@ -404,14 +406,42 @@ Artisan::command('smartsheet:sync {--full : Re-fetch every sheet, ignoring versi
             ->all();
     }
 
-    foreach ($due as $sheet) {
-        \App\Jobs\SyncSmartsheetSheet::dispatch($sheet, (bool) $this->option('full'));
+    /*
+     * --queue is for the deployed scheduler. Inline is the default because
+     * the queue table is shared with the Cloud deployment: a worker there
+     * pops any job whose class it doesn't have and discards it, so local
+     * dispatches of a not-yet-deployed job class silently vanish.
+     */
+    if ($this->option('queue')) {
+        foreach ($due as $sheet) {
+            \App\Jobs\SyncSmartsheetSheet::dispatch($sheet, (bool) $this->option('full'));
+        }
+        $this->info('Queued '.count($due).' sheet sync(s).');
+
+        return;
     }
 
-    $this->info('Queued '.count($due).' sheet sync(s).');
-})->purpose('Discover Smartsheet changes and queue per-sheet CBI syncs');
+    $done = 0;
+    foreach ($due as $sheet) {
+        attempt:
+        $result = \App\Support\Smartsheet\Synchroniser::syncSheet($sheet, $runId, (bool) $this->option('full'));
+        if ($result['status'] === 'throttled') {
+            $wait = max(1, (int) ($result['retryAfter'] ?? 30));
+            $this->warn("Throttled; waiting {$wait}s…");
+            sleep($wait);
+            goto attempt;
+        }
+        if ($result['status'] === 'synced') {
+            \App\Support\Cbi\Mapper::mapSheet($sheet->fresh());
+        }
+        $done++;
+        $this->info("[{$done}/".count($due)."] {$result['status']}: {$sheet->name}");
+    }
 
-Schedule::command('smartsheet:sync')
+    $this->info('Synced '.count($due).' sheet(s).');
+})->purpose('Discover Smartsheet changes and sync each changed sheet into CBI');
+
+Schedule::command('smartsheet:sync --queue')
     ->everyTenMinutes()
     // The per-sheet job already refuses to overlap itself; this stops a slow
     // workspace walk from stacking scheduler ticks as well.

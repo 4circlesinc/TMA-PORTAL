@@ -208,6 +208,15 @@
   /* Slightly under the old 21px / 16px rail — readable, not oversized. */
   --dash-icon-md: 20px;
   --dash-nav-icon-inset: calc(var(--space-2) + 16px + var(--space-4));
+  /* Where a nav icon's box ACTUALLY starts, measured from the nav item's left
+     edge: the item's own padding, then the (invisible but in-flow) caret, then
+     the gap after it. --dash-nav-icon-inset above still describes a 16px caret
+     and a --space-4 gap; the caret has since become 1em (14px) and the gap
+     --space-10, so it reads 4px short and anything aligned from it lands left
+     of the icons. Correcting the old variable would move the nested-item
+     indent, the profile row and the logo with it, so this states the real
+     figure for the things that must line up with the icon column. */
+  --dash-nav-icon-real-inset: calc(var(--space-2) + 14px + var(--space-10));
 }
 .tma-dash__sidebar-nav::-webkit-scrollbar { display: none; }
 
@@ -310,17 +319,16 @@
   opacity: 0.75;
 }
 
-/* Main Menu / Folder Shortcuts toggle */
+/* Menu / Folders toggle */
 .tma-dash__tabs {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  /* .tma-dash__tab's own padding-left (space-8) is fixed, so nudge the
-     whole row by the gap between that and --dash-nav-icon-inset (the
-     icon's real inset, padding + hidden caret + gap) — lines "Main Menu"
-     up with the icon column instead of the item's bare padding. */
-  margin-left: calc(var(--dash-nav-icon-inset) - var(--space-6));
+  /* .tma-dash__tab's own padding-left is fixed, so nudge the whole row by the
+     gap between that and the icon column's real inset — the tab's TEXT then
+     starts exactly where the nav icons start, instead of 4px to their left. */
+  margin-left: calc(var(--dash-nav-icon-real-inset) - var(--space-6));
   transition: opacity var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open),
               margin-left var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open);
 }
@@ -3367,12 +3375,18 @@
     opacity: 0;
     visibility: hidden;
   }
-  /* "Main Menu" is ~57px of 10px text; the row's 16px icon-column inset
-     plus 6px tab padding leaves 44px in the 72px rail and ellipsized every
-     label. Drop both when collapsed — the label owns the full rail width. */
+  /* "Menu" is ~31px of 10px text; the row's icon-column inset plus 6px tab
+     padding left too little of the 72px rail and ellipsized every label. Drop
+     the inset when collapsed — the label owns the full rail width.
+
+     Centred on the ICON COLUMN, not on the rail. The icons sit 4px right of
+     the rail's true centre (the in-flow caret ahead of them is wider than the
+     padding behind them), so a label centred on the rail reads as misaligned
+     against the column of icons directly beneath it. The row's right edge is
+     fixed, so shifting a centred row 4px takes twice that on the left. */
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tabs {
-    margin-left: 0;
+    margin-left: var(--space-8);
     justify-content: center;
     /* The zero-width hidden sibling still spends the flex gap, which would
        skew the centred label sideways. */

@@ -27,6 +27,13 @@ async function signIn(page, email) {
   ]);
   await page.waitForTimeout(500);
   if (page.url().includes('/auth/login')) throw new Error('login failed for ' + email);
+  // The stay-signed-in interstitial holds the session until it is answered —
+  // every later goto lands back on it, so the portal shell never renders and
+  // every selector below finds nothing.
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await page.click('text=Yes, stay signed in');
+    await page.waitForTimeout(800);
+  }
 }
 
 const tab = (page, name) => page.click(`.tma-dash__sidebar .tma-dash__tab:has-text("${name}")`);
@@ -87,7 +94,12 @@ try {
   check(tabs[0].trim() === 'Menu', 'first tab is Menu');
   check(tabs[1].trim() === 'Folders', 'second tab is Folders');
 
-  // Both labels must be legible, not clipped by the 225px sidebar.
+  // Both labels must be legible, not clipped by the 225px sidebar — so measure
+  // the sidebar open. The rail starts collapsed, and there the INACTIVE tab is
+  // deliberately squeezed to max-width:0, which reads as "clipped" however wide
+  // its label is. Hovering is how a user opens it in the default overlay mode.
+  await page.hover('.tma-dash__sidebar');
+  await page.waitForTimeout(600);
   for (const t of await page.locator('.tma-dash__sidebar .tma-dash__tab').all()) {
     const clipped = await t.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
     check(!clipped, `tab "${(await t.textContent()).trim()}" is not clipped`);

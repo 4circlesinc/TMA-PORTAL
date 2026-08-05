@@ -3,6 +3,7 @@
 namespace App\Support\Smartsheet;
 
 use App\Models\SmartsheetAttachment;
+use App\Models\SmartsheetColumn;
 use App\Models\SmartsheetComment;
 use App\Models\SmartsheetDiscussion;
 use App\Models\SmartsheetRow;
@@ -40,7 +41,19 @@ class Synchroniser
         $payload = Client::get('/workspaces/'.$workspaceId, ['loadAll' => 'true']);
 
         $seen = [];
-        self::walkFolder($payload, '', $seen);
+        $batch = [];
+        self::walkFolder($payload, '', $seen, $batch);
+        foreach (array_chunk($batch, 200) as $chunk) {
+            SmartsheetSheet::upsert($chunk, ['remote_id'],
+                ['name', 'permalink', 'folder_path', 'category', 'modified_at_remote', 'created_at_remote']);
+        }
+
+        // A sheet that vanished and came back (restored from Smartsheet's
+        // deleted items, moved workspaces and back) revives here.
+        SmartsheetSheet::query()
+            ->whereIn('remote_id', array_keys($seen))
+            ->where('status', SmartsheetSheet::STATUS_GONE)
+            ->update(['status' => SmartsheetSheet::STATUS_IDLE]);
 
         // Remote deletions: a sheet we mirror that the walk no longer finds.
         // Mirror data is kept — this archive outlives the Smartsheet account.
@@ -71,30 +84,31 @@ class Synchroniser
         return $due;
     }
 
-    /** @param array<int, true> $seen */
-    private static function walkFolder(array $node, string $path, array &$seen): void
+    /**
+     * @param array<int, true> $seen
+     * @param list<array<string, mixed>> $batch collected for one bulk upsert
+     */
+    private static function walkFolder(array $node, string $path, array &$seen, array &$batch): void
     {
         foreach ($node['sheets'] ?? [] as $sheet) {
             $seen[(int) $sheet['id']] = true;
-            SmartsheetSheet::updateOrCreate(
-                ['remote_id' => (int) $sheet['id']],
-                [
-                    'name' => (string) $sheet['name'],
-                    'permalink' => $sheet['permalink'] ?? null,
-                    'folder_path' => $path,
-                    'category' => self::classify($path, (string) $sheet['name']),
-                    // The walk's modifiedAt is advisory; /version decides.
-                    'modified_at_remote' => isset($sheet['modifiedAt'])
-                        ? CarbonImmutable::parse($sheet['modifiedAt']) : null,
-                    'created_at_remote' => isset($sheet['createdAt'])
-                        ? CarbonImmutable::parse($sheet['createdAt']) : null,
-                ],
-            );
+            $batch[] = [
+                'remote_id' => (int) $sheet['id'],
+                'name' => (string) $sheet['name'],
+                'permalink' => $sheet['permalink'] ?? null,
+                'folder_path' => $path,
+                'category' => self::classify($path, (string) $sheet['name']),
+                // The walk's modifiedAt is advisory; /version decides.
+                'modified_at_remote' => isset($sheet['modifiedAt'])
+                    ? CarbonImmutable::parse($sheet['modifiedAt']) : null,
+                'created_at_remote' => isset($sheet['createdAt'])
+                    ? CarbonImmutable::parse($sheet['createdAt']) : null,
+            ];
         }
 
         foreach ($node['folders'] ?? [] as $folder) {
             $sub = $path === '' ? (string) $folder['name'] : $path.'/'.$folder['name'];
-            self::walkFolder($folder, $sub, $seen);
+            self::walkFolder($folder, $sub, $seen, $batch);
         }
         // Reports are saved views over sheets — derived data, never synced.
     }
@@ -154,7 +168,15 @@ class Synchroniser
             $sheet->update(['status' => SmartsheetSheet::STATUS_SYNCING, 'last_synced_at' => now()]);
 
             $incremental = ! $force && $sheet->synced_version !== null && $sheet->last_success_at !== null;
-            $query = ['include' => 'attachments,rowPermalink'];
+
+            /*
+             * Rows are PAGED, and attachments come from their own listing
+             * endpoint rather than include=attachments — an unpaged 210-column
+             * master sheet with row includes is a response Smartsheet serves
+             * at a trickle (observed: 1.3 MB in 15 minutes, then a timeout).
+             * Small pages arrive in seconds.
+             */
+            $query = [];
             if ($incremental) {
                 // Overlap the window a minute so a row modified while the
                 // previous pass ran is never missed.
@@ -162,11 +184,36 @@ class Synchroniser
                     ->subMinute()->utc()->format('Y-m-d\TH:i:s\Z');
             }
 
-            $payload = Client::get('/sheets/'.$sheet->remote_id, $query);
+            $rowCount = 0;
+            $remoteTotal = 0;
+            $seenRowIds = [];
+            $page = 1;
+            do {
+                // 200-row pages: the dense master/closed sheets arrive from
+                // Smartsheet at ~8 KB/s, and a bigger page outruns any sane
+                // timeout.
+                $payload = Client::get('/sheets/'.$sheet->remote_id,
+                    $query + ['pageSize' => 200, 'page' => $page]);
 
-            self::applyColumns($sheet, $payload['columns'] ?? []);
-            $rowCount = self::applyRows($sheet, $payload['rows'] ?? []);
-            self::applyAttachments($sheet, $payload);
+                if ($page === 1) {
+                    self::applyColumns($sheet, $payload['columns'] ?? []);
+                    $remoteTotal = (int) ($payload['totalRowCount'] ?? 0);
+                }
+
+                $rows = $payload['rows'] ?? [];
+                $rowCount += self::applyRows($sheet, $rows);
+                foreach ($rows as $row) {
+                    $seenRowIds[] = (int) $row['id'];
+                }
+
+                $page++;
+                // filteredRowCount reflects rowsModifiedSince; totalRowCount
+                // is the whole sheet. Whichever applies, stop when we've
+                // paged past it.
+                $pageTotal = (int) ($payload['filteredRowCount'] ?? $payload['totalRowCount'] ?? 0);
+            } while (count($seenRowIds) < $pageTotal && $rows !== []);
+
+            self::applySheetAttachments($sheet);
 
             /*
              * rowsModifiedSince never reports deletions or moves-away, so an
@@ -174,9 +221,8 @@ class Synchroniser
              * disagrees with ours — one extra request fetching only the
              * primary column, not the whole sheet.
              */
-            $remoteTotal = (int) ($payload['totalRowCount'] ?? 0);
             if (! $incremental) {
-                self::pruneRows($sheet, collect($payload['rows'] ?? [])->pluck('id')->all(), $runId);
+                self::pruneRows($sheet, $seenRowIds, $runId);
             } elseif ($remoteTotal !== $sheet->rows()->count()) {
                 self::reconcileRowIds($sheet, $runId);
             }
@@ -254,7 +300,6 @@ class Synchroniser
     {
         $now = now();
         $rowBatch = [];
-        $attachmentBatch = [];
 
         foreach ($rows as $row) {
             // Sparse cell map: only cells that hold anything. ~40 of 210 on a
@@ -284,10 +329,6 @@ class Synchroniser
                 'modified_at_remote' => isset($row['modifiedAt']) ? CarbonImmutable::parse($row['modifiedAt']) : null,
                 'synced_at' => $now,
             ];
-
-            foreach ($row['attachments'] ?? [] as $attachment) {
-                $attachmentBatch[] = self::attachmentValues($sheet, $attachment, 'ROW', (int) $row['id']);
-            }
         }
 
         foreach (array_chunk($rowBatch, 200) as $chunk) {
@@ -295,16 +336,19 @@ class Synchroniser
                 ['row_number', 'parent_remote_id', 'cells', 'permalink',
                     'created_at_remote', 'modified_at_remote', 'synced_at']);
         }
-        self::upsertAttachments($attachmentBatch);
 
         return count($rowBatch);
     }
 
-    /** @param array<string, mixed> $payload */
-    private static function applyAttachments(SmartsheetSheet $sheet, array $payload): void
+    /**
+     * One paged listing covers every attachment on the sheet — sheet-level
+     * and row-level alike, each row carrying parentType/parentId — far
+     * cheaper than inlining attachments into the row payload.
+     */
+    private static function applySheetAttachments(SmartsheetSheet $sheet): void
     {
         $batch = [];
-        foreach ($payload['attachments'] ?? [] as $attachment) {
+        foreach (Client::getAll('/sheets/'.$sheet->remote_id.'/attachments') as $attachment) {
             $batch[] = self::attachmentValues($sheet, $attachment, 'SHEET', null);
         }
         self::upsertAttachments($batch);

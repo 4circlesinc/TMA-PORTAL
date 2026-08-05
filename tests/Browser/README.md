@@ -111,6 +111,23 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/people.mjs
   ```
 
+- **`cbi.mjs`** — the CBI development preview at `/dev/cbi`. The module is
+  deliberately dark (no sidebar entry, no SPA page, gated on `FEATURE_CBI` +
+  admin), so what only a browser can check is that the standalone shell
+  actually paints against real synced data: the stage tabs filter, search
+  narrows the table, an application opens into its workspace with the
+  Applicant/Case/Comments/Activity panels, a portal comment posts and
+  survives a reload, and — the part that matters most while it's hidden — an
+  employee gets a **404**, not a page, from both the URL and the JSON API.
+
+  Needs `FEATURE_CBI=true`, the standard `e2e@example.com` admin (plus
+  `emp@example.com` for the 404 check) and `cbi_applications` rows — either
+  from a real `smartsheet:sync` or copied in from another environment:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cbi.mjs
+  ```
+
 - **`settings-access.mjs`** — who the account settings rail offers what to.
   `/account-settings` is the one settings home, so *every* account loads it —
   but the rail it draws is a single static list in `portal-admin.js` and

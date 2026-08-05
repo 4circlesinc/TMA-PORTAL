@@ -289,6 +289,9 @@
   function panel(title, inner, opts) {
     opts = opts || {};
     if (!inner) return '';
+    // A facts panel whose <dl> emitted no rows has nothing to say — skip it
+    // rather than paint an empty card.
+    if (inner.indexOf('<dl') === 0 && inner.indexOf('<dt') === -1) return '';
     return '<section class="cbi-panel' + (opts.wide ? ' cbi-panel--wide' : '') + '">' +
       '<h3 class="cbi-panel__title"><span>' + esc(title) + '</span>' +
       (opts.hint ? '<small>' + esc(opts.hint) + '</small>' : '') + '</h3>' + inner + '</section>';
