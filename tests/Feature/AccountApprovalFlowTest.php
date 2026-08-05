@@ -114,6 +114,50 @@ class AccountApprovalFlowTest extends TestCase
      * unrecorded one leaves nobody able to answer "did it go out?".
      */
 
+    /**
+     * The regression the other tests in this file could never catch: they all
+     * build their pending user with an explicit `'status' => 'pending'`, so the
+     * model always had one. A real signup doesn't pass status at all and relies
+     * on the column default — which fills the row but leaves the saved instance
+     * NULL, so every `$user->status === STATUS_PENDING` check downstream was
+     * false and the whole registration follow-up was skipped.
+     */
+    public function test_a_newly_created_account_is_pending_on_the_model_not_just_in_the_table(): void
+    {
+        $user = User::create([
+            'name' => 'Newbie Jones',
+            'email' => 'newbie@example.com',
+            'password' => 'password-that-is-long-enough',
+        ]);
+
+        $this->assertSame(User::STATUS_PENDING, $user->status);
+        $this->assertTrue($user->status === User::STATUS_PENDING);
+        $this->assertSame(User::STATUS_PENDING, $user->fresh()->status);
+    }
+
+    public function test_signing_up_through_the_register_form_alerts_admins_and_emails_the_person(): void
+    {
+        Mail::fake();
+        $admin = $this->admin();
+
+        $this->post('/auth/register', [
+            'name' => 'Newbie Jones',
+            'email' => 'newbie@example.com',
+            'password' => 'password-that-is-long-enough',
+            'password_confirmation' => 'password-that-is-long-enough',
+            'terms' => 'on',
+        ]);
+
+        $newbie = User::where('email', 'newbie@example.com')->firstOrFail();
+        $this->assertSame(User::STATUS_PENDING, $newbie->status);
+
+        $this->assertSame(1, Notification::where('user_id', $admin->id)
+            ->where('type', 'account.pending')->count());
+        $this->assertSame(1, ActivityLog::where('activity_type', 'account.registered')->count());
+        Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
+            && $m->subjectLine === 'We\'ve received your request for access');
+    }
+
     public function test_registering_emails_the_person_that_their_request_is_pending(): void
     {
         Mail::fake();

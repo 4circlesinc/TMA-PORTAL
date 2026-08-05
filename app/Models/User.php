@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Listeners\RecordAuthEvent;
 use App\Notifications\PortalResetPassword;
 use App\Notifications\PortalVerifyEmail;
 use Database\Factories\UserFactory;
@@ -32,8 +33,28 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasFactory, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
     public const string STATUS_PENDING = 'pending';
+
     public const string STATUS_APPROVED = 'approved';
+
     public const string STATUS_SUSPENDED = 'suspended';
+
+    /**
+     * A new account starts pending, in memory as well as in the table.
+     *
+     * The column already defaults to 'pending', but a database default only
+     * fills the row — it never travels back to the instance that was just
+     * saved. So `User::create([...])` without an explicit status handed every
+     * listener a model whose `status` was NULL, and
+     * {@see RecordAuthEvent::handleRegistered} compares it to
+     * STATUS_PENDING: registrations silently skipped the administrator alert,
+     * the audit entry and the "we've received your request" email, while the
+     * stored row looked perfectly correct.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'status' => self::STATUS_PENDING,
+    ];
 
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
     {

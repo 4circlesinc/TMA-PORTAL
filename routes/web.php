@@ -9,6 +9,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
+use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientOnboardingController;
@@ -762,6 +763,24 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/attachments/{uuid}/thumb', [MessagingAttachmentController::class, 'thumb'])->name('attachments.thumb');
     });
 
+    /*
+     * CBI (Citizenship by Investment) — in development, deliberately dark.
+     * No sidebar entry, no SPA page, no Role capability: the only way in is
+     * knowing the URL. Every endpoint 404s (never 403s) unless FEATURE_CBI
+     * is on AND the caller is an administrator, so to everyone else the
+     * module does not exist. Promotion to a real page later means adding
+     * the slug to SPA_PAGES + a capability — the API stays as it is.
+     */
+    Route::prefix('portal/cbi')->name('cbi.')->group(function () {
+        Route::get('/summary', [CbiController::class, 'summary'])->name('summary');
+        Route::get('/applications', [CbiController::class, 'applications'])->name('applications');
+        Route::get('/sync', [CbiController::class, 'syncStatus'])->name('sync.status');
+        Route::post('/sync', [CbiController::class, 'triggerSync'])->name('sync.trigger');
+        Route::get('/attachments/{attachment}', [CbiController::class, 'downloadAttachment'])->name('attachments.download');
+        Route::get('/applications/{uuid}', [CbiController::class, 'application'])->name('applications.show');
+        Route::post('/applications/{uuid}/comments', [CbiController::class, 'storeComment'])->name('applications.comments');
+    });
+
     Route::get('/{page}', LegacyPageController::class)
         ->whereIn('page', LegacyPageController::PORTAL_PAGES);
 });
@@ -933,6 +952,15 @@ Route::get('/client-invite/{token}', fn (string $token) => redirect('/invite/'.$
 Route::get('/design/mail', [MailPreviewController::class, 'index'])
     ->middleware(['auth', 'verified', 'account.approved'])
     ->name('design.mail.index');
+
+/*
+ * CBI development preview. Like /design/mail it exists in production so the
+ * module can be QA'd on live data before launch, but it is invisible: the
+ * controller 404s unless FEATURE_CBI is on and the caller is an admin.
+ */
+Route::get('/dev/cbi', [CbiController::class, 'page'])
+    ->middleware(['auth', 'verified', 'account.approved'])
+    ->name('dev.cbi');
 
 /*
  * Friendly aliases from the design-phase URLs.

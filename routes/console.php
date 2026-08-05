@@ -370,3 +370,79 @@ Artisan::command('feed:prune-attachments {--hours=24}', function () {
 })->purpose('Remove staged Feed attachments that were never posted');
 
 Schedule::command('feed:prune-attachments')->hourly();
+
+/*
+ * ── Smartsheet → CBI ─────────────────────────────────────────────────────
+ *
+ * One-way inbound sync for the CBI module (the firm is migrating OFF
+ * Smartsheet; the portal never writes back). The tick walks the workspace
+ * (one API call), then queues one job per sheet whose version moved — the
+ * cheap /version gate is what keeps ~300 sheets inside Smartsheet's
+ * 300 req/min budget. Everything is inert unless FEATURE_CBI is on and the
+ * token is configured, so the schedule can ship dark.
+ */
+Artisan::command('smartsheet:sync {--full : Re-fetch every sheet, ignoring version gates}', function () {
+    if (! config('services.smartsheet.cbi_enabled')) {
+        $this->info('CBI is disabled (FEATURE_CBI).');
+
+        return;
+    }
+    if (! \App\Support\Smartsheet\Client::configured()) {
+        $this->warn('Smartsheet token or workspace id missing.');
+
+        return;
+    }
+
+    $runId = (string) \Illuminate\Support\Str::uuid();
+    $due = \App\Support\Smartsheet\Synchroniser::refreshWorkspace($runId);
+
+    if ($this->option('full')) {
+        $due = \App\Models\SmartsheetSheet::query()
+            ->where('sync_enabled', true)
+            ->where('status', '!=', \App\Models\SmartsheetSheet::STATUS_GONE)
+            ->get()
+            ->all();
+    }
+
+    foreach ($due as $sheet) {
+        \App\Jobs\SyncSmartsheetSheet::dispatch($sheet, (bool) $this->option('full'));
+    }
+
+    $this->info('Queued '.count($due).' sheet sync(s).');
+})->purpose('Discover Smartsheet changes and queue per-sheet CBI syncs');
+
+Schedule::command('smartsheet:sync')
+    ->everyTenMinutes()
+    // The per-sheet job already refuses to overlap itself; this stops a slow
+    // workspace walk from stacking scheduler ticks as well.
+    ->withoutOverlapping();
+
+/*
+ * Re-run the mirror → CBI mapping without touching the Smartsheet API.
+ * This is the whole point of the two-layer design: mapping fixes are a
+ * remap, never a re-walk. Safe to run any time; it upserts.
+ */
+Artisan::command('cbi:remap {--sheet= : Remote sheet id to remap alone}', function () {
+    $query = \App\Models\SmartsheetSheet::query()
+        ->whereIn('category', array_merge(
+            \App\Models\SmartsheetSheet::APPLICATION_CATEGORIES,
+            [\App\Models\SmartsheetSheet::CATEGORY_ASSESSMENT],
+        ));
+
+    if ($this->option('sheet')) {
+        $query->where('remote_id', (int) $this->option('sheet'));
+    }
+
+    // Application sheets first so assessment matching has applications to
+    // link against on a cold start.
+    $sheets = $query->get()->sortBy(
+        fn ($s) => $s->category === \App\Models\SmartsheetSheet::CATEGORY_ASSESSMENT ? 1 : 0
+    );
+
+    foreach ($sheets as $sheet) {
+        \App\Support\Cbi\Mapper::mapSheet($sheet);
+        $this->info("Mapped: {$sheet->name}");
+    }
+
+    $this->info('Remapped '.$sheets->count().' sheet(s).');
+})->purpose('Re-run the Smartsheet mirror → CBI application mapping');

@@ -12,6 +12,7 @@ use App\Support\Notifications\Notifier;
 use App\Support\StaySignedIn;
 use App\Support\TrustedDevices;
 use GuzzleHttp\Exception\RequestException;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -289,7 +290,13 @@ class SocialAuthController extends Controller
                 'password_auto' => true,
             ])->save();
 
-            $this->record($user->id, 'registered');
+            // The real Registered event, not a bare auth_events row. Signing up
+            // with Google or Microsoft is still signing up: it has to alert the
+            // administrators, land in the audit trail and email the person that
+            // their request is pending, exactly as the password form does.
+            // RecordAuthEvent::handleRegistered writes the auth_events row, so
+            // recording it here as well would double-count it.
+            event(new Registered($user));
         }
 
         $account = $user->connectedAccounts()->updateOrCreate(

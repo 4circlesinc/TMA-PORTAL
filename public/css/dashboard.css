@@ -321,7 +321,8 @@
      icon's real inset, padding + hidden caret + gap) — lines "Main Menu"
      up with the icon column instead of the item's bare padding. */
   margin-left: calc(var(--dash-nav-icon-inset) - var(--space-6));
-  transition: opacity var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open);
+  transition: opacity var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open),
+              margin-left var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open);
 }
 .tma-dash__tab {
   appearance: none;
@@ -342,6 +343,12 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Upper bound exists so the collapsed rail's max-width: 0 on the
+     inactive tab has a value to animate back to on hover-expand. */
+  max-width: 140px;
+  transition: max-width var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open),
+              padding var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open),
+              opacity var(--dash-sidebar-open-ms) var(--dash-sidebar-ease-open);
 }
 .tma-dash__tab--active { color: var(--color-text-secondary); }
 
@@ -3333,14 +3340,12 @@
      closed and open. Carets stay in the flex flow (invisible) so icons do
      not slide horizontally either. */
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__profile-meta,
-  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__group-label,
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap):not(.tma-dash__nav-caret),
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__nav-caret:not(.tma-dash__nav-caret--hidden),
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-remove,
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__shortcut-note,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__profile-meta,
-  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tabs,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__group-label,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-item > span:not(.tma-dash__nav-count):not(.tma-dash__nav-icon):not(.tma-dash__nav-icon-wrap):not(.tma-dash__nav-caret),
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__nav-caret:not(.tma-dash__nav-caret--hidden),
@@ -3348,6 +3353,31 @@
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__shortcut-note {
     opacity: 0;
     visibility: hidden;
+  }
+
+  /* ── Tabs in the collapsed rail: keep only the ACTIVE tab visible ──
+     The row itself stays (same height closed and open — Instagram rule);
+     the inactive tab collapses to zero width and slides back on expand.
+     Long labels ellipsis-truncate against the 72px rail. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tab:not(.tma-dash__tab--active),
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tab:not(.tma-dash__tab--active) {
+    max-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    opacity: 0;
+    visibility: hidden;
+  }
+  /* "Main Menu" is ~57px of 10px text; the row's 16px icon-column inset
+     plus 6px tab padding leaves 44px in the 72px rail and ellipsized every
+     label. Drop both when collapsed — the label owns the full rail width. */
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tabs {
+    margin-left: 0;
+  }
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tab--active,
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tab--active {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
   }
 
   /* Profile meta + sign-out release space in the rail: avatar only when
