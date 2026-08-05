@@ -5,9 +5,9 @@ namespace App\Support\Cbi;
 use App\Models\CbiApplication;
 use App\Models\CbiApplicationEvent;
 use App\Models\CbiApplicationSource;
+use App\Models\CbiAssessmentItem;
 use App\Models\CbiComment;
 use App\Models\SmartsheetDiscussion;
-use App\Models\SmartsheetRow;
 use App\Models\SmartsheetSheet;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
@@ -18,18 +18,20 @@ use Throwable;
  * Mirror → CBI domain. Pure data transformation: reads smartsheet_* tables,
  * writes cbi_* tables, touches no network. Re-runnable at any time — the
  * whole point of landing raw data first is that mapping mistakes are fixed
- * by editing this class and re-running, never by re-walking the API.
+ * by editing this class and re-running (cbi:remap), never by re-walking
+ * the API.
  *
  * One application per citizenship file: rows for the same applicant on the
  * master tracker, the COR/NIC/passport trackers and a closed sheet merge via
- * a dedupe key, sources ordered so the most authoritative row wins each
- * field it actually fills while lower-priority rows fill the gaps.
+ * a dedupe key. Everything writes in bulk — the database is remote Postgres,
+ * and per-row writes at WAN latency would turn the initial import into
+ * hours.
  */
 class Mapper
 {
     /**
      * Portal field => candidate column titles (normalised), first hit wins.
-     * Misspellings ('PRE-PROOCESSDING', 'ORIGNALS') are Smartsheet's, kept
+     * Misspellings ('PRE-PROOCESSING', 'ORIGNALS') are Smartsheet's, kept
      * deliberately — this maps the sheets as they are, not as they should be.
      */
     private const FIELDS = [
@@ -143,6 +145,26 @@ class Mapper
         SmartsheetSheet::CATEGORY_CLOSED => 10,
     ];
 
+    /** Attribute list every bulk application upsert row must carry. */
+    private const APP_UPDATE_COLUMNS = [
+        'needs_review', 'applicant_number', 'applicant_name', 'main_applicant_name',
+        'date_of_birth', 'nationality', 'number_of_dependents', 'family_structure', 'contact_details',
+        'stage', 'status', 'application_review', 'progress', 'granted', 'closed', 'action_needed',
+        'referred_by', 'promoter', 'service_provider', 'main_contact', 'assigned_to',
+        'verification_officer', 'dd_officer', 'pa_assignment', 'file_owner', 'submitted_by', 'verified_by',
+        'investment_option', 'application_type', 'clio_matter_number', 'clio_matter_link', 'file_location',
+        'received_at', 'pre_processing_at', 'submitted_at', 'accepted_at', 'compliance_due_at',
+        'decision_required_at', 'decision_received_at', 'cor_submitted_at', 'cor_received_at', 'cor_number',
+        'nic_request_sent_at', 'nic_letter_received_at', 'passport_pads_received_at',
+        'ready_for_passport_submission_at', 'passport_submitted_at', 'passport_received_at',
+        'passport_number', 'originals_delivered_at', 'final_documents_sent_at',
+        'appeal_requested_at', 'appeal_sent_at', 'appeal_decided_at',
+        'notes', 'latest_comment', 'issues_log', 'agent_assessment', 'assessment_response',
+        'financials', 'extra',
+        'source_sheet_remote_id', 'source_row_remote_id', 'source_permalink', 'source_modified_at',
+        'synced_at',
+    ];
+
     /**
      * Map everything a sheet feeds. Called after each sheet sync and by the
      * cbi:remap command.
@@ -160,112 +182,284 @@ class Mapper
     private static function mapApplicationSheet(SmartsheetSheet $sheet): void
     {
         $titles = self::titleMap($sheet);
+        $now = now();
 
-        $sheet->rows()->orderBy('row_number')->chunk(200, function ($rows) use ($sheet, $titles) {
+        // 1. Extract every row in memory (a master tracker is ~2k rows —
+        //    comfortably held; the CPU work here saves thousands of queries).
+        $extracts = [];
+        $sheet->rows()->orderBy('row_number')->chunk(500, function ($rows) use (&$extracts, $titles, $sheet) {
             foreach ($rows as $row) {
                 try {
-                    self::applyRow($sheet, $row, $titles);
+                    $fields = self::extractFields($row->cells ?? [], $titles);
+                    $dedupe = self::dedupeKey($fields, $sheet, $row);
+                    $extracts[(int) $row->remote_id] = [
+                        'modified' => $row->modified_at_remote,
+                        'permalink' => $row->permalink,
+                        'fields' => $fields,
+                        'financials' => self::bagValues($row->cells ?? [], $titles, self::FINANCIAL_TITLES),
+                        'extra' => self::extraValues($row->cells ?? [], $sheet),
+                        'key' => $dedupe['key'],
+                        'needs_review' => $dedupe['needs_review'],
+                    ];
                 } catch (Throwable $e) {
                     // One malformed row must not sink the sheet.
-                    Log::warning('CBI map failed for row', [
+                    Log::warning('CBI extract failed for row', [
                         'sheet' => $sheet->remote_id, 'row' => $row->remote_id, 'error' => $e->getMessage(),
                     ]);
                 }
             }
         });
 
-        // Rows that left this sheet (moved to closed, deleted) lose their
-        // source link; an application with no sources left is retired.
-        $liveIds = $sheet->rows()->pluck('remote_id');
+        // 2. Existing sources for this sheet, and the rows that changed.
+        $sources = CbiApplicationSource::query()
+            ->where('sheet_remote_id', $sheet->remote_id)
+            ->get(['id', 'application_id', 'row_remote_id', 'row_modified_at'])
+            ->keyBy('row_remote_id');
+
+        $work = [];
+        foreach ($extracts as $remoteId => $x) {
+            $source = $sources->get($remoteId);
+            if ($source && $source->row_modified_at !== null && $x['modified'] !== null
+                && ! $x['modified']->gt($source->row_modified_at)) {
+                continue; // unchanged since it last fed its application
+            }
+            $work[$remoteId] = $x;
+        }
+
+        if ($extracts !== []) {
+            CbiApplicationSource::query()
+                ->where('sheet_remote_id', $sheet->remote_id)
+                ->whereIn('row_remote_id', array_keys($extracts))
+                ->update(['last_seen_at' => $now]);
+        }
+
+        if ($work !== []) {
+            self::applyWork($sheet, $work, $now);
+        }
+
+        // 3. Rows that left this sheet (moved to a closed sheet, deleted)
+        //    lose their source link; a sourceless application is retired.
         $stale = CbiApplicationSource::query()
             ->where('sheet_remote_id', $sheet->remote_id)
-            ->whereNotIn('row_remote_id', $liveIds)
+            ->whereNotIn('row_remote_id', array_keys($extracts))
             ->get();
-        foreach ($stale as $source) {
-            $application = $source->application;
-            $source->delete();
-            if ($application && $application->sources()->count() === 0) {
-                $application->delete(); // soft delete — recoverable
-            } elseif ($application) {
+        if ($stale->isNotEmpty()) {
+            CbiApplicationSource::query()->whereIn('id', $stale->pluck('id'))->delete();
+            foreach ($stale->pluck('application_id')->unique() as $applicationId) {
+                $application = CbiApplication::find($applicationId);
+                if ($application && $application->sources()->count() > 0) {
+                    self::rebuild($application);
+                }
+            }
+        }
+
+        // Anything left holding no sources at all is soft-deleted in one pass.
+        CbiApplication::query()
+            ->whereDoesntHave('sources')
+            ->update(['deleted_at' => $now]);
+    }
+
+    /**
+     * The bulk pipeline: resolve/create applications for every changed row,
+     * re-point sources, then upsert the merged field sets in chunks.
+     *
+     * @param  array<int, array<string, mixed>>  $work row_remote_id => extract
+     */
+    private static function applyWork(SmartsheetSheet $sheet, array $work, $now): void
+    {
+        // Resolve applications by dedupe key — including trashed ones, which
+        // a live row resurrects.
+        $keys = array_values(array_unique(array_column($work, 'key')));
+        $byKey = collect();
+        foreach (array_chunk($keys, 1000) as $chunk) {
+            $byKey = $byKey->merge(
+                CbiApplication::withTrashed()
+                    ->whereIn('dedupe_key', $chunk)
+                    ->get(['id', 'uuid', 'dedupe_key', 'stage', 'status', 'assigned_to', 'deleted_at'])
+                    ->keyBy('dedupe_key')
+            );
+        }
+
+        $restore = $byKey->filter(fn ($a) => $a->trashed())->pluck('id');
+        if ($restore->isNotEmpty()) {
+            CbiApplication::withTrashed()->whereIn('id', $restore)->update(['deleted_at' => null]);
+        }
+
+        // Create the missing ones (minimal rows), then read their ids back.
+        $missing = [];
+        foreach ($work as $x) {
+            if (! $byKey->has($x['key']) && ! isset($missing[$x['key']])) {
+                $missing[$x['key']] = [
+                    'uuid' => (string) Str::uuid(),
+                    'dedupe_key' => $x['key'],
+                    'needs_review' => $x['needs_review'],
+                    'stage' => CbiApplication::STAGE_APPLICATIONS,
+                    'first_imported_at' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+        }
+        if ($missing !== []) {
+            foreach (array_chunk(array_values($missing), 500) as $chunk) {
+                // Ignore races: another sheet's job may have claimed the key.
+                CbiApplication::insertOrIgnore($chunk);
+            }
+            foreach (array_chunk(array_keys($missing), 1000) as $chunk) {
+                $byKey = $byKey->merge(
+                    CbiApplication::query()->whereIn('dedupe_key', $chunk)
+                        ->get(['id', 'uuid', 'dedupe_key', 'stage', 'status', 'assigned_to'])
+                        ->keyBy('dedupe_key')
+                );
+            }
+
+            $imported = [];
+            foreach (array_keys($missing) as $key) {
+                if ($application = $byKey->get($key)) {
+                    $imported[] = [
+                        'application_id' => $application->id,
+                        'type' => CbiApplicationEvent::TYPE_IMPORTED,
+                        'source' => 'smartsheet',
+                        'to_value' => $sheet->name,
+                        'occurred_at' => $now,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+            }
+            foreach (array_chunk($imported, 500) as $chunk) {
+                CbiApplicationEvent::insert($chunk);
+            }
+        }
+
+        // Point every changed row's source at its application.
+        $sourceBatch = [];
+        foreach ($work as $remoteId => $x) {
+            if ($application = $byKey->get($x['key'])) {
+                $sourceBatch[] = [
+                    'application_id' => $application->id,
+                    'sheet_remote_id' => $sheet->remote_id,
+                    'row_remote_id' => $remoteId,
+                    'sheet_name' => Str::limit($sheet->name, 500, ''),
+                    'sheet_category' => $sheet->category,
+                    'row_modified_at' => $x['modified'],
+                    'last_seen_at' => $now,
+                ];
+            }
+        }
+        foreach (array_chunk($sourceBatch, 500) as $chunk) {
+            CbiApplicationSource::upsert($chunk, ['sheet_remote_id', 'row_remote_id'],
+                ['application_id', 'sheet_name', 'sheet_category', 'row_modified_at', 'last_seen_at']);
+        }
+
+        // Which touched applications draw from more than one row? Those take
+        // the accurate multi-source rebuild; the overwhelming majority have
+        // exactly one source and bulk-update straight from the extract.
+        $touched = collect($sourceBatch)->pluck('application_id')->unique()->values();
+        $counts = collect();
+        foreach ($touched->chunk(1000) as $chunk) {
+            $counts = $counts->union(
+                CbiApplicationSource::query()
+                    ->whereIn('application_id', $chunk)
+                    ->selectRaw('application_id, count(*) as n')
+                    ->groupBy('application_id')
+                    ->pluck('n', 'application_id')
+            );
+        }
+
+        $upsertBatch = [];
+        $events = [];
+        $multiSource = [];
+        foreach ($work as $remoteId => $x) {
+            $application = $byKey->get($x['key']);
+            if ($application === null) {
+                continue;
+            }
+            if ((int) ($counts[$application->id] ?? 1) > 1) {
+                $multiSource[$application->id] = true;
+
+                continue;
+            }
+
+            $attrs = self::castFields($x['fields']);
+            $stage = self::deriveStage(
+                ['closed' => $attrs['closed'], 'status' => $attrs['status']],
+                $sheet,
+            );
+
+            $upsertBatch[] = $attrs + [
+                'uuid' => $application->uuid,
+                'dedupe_key' => $x['key'],
+                'needs_review' => $x['needs_review'],
+                'stage' => $stage,
+                'financials' => $x['financials'] === [] ? null : json_encode($x['financials']),
+                'extra' => $x['extra'] === [] ? null : json_encode($x['extra']),
+                'source_sheet_remote_id' => $sheet->remote_id,
+                'source_row_remote_id' => $remoteId,
+                'source_permalink' => $x['permalink'],
+                'source_modified_at' => $x['modified'],
+                'synced_at' => $now,
+                'first_imported_at' => $now, // insert path only; not in update list
+            ];
+
+            $events = array_merge($events, self::diffEvents(
+                $application->id,
+                ['stage' => $application->stage, 'status' => $application->status, 'assigned_to' => $application->assigned_to],
+                ['stage' => $stage, 'status' => $attrs['status'], 'assigned_to' => $attrs['assigned_to']],
+                $x['modified'] ?? $now,
+                $now,
+            ));
+        }
+
+        foreach (array_chunk($upsertBatch, 100) as $chunk) {
+            CbiApplication::upsert($chunk, ['dedupe_key'], self::APP_UPDATE_COLUMNS);
+        }
+        foreach (array_chunk($events, 500) as $chunk) {
+            CbiApplicationEvent::insert($chunk);
+        }
+
+        foreach (array_keys($multiSource) as $applicationId) {
+            if ($application = CbiApplication::find($applicationId)) {
                 self::rebuild($application);
             }
         }
     }
 
-    /**
-     * @param  array<string, list<string>>  $titles normalised title => [columnRemoteId,...]
-     */
-    private static function applyRow(SmartsheetSheet $sheet, SmartsheetRow $row, array $titles): void
+    /** @return list<array<string, mixed>> */
+    private static function diffEvents(int $applicationId, array $before, array $after, $occurredAt, $now): array
     {
-        $fields = self::extractFields($row->cells ?? [], $titles);
-
-        $dedupe = self::dedupeKey($fields, $sheet, $row);
-
-        $source = CbiApplicationSource::query()
-            ->where('sheet_remote_id', $sheet->remote_id)
-            ->where('row_remote_id', $row->remote_id)
-            ->first();
-
-        // Fast skip: row unchanged since this source last fed its application.
-        if ($source && $source->row_modified_at !== null
-            && $row->modified_at_remote !== null
-            && ! $row->modified_at_remote->gt($source->row_modified_at)) {
-            $source->update(['last_seen_at' => now()]);
-
-            return;
-        }
-
-        $byKey = $dedupe['key'] !== null
-            ? CbiApplication::query()->where('dedupe_key', $dedupe['key'])->first()
-            : null;
-
-        $application = $byKey ?? $source?->application;
-
-        if ($source && $byKey && $source->application_id !== $byKey->id) {
-            // The row's identity changed (a number was filled in later) and
-            // now matches a different application: move the source across and
-            // retire the old application if this row was all it had.
-            $orphan = $source->application;
-            $source->application_id = $byKey->id;
-            $source->save();
-            if ($orphan && $orphan->sources()->count() === 0) {
-                $orphan->delete();
+        $types = [
+            'stage' => CbiApplicationEvent::TYPE_STAGE_CHANGED,
+            'status' => CbiApplicationEvent::TYPE_STATUS_CHANGED,
+            'assigned_to' => CbiApplicationEvent::TYPE_ASSIGNED,
+        ];
+        $events = [];
+        foreach ($types as $field => $type) {
+            $old = $before[$field] ?? null;
+            $new = $after[$field] ?? null;
+            if ($old !== null && $old !== $new) {
+                $events[] = [
+                    'application_id' => $applicationId,
+                    'type' => $type,
+                    'field' => $field,
+                    'from_value' => $old,
+                    'to_value' => $new,
+                    'source' => 'smartsheet',
+                    'occurred_at' => $occurredAt,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
-            $application = $byKey;
         }
 
-        if ($application === null) {
-            $application = CbiApplication::create([
-                'dedupe_key' => $dedupe['key'],
-                'needs_review' => $dedupe['needs_review'],
-                'first_imported_at' => now(),
-            ]);
-            $application->events()->create([
-                'type' => CbiApplicationEvent::TYPE_IMPORTED,
-                'source' => 'smartsheet',
-                'to_value' => $sheet->name,
-                'occurred_at' => $row->modified_at_remote ?? now(),
-            ]);
-        }
-
-        CbiApplicationSource::updateOrCreate(
-            ['sheet_remote_id' => $sheet->remote_id, 'row_remote_id' => $row->remote_id],
-            [
-                'application_id' => $application->id,
-                'sheet_name' => $sheet->name,
-                'sheet_category' => $sheet->category,
-                'row_modified_at' => $row->modified_at_remote,
-                'last_seen_at' => now(),
-            ],
-        );
-
-        self::rebuild($application->fresh());
+        return $events;
     }
 
     /**
-     * Recompute an application from every row that feeds it. Sources apply
-     * in ascending authority so the most authoritative row's non-empty
-     * values land last; empty cells never erase what another row knows.
+     * Accurate multi-source path: recompute an application from every row
+     * that feeds it. Sources apply in ascending authority so the most
+     * authoritative row's non-empty values land last; empty cells never
+     * erase what another row knows.
      */
     public static function rebuild(CbiApplication $application): void
     {
@@ -295,7 +489,7 @@ class Mapper
         $authoritativeSheet = null;
 
         foreach ($sources as $sourceRecord) {
-            $sheet = SmartsheetSheet::query()->where('remote_id', $sourceRecord->sheet_remote_id)->first();
+            $sheet = self::sheetByRemoteId($sourceRecord->sheet_remote_id);
             $row = $sheet?->rows()->where('remote_id', $sourceRecord->row_remote_id)->first();
             if ($sheet === null || $row === null) {
                 continue;
@@ -325,31 +519,23 @@ class Mapper
 
         $application->fill($attrs)->save();
 
-        self::recordDiff($application, $before, $authoritative?->modified_at_remote);
+        $events = self::diffEvents(
+            $application->id,
+            $before,
+            ['stage' => $application->stage, 'status' => $application->status, 'assigned_to' => $application->assigned_to],
+            $authoritative?->modified_at_remote ?? now(),
+            now(),
+        );
+        if ($events !== []) {
+            CbiApplicationEvent::insert($events);
+        }
     }
 
-    /** @param array<string, mixed> $before */
-    private static function recordDiff(CbiApplication $application, array $before, ?CarbonImmutable $occurredAt): void
+    private static function sheetByRemoteId(int|string $remoteId): ?SmartsheetSheet
     {
-        $diffs = [
-            'stage' => CbiApplicationEvent::TYPE_STAGE_CHANGED,
-            'status' => CbiApplicationEvent::TYPE_STATUS_CHANGED,
-            'assigned_to' => CbiApplicationEvent::TYPE_ASSIGNED,
-        ];
-        foreach ($diffs as $field => $type) {
-            $old = $before[$field];
-            $new = $application->{$field};
-            if ($old !== null && $old !== $new) {
-                $application->events()->create([
-                    'type' => $type,
-                    'field' => $field,
-                    'from_value' => $old,
-                    'to_value' => $new,
-                    'source' => 'smartsheet',
-                    'occurred_at' => $occurredAt ?? now(),
-                ]);
-            }
-        }
+        static $cache = [];
+
+        return $cache[$remoteId] ??= SmartsheetSheet::query()->where('remote_id', $remoteId)->first();
     }
 
     /**
@@ -384,8 +570,8 @@ class Mapper
         };
     }
 
-    /** @return array{key: ?string, needs_review: bool} */
-    private static function dedupeKey(array $fields, SmartsheetSheet $sheet, SmartsheetRow $row): array
+    /** @return array{key: string, needs_review: bool} */
+    private static function dedupeKey(array $fields, SmartsheetSheet $sheet, $row): array
     {
         $number = strtoupper(preg_replace('/\s+/', '', (string) ($fields['applicant_number'] ?? '')));
         if ($number !== '') {
@@ -393,7 +579,7 @@ class Mapper
         }
 
         $name = Str::slug((string) ($fields['applicant_name'] ?? $fields['main_applicant_name'] ?? ''));
-        $dob = (string) ($fields['date_of_birth'] ?? '');
+        $dob = self::parseDate($fields['date_of_birth'] ?? null)?->toDateString() ?? '';
         if ($name !== '' && $dob !== '') {
             return ['key' => 'D:'.$name.'|'.$dob, 'needs_review' => false];
         }
@@ -488,11 +674,11 @@ class Mapper
             }
             $value = self::cellValue($cells, (int) $column->remote_id);
             if ($value !== null && $value !== '') {
-                $extra[trim($column->title)] = $value;
+                $extra[trim($column->title)] = is_scalar($value) ? $value : null;
             }
         }
 
-        return $extra;
+        return array_filter($extra, fn ($v) => $v !== null);
     }
 
     private static function cellValue(array $cells, int $columnId): mixed
@@ -514,7 +700,7 @@ class Mapper
         return is_string($value) ? trim($value) : $value;
     }
 
-    /** @return array<string, mixed> attrs safe to fill() */
+    /** @return array<string, mixed> attrs covering every mapped field (nulls included) */
     private static function castFields(array $merged): array
     {
         $attrs = [];
@@ -552,6 +738,7 @@ class Mapper
         }
         try {
             $date = CarbonImmutable::parse($value);
+
             // Guard against junk text Carbon happens to parse and absurd
             // years from typos.
             return ($date->year >= 1900 && $date->year <= 2100) ? $date : null;
@@ -565,40 +752,48 @@ class Mapper
     /**
      * Smartsheet row discussions become portal comments on the application
      * the row feeds — 1,100+ threads of real case history on the master
-     * tracker alone.
+     * tracker alone. Upserted on the remote comment id, so edits flow
+     * through and nothing ever duplicates.
      */
     private static function importComments(SmartsheetSheet $sheet): void
     {
         $sourceByRow = CbiApplicationSource::query()
             ->where('sheet_remote_id', $sheet->remote_id)
             ->pluck('application_id', 'row_remote_id');
+        if ($sourceByRow->isEmpty()) {
+            return;
+        }
 
+        $batch = [];
         SmartsheetDiscussion::query()
             ->where('sheet_id', $sheet->id)
             ->where('parent_type', 'ROW')
             ->with('comments')
-            ->chunk(100, function ($discussions) use ($sourceByRow) {
+            ->chunk(200, function ($discussions) use ($sourceByRow, &$batch) {
                 foreach ($discussions as $discussion) {
                     $applicationId = $sourceByRow[$discussion->parent_remote_id] ?? null;
                     if ($applicationId === null) {
                         continue;
                     }
                     foreach ($discussion->comments as $comment) {
-                        CbiComment::updateOrCreate(
-                            ['smartsheet_comment_remote_id' => $comment->remote_id],
-                            [
-                                'application_id' => $applicationId,
-                                'author_name' => $comment->created_by_name,
-                                'author_email' => $comment->created_by_email,
-                                'body' => $comment->text,
-                                'source' => 'smartsheet',
-                                'smartsheet_discussion_remote_id' => $discussion->remote_id,
-                                'commented_at' => $comment->created_at_remote,
-                            ],
-                        );
+                        $batch[] = [
+                            'application_id' => $applicationId,
+                            'author_name' => $comment->created_by_name,
+                            'author_email' => $comment->created_by_email,
+                            'body' => $comment->text,
+                            'source' => 'smartsheet',
+                            'smartsheet_comment_remote_id' => $comment->remote_id,
+                            'smartsheet_discussion_remote_id' => $discussion->remote_id,
+                            'commented_at' => $comment->created_at_remote,
+                        ];
                     }
                 }
             });
+
+        foreach (array_chunk($batch, 500) as $chunk) {
+            CbiComment::upsert($chunk, ['smartsheet_comment_remote_id'],
+                ['application_id', 'author_name', 'author_email', 'body', 'commented_at']);
+        }
     }
 
     // ── Assessment sheets ────────────────────────────────────────────
@@ -611,31 +806,38 @@ class Mapper
             self::matchAssessmentSheet($sheet);
         }
 
-        $sheet->rows()->orderBy('row_number')->chunk(500, function ($rows) use ($sheet, $titles) {
+        $batch = [];
+        $sheet->rows()->orderBy('row_number')->chunk(500, function ($rows) use ($sheet, $titles, &$batch) {
             foreach ($rows as $row) {
                 $cells = $row->cells ?? [];
                 $value = fn (string $title) => self::firstTitleValue($cells, $titles, $title);
 
-                \App\Models\CbiAssessmentItem::updateOrCreate(
-                    ['sheet_id' => $sheet->id, 'row_remote_id' => $row->remote_id],
-                    [
-                        'application_id' => $sheet->cbi_application_id,
-                        'parent_row_remote_id' => $row->parent_remote_id,
-                        'position' => $row->row_number,
-                        'applicant_label' => $value('APPLICANT'),
-                        'description' => $value('DESCRIPTION'),
-                        'notes' => $value('NOTES'),
-                        'agent_assessment' => $value('AGENT ASSESSMENT'),
-                        'assessment_response' => $value('ASSESSMENT RESPONSE'),
-                        'is_done' => self::firstTitleRaw($cells, $titles, 'STATUS') === true,
-                        'row_modified_at' => $row->modified_at_remote,
-                    ],
-                );
+                $batch[] = [
+                    'sheet_id' => $sheet->id,
+                    'row_remote_id' => $row->remote_id,
+                    'application_id' => $sheet->cbi_application_id,
+                    'parent_row_remote_id' => $row->parent_remote_id,
+                    'position' => $row->row_number,
+                    'applicant_label' => $value('APPLICANT'),
+                    'description' => $value('DESCRIPTION'),
+                    'notes' => $value('NOTES'),
+                    'agent_assessment' => $value('AGENT ASSESSMENT'),
+                    'assessment_response' => $value('ASSESSMENT RESPONSE'),
+                    'is_done' => self::firstTitleRaw($cells, $titles, 'STATUS') === true,
+                    'row_modified_at' => $row->modified_at_remote,
+                ];
             }
         });
 
+        foreach (array_chunk($batch, 500) as $chunk) {
+            CbiAssessmentItem::upsert($chunk, ['sheet_id', 'row_remote_id'],
+                ['application_id', 'parent_row_remote_id', 'position', 'applicant_label',
+                    'description', 'notes', 'agent_assessment', 'assessment_response',
+                    'is_done', 'row_modified_at']);
+        }
+
         // Rows deleted remotely disappear from the checklist too.
-        \App\Models\CbiAssessmentItem::query()
+        CbiAssessmentItem::query()
             ->where('sheet_id', $sheet->id)
             ->whereNotIn('row_remote_id', $sheet->rows()->pluck('remote_id'))
             ->delete();
@@ -651,10 +853,11 @@ class Mapper
     private static function matchAssessmentSheet(SmartsheetSheet $sheet): void
     {
         $name = $sheet->name;
-        foreach ([' - ASSESSMENT FEEDBACK', '- ASSESSMENT FEEDBACK', 'ASSESSMENT FEEDBACK', ' - FEEDBACK ASSESSMENT'] as $marker) {
+        foreach ([' - ASSESSMENT FEEDBACK', '- ASSESSMENT FEEDBACK', 'ASSESSMENT FEEDBACK',
+            ' - FEEDBACK ASSESSMENT', 'ASSESSMENT FOR '] as $marker) {
             $pos = stripos($name, $marker);
             if ($pos !== false) {
-                $name = substr($name, 0, $pos);
+                $name = $marker === 'ASSESSMENT FOR ' ? substr($name, $pos + strlen($marker)) : substr($name, 0, $pos);
                 break;
             }
         }

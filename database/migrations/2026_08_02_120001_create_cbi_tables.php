@@ -32,7 +32,9 @@ return new class extends Migration
              * to merge and flag needs_review instead — a wrong merge of two
              * real applicants is far worse than a duplicate card.
              */
-            $table->string('dedupe_key', 191)->nullable()->index();
+            // Unique so the bulk merge-upsert has a conflict target; every
+            // application gets a key (worst case a per-row 'R:' key).
+            $table->string('dedupe_key', 191)->nullable()->unique();
             $table->boolean('needs_review')->default(false);
 
             // Applicant

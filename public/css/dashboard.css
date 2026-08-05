@@ -3373,6 +3373,10 @@
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tabs,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tabs {
     margin-left: 0;
+    justify-content: center;
+    /* The zero-width hidden sibling still spends the flex gap, which would
+       skew the centred label sideways. */
+    gap: 0;
   }
   .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__tab--active,
   .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__tab--active {

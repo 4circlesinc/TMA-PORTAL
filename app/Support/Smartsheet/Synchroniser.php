@@ -220,27 +220,42 @@ class Synchroniser
         }
     }
 
+    /*
+     * All apply* methods write in bulk (chunked upserts against the tables'
+     * unique keys). The database is Laravel Cloud Postgres over TLS — per-row
+     * updateOrCreate at WAN latency turns a 2,000-row master sheet into a
+     * half-hour sync; batched, it's a handful of statements.
+     */
+
     /** @param list<array<string, mixed>> $columns */
     private static function applyColumns(SmartsheetSheet $sheet, array $columns): void
     {
+        $batch = [];
         foreach ($columns as $column) {
-            $sheet->columns()->updateOrCreate(
-                ['remote_id' => (int) $column['id']],
-                [
-                    'title' => (string) $column['title'],
-                    'type' => (string) ($column['type'] ?? 'TEXT_NUMBER'),
-                    'options' => $column['options'] ?? null,
-                    'position' => (int) ($column['index'] ?? 0),
-                    'is_primary' => (bool) ($column['primary'] ?? false),
-                ],
-            );
+            $batch[] = [
+                'sheet_id' => $sheet->id,
+                'remote_id' => (int) $column['id'],
+                'title' => (string) $column['title'],
+                'type' => (string) ($column['type'] ?? 'TEXT_NUMBER'),
+                // upsert() bypasses Eloquent casts — encode JSON by hand.
+                'options' => isset($column['options']) ? json_encode($column['options']) : null,
+                'position' => (int) ($column['index'] ?? 0),
+                'is_primary' => (bool) ($column['primary'] ?? false),
+            ];
+        }
+        foreach (array_chunk($batch, 500) as $chunk) {
+            SmartsheetColumn::upsert($chunk, ['sheet_id', 'remote_id'],
+                ['title', 'type', 'options', 'position', 'is_primary']);
         }
     }
 
     /** @param list<array<string, mixed>> $rows */
     private static function applyRows(SmartsheetSheet $sheet, array $rows): int
     {
-        $applied = 0;
+        $now = now();
+        $rowBatch = [];
+        $attachmentBatch = [];
+
         foreach ($rows as $row) {
             // Sparse cell map: only cells that hold anything. ~40 of 210 on a
             // typical tracker row — the other 170 would be pure dead weight.
@@ -258,89 +273,125 @@ class Synchroniser
                 }
             }
 
-            $sheet->rows()->updateOrCreate(
-                ['remote_id' => (int) $row['id']],
-                [
-                    'row_number' => (int) ($row['rowNumber'] ?? 0),
-                    'parent_remote_id' => isset($row['parentId']) ? (int) $row['parentId'] : null,
-                    'cells' => $cells,
-                    'permalink' => $row['permalink'] ?? null,
-                    'created_at_remote' => isset($row['createdAt']) ? CarbonImmutable::parse($row['createdAt']) : null,
-                    'modified_at_remote' => isset($row['modifiedAt']) ? CarbonImmutable::parse($row['modifiedAt']) : null,
-                    'synced_at' => now(),
-                ],
-            );
+            $rowBatch[] = [
+                'sheet_id' => $sheet->id,
+                'remote_id' => (int) $row['id'],
+                'row_number' => (int) ($row['rowNumber'] ?? 0),
+                'parent_remote_id' => isset($row['parentId']) ? (int) $row['parentId'] : null,
+                'cells' => json_encode($cells),
+                'permalink' => $row['permalink'] ?? null,
+                'created_at_remote' => isset($row['createdAt']) ? CarbonImmutable::parse($row['createdAt']) : null,
+                'modified_at_remote' => isset($row['modifiedAt']) ? CarbonImmutable::parse($row['modifiedAt']) : null,
+                'synced_at' => $now,
+            ];
 
             foreach ($row['attachments'] ?? [] as $attachment) {
-                self::applyAttachment($sheet, $attachment, 'ROW', (int) $row['id']);
+                $attachmentBatch[] = self::attachmentValues($sheet, $attachment, 'ROW', (int) $row['id']);
             }
-
-            $applied++;
         }
 
-        return $applied;
+        foreach (array_chunk($rowBatch, 200) as $chunk) {
+            SmartsheetRow::upsert($chunk, ['sheet_id', 'remote_id'],
+                ['row_number', 'parent_remote_id', 'cells', 'permalink',
+                    'created_at_remote', 'modified_at_remote', 'synced_at']);
+        }
+        self::upsertAttachments($attachmentBatch);
+
+        return count($rowBatch);
     }
 
     /** @param array<string, mixed> $payload */
     private static function applyAttachments(SmartsheetSheet $sheet, array $payload): void
     {
+        $batch = [];
         foreach ($payload['attachments'] ?? [] as $attachment) {
-            self::applyAttachment($sheet, $attachment, 'SHEET', null);
+            $batch[] = self::attachmentValues($sheet, $attachment, 'SHEET', null);
         }
+        self::upsertAttachments($batch);
     }
 
-    /** @param array<string, mixed> $attachment */
-    private static function applyAttachment(SmartsheetSheet $sheet, array $attachment, string $parentType, ?int $parentRemoteId): void
+    /** @return array<string, mixed> */
+    private static function attachmentValues(SmartsheetSheet $sheet, array $attachment, string $parentType, ?int $parentRemoteId): array
     {
-        SmartsheetAttachment::updateOrCreate(
-            ['remote_id' => (int) $attachment['id']],
-            [
-                'sheet_id' => $sheet->id,
-                'parent_type' => (string) ($attachment['parentType'] ?? $parentType),
-                'parent_remote_id' => isset($attachment['parentId']) ? (int) $attachment['parentId'] : $parentRemoteId,
-                'name' => (string) ($attachment['name'] ?? 'Attachment'),
-                'mime_type' => $attachment['mimeType'] ?? null,
-                'attachment_type' => $attachment['attachmentType'] ?? null,
-                'size_kb' => isset($attachment['sizeInKb']) ? (int) $attachment['sizeInKb'] : null,
-                'created_by' => $attachment['createdBy']['email'] ?? $attachment['createdBy']['name'] ?? null,
-                'created_at_remote' => isset($attachment['createdAt']) ? CarbonImmutable::parse($attachment['createdAt']) : null,
-            ],
-        );
+        return [
+            'sheet_id' => $sheet->id,
+            'remote_id' => (int) $attachment['id'],
+            'parent_type' => (string) ($attachment['parentType'] ?? $parentType),
+            'parent_remote_id' => isset($attachment['parentId']) ? (int) $attachment['parentId'] : $parentRemoteId,
+            'name' => (string) ($attachment['name'] ?? 'Attachment'),
+            'mime_type' => $attachment['mimeType'] ?? null,
+            'attachment_type' => $attachment['attachmentType'] ?? null,
+            'size_kb' => isset($attachment['sizeInKb']) ? (int) $attachment['sizeInKb'] : null,
+            'created_by' => $attachment['createdBy']['email'] ?? $attachment['createdBy']['name'] ?? null,
+            'created_at_remote' => isset($attachment['createdAt']) ? CarbonImmutable::parse($attachment['createdAt']) : null,
+        ];
+    }
+
+    /** @param list<array<string, mixed>> $batch */
+    private static function upsertAttachments(array $batch): void
+    {
+        foreach (array_chunk($batch, 500) as $chunk) {
+            SmartsheetAttachment::upsert($chunk, ['remote_id'],
+                ['sheet_id', 'parent_type', 'parent_remote_id', 'name', 'mime_type',
+                    'attachment_type', 'size_kb', 'created_by', 'created_at_remote']);
+        }
     }
 
     private static function applyDiscussions(SmartsheetSheet $sheet, ?string $runId): void
     {
         $discussions = Client::getAll('/sheets/'.$sheet->remote_id.'/discussions', ['include' => 'comments']);
+        if ($discussions === []) {
+            return;
+        }
 
+        $discussionBatch = [];
         foreach ($discussions as $discussion) {
-            $record = SmartsheetDiscussion::updateOrCreate(
-                ['remote_id' => (int) $discussion['id']],
-                [
-                    'sheet_id' => $sheet->id,
-                    'parent_type' => (string) ($discussion['parentType'] ?? 'SHEET'),
-                    'parent_remote_id' => isset($discussion['parentId']) ? (int) $discussion['parentId'] : null,
-                    'title' => $discussion['title'] ?? null,
-                    'comment_count' => (int) ($discussion['commentCount'] ?? 0),
-                    'created_by' => $discussion['createdBy']['email'] ?? $discussion['createdBy']['name'] ?? null,
-                    'last_commented_at' => isset($discussion['lastCommentedAt'])
-                        ? CarbonImmutable::parse($discussion['lastCommentedAt']) : null,
-                ],
-            );
+            $discussionBatch[] = [
+                'sheet_id' => $sheet->id,
+                'remote_id' => (int) $discussion['id'],
+                'parent_type' => (string) ($discussion['parentType'] ?? 'SHEET'),
+                'parent_remote_id' => isset($discussion['parentId']) ? (int) $discussion['parentId'] : null,
+                'title' => isset($discussion['title']) ? Str::limit((string) $discussion['title'], 500) : null,
+                'comment_count' => (int) ($discussion['commentCount'] ?? 0),
+                'created_by' => $discussion['createdBy']['email'] ?? $discussion['createdBy']['name'] ?? null,
+                'last_commented_at' => isset($discussion['lastCommentedAt'])
+                    ? CarbonImmutable::parse($discussion['lastCommentedAt']) : null,
+            ];
+        }
+        foreach (array_chunk($discussionBatch, 500) as $chunk) {
+            SmartsheetDiscussion::upsert($chunk, ['remote_id'],
+                ['sheet_id', 'parent_type', 'parent_remote_id', 'title', 'comment_count',
+                    'created_by', 'last_commented_at']);
+        }
 
-            foreach ($discussion['comments'] ?? [] as $comment) {
-                SmartsheetComment::updateOrCreate(
-                    ['remote_id' => (int) $comment['id']],
-                    [
-                        'discussion_id' => $record->id,
-                        'sheet_id' => $sheet->id,
-                        'text' => (string) ($comment['text'] ?? ''),
-                        'created_by_name' => $comment['createdBy']['name'] ?? null,
-                        'created_by_email' => $comment['createdBy']['email'] ?? null,
-                        'created_at_remote' => isset($comment['createdAt']) ? CarbonImmutable::parse($comment['createdAt']) : null,
-                        'modified_at_remote' => isset($comment['modifiedAt']) ? CarbonImmutable::parse($comment['modifiedAt']) : null,
-                    ],
-                );
+        // Comments carry a local FK to their discussion, so resolve the
+        // remote → local id map once, then batch the comments too.
+        $discussionIds = SmartsheetDiscussion::query()
+            ->where('sheet_id', $sheet->id)->pluck('id', 'remote_id');
+
+        $commentBatch = [];
+        foreach ($discussions as $discussion) {
+            $localDiscussionId = $discussionIds[(int) $discussion['id']] ?? null;
+            if ($localDiscussionId === null) {
+                continue;
             }
+            foreach ($discussion['comments'] ?? [] as $comment) {
+                $commentBatch[] = [
+                    'discussion_id' => $localDiscussionId,
+                    'sheet_id' => $sheet->id,
+                    'remote_id' => (int) $comment['id'],
+                    'text' => (string) ($comment['text'] ?? ''),
+                    'created_by_name' => $comment['createdBy']['name'] ?? null,
+                    'created_by_email' => $comment['createdBy']['email'] ?? null,
+                    'created_at_remote' => isset($comment['createdAt']) ? CarbonImmutable::parse($comment['createdAt']) : null,
+                    'modified_at_remote' => isset($comment['modifiedAt']) ? CarbonImmutable::parse($comment['modifiedAt']) : null,
+                ];
+            }
+        }
+        foreach (array_chunk($commentBatch, 500) as $chunk) {
+            SmartsheetComment::upsert($chunk, ['remote_id'],
+                ['discussion_id', 'sheet_id', 'text', 'created_by_name', 'created_by_email',
+                    'created_at_remote', 'modified_at_remote']);
         }
     }
 
