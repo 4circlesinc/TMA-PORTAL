@@ -1,4 +1,4 @@
-- Title bar controls are legible on the sign-in screen
-- The title bar is now transparent on the sign-in screen
-- Page titles no longer repeat the app's own name
+- The title bar now looks the same on every screen, including sign-in
 - Window controls line up with the rest of the title bar
+- Page titles no longer repeat the app's own name
+- A launch screen while the app starts, instead of a blank wait

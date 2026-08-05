@@ -194,53 +194,11 @@ const CSS = `
   .tma-desktop-has-shell #tma-desktop-titlebar .tma-tb-title { max-width: 24vw; }
 
   /*
-   * Sign-in, and anything else with no portal shell: the bar is window controls
-   * and nothing else, so it is transparent and sits on the page rather than
-   * cutting a coloured band across a design that was composed without one.
-   *
-   * That means the controls are now on the page's own background, so they take
-   * the page's ink instead of white — and follow light and dark with it.
+   * Sign-in and the error page get exactly the same bar as everywhere else:
+   * full-width, brand blue, white controls. It was briefly transparent there —
+   * which was accurate (those pages have no toolbar to carry) but read as a
+   * different app the moment you moved between them. One chrome, everywhere.
    */
-  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar {
-    background: transparent;
-    color: light-dark(rgba(0,0,0,.75), rgba(255,255,255,.85));
-  }
-
-  /*
-   * Ink and weight, not just colour. The opacities above are tuned for white
-   * artwork on saturated blue, where 0.82 still reads; the same values in dark
-   * ink on a near-white page leave the chevrons barely there — and the disabled
-   * pair, at 0.32, all but invisible. Disabled must still look disabled, so it
-   * stays lighter than the rest, just not to the point of vanishing.
-   */
-  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn {
-    opacity: 1;
-    color: light-dark(rgba(0,0,0,.82), rgba(255,255,255,.92));
-  }
-
-  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn[disabled] {
-    opacity: 1;
-    color: light-dark(rgba(0,0,0,.32), rgba(255,255,255,.34));
-  }
-
-  /* A hair heavier: thin strokes lose more to a light background. */
-  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn svg {
-    stroke-width: 2;
-  }
-
-  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-sep {
-    opacity: 0.3;
-  }
-
-  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn:hover {
-    background: light-dark(rgba(0,0,0,.07), rgba(255,255,255,.14));
-  }
-  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn:active {
-    background: light-dark(rgba(0,0,0,.12), rgba(255,255,255,.22));
-  }
-
-  /* No band to sit below, so the page keeps its own full height. */
-  html:not(.tma-desktop-has-shell) body { padding-top: 0 !important; }
 
   .tma-dash--desktop-bar .tma-dash__header {
     position: fixed !important;
