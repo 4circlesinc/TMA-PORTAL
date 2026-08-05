@@ -79,6 +79,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
+ * Profile photos. Signed-in only, but deliberately outside every onboarding
+ * gate: the profile-setup and onboarding screens show the photo we pulled from
+ * the person's Google/Microsoft account, and those screens run *before*
+ * 'profile.complete' passes. Gated with the portal, the <img> would follow a
+ * redirect back to the setup page and render as a broken image.
+ */
+Route::middleware(['auth'])->group(function () {
+    Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
+});
+
+/*
  * Portal - requires login, verified email, and administrator approval.
  */
 Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', 'onboarded', 'mfa.enforced'])->group(function () {
@@ -139,7 +150,6 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::post('/me/avatar', [MeController::class, 'updateAvatar'])->name('me.avatar');
     Route::get('/me/preferences', [PreferencesController::class, 'show'])->name('me.preferences');
     Route::put('/me/preferences', [PreferencesController::class, 'update'])->name('me.preferences.update');
-    Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
 
     // Notifications: the bell popup, the right-sidebar section, and the badge.
     Route::prefix('portal/notifications')->name('notifications.')->group(function () {

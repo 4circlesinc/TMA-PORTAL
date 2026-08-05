@@ -18,6 +18,16 @@
       var btn = document.querySelector('[data-photo-btn]');
       var btnLabel = document.querySelector('[data-photo-btn-label]');
       var providerSrc = preview ? preview.getAttribute('src') : '';
+
+      // A photo that won't load (a provider URL that has expired, say) must
+      // fall back to the placeholder - a broken image reads as "we lost it".
+      if (preview) {
+        preview.addEventListener('error', function () {
+          preview.hidden = true;
+          if (placeholder) placeholder.hidden = false;
+        });
+      }
+
       if (!input) return;
 
       var msg = document.querySelector('[data-photo-msg]');

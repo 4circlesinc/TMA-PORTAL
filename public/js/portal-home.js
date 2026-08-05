@@ -599,7 +599,7 @@
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
     return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road tma-portal-tile--third"' +
-      ' data-tile-id="road" data-tile-span="third" data-key="panel-road" aria-label="What\'s on the road?">' +
+      ' data-tile-id="road" data-tile-span="third" data-key="panel-road" aria-label="Upcoming Events">' +
       window.TMAOverview.renderRoad() +
       '</div>';
   }
@@ -775,7 +775,7 @@
     { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
     { id: 'favorites', label: 'Favorites', desc: 'Files and folders you marked as favorite.', preview: 'favorites' },
     { id: 'tutorials', label: 'Tutorials', desc: 'Videos and helpful articles that will help you get the best out of the portal.', preview: 'tutorials' },
-    { id: 'road', label: 'What\'s on the road?', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
+    { id: 'road', label: 'Upcoming Events', desc: 'Upcoming events and work-plan items for the selected day.', preview: 'road' },
   ];
 
   // Shipped default board (3 equal columns, masonry):

@@ -245,14 +245,30 @@ class SocialAuthController extends Controller
             ->first();
 
         if ($account) {
-            return $this->login($request, $account->user);
+            // A deleted account keeps its row in the Recycle Bin, so its
+            // connected accounts still resolve - but the relation is filtered
+            // by the soft-delete scope and comes back null. Say what happened
+            // rather than dying on it.
+            return $account->user
+                ? $this->login($request, $account->user)
+                : $this->fail($request, 'That account has been removed. Ask an administrator to restore it.');
         }
 
         if (! $verified) {
             return $this->fail($request, 'Your '.ucfirst($provider)." email isn't verified, so it can't be used to sign in.");
         }
 
-        $user = User::where('email', Str::lower($oauth->getEmail()))->first();
+        $email = Str::lower($oauth->getEmail());
+
+        // Look past the soft-delete scope before deciding to register: the
+        // address is still taken by the deleted row, so creating a second
+        // account here would only break on the unique index.
+        $deleted = User::onlyTrashed()->where('email', $email)->first();
+        if ($deleted) {
+            return $this->fail($request, 'That account has been removed. Ask an administrator to restore it.');
+        }
+
+        $user = User::where('email', $email)->first();
 
         if (! $user) {
             $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');
@@ -265,7 +281,7 @@ class SocialAuthController extends Controller
                 'first_name' => $first,
                 'middle_name' => count($parts) ? implode(' ', $parts) : null,
                 'last_name' => $last,
-                'email' => Str::lower($oauth->getEmail()),
+                'email' => $email,
                 'password' => Str::password(32),
             ]);
             $user->forceFill([

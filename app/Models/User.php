@@ -9,8 +9,10 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -19,8 +21,15 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable;
+    /**
+     * SoftDeletes is what puts a removed account in the admin Recycle Bin. It
+     * also does the security work for free: the global scope hides trashed rows
+     * from every query in the portal, including the one Laravel's auth guard
+     * uses to resolve credentials, so a deleted account cannot sign back in.
+     *
+     * @use HasFactory<UserFactory>
+     */
+    use HasFactory, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
     public const string STATUS_PENDING = 'pending';
     public const string STATUS_APPROVED = 'approved';
@@ -89,6 +98,12 @@ class User extends Authenticatable implements MustVerifyEmail
     public function photoUrl(): ?string
     {
         return $this->avatar_url ?: $this->provider_avatar_url;
+    }
+
+    /** The administrator who moved this account to the Recycle Bin. */
+    public function deletedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'deleted_by');
     }
 
     public function connectedAccounts(): HasMany

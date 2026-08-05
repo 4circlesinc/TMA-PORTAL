@@ -889,9 +889,9 @@ if (state.filters.user) {
     function confirmDeleteUser(row) {
       openDeleteConfirm({
         title: 'Delete ' + row.user + '?',
-        text: "This permanently removes their account, sign-in methods, sessions, and connected accounts. This can't be undone.",
+        text: 'They lose access straight away. The account moves to the Recycle Bin, where you can restore it.',
         confirmLabel: 'Delete account',
-        success: 'Account deleted',
+        success: 'Account moved to the Recycle Bin',
         run: function () { return usersApi('DELETE', '/admin/users/' + row._id); },
       });
     }
@@ -899,9 +899,9 @@ if (state.filters.user) {
     function confirmBulkDelete(ids) {
       openDeleteConfirm({
         title: 'Delete ' + ids.length + (ids.length === 1 ? ' user' : ' users') + '?',
-        text: "This permanently removes the selected accounts, their sign-in methods, sessions, and connected accounts. This can't be undone. (Your own account is never deleted.)",
+        text: 'They lose access straight away. The accounts move to the Recycle Bin, where you can restore them. Your own account is never deleted.',
         confirmLabel: 'Delete ' + ids.length + (ids.length === 1 ? ' account' : ' accounts'),
-        success: 'Accounts deleted',
+        success: 'Accounts moved to the Recycle Bin',
         run: function () { return usersApi('POST', '/admin/users/bulk-delete', { ids: ids }); },
       });
     }

@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\Files\FileType;
 use App\Support\Files\FolderTree;
 use App\Support\Files\Presenter;
+use App\Support\Files\SystemFolders;
 use App\Support\Files\Thumbnail;
 use App\Support\Files\Vault;
 use Illuminate\Support\Collection;
@@ -22,13 +23,15 @@ use Illuminate\Support\Facades\Storage;
  * Firm-wide soft-deleted items for administrators (Overview → Recycle Bin).
  *
  * Email and chat messages themselves are excluded. Message *files* are included
- * via MessageAttachment soft deletes.
+ * via MessageAttachment soft deletes. Deleted user accounts land here too, so
+ * removing a colleague is recoverable rather than final.
  */
 class AdminRecycleBin
 {
     public const KINDS = [
         'file',
         'folder',
+        'user',
         'client',
         'signature',
         'group',
@@ -50,6 +53,9 @@ class AdminRecycleBin
         }
         if (! $kind || $kind === 'folder') {
             $chunks = $chunks->merge(self::folders($search));
+        }
+        if (! $kind || $kind === 'user') {
+            $chunks = $chunks->merge(self::users($search));
         }
         if (! $kind || $kind === 'client') {
             $chunks = $chunks->merge(self::clients($search));
@@ -82,6 +88,7 @@ class AdminRecycleBin
         match ($kind) {
             'file' => self::restoreFile($id),
             'folder' => self::restoreFolder($id),
+            'user' => self::restoreUser($id),
             'client' => self::restoreClient($id),
             'signature' => self::restoreSignature($id),
             'group' => self::restoreGroup($id),
@@ -96,6 +103,7 @@ class AdminRecycleBin
         match ($kind) {
             'file' => self::purgeFile($id),
             'folder' => self::purgeFolder($id),
+            'user' => self::purgeUser($id),
             'client' => self::purgeClient($id),
             'signature' => self::purgeSignature($id),
             'group' => self::purgeGroup($id),
@@ -105,13 +113,14 @@ class AdminRecycleBin
         };
     }
 
-    /** @return array{files: int, folders: int, clients: int, signatures: int, groups: int, calendar_events: int, message_attachments: int} */
+    /** @return array{files: int, folders: int, users: int, clients: int, signatures: int, groups: int, calendar_events: int, message_attachments: int} */
     public static function empty(?array $kinds = null): array
     {
         $kinds = $kinds ? array_values(array_intersect(self::KINDS, $kinds)) : self::KINDS;
         $counts = [
             'files' => 0,
             'folders' => 0,
+            'users' => 0,
             'clients' => 0,
             'signatures' => 0,
             'groups' => 0,
@@ -133,6 +142,14 @@ class AdminRecycleBin
             foreach ($folders as $folder) {
                 FolderTree::purgeTree($folder);
                 $counts['folders']++;
+            }
+        }
+        if (in_array('user', $kinds, true)) {
+            // One at a time: each account has to hand its system folders over
+            // before its row goes, or the cascade takes shared content with it.
+            foreach (User::onlyTrashed()->limit(500)->pluck('id') as $id) {
+                self::eraseUser(User::onlyTrashed()->find($id));
+                $counts['users']++;
             }
         }
         if (in_array('client', $kinds, true)) {
@@ -231,6 +248,43 @@ class AdminRecycleBin
                     'iconName' => $f->icon_name,
                     'folderType' => $f->folder_type,
                     'fileCount' => null,
+                ],
+            ));
+    }
+
+    /**
+     * Deleted accounts. Addressed by numeric id rather than a uuid — users have
+     * no public identifier, and the admin table this bin restores back into
+     * already works in those ids.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private static function users(?string $search): Collection
+    {
+        return User::onlyTrashed()
+            ->with(['deletedBy'])
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%'.mb_strtolower($search).'%';
+                $q->where(function ($w) use ($like) {
+                    $w->whereRaw('LOWER(name) like ?', [$like])
+                        ->orWhereRaw('LOWER(email) like ?', [$like]);
+                });
+            })
+            ->orderByDesc('deleted_at')
+            ->limit(self::PER_KIND)
+            ->get()
+            ->map(fn (User $u) => self::row(
+                kind: 'user',
+                id: (string) $u->id,
+                name: $u->name ?: $u->email,
+                subtitle: ($u->account_type ?: 'Account').' · '.$u->email,
+                deletedAt: $u->deleted_at,
+                deletedBy: $u->deletedBy,
+                meta: [
+                    'avatarUrl' => $u->photoUrl(),
+                    'email' => $u->email,
+                    'accountType' => $u->account_type,
+                    'icon' => 'User',
                 ],
             ));
     }
@@ -431,6 +485,43 @@ class AdminRecycleBin
     {
         $folder = Folder::onlyTrashed()->where('uuid', $uuid)->firstOrFail();
         FolderTree::purgeTree($folder);
+    }
+
+    /**
+     * Bringing an account back restores the person, not their reach: the client
+     * and company assignments AccessSync ended on delete stay ended, so somebody
+     * has to re-assign them deliberately.
+     *
+     * Nothing here has to defend the email address. `users.email` is unique and
+     * the index counts soft-deleted rows, so an account in the bin keeps its
+     * address reserved and no second account can have taken it meanwhile.
+     */
+    private static function restoreUser(string $id): void
+    {
+        $user = User::onlyTrashed()->findOrFail((int) $id);
+
+        $user->restore();
+        $user->forceFill(['deleted_by' => null])->save();
+    }
+
+    private static function purgeUser(string $id): void
+    {
+        self::eraseUser(User::onlyTrashed()->findOrFail((int) $id));
+    }
+
+    /**
+     * The real delete. Hands the account's system folders to a surviving admin
+     * first — folders and files cascade on owner, so erasing an administrator
+     * without this would take client and organization content with it.
+     */
+    private static function eraseUser(?User $user): void
+    {
+        if (! $user) {
+            return;
+        }
+
+        SystemFolders::rehome([$user->id], $user->deleted_by ?: $user->id);
+        $user->forceDelete();
     }
 
     private static function restoreClient(string $uid): void

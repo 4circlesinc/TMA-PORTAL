@@ -8,8 +8,10 @@
       <img src="/images/icons/phosphor/Sun.svg" alt="" width="18" height="18" aria-hidden="true">
     </button>
 
+    {{-- The mark used to sit in this corner as well. Two logos on one screen is
+         one too many, and the full lockup in the panel beside it is the one that
+         actually names the firm. --}}
     <section class="tma-auth__stage" aria-hidden="true">
-      <img class="tma-auth__stage-mark" src="/images/brand/tma/tma-logo-mark.png" alt="" width="40" height="40">
       <img class="tma-auth__stage-art" src="/images/illustrations/Illustration28.svg" alt="" width="100" height="75">
     </section>
 

@@ -832,6 +832,26 @@
   font-size: var(--text-size-13); color: var(--color-text-secondary);
 }
 .tma-portal-sync b { color: var(--color-text-primary); }
+/* Close sits at the far end, pushed there rather than floated so the strip
+   keeps its single flex row. */
+.tma-portal-sync__close {
+  margin-left: auto; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0;
+  border: 0; border-radius: var(--radius-6); background: none;
+  color: var(--color-text-secondary); cursor: pointer;
+}
+.tma-portal-sync__close:hover { background: var(--color-hover); color: var(--color-text-primary); }
+/* Masked, so the glyph takes the button's colour like every other tinted
+   icon — an <img> would paint its own black. */
+.tma-portal-sync__close-glyph {
+  display: block; width: 10px; height: 10px; background: currentColor;
+  mask-image: url('../images/icons/phosphor/X.svg');
+  -webkit-mask-image: url('../images/icons/phosphor/X.svg');
+  mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
+  mask-position: center; -webkit-mask-position: center;
+  mask-size: contain; -webkit-mask-size: contain;
+}
 .tma-portal-sync--busy { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
 .tma-portal-sync--error { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
 .tma-portal-sync__spinner {

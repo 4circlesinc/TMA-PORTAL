@@ -2798,7 +2798,9 @@
 
 .tma-dash[data-theme="dark"] .tma-dash__card-ico,
 .tma-dash[data-theme="dark"] .tma-dash__card-delta img { filter: invert(1) brightness(1.6); }
-.tma-dash[data-theme="dark"] .tma-dash__logo-horizontal,
+/* the wordmark is navy + cyan on transparent; brightness(0) flattens every opaque
+   pixel to black and invert(1) lifts it to white, leaving the alpha channel intact */
+.tma-dash[data-theme="dark"] .tma-dash__logo-horizontal { filter: brightness(0) invert(1); }
 .tma-dash[data-theme="dark"] .tma-dash__logo-mark { filter: brightness(1.15); }
 
 /* ─────────────────────────────────────────

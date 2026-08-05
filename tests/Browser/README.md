@@ -192,6 +192,14 @@ field placement and drawing, and computed CSS only exist in a browser.
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
   the client profile's "Open folder" action lands in the File Library. Needs an
   administrator account.
+- **`sync-notice-dismiss.mjs`** — closing the File Library's "…synced 1d ago"
+  line, permanently. It had no close button at all, so a library synced
+  yesterday said so above the file list for ever. The assertion that carries
+  this test is the **second browser context**: empty localStorage, same account,
+  and the line must still be hidden — a browser-only dismissal passes every
+  other check here and fails that one. Only the quiet line is dismissible; a
+  sync in progress, a sync error and an unresolved conflict all still show.
+  Needs a connected library whose last sync succeeded.
 - **`home-library-actions.mjs`** — bulk actions and the row menu on the
   dashboard's Recent Files / Shared-with-me tables. Those tables rendered
   checkboxes, a select-all header and a three-dot button with **nothing wired to

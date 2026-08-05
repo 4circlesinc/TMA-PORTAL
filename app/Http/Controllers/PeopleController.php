@@ -278,7 +278,12 @@ class PeopleController extends Controller
         abort_if($user->id === $actor->id, 422, "You can't remove your own account.");
 
         DB::table('sessions')->where('user_id', $user->id)->delete();
-        $user->delete();
+
+        // Erased, not parked in the Recycle Bin. This is the withdrawal of an
+        // invitation that was never taken up: the shell account holds nothing
+        // worth restoring, and leaving it soft-deleted would hold its email
+        // address hostage against the unique index if the person is re-invited.
+        $user->forceDelete();
 
         ActivityLogger::log([
             'actor' => $actor,

@@ -82,7 +82,28 @@ setTimeout(() => {
   app.exit(1);
 }, 45000).unref();
 
+/*
+ * The injected script is JavaScript built inside a template literal, and that
+ * has now broken three separate ways: a backticked term closing the string, a
+ * singly-escaped regex arriving as plain letters, and a slash-after-asterisk in
+ * a comment closing the comment early and turning prose into code. Each one
+ * failed silently in the page. Parsing the emitted text catches all three
+ * before it ever reaches a window.
+ */
+function checkEmittedScript() {
+  const src = titlebar.script({ canGoBack: true, canGoForward: false });
+  try {
+    new Function(src);
+    check('the injected script parses', true, true);
+  } catch (error) {
+    check(`the injected script parses (${error.message})`, false, true);
+  }
+  check('its regex escapes survived the template', src.includes('\\d+'), true);
+}
+
 app.whenReady().then(async () => {
+  checkEmittedScript();
+
   const server = await serve();
   const { port } = server.address();
 

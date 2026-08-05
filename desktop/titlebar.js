@@ -77,10 +77,16 @@ const CSS = `
     }
   }
 
+  /*
+   * Full width by default. The strip is only narrow where the portal shell
+   * exists to supply the rest of the row — on sign-in, or the error page, there
+   * is no .tma-dash__header to restyle, and a 300px stub of blue against a
+   * white page is not a title bar.
+   */
   #tma-desktop-titlebar {
     position: fixed;
     top: 0; left: 0;
-    width: ${CONTROLS}px;
+    width: 100%;
     height: ${HEIGHT}px;
     /*
      * Above ordinary content and scrims, deliberately below the portal's
@@ -159,7 +165,7 @@ const CSS = `
   }
 
   #tma-desktop-titlebar .tma-tb-title {
-    max-width: 24vw;
+    max-width: 60vw;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -184,6 +190,58 @@ const CSS = `
    * rebuild the header as often as it likes; injected CSS applies to whatever
    * it puts there.
    */
+  .tma-desktop-has-shell #tma-desktop-titlebar { width: ${CONTROLS}px; }
+  .tma-desktop-has-shell #tma-desktop-titlebar .tma-tb-title { max-width: 24vw; }
+
+  /*
+   * Sign-in, and anything else with no portal shell: the bar is window controls
+   * and nothing else, so it is transparent and sits on the page rather than
+   * cutting a coloured band across a design that was composed without one.
+   *
+   * That means the controls are now on the page's own background, so they take
+   * the page's ink instead of white — and follow light and dark with it.
+   */
+  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar {
+    background: transparent;
+    color: light-dark(rgba(0,0,0,.75), rgba(255,255,255,.85));
+  }
+
+  /*
+   * Ink and weight, not just colour. The opacities above are tuned for white
+   * artwork on saturated blue, where 0.82 still reads; the same values in dark
+   * ink on a near-white page leave the chevrons barely there — and the disabled
+   * pair, at 0.32, all but invisible. Disabled must still look disabled, so it
+   * stays lighter than the rest, just not to the point of vanishing.
+   */
+  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn {
+    opacity: 1;
+    color: light-dark(rgba(0,0,0,.82), rgba(255,255,255,.92));
+  }
+
+  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn[disabled] {
+    opacity: 1;
+    color: light-dark(rgba(0,0,0,.32), rgba(255,255,255,.34));
+  }
+
+  /* A hair heavier: thin strokes lose more to a light background. */
+  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn svg {
+    stroke-width: 2;
+  }
+
+  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-sep {
+    opacity: 0.3;
+  }
+
+  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn:hover {
+    background: light-dark(rgba(0,0,0,.07), rgba(255,255,255,.14));
+  }
+  html:not(.tma-desktop-has-shell) #tma-desktop-titlebar .tma-tb-btn:active {
+    background: light-dark(rgba(0,0,0,.12), rgba(255,255,255,.22));
+  }
+
+  /* No band to sit below, so the page keeps its own full height. */
+  html:not(.tma-desktop-has-shell) body { padding-top: 0 !important; }
+
   .tma-dash--desktop-bar .tma-dash__header {
     position: fixed !important;
     top: 0; left: 0; right: 0;
@@ -311,6 +369,7 @@ function script({ canGoBack, canGoForward }) {
      */
     const dash = document.querySelector('.tma-dash');
     if (dash) dash.classList.add('tma-dash--desktop-bar');
+    document.documentElement.classList.toggle('tma-desktop-has-shell', !!dash);
 
     /*
      * The page's own heading, not document.title — that one is prefixed with
@@ -321,7 +380,26 @@ function script({ canGoBack, canGoForward }) {
       const el = document.querySelector('[data-page-title]')
         || document.querySelector('.tma-dash__crumb--current');
       const text = el && el.textContent.trim();
-      return text || (document.title || '').replace(/^\(\d+\)\s*/, '') || 'TM ANTOINE Portal';
+      /*
+       * Every backslash below is doubled, and has to be. This function is built
+       * inside a template literal, where backslash-s and backslash-d are not
+       * valid escapes and the backslash is simply dropped — written singly they
+       * reach the page as plain letters and quietly match nothing, which is why
+       * the unread count was never actually being stripped.
+       *
+       * Regex literals are deliberately not quoted in this comment: a slash
+       * after an asterisk would close the comment early and turn the prose that
+       * follows into code.
+       */
+      return text
+        || (document.title || '')
+          // The unread count belongs on the badge, not in the chrome.
+          .replace(/^\\(\\d+\\)\\s*/, '')
+          // And "Sign In — TM ANTOINE Advisory" is the app telling you its own
+          // name inside its own window.
+          .split(/\\s+[—–|]\\s+/)[0]
+          .trim()
+        || 'TM ANTOINE Portal';
     };
 
     const paint = () => { title.textContent = heading(); };
@@ -413,4 +491,7 @@ async function apply(webContents) {
   await refresh(webContents);
 }
 
-module.exports = { apply, refresh, windowOptions, HEIGHT, BLUE };
+// `script` is exported for tests: it is a template literal that builds
+// JavaScript, and a stray backslash or backtick in it is a syntax error the
+// page swallows silently. Checking the emitted text is the only way to catch it.
+module.exports = { apply, refresh, windowOptions, script, CSS, HEIGHT, BLUE };

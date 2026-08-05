@@ -426,9 +426,9 @@
             '<span class="tma-dash__overview-road-text">' + esc(item.text) + '</span>' +
             '<span class="tma-dash__overview-road-time">' + esc(item.time) + '</span></div></button>';
         }).join('')
-      : '<p class="tma-dash__overview-empty">Nothing on the road for this day.</p>';
+      : '<p class="tma-dash__overview-empty">No upcoming events for this day.</p>';
     return '<section class="tma-dash__overview-block tma-dash__overview-block--road" data-node-id="32546:46995" data-overview-road>' +
-      '<h3 class="tma-dash__overview-block-title">What\'s on the road?</h3>' +
+      '<h3 class="tma-dash__overview-block-title">Upcoming Events</h3>' +
       '<div class="tma-dash__overview-week-wrap">' +
       '<button type="button" class="tma-dash__overview-week-nav" data-overview-week-nav="-1" aria-label="Previous week">' +
       '<img src="' + ICON + 'CaretLeft.svg" alt=""></button>' +

@@ -629,7 +629,7 @@ Each loads its `design/{slug}.json` and exposes `catalog()`, preset data, and as
 - **CSS:** `public/css/dashboard.css` (prefix `tma-dash-*`, overview block `tma-dash__overview-*`)
 - **JS:** `public/js/dashboard.js` - `window.TMADashboard.mount(root)`; `public/js/overview.js` - `window.TMAOverview.mount(container)`
 - **Layout:** three columns - 212px sidebar / flex main / 280px rightbar, 28px content gap
-- **Sections (Overview, Figma `32546:96118`):** underline tab bar + actions, project hero (status strip / tasks / due date / budget / avatars - **no SnowUI title or logo**), What's on the road timeline, Latest Files, Project Spendings table, footer, rightbar (Notifications / Activities / Contacts)
+- **Sections (Overview, Figma `32546:96118`):** underline tab bar + actions, project hero (status strip / tasks / due date / budget / avatars - **no SnowUI title or logo**), Upcoming Events timeline, Latest Files, Project Spendings table, footer, rightbar (Notifications / Activities / Contacts)
 - **Icons:** local files only - `icons/phosphor/FilePdf.svg`, `FileJpg.svg`, `FileXls.svg`, `Plus.svg`, `DownloadSimple.svg`, `ChartPieSlice.svg` (Overview nav), `icons/tma/ThreeDots-16.svg`
 - **Interactions:** nav active-state + breadcrumb/title sync, expandable page groups, Favorites/Recently toggle, sidebar collapses to a **72px icon-only rail** on desktop / rightbar drawer on mobile, light/dark theme, `/` command palette - state persisted in `localStorage`
 - **Views:** the app shell hosts multiple views (`.tma-dash__view[data-view]`). **Dashboard** (`dashboard`, Figma `32546:96097`) - metric cards, donut, tasks table, bar chart at `/`. **Overview** (`overview`, Figma `32546:96118`) - project detail at `/overview`. Also: `projects`, `clients`, `users`.
@@ -692,7 +692,7 @@ The app shell's primary navigation mirrors the client-portal feature set replica
 - **Pages:** Folders, Projects, Workflows, Templates, Signatures, People, Account settings
 - Bottom: **Classic design** link
 
-There is no trial banner strip. The Dashboard view hides the main-head title row (the greeting is its header; Recent Files/Shortcuts panels stretch to equal height) and includes the Overview "What's on the road?" timeline via `TMAOverview.renderRoad()`. Remaining legacy views (My Projects, Account, Settings) are URL-reachable but not in the sidebar.
+There is no trial banner strip. The Dashboard view hides the main-head title row (the greeting is its header; Recent Files/Shortcuts panels stretch to equal height) and includes the Overview "Upcoming Events" timeline via `TMAOverview.renderRoad()`. Remaining legacy views (My Projects, Account, Settings) are URL-reachable but not in the sidebar.
 
 **Classic design** - the pre-replication shell is preserved at **`/classic`** (`public/classic/index.html`): original sidebar (Dashboards / Pages groups), metrics dashboard, and script set. It sets `window.TMA_CLASSIC = true`, which makes the shared `dashboard.js` skip URL sync (navigation stays at `/classic`), point the mobile header logo at `/classic`, and keep the classic dashboard's title row + Today selector. It links back to the new design ("New design" item); the new shell links to it ("Classic design" item).
 

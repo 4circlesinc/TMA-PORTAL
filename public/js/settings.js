@@ -440,6 +440,7 @@
     'tma.privacy.cookie.marketing': 'cookieMarketing',
     'tma.privacy.historyDays': 'historyDays',
     'tma.plugins.list': 'plugins',
+    'tma.files.syncNoticeDismissed': 'fileSyncNoticeDismissed',
   };
 
   /* localStorage only holds strings, but the API is typed. Keys listed here
@@ -461,6 +462,9 @@
     cookieFunctional: prefBoolCodec(),
     cookieAnalytics: prefBoolCodec(),
     cookieMarketing: prefBoolCodec(),
+    // Without a codec this round-trips as the string "true"/"false", and the
+    // column wants a real boolean — the validator rejects the string.
+    fileSyncNoticeDismissed: prefBoolCodec(),
     fontScale: prefIntCodec(3),
     historyDays: prefIntCodec(30),
     // The plugin list rides in localStorage as JSON text; the column wants

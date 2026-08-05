@@ -219,7 +219,13 @@ class ClientFolderProvisioningTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_deleting_the_owning_admin_rehomes_system_folders_instead_of_destroying_them(): void
+    /**
+     * Deleting an administrator now parks the account in the Recycle Bin, so
+     * the row - and every folder keyed to it - is untouched. The rehoming that
+     * protects client content happens at the point of no return instead: when
+     * the account is purged for good.
+     */
+    public function test_deleting_the_owning_admin_leaves_system_folders_alone_and_purging_rehomes_them(): void
     {
         $admin = $this->user('Administrator');
         $keeper = $this->user('Administrator');
@@ -233,6 +239,13 @@ class ClientFolderProvisioningTest extends TestCase
 
         $folder = Folder::find($folderId);
         $this->assertNotNull($folder, 'client folder survives the admin deletion');
+        $this->assertSame($admin->id, $folder->owner_id, 'a recoverable account keeps what it owns');
+
+        $this->actingAs($keeper)->deleteJson("/portal/admin/recycle-bin/user/{$admin->id}")->assertOk();
+
+        $folder = Folder::find($folderId);
+        $this->assertNotNull($folder, 'client folder survives the purge too');
         $this->assertSame($keeper->id, $folder->owner_id, 'ownership handed to another admin');
+        $this->assertDatabaseMissing('users', ['id' => $admin->id]);
     }
 }

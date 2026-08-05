@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -16,14 +16,20 @@ return new class extends Migration
         });
 
         // Split existing display names: first word, last word, rest in between.
-        User::query()->whereNull('first_name')->get()->each(function (User $user) {
+        //
+        // Deliberately the query builder, not the User model. A migration runs
+        // against the schema as it stood at this point in history, while the
+        // model describes today's - once User gained SoftDeletes, an Eloquent
+        // query here started asking for a `deleted_at` column that no migration
+        // has added yet, and every fresh install died on it.
+        DB::table('users')->whereNull('first_name')->orderBy('id')->each(function ($user) {
             $parts = preg_split('/\s+/', trim((string) $user->name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
-            $user->forceFill([
+            DB::table('users')->where('id', $user->id)->update([
                 'first_name' => array_shift($parts) ?: $user->name,
                 'last_name' => count($parts) ? array_pop($parts) : null,
                 'middle_name' => count($parts) ? implode(' ', $parts) : null,
-            ])->save();
+            ]);
         });
     }
 

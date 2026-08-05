@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuthEvent;
-use App\Models\FileItem;
 use App\Models\FileLibrarySetting;
-use App\Models\Folder;
 use App\Models\Invitation;
 use App\Models\Notification;
 use App\Models\User;
@@ -114,12 +112,11 @@ class AdminUsersController extends Controller
             abort_unless($remaining, 422, 'That would remove the last administrator. Keep at least one active admin.');
         }
 
-        foreach (User::whereIn('id', $ids)->pluck('id') as $uid) {
-            $this->record($uid, 'account_deleted');
+        $deleted = 0;
+        foreach (User::whereIn('id', $ids)->get() as $user) {
+            $this->moveToRecycleBin($user, $request->user());
+            $deleted++;
         }
-        DB::table('sessions')->whereIn('user_id', $ids)->delete();
-        $this->rehomeSystemFolders($ids, $request->user()->id);
-        $deleted = User::whereIn('id', $ids)->delete();
 
         return response()->json(['deleted' => $deleted, 'skippedSelf' => $selfIncluded]);
     }
@@ -505,63 +502,42 @@ class AdminUsersController extends Controller
             abort_unless($otherAdmins, 422, 'The portal needs at least one active administrator.');
         }
 
-        $this->record($user->id, 'account_deleted');
-
-        DB::table('sessions')->where('user_id', $user->id)->delete();
-        $this->rehomeSystemFolders([$user->id], $request->user()->id);
-        $user->delete();
+        $this->moveToRecycleBin($user, $request->user());
 
         return response()->json(['status' => 'ok']);
     }
 
     /**
-     * System-managed folders (the Client Files / Staff Files roots, every
-     * organization / client / staff folder, and everything nested inside them)
-     * are owned and created by an administrator so storage has a stable owner.
-     * folders and files both cascade on those columns, so before an admin is
-     * deleted we hand that whole subtree - folders and their files - to another
-     * admin. Otherwise deleting an admin would destroy client and organization
-     * content along with the account.
+     * Deleting an account parks it in the admin Recycle Bin rather than erasing
+     * it. The row survives, so nothing keyed to the user cascades away and a
+     * restore brings the whole account back.
      *
-     * @param  array<int, int>  $userIds
+     * What does *not* survive is the ability to act: sessions are dropped, and
+     * live client/company assignments are settled exactly as they are on a
+     * suspension. Those are ended rather than deleted, so restoring an account
+     * is a deliberate re-assignment rather than a silent return of everything
+     * the person could once reach.
+     *
+     * System folders stay put — see SystemFolders::rehome, which runs on purge
+     * instead, when the row really is about to go.
      */
-    private function rehomeSystemFolders(array $userIds, int $actorId): void
+    private function moveToRecycleBin(User $user, User $actor): void
     {
-        $heir = User::where('account_type', 'Administrator')
-            ->whereNotIn('id', $userIds)
-            ->orderBy('id')
-            ->value('id') ?? $actorId;
+        $this->record($user->id, 'account_deleted');
 
-        // Seed from the structural system nodes, then walk down to every
-        // descendant folder so nested subfolders and files are covered too.
-        $ids = Folder::withTrashed()
-            ->whereIn('folder_type', ['root', 'organization', 'client', 'staff'])
-            ->pluck('id')->all();
+        DB::table('sessions')->where('user_id', $user->id)->delete();
+        AccessSync::userSuspended($user, $actor);
 
-        $frontier = $ids;
-        while ($frontier) {
-            $children = Folder::withTrashed()->whereIn('parent_id', $frontier)->pluck('id')->all();
-            $children = array_values(array_diff($children, $ids));
-            if (! $children) {
-                break;
-            }
-            $ids = array_merge($ids, $children);
-            $frontier = $children;
-        }
+        $user->forceFill(['deleted_by' => $actor->id])->save();
+        $user->delete();
 
-        if (! $ids) {
-            return;
-        }
-
-        Folder::withTrashed()->whereIn('id', $ids)
-            ->whereIn('owner_id', $userIds)->update(['owner_id' => $heir]);
-        Folder::withTrashed()->whereIn('id', $ids)
-            ->whereIn('created_by', $userIds)->update(['created_by' => $heir]);
-
-        FileItem::withTrashed()->whereIn('folder_id', $ids)
-            ->whereIn('owner_id', $userIds)->update(['owner_id' => $heir]);
-        FileItem::withTrashed()->whereIn('folder_id', $ids)
-            ->whereIn('uploaded_by', $userIds)->update(['uploaded_by' => $heir]);
+        ActivityLogger::log([
+            'actor' => $actor,
+            'type' => 'account.deleted',
+            'module' => 'account',
+            'description' => $actor->name.' moved the account for '.$user->email.' to the Recycle Bin',
+            'subject' => $user,
+        ]);
     }
 
     public function reactivate(Request $request, User $user): JsonResponse

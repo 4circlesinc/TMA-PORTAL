@@ -701,6 +701,7 @@
   }
 
   function onClick(e) {
+    if (e.target.closest('[data-sync-dismiss]')) { e.preventDefault(); dismissSyncNotice(); return; }
     if (e.target.closest('[data-sync-retry]')) { retrySync(); return; }
     var actionEl = e.target.closest('[data-files-action]');
     if (actionEl && !actionEl.disabled) { e.preventDefault(); handleAction(actionEl.getAttribute('data-files-action')); return; }
@@ -1038,11 +1039,53 @@
       .sort(function (a, b) { return new Date(b.lastSuccessAt) - new Date(a.lastSuccessAt); })[0];
     if (!newest) return '';
 
+    /*
+     * Dismissed for good.
+     *
+     * "Citizenship Applications synced 1d ago" is not news — after the first
+     * read it is just a line that never goes away. Closing it hides it
+     * permanently, on the account rather than in this browser.
+     *
+     * Only this quiet line is dismissible. A sync in progress and a sync
+     * error are handled above and always show: hiding a failure because
+     * somebody once closed a success message would be a different thing
+     * entirely. A conflict keeps it visible too, since that needs a decision.
+     */
+    if (syncNoticeDismissed() && !d.conflicts) return '';
+
     return '<div class="tma-portal-sync" data-sync-strip>' +
       '<img src="images/icons/phosphor/CloudCheck.svg" alt="" width="16" height="16">' +
       '<span>' + esc(newest.name) + ' synced ' + esc(relativeTime(newest.lastSuccessAt)) + '</span>' +
       (d.conflicts ? '<span class="tma-portal-sync__flag">' + d.conflicts + ' conflict(s)</span>' : '') +
+      '<button type="button" class="tma-portal-sync__close" data-sync-dismiss' +
+        ' aria-label="Hide sync status">' +
+        '<span class="tma-portal-sync__close-glyph" aria-hidden="true"></span></button>' +
     '</div>';
+  }
+
+  var SYNC_NOTICE_KEY = 'tma.files.syncNoticeDismissed';
+
+  /*
+   * Booleans ride in localStorage as '1'/'0', not 'true'/'false'.
+   *
+   * That is the codec settings.js uses for every other boolean preference, in
+   * both directions — hydration writes '1' back from the account. Writing
+   * 'true' here made the sync to the server send `false` (the codec reads
+   * anything that is not '1' as off), so it hid locally and un-hid itself on
+   * the next device.
+   */
+  function syncNoticeDismissed() {
+    try { return localStorage.getItem(SYNC_NOTICE_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function dismissSyncNotice() {
+    var prev = syncNoticeDismissed() ? '1' : '0';
+    try { localStorage.setItem(SYNC_NOTICE_KEY, '1'); } catch (e) {}
+    // Write through to the account so it stays closed on every other browser.
+    if (window.TMAPrefs && window.TMAPrefs.push) {
+      try { window.TMAPrefs.push(SYNC_NOTICE_KEY, '1', prev); } catch (e) {}
+    }
+    paintSyncStatus();
   }
 
   function paintSyncStatus() {

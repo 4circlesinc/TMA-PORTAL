@@ -16,6 +16,7 @@
   var KIND_LABEL = {
     file: 'File',
     folder: 'Folder',
+    user: 'Account',
     client: 'Client',
     signature: 'Signature',
     group: 'Group',
@@ -27,6 +28,7 @@
     { value: '', label: 'All types' },
     { value: 'file', label: 'Files' },
     { value: 'folder', label: 'Folders' },
+    { value: 'user', label: 'Accounts' },
     { value: 'client', label: 'Clients' },
     { value: 'signature', label: 'Signatures' },
     { value: 'group', label: 'Groups' },
@@ -125,7 +127,9 @@
       return { html: html, tone: '' };
     }
 
-    if (kind === 'client') {
+    // Accounts and clients are both people: show the face, falling back to the
+    // same initials tile the rest of the portal draws.
+    if (kind === 'client' || kind === 'user') {
       var photo = meta.avatarUrl;
       var src = avatarSrc(photo, item.name);
       return {

@@ -1,4 +1,4 @@
-- Window controls now line up with the rest of the title bar
-- Taller title bar, with the search box properly centred
-- Fixes the search box and toolbar icons disappearing from the top of the window
-- A launch screen while the app starts, instead of a blank wait
+- Title bar controls are legible on the sign-in screen
+- The title bar is now transparent on the sign-in screen
+- Page titles no longer repeat the app's own name
+- Window controls line up with the rest of the title bar

@@ -41,6 +41,15 @@ class PreferencesController extends Controller
         // server state on calendar_subscriptions.
         'calendarView' => 'month',
         'calendarSidebarOpen' => true,
+        /*
+         * The File Library's "…synced 2 hours ago" line, once dismissed.
+         *
+         * Stored on the account rather than in localStorage so closing it
+         * means closing it — not closing it again on the next browser. It
+         * only ever hides the QUIET line; an in-progress sync and a sync
+         * error both still show, because those are worth interrupting for.
+         */
+        'fileSyncNoticeDismissed' => false,
     ];
 
     private const RULES = [
@@ -62,6 +71,7 @@ class PreferencesController extends Controller
         'plugins.*.enabled' => ['boolean'],
         'calendarView' => ['string', 'in:week,month,agenda,day,work_week'],
         'calendarSidebarOpen' => ['boolean'],
+        'fileSyncNoticeDismissed' => ['boolean'],
         // Nested toast prefs — validated + cleaned by ToastSettings.
         'toasts' => ['array'],
         'toasts.enabled' => ['boolean'],

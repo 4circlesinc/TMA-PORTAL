@@ -11,8 +11,9 @@ use Illuminate\Http\Request;
 /**
  * Firm-wide Recycle Bin for administrators (Overview → Recycle Bin).
  *
- * Soft-deleted files, folders, clients, signatures, groups, calendar events,
- * and message attachments. Email and chat messages themselves are excluded.
+ * Soft-deleted files, folders, user accounts, clients, signatures, groups,
+ * calendar events, and message attachments. Email and chat messages themselves
+ * are excluded.
  */
 class AdminRecycleBinController extends Controller
 {
