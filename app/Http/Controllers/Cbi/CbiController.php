@@ -81,7 +81,10 @@ class CbiController extends Controller
             ],
             'sync' => [
                 'configured' => Client::configured(),
-                'lastSuccessAt' => SmartsheetSheet::query()->max('last_success_at'),
+                // max() bypasses the model's datetime cast and returns the
+                // raw UTC string, which a browser would parse as local time.
+                'lastSuccessAt' => ($last = SmartsheetSheet::query()->max('last_success_at'))
+                    ? \Illuminate\Support\Carbon::parse($last)->toIso8601String() : null,
                 'sheets' => SmartsheetSheet::query()->where('status', '!=', SmartsheetSheet::STATUS_GONE)->count(),
                 'sheetsWithErrors' => SmartsheetSheet::query()->where('status', SmartsheetSheet::STATUS_ERROR)->count(),
                 'syncing' => SmartsheetSheet::query()->where('status', SmartsheetSheet::STATUS_SYNCING)->count(),
@@ -357,7 +360,9 @@ class CbiController extends Controller
         $this->gate($request);
 
         $url = Client::attachmentUrl($attachment->sheet->remote_id, $attachment->remote_id);
-        abort_if($url === null, 404);
+        // Only ever follow an https URL: LINK-type "attachments" are
+        // collaborator-typed and could name any scheme or host.
+        abort_if($url === null || ! str_starts_with($url, 'https://'), 404);
 
         return redirect()->away($url);
     }

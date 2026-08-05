@@ -25,6 +25,14 @@
     console[ok === false ? 'error' : 'log']('[CBI]', msg);
   }
 
+  // Imported cell text becomes hrefs in a couple of places; only http(s)
+  // ever renders as a link — a javascript: URL typed into Smartsheet must
+  // degrade to plain text, not an anchor.
+  function safeUrl(u) {
+    u = String(u == null ? '' : u).trim();
+    return /^https?:\/\//i.test(u) ? u : '';
+  }
+
   function csrf() {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : '';
@@ -72,9 +80,14 @@
     summary: null,
     list: { items: [], total: 0, page: 1, lastPage: 1, loading: false, error: null },
     filters: { stage: '', status: '', referred_by: '', investment_option: '', assigned_to: '', q: '', sort: 'recent', needs_review: false },
-    detail: { data: null, loading: false, error: null, uuid: null, posting: false },
+    detail: { data: null, loading: false, error: null, uuid: null, posting: false, commentDraft: '' },
     searchTimer: null,
   };
+
+  // Monotonic request tokens: without them a slow response for an earlier
+  // filter (or another applicant's detail) lands after a faster later one
+  // and silently overwrites it.
+  var listReq = 0;
 
   /* ── data ── */
 
@@ -99,9 +112,11 @@
   }
 
   function loadList() {
+    var req = ++listReq;
     state.list.loading = true; state.list.error = null; render();
     cbiFetch(BASE + '/applications?' + listQuery())
       .then(function (d) {
+        if (req !== listReq) return; // superseded by a newer request
         state.list.items = d.items || [];
         state.list.total = d.total || 0;
         state.list.lastPage = d.lastPage || 1;
@@ -109,6 +124,7 @@
         render();
       })
       .catch(function (e) {
+        if (req !== listReq) return;
         state.list.loading = false;
         state.list.error = (e && e.message) || 'Couldn’t load applications';
         render();
@@ -116,13 +132,21 @@
   }
 
   function loadDetail(uuid) {
-    state.detail = { data: null, loading: true, error: null, uuid: uuid, posting: false };
+    // Identity check on the request's own detail object: a response only
+    // applies while this object is still the live one, which also covers
+    // re-opening the same uuid.
+    var req = { data: null, loading: true, error: null, uuid: uuid, posting: false, commentDraft: '' };
+    state.detail = req;
     render();
     cbiFetch(BASE + '/applications/' + encodeURIComponent(uuid))
-      .then(function (d) { state.detail.data = d; state.detail.loading = false; render(); })
+      .then(function (d) {
+        if (state.detail !== req) return;
+        req.data = d; req.loading = false; render();
+      })
       .catch(function (e) {
-        state.detail.loading = false;
-        state.detail.error = e && e.status === 404 ? 'Application not found.' : ((e && e.message) || 'Couldn’t load');
+        if (state.detail !== req) return;
+        req.loading = false;
+        req.error = e && e.status === 404 ? 'Application not found.' : ((e && e.message) || 'Couldn’t load');
         render();
       });
   }
@@ -330,7 +354,7 @@
         '<div class="cbi-detail__meta">' +
           (a.applicantNumber ? '<span>№ ' + esc(a.applicantNumber) + '</span>' : '') +
           (a.progress ? '<span>' + esc(a.progress) + '</span>' : '') +
-          (a.sourcePermalink ? '<a href="' + esc(a.sourcePermalink) + '" target="_blank" rel="noopener">Open in Smartsheet ↗</a>' : '') +
+          (safeUrl(a.sourcePermalink) ? '<a href="' + esc(safeUrl(a.sourcePermalink)) + '" target="_blank" rel="noopener">Open in Smartsheet ↗</a>' : '') +
           (a.syncedAt ? '<span>Synced ' + esc(fmtDateTime(a.syncedAt)) + '</span>' : '') +
         '</div>' +
       '</div>';
@@ -353,9 +377,9 @@
       fact('Main contact', a.mainContact) +
       fact('COR number', a.corNumber) +
       fact('Passport number', a.passportNumber) +
-      fact('Clio matter', a.clioMatterLink
-        ? '<a href="' + esc(a.clioMatterLink) + '" target="_blank" rel="noopener">' + esc(a.clioMatterNumber || 'Open ↗') + '</a>'
-        : a.clioMatterNumber, !!a.clioMatterLink) +
+      fact('Clio matter', safeUrl(a.clioMatterLink)
+        ? '<a href="' + esc(safeUrl(a.clioMatterLink)) + '" target="_blank" rel="noopener">' + esc(a.clioMatterNumber || 'Open ↗') + '</a>'
+        : a.clioMatterNumber, !!safeUrl(a.clioMatterLink)) +
       fact('File location', a.fileLocation) +
       '</dl>';
 
@@ -412,7 +436,10 @@
       }).join('') : '<div class="cbi-empty">No comments yet.</div>') +
       '</div>' +
       '<div class="cbi-composer">' +
-        '<textarea data-cbi-comment-input placeholder="Add a comment…" maxlength="8000"></textarea>' +
+        // The draft lives in state, not just the DOM: a morph that touches
+        // an unfocused textarea syncs it to the rendered value, so an
+        // unmanaged draft would vanish on the next re-render.
+        '<textarea data-cbi-comment-input placeholder="Add a comment…" maxlength="8000">' + esc(state.detail.commentDraft || '') + '</textarea>' +
         '<button type="button" data-cbi-action="post-comment"' + (state.detail.posting ? ' disabled' : '') + '>Post</button>' +
       '</div>';
 
@@ -505,16 +532,24 @@
     }
   }
 
-  function onInput(e) {
-    var search = e.target.closest('[data-cbi-search]');
-    if (!search) return;
+  function commitSearch(value) {
     clearTimeout(state.searchTimer);
-    var value = search.value;
     state.searchTimer = setTimeout(function () {
-      state.filters.q = value.trim();
+      state.filters.q = (value || '').trim();
       state.list.page = 1;
       loadList();
     }, 300);
+  }
+
+  function onInput(e) {
+    // The comment draft mirrors into state so morphs can't eat it.
+    var comment = e.target.closest('[data-cbi-comment-input]');
+    if (comment) { state.detail.commentDraft = comment.value; return; }
+
+    // Search normally goes through wireToolbarSearch (which also powers the
+    // clear button and focus classes); this is the standalone fallback.
+    var search = e.target.closest('[data-cbi-search]');
+    if (search && !search._portalToolbarSearchWired) commitSearch(search.value);
   }
 
   function handleAction(action) {
@@ -565,16 +600,24 @@
     if (!input) return;
     var body = input.value.trim();
     if (!body || state.detail.posting) return;
-    state.detail.posting = true; render();
+    state.detail.posting = true;
+    state.detail.commentDraft = body;
+    render();
     cbiFetch(BASE + '/applications/' + encodeURIComponent(state.detail.uuid) + '/comments', { method: 'POST', json: { body: body } })
       .then(function (c) {
         state.detail.posting = false;
+        state.detail.commentDraft = '';
         if (state.detail.data) state.detail.data.comments.push(c);
         render();
+        // The morph never rewrites a FOCUSED textarea, so clear it directly
+        // for the case where the cursor stayed in the composer.
+        var live = state.el.querySelector('[data-cbi-comment-input]');
+        if (live) live.value = '';
         var thread = state.el.querySelector('[data-cbi-comments]');
         if (thread) thread.scrollTop = thread.scrollHeight;
       })
       .catch(function (e) {
+        // Draft stays in state, so the failure render restores the text.
         state.detail.posting = false; render();
         toast((e && e.message) || 'Couldn’t post the comment', false);
       });
@@ -607,6 +650,11 @@
     el.addEventListener('click', onClick);
     el.addEventListener('change', onChange);
     el.addEventListener('input', onInput);
+    // The shared toolbar-search wiring owns the clear (X) button, focus
+    // classes and keystroke commits; its own guard makes re-calls safe.
+    if (ui() && ui().wireToolbarSearch) {
+      ui().wireToolbarSearch(el, '[data-cbi-search]', commitSearch);
+    }
   }
 
   function mount(el) {

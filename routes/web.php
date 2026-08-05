@@ -776,7 +776,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications', [CbiController::class, 'applications'])->name('applications');
         Route::get('/sync', [CbiController::class, 'syncStatus'])->name('sync.status');
         Route::post('/sync', [CbiController::class, 'triggerSync'])->name('sync.trigger');
-        Route::get('/attachments/{attachment}', [CbiController::class, 'downloadAttachment'])->name('attachments.download');
+        Route::get('/attachments/{attachment}', [CbiController::class, 'downloadAttachment'])
+            ->whereNumber('attachment')->name('attachments.download');
         Route::get('/applications/{uuid}', [CbiController::class, 'application'])->name('applications.show');
         Route::post('/applications/{uuid}/comments', [CbiController::class, 'storeComment'])->name('applications.comments');
     });

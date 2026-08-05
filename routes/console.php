@@ -431,7 +431,9 @@ Artisan::command('smartsheet:sync
             sleep($wait);
             goto attempt;
         }
-        if ($result['status'] === 'synced') {
+        // 'unchanged' maps too: a pass that mirrored but died mid-mapping
+        // reports unchanged on retry, and mapping again is nearly free.
+        if (in_array($result['status'], ['synced', 'unchanged'], true)) {
             \App\Support\Cbi\Mapper::mapSheet($sheet->fresh());
         }
         $done++;
@@ -470,7 +472,9 @@ Artisan::command('cbi:remap {--sheet= : Remote sheet id to remap alone}', functi
     );
 
     foreach ($sheets as $sheet) {
-        \App\Support\Cbi\Mapper::mapSheet($sheet);
+        // force: without it the per-row unchanged-skip makes a remap a
+        // silent no-op — the whole point here is re-extracting everything.
+        \App\Support\Cbi\Mapper::mapSheet($sheet, force: true);
         $this->info("Mapped: {$sheet->name}");
     }
 

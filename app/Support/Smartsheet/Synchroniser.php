@@ -66,12 +66,24 @@ class Synchroniser
                 self::log($sheet, 'sheet-gone', 'warning', 'Sheet no longer present in the workspace.', [], $runId);
             });
 
+        /*
+         * Tier one of change detection. The stored `version` column can't be
+         * the gate here — it is only ever written by syncSheet, always equal
+         * to synced_version, so comparing them would go circular after the
+         * first success and freeze the sheet forever. The walk DOES refresh
+         * modified_at_remote every tick, so that timestamp is the tier-one
+         * signal; syncSheet's cheap /version probe stays as tier two and
+         * short-circuits advisory bumps that changed nothing. Errored sheets
+         * are always due again — a failed pass must retry, not hide.
+         */
         $due = SmartsheetSheet::query()
             ->where('sync_enabled', true)
             ->where('status', '!=', SmartsheetSheet::STATUS_GONE)
             ->where(function ($q) {
                 $q->whereNull('synced_version')
-                    ->orWhereColumn('version', '!=', 'synced_version');
+                    ->orWhereNull('last_success_at')
+                    ->orWhereColumn('modified_at_remote', '>', 'last_success_at')
+                    ->orWhere('status', SmartsheetSheet::STATUS_ERROR);
             })
             ->orderByRaw('synced_version IS NOT NULL')   // never-synced sheets first
             ->orderBy('modified_at_remote', 'desc')
@@ -160,7 +172,14 @@ class Synchroniser
         try {
             $version = (int) (Client::get('/sheets/'.$sheet->remote_id.'/version')['version'] ?? 0);
             if (! $force && $sheet->synced_version !== null && $version === (int) $sheet->synced_version) {
-                $sheet->update(['version' => $version, 'last_synced_at' => now()]);
+                // Verified current — advancing last_success_at is what stops
+                // an advisory modified_at bump from re-probing every tick.
+                // Safe as the rowsModifiedSince watermark too: nothing changed.
+                $sheet->update([
+                    'version' => $version,
+                    'last_synced_at' => now(),
+                    'last_success_at' => now(),
+                ]);
 
                 return ['status' => 'unchanged'];
             }

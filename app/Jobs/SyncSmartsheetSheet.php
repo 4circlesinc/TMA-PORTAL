@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\SmartsheetSheet;
 use App\Support\Cbi\Mapper;
 use App\Support\Smartsheet\Synchroniser;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -15,8 +15,13 @@ use Illuminate\Support\Str;
  * Mirror one Smartsheet sheet, then map its rows into the CBI domain.
  * Dispatched per sheet by smartsheet:sync so a big master tracker can't
  * hold the rest of the workspace hostage.
+ *
+ * UntilProcessing, not plain ShouldBeUnique: the throttle path re-dispatches
+ * this job from inside handle(), and a lock held for the job's whole life
+ * would swallow that re-dispatch silently. Releasing at processing keeps
+ * queue-level dedupe while WithoutOverlapping still stops concurrent runs.
  */
-class SyncSmartsheetSheet implements ShouldBeUnique, ShouldQueue
+class SyncSmartsheetSheet implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
@@ -61,7 +66,14 @@ class SyncSmartsheetSheet implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        if ($result['status'] === 'synced') {
+        /*
+         * Map on 'unchanged' as well as 'synced': if a previous run synced
+         * the mirror but died during mapping, the version gate reports
+         * unchanged on retry and a synced-only condition would mask the
+         * unfinished mapping forever. Mapping an already-mapped sheet is
+         * nearly free — the per-row unchanged-skip does the work.
+         */
+        if (in_array($result['status'], ['synced', 'unchanged'], true)) {
             Mapper::mapSheet($this->sheet->fresh());
         }
     }

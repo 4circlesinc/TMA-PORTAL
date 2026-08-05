@@ -10,6 +10,7 @@ use App\Models\CbiComment;
 use App\Models\SmartsheetDiscussion;
 use App\Models\SmartsheetSheet;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -167,27 +168,38 @@ class Mapper
 
     /**
      * Map everything a sheet feeds. Called after each sheet sync and by the
-     * cbi:remap command.
+     * cbi:remap command. $force re-extracts every row regardless of the
+     * unchanged-skip — without it a remap after a mapping fix would be a
+     * silent no-op, since sources are stamped with exactly the timestamp
+     * the skip compares against.
      */
-    public static function mapSheet(SmartsheetSheet $sheet): void
+    public static function mapSheet(SmartsheetSheet $sheet, bool $force = false): void
     {
+        // Per-pass caches only: a long-lived queue worker would otherwise
+        // serve titles/sheets from a previous job after columns changed.
+        self::$titleMaps = [];
+        self::$sheetsByRemoteId = [];
+
         if ($sheet->mapsToApplications()) {
-            self::mapApplicationSheet($sheet);
+            self::mapApplicationSheet($sheet, $force);
             self::importComments($sheet);
         } elseif ($sheet->category === SmartsheetSheet::CATEGORY_ASSESSMENT) {
             self::mapAssessmentSheet($sheet);
         }
     }
 
-    private static function mapApplicationSheet(SmartsheetSheet $sheet): void
+    private static function mapApplicationSheet(SmartsheetSheet $sheet, bool $force = false): void
     {
         $titles = self::titleMap($sheet);
         $now = now();
 
         // 1. Extract every row in memory (a master tracker is ~2k rows —
         //    comfortably held; the CPU work here saves thousands of queries).
+        //    A row that fails extraction is remembered: it must read as
+        //    "couldn't process", never as "left the sheet".
         $extracts = [];
-        $sheet->rows()->orderBy('row_number')->chunk(500, function ($rows) use (&$extracts, $titles, $sheet) {
+        $failed = [];
+        $sheet->rows()->orderBy('row_number')->chunk(500, function ($rows) use (&$extracts, &$failed, $titles, $sheet) {
             foreach ($rows as $row) {
                 try {
                     $fields = self::extractFields($row->cells ?? [], $titles);
@@ -203,12 +215,23 @@ class Mapper
                     ];
                 } catch (Throwable $e) {
                     // One malformed row must not sink the sheet.
+                    $failed[] = (int) $row->remote_id;
                     Log::warning('CBI extract failed for row', [
                         'sheet' => $sheet->remote_id, 'row' => $row->remote_id, 'error' => $e->getMessage(),
                     ]);
                 }
             }
         });
+
+        // Systematic failure guard: every row failing extraction means a bug
+        // here, not a mass departure — touch nothing downstream.
+        if ($extracts === [] && $failed !== []) {
+            Log::error('CBI extraction failed for every row; skipping map pass', [
+                'sheet' => $sheet->remote_id, 'failed' => count($failed),
+            ]);
+
+            return;
+        }
 
         // 2. Existing sources for this sheet, and the rows that changed.
         $sources = CbiApplicationSource::query()
@@ -219,7 +242,7 @@ class Mapper
         $work = [];
         foreach ($extracts as $remoteId => $x) {
             $source = $sources->get($remoteId);
-            if ($source && $source->row_modified_at !== null && $x['modified'] !== null
+            if (! $force && $source && $source->row_modified_at !== null && $x['modified'] !== null
                 && ! $x['modified']->gt($source->row_modified_at)) {
                 continue; // unchanged since it last fed its application
             }
@@ -233,15 +256,17 @@ class Mapper
                 ->update(['last_seen_at' => $now]);
         }
 
+        $orphanCandidates = [];
         if ($work !== []) {
-            self::applyWork($sheet, $work, $now);
+            $orphanCandidates = self::applyWork($sheet, $work, $now);
         }
 
         // 3. Rows that left this sheet (moved to a closed sheet, deleted)
         //    lose their source link; a sourceless application is retired.
+        //    Failed-extraction rows are exempt — they are still present.
         $stale = CbiApplicationSource::query()
             ->where('sheet_remote_id', $sheet->remote_id)
-            ->whereNotIn('row_remote_id', array_keys($extracts))
+            ->whereNotIn('row_remote_id', array_merge(array_keys($extracts), $failed))
             ->get();
         if ($stale->isNotEmpty()) {
             CbiApplicationSource::query()->whereIn('id', $stale->pluck('id'))->delete();
@@ -253,19 +278,46 @@ class Mapper
             }
         }
 
-        // Anything left holding no sources at all is soft-deleted in one pass.
-        CbiApplication::query()
-            ->whereDoesntHave('sources')
-            ->update(['deleted_at' => $now]);
+        /*
+         * Retire sourceless applications — but only the ones THIS pass could
+         * have orphaned (stale rows + re-pointed keys). A global sweep raced
+         * concurrently-mapping sheets: another job's application exists for
+         * an instant before its first source row lands.
+         */
+        $candidates = array_values(array_unique(array_merge(
+            $orphanCandidates,
+            $stale->pluck('application_id')->all(),
+        )));
+        if ($candidates !== []) {
+            CbiApplication::query()
+                ->whereIn('id', $candidates)
+                ->whereDoesntHave('sources')
+                ->update(['deleted_at' => $now]);
+        }
     }
 
     /**
      * The bulk pipeline: resolve/create applications for every changed row,
-     * re-point sources, then upsert the merged field sets in chunks.
+     * re-point sources, then upsert the merged field sets in chunks. The
+     * whole pass is one transaction, so a source is never stamped
+     * "processed" unless the application write it fed also landed — a
+     * half-applied pass rolls back and the retry redoes it all.
+     *
+     * Returns the ids of applications this pass may have orphaned (a row's
+     * dedupe key changed and its source moved to a different application).
      *
      * @param  array<int, array<string, mixed>>  $work row_remote_id => extract
+     * @return list<int>
      */
-    private static function applyWork(SmartsheetSheet $sheet, array $work, $now): void
+    private static function applyWork(SmartsheetSheet $sheet, array $work, $now): array
+    {
+        return DB::transaction(function () use ($sheet, $work, $now) {
+            return self::applyWorkInner($sheet, $work, $now);
+        });
+    }
+
+    /** @return list<int> */
+    private static function applyWorkInner(SmartsheetSheet $sheet, array $work, $now): array
     {
         // Resolve applications by dedupe key — including trashed ones, which
         // a live row resurrects.
@@ -284,6 +336,15 @@ class Mapper
         if ($restore->isNotEmpty()) {
             CbiApplication::withTrashed()->whereIn('id', $restore)->update(['deleted_at' => null]);
         }
+
+        // Which applications currently own these rows? Anything that loses
+        // its row to a re-keyed application is an orphan candidate for the
+        // caller's scoped sweep.
+        $previousOwners = CbiApplicationSource::query()
+            ->where('sheet_remote_id', $sheet->remote_id)
+            ->whereIn('row_remote_id', array_keys($work))
+            ->pluck('application_id')
+            ->unique();
 
         // Create the missing ones (minimal rows), then read their ids back.
         $missing = [];
@@ -306,11 +367,16 @@ class Mapper
                 CbiApplication::insertOrIgnore($chunk);
             }
             foreach (array_chunk(array_keys($missing), 1000) as $chunk) {
-                $byKey = $byKey->merge(
-                    CbiApplication::query()->whereIn('dedupe_key', $chunk)
-                        ->get(['id', 'uuid', 'dedupe_key', 'stage', 'status', 'assigned_to'])
-                        ->keyBy('dedupe_key')
-                );
+                // withTrashed: insertOrIgnore may have collided with a swept
+                // (soft-deleted) application holding the key — a live row now
+                // feeds it, so it comes back rather than staying invisible.
+                $found = CbiApplication::withTrashed()->whereIn('dedupe_key', $chunk)
+                    ->get(['id', 'uuid', 'dedupe_key', 'stage', 'status', 'assigned_to', 'deleted_at']);
+                $revive = $found->filter(fn ($a) => $a->trashed())->pluck('id');
+                if ($revive->isNotEmpty()) {
+                    CbiApplication::withTrashed()->whereIn('id', $revive)->update(['deleted_at' => null]);
+                }
+                $byKey = $byKey->merge($found->keyBy('dedupe_key'));
             }
 
             $imported = [];
@@ -427,6 +493,11 @@ class Mapper
                 self::rebuild($application);
             }
         }
+
+        // Applications that owned one of these rows before but no longer do.
+        $newOwners = collect($sourceBatch)->pluck('application_id')->unique();
+
+        return $previousOwners->diff($newOwners)->values()->all();
     }
 
     /** @return list<array<string, mixed>> */
@@ -537,11 +608,19 @@ class Mapper
         }
     }
 
+    /** Per-pass caches, reset by mapSheet() — see the staleness note there. */
+    private static array $titleMaps = [];
+
+    /** @var array<int|string, SmartsheetSheet|null> */
+    private static array $sheetsByRemoteId = [];
+
     private static function sheetByRemoteId(int|string $remoteId): ?SmartsheetSheet
     {
-        static $cache = [];
+        if (! array_key_exists($remoteId, self::$sheetsByRemoteId)) {
+            self::$sheetsByRemoteId[$remoteId] = SmartsheetSheet::query()->where('remote_id', $remoteId)->first();
+        }
 
-        return $cache[$remoteId] ??= SmartsheetSheet::query()->where('remote_id', $remoteId)->first();
+        return self::$sheetsByRemoteId[$remoteId];
     }
 
     /**
@@ -607,9 +686,8 @@ class Mapper
     /** @return array<string, list<int>> normalised title => column remote ids (in position order) */
     private static function titleMap(SmartsheetSheet $sheet): array
     {
-        static $cache = [];
-        if (isset($cache[$sheet->id])) {
-            return $cache[$sheet->id];
+        if (isset(self::$titleMaps[$sheet->id])) {
+            return self::$titleMaps[$sheet->id];
         }
 
         $map = [];
@@ -617,7 +695,7 @@ class Mapper
             $map[self::normaliseTitle($column->title)][] = (int) $column->remote_id;
         }
 
-        return $cache[$sheet->id] = $map;
+        return self::$titleMaps[$sheet->id] = $map;
     }
 
     private static function normaliseTitle(string $title): string
@@ -710,6 +788,22 @@ class Mapper
         return is_string($value) ? trim($value) : $value;
     }
 
+    /**
+     * Column widths, mirroring the cbi_applications schema. Every string
+     * truncates to its column's width — an overwidth cell degrades to
+     * truncation instead of aborting a whole 100-row upsert chunk.
+     * Fields absent here are text columns, capped at 4000 to stay sane.
+     */
+    private const FIELD_LIMITS = [
+        'applicant_number' => 191, 'applicant_name' => 512, 'main_applicant_name' => 512,
+        'nationality' => 191, 'status' => 191, 'application_review' => 191, 'progress' => 191,
+        'action_needed' => 191, 'referred_by' => 191, 'promoter' => 191, 'service_provider' => 191,
+        'main_contact' => 191, 'assigned_to' => 191, 'verification_officer' => 191, 'dd_officer' => 191,
+        'pa_assignment' => 191, 'file_owner' => 191, 'submitted_by' => 191, 'verified_by' => 191,
+        'investment_option' => 191, 'application_type' => 191, 'clio_matter_number' => 191,
+        'clio_matter_link' => 512, 'file_location' => 191, 'cor_number' => 191, 'passport_number' => 191,
+    ];
+
     /** @return array<string, mixed> attrs covering every mapped field (nulls included) */
     private static function castFields(array $merged): array
     {
@@ -732,10 +826,20 @@ class Mapper
 
                 continue;
             }
-            $attrs[$field] = is_scalar($value) ? Str::limit((string) $value, 4000, '') : null;
+            $attrs[$field] = is_scalar($value)
+                ? Str::limit((string) $value, self::FIELD_LIMITS[$field] ?? 4000, '')
+                : null;
             if ($attrs[$field] === '') {
                 $attrs[$field] = null;
             }
+        }
+
+        // Rendered as an href in the portal: anything but http(s) (a
+        // javascript: cell typed into Smartsheet, say) is dropped here so
+        // it can never reach a browser.
+        if (isset($attrs['clio_matter_link'])
+            && ! preg_match('~^https?://~i', (string) $attrs['clio_matter_link'])) {
+            $attrs['clio_matter_link'] = null;
         }
 
         return $attrs;
