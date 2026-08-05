@@ -872,11 +872,16 @@
   display: flex;
   justify-content: center;
   flex-shrink: 0;
+  /* the auto margin here and on the panel body centre the two as one group.
+     Without it the logo pins to the top of the panel and the body centres in
+     whatever is left, which opens a dead gap between them. */
+  margin-top: auto;
+  padding-bottom: var(--space-32);
 }
 
 .tma-auth__brand img {
   /* the horizontal logo PNG carries generous transparent padding */
-  height: 120px;
+  height: 88px;
   width: auto;
 }
 
@@ -884,7 +889,8 @@
    loads after this file and outranks anything declared here */
 
 .tma-auth__panel-body {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  margin-bottom: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -985,8 +991,12 @@
     gap: var(--space-20);
   }
 
+  .tma-auth__brand {
+    padding-bottom: var(--space-20);
+  }
+
   .tma-auth__brand img {
-    height: 76px;
+    height: 64px;
   }
 
   .tma-auth__form,
