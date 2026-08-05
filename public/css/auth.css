@@ -876,7 +876,7 @@
      Without it the logo pins to the top of the panel and the body centres in
      whatever is left, which opens a dead gap between them. */
   margin-top: auto;
-  padding-bottom: var(--space-32);
+  padding-bottom: var(--space-64);
 }
 
 .tma-auth__brand img {
@@ -992,7 +992,7 @@
   }
 
   .tma-auth__brand {
-    padding-bottom: var(--space-20);
+    padding-bottom: var(--space-32);
   }
 
   .tma-auth__brand img {
