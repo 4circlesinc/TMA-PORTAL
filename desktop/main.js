@@ -14,6 +14,7 @@ const titlebar = require('./titlebar');
 const tray = require('./tray');
 const notifications = require('./notifications');
 const splash = require('./splash');
+const assetCache = require('./asset-cache');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
@@ -90,6 +91,7 @@ function chromeUserAgent() {
 /* ----------------------------------------------------------------------- window */
 
 let mainWindow = null;
+let loadingLayer = null;
 
 // Closing the window puts the app in the background rather than ending it, so
 // messages and calls keep arriving. Only Quit — or an update restart — sets
@@ -133,21 +135,58 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  attachNavigationRules(mainWindow);
-
   /*
-   * The loading screen is this window, not a panel in front of it: a separate
-   * splash is a second thing on the desktop that has to be positioned, kept on
-   * top and taken away again. Loading it here means the window opens with it
-   * already drawn, and the portal replaces it in place the moment it commits.
+   * The loading layer goes up before anything is asked for, and comes down only
+   * once the page underneath has painted — so the staged assembly of the shell
+   * (sidebar, then labels, then icons) happens out of sight.
    */
-  splash.showIn(mainWindow, () => loadPortal(mainWindow));
+  loadingLayer = splash.attach(mainWindow);
+  loadingLayer.show();
+
+  attachNavigationRules(mainWindow);
+  loadPortal(mainWindow);
 }
 
 function loadPortal(win, url = PORTAL_URL) {
   win.loadURL(url, { userAgent: chromeUserAgent() }).catch(() => {
     // handled by did-fail-load
   });
+}
+
+/**
+ * Takes the loading layer down once the page underneath has actually painted.
+ *
+ * `did-finish-load` is far too early to reveal on: it fires when the document
+ * and its subresources have loaded, which is before layout has settled and
+ * before webfonts have swapped. Revealing there is what produced the staged
+ * assembly — shell, then labels, then icons — that made the app look like a
+ * page being built rather than an app opening.
+ *
+ * So it waits for the load event, then for the fonts (they reshape every label
+ * on the screen, and swapping after the reveal shows the page twice in two
+ * typefaces), then for two animation frames so the first real frame has been
+ * composited.
+ */
+async function revealWhenPainted(webContents) {
+  if (!loadingLayer) return;
+
+  try {
+    await webContents.executeJavaScript(`
+      new Promise((resolve) => {
+        const settle = () => requestAnimationFrame(() => requestAnimationFrame(resolve));
+        const ready = () => {
+          if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle, settle);
+          else settle();
+        };
+        if (document.readyState === 'complete') ready();
+        else window.addEventListener('load', ready, { once: true });
+      })
+    `, true);
+  } catch {
+    // The page went away mid-wait; the layer's own timeout still takes it down.
+  }
+
+  if (loadingLayer) loadingLayer.hide();
 }
 
 function revealWindow({ steal }) {
@@ -216,6 +255,16 @@ function attachNavigationRules(win) {
     shell.openExternal(url);
   });
 
+  /*
+   * A reload has the same problem as a cold start, so the layer returns for
+   * every main-frame navigation. `isSameDocument` is excluded: the portal
+   * routes by pushState, and covering the window for an in-page move would
+   * flash the splash over a screen that is already there.
+   */
+  webContents.on('did-start-navigation', (event, url, isSameDocument, isMainFrame) => {
+    if (isMainFrame && !isSameDocument && loadingLayer) loadingLayer.show();
+  });
+
   webContents.on('did-finish-load', () => {
     // Before the portal check: the error page below is ours too, and it would
     // otherwise render underneath the bar.
@@ -229,6 +278,8 @@ function attachNavigationRules(win) {
     webContents.executeJavaScript(HOST_BRIDGE, true).catch(() => {
       // A page that never exposed the stores just leaves the badge alone.
     });
+
+    revealWhenPainted(webContents);
   });
 
   // The portal routes through pushState, which fires no load event. Without
@@ -239,6 +290,9 @@ function attachNavigationRules(win) {
 
   webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame || errorCode === -3) return; // -3 = user aborted
+    // The error page is the thing to look at; hiding it behind a logo helps
+    // nobody.
+    if (loadingLayer) loadingLayer.hide();
     showLoadError(win, errorDescription, validatedURL);
   });
 
@@ -881,7 +935,7 @@ if (!app.requestSingleInstanceLock()) {
 
   const argvDeepLink = () => process.argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     if (app.isPackaged) {
       app.setAsDefaultProtocolClient(PROTOCOL);
     } else {
@@ -917,6 +971,16 @@ if (!app.requestSingleInstanceLock()) {
     // and declining both go through the page that owns the call.
     ipcMain.on('call:accept', answerCall);
     ipcMain.on('call:decline', declineCall);
+
+    /*
+     * Before the window, so the very first load benefits. Awaited on purpose:
+     * it is one small request, and doing it after the portal has started
+     * fetching would leave the cold start — the one that matters — uncached.
+     */
+    const assets = await assetCache.install(PORTAL_ORIGIN);
+    console.log(assets.active
+      ? `  • assets: serving ${assets.count} files from the app`
+      : `  • assets: using the network (${assets.reason})`);
 
     createWindow();
     buildMenu();

@@ -1,4 +1,4 @@
-- The title bar now looks the same on every screen, including sign-in
-- Window controls line up with the rest of the title bar
-- Page titles no longer repeat the app's own name
-- A launch screen while the app starts, instead of a blank wait
+- Icons, styles and scripts now ship with the app instead of downloading each time
+- The app no longer shows a half-built screen while it loads
+- The loading screen covers every start and every refresh
+- The title bar looks the same on every screen, including sign-in

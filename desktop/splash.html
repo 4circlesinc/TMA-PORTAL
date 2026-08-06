@@ -12,6 +12,9 @@
     margin: 0;
     height: 100%;
     overflow: hidden;
+    /* Faded out when the page underneath is ready, so the portal appears to
+       arrive rather than the splash to vanish. */
+    transition: opacity 240ms ease;
     /* --color-primary-dark from public/css/tokens.css. */
     background: #136da0;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
@@ -19,6 +22,8 @@
     user-select: none;
     cursor: default;
   }
+
+  body.is-leaving { opacity: 0; }
 
   .screen {
     /* Frameless and undraggable: it is gone in a second and dragging it would

@@ -27,6 +27,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\Design\MailPreviewController;
 use App\Http\Controllers\DesktopAuthController;
+use App\Http\Controllers\DesktopAssetsController;
 use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\DevDatabaseController;
@@ -988,6 +989,11 @@ Route::get('/desktop/releases', [DesktopReleasesController::class, 'index'])
 Route::get('/desktop/download/{platform}', [DesktopReleasesController::class, 'download'])
     ->where('platform', 'mac|windows')
     ->name('desktop.download');
+
+// Identity of this deploy's static assets. The desktop app ships a copy and
+// serves it locally only when this matches exactly — see the controller.
+Route::get('/desktop/assets', [DesktopAssetsController::class, 'show'])
+    ->name('desktop.assets');
 
 // Update feed the installed macOS app polls. Public by design: it serves only
 // the signed builds we publish, and the app has no session when it checks.
