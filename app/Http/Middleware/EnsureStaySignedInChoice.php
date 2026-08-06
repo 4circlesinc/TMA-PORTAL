@@ -22,6 +22,19 @@ class EnsureStaySignedInChoice
             && ! $request->routeIs('logout')
             && ! $request->routeIs('two-factor.*')
         ) {
+            // A browser that has already answered is never held here again.
+            // The cookie *is* the answer; the session flag is only how we
+            // remember to ask. If the flag ever outlives the answer — a submit
+            // that didn't validate, a write that didn't land — this gate would
+            // otherwise pin the account to one screen for the rest of the
+            // session, bouncing every URL back with nothing on the page to
+            // explain it. That is not a state a user can get themselves out of.
+            if (! StaySignedIn::shouldAsk($request)) {
+                StaySignedIn::clearNeeded($request);
+
+                return $next($request);
+            }
+
             return redirect()->route('stay-signed-in.show');
         }
 

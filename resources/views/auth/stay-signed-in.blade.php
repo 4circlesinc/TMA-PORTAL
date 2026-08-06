@@ -19,11 +19,35 @@
           <p class="tma-auth__subtitle">Do you trust this browser to keep you signed in? Only say yes on devices you use regularly.</p>
         </div>
 
-        <form class="tma-auth__section" method="POST" action="{{ route('stay-signed-in.store') }}">
-          @csrf
-          <button type="submit" class="tma-auth__submit" name="stay" value="yes">Yes, stay signed in</button>
-          <button type="submit" class="tma-auth__submit tma-auth__submit--ghost" name="stay" value="no">No, sign me out when the session ends</button>
-        </form>
+        @error('stay')
+          <div class="tma-auth__alert tma-auth__alert--error" role="alert">
+            <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="16" height="16" aria-hidden="true">
+            <span>{{ $message }}</span>
+          </div>
+        @enderror
+
+        {{-- Two forms, not two submit buttons in one.
+             The answer used to ride on the pressed button's name/value, which
+             is only sent when the browser reports a submitter — and a form
+             submitted any other way (Enter on a focused control, an extension,
+             an assistive tool) sent no `stay` at all. That failed validation,
+             bounced back to this screen, and EnsureStaySignedInChoice then held
+             the person here for the rest of the session: every URL they typed
+             came straight back. With the answer in a hidden field there is no
+             submitter to lose, so this cannot happen however the form is sent. --}}
+        <div class="tma-auth__section">
+          <form method="POST" action="{{ route('stay-signed-in.store') }}">
+            @csrf
+            <input type="hidden" name="stay" value="yes">
+            <button type="submit" class="tma-auth__submit">Yes, stay signed in</button>
+          </form>
+
+          <form method="POST" action="{{ route('stay-signed-in.store') }}">
+            @csrf
+            <input type="hidden" name="stay" value="no">
+            <button type="submit" class="tma-auth__submit tma-auth__submit--ghost">No, sign me out when the session ends</button>
+          </form>
+        </div>
       </section>
     </div>
 
