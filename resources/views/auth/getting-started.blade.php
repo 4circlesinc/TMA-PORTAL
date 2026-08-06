@@ -60,8 +60,8 @@
             @php
               $connectUrl = route('social.redirect', ['provider' => 'microsoft', 'sync_all' => 1, 'return' => 'getting-started']);
               $rows = [
-                ['key' => 'email', 'icon' => '/images/icons/phosphor/MicrosoftOutlookLogo.svg', 'name' => 'Connect your email', 'desc' => 'Outlook mail, right in the portal'],
-                ['key' => 'calendar', 'icon' => '/images/icons/phosphor/Calendar.svg', 'name' => 'Connect your calendar', 'desc' => 'Meetings sync both ways'],
+                ['key' => 'email', 'icon' => '/images/icons/brands/Outlook.svg', 'name' => 'Connect your email', 'desc' => 'Outlook mail, right in the portal'],
+                ['key' => 'calendar', 'icon' => '/images/icons/brands/outlook_calendar.svg', 'name' => 'Connect your calendar', 'desc' => 'Meetings sync both ways'],
                 ['key' => 'onedrive', 'icon' => '/images/icons/brands/OneDrive40.svg', 'name' => 'Connect OneDrive', 'desc' => 'Your files in the library'],
               ];
             @endphp

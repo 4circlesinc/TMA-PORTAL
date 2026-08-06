@@ -1729,8 +1729,8 @@
   // One Microsoft consent covers all three — each tile reflects a facet of
   // the same connected account, so connecting any of them connects them all.
   var CONNECTOR_CATALOG = [
-    { id: 'email', name: 'Outlook', desc: 'Read and send your mail in the portal', icon: 'images/icons/phosphor/MicrosoftOutlookLogo.svg' },
-    { id: 'calendar', name: 'Calendar', desc: 'Two-way sync with your Microsoft calendar', icon: 'images/icons/phosphor/Calendar.svg' },
+    { id: 'email', name: 'Outlook', desc: 'Read and send your mail in the portal', icon: 'images/icons/brands/Outlook.svg' },
+    { id: 'calendar', name: 'Calendar', desc: 'Two-way sync with your Microsoft calendar', icon: 'images/icons/brands/outlook_calendar.svg' },
     { id: 'onedrive', name: 'OneDrive', desc: 'Your OneDrive files in the file library', icon: 'images/icons/brands/OneDrive40.svg' },
   ];
 

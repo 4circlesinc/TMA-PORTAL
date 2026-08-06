@@ -14,8 +14,8 @@
   var DONE_LINGER_MS = 6000;
 
   var SERVICES = {
-    email: { label: 'Email', syncing: 'Syncing email…', icon: '/images/icons/phosphor/MicrosoftOutlookLogo.svg' },
-    calendar: { label: 'Calendar', syncing: 'Syncing calendar…', icon: '/images/icons/phosphor/Calendar.svg' },
+    email: { label: 'Email', syncing: 'Syncing email…', icon: '/images/icons/brands/Outlook.svg' },
+    calendar: { label: 'Calendar', syncing: 'Syncing calendar…', icon: '/images/icons/brands/outlook_calendar.svg' },
     onedrive: { label: 'OneDrive', syncing: 'Syncing OneDrive…', icon: '/images/icons/brands/OneDrive40.svg' },
   };
 
