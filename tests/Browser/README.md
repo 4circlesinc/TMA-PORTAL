@@ -132,8 +132,8 @@ field placement and drawing, and computed CSS only exist in a browser.
   `/account-settings` is the one settings home, so *every* account loads it —
   but the rail it draws is a single static list in `portal-admin.js` and
   nothing pruned it, so employees and clients were offered Admin Overview, the
-  security and sign-in policies, DLP, company branding, billing, storage and
-  the whole Advanced Preferences group beside their own profile.
+  security and sign-in policies, company branding, storage and the whole
+  Advanced Preferences group beside their own profile.
 
   `PortalAccessTest` can check the matrix; only a browser can check what the
   rail *paints*. It reads every section each account type is offered (expanding

@@ -79,11 +79,10 @@ async function railSections(page) {
 const ADMIN_ONLY = [
   'admin-overview', 'background-ops', 'reporting', 'notification-history',
   'branding', 'clienthub-access', 'service-teams', 'custom-fields',
-  'security-insights', 'dlp', 'signin-policy', 'security-policy',
-  'alert-settings', 'device-security', 'super-users', 'quarantined',
-  'connection-manager', 'storage-usage', 'ai-settings', 'email-settings',
-  'permissions', 'file-settings', 'tools', 'default-folders',
-  'folder-templates', 'upload-forms', 'file-drops',
+  'security-insights', 'signin-policy', 'security-policy',
+  'alert-settings', 'device-security',
+  'connection-manager', 'storage-usage',
+  'permissions', 'default-folders', 'folder-templates',
 ];
 
 const PERSONAL = ['profile', 'theme', 'time', 'notifications', 'privacy',
