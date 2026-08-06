@@ -902,95 +902,297 @@
     },
   };
 
+  /* ── Service teams (real: /admin/service-teams) ────────────────────
+     Teams are the firm's staff groups — this screen does not create a second
+     kind. Putting a team on a client fans out into ordinary per-person
+     assignments, which is what FileAccess reads, so folder access arrives by
+     the route it always did. */
+  var TEAMS = { loaded: false, loading: false, error: '', data: null };
+
+  function loadTeams() {
+    if (TEAMS.loading) return;
+    TEAMS.loading = true;
+    filelibJson('GET', '/admin/service-teams')
+      .then(function (d) { TEAMS.data = d; TEAMS.error = ''; })
+      .catch(function (e) { TEAMS.error = e.message; })
+      .then(function () { TEAMS.loading = false; TEAMS.loaded = true; render(); });
+  }
+
+  function teamAssignModal(team, mode) {
+    var d = TEAMS.data;
+    var removing = mode === 'remove';
+
+    if (!d.clients.length) {
+      ui().toast('There are no clients to assign a team to yet');
+      return;
+    }
+    if (!removing && !team.memberCount) {
+      ui().toast('“' + team.name + '” has no staff members yet — add some under People → Groups');
+      return;
+    }
+
+    var roleOptions = Object.keys(d.roles).map(function (k) { return { value: k, label: d.roles[k] }; });
+
+    ui().openModal({
+      title: (removing ? 'Take “' : 'Assign “') + team.name + (removing ? '” off a client' : '” to a client'),
+      body:
+        '<p>' + (removing
+          ? 'Ends the client assignment for all ' + team.memberCount + ' staff member' + (team.memberCount === 1 ? '' : 's') + ' in this team.'
+          : 'Assigns all ' + team.memberCount + ' staff member' + (team.memberCount === 1 ? '' : 's') + ' in this team to the client.') + '</p>' +
+        ui().field('Client', ui().select(d.clients.map(function (c) {
+          return { value: c.uid, label: c.name };
+        }), d.clients[0].uid, 'data-team-client', 'Client')) +
+        (removing ? '' :
+          ui().field('What they do for this client', ui().select(roleOptions, 'general', 'data-team-role', 'Role')) +
+          ui().field('What they can reach', ui().select(d.levels, 'view_files', 'data-team-level', 'Permission level'))) +
+        '<p class="tma-portal-note">' + (removing
+          ? 'Anyone in this team who is on the client for another reason loses that too — a client records one assignment per person, not one per team.'
+          : 'Nobody becomes the client’s primary contact this way. Adding someone to the team later does not put them on the client — re-apply the team to include them.') + '</p>' +
+        '<div class="tma-portal-form-actions">' +
+        ui().btn({
+          label: removing ? 'Remove from client' : 'Assign team',
+          variant: removing ? 'danger' : undefined,
+          attrs: 'data-team-go',
+        }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-team-go]').addEventListener('click', function () {
+          var body = { client: host.querySelector('[data-team-client]').value };
+          if (!removing) {
+            body.role = host.querySelector('[data-team-role]').value;
+            body.level = host.querySelector('[data-team-level]').value;
+          }
+
+          filelibJson('POST', '/admin/service-teams/' + encodeURIComponent(team.id) + (removing ? '/unassign' : '/assign'), body)
+            .then(function (res) {
+              TEAMS.data = res;
+              ui().closeModal();
+              var names = removing ? res.removed : res.assigned;
+              ui().toast(names.length
+                ? (removing ? 'Removed ' : 'Assigned ') + names.length + ' staff ' +
+                  (removing ? 'from ' : 'to ') + res.client.name
+                : (removing ? 'Nobody in this team was on ' : 'Everyone in this team was already on ') + res.client.name);
+              render();
+            })
+            .catch(function (e) { ui().toastError(e.message); });
+        });
+      },
+    });
+  }
+
   PAGES['service-teams'] = {
-    render: function (s) {
-      return '<p class="tma-portal-subtitle">Create and manage service teams that can be assigned to clients.</p>' +
-        (s.serviceTeams.length
-          ? ui().table(['Team', 'Members', 'Created', ''], s.serviceTeams.map(function (t) {
-              return '<tr><td><strong>' + ui().esc(t.name) + '</strong></td>' +
-                '<td class="tma-portal-table__muted">' + t.members.length + '</td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(t.created) + '</td>' +
-                '<td><div class="tma-portal-row-actions">' +
-                '<button type="button" class="tma-portal-icon-btn" data-team-delete="' + t.id + '" title="Delete team" aria-label="Delete team"><img src="images/icons/phosphor/Trash.svg" alt=""></button>' +
-                '</div></td></tr>';
-            }).join('')) +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create service team', attrs: 'data-team-create' }) + '</div>'
+    render: function () {
+      if (TEAMS.error) return '<p class="tma-portal-note">Couldn’t load service teams: ' + ui().esc(TEAMS.error) + '</p>';
+      if (!TEAMS.loaded) return ui().loading();
+
+      var d = TEAMS.data;
+      var canEdit = !!d.canEdit;
+
+      return '<p class="tma-portal-subtitle">Put a whole staff team onto a client in one move. ' +
+        'Teams are your staff groups — create and edit them under People → Groups.</p>' +
+        (canEdit ? '' : '<p class="tma-portal-note">Only administrators can assign service teams.</p>') +
+        (d.teams.length
+          ? ui().table(['Team', 'Staff', 'Clients', ''], d.teams.map(function (t) {
+              return '<tr><td><strong>' + ui().esc(t.name) + '</strong>' +
+                (t.description ? '<br><span class="tma-portal-table__muted">' + ui().esc(t.description) + '</span>' : '') + '</td>' +
+                '<td class="tma-portal-table__muted">' + t.memberCount + '</td>' +
+                '<td class="tma-portal-table__muted">' + t.clientCount + '</td>' +
+                '<td>' + (canEdit
+                  ? '<div class="tma-portal-row-actions">' +
+                    '<button type="button" class="tma-portal-icon-btn" data-team-assign="' + ui().esc(t.id) + '" title="Assign to a client" aria-label="Assign to a client"><img src="images/icons/phosphor/UserPlus.svg" alt=""></button>' +
+                    '<button type="button" class="tma-portal-icon-btn" data-team-remove="' + ui().esc(t.id) + '" title="Take off a client" aria-label="Take off a client"><img src="images/icons/phosphor/UserMinus.svg" alt=""></button>' +
+                    '</div>'
+                  : '') + '</td></tr>';
+            }).join(''))
           : ui().emptyState({
               illustration: 'Illustration13',
-              title: 'There aren’t any service teams yet',
-              subtitle: 'Start by creating service teams to assign to clients.',
-              button: ui().btn({ label: 'Create service team', attrs: 'data-team-create' }),
+              title: 'There aren’t any staff groups yet',
+              subtitle: 'Create a group under People → Groups, then assign it to a client from here.',
             }));
     },
-    wire: function (el, s) {
-      el.querySelectorAll('[data-team-create]').forEach(function (b) {
+    wire: function (el) {
+      if (!TEAMS.loaded) { loadTeams(); return; }
+
+      function teamFor(btn, attr) {
+        var id = btn.getAttribute(attr);
+        return TEAMS.data.teams.filter(function (t) { return t.id === id; })[0];
+      }
+
+      el.querySelectorAll('[data-team-assign]').forEach(function (b) {
         b.addEventListener('click', function () {
-          ui().openModal({
-            title: 'Create service team',
-            body:
-              ui().field('Team name', ui().input({ placeholder: 'e.g. Tax Advisory', attrs: 'data-team-name' })) +
-              ui().field('Members (employee emails, comma separated)', ui().input({ placeholder: 'a@x.com, b@y.com', attrs: 'data-team-members' })) +
-              '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create team', attrs: 'data-team-save' }) + '</div>',
-            onMount: function (host) {
-              host.querySelector('[data-team-save]').addEventListener('click', function () {
-                var name = host.querySelector('[data-team-name]').value.trim();
-                if (!name) { host.querySelector('[data-team-name]').focus(); return; }
-                var members = host.querySelector('[data-team-members]').value.split(',').map(function (m) { return m.trim(); }).filter(Boolean);
-                s.serviceTeams.unshift({ id: data().uid('team'), name: name, members: members, created: data().shortDate() });
-                data().save();
-                ui().closeModal();
-                ui().toast('Service team created');
-                render();
-              });
-            },
-          });
+          var t = teamFor(b, 'data-team-assign');
+          if (t) teamAssignModal(t, 'assign');
         });
       });
-      el.querySelectorAll('[data-team-delete]').forEach(function (b) {
+
+      el.querySelectorAll('[data-team-remove]').forEach(function (b) {
         b.addEventListener('click', function () {
-          s.serviceTeams = s.serviceTeams.filter(function (t) { return t.id !== b.getAttribute('data-team-delete'); });
-          data().save(); ui().toast('Team deleted'); render();
+          var t = teamFor(b, 'data-team-remove');
+          if (t) teamAssignModal(t, 'remove');
         });
       });
     },
   };
 
+  /* ── Custom fields (real: /admin/client-fields) ────────────────────
+     Defines them here; the values are collected on the client record and
+     normalised server-side on every write, so a deleted field stops being
+     stored and a dropdown can never hold a value that is not one of its
+     options. */
+  var CFIELDS = { loaded: false, loading: false, error: '', data: null };
+
+  var CFIELD_TYPES = [
+    { value: 'text', label: 'Text' },
+    { value: 'number', label: 'Number' },
+    { value: 'date', label: 'Date' },
+    { value: 'select', label: 'Dropdown' },
+  ];
+
+  function cfieldTypeLabel(type) {
+    var match = CFIELD_TYPES.filter(function (t) { return t.value === type; })[0];
+    return match ? match.label : type;
+  }
+
+  function loadCustomFields() {
+    if (CFIELDS.loading) return;
+    CFIELDS.loading = true;
+    filelibJson('GET', '/admin/client-fields')
+      .then(function (d) { CFIELDS.data = d; CFIELDS.error = ''; })
+      .catch(function (e) { CFIELDS.error = e.message; })
+      .then(function () { CFIELDS.loading = false; CFIELDS.loaded = true; render(); });
+  }
+
+  function customFieldModal(existing) {
+    var editing = !!existing;
+
+    ui().openModal({
+      title: editing ? 'Edit custom field' : 'Add custom field',
+      body:
+        ui().field('Field name', ui().input({
+          value: editing ? existing.label : '',
+          placeholder: 'e.g. Client reference',
+          attrs: 'data-cf-label',
+        })) +
+        ui().field('Type', ui().select(CFIELD_TYPES, editing ? existing.type : 'text', 'data-cf-type', 'Field type')) +
+        '<div data-cf-options' + (editing && existing.type === 'select' ? '' : ' hidden') + '>' +
+        ui().field('Options (comma separated)', ui().input({
+          value: editing ? existing.options.join(', ') : '',
+          placeholder: 'North, South, East, West',
+          attrs: 'data-cf-option-list',
+        })) +
+        '</div>' +
+        '<label class="tma-portal-checkbox"><input type="checkbox" data-cf-required' +
+        (editing && existing.required ? ' checked' : '') + '><span>Required</span></label>' +
+        '<p class="tma-portal-note">Required fields are shown as missing on client records that don’t answer them. ' +
+        'Existing clients are never blocked from being saved.</p>' +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: editing ? 'Save' : 'Add field', attrs: 'data-cf-save' }) + '</div>',
+      onMount: function (host) {
+        var typeEl = host.querySelector('[data-cf-type]');
+        var optionsWrap = host.querySelector('[data-cf-options]');
+
+        typeEl.addEventListener('change', function () {
+          optionsWrap.hidden = typeEl.value !== 'select';
+        });
+
+        host.querySelector('[data-cf-save]').addEventListener('click', function () {
+          var labelEl = host.querySelector('[data-cf-label]');
+          var label = labelEl.value.trim();
+          if (!label) { labelEl.focus(); return; }
+
+          var type = typeEl.value;
+          var options = host.querySelector('[data-cf-option-list]').value
+            .split(',').map(function (o) { return o.trim(); }).filter(Boolean);
+
+          if (type === 'select' && !options.length) {
+            host.querySelector('[data-cf-option-list]').focus();
+            ui().toastError('A dropdown needs at least one option.');
+            return;
+          }
+
+          var body = {
+            label: label,
+            type: type,
+            options: options,
+            required: host.querySelector('[data-cf-required]').checked,
+          };
+
+          var call = editing
+            ? filelibJson('PUT', '/admin/client-fields/' + encodeURIComponent(existing.id), body)
+            : filelibJson('POST', '/admin/client-fields', body);
+
+          call.then(function (d) {
+            CFIELDS.data = d;
+            ui().closeModal();
+            ui().toast(editing ? 'Field saved' : 'Custom field added');
+            render();
+          }).catch(function (e) { ui().toastError(e.message); });
+        });
+      },
+    });
+  }
+
   PAGES['custom-fields'] = {
-    render: function (s) {
-      return '<p class="tma-portal-subtitle">Add custom fields to collect extra details about clients in the hub.</p>' +
-        (s.customFields.length
-          ? ui().table(['Field', 'Type', ''], s.customFields.map(function (f) {
-              return '<tr><td><strong>' + ui().esc(f.name) + '</strong></td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(f.type) + '</td>' +
-                '<td><div class="tma-portal-row-actions">' +
-                '<button type="button" class="tma-portal-icon-btn" data-field-delete="' + f.id + '" title="Delete field" aria-label="Delete field"><img src="images/icons/phosphor/Trash.svg" alt=""></button>' +
-                '</div></td></tr>';
+    render: function () {
+      if (CFIELDS.error) return '<p class="tma-portal-note">Couldn’t load custom fields: ' + ui().esc(CFIELDS.error) + '</p>';
+      if (!CFIELDS.loaded) return ui().loading();
+
+      var d = CFIELDS.data;
+      var canEdit = !!d.canEdit;
+      var usage = d.usage || {};
+
+      return '<p class="tma-portal-subtitle">Extra details collected on every client record.</p>' +
+        (canEdit ? '' : '<p class="tma-portal-note">Only administrators can change custom fields.</p>') +
+        (d.fields.length
+          ? ui().table(['Field', 'Type', 'Answered by', ''], d.fields.map(function (f) {
+              var answered = usage[f.id] || 0;
+              return '<tr><td><strong>' + ui().esc(f.label) + '</strong>' +
+                (f.required ? ' <span class="tma-portal-tag">Required</span>' : '') +
+                (f.type === 'select' && f.options.length
+                  ? '<br><span class="tma-portal-table__muted">' + ui().esc(f.options.join(', ')) + '</span>'
+                  : '') + '</td>' +
+                '<td class="tma-portal-table__muted">' + ui().esc(cfieldTypeLabel(f.type)) + '</td>' +
+                '<td class="tma-portal-table__muted">' + answered + ' of ' + d.clientCount + '</td>' +
+                '<td>' + (canEdit
+                  ? '<div class="tma-portal-row-actions">' +
+                    '<button type="button" class="tma-portal-icon-btn" data-cf-edit="' + ui().esc(f.id) + '" title="Edit field" aria-label="Edit field"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+                    '<button type="button" class="tma-portal-icon-btn" data-cf-delete="' + ui().esc(f.id) + '" title="Delete field" aria-label="Delete field"><img src="images/icons/phosphor/Trash.svg" alt=""></button>' +
+                    '</div>'
+                  : '') + '</td></tr>';
             }).join(''))
-          : ui().emptyState({ illustration: 'Illustration04', title: 'No custom fields yet', subtitle: 'Add a field to collect details like Client ID or Region.' })) +
-        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Add custom field', attrs: 'data-field-add' }) + '</div>';
+          : ui().emptyState({ illustration: 'Illustration04', title: 'No custom fields yet', subtitle: 'Add a field to collect details like a client reference or region.' })) +
+        (canEdit ? '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Add custom field', attrs: 'data-cf-add' }) + '</div>' : '');
     },
-    wire: function (el, s) {
-      el.querySelector('[data-field-add]').addEventListener('click', function () {
-        ui().openModal({
-          title: 'Add custom field',
-          body:
-            ui().field('Field name', ui().input({ placeholder: 'e.g. Client ID', attrs: 'data-field-name' })) +
-            ui().field('Type', ui().select(['Text', 'Number', 'Date', 'Dropdown'], 'Text', 'data-field-type')) +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Add field', attrs: 'data-field-save' }) + '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-field-save]').addEventListener('click', function () {
-              var name = host.querySelector('[data-field-name]').value.trim();
-              if (!name) { host.querySelector('[data-field-name]').focus(); return; }
-              s.customFields.push({ id: data().uid('field'), name: name, type: host.querySelector('[data-field-type]').value });
-              data().save(); ui().closeModal(); ui().toast('Field added'); render();
-            });
-          },
+    wire: function (el) {
+      if (!CFIELDS.loaded) { loadCustomFields(); return; }
+
+      function fieldFor(btn, attr) {
+        var id = btn.getAttribute(attr);
+        return CFIELDS.data.fields.filter(function (f) { return f.id === id; })[0];
+      }
+
+      var add = el.querySelector('[data-cf-add]');
+      if (add) add.addEventListener('click', function () { customFieldModal(null); });
+
+      el.querySelectorAll('[data-cf-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var f = fieldFor(b, 'data-cf-edit');
+          if (f) customFieldModal(f);
         });
       });
-      el.querySelectorAll('[data-field-delete]').forEach(function (b) {
+
+      el.querySelectorAll('[data-cf-delete]').forEach(function (b) {
         b.addEventListener('click', function () {
-          s.customFields = s.customFields.filter(function (f) { return f.id !== b.getAttribute('data-field-delete'); });
-          data().save(); render();
+          var f = fieldFor(b, 'data-cf-delete');
+          if (!f) return;
+          var answered = (CFIELDS.data.usage || {})[f.id] || 0;
+          // Deleting a field and discarding the answers to it are the same
+          // click, so the count has to be in the question.
+          if (!window.confirm(answered
+            ? 'Delete “' + f.label + '”? ' + answered + ' client record' + (answered === 1 ? '' : 's') + ' answered it, and those answers stop being shown.'
+            : 'Delete the “' + f.label + '” field?')) return;
+
+          filelibJson('DELETE', '/admin/client-fields/' + encodeURIComponent(f.id))
+            .then(function (d) { CFIELDS.data = d; ui().toast('Field deleted'); render(); })
+            .catch(function (e) { ui().toastError(e.message); });
         });
       });
     },
@@ -2022,38 +2224,70 @@
     },
   };
 
+  /* ── Security alert settings (real: /admin/security-policies) ───────
+     Only the two events the portal actually detects are offered. The screen
+     this replaced also listed "signs in from a different country" and "a
+     suspicious file is uploaded" — the portal does no geo-IP lookup and runs
+     no malware scanner, so those switches could never have fired. The event
+     list comes from the server for exactly that reason. */
   PAGES['alert-settings'] = {
-    render: function (s) {
-      var a = s.settings.alertSettings;
-      var events = [
-        ['differentCountry', 'A user signs in from a different country'],
-        ['differentCity', 'A user signs in from a different city using a different device'],
-        ['failedSignIns', 'There are multiple failed sign-in attempts on a user’s account'],
-        ['suspiciousUpload', 'A suspicious file is uploaded to a folder'],
-      ];
-      return ui().section('',
-        '<p class="tma-portal-note">We send security alerts whenever we detect potentially malicious activity. Choose which activities you’d like us to notify your users about.</p>' +
-        '<table class="tma-portal-matrix"><thead>' +
-        '<tr><th>Send an alert whenever…</th><th>Admin</th><th>Employees</th><th>Clients</th></tr></thead><tbody>' +
-        events.map(function (ev) {
-          return '<tr><td>' + ev[1] + '</td>' +
-            ['admin', 'employees', 'clients'].map(function (who) {
-              return '<td><input type="checkbox" data-alert="' + ev[0] + '.' + who + '"' + (a[ev[0]][who] ? ' checked' : '') + ' aria-label="' + ev[1] + ' - ' + who + '"></td>';
-            }).join('') + '</tr>';
-        }).join('') +
-        '</tbody></table>' +
-        saveBtn('data-alert-save')) +
-        ui().section('Add Alternate Contacts',
-          ui().field('Also send alerts to (comma separated emails)', ui().input({ value: a.alternateContacts, placeholder: 'security@yourfirm.com', attrs: 'data-alert-contacts' })));
+    render: function () {
+      return '<div data-alert-root>' + ui().loading() + '</div>';
     },
-    wire: function (el, s) {
-      wireSave(el, 'data-alert-save', function () {
-        var a = s.settings.alertSettings;
-        el.querySelectorAll('[data-alert]').forEach(function (cb) {
-          var path = cb.getAttribute('data-alert').split('.');
-          a[path[0]][path[1]] = cb.checked;
+    wire: function (el) {
+      var root = el.querySelector('[data-alert-root]');
+      if (!root) return;
+
+      secApi('GET', '/admin/security-policies').then(function (r) { return r.json(); }).then(function (all) {
+        var a = all.alertSettings;
+        var admin = all.isAdmin;
+        var events = all.alertEvents || [];
+        var thresholds = [3, 5, 10, 15, 20];
+
+        root.innerHTML =
+          '<p class="tma-portal-subtitle">Who is told when something happens to an account, on top of the account holder.</p>' +
+          (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
+          ui().section('Tell administrators when…',
+            events.map(function (ev) {
+              return '<div class="tma-dash__settings-cookie-row">' +
+                '<span class="tma-dash__settings-cookie-copy">' +
+                '<span class="tma-dash__settings-cookie-label">' + ui().esc(ev.label) + '</span>' +
+                '<span class="tma-dash__settings-cookie-desc">' + ui().esc(ev.help) + '</span>' +
+                '</span>' +
+                ui().toggle((a[ev.id] || {}).admins, 'data-alert-cap="' + ui().esc(ev.id) + '"' + (admin ? '' : ' disabled'), ev.label) +
+                '</div>';
+            }).join('')) +
+          ui().section('Failed sign-in threshold',
+            ui().field('Alert after', ui().select(thresholds.map(function (n) {
+              return { value: String(n), label: n + ' failed attempts' };
+            }), String(a.failedSignInThreshold), 'data-alert-threshold' + (admin ? '' : ' disabled'), 'Failed sign-in threshold')) +
+            '<p class="tma-portal-note">Counted within ' + all.failureWindowMinutes + ' minutes, and sent once when the count is reached.</p>') +
+          ui().section('Alternate contacts',
+            ui().field('Also send alerts to (comma separated emails)', ui().input({
+              value: a.alternateContacts,
+              placeholder: 'security@yourfirm.com',
+              attrs: 'data-alert-contacts' + (admin ? '' : ' disabled'),
+            }))) +
+          (admin ? saveBtn('data-alert-save') : '');
+
+        var save = root.querySelector('[data-alert-save]');
+        if (!save) return;
+        save.addEventListener('click', function () {
+          var body = {
+            failedSignInThreshold: parseInt(root.querySelector('[data-alert-threshold]').value, 10),
+            alternateContacts: root.querySelector('[data-alert-contacts]').value.trim(),
+          };
+          root.querySelectorAll('[data-alert-cap]').forEach(function (cb) {
+            body[cb.getAttribute('data-alert-cap')] = { admins: cb.checked };
+          });
+
+          secApi('PUT', '/admin/security-policies/alerts', body).then(function (res) {
+            if (res.ok) { ui().toast('Alert settings saved'); return; }
+            res.json().then(function (j) { ui().toastError((j && j.message) || 'Could not save'); }).catch(function () {});
+          });
         });
-        a.alternateContacts = el.querySelector('[data-alert-contacts]').value.trim();
+      }).catch(function () {
+        root.innerHTML = '<p class="tma-portal-note">Couldn’t load the alert settings. Refresh to try again.</p>';
       });
     },
   };

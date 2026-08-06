@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SecurityPolicies
 {
-    public const SECTIONS = ['sign-in', 'security', 'device'];
+    public const SECTIONS = ['sign-in', 'security', 'device', 'alerts'];
 
     public const DEFAULTS = [
         'sign-in' => [
@@ -33,6 +33,21 @@ class SecurityPolicies
         'device' => [
             'defaultMode' => 'standard',
             'selfDestruct' => 'After 7 days offline',
+        ],
+        /*
+         * Who is told when something happens to an account, beyond the person
+         * it happened to. See App\Support\Security\SecurityAlertPolicy for what
+         * each event means and why the list is only two long.
+         *
+         * Administrators are not notified by default: on a small firm every
+         * new laptop would page them, and an alert nobody reads is worse than
+         * no alert. Alternate contacts default to none.
+         */
+        'alerts' => [
+            'newDevice' => ['admins' => false],
+            'failedSignIns' => ['admins' => true],
+            'failedSignInThreshold' => 5,
+            'alternateContacts' => '',
         ],
     ];
 

@@ -9,6 +9,7 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\PresenceService;
 use App\Support\Notifications\Notifier;
+use App\Support\Security\SecurityAlertPolicy;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -113,6 +114,15 @@ class RecordAuthEvent
                 'message' => trim(($ua ?: 'A new device').' · '.($ip ?: '')),
                 'action_url' => '/account-settings?settings-page=security',
             ]);
+
+            // And whoever else the firm asked to be told — off by default, so
+            // this is silent until an administrator turns it on.
+            SecurityAlertPolicy::fanOut(
+                'newDevice',
+                $event->user,
+                'New sign-in on '.$event->user->name.'’s account',
+                trim(($ua ?: 'A new device').' · '.($ip ?: '')),
+            );
         }
     }
 
@@ -144,7 +154,21 @@ class RecordAuthEvent
 
     public function handleFailed(Failed $event): void
     {
-        $this->record('login_failed', $event->user?->getAuthIdentifier());
+        $userId = $event->user?->getAuthIdentifier();
+
+        $this->record('login_failed', $userId);
+
+        // Recorded first, so this attempt counts towards the threshold — the
+        // check reads auth_events rather than keeping its own tally.
+        if ($event->user instanceof User && SecurityAlertPolicy::crossedFailureThreshold((int) $userId)) {
+            SecurityAlertPolicy::fanOut(
+                'failedSignIns',
+                $event->user,
+                'Repeated failed sign-ins on '.$event->user->name.'’s account',
+                SecurityAlertPolicy::failureThreshold().' failed attempts in the last hour, most recently from '
+                    .(request()->ip() ?: 'an unknown address').'.',
+            );
+        }
     }
 
     public function handlePasswordReset(PasswordReset $event): void

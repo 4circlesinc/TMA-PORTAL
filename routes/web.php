@@ -13,6 +13,7 @@ use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\ClientAssignmentController;
+use App\Http\Controllers\ClientCustomFieldsController;
 use App\Http\Controllers\ClientHubSettingsController;
 use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientOnboardingController;
@@ -283,6 +284,18 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         ->name('admin.service-teams.assign');
     Route::post('/admin/service-teams/{id}/unassign', [ServiceTeamsController::class, 'unassign'])
         ->name('admin.service-teams.unassign');
+
+    // Settings → Client hub management → Custom fields. Defines them; the
+    // values are collected on the client record and normalised on every write
+    // by ClientCustomFields::sanitise().
+    Route::get('/admin/client-fields', [ClientCustomFieldsController::class, 'index'])
+        ->name('admin.client-fields');
+    Route::post('/admin/client-fields', [ClientCustomFieldsController::class, 'store'])
+        ->name('admin.client-fields.store');
+    Route::put('/admin/client-fields/{id}', [ClientCustomFieldsController::class, 'update'])
+        ->name('admin.client-fields.update');
+    Route::delete('/admin/client-fields/{id}', [ClientCustomFieldsController::class, 'destroy'])
+        ->name('admin.client-fields.destroy');
 
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])
         ->name('admin.security-policies');

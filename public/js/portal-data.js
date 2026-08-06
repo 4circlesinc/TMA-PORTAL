@@ -17,8 +17,13 @@
      Super user group and quarantine duplicated or invented things the portal
      does not do; File Drops, Remote Upload Forms, File Settings, Portal Tools,
      AI and Email Settings described a product this is not. */
-  var RETIRED_KEYS = ['superUsers', 'hideSuperGroup', 'quarantinedFiles', 'fileDrops', 'remoteUploadForms', 'folderTemplates'];
-  var RETIRED_SETTINGS = ['dlp', 'emailSettings', 'fileSettings', 'tools', 'ai', 'permissions'];
+  var RETIRED_KEYS = ['superUsers', 'hideSuperGroup', 'quarantinedFiles', 'fileDrops', 'remoteUploadForms', 'folderTemplates', 'serviceTeams', 'customFields'];
+  var RETIRED_SETTINGS = [
+    'dlp', 'emailSettings', 'fileSettings', 'tools', 'ai', 'permissions',
+    // Rebuilt server-backed rather than removed — the stale copy would just
+    // sit there disagreeing with the real one.
+    'deviceSecurity', 'securityPolicy', 'signInPolicy', 'alertSettings',
+  ];
 
   function uid(prefix) {
     return (prefix || 'id') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
@@ -132,8 +137,6 @@
       personalAddressBook: [],
       // distributionGroups removed: groups are server-backed now, via
       // /portal/groups (see portal-people.js).
-      serviceTeams: [],
-      customFields: [],
       clientHubAccess: { enabled: true, allowSelfRegistration: false },
       connectors: [
         { id: 'box', name: 'Box', description: 'Enable users to connect to their own Box account', action: 'Enable', enabled: false },
@@ -147,34 +150,11 @@
       recurringReports: [],
       notificationHistory: [],
       backgroundOps: [],
-      settings: {
-        deviceSecurity: {
-          defaultMode: 'standard',
-          selfDestruct: 'Never',
-        },
-        securityPolicy: {
-          trustedDomains: '',
-          autoRemediation: {
-            impossibleTravel: true,
-            downloadTrend: true,
-            ipCountChange: true,
-            failedSignIns: true,
-            suspiciousIp: true,
-          },
-        },
-        signInPolicy: {
-          minLength: 8,
-          numbersRequired: 1,
-          specialRequired: 1,
-        },
-        alertSettings: {
-          differentCountry: { admin: true, employees: true, clients: true },
-          differentCity: { admin: true, employees: true, clients: true },
-          failedSignIns: { admin: true, employees: true, clients: true },
-          suspiciousUpload: { admin: true, employees: true, clients: true },
-          alternateContacts: '',
-        },
-      },
+      /* Every security and preference screen reads its own endpoint now, so
+         nothing is left in here. Kept as an empty object rather than removed:
+         load() merges `fresh.settings` key by key, and a browser holding the
+         old blob would hit an undefined otherwise. */
+      settings: {},
     };
   }
 

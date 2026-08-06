@@ -9,6 +9,7 @@ use App\Support\Access\AccessSync;
 use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Clients\ClientCustomFields;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
@@ -36,7 +37,13 @@ class ClientsController extends Controller
             ->map->toRecord()
             ->values();
 
-        return response()->json(['clients' => $clients]);
+        // The definitions ride along with the list: the client form has to
+        // render whatever the firm defined, and a field list nothing can draw
+        // is the mock this replaced.
+        return response()->json([
+            'clients' => $clients,
+            'customFields' => ClientCustomFields::all(),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -203,7 +210,11 @@ class ClientsController extends Controller
      */
     private function columns(string $uid, array $data, ?User $creator): array
     {
-        $profile = $data['profile'];
+        // Every client write comes through here, which is why the custom
+        // fields are normalised at this point rather than per endpoint: a
+        // deleted field stops being stored, and a dropdown cannot keep a value
+        // that is no longer one of its options.
+        $profile = ClientCustomFields::sanitise($data['profile']);
         $company = $this->resolveCompany($data['companyId'] ?? null, $profile['work']['company'] ?? null);
 
         if ($company) {
