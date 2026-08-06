@@ -86,6 +86,43 @@ class MeSyncStatusTest extends TestCase
             ->assertJsonPath('onedrive.state', 'done');
     }
 
+    /*
+     * The mailbox had no sync card once its first import was over: this said
+     * 'done' for ever after, including while a queued SyncMailbox run was
+     * walking the folders. OneDrive and the calendar both report every pass —
+     * mail has to as well, or "syncing" means something different per service.
+     */
+    public function test_a_pass_after_the_first_import_still_reports_syncing(): void
+    {
+        $user = $this->user();
+        $this->oneDrive($user);
+
+        ConnectedAccount::where('user_id', $user->id)->first()->forceFill([
+            'mail_backfilled_at' => now()->subDay(),
+            'mail_status' => 'syncing',
+        ])->save();
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('email.state', 'syncing')
+            ->assertJsonPath('email.mode', 'incremental');
+    }
+
+    public function test_an_idle_mailbox_reports_done(): void
+    {
+        $user = $this->user();
+        $this->oneDrive($user);
+
+        ConnectedAccount::where('user_id', $user->id)->first()->forceFill([
+            'mail_backfilled_at' => now()->subDay(),
+            'mail_status' => 'idle',
+        ])->save();
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('email.state', 'done');
+    }
+
     public function test_an_unreadable_token_reports_error_instead_of_failing_the_poll(): void
     {
         $user = $this->user();

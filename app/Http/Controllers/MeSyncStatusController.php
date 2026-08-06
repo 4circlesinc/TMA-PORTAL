@@ -63,15 +63,29 @@ class MeSyncStatusController extends Controller
         $totals = array_map('intval', $account->mail_backfill['_totals'] ?? []);
         $total = $totals === [] ? null : array_sum($totals);
 
-        if ($account->mail_backfilled_at !== null) {
-            return ['state' => 'done', 'synced' => $synced];
-        }
-
         if ($account->mail_status === 'error') {
             return ['state' => 'error', 'synced' => $synced];
         }
 
-        return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
+        // The first import is the only pass with a knowable total — it walks a
+        // measured mailbox, so the card can show a real percentage.
+        if ($account->mail_backfilled_at === null) {
+            return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
+        }
+
+        /*
+         * Every later pass counts too. Reporting only the first import is why
+         * the mailbox had no sync card while OneDrive and the calendar both
+         * did: once the backfill finished this said 'done' for ever, including
+         * while a queued SyncMailbox run was actually walking the folders.
+         * An incremental pass has no total (the provider's change feed is a
+         * stream, not a set), so the card runs indeterminate.
+         */
+        if ($account->mail_status === 'syncing') {
+            return ['state' => 'syncing', 'synced' => $synced, 'mode' => 'incremental'];
+        }
+
+        return ['state' => 'done', 'synced' => $synced];
     }
 
     private function calendar($user): array

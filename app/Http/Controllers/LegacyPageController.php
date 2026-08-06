@@ -3,8 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Support\Access\Role;
+use App\Support\PortalShell;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class LegacyPageController extends Controller
 {
@@ -96,7 +97,7 @@ class LegacyPageController extends Controller
         return resource_path('views/pages/dashboard.html');
     }
 
-    public function __invoke(Request $request, string $page): BinaryFileResponse
+    public function __invoke(Request $request, string $page): Response
     {
         if (in_array($page, self::PUBLIC_PAGES, true)) {
             $path = public_path($page.'/index.html');
@@ -106,7 +107,10 @@ class LegacyPageController extends Controller
             // staff tooling a client can't reach.
             abort_unless(Role::canViewPage($request->user(), $page), 404);
 
-            $path = self::spaShellPath();
+            // Hard-refreshing a portal URL gets the same shell the dashboard
+            // does, capabilities and no-store headers included — otherwise the
+            // sidebar would paint its six blank gaps on every page but /.
+            return PortalShell::respond(self::spaShellPath(), $request->user());
         } elseif (in_array($page, self::STANDALONE_PAGES, true)) {
             abort_unless(Role::canViewPage($request->user(), $page), 404);
 
@@ -117,15 +121,8 @@ class LegacyPageController extends Controller
 
         abort_unless(is_file($path), 404);
 
-        $headers = [];
-        if (in_array($page, self::SPA_PAGES, true)) {
-            $headers = [
-                'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
-                'Pragma' => 'no-cache',
-                'Expires' => '0',
-            ];
-        }
-
-        return response()->file($path, $headers);
+        // Only the public and standalone pages reach here; the SPA shell went
+        // out above, where its no-store headers live with the rest of it.
+        return response()->file($path);
     }
 }

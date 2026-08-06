@@ -78,9 +78,18 @@
     'folder-templates': 'files.settings',
   };
 
-  var caps = null;
+  /* The shell is served with the reader's capabilities already in the
+     document (App\Support\PortalShell), so on those pages nothing here has to
+     wait for /me: the nav is decided before the sidebar has even parsed.
+     Shells without it — the classic and onboarding layouts — fall back to
+     holding the gated rows until /me answers, exactly as before. */
+  var boot = Array.isArray(window.TMABootCapabilities) ? window.TMABootCapabilities : null;
+
+  var caps = boot;
   var readyResolve;
   var readyPromise = new Promise(function (resolve) { readyResolve = resolve; });
+
+  if (boot) readyResolve(boot.slice());
 
   function can(capability) {
     if (!capability) return true;
@@ -152,14 +161,37 @@
     document.documentElement.setAttribute('data-tma-access', 'ready');
   }
 
-  /* Hide the gated items until we know, so a client never sees Clients or
-     Users flash on screen before /me answers. Staff see them a beat later,
-     which is the same beat the profile skeleton already waits for. */
+  /* What to do about the gated rows before the DOM exists to prune.
+     `apply()` can only run once the sidebar has parsed, and the browser is
+     free to paint before then, so the answer has to be CSS injected from
+     <head> either way. What differs is how much it has to hide:
+
+     - With boot capabilities we know precisely which rows this account may
+       not have, so hide only those, and with `display:none` — the row leaves
+       the layout entirely, so the menu paints closed up and correct.
+     - Without them nothing is known yet, so every gated row is held with
+       `visibility:hidden`. That reserves its space, which is deliberate: the
+       menu must not jump when the missing rows arrive. It is also what put
+       six blank gaps in the sidebar for the length of a /me round trip, which
+       is the whole reason the boot path above exists.
+
+     Both are released by the `data-tma-access="ready"` flag `apply()` sets,
+     by which point it has removed the denied rows outright. */
   function injectHoldCss() {
     if (document.getElementById('tma-access-css')) return;
-    var selectors = Object.keys(NAV_CAPABILITIES).map(function (id) {
+
+    var navIds = Object.keys(NAV_CAPABILITIES);
+    var tabIds = Object.keys(TAB_CAPABILITIES);
+
+    if (boot) {
+      navIds = navIds.filter(function (id) { return !can(NAV_CAPABILITIES[id]); });
+      tabIds = tabIds.filter(function (id) { return !can(TAB_CAPABILITIES[id]); });
+      if (!navIds.length && !tabIds.length) return;
+    }
+
+    var selectors = navIds.map(function (id) {
       return '[data-nav="' + id + '"]';
-    }).concat(Object.keys(TAB_CAPABILITIES).map(function (id) {
+    }).concat(tabIds.map(function (id) {
       return '[data-tab="' + id + '"]';
     }));
 
@@ -167,7 +199,7 @@
     style.id = 'tma-access-css';
     style.textContent = 'html:not([data-tma-access="ready"]) ' +
       selectors.join(', html:not([data-tma-access="ready"]) ') +
-      '{visibility:hidden!important}';
+      (boot ? '{display:none!important}' : '{visibility:hidden!important}');
     (document.head || document.documentElement).appendChild(style);
   }
 
@@ -190,13 +222,17 @@
   }
 
   function start() {
+    // Boot capabilities: the DOM is here, so prune for real now rather than
+    // leaving the rows hidden-but-present until /me lands.
+    if (boot) apply();
+
     if (!window.TMACurrentUser) {
       // No identity source on this shell — reveal rather than strand the nav.
       releaseHold();
       return;
     }
     window.TMACurrentUser.onChange(adopt);
-    setTimeout(releaseHold, 8000);
+    if (!boot) setTimeout(releaseHold, 8000);
   }
 
   if (document.readyState === 'loading') {

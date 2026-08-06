@@ -2429,6 +2429,17 @@
   var syncDismissed = false;
   var syncCollapsed = false;
 
+  /* A full sync is queued, not run inline, so the button coming back to life
+   * is not evidence of anything. Hand it to the shared bottom-right sync
+   * toasts (sync-toasts.js) — the same card OneDrive and the calendar use —
+   * so the mailbox reports its progress the same way from any page. The panel
+   * above supersedes it while a first import is on screen. */
+  function announceMailSync() {
+    if (window.TMASyncToasts && window.TMASyncToasts.watch) {
+      window.TMASyncToasts.watch('email');
+    }
+  }
+
   function stopSyncPolling() {
     if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
   }
@@ -5093,7 +5104,10 @@
             state.settings = data;
             render();
             // Turning sync on backfills the mailbox, so reload what it found.
-            if (input.checked) bootstrapMailbox(root, state, render);
+            if (input.checked) {
+              announceMailSync();
+              bootstrapMailbox(root, state, render);
+            }
           })
           .catch(function (err) {
             input.checked = !input.checked;
@@ -5106,6 +5120,7 @@
       btn.addEventListener('click', function () {
         btn.disabled = true;
         btn.textContent = 'Syncing…';
+        announceMailSync();
 
         api().sync().then(function (data) {
           if (data && data.folders) state.folderCounts = data.folders;
@@ -6391,6 +6406,7 @@
         if (state.refreshing) return;
         state.refreshing = true;
         render();
+        announceMailSync();
 
         api().sync().then(function (data) {
           if (data && data.folders) state.folderCounts = data.folders;

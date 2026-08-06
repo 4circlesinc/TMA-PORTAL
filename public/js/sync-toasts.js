@@ -10,8 +10,14 @@
 
   var ENDPOINT = '/me/sync-status';
   var POLL_MS = 5000;
+  var PENDING_POLL_MS = 2000; // a run we just started: catch it starting
   var MAX_LIFETIME_MS = 15 * 60 * 1000; // stop polling eventually, whatever happens
   var DONE_LINGER_MS = 6000;
+  /* A sync the user just asked for is queued, not running: the job may sit for
+     a few seconds before a worker picks it up, and the status would answer
+     'done' the whole time. Hold the card as syncing for this long, or until
+     the server confirms a run — whichever comes first. */
+  var QUEUE_GRACE_MS = 20000;
 
   var SERVICES = {
     email: { label: 'Email', syncing: 'Syncing email…', icon: '/images/icons/brands/Outlook.svg' },
@@ -49,7 +55,12 @@
   // Every card reads the same way: "synced of total <unit>".
   function detail(key, s) {
     if (s.state === 'error') return 'Check Settings → Connectors.';
+    // A run we started locally has no counts yet — say so rather than "0".
+    if (s.synced == null && s.total == null && s.count == null) return 'Starting…';
     if (key === 'email') {
+      // An incremental pass replays a change feed — the stored count is the
+      // mailbox's size, not this run's progress, so don't imply it is.
+      if (s.state === 'syncing' && s.mode === 'incremental') return 'Checking for new mail…';
       return s.total
         ? fmt(s.synced) + ' of ' + fmt(s.total) + ' messages'
         : fmt(s.synced) + ' messages';
@@ -113,6 +124,7 @@
     var card = cards[key];
     if (!card || !card.el) return;
     card.dismissed = true;
+    card.pendingUntil = 0;
     card.el.classList.add('tma-sync-toast--closing');
     (function (el) {
       setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 260);
@@ -120,9 +132,49 @@
     card.el = null;
   }
 
+  function cardFor(key) {
+    return cards[key] || (cards[key] = {
+      el: null, minimized: false, dismissed: false, doneTimer: null, pendingUntil: 0,
+    });
+  }
+
+  /*
+   * The mail page draws its own import panel — stage, ETA, retry — in the same
+   * bottom-right dock. Two cards for one mailbox is noise, and the panel is
+   * the more useful of the two, so the toast stands down while it is up.
+   */
+  function supersededByPagePanel(key) {
+    return key === 'email' && !!document.querySelector('.tma-mail-sync');
+  }
+
   function update(key, s) {
-    var card = cards[key] || (cards[key] = { el: null, minimized: false, dismissed: false, doneTimer: null });
+    var card = cardFor(key);
     if (card.dismissed) return;
+
+    if (supersededByPagePanel(key)) {
+      if (card.el) dismiss(key);
+      return;
+    }
+
+    // A run started from this page is queued, not running yet: keep the card
+    // saying "syncing" until the server confirms one, or the grace runs out.
+    if (card.pendingUntil) {
+      if (s.state === 'syncing' || s.state === 'error') {
+        card.pendingUntil = 0;
+      } else if (Date.now() < card.pendingUntil) {
+        s = {
+          state: 'syncing',
+          synced: s.synced,
+          total: s.total,
+          count: s.count,
+          // No total means there is no first-import measurement to show — the
+          // run we are waiting on is an incremental one.
+          mode: s.mode || (s.total == null ? 'incremental' : null),
+        };
+      } else {
+        card.pendingUntil = 0;
+      }
+    }
 
     // Only surface done/error for a service we watched syncing — a mailbox
     // that finished importing last week doesn't need a toast on every load.
@@ -177,6 +229,12 @@
     });
   }
 
+  function anyPending() {
+    return Object.keys(cards).some(function (key) {
+      return cards[key].pendingUntil && Date.now() < cards[key].pendingUntil;
+    });
+  }
+
   function poll() {
     fetch(ENDPOINT, {
       credentials: 'same-origin',
@@ -189,8 +247,10 @@
         if (data[key]) update(key, data[key]);
       });
 
-      if (anySyncing(data) && Date.now() - startedAt < MAX_LIFETIME_MS) {
-        timer = setTimeout(poll, POLL_MS);
+      var pending = anyPending();
+
+      if ((anySyncing(data) || pending) && Date.now() - startedAt < MAX_LIFETIME_MS) {
+        timer = setTimeout(poll, pending ? PENDING_POLL_MS : POLL_MS);
       } else {
         timer = null;
         retireAll();
@@ -200,6 +260,32 @@
       timer = null;
       retireAll();
     });
+  }
+
+  /*
+   * "I just started a sync — show its card."
+   *
+   * The poll loop goes quiet once nothing is running, so a sync started later
+   * in the session (the mailbox's Sync now, for one) would otherwise never be
+   * seen. This paints the card straight away, forgives an earlier dismissal —
+   * the user asked for this run — and restarts polling to take over the counts.
+   */
+  function watch(key) {
+    if (!SERVICES[key] || !document.body || supersededByPagePanel(key)) return;
+
+    var card = cardFor(key);
+    card.dismissed = false;
+    card.pendingUntil = 0;
+    if (card.doneTimer) { clearTimeout(card.doneTimer); card.doneTimer = null; }
+
+    // Paint first, then arm the grace — update() clears it on any 'syncing'
+    // payload, and this one is ours rather than the server's.
+    update(key, { state: 'syncing' });
+    card.pendingUntil = Date.now() + QUEUE_GRACE_MS;
+
+    startedAt = Date.now();
+    if (timer) { clearTimeout(timer); timer = null; }
+    poll();
   }
 
   function boot() {
@@ -213,5 +299,5 @@
     boot();
   }
 
-  window.TMASyncToasts = { poll: poll, dismiss: dismiss };
+  window.TMASyncToasts = { poll: poll, watch: watch, dismiss: dismiss };
 })();

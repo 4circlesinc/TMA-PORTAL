@@ -161,6 +161,31 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/settings-access.mjs
   ```
 
+- **`sidebar-first-paint.mjs`** — the sidebar *before* `/me` answers. The
+  role-gated rows (Overview, Client hub, Email, Feed, Users, Templates) live in
+  one static list shared by every account, so portal-access.js held them with
+  `visibility:hidden` until the capabilities landed. That reserves their space:
+  the menu painted with six full-height blank gaps for the length of a round
+  trip, which reads as icons failing to load rather than as a permissions
+  wait. `App\Support\PortalShell` now bakes the reader's capabilities into the
+  shell, so the nav is settled before the sidebar parses.
+
+  The state only exists for a few hundred milliseconds on a local server, so
+  the script **stalls `/me` for four seconds** through `page.route` and
+  measures inside that window. It asserts no row reserves space while drawing
+  nothing, the menu isn't empty, every drawn row's icon mask is a `data:` URI
+  rather than a fetch, and — the check that catches a shell disagreeing with
+  `/me` — that the menu is *identical* once the answer lands. Runs for all
+  three account types and writes a rail screenshot per account.
+
+  Reverting only `public/js/portal-access.js` reproduces the original failure
+  exactly, naming all six blank rows, which is worth knowing if this ever
+  regresses. Needs the three standard accounts:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/sidebar-first-paint.mjs
+  ```
+
 - **`account-reporting.mjs`** — Account settings → Account and Reporting, after
   its three pages stopped reading `window.TMAPortalData`. Reporting used to file
   a name and a date into localStorage with no numbers behind them, the

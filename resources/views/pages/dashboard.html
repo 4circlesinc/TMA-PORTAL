@@ -37,9 +37,11 @@
   <link rel="stylesheet" href="css/portal-files.css?v=9">
   <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=11">
   <link rel="stylesheet" href="css/feed.css?v=2">
-  <!-- In <head> on purpose: it holds the role-gated nav items back before the
-       sidebar paints, so a client never sees Clients/Users/Email flash by. -->
-  <script src="js/portal-access.js?v=4"></script>
+  <!-- In <head> on purpose: it settles the role-gated nav items before the
+       sidebar paints, so a client never sees Clients/Users/Email flash by.
+       The capabilities are injected immediately above by App\Support\
+       PortalShell, so it needs no round trip to know which rows to drop. -->
+  <script src="js/portal-access.js?v=5"></script>
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -525,7 +527,7 @@
   <script src="js/toast-icons.js"></script>
   <script src="js/i18n.js?v=1"></script>
   <script src="js/toast.js?v=11"></script>
-  <script src="js/sync-toasts.js?v=1"></script>
+  <script src="js/sync-toasts.js?v=2"></script>
   <script src="js/head-dropdown.js"></script>
   <script src="js/clients.js?v=5"></script>
   <script src="js/calendar.js?v=4"></script>
