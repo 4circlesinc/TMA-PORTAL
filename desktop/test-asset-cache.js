@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
   const server = http.createServer((req, res) => {
     if (req.url === '/desktop/assets') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(reported === null ? {} : { build: reported }));
+      res.end(JSON.stringify(reported === null ? {} : reported));
       return;
     }
     res.writeHead(404).end();
@@ -45,11 +45,12 @@ app.whenReady().then(async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const origin = `http://127.0.0.1:${server.address().port}`;
 
-  // A portal one deploy ahead. This is the case that must never serve locally.
-  reported = 'a-different-build-entirely';
+  // A portal whose every asset differs. Nothing may be served from the bundle.
+  reported = { build: 'x', files: Object.fromEntries(
+    Object.keys(local.files).map((u) => [u, 'a-completely-different-hash'])) };
   let result = await assetCache.install(origin);
-  check('a mismatched build does not activate', result.active, false);
-  check('and says why', result.reason, 'bundle is out of date with the portal');
+  check('a wholly different deploy does not activate', result.active, false);
+  check('and says why', result.reason, 'no bundled asset matches this deploy');
 
   // A portal that answers with nothing useful.
   reported = null;
@@ -68,6 +69,12 @@ app.whenReady().then(async () => {
   check('ignores the cache-busting query', !!assetCache.localFile(url('/js/notify-store.js?v=12')), true);
   check('leaves unbundled paths alone', assetCache.localFile(url('/me')), null);
   check('leaves an unknown asset alone', assetCache.localFile(url('/css/does-not-exist.css')), null);
+
+  // The per-file gate: a file the deploy no longer agrees with is not served
+  // even though it is sitting right there in the bundle.
+  const only = new Set(['/css/tokens.css']);
+  check('serves a file the deploy agrees with', !!assetCache.localFile(url('/css/tokens.css'), only), true);
+  check('refuses one it does not', assetCache.localFile(url('/js/notify-store.js'), only), null);
   // A path climbing out of the bundle must not resolve to something on disk.
   check('refuses to climb out of the bundle',
     assetCache.localFile(url('/css/../../../../etc/passwd')), null);
@@ -77,7 +84,7 @@ app.whenReady().then(async () => {
   const matching = http.createServer((req, res) => {
     if (req.url === '/desktop/assets') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ build: local.build }));
+      res.end(JSON.stringify({ build: local.build, files: local.files }));
       return;
     }
     res.writeHead(500).end();
@@ -86,7 +93,9 @@ app.whenReady().then(async () => {
   const good = `http://127.0.0.1:${matching.address().port}`;
 
   result = await assetCache.install(good);
-  check('a matching build activates', result.active, true);
+  check('a matching deploy activates', result.active, true);
+  check('and serves every bundled file', result.count, local.count);
+  check('with none left stale', result.stale, 0);
 
   // And the file it would serve is byte-identical to the portal's own copy.
   const served = assetCache.localFile(url('/css/tokens.css'));

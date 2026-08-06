@@ -72,11 +72,12 @@ class DesktopAssetsController extends Controller
     }
 
     /**
-     * @return array{build: string, count: int, bytes: int}
+     * @return array{build: string, count: int, bytes: int, files: array<string, string>}
      */
     private function manifest(): array
     {
         $entries = [];
+        $files = [];
         $bytes = 0;
 
         foreach (self::INCLUDE as $rel) {
@@ -98,7 +99,9 @@ class DesktopAssetsController extends Controller
                     substr($file->getPathname(), strlen(public_path())), '/\\'
                 ));
 
-                $entries[] = $url.':'.hash_file('sha256', $file->getPathname());
+                $hash = hash_file('sha256', $file->getPathname());
+                $entries[] = $url.':'.$hash;
+                $files[$url] = $hash;
                 $bytes += $file->getSize();
             }
         }
@@ -107,10 +110,16 @@ class DesktopAssetsController extends Controller
         // the filesystem happened to hand the files over.
         sort($entries, SORT_STRING);
 
+        ksort($files, SORT_STRING);
+
         return [
             'build' => hash('sha256', implode("\n", $entries)),
             'count' => count($entries),
             'bytes' => $bytes,
+            // Per file, so the app can match asset by asset rather than all or
+            // nothing. A deploy that changes three files then costs three
+            // network fetches, not a fallback to all two thousand.
+            'files' => $files,
         ];
     }
 }

@@ -8,12 +8,13 @@
  * screen instead of simply appearing. These ship in the package now and are
  * answered from disk.
  *
- * The safety condition is the whole design: the bundled copy is used *only*
- * when its build hash equals the one this deploy reports at /desktop/assets.
- * Assets a single deploy out of date would mean last week's JavaScript running
- * against this week's API — a failure far worse, and far harder to diagnose,
- * than a slow load. Anything short of an exact match falls back to the network,
- * which is precisely how the app behaved before any of this existed.
+ * The safety condition is the whole design: a file is served from the bundle
+ * *only* when its hash equals the one this deploy reports for that same path at
+ * /desktop/assets. Assets a single deploy out of date would mean last week's
+ * JavaScript running against this week's API — a failure far worse, and far
+ * harder to diagnose, than a slow load. Anything that does not match, or any
+ * doubt about what the portal is serving, falls back to the network, which is
+ * precisely how the app behaved before any of this existed.
  *
  * `protocol.handle('https')` replaces the scheme handler for the session, so
  * every request in the app passes through here. Everything that is not a
@@ -57,8 +58,8 @@ function bundled() {
   }
 }
 
-/** What this deploy says its assets hash to. Null on any doubt. */
-async function serverBuild(origin) {
+/** What this deploy says each of its assets hashes to. Null on any doubt. */
+async function serverManifest(origin) {
   try {
     const response = await net.fetch(new URL('/desktop/assets', origin).toString(), {
       cache: 'no-store',
@@ -67,7 +68,7 @@ async function serverBuild(origin) {
 
     if (!response.ok) return null;
     const body = await response.json();
-    return typeof body.build === 'string' ? body.build : null;
+    return body && body.files && typeof body.files === 'object' ? body : null;
   } catch {
     // Offline, or the portal is between deploys. Either way: use the network,
     // which will fail in its own visible way rather than serving stale files.
@@ -82,8 +83,13 @@ async function serverBuild(origin) {
  * `?v=12`, and the build hash already guarantees the bytes are the ones this
  * deploy would have sent, so the version tag carries no extra information here.
  */
-function localFile(url) {
+function localFile(url, agreed) {
   if (!SERVED.some((prefix) => url.pathname.startsWith(prefix))) return null;
+
+  // Only files this deploy agrees byte-for-byte with. Everything else — a file
+  // the portal has changed since this build, one it no longer serves, one it
+  // never had — goes to the network.
+  if (agreed && !agreed.has(url.pathname)) return null;
 
   // Normalised before use: a path that climbs out of the bundle is not served.
   const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
@@ -103,11 +109,26 @@ async function install(origin) {
   const local = bundled();
   if (!local) return { active: false, reason: 'no bundle in this build' };
 
-  const remote = await serverBuild(origin);
-  if (!remote) return { active: false, reason: 'portal did not report an asset build' };
+  const remote = await serverManifest(origin);
+  if (!remote) return { active: false, reason: 'portal did not report its assets' };
 
-  if (remote !== local.build) {
-    return { active: false, reason: 'bundle is out of date with the portal' };
+  /*
+   * The intersection, not the whole set.
+   *
+   * Matching the two build hashes and refusing on any difference was the first
+   * design, and it was too brittle to ever fire: a single file drifting by a
+   * few bytes — a deploy slightly ahead of the build, a rebuilt stylesheet —
+   * threw away all 2,156. Comparing per file keeps exactly the same guarantee,
+   * because a file is served only when its hash equals what this deploy would
+   * have sent, while letting the rest still come from disk.
+   */
+  const agreed = new Set();
+  for (const [url, hash] of Object.entries(local.files || {})) {
+    if (remote.files[url] === hash) agreed.add(url);
+  }
+
+  if (agreed.size === 0) {
+    return { active: false, reason: 'no bundled asset matches this deploy' };
   }
 
   protocol.handle('https', (request) => {
@@ -118,7 +139,7 @@ async function install(origin) {
       return net.fetch(request, { bypassCustomProtocolHandlers: true });
     }
 
-    const file = url.origin === origin ? localFile(url) : null;
+    const file = url.origin === origin ? localFile(url, agreed) : null;
     if (!file) return net.fetch(request, { bypassCustomProtocolHandlers: true });
 
     return new Response(fs.createReadStream(file), {
@@ -131,7 +152,13 @@ async function install(origin) {
     });
   });
 
-  return { active: true, reason: 'matched', count: local.count };
+  return {
+    active: true,
+    reason: 'matched',
+    count: agreed.size,
+    total: local.count,
+    stale: local.count - agreed.size,
+  };
 }
 
 module.exports = { install, bundled, localFile, SERVED, ROOT };

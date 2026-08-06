@@ -60,6 +60,7 @@ function build() {
   fs.rmSync(OUT, { recursive: true, force: true });
 
   const entries = [];
+  const files = {};
   let bytes = 0;
 
   for (const rel of INCLUDE) {
@@ -74,7 +75,9 @@ function build() {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, body);
 
-      entries.push(`${url}:${crypto.createHash('sha256').update(body).digest('hex')}`);
+      const hash = crypto.createHash('sha256').update(body).digest('hex');
+      entries.push(`${url}:${hash}`);
+      files[url] = hash;
       bytes += body.length;
     });
   }
@@ -87,6 +90,11 @@ function build() {
     build: crypto.createHash('sha256').update(entries.join('\n')).digest('hex'),
     count: entries.length,
     bytes,
+    // Per file, not just the whole set. The app matches each asset against the
+    // portal's hash for that same path and serves only the ones that agree —
+    // so a deploy that touches three files costs three network fetches rather
+    // than falling back to all two thousand.
+    files,
   };
 
   fs.writeFileSync(path.join(OUT, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);

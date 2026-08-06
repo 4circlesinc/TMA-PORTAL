@@ -979,7 +979,8 @@ if (!app.requestSingleInstanceLock()) {
      */
     const assets = await assetCache.install(PORTAL_ORIGIN);
     console.log(assets.active
-      ? `  • assets: serving ${assets.count} files from the app`
+      ? `  • assets: ${assets.count}/${assets.total} served from the app`
+        + (assets.stale ? `, ${assets.stale} from the portal (changed since this build)` : '')
       : `  • assets: using the network (${assets.reason})`);
 
     createWindow();
