@@ -21,7 +21,7 @@ const path = require('node:path');
 
 // How long the layer may stay before it is taken away regardless. A page that
 // never fires did-finish-load must not leave someone staring at a logo.
-const MAX_MS = 15000;
+const MAX_MS = 12000;
 
 // Matches the fade in splash.html. Removing the view before the fade finishes
 // makes the transition a cut.

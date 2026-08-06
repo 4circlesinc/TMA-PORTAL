@@ -164,8 +164,13 @@ function loadPortal(win, url = PORTAL_URL) {
  *
  * So it waits for the load event, then for the fonts (they reshape every label
  * on the screen, and swapping after the reveal shows the page twice in two
- * typefaces), then for two animation frames so the first real frame has been
- * composited.
+ * typefaces), then for the DOM to go quiet.
+ *
+ * That last one is what actually matters. The portal fetches its data *after*
+ * the page has loaded and renders it when the answers arrive, so waiting only
+ * for paint revealed a shell with no labels and a column of skeletons — icons
+ * present, content still on its way. Quiescence is the only honest signal that
+ * the screen has finished assembling, since nothing in the page announces it.
  */
 async function revealWhenPainted(webContents) {
   if (!loadingLayer) return;
@@ -173,11 +178,44 @@ async function revealWhenPainted(webContents) {
   try {
     await webContents.executeJavaScript(`
       new Promise((resolve) => {
-        const settle = () => requestAnimationFrame(() => requestAnimationFrame(resolve));
-        const ready = () => {
-          if (document.fonts && document.fonts.ready) document.fonts.ready.then(settle, settle);
-          else settle();
+        // Capped, because a page that never stops moving — a spinner, a live
+        // clock — would otherwise hold the screen for ever.
+        const CAP = 6000;
+        const QUIET = 350;
+
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
         };
+
+        const cap = setTimeout(finish, CAP);
+
+        const waitForQuiet = () => {
+          let idle = setTimeout(settled, QUIET);
+          const observer = new MutationObserver(() => {
+            clearTimeout(idle);
+            idle = setTimeout(settled, QUIET);
+          });
+
+          function settled() {
+            observer.disconnect();
+            clearTimeout(cap);
+            finish();
+          }
+
+          observer.observe(document.documentElement, {
+            childList: true, subtree: true, characterData: true,
+          });
+        };
+
+        const ready = () => {
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(waitForQuiet, waitForQuiet);
+          } else waitForQuiet();
+        };
+
         if (document.readyState === 'complete') ready();
         else window.addEventListener('load', ready, { once: true });
       })

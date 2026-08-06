@@ -846,8 +846,8 @@
    icon — an <img> would paint its own black. */
 .tma-portal-sync__close-glyph {
   display: block; width: 10px; height: 10px; background: currentColor;
-  mask-image: url('../images/icons/phosphor/X.svg');
-  -webkit-mask-image: url('../images/icons/phosphor/X.svg');
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/X.svg */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/X.svg */
   mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
   mask-position: center; -webkit-mask-position: center;
   mask-size: contain; -webkit-mask-size: contain;
@@ -909,8 +909,8 @@
 .tma-portal-sync-panel__toggle { display: inline-flex; align-items: center; justify-content: center; }
 .tma-portal-sync-panel__caret {
   display: block; width: 12px; height: 12px; background: currentColor;
-  mask-image: url('../images/icons/phosphor/CaretDown.svg');
-  -webkit-mask-image: url('../images/icons/phosphor/CaretDown.svg');
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CaretDown.svg */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CaretDown.svg */
   mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
   mask-position: center; -webkit-mask-position: center;
   mask-size: contain; -webkit-mask-size: contain;

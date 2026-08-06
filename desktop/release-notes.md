@@ -1,4 +1,4 @@
-- Icons, styles and scripts now ship with the app instead of downloading each time
-- The app no longer shows a half-built screen while it loads
+- The app waits until the screen is fully loaded before showing it
+- Icons, styles and scripts ship with the app instead of downloading each time
 - The loading screen covers every start and every refresh
 - The title bar looks the same on every screen, including sign-in

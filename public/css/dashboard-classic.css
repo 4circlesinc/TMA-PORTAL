@@ -9197,8 +9197,8 @@
   width: 16px;
   height: 11px;
   background-color: var(--email-label-tag-color, #7bafbb);
-  -webkit-mask-image: url('../images/icons/tma/LabelTag.svg');
-  mask-image: url('../images/icons/tma/LabelTag.svg');
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2018%2012'%20fill='none'%3E%20%3Cpath%20fill='%23000'%20d='M2.5%200.5H11.8L16.8%206L11.8%2011.5H2.5C1.4%2011.5%200.5%2010.6%200.5%209.5V2.5C0.5%201.4%201.4%200.5%202.5%200.5Z'/%3E%20%3C/svg%3E"); /* ../images/icons/tma/LabelTag.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2018%2012'%20fill='none'%3E%20%3Cpath%20fill='%23000'%20d='M2.5%200.5H11.8L16.8%206L11.8%2011.5H2.5C1.4%2011.5%200.5%2010.6%200.5%209.5V2.5C0.5%201.4%201.4%200.5%202.5%200.5Z'/%3E%20%3C/svg%3E"); /* ../images/icons/tma/LabelTag.svg */
   -webkit-mask-size: contain;
   mask-size: contain;
   -webkit-mask-repeat: no-repeat;
