@@ -57,9 +57,12 @@ class NotificationEmailTest extends TestCase
     public function test_a_module_with_email_off_sends_nothing(): void
     {
         Mail::fake();
-        $recipient = $this->user();
+        // Every channel is on by default now, so switching one off is what
+        // this has to prove — the grid's Email column really silences email.
+        $recipient = $this->user([
+            'preferences' => ['notifications' => ['files' => ['email' => false]]],
+        ]);
 
-        // files group: email channel defaults OFF.
         $this->notify($recipient, ['type' => 'file.shared']);
 
         Mail::assertNotQueued(Postcard::class);

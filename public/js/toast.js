@@ -132,10 +132,11 @@
     enabled: true,
     position: 'bottom-right',
     durationSec: 10,
-    stickyImportant: false,
-    sound: false,
+    // Everything on by default; mirrors ToastSettings::DEFAULTS.
+    stickyImportant: true,
+    sound: true,
     previewText: true,
-    groupSimilar: false,
+    groupSimilar: true,
   };
 
   const POSITIONS = ['bottom-right', 'top-right', 'bottom-left'];

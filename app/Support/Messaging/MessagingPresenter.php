@@ -3,6 +3,7 @@
 namespace App\Support\Messaging;
 
 use App\Models\Conversation;
+use App\Support\UserTime;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
@@ -86,7 +87,7 @@ class MessagingPresenter
             // Surfaced in the list the way an unsent draft is, without letting
             // a reaction masquerade as a message.
             'reactionNote' => self::reactionNote($conversation, $viewer, $last, $latestReactions),
-            'time' => self::listTime($conversation->last_message_at),
+            'time' => self::listTime($conversation->last_message_at, $viewer),
             'timestamp' => $conversation->last_message_at?->toIso8601String(),
             'unread' => $participant ? self::unreadFor($participant, $conversation, $unread) : 0,
             'pinned' => $participant?->pinned_at !== null,
@@ -137,7 +138,7 @@ class MessagingPresenter
                 'photo' => $message->sender->avatar_url,
             ] : null,
             'sentAt' => $message->created_at->toIso8601String(),
-            'time' => $message->created_at->format('g:i A'),
+            'time' => UserTime::format($message->created_at, $viewer, 'g:i A'),
             'replyTo' => $message->replyTo ? self::replyStub($message->replyTo) : null,
             'attachments' => $deleted ? [] : $message->attachments->map(
                 fn (MessageAttachment $a) => self::attachment($a)
@@ -455,12 +456,21 @@ class MessagingPresenter
         };
     }
 
-    /** Chat-list timestamps compress with age, like every messenger's list. */
-    public static function listTime(?Carbon $at): string
+    /**
+     * Chat-list timestamps compress with age, like every messenger's list.
+     *
+     * Rendered on the reader's wall clock — "today" and "yesterday" are
+     * decided in their zone, not the server's. Payloads that carry an ISO
+     * timestamp are re-formatted by the browser anyway (a broadcast reaches
+     * several zones at once); this is what the rest read.
+     */
+    public static function listTime(?Carbon $at, ?User $viewer = null): string
     {
         if (! $at) {
             return '';
         }
+
+        $at = UserTime::for($at, $viewer) ?? $at;
 
         return match (true) {
             $at->isToday() => $at->format('g:i A'),

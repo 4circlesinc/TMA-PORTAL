@@ -1,8 +1,8 @@
 /*
  * TMA - Portal Account settings (admin area)
  * Secondary nav + admin pages: Admin Overview, Background Operations,
- * Account and Reporting, Billing, Client hub management, Security,
- * Connectors, Connection Manager, Storage, Advanced Preferences.
+ * Account and Reporting, Client hub management, Security, Connectors,
+ * Connection Manager, Storage, Advanced Preferences.
  * Registers view: 'admin'.
  */
 (function () {
@@ -60,28 +60,19 @@
     { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
       { id: 'account-security', label: 'Account security' },
       { id: 'security-insights', label: 'Security Insights' },
-      { id: 'dlp', label: 'Data loss prevention' },
       { id: 'signin-policy', label: 'Sign in policy' },
       { id: 'security-policy', label: 'Security policy' },
       { id: 'alert-settings', label: 'Security alert settings' },
       { id: 'device-security', label: 'Configure device security' },
-      { id: 'super-users', label: 'Edit super user group' },
-      { id: 'quarantined', label: 'Quarantined files' },
     ] },
     { id: 'connectors', label: 'Connectors', icon: 'Plugs' },
     { group: 'storage-group', label: 'Storage', icon: 'HardDrives', items: [
       { id: 'storage-usage', label: 'Usage' },
     ] },
     { group: 'prefs-group', label: 'Advanced Preferences', icon: 'SlidersHorizontal', items: [
-      { id: 'ai-settings', label: 'AI Settings' },
-      { id: 'email-settings', label: 'Email Settings' },
       { id: 'permissions', label: 'Permissions' },
-      { id: 'file-settings', label: 'File Settings' },
-      { id: 'tools', label: 'Enable Portal Tools' },
       { id: 'default-folders', label: 'Default Folders' },
       { id: 'folder-templates', label: 'Folder Templates' },
-      { id: 'upload-forms', label: 'Remote Upload Forms' },
-      { id: 'file-drops', label: 'File Drops' },
     ] },
   ];
 
@@ -148,300 +139,766 @@
   /* ── pages ──────────────────────────────────────── */
   var PAGES = {};
 
+  /* Server-backed: the real queue. Long jobs (mail import, calendar import,
+     OneDrive sync, outbound email) all run here, and their signature failure
+     is a worker that stopped — so the health line comes first. */
   PAGES['background-ops'] = {
-    render: function (s) {
-      function opsList(list) {
-        if (!list.length) return '<p class="tma-portal-note" style="text-align:center;padding:var(--space-16) 0">There are no operations to display</p>';
-        return list.map(function (op) {
-          return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">' + ui().esc(op.name) + '</span>' +
-            '<span class="tma-portal-note">' + ui().esc(op.date) + '</span></div>';
-        }).join('');
+    render: function () {
+      secEnsureStyles();
+      return '<div data-ops-root>' + ui().loading() + '</div>';
+    },
+    wire: function (el) {
+      var root = el.querySelector('[data-ops-root]');
+      if (!root) return;
+      var esc = ui().esc;
+
+      function ago(seconds) {
+        if (!seconds || seconds < 60) return 'just now';
+        var m = Math.floor(seconds / 60);
+        if (m < 60) return m + ' minute' + (m === 1 ? '' : 's');
+        var h = Math.floor(m / 60);
+        if (h < 24) return h + ' hour' + (h === 1 ? '' : 's');
+        var d = Math.floor(h / 24);
+        return d + ' day' + (d === 1 ? '' : 's');
       }
-      var current = s.backgroundOps.filter(function (o) { return o.status !== 'completed'; });
-      var completed = s.backgroundOps.filter(function (o) { return o.status === 'completed'; }).slice(0, 10);
-      return '<p class="tma-portal-subtitle">Sometimes actions in the portal can take a long time to complete. Instead of making you wait for them to finish we allow you to continue working and move those operations to the background. This page allows you to see a listing of all pending, in progress and recently completed operations.</p>' +
-        ui().section('Current Operations', opsList(current)) +
-        ui().section('Completed Operations', opsList(completed));
+
+      function when(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        return isNaN(d.getTime()) ? '' : d.toLocaleString();
+      }
+
+      function empty(text) {
+        return '<p class="tma-portal-note" style="text-align:center;padding:var(--space-16) 0">' + text + '</p>';
+      }
+
+      function load() {
+        secApi('GET', '/admin/background-ops').then(function (r) { return r.json(); }).then(function (d) {
+          if (!d.inspectable) {
+            root.innerHTML = '<p class="tma-portal-subtitle">Long-running work runs on the <strong>' +
+              esc(d.driver || 'unknown') + '</strong> queue, which can\'t be inspected from here.</p>';
+            return;
+          }
+
+          var h = d.health || {};
+          var health = h.stalled
+            ? '<div class="tma-portal-connector" style="border-left:3px solid var(--color-red, #d64545)">' +
+              '<div class="tma-portal-connector__body">' +
+              '<span class="tma-portal-connector__name">Nothing is processing the queue</span>' +
+              '<span class="tma-portal-connector__desc">' + h.pending + ' job(s) waiting, the oldest for ' +
+              esc(ago(h.oldestWaitSeconds)) + '. Email, calendar and file sync stay stuck until a worker runs.' +
+              '</span></div></div>'
+            : '<div class="tma-portal-connector">' +
+              '<div class="tma-portal-connector__body">' +
+              '<span class="tma-portal-connector__name">' +
+              (h.pending ? 'Working through ' + h.pending + ' job(s)' : 'Everything is up to date') + '</span>' +
+              '<span class="tma-portal-connector__desc">' +
+              (h.failed ? h.failed + ' job(s) failed and need attention.' : 'No failed jobs.') +
+              '</span></div></div>';
+
+          var pending = (d.pending || []).length
+            ? (d.pending).map(function (j) {
+                return '<div class="tma-portal-toggle-row">' +
+                  '<span class="tma-portal-toggle-row__label">' + esc(j.name) +
+                  (j.attempts > 0 ? ' <span class="tma-portal-note">(attempt ' + (j.attempts + 1) + ')</span>' : '') +
+                  '</span>' +
+                  '<span class="tma-portal-note">' + (j.reserved ? 'Running' : 'Waiting ' + esc(ago(j.waitingSeconds))) + '</span>' +
+                  '</div>';
+              }).join('')
+            : empty('Nothing is queued.');
+
+          var failed = (d.failed || []).length
+            ? (d.failed).map(function (j) {
+                return '<div class="tma-portal-toggle-row">' +
+                  '<span class="tma-portal-toggle-row__label">' + esc(j.name) +
+                  '<br><span class="tma-portal-note">' + esc(j.error || '') + '</span></span>' +
+                  '<span style="display:flex;align-items:center;gap:6px">' +
+                  '<span class="tma-portal-note">' + esc(when(j.failedAt)) + '</span>' +
+                  ui().btn({ label: 'Retry', small: true, attrs: 'data-ops-retry="' + esc(j.uuid) + '"' }) +
+                  ui().btn({ label: 'Dismiss', variant: 'ghost', small: true, attrs: 'data-ops-forget="' + esc(j.uuid) + '"' }) +
+                  '</span></div>';
+              }).join('')
+            : empty('No failed jobs.');
+
+          root.innerHTML =
+            '<p class="tma-portal-subtitle">Work the portal does in the background — importing mail and files, ' +
+            'syncing calendars, sending email. You can keep working while these run.</p>' +
+            health +
+            ui().section('Queued', pending) +
+            ui().section('Failed', failed +
+              ((d.failed || []).length
+                ? '<div style="margin-top:8px">' + ui().btn({ label: 'Clear all failed', variant: 'ghost', small: true, attrs: 'data-ops-flush' }) + '</div>'
+                : ''));
+
+          root.querySelectorAll('[data-ops-retry], [data-ops-forget]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              var uuid = b.getAttribute('data-ops-retry') || b.getAttribute('data-ops-forget');
+              var action = b.hasAttribute('data-ops-retry') ? 'retry' : 'forget';
+              b.disabled = true;
+              secApi('POST', '/admin/background-ops/retry', { uuid: uuid, action: action })
+                .then(function (res) {
+                  ui().toast(res.ok ? (action === 'retry' ? 'Job queued again' : 'Job dismissed') : 'Could not update that job');
+                  load();
+                });
+            });
+          });
+
+          var flush = root.querySelector('[data-ops-flush]');
+          if (flush) {
+            flush.addEventListener('click', function () {
+              flush.disabled = true;
+              secApi('POST', '/admin/background-ops/flush', {}).then(function (res) {
+                ui().toast(res.ok ? 'Failed jobs cleared' : 'Could not clear');
+                load();
+              });
+            });
+          }
+        }).catch(function () {
+          root.innerHTML = '<p class="tma-portal-note">Couldn\'t load background operations. Refresh to try again.</p>';
+        });
+      }
+
+      load();
     },
   };
 
+  /* ── Account and Reporting ──────────────────────────────────────────
+     All three pages below used to read and write window.TMAPortalData, the
+     localStorage store — so a "report" held a name and a date and no numbers,
+     the notification history listed whatever the mock had pushed into it, and
+     branding applied to the one browser that typed it. They are server-backed
+     now: ReportsController (numbers computed from the portal's own tables),
+     NotificationHistoryController (the real email_deliveries log) and
+     BrandingController (portal_settings, shared by the whole firm). */
+
+  /* Delivery and report states, in the documented status-chip colours. */
+  function statusChip(status) {
+    var tone = {
+      ready: 'success', sent: 'success', delivered: 'success', opened: 'success', clicked: 'success',
+      failed: 'danger', bounced: 'danger',
+      pending: 'pending', queued: 'pending',
+    }[status] || 'neutral';
+    var label = String(status || '').replace(/^./, function (c) { return c.toUpperCase(); });
+    return '<span class="tma-portal-status tma-portal-status--' + tone + '">' + ui().esc(label) + '</span>';
+  }
+
+  function whenDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+  }
+
   PAGES['reporting'] = {
     tab: 'recent',
-    render: function (s) {
-      var self = PAGES['reporting'];
-      var list = self.tab === 'recent' ? s.reports : s.recurringReports;
-      return '<p class="tma-portal-subtitle">To see how your account is being used, you can create recurring and non-recurring reports that track usage, access, messaging, storage, and other helpful details.</p>' +
-        '<div class="tma-portal-toolbar">' +
-        ui().tabs([{ key: 'recent', label: 'Recent Reports' }, { key: 'recurring', label: 'Recurring Reports' }], self.tab) +
-        ui().btn({ label: 'Create Report', attrs: 'data-report-create' }) +
-        '</div>' +
-        (list.length
-          ? ui().table(['Report', 'Type', 'Date range', 'Created'], list.map(function (r) {
-              return '<tr><td><strong>' + ui().esc(r.name) + '</strong></td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(r.type) + '</td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(r.range) + '</td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(r.created) + '</td></tr>';
-            }).join(''))
-          : ui().emptyState({ illustration: 'Illustration04', title: 'No reports have been created recently.', subtitle: 'Create a report to see how your account is being used.' }));
+    open: null,        // uid of the report being read, or null for the list
+    render: function () {
+      return '<div data-rep-root>' + ui().loading() + '</div>';
     },
-    wire: function (el, s) {
+    wire: function (el) {
       var self = PAGES['reporting'];
-      ui().wireTabs(el, function (key) { self.tab = key; render(); });
-      var create = el.querySelector('[data-report-create]');
-      if (create) create.addEventListener('click', function () {
+      var root = el.querySelector('[data-rep-root]');
+      if (!root) return;
+      var esc = ui().esc;
+      var payload = null;
+
+      function fail(message) {
+        root.innerHTML = '<p class="tma-portal-note">' + esc(message) + '</p>';
+      }
+
+      /* repaint: false refreshes the list behind a report that is already on
+         screen, so creating one doesn't paint its numbers and then immediately
+         fetch and paint them a second time. */
+      function load(repaint) {
+        return secApi('GET', '/admin/reports').then(function (r) {
+          if (r.status === 403) { fail('Only administrators can open reporting.'); return null; }
+          /* A failed request still answers with JSON, so parsing it and
+             carrying on paints "no reports have been created yet" over what is
+             actually a broken endpoint. Anything but a 200 is a failure. */
+          if (!r.ok) { fail('Couldn\'t load reports. Refresh to try again.'); return null; }
+          return r.json();
+        }).then(function (d) {
+          if (!d) return;
+          payload = d;
+          if (repaint === false) return;
+          self.open ? openReport(self.open) : paintList();
+        }).catch(function () { fail('Couldn\'t load reports. Refresh to try again.'); });
+      }
+
+      /* ── the two tabs ─────────────────────────────── */
+      function paintList() {
+        self.open = null;
+        var list = self.tab === 'recent' ? (payload.recent || []) : (payload.recurring || []);
+
+        var rows = list.map(function (r) {
+          return '<tr>' +
+            '<td><button type="button" class="tma-portal-link" data-rep-open="' + esc(r.id) + '">' + esc(r.name) + '</button></td>' +
+            '<td class="tma-portal-table__muted">' + esc(typeLabel(r.type)) + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(r.range) + '</td>' +
+            '<td>' + statusChip(r.status) +
+            (r.frequency ? ' <span class="tma-portal-note">' + esc(r.frequency === 'weekly' ? 'Weekly' : 'Monthly') + '</span>' : '') +
+            '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(whenDate(r.generatedAt || r.created)) + '</td>' +
+            '<td>' + ui().btn({ label: 'Delete', variant: 'ghost', small: true, attrs: 'data-rep-delete="' + esc(r.id) + '"' }) + '</td>' +
+            '</tr>';
+        }).join('');
+
+        root.innerHTML =
+          '<p class="tma-portal-subtitle">To see how your account is being used, you can create recurring and non-recurring reports that track usage, access, messaging and storage. Every report is measured from the portal\'s own records at the moment you create it.</p>' +
+          '<div class="tma-portal-toolbar">' +
+          ui().tabs([{ key: 'recent', label: 'Recent Reports' }, { key: 'recurring', label: 'Recurring Reports' }], self.tab) +
+          ui().btn({ label: 'Create Report', attrs: 'data-rep-create' }) +
+          '</div>' +
+          (list.length
+            ? ui().table(['Report', 'Type', 'Date range', 'Status', 'Generated', ''], rows)
+            : ui().emptyState({
+                illustration: 'Illustration04',
+                title: self.tab === 'recent' ? 'No reports have been created yet.' : 'No recurring reports.',
+                subtitle: self.tab === 'recent'
+                  ? 'Create a report to see how your account is being used.'
+                  : 'A recurring report re-measures itself every week or month.',
+              }));
+
+        /* The tab markup is new on every repaint and needs re-initialising,
+           but `root` is the same node — wiring the change listener again would
+           stack another handler on it each time a tab is clicked. */
+        if (root._repTabsWired) {
+          if (window.PortalTabGroup) window.PortalTabGroup.init(root);
+        } else {
+          root._repTabsWired = true;
+          ui().wireTabs(root, function (key) { self.tab = key; paintList(); });
+        }
+
+        root.querySelectorAll('[data-rep-open]').forEach(function (b) {
+          b.addEventListener('click', function () { openReport(b.getAttribute('data-rep-open')); });
+        });
+        root.querySelectorAll('[data-rep-delete]').forEach(function (b) {
+          b.addEventListener('click', function () { removeReport(b.getAttribute('data-rep-delete'), b); });
+        });
+        var create = root.querySelector('[data-rep-create]');
+        if (create) create.addEventListener('click', createDialog);
+      }
+
+      function typeLabel(type) {
+        var found = (payload.types || []).filter(function (t) { return t.value === type; })[0];
+        return found ? found.label : type;
+      }
+
+      /* ── one report ───────────────────────────────── */
+      function openReport(uid) {
+        self.open = uid;
+        root.innerHTML = ui().loading();
+        secApi('GET', '/admin/reports/' + encodeURIComponent(uid)).then(function (r) {
+          if (r.status === 404) { self.open = null; paintList(); return null; }
+          return r.json();
+        }).then(function (d) { if (d) paintReport(d.report); })
+          .catch(function () { fail('Couldn\'t open that report. Refresh to try again.'); });
+      }
+
+      function paintReport(report) {
+        var d = report.data || {};
+
+        /* The documented KPI card - same component as the dashboard's metric
+           row, alternating the two card colours the way it does. */
+        var cards = (d.metrics || []).map(function (m, i) {
+          return '<article class="tma-dash__card tma-dash__card--' + (i % 2 ? 'purple' : 'blue') + '">' +
+            '<div class="tma-dash__card-head"><span class="tma-dash__card-label">' + esc(m.label) + '</span></div>' +
+            '<div class="tma-dash__card-row"><div class="tma-dash__card-value">' + esc(m.value) + '</div></div>' +
+            (m.hint ? '<div class="tma-dash__card-delta"><span class="tma-dash__card-delta-text">' + esc(m.hint) + '</span></div>' : '') +
+            '</article>';
+        }).join('');
+
+        var breakdown = d.table && (d.table.rows || []).length
+          ? ui().section(d.table.title, ui().table(d.table.columns || [], d.table.rows.map(function (row) {
+              return '<tr>' + row.map(function (cell, i) {
+                return '<td' + (i ? ' class="tma-portal-table__muted"' : '') + '>' + esc(cell) + '</td>';
+              }).join('') + '</tr>';
+            }).join('')))
+          : '';
+
+        root.innerHTML =
+          '<div class="tma-portal-toolbar">' +
+          '<button type="button" class="tma-portal-link" data-rep-back>&larr; All reports</button>' +
+          '<div class="tma-portal-toolbar__group">' +
+          ui().btn({ label: 'Run again', variant: 'ghost', small: true, attrs: 'data-rep-run' }) +
+          ui().btn({ label: 'Download CSV', variant: 'ghost', small: true, attrs: 'data-rep-csv' }) +
+          '</div></div>' +
+          '<h3 class="tma-portal-section__title">' + esc(report.name) + '</h3>' +
+          '<p class="tma-portal-subtitle">' + esc(report.range) +
+          (report.generatedAt ? ' · measured ' + esc(new Date(report.generatedAt).toLocaleString()) : '') +
+          (report.frequency ? ' · repeats ' + esc(report.frequency) : '') +
+          '</p>' +
+          (report.status === 'failed'
+            ? ui().banner('warning', 'This report could not be generated. ' + esc(report.error || ''))
+            : '<div class="tma-dash__cards">' + cards + '</div>' + breakdown);
+
+        root.querySelector('[data-rep-back]').addEventListener('click', paintList);
+
+        root.querySelector('[data-rep-run]').addEventListener('click', function () {
+          secApi('POST', '/admin/reports/' + encodeURIComponent(report.id) + '/run').then(function (r) { return r.json(); })
+            .then(function (d2) {
+              ui().toast('Report measured again');
+              paintReport(d2.report);
+            }).catch(function () { ui().toastError('Could not run that report'); });
+        });
+
+        root.querySelector('[data-rep-csv]').addEventListener('click', function () {
+          window.location.href = '/admin/reports/' + encodeURIComponent(report.id) + '/export';
+        });
+      }
+
+      /* ── create ───────────────────────────────────── */
+      function createDialog() {
+        var today = new Date().toISOString().slice(0, 10);
         ui().openModal({
           title: 'Create Report',
           body:
-            ui().field('Report type', ui().select(['Usage', 'Access', 'Messaging', 'Storage Summary', 'Storage Detail'], 'Usage', 'data-report-type')) +
-            ui().field('Date range', ui().select(['Last 7 days', 'Last 30 days', 'Last 90 days', 'Custom'], 'Last 30 days', 'data-report-range')) +
-            '<label class="tma-portal-checkbox"><input type="checkbox" data-report-recurring><span>Run this report on a recurring schedule</span></label>' +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create Report', attrs: 'data-report-save' }) + '</div>',
+            ui().field('Report type', ui().select(payload.types || [], 'usage', 'data-rep-type', 'Report type')) +
+            ui().field('Date range', ui().select(payload.ranges || [], 'last_30', 'data-rep-range', 'Date range')) +
+            '<div data-rep-custom hidden>' +
+            ui().field('From', ui().input({ type: 'date', attrs: 'data-rep-from', value: today })) +
+            ui().field('To', ui().input({ type: 'date', attrs: 'data-rep-to', value: today })) +
+            '</div>' +
+            '<label class="tma-portal-checkbox"><input type="checkbox" data-rep-recurring><span>Run this report on a recurring schedule</span></label>' +
+            '<div data-rep-freq hidden>' +
+            ui().field('How often', ui().select(payload.frequencies || [], 'weekly', 'data-rep-frequency', 'Frequency')) +
+            '</div>' +
+            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create Report', attrs: 'data-rep-save' }) + '</div>',
           onMount: function (host) {
-            host.querySelector('[data-report-save]').addEventListener('click', function () {
-              var type = host.querySelector('[data-report-type]').value;
-              var recurring = host.querySelector('[data-report-recurring]').checked;
-              var report = {
-                id: data().uid('report'),
-                name: type + ' report',
-                type: type,
-                range: host.querySelector('[data-report-range]').value,
-                created: data().shortDate(),
-              };
-              (recurring ? s.recurringReports : s.reports).unshift(report);
-              data().save();
-              data().logBackgroundOp('Generate ' + type.toLowerCase() + ' report');
-              self.tab = recurring ? 'recurring' : 'recent';
-              ui().closeModal();
-              ui().toast('Report created');
-              render();
+            var range = host.querySelector('[data-rep-range]');
+            var custom = host.querySelector('[data-rep-custom]');
+            var recurring = host.querySelector('[data-rep-recurring]');
+            var freq = host.querySelector('[data-rep-freq]');
+
+            range.addEventListener('change', function () { custom.hidden = range.value !== 'custom'; });
+            recurring.addEventListener('change', function () { freq.hidden = !recurring.checked; });
+
+            var save = host.querySelector('[data-rep-save]');
+            save.addEventListener('click', function () {
+              save.disabled = true;
+              secApi('POST', '/admin/reports', {
+                type: host.querySelector('[data-rep-type]').value,
+                range: range.value,
+                startsOn: range.value === 'custom' ? host.querySelector('[data-rep-from]').value : null,
+                endsOn: range.value === 'custom' ? host.querySelector('[data-rep-to]').value : null,
+                recurring: recurring.checked,
+                frequency: recurring.checked ? host.querySelector('[data-rep-frequency]').value : null,
+              }).then(function (res) {
+                return res.json().catch(function () { return {}; }).then(function (j) {
+                  if (!res.ok) {
+                    save.disabled = false;
+                    ui().toastError((j && j.message) || 'Could not create that report');
+                    return;
+                  }
+                  self.tab = recurring.checked ? 'recurring' : 'recent';
+                  ui().closeModal();
+                  ui().toast('Report created');
+                  // Straight into the numbers: seeing them is the point. The
+                  // list refreshes behind it, ready for the back link.
+                  self.open = j.report.id;
+                  paintReport(j.report);
+                  load(false);
+                });
+              }).catch(function () {
+                save.disabled = false;
+                ui().toastError('Could not create that report');
+              });
             });
           },
         });
-      });
+      }
+
+      function removeReport(uid, button) {
+        button.disabled = true;
+        secApi('DELETE', '/admin/reports/' + encodeURIComponent(uid)).then(function (res) {
+          if (!res.ok) { button.disabled = false; ui().toastError('Could not delete that report'); return; }
+          ui().toast('Report deleted');
+          load();
+        }).catch(function () { button.disabled = false; ui().toastError('Could not delete that report'); });
+      }
+
+      load();
     },
   };
 
   PAGES['notification-history'] = {
     filterDate: '',
     filterEmail: '',
-    render: function (s) {
-      var self = PAGES['notification-history'];
-      var emails = [''].concat(s.notificationHistory.map(function (n) { return n.email; }).filter(function (v, i, a) { return a.indexOf(v) === i; }));
-      var list = s.notificationHistory.filter(function (n) {
-        if (self.filterEmail && n.email !== self.filterEmail) return false;
-        if (self.filterDate) {
-          var d = new Date(self.filterDate);
-          var formatted = data().shortDate(d);
-          if (n.date !== formatted) return false;
-        }
-        return true;
-      });
-      return '<p class="tma-portal-subtitle">Below is a history of all email messages that have been sent from the portal.</p>' +
-        '<div class="tma-portal-section__card"><div class="tma-portal-toolbar">' +
-        '<div class="tma-portal-toolbar__group">' +
-        ui().field('Date:', ui().input({ type: 'date', attrs: 'data-note-date', value: self.filterDate })) +
-        ui().field('Email:', ui().select(emails.map(function (e) { return { value: e, label: e || 'Select…' }; }), self.filterEmail, 'data-note-email', 'Email filter')) +
-        '</div>' +
-        ui().btn({ label: 'Apply', attrs: 'data-note-apply' }) +
-        '</div></div>' +
-        (list.length
-          ? ui().table(['Date', 'Recipient', 'Subject'], list.map(function (n) {
-              return '<tr><td class="tma-portal-table__muted">' + ui().esc(n.time || n.date) + '</td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(n.email) + '</td>' +
-                '<td>' + ui().esc(n.subject) + '</td></tr>';
-            }).join(''))
-          : '<div class="tma-portal-table-wrap"><div style="padding:var(--space-24);text-align:center">' +
-            '<p class="tma-portal-note">' + ui().esc(data().shortDate()) + '</p>' +
-            '<p class="tma-portal-note">No notifications found.</p></div></div>');
+    filterStatus: '',
+    page: 1,
+    render: function () {
+      return '<div data-note-root>' + ui().loading() + '</div>';
     },
     wire: function (el) {
       var self = PAGES['notification-history'];
-      var apply = el.querySelector('[data-note-apply]');
-      if (apply) apply.addEventListener('click', function () {
-        self.filterDate = el.querySelector('[data-note-date]').value;
-        self.filterEmail = el.querySelector('[data-note-email]').value;
-        render();
-      });
+      var root = el.querySelector('[data-note-root]');
+      if (!root) return;
+      var esc = ui().esc;
+
+      function query() {
+        var parts = [];
+        if (self.filterDate) parts.push('date=' + encodeURIComponent(self.filterDate));
+        if (self.filterEmail) parts.push('recipient=' + encodeURIComponent(self.filterEmail));
+        if (self.filterStatus) parts.push('status=' + encodeURIComponent(self.filterStatus));
+        if (self.page > 1) parts.push('page=' + self.page);
+        return parts.length ? '?' + parts.join('&') : '';
+      }
+
+      function load() {
+        secApi('GET', '/admin/notification-history' + query()).then(function (r) {
+          if (r.status === 403) {
+            root.innerHTML = '<p class="tma-portal-note">Only administrators can open the notification history.</p>';
+            return null;
+          }
+          /* An error answers with JSON too, and painting it would report an
+             empty history rather than a broken one. */
+          if (!r.ok) {
+            root.innerHTML = '<p class="tma-portal-note">Couldn\'t load the notification history. Refresh to try again.</p>';
+            return null;
+          }
+          return r.json();
+        }).then(function (d) { if (d) paint(d); })
+          .catch(function () {
+            root.innerHTML = '<p class="tma-portal-note">Couldn\'t load the notification history. Refresh to try again.</p>';
+          });
+      }
+
+      function paint(d) {
+        var summary = d.summary || {};
+        var recipients = [{ value: '', label: 'Everyone' }].concat((d.recipients || []).map(function (e) {
+          return { value: e, label: e };
+        }));
+
+        var rows = (d.notifications || []).map(function (n) {
+          return '<tr>' +
+            '<td class="tma-portal-table__muted">' + esc(n.time) + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(n.recipient) + '</td>' +
+            '<td>' + esc(n.subject) +
+            (n.template ? '<br><span class="tma-portal-note">' + esc(n.template) + '</span>' : '') +
+            '</td>' +
+            '<td>' + statusChip(n.status) +
+            (n.failed && n.error ? '<br><span class="tma-portal-note">' + esc(n.error) + '</span>' : '') +
+            '</td></tr>';
+        }).join('');
+
+        root.innerHTML =
+          '<p class="tma-portal-subtitle">Every email the portal has sent, and what became of it. ' +
+          '"Queued" means the message is still waiting on a worker and has not left yet.</p>' +
+          (summary.failed
+            ? ui().banner('warning', esc(String(summary.failed)) + ' message(s) failed to send.')
+            : '') +
+          '<div class="tma-portal-section__card"><div class="tma-portal-toolbar">' +
+          '<div class="tma-portal-toolbar__group">' +
+          ui().field('Date:', ui().input({ type: 'date', attrs: 'data-note-date', value: self.filterDate })) +
+          ui().field('Recipient:', ui().select(recipients, self.filterEmail, 'data-note-email', 'Recipient filter')) +
+          ui().field('Status:', ui().select([
+            { value: '', label: 'Any' },
+            { value: 'queued', label: 'Queued' },
+            { value: 'sent', label: 'Sent' },
+            { value: 'failed', label: 'Failed' },
+          ], self.filterStatus, 'data-note-status', 'Status filter')) +
+          '</div>' +
+          '<div class="tma-portal-toolbar__group">' +
+          ui().btn({ label: 'Apply', attrs: 'data-note-apply' }) +
+          ui().btn({ label: 'Clear', variant: 'ghost', attrs: 'data-note-clear' }) +
+          '</div></div></div>' +
+          (rows
+            ? ui().table(['Sent', 'Recipient', 'Subject', 'Status'], rows) +
+              '<div class="tma-portal-toolbar">' +
+              '<span class="tma-portal-note">' + esc(String(d.total)) + ' message(s) · ' +
+              esc(String(summary.queued || 0)) + ' still queued</span>' +
+              (d.pages > 1
+                ? '<div class="tma-portal-toolbar__group">' +
+                  ui().btn({ label: 'Previous', variant: 'ghost', small: true, attrs: 'data-note-prev', disabled: d.page <= 1 }) +
+                  '<span class="tma-portal-note">Page ' + esc(String(d.page)) + ' of ' + esc(String(d.pages)) + '</span>' +
+                  ui().btn({ label: 'Next', variant: 'ghost', small: true, attrs: 'data-note-next', disabled: d.page >= d.pages }) +
+                  '</div>'
+                : '') +
+              '</div>'
+            : ui().emptyState({
+                illustration: 'Illustration04',
+                title: 'No notifications found.',
+                subtitle: 'Nothing matches these filters.',
+              }));
+
+        root.querySelector('[data-note-apply]').addEventListener('click', function () {
+          self.filterDate = root.querySelector('[data-note-date]').value;
+          self.filterEmail = root.querySelector('[data-note-email]').value;
+          self.filterStatus = root.querySelector('[data-note-status]').value;
+          self.page = 1;
+          load();
+        });
+
+        root.querySelector('[data-note-clear]').addEventListener('click', function () {
+          self.filterDate = self.filterEmail = self.filterStatus = '';
+          self.page = 1;
+          load();
+        });
+
+        var prev = root.querySelector('[data-note-prev]');
+        if (prev) prev.addEventListener('click', function () { self.page = Math.max(1, d.page - 1); load(); });
+        var next = root.querySelector('[data-note-next]');
+        if (next) next.addEventListener('click', function () { self.page = d.page + 1; load(); });
+      }
+
+      load();
     },
   };
 
   PAGES['branding'] = {
-    render: function (s) {
-      return ui().section('Edit Account Name',
-        ui().field('Account Name:', ui().input({ value: s.branding.accountName, attrs: 'data-brand-name' })) +
-        (s.trial.active ? '<p class="tma-portal-note">TRIAL</p>' : '')) +
-        ui().section('Edit Account Appearance',
-          '<div class="tma-portal-toolbar"><strong>Basic Options</strong>' +
-          '<button type="button" class="tma-portal-link" data-brand-defaults>Use Portal Defaults</button></div>' +
-          ui().field('Page Title:', ui().input({ value: s.branding.pageTitle, attrs: 'data-brand-title' })) +
-          ui().field('Logo:', '<input type="file" accept="image/*" data-brand-logo class="tma-portal-input" style="padding:var(--space-4)">') +
-          (s.branding.logoName ? '<p class="tma-portal-note">Current logo: ' + ui().esc(s.branding.logoName) + '</p>' : '') +
-          '<div class="tma-portal-toolbar__group">' +
-          ui().field('Header Background Color:', '<input type="color" data-brand-header value="' + ui().esc(s.branding.headerColor) + '" aria-label="Header background color">') +
-          ui().field('Accent Color:', '<input type="color" data-brand-accent value="' + ui().esc(s.branding.accentColor) + '" aria-label="Accent color">') +
-          '</div>') +
-        saveBtn('data-brand-save');
+    render: function () {
+      return '<div data-brand-root>' + ui().loading() + '</div>';
     },
-    wire: function (el, s) {
-      wireSave(el, 'data-brand-save', function () {
-        s.branding.accountName = el.querySelector('[data-brand-name]').value.trim() || s.branding.accountName;
-        s.branding.pageTitle = el.querySelector('[data-brand-title]').value.trim();
-        s.branding.headerColor = el.querySelector('[data-brand-header]').value;
-        s.branding.accentColor = el.querySelector('[data-brand-accent]').value;
-        var logo = el.querySelector('[data-brand-logo]');
-        if (logo.files && logo.files[0]) s.branding.logoName = logo.files[0].name;
-      });
-      var defaults = el.querySelector('[data-brand-defaults]');
-      if (defaults) defaults.addEventListener('click', function () {
-        s.branding.pageTitle = 'TM ANTOINE Advisory - Where Companies Connect';
-        s.branding.headerColor = '#FFFFFF';
-        s.branding.accentColor = '#0C0C0C';
-        s.branding.logoName = '';
-        data().save();
-        ui().toast('Defaults restored');
-        render();
-      });
-    },
-  };
+    wire: function (el) {
+      var root = el.querySelector('[data-brand-root]');
+      if (!root) return;
+      var esc = ui().esc;
+      var editable = true;
 
-  PAGES['billing-convert'] = {
-    cycle: 'annual',
-    render: function (s) {
-      var self = PAGES['billing-convert'];
-      var monthly = self.cycle === 'monthly';
-      function price(annual) { return monthly ? (Math.round(annual * 1.25 * 10) / 10).toFixed(1) : annual.toFixed(1); }
-      function plan(name, tagline, annualPrice, badges, current, forChip) {
-        return '<article class="tma-portal-plan' + (current ? ' is-current' : '') + '">' +
-          '<div class="tma-portal-plan__badges">' +
-          badges.map(function (b) { return '<span class="tma-portal-chip">' + ui().esc(b) + '</span>'; }).join('') +
-          (forChip ? '<span class="tma-portal-chip">' + ui().esc(forChip) + '</span>' : '') +
-          '</div>' +
-          '<h3 class="tma-portal-plan__name">' + ui().esc(name) + '</h3>' +
-          '<p class="tma-portal-plan__tagline">' + ui().esc(tagline) + '</p>' +
-          '<div class="tma-portal-plan__price"><span class="tma-portal-plan__amount">$' + price(annualPrice) + '0</span>' +
-          '<span class="tma-portal-plan__per">per month</span></div>' +
-          '<div class="tma-portal-plan__meta">' +
-          '<span><img src="images/icons/phosphor/Users.svg" alt="">3 Employee Accounts</span>' +
-          '<span><img src="images/icons/phosphor/Database.svg" alt="">1TB/license Storage</span>' +
-          '</div>' +
-          ui().btn({ label: 'Buy now', attrs: 'data-plan-buy="' + ui().esc(name) + '"', variant: current ? undefined : 'ghost' }) +
-          '</article>';
-      }
-      return ui().banner('info', 'Need help? We’re here for you. Contact support at <strong>sales@tmantoinelaw.com</strong> or call <strong>1 (800) 441-3453</strong> for more plan options.') +
-        '<div class="tma-portal-toolbar"><h3 class="tma-portal-section__title">Select plan</h3>' +
-        '<div class="tma-portal-toolbar__group">' +
-        ui().btn({ label: 'Pay monthly', small: true, variant: monthly ? undefined : 'ghost', attrs: 'data-plan-cycle="monthly"' }) +
-        ui().btn({ label: 'Pay annually', small: true, variant: monthly ? 'ghost' : undefined, attrs: 'data-plan-cycle="annual"' }) +
-        '</div></div>' +
-        '<div class="tma-portal-plans">' +
-        plan('Advanced', 'Secure File Sharing for Teams', 49.5, [], false) +
-        plan('Premium', 'End-to-End Document Workflows for Teams and Clients', 78.0, ['Most popular', 'Current plan'], true) +
-        plan('Industry Advantage', 'Pre-Built, Accounting-Specific Document Workflow Automation', 125.0, [], false, 'For Accounting') +
-        '</div>';
-    },
-    wire: function (el, s) {
-      var self = PAGES['billing-convert'];
-      el.querySelectorAll('[data-plan-cycle]').forEach(function (b) {
-        b.addEventListener('click', function () { self.cycle = b.getAttribute('data-plan-cycle'); render(); });
-      });
-      el.querySelectorAll('[data-plan-buy]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var name = b.getAttribute('data-plan-buy');
-          ui().openModal({
-            title: 'Convert to ' + name,
-            body: '<p>Your trial will convert to the <strong>' + ui().esc(name) + '</strong> plan billed ' +
-              (self.cycle === 'monthly' ? 'monthly' : 'annually') + '. You can change plans at any time.</p>' +
-              '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Confirm purchase', attrs: 'data-plan-confirm' }) + '</div>',
-            onMount: function (host) {
-              host.querySelector('[data-plan-confirm]').addEventListener('click', function () {
-                s.trial.active = false;
-                s.plan = name;
-                data().save();
-                data().logNotification('Order confirmation - ' + name + ' plan', s.user.email);
-                ui().closeModal();
-                ui().toast('Welcome to ' + name + '!');
-                render();
-              });
-            },
+      function load() {
+        secApi('GET', '/admin/branding').then(function (r) {
+          // An error body would paint as blank fields, and saving those would
+          // then wipe the firm's real branding.
+          if (!r.ok) throw new Error('branding');
+          return r.json();
+        })
+          .then(function (d) { paint(d.branding || {}); })
+          .catch(function () {
+            root.innerHTML = '<p class="tma-portal-note">Couldn\'t load branding. Refresh to try again.</p>';
           });
+      }
+
+      function paint(b) {
+        root.innerHTML =
+          '<p class="tma-portal-subtitle">The name, title and colours everyone in the firm sees. Saved once for the whole account.</p>' +
+          ui().section('Edit Account Name',
+            ui().field('Account Name:', ui().input({ value: b.accountName || '', attrs: 'data-brand-name' }))) +
+          ui().section('Edit Account Appearance',
+            '<div class="tma-portal-toolbar"><strong>Basic Options</strong>' +
+            '<button type="button" class="tma-portal-link" data-brand-defaults>Use Portal Defaults</button></div>' +
+            ui().field('Page Title:', ui().input({ value: b.pageTitle || '', attrs: 'data-brand-title' })) +
+            ui().field('Logo:', '<input type="file" accept="image/jpeg,image/png,image/webp" data-brand-logo class="tma-portal-input" style="padding:var(--space-4)">') +
+            (b.logo
+              ? '<div class="tma-portal-toolbar">' +
+                '<img src="' + esc(b.logo) + '" alt="Current logo" style="max-height:40px;max-width:200px">' +
+                '<div class="tma-portal-toolbar__group">' +
+                '<span class="tma-portal-note">' + esc(b.logoName || 'Current logo') + '</span>' +
+                ui().btn({ label: 'Remove', variant: 'ghost', small: true, attrs: 'data-brand-logo-remove' }) +
+                '</div></div>'
+              : '<p class="tma-portal-note">No logo uploaded. JPG, PNG or WebP, up to 2 MB.</p>') +
+            '<div class="tma-portal-toolbar__group">' +
+            ui().field('Header Background Color:', '<input type="color" data-brand-header value="' + esc(b.headerColor || '#FFFFFF') + '" aria-label="Header background color">') +
+            ui().field('Accent Color:', '<input type="color" data-brand-accent value="' + esc(b.accentColor || '#0C0C0C') + '" aria-label="Accent color">') +
+            '</div>') +
+          (editable ? saveBtn('data-brand-save') : '');
+
+        var save = root.querySelector('[data-brand-save]');
+        if (save) save.addEventListener('click', function () {
+          save.disabled = true;
+          secApi('PUT', '/admin/branding', {
+            accountName: root.querySelector('[data-brand-name]').value.trim(),
+            pageTitle: root.querySelector('[data-brand-title]').value.trim(),
+            headerColor: root.querySelector('[data-brand-header]').value,
+            accentColor: root.querySelector('[data-brand-accent]').value,
+          }).then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (j) {
+              save.disabled = false;
+              if (res.status === 403) { editable = false; ui().toastError('Only administrators can change branding.'); return; }
+              if (!res.ok) {
+                var msg = (j && j.message) || 'Could not save branding';
+                if (j && j.errors) { var k = Object.keys(j.errors); if (k.length) msg = j.errors[k[0]][0]; }
+                ui().toastError(msg);
+                return;
+              }
+              ui().toast('Branding saved');
+              applyBranding(j.branding);
+              // The logo is uploaded separately: it is a file, not a field.
+              uploadLogo(j.branding);
+            });
+          }).catch(function () { save.disabled = false; ui().toastError('Could not save branding'); });
         });
-      });
+
+        var remove = root.querySelector('[data-brand-logo-remove]');
+        if (remove) remove.addEventListener('click', function () {
+          remove.disabled = true;
+          secApi('DELETE', '/admin/branding/logo').then(function (res) { return res.json(); })
+            .then(function (j) { ui().toast('Logo removed'); applyBranding(j.branding); paint(j.branding); })
+            .catch(function () { remove.disabled = false; ui().toastError('Could not remove the logo'); });
+        });
+
+        var defaults = root.querySelector('[data-brand-defaults]');
+        if (defaults) defaults.addEventListener('click', function () {
+          secApi('POST', '/admin/branding/reset').then(function (res) {
+            if (!res.ok) { ui().toastError('Could not restore the defaults'); return null; }
+            return res.json();
+          }).then(function (j) {
+            if (!j) return;
+            ui().toast('Defaults restored');
+            applyBranding(j.branding);
+            paint(j.branding);
+          }).catch(function () { ui().toastError('Could not restore the defaults'); });
+        });
+      }
+
+      function uploadLogo(current) {
+        var picker = root.querySelector('[data-brand-logo]');
+        if (!picker || !picker.files || !picker.files[0]) { paint(current); return; }
+
+        var fd = new FormData();
+        fd.append('logo', picker.files[0]);
+
+        var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        fetch('/admin/branding/logo', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Accept': 'application/json',
+            'X-XSRF-TOKEN': m ? decodeURIComponent(m[1]) : '',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: fd,
+        }).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            if (!res.ok) {
+              var msg = (j && j.message) || 'Could not upload that logo';
+              if (j && j.errors) { var k = Object.keys(j.errors); if (k.length) msg = j.errors[k[0]][0]; }
+              ui().toastError(msg);
+              paint(current);
+              return;
+            }
+            ui().toast('Logo updated');
+            applyBranding(j.branding);
+            paint(j.branding);
+          });
+        }).catch(function () { ui().toastError('Could not upload that logo'); paint(current); });
+      }
+
+      load();
     },
   };
 
-  PAGES['billing-cancel'] = {
-    render: function (s) {
-      return '<div class="tma-portal-two-col">' +
-        ui().section('We are here for you',
-          '<ul>' +
-          '<li><button type="button" class="tma-portal-link" data-cancel-support>Visit support</button></li>' +
-          '<li>Call toll free: 1.800.441.3453</li>' +
-          '<li>UK: +44 (0800) 680.0621</li>' +
-          '<li>International: +1 919.745.6111</li>' +
-          '</ul>') +
-        ui().section('Have you tried these resources?',
-          '<ul>' +
-          '<li><span class="tma-portal-link">Ask the community</span></li>' +
-          '<li><span class="tma-portal-link">Knowledge base</span></li>' +
-          '<li><span class="tma-portal-link">Training videos</span></li>' +
-          '</ul>') +
-        '</div>' +
-        ui().section('We’re sorry to see you go!',
-          '<p>The portal is designed with you in mind, and we’re always trying to find ways to improve our service and meet your file-sharing and storage needs.</p>' +
-          '<h4 style="margin:0;font-size:var(--text-size-14)">Did you know?</h4>' +
-          '<p class="tma-portal-note">When you cancel your account, you’ll miss out on a lot of great features, including:</p>' +
-          '<div class="tma-portal-feature"><img src="images/icons/phosphor/EnvelopeSimple.svg" alt="">' +
-          '<div class="tma-portal-feature__body"><span class="tma-portal-feature__title">Plugin for Microsoft Outlook</span>' +
-          '<span class="tma-portal-feature__desc">Send large files securely directly from Outlook. <span class="tma-portal-link">Download now</span></span></div></div>' +
-          '<div class="tma-portal-feature"><img src="images/icons/phosphor/DeviceMobile.svg" alt="">' +
-          '<div class="tma-portal-feature__body"><span class="tma-portal-feature__title">Mobile Apps</span>' +
-          '<span class="tma-portal-feature__desc">Access files and folders anytime from your smartphone or tablet. <span class="tma-portal-link">Learn More</span></span></div></div>' +
-          '<div class="tma-portal-feature"><img src="images/icons/phosphor/Signature.svg" alt="">' +
-          '<div class="tma-portal-feature__body"><span class="tma-portal-feature__title">E-Signature</span>' +
-          '<span class="tma-portal-feature__desc">Get documents signed with legally binding e-signatures.</span></div></div>' +
-          '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Cancel my trial', variant: 'danger', attrs: 'data-cancel-trial' }) + '</div>');
-    },
-    wire: function (el, s) {
-      var support = el.querySelector('[data-cancel-support]');
-      if (support) support.addEventListener('click', function () { ui().toast('Support: support@tmantoinelaw.com'); });
-      var cancel = el.querySelector('[data-cancel-trial]');
-      if (cancel) cancel.addEventListener('click', function () {
-        ui().openModal({
-          title: 'Cancel trial?',
-          body: '<p>Your trial data will be kept for 30 days in case you change your mind.</p>' +
-            '<div class="tma-portal-form-actions">' +
-            ui().btn({ label: 'Keep my trial', attrs: 'data-cancel-keep' }) +
-            ui().btn({ label: 'Cancel trial', variant: 'danger', attrs: 'data-cancel-confirm' }) +
-            '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-cancel-keep]').addEventListener('click', function () { ui().closeModal(); });
-            host.querySelector('[data-cancel-confirm]').addEventListener('click', function () {
-              ui().closeModal();
-              ui().toast('Cancellation request received - check your email');
-              data().logNotification('Trial cancellation confirmation', s.user.email);
-            });
-          },
-        });
-      });
-    },
-  };
+  /* Branding is chrome every shell paints, so a save has to reach the page the
+     administrator is standing on, not just the database. */
+  function applyBranding(b) {
+    if (!b) return;
+    if (window.TMABranding && window.TMABranding.apply) window.TMABranding.apply(b);
+  }
+
+  /* ── Client hub access (real: /admin/client-hub) ──────────────────
+     The capability toggles here are the same names the server enforces and
+     the sidebar prunes on, so switching one off removes the Clients page for
+     every employee — not just its buttons. Administrators always hold all of
+     them, which is why nobody can lock themselves out of this screen.
+
+     Rows reuse the Privacy panel's cookie-row component (label + description
+     + switch, with a disabled state already styled); a plain toggle row has
+     nowhere to say what the switch actually does. */
+  var HUB_CAP_DEPENDENTS = ['clients.viewAll', 'clients.manage', 'clients.invite', 'clients.assign'];
+
+  function capRow(cap, canEdit, attr) {
+    return '<div class="tma-dash__settings-cookie-row">' +
+      '<span class="tma-dash__settings-cookie-copy">' +
+      '<span class="tma-dash__settings-cookie-label">' + ui().esc(cap.label) + '</span>' +
+      '<span class="tma-dash__settings-cookie-desc">' + ui().esc(cap.help) + '</span>' +
+      '</span>' +
+      ui().toggle(cap.granted, attr + '="' + ui().esc(cap.id) + '"' + (canEdit ? '' : ' disabled'), cap.label) +
+      '</div>';
+  }
+
+  function hubCapRow(cap, canEdit) {
+    return capRow(cap, canEdit, 'data-hub-cap');
+  }
 
   PAGES['clienthub-access'] = {
-    render: function (s) {
-      return ui().section('Client hub access',
-        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Enable the client hub for this account</span>' +
-        ui().toggle(s.clientHubAccess.enabled, 'data-hub-enabled', 'Enable client hub') + '</div>' +
-        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Allow clients to self-register from an invite link</span>' +
-        ui().toggle(s.clientHubAccess.allowSelfRegistration, 'data-hub-self', 'Allow self registration') + '</div>' +
-        '<p class="tma-portal-note">The client hub gives each client a personalized space with their shared files, requests, and projects.</p>');
+    render: function () {
+      return '<div data-hub-root>' + ui().loading() + '</div>';
     },
-    wire: function (el, s) {
-      el.querySelector('[data-hub-enabled]').addEventListener('change', function (e) {
-        s.clientHubAccess.enabled = e.target.checked; data().save(); ui().toast('Client hub ' + (e.target.checked ? 'enabled' : 'disabled'));
-      });
-      el.querySelector('[data-hub-self]').addEventListener('change', function (e) {
-        s.clientHubAccess.allowSelfRegistration = e.target.checked; data().save();
-      });
+    wire: function (el) {
+      var root = el.querySelector('[data-hub-root]');
+      if (!root) return;
+      var editable = false;
+
+      function paint(d) {
+        var canEdit = editable = !!d.canEdit;
+        var counts = d.counts || {};
+
+        root.innerHTML =
+          '<p class="tma-portal-subtitle">Who may work in the client hub, and how clients get their account — ' +
+          'administrators always hold every permission below.</p>' +
+          (canEdit ? '' : '<p class="tma-portal-note">Only administrators can change client hub access.</p>') +
+          ui().section('What employees can do',
+            d.capabilities.map(function (cap) { return hubCapRow(cap, canEdit); }).join('') +
+            '<p class="tma-portal-note" data-hub-reach-note hidden>Employees cannot open the client hub, so the permissions above it do nothing.</p>' +
+            '<p class="tma-portal-note">Applies to ' + counts.employees + ' employee account' + (counts.employees === 1 ? '' : 's') +
+            ', the next time each one loads the portal.</p>') +
+          ui().section('Client invitations',
+            '<div class="tma-dash__settings-cookie-row">' +
+            '<span class="tma-dash__settings-cookie-copy">' +
+            '<span class="tma-dash__settings-cookie-label">Let clients create their own account from an invitation link</span>' +
+            '<span class="tma-dash__settings-cookie-desc">Off, an invited client is told the account will be created for them, and only an existing login can accept.</span>' +
+            '</span>' +
+            ui().toggle(d.allowSelfRegistration, 'data-hub-self' + (canEdit ? '' : ' disabled'), 'Allow self registration') +
+            '</div>' +
+            ui().field('Invitation links expire after',
+              ui().select(d.expiryChoices.map(function (n) {
+                return { value: String(n), label: n + (n === 1 ? ' day' : ' days') };
+              }), String(d.inviteExpiryDays), 'data-hub-expiry' + (canEdit ? '' : ' disabled'), 'Invitation expiry')) +
+            '<p class="tma-portal-note">Client and company invitations only' +
+            (counts.pendingInvitations
+              ? '; the ' + counts.pendingInvitations + ' already outstanding keep their original date'
+              : '') + '.</p>') +
+          (canEdit ? saveBtn('data-hub-save') : '');
+
+        syncDependents();
+        wireRow();
+      }
+
+      /* The other four permissions are meaningless without the hub itself, so
+         they follow it rather than silently staying "on" against a page the
+         employee can no longer reach. */
+      function syncDependents() {
+        var reach = root.querySelector('[data-hub-cap="clients.view"]');
+        var off = reach && !reach.checked;
+        HUB_CAP_DEPENDENTS.forEach(function (id) {
+          var cb = root.querySelector('[data-hub-cap="' + id + '"]');
+          // A reader who may not edit stays disabled whatever `reach` says.
+          if (cb) cb.disabled = !editable || !!off;
+        });
+        var note = root.querySelector('[data-hub-reach-note]');
+        if (note) note.hidden = !off;
+      }
+
+      function wireRow() {
+        var reach = root.querySelector('[data-hub-cap="clients.view"]');
+        if (reach) reach.addEventListener('change', syncDependents);
+
+        var save = root.querySelector('[data-hub-save]');
+        if (!save) return;
+        save.addEventListener('click', function () {
+          var employee = {};
+          root.querySelectorAll('[data-hub-cap]').forEach(function (cb) {
+            employee[cb.getAttribute('data-hub-cap')] = cb.checked;
+          });
+          var body = {
+            employee: employee,
+            allowSelfRegistration: root.querySelector('[data-hub-self]').checked,
+            inviteExpiryDays: parseInt(root.querySelector('[data-hub-expiry]').value, 10),
+          };
+          secApi('PUT', '/admin/client-hub', body).then(function (res) {
+            return res.json().then(function (j) { return { ok: res.ok, body: j }; });
+          }).then(function (r) {
+            if (!r.ok) { ui().toast((r.body && r.body.message) || 'Could not save'); return; }
+            ui().toast('Client hub access saved');
+            paint(r.body);
+          }).catch(function () { ui().toast('Could not save'); });
+        });
+      }
+
+      secApi('GET', '/admin/client-hub')
+        .then(function (r) { return r.json(); })
+        .then(paint)
+        .catch(function () {
+          root.innerHTML = '<p class="tma-portal-note">Couldn’t load client hub access. Refresh to try again.</p>';
+        });
     },
   };
 
@@ -860,7 +1317,11 @@
 
         var sessionRows = d.sessions.map(function (s2) {
           return '<tr><td>' + esc(s2.device) + (s2.current ? ' <span class="tma-auth__badge tma-auth__badge--done">This device</span>' : '') + '</td>' +
-            '<td>' + esc(s2.ip || '') + '</td><td>' + esc(s2.lastActive) + '</td><td></td></tr>';
+            '<td>' + esc(s2.ip || '') + '</td><td>' + esc(s2.lastActive) + '</td>' +
+            '<td>' + (s2.current
+              ? ''
+              : '<button type="button" class="tma-auth__chip-btn" data-sec-session-revoke="' + esc(s2.id) + '"><span>Sign out</span></button>') +
+            '</td></tr>';
         }).join('');
 
         var eventRows = d.events.map(function (ev) {
@@ -880,13 +1341,18 @@
 
           '<section class="tma-security__card" aria-labelledby="sec-password">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-password"><img src="images/icons/phosphor/Password.svg" alt="" aria-hidden="true">Password</h2>' +
-          '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#change-password-dialog"><span>Change password</span></button></div>' +
-          '<p class="tma-security__desc">Use a password you don\'t use anywhere else.</p></section>' +
+          '<h2 class="tma-security__title" id="sec-password">Password</h2>' +
+          (d.hasRealPassword
+            ? '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#change-password-dialog"><span>Change password</span></button></div>' +
+              '<p class="tma-security__desc">Use a password you don\'t use anywhere else.</p></section>'
+            // An account created by an administrator, or through Google/Microsoft,
+            // has a random password nobody has ever seen — so "change" can't work.
+            : '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#set-password-dialog"><span>Set a password</span></button></div>' +
+              '<p class="tma-security__desc">Set one to sign in with your email address as well as your connected accounts.</p></section>') +
 
           '<section class="tma-security__card" aria-labelledby="sec-connected">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-connected"><img src="images/icons/phosphor/Plugs.svg" alt="" aria-hidden="true">Connected accounts</h2></div>' +
+          '<h2 class="tma-security__title" id="sec-connected">Connected accounts</h2></div>' +
           '<p class="tma-security__desc">Sign in with Google or Microsoft alongside your password. Only accounts with your portal email can be connected.</p>' +
           ((d.syncAvailable && (d.syncAvailable.google || d.syncAvailable.microsoft)) ? '<p class="tma-security__desc"><strong>Connecting also lets you sync your email and calendar</strong> into the portal, so you can use it instead of Gmail or Outlook.</p>' : '') +
           '<div class="tma-security__row">' +
@@ -914,16 +1380,24 @@
 
           '<section class="tma-security__card" aria-labelledby="sec-phone">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-phone"><img src="images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">Phone number</h2></div>' +
+          '<h2 class="tma-security__title" id="sec-phone">Phone number</h2>' +
+          (d.phone ? '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#phone-dialog"><span>Change</span></button>' : '') +
+          '</div>' +
           '<p class="tma-security__desc">Used for security alerts and account recovery only - never marketing.</p>' +
-          '<div class="tma-security__empty">' +
-          '<img src="images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">' +
-          '<span>No phone number added yet.</span>' +
-          '<button type="button" class="tma-auth__chip-btn" data-sec-connect="Phone verification"><span>Add phone number</span></button></div></section>' +
+          (d.phone
+            ? '<div class="tma-security__row">' +
+              '<span class="tma-security__row-copy"><span class="tma-security__row-name">' + esc(d.phone) + '</span>' +
+              '<span class="tma-security__row-sub">Also shown on your profile.</span></span>' +
+              '<button type="button" class="tma-auth__chip-btn" data-sec-phone-remove><span>Remove</span></button></div>'
+            : '<div class="tma-security__empty">' +
+              '<img src="images/icons/phosphor/DeviceMobile.svg" alt="" aria-hidden="true">' +
+              '<span>No phone number added yet.</span>' +
+              '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#phone-dialog"><span>Add phone number</span></button></div>') +
+          '</section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-tfa">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-tfa"><img src="images/icons/phosphor/ShieldCheck.svg" alt="" aria-hidden="true">Two-factor authentication</h2>' +
+          '<h2 class="tma-security__title" id="sec-tfa">Two-factor authentication</h2>' +
           (on ? '<span class="tma-auth__badge tma-auth__badge--done">On</span>' : '<span class="tma-auth__badge">Off</span>') + '</div>' +
           '<p class="tma-security__desc">A 6-digit code from your authenticator app is required when signing in.</p>' +
           (on
@@ -944,7 +1418,7 @@
 
           '<section class="tma-security__card" aria-labelledby="sec-codes">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-codes"><img src="images/icons/phosphor/Key.svg" alt="" aria-hidden="true">Recovery codes</h2></div>' +
+          '<h2 class="tma-security__title" id="sec-codes">Recovery codes</h2></div>' +
           (on
             ? '<div class="tma-security__row">' +
               '<span class="tma-security__row-copy"><span class="tma-security__row-name">' + d.recoveryCodesCount + ' codes available</span>' +
@@ -955,7 +1429,7 @@
 
           '<section class="tma-security__card" aria-labelledby="sec-trusted">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-trusted"><img src="images/icons/phosphor/Devices.svg" alt="" aria-hidden="true">Trusted devices</h2>' +
+          '<h2 class="tma-security__title" id="sec-trusted">Trusted devices</h2>' +
           ((d.trustedDevices || []).length ? '<button type="button" class="tma-auth__chip-btn" data-sec-trust-revoke-all><span>Remove all</span></button>' : '') +
           '</div>' +
           '<p class="tma-security__desc">These devices skip the two-factor code for 30 days. Remove any device you don\'t recognize.</p>' +
@@ -974,16 +1448,16 @@
 
           '<section class="tma-security__card" aria-labelledby="sec-sessions">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-sessions"><img src="images/icons/phosphor/Desktop.svg" alt="" aria-hidden="true">Active sessions</h2>' +
+          '<h2 class="tma-security__title" id="sec-sessions">Active sessions</h2>' +
           '<button type="button" class="tma-auth__chip-btn" data-dialog-open="#signout-all-dialog"><span>Sign out of all other devices</span></button></div>' +
-          '<p class="tma-security__desc">Everywhere you\'re currently signed in. Sign out anything you don\'t recognize.</p>' +
+          '<p class="tma-security__desc">Everywhere you\'re currently signed in. Signing one out asks every device that chose to stay signed in to sign in again.</p>' +
           '<div class="tma-security__table-wrap"><table class="tma-security__table">' +
           '<thead><tr><th scope="col">Device</th><th scope="col">Location</th><th scope="col">Last active</th><th scope="col"></th></tr></thead>' +
           '<tbody>' + sessionRows + '</tbody></table></div></section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-history">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-history"><img src="images/icons/phosphor/ClockCounterClockwise.svg" alt="" aria-hidden="true">Recent login activity</h2></div>' +
+          '<h2 class="tma-security__title" id="sec-history">Recent login activity</h2></div>' +
           '<p class="tma-security__desc">The last sign-ins and attempts on your account. If something looks wrong, change your password and sign out of all devices.</p>' +
           (d.events.length
             ? '<div class="tma-security__table-wrap"><table class="tma-security__table">' +
@@ -996,22 +1470,24 @@
 
           '<section class="tma-security__card" aria-labelledby="sec-notify">' +
           '<div class="tma-security__head">' +
-          '<h2 class="tma-security__title" id="sec-notify"><img src="images/icons/phosphor/Bell.svg" alt="" aria-hidden="true">Security notifications</h2></div>' +
+          '<h2 class="tma-security__title" id="sec-notify">Security notifications</h2></div>' +
           '<p class="tma-security__desc">Emails we send to keep you informed about your account. Alerts for sign-ins from new devices can\'t be turned off.</p>' +
-          '<div class="tma-security__row">' +
-          '<span class="tma-security__row-copy"><span class="tma-security__row-name">New device sign-in</span>' +
-          '<span class="tma-security__row-sub">Always on - sent whenever a new device signs in</span></span>' +
-          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked disabled aria-label="New device sign-in alerts (always on)"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
-          '<div class="tma-security__row">' +
-          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Password changes</span></span>' +
-          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked aria-label="Password change alerts"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
-          '<div class="tma-security__row">' +
-          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Two-factor authentication changes</span></span>' +
-          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" checked aria-label="Two-factor authentication change alerts"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
-          '<div class="tma-security__row">' +
-          '<span class="tma-security__row-copy"><span class="tma-security__row-name">Monthly security summary</span>' +
-          '<span class="tma-security__row-sub">A short overview of recent account activity</span></span>' +
-          '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" aria-label="Monthly security summary"><span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>' +
+          /* key, label, sub, locked-on, default */
+          [
+            ['new_device', 'New device sign-in', 'Always on - sent whenever a new device signs in', true, true],
+            ['password_changed', 'Password changes', '', false, true],
+            ['two_factor_changed', 'Two-factor authentication changes', '', false, true],
+            ['monthly_summary', 'Monthly security summary', 'A short overview of recent account activity', false, false],
+          ].map(function (a) {
+            var alerts = d.alerts || {};
+            var on = a[3] ? true : (Object.prototype.hasOwnProperty.call(alerts, a[0]) ? !!alerts[a[0]] : a[4]);
+            return '<div class="tma-security__row">' +
+              '<span class="tma-security__row-copy"><span class="tma-security__row-name">' + a[1] + '</span>' +
+              (a[2] ? '<span class="tma-security__row-sub">' + a[2] + '</span>' : '') + '</span>' +
+              '<label class="tma-auth__switch"><input class="tma-auth__switch-input" type="checkbox" data-sec-alert="' + a[0] + '"' +
+              (on ? ' checked' : '') + (a[3] ? ' disabled' : '') + ' aria-label="' + a[1] + '">' +
+              '<span class="tma-auth__switch-ui"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span></label></div>';
+          }).join('') +
           '</section>' +
           '</div>' +
 
@@ -1028,6 +1504,30 @@
           '<div class="tma-auth__dialog-actions">' +
           '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
           '<button type="submit" class="tma-auth__submit">Update password</button></div></form></div></div>' +
+
+          '<div class="tma-auth__dialog" id="set-password-dialog" role="dialog" aria-modal="true" hidden>' +
+          '<div class="tma-auth__dialog-card">' +
+          '<h2 class="tma-auth__dialog-title">Set a password</h2>' +
+          '<p class="tma-auth__dialog-text">You\'ll be able to sign in with your email address and this password, as well as the accounts you\'ve connected.</p>' +
+          '<form class="tma-auth__form" data-sec-form="set-password" action="#" novalidate>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="password" name="password" placeholder="New password" autocomplete="new-password" aria-label="New password"></label>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="password" name="password_confirmation" placeholder="Confirm new password" autocomplete="new-password" aria-label="Confirm new password"></label>' +
+          '<p class="tma-auth__hint">At least 10 characters.</p>' +
+          '<p class="tma-auth__hint" data-sec-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
+          '<button type="submit" class="tma-auth__submit">Set password</button></div></form></div></div>' +
+
+          '<div class="tma-auth__dialog" id="phone-dialog" role="dialog" aria-modal="true" hidden>' +
+          '<div class="tma-auth__dialog-card">' +
+          '<h2 class="tma-auth__dialog-title">' + (d.phone ? 'Change your phone number' : 'Add a phone number') + '</h2>' +
+          '<p class="tma-auth__dialog-text">Used for security alerts and account recovery only.</p>' +
+          '<form class="tma-auth__form" data-sec-form="phone" action="#" novalidate>' +
+          '<label class="tma-auth__field"><input class="tma-auth__input" type="tel" name="phone" value="' + esc(d.phone || '') + '" placeholder="+1 555 123 4567" autocomplete="tel" aria-label="Phone number"></label>' +
+          '<p class="tma-auth__hint" data-sec-error hidden style="color: var(--color-red);"></p>' +
+          '<div class="tma-auth__dialog-actions">' +
+          '<button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-dialog-close>Cancel</button>' +
+          '<button type="submit" class="tma-auth__submit">Save number</button></div></form></div></div>' +
 
           '<div class="tma-auth__dialog" id="disable-tfa-dialog" role="dialog" aria-modal="true" hidden>' +
           '<div class="tma-auth__dialog-card">' +
@@ -1163,10 +1663,40 @@
           });
         });
 
-        /* coming-soon connects */
-        root.querySelectorAll('[data-sec-connect]').forEach(function (b) {
+        /* phone number */
+        var phoneRemove = root.querySelector('[data-sec-phone-remove]');
+        if (phoneRemove) phoneRemove.addEventListener('click', function () {
+          if (!window.confirm('Remove your phone number? We won\'t be able to reach you on it about your account.')) return;
+          secApi('DELETE', '/security-settings/phone').then(function (res) {
+            if (res.ok) { ui().toast('Phone number removed'); refresh(); }
+            else ui().toast('Could not remove your phone number.');
+          });
+        });
+
+        /* security notification switches — saved as they're flipped */
+        root.querySelectorAll('[data-sec-alert]').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var body = {};
+            body[cb.getAttribute('data-sec-alert')] = cb.checked;
+            secApi('PUT', '/security-settings/alerts', body).then(function (res) {
+              if (res.ok) { ui().toast(cb.checked ? 'Alert turned on' : 'Alert turned off'); return; }
+              cb.checked = !cb.checked;   // the server didn't take it; don't pretend it did
+              ui().toast('Could not save that setting.');
+            }).catch(function () {
+              cb.checked = !cb.checked;
+              ui().toast('Could not save that setting.');
+            });
+          });
+        });
+
+        /* end one other session */
+        root.querySelectorAll('[data-sec-session-revoke]').forEach(function (b) {
           b.addEventListener('click', function () {
-            ui().toast(b.getAttribute('data-sec-connect') + ' is coming in a later phase');
+            b.disabled = true;
+            secApi('DELETE', '/security-settings/sessions/' + b.getAttribute('data-sec-session-revoke')).then(function (res) {
+              if (res.ok) { ui().toast('Session ended'); refresh(); }
+              else { b.disabled = false; ui().toast('That session has already ended.'); }
+            }).catch(function () { b.disabled = false; ui().toast('Could not end that session.'); });
           });
         });
 
@@ -1329,6 +1859,23 @@
               });
             }
 
+            if (kind === 'set-password') {
+              var pw = form.querySelector('[name="password"]').value;
+              var pw2 = form.querySelector('[name="password_confirmation"]').value;
+              if (pw !== pw2) { errorIn(form, 'Those passwords don\'t match.'); return; }
+              secApi('POST', '/security-settings/password', { password: pw, password_confirmation: pw2 }).then(function (res) {
+                if (res.ok) { closeDialogs(); ui().toast('Password set'); form.reset(); refresh(); }
+                else res.json().then(function (j) { errorIn(form, firstError(j, 'Could not set your password.')); });
+              });
+            }
+
+            if (kind === 'phone') {
+              secApi('PUT', '/security-settings/phone', { phone: form.querySelector('[name="phone"]').value.trim() }).then(function (res) {
+                if (res.ok) { closeDialogs(); ui().toast('Phone number saved'); refresh(); }
+                else res.json().then(function (j) { errorIn(form, firstError(j, 'Could not save that number.')); });
+              });
+            }
+
             if (kind === 'logout-all') {
               secApi('POST', '/security-settings/logout-others', { password: form.querySelector('input').value }).then(function (res) {
                 if (res.ok) { closeDialogs(); ui().toast('Other sessions ended'); refresh(); }
@@ -1344,13 +1891,12 @@
   };
 
   PAGES['security-insights'] = {
-    render: function (s) {
+    render: function () {
       return '<p class="tma-portal-subtitle">A summary of your account’s security posture.</p>' +
         '<div class="tma-portal-two-col">' +
         ui().section('Sign-ins', '<div data-si-signins>' + ui().loading({ count: 2 }) + '</div>') +
         ui().section('Two-factor authentication', '<div data-si-tfa>' + ui().loading({ count: 2 }) + '</div>') +
         ui().section('Active sessions', '<div data-si-sessions>' + ui().loading({ count: 2 }) + '</div>') +
-        ui().section('Quarantine', '<p><strong>' + s.quarantinedFiles.length + '</strong> quarantined files</p>') +
         '</div>';
     },
     wire: function (el) {
@@ -1362,42 +1908,6 @@
         if (tfa) tfa.innerHTML = d.twoFactor === 'on' ? '<strong>On</strong>' : '<strong>Off</strong> — turn it on under Account security';
         if (ses) ses.innerHTML = '<strong>' + d.sessions.length + '</strong> active session' + (d.sessions.length === 1 ? '' : 's');
       }).catch(function () {});
-    },
-  };
-
-  PAGES['dlp'] = {
-    render: function (s) {
-      var d = s.settings.dlp;
-      function matrix(key, label, help) {
-        var m = d[key];
-        function row(action, actionLabel) {
-          return '<tr><td>' + actionLabel + '</td>' +
-            ['anonymous', 'client', 'employee'].map(function (role) {
-              return '<td><input type="checkbox" data-dlp="' + key + '.' + action + '.' + role + '"' + (m[action][role] ? ' checked' : '') + ' aria-label="' + actionLabel + ' - ' + role + '"></td>';
-            }).join('') + '</tr>';
-        }
-        return ui().section(label,
-          (help ? '<p class="tma-portal-note">' + ui().esc(help) + '</p>' : '') +
-          '<table class="tma-portal-matrix"><thead><tr><th></th><th>Anonymous</th><th>Client</th><th>Employee</th></tr></thead>' +
-          '<tbody>' + row('download', 'Download') + row('share', 'Share') + '</tbody></table>');
-      }
-      return '<p class="tma-portal-subtitle">The portal integrates with third-party Data Loss Prevention (DLP) systems to identify files that contain sensitive information. To limit access and sharing of items based on their content, enable DLP scanning on your storage zone controller and then configure the settings below.</p>' +
-        ui().section('Limit access to files based on their content',
-          ui().radioYesNo('dlp-limit', d.limitAccess, 'data-dlp-limit')) +
-        '<h3 class="tma-portal-section__title">Allowed Actions</h3>' +
-        matrix('rejected', 'Scanned: Rejected', 'Files a DLP scan flagged as containing sensitive content.') +
-        matrix('ok', 'Scanned: OK', 'Files a DLP scan cleared.') +
-        matrix('unscanned', 'Unscanned Documents', 'Files not yet scanned.') +
-        saveBtn('data-dlp-save');
-    },
-    wire: function (el, s) {
-      wireSave(el, 'data-dlp-save', function () {
-        s.settings.dlp.limitAccess = radioValue(el, 'dlp-limit', 'yes');
-        el.querySelectorAll('[data-dlp]').forEach(function (cb) {
-          var path = cb.getAttribute('data-dlp').split('.');
-          s.settings.dlp[path[0]][path[1]][path[2]] = cb.checked;
-        });
-      });
     },
   };
 
@@ -1600,104 +2110,6 @@
     },
   };
 
-  PAGES['super-users'] = {
-    search: '',
-    alpha: 'All',
-    selected: {},
-    render: function (s) {
-      var self = PAGES['super-users'];
-      var members = s.employees.filter(function (e) { return s.superUsers.indexOf(e.id) !== -1; });
-      var list = members.filter(function (p) {
-        if (self.alpha !== 'All' && (p.lastName || p.firstName).charAt(0).toUpperCase() !== self.alpha) return false;
-        var q = self.search.toLowerCase();
-        if (q && (p.firstName + ' ' + p.lastName + ' ' + p.email).toLowerCase().indexOf(q) === -1) return false;
-        return true;
-      });
-      var hasSelection = Object.keys(self.selected).some(function (k) { return self.selected[k]; });
-      return ui().alphaFilter(self.alpha) +
-        '<div class="tma-portal-toolbar">' +
-        '<div class="tma-portal-toolbar__group">' + ui().searchInput('Search Users', 'data-super-search', self.search) + '</div>' +
-        '<div class="tma-portal-toolbar__group">' +
-        ui().btn({ label: 'Remove', variant: 'danger', attrs: 'data-super-remove', disabled: !hasSelection }) +
-        ui().btn({ label: 'Add New User', attrs: 'data-super-add' }) +
-        '</div></div>' +
-        ui().table(['', 'Name', 'Email', 'Company'], list.map(function (p) {
-          return '<tr>' +
-            '<td><label class="tma-portal-checkbox"><input type="checkbox" data-super-select="' + p.id + '"' + (self.selected[p.id] ? ' checked' : '') + '></label></td>' +
-            '<td><span class="tma-portal-avatar-cell"><img src="' +
-            (window.TMACurrentUser && window.TMACurrentUser.avatarSrc
-              ? window.TMACurrentUser.avatarSrc(p.avatar || null, (p.firstName || '') + ' ' + (p.lastName || ''))
-              : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7') +
-            '" alt=""><strong>' + ui().esc(p.lastName + ', ' + p.firstName) + '</strong></span></td>' +
-            '<td class="tma-portal-table__muted">' + ui().esc(p.email) + '</td>' +
-            '<td class="tma-portal-table__muted">' + ui().esc(p.company || '-') + '</td></tr>';
-        }).join('') || '<tr class="tma-portal-table__empty"><td colspan="4">No members match your filters.</td></tr>') +
-        '<label class="tma-portal-checkbox"><input type="checkbox" data-super-hide' + (s.hideSuperGroup ? ' checked' : '') + '>' +
-        '<span>Hide Super Group from Folder Access List</span></label>';
-    },
-    wire: function (el, s) {
-      var self = PAGES['super-users'];
-      el.querySelectorAll('[data-alpha]').forEach(function (b) {
-        b.addEventListener('click', function () { self.alpha = b.getAttribute('data-alpha'); render(); });
-      });
-      var search = el.querySelector('[data-super-search]');
-      if (search) search.addEventListener('input', function () { self.search = search.value; render(); });
-      el.querySelectorAll('[data-super-select]').forEach(function (cb) {
-        cb.addEventListener('change', function () { self.selected[cb.getAttribute('data-super-select')] = cb.checked; render(); });
-      });
-      var remove = el.querySelector('[data-super-remove]');
-      if (remove) remove.addEventListener('click', function () {
-        s.superUsers = s.superUsers.filter(function (id) { return !self.selected[id]; });
-        self.selected = {};
-        data().save(); ui().toast('Removed from Super User Group'); render();
-      });
-      var add = el.querySelector('[data-super-add]');
-      if (add) add.addEventListener('click', function () {
-        var candidates = s.employees.filter(function (e) { return s.superUsers.indexOf(e.id) === -1; });
-        if (!candidates.length) { ui().toast('All employees are already super users'); return; }
-        ui().openModal({
-          title: 'Add to Super User Group',
-          body: ui().field('Employee', ui().select(candidates.map(function (e) { return { value: e.id, label: e.lastName + ', ' + e.firstName + ' (' + e.email + ')' }; }), candidates[0].id, 'data-super-pick')) +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Add', attrs: 'data-super-save' }) + '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-super-save]').addEventListener('click', function () {
-              s.superUsers.push(host.querySelector('[data-super-pick]').value);
-              data().save(); ui().closeModal(); ui().toast('Added to Super User Group'); render();
-            });
-          },
-        });
-      });
-      var hide = el.querySelector('[data-super-hide]');
-      if (hide) hide.addEventListener('change', function () { s.hideSuperGroup = hide.checked; data().save(); });
-    },
-  };
-
-  PAGES['quarantined'] = {
-    render: function (s) {
-      return '<p class="tma-portal-subtitle">We detected malicious content in these files.</p>' +
-        '<div class="tma-portal-toolbar"><span></span><div class="tma-portal-toolbar__group">' +
-        ui().btn({ label: 'Delete', variant: 'danger', attrs: 'data-quar-delete', disabled: !s.quarantinedFiles.length }) +
-        ui().btn({ label: 'Download', attrs: 'data-quar-download', disabled: !s.quarantinedFiles.length }) +
-        '</div></div>' +
-        (s.quarantinedFiles.length
-          ? ui().table(['File', 'Detected', 'Threat'], s.quarantinedFiles.map(function (f) {
-              return '<tr><td><strong>' + ui().esc(f.name) + '</strong></td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(f.date) + '</td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(f.threat) + '</td></tr>';
-            }).join(''))
-          : ui().emptyState({ illustration: 'Illustration03', title: 'Quarantined Files is empty', subtitle: 'Files flagged for malicious content will be held here.' }));
-    },
-    wire: function (el, s) {
-      var del = el.querySelector('[data-quar-delete]');
-      if (del) del.addEventListener('click', function () {
-        s.quarantinedFiles = [];
-        data().save(); ui().toast('Quarantined files permanently deleted'); render();
-      });
-      var dl = el.querySelector('[data-quar-download]');
-      if (dl) dl.addEventListener('click', function () { ui().toast('Preparing download…'); });
-    },
-  };
-
   // One Microsoft consent covers all three — each tile reflects a facet of
   // the same connected account, so connecting any of them connects them all.
   var CONNECTOR_CATALOG = [
@@ -1772,384 +2184,402 @@
     },
   };
 
+  /* Server-backed: real bytes, measured from every table that holds them —
+     the File Library, old versions, message and Feed attachments, and anything
+     deleted but not yet purged. The limit is a licence figure from config, and
+     the page says so rather than implying the ceiling was metered. */
   PAGES['storage-usage'] = {
-    render: function (s) {
-      var files = s.folders.personal.length + s.folders.shared.length;
-      return ui().section('Storage usage',
-        '<p><strong>2.1 GB</strong> of <strong>1 TB</strong> used</p>' +
-        '<div style="height:8px;border-radius:var(--radius-pill);background:var(--color-hover);overflow:hidden">' +
-        '<div style="width:2%;height:100%;background:var(--color-black)"></div></div>' +
-        '<p class="tma-portal-note">' + files + ' items across personal and shared folders. Storage is pooled across all licenses.</p>');
+    render: function () {
+      secEnsureStyles();
+      return '<div data-usage-root>' + ui().loading() + '</div>';
     },
-  };
+    wire: function (el) {
+      var root = el.querySelector('[data-usage-root]');
+      if (!root) return;
+      var esc = ui().esc;
 
-  PAGES['ai-settings'] = {
-    render: function (s) {
-      var a = s.settings.ai;
-      return ui().section('AI-powered document request list generation',
-        '<p class="tma-portal-note"><span class="tma-portal-chip">Beta</span></p>' +
-        '<p>Generate document request lists with AI-powered recommendations. <span class="tma-portal-link">Learn More</span></p>' +
-        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Enable document request list generation</span>' +
-        ui().toggle(a.requestList, 'data-ai-requests', 'Enable document request list generation') + '</div>') +
-        ui().section('AI document assistant',
-          '<p class="tma-portal-note"><span class="tma-portal-chip">Beta</span></p>' +
-          '<p>Generate a document summary and ask questions with AI. <span class="tma-portal-link">Learn More</span></p>' +
-          '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Enable AI document assistant</span>' +
-          ui().toggle(a.docAssistant, 'data-ai-assistant', 'Enable AI document assistant') + '</div>');
-    },
-    wire: function (el, s) {
-      el.querySelector('[data-ai-requests]').addEventListener('change', function (e) {
-        s.settings.ai.requestList = e.target.checked; data().save();
-      });
-      el.querySelector('[data-ai-assistant]').addEventListener('change', function (e) {
-        s.settings.ai.docAssistant = e.target.checked; data().save();
-      });
-    },
-  };
-
-  PAGES['email-settings'] = {
-    render: function (s) {
-      var e = s.settings.emailSettings;
-      function radio(name, value, current, label, attr) {
-        return '<label class="tma-portal-radio"><input type="radio" name="' + name + '" value="' + value + '"' + (current === value ? ' checked' : '') + ' ' + attr + '>' +
-          '<span class="tma-portal-radio__dot" aria-hidden="true"></span><span>' + label + '</span></label>';
+      function bytes(n) {
+        var v = Number(n) || 0;
+        if (v <= 0) return '0 B';
+        var units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+        var p = Math.min(Math.floor(Math.log(v) / Math.log(1024)), units.length - 1);
+        var scaled = v / Math.pow(1024, p);
+        return (p === 0 ? v : scaled.toFixed(scaled >= 100 ? 0 : 1)) + ' ' + units[p];
       }
-      return ui().section('Send Emails Via',
-        '<p class="tma-portal-note">Choose which notifications are sent through the portal mail server.</p>' +
-        '<div class="tma-portal-radio-row" style="flex-direction:column;align-items:flex-start;gap:var(--space-8)">' +
-        radio('email-via', 'uploads', e.sendVia, 'Uploads Only', 'data-email-via') +
-        radio('email-via', 'downloads', e.sendVia, 'Downloads Only', 'data-email-via') +
-        radio('email-via', 'both', e.sendVia, 'Both Uploads and Downloads', 'data-email-via') +
-        '</div>', { help: 'Mail routing for notification emails' }) +
-        ui().section('Upload Receipts',
-          '<p>Send upload receipts for Request a File</p>' +
-          ui().radioYesNo('email-receipts', e.uploadReceipts, 'data-email-receipts'), { help: 'Email clients a receipt when they upload files' }) +
-        ui().section('Email Notifications',
-          ui().field('Send email notifications:', ui().select(['Every 15 minutes', 'Every 30 minutes', 'Hourly', 'Daily'], e.notifyFrequency, 'data-email-frequency')) +
-          ui().field('Default email language:', ui().select(['Invariant', 'English (US)', 'English (UK)', 'Spanish', 'French', 'Dutch', 'German'], e.language, 'data-email-language')), { help: 'How often notification digests are sent' }) +
-        ui().section('Q & A Email Text',
-          '<p>Show Question &amp; Answer text in the notification email</p>' +
-          ui().radioYesNo('email-qa', e.qaText, 'data-email-qa'), { help: 'Include Q&A thread text in notifications' }) +
-        saveBtn('data-email-save');
-    },
-    wire: function (el, s) {
-      wireSave(el, 'data-email-save', function () {
-        var e = s.settings.emailSettings;
-        e.sendVia = radioValue(el, 'email-via', 'both');
-        e.uploadReceipts = radioValue(el, 'email-receipts', 'no');
-        e.notifyFrequency = el.querySelector('[data-email-frequency]').value;
-        e.language = el.querySelector('[data-email-language]').value;
-        e.qaText = radioValue(el, 'email-qa', 'yes');
+
+      function count(n) { return (Number(n) || 0).toLocaleString(); }
+
+      function plural(n, one, many) { return (Number(n) === 1 ? one : many); }
+
+      function when(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+      }
+
+      function empty(text) {
+        return '<p class="tma-portal-note" style="text-align:center;padding:var(--space-16) 0">' + esc(text) + '</p>';
+      }
+
+      /* Headline: used against the allowance, with the bar only when there is
+         an allowance to draw it against. */
+      function headline(d) {
+        var limit = d.limit || {};
+        var used = Number(d.usedBytes) || 0;
+        var total = Number(limit.bytes) || 0;
+        var pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+
+        var line = total > 0
+          ? '<span><strong>' + esc(bytes(used)) + '</strong> of <strong>' + esc(bytes(total)) + '</strong> used</span>' +
+            '<span>' + esc(pct < 1 && used > 0 ? 'Under 1%' : Math.round(pct) + '%') + '</span>'
+          : '<span><strong>' + esc(bytes(used)) + '</strong> stored</span>';
+
+        // A fraction of a percent still rounds to a sub-pixel sliver, which
+        // reads as "nothing stored" rather than "barely anything".
+        var bar = total > 0
+          ? '<div class="tma-auth__progress-track"><div class="tma-auth__progress-fill" style="width:' +
+            pct.toFixed(1) + '%' + (used > 0 ? ';min-width:3px' : '') + '"></div></div>'
+          : '';
+
+        var source = total > 0
+          ? (limit.source === 'licences'
+              ? bytes(limit.perLicenceBytes) + ' per licence across ' + count(limit.licences) + ' staff ' +
+                plural(limit.licences, 'account', 'accounts') + ', pooled.'
+              : 'Pooled across the account.')
+          : 'No storage limit is set for this account.';
+
+        var where = (d.byLocation || []).filter(function (l) { return Number(l.bytes) > 0; });
+        var whereLine = where.length
+          ? '<p class="tma-portal-note">' + where.map(function (l) {
+              return esc(l.label) + ' ' + esc(bytes(l.bytes));
+            }).join(' · ') + '</p>'
+          : '';
+
+        var g = d.growth || {};
+        var growthLine = (g.addedFiles || g.binnedFiles)
+          ? '<p class="tma-portal-note">Last ' + esc(g.days) + ' days: ' + esc(bytes(g.addedBytes)) + ' added across ' +
+            esc(count(g.addedFiles)) + ' ' + plural(g.addedFiles, 'file', 'files') +
+            (g.binnedFiles ? ', ' + esc(bytes(g.binnedBytes)) + ' moved to the bin' : '') + '.</p>'
+          : '';
+
+        // No heading: the rail already says Usage, and the figure is the lead.
+        return ui().section('',
+          '<div class="tma-auth__progress" style="width:100%">' +
+          '<div class="tma-auth__progress-row">' + line + '</div>' + bar + '</div>' +
+          '<p class="tma-portal-note">' + esc(source) + '</p>' +
+          whereLine + growthLine);
+      }
+
+      function categories(d) {
+        var list = (d.categories || []);
+        var used = Number(d.usedBytes) || 0;
+        // Six zero rows is noise on a new account; one line says the same.
+        if (!list.length || used <= 0) return ui().section('What’s using it', empty('Nothing is stored yet.'));
+
+        var rows = list.map(function (c) {
+          var share = used > 0 ? (Number(c.bytes) / used) * 100 : 0;
+          return '<tr><td><strong>' + esc(c.label) + '</strong>' +
+            (c.hint ? '<br><span class="tma-portal-note">' + esc(c.hint) + '</span>' : '') + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(count(c.count)) + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(bytes(c.bytes)) + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(Number(c.bytes) > 0 && share < 1 ? '<1%' : Math.round(share) + '%') + '</td></tr>';
+        }).join('');
+
+        return ui().section('What’s using it', ui().table(['Storage', 'Items', 'Size', 'Share'], rows));
+      }
+
+      function owners(d) {
+        var list = d.topOwners || [];
+        var split = (d.byAccountType || []).filter(function (t) { return Number(t.bytes) > 0; });
+        var splitLine = split.length > 1
+          ? '<p class="tma-portal-note">' + split.map(function (t) {
+              return esc(t.label) + ' ' + esc(bytes(t.bytes));
+            }).join(' · ') + '</p>'
+          : '';
+
+        if (!list.length) return ui().section('Storage by owner', empty('No files have been uploaded yet.'));
+
+        var rows = list.map(function (o) {
+          return '<tr><td><strong>' + esc(o.name) + '</strong></td>' +
+            '<td class="tma-portal-table__muted">' + esc(o.type) + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(count(o.count)) + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(bytes(o.bytes)) + '</td></tr>';
+        }).join('');
+
+        return ui().section('Storage by owner', ui().table(['Owner', 'Type', 'Files', 'Size'], rows) + splitLine);
+      }
+
+      function largest(d) {
+        var list = d.largestFiles || [];
+        if (!list.length) return '';
+
+        var rows = list.map(function (f) {
+          return '<tr><td><strong>' + esc(f.name) + '</strong></td>' +
+            '<td class="tma-portal-table__muted">' + esc(f.folder || '—') + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(f.owner || '—') + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(when(f.uploadedAt)) + '</td>' +
+            '<td class="tma-portal-table__muted">' + esc(bytes(f.bytes)) + '</td></tr>';
+        }).join('');
+
+        return ui().section('Largest files', ui().table(['File', 'Folder', 'Owner', 'Uploaded', 'Size'], rows));
+      }
+
+      secApi('GET', '/admin/storage-usage').then(function (r) {
+        if (!r.ok) throw new Error('load');
+        return r.json();
+      }).then(function (d) {
+        root.innerHTML = headline(d) + categories(d) + owners(d) + largest(d);
+      }).catch(function () {
+        root.innerHTML = '<p class="tma-portal-note">Couldn\'t load storage usage. Refresh to try again.</p>';
       });
     },
   };
 
+  /* ── Permissions (real: /admin/permissions) ───────────────────────
+     Two firm-wide defaults of deliberately different kinds. The directory
+     toggle grants a capability, so switching it off takes the People section
+     away from every employee — sidebar, page gate and API together. Client
+     sharing is not a capability (the right to re-share belongs to the item,
+     not the account), so the server enforces it inside FileAccess::can, which
+     every share path already passes through. */
   PAGES['permissions'] = {
-    render: function (s) {
-      var p = s.settings.permissions;
-      return ui().section('Client contact shares',
-        '<p>Allow client contacts to share files</p>' +
-        ui().radioYesNo('perm-shares', p.clientShares, 'data-perm-shares'), { help: 'Whether clients can re-share files' }) +
-        ui().section('Folder access list',
-          '<p>Show “People” tab to non-administrators</p>' +
-          ui().radioYesNo('perm-people', p.showPeopleTab, 'data-perm-people'), { help: 'Visibility of the People tab' }) +
-        saveBtn('data-perm-save');
+    render: function () {
+      return '<div data-perm-root>' + ui().loading() + '</div>';
     },
-    wire: function (el, s) {
-      wireSave(el, 'data-perm-save', function () {
-        s.settings.permissions.clientShares = radioValue(el, 'perm-shares', 'no');
-        s.settings.permissions.showPeopleTab = radioValue(el, 'perm-people', 'no');
-      });
+    wire: function (el) {
+      var root = el.querySelector('[data-perm-root]');
+      if (!root) return;
+
+      function paint(d) {
+        var canEdit = !!d.canEdit;
+        var counts = d.counts || {};
+
+        root.innerHTML =
+          '<p class="tma-portal-subtitle">Firm-wide defaults for what employees can see and what clients can pass on — ' +
+          'administrators are unaffected by both.</p>' +
+          (canEdit ? '' : '<p class="tma-portal-note">Only administrators can change these permissions.</p>') +
+          ui().section('Directory',
+            d.capabilities.map(function (cap) { return capRow(cap, canEdit, 'data-perm-cap'); }).join('') +
+            '<p class="tma-portal-note">Applies to ' + counts.employees + ' employee account' +
+            (counts.employees === 1 ? '' : 's') + ', the next time each one loads the portal.</p>') +
+          ui().section('Client sharing',
+            '<div class="tma-dash__settings-cookie-row">' +
+            '<span class="tma-dash__settings-cookie-copy">' +
+            '<span class="tma-dash__settings-cookie-label">Let clients share files onward</span>' +
+            '<span class="tma-dash__settings-cookie-desc">Off, a client can open and download what you share with them but cannot pass it to anyone else. ' +
+            'Existing share links they already created keep working.</span>' +
+            '</span>' +
+            ui().toggle(d.clientSharing, 'data-perm-sharing' + (canEdit ? '' : ' disabled'), 'Let clients share files onward') +
+            '</div>' +
+            '<p class="tma-portal-note">Applies to ' + counts.clients + ' client' +
+            (counts.clients === 1 ? '' : 's') + '. Staff sharing is unaffected.</p>') +
+          (canEdit ? saveBtn('data-perm-save') : '');
+
+        var save = root.querySelector('[data-perm-save]');
+        if (!save) return;
+        save.addEventListener('click', function () {
+          var employee = {};
+          root.querySelectorAll('[data-perm-cap]').forEach(function (cb) {
+            employee[cb.getAttribute('data-perm-cap')] = cb.checked;
+          });
+          secApi('PUT', '/admin/permissions', {
+            employee: employee,
+            clientSharing: root.querySelector('[data-perm-sharing]').checked,
+          }).then(function (res) {
+            return res.json().then(function (j) { return { ok: res.ok, body: j }; });
+          }).then(function (r) {
+            if (!r.ok) { ui().toast((r.body && r.body.message) || 'Could not save'); return; }
+            ui().toast('Permissions saved');
+            paint(r.body);
+          }).catch(function () { ui().toast('Could not save'); });
+        });
+      }
+
+      secApi('GET', '/admin/permissions')
+        .then(function (r) { return r.json(); })
+        .then(paint)
+        .catch(function () {
+          root.innerHTML = '<p class="tma-portal-note">Couldn’t load permissions. Refresh to try again.</p>';
+        });
     },
   };
 
-  PAGES['file-settings'] = {
-    render: function (s) {
-      var f = s.settings.fileSettings;
-      var tokens = ['Email', 'First Name', 'Last Name', 'Company', 'IP Address', 'Date', 'Time'];
-      return ui().section('Sorting',
-        '<p>Enable Sorting</p>' +
-        ui().radioYesNo('fs-sorting', f.sortingEnabled, 'data-fs-sorting') +
-        '<div class="tma-portal-toolbar__group">' +
-        ui().field('Default Sort:', ui().select(['Name', 'Date', 'Size', 'Type'], f.defaultSortField, 'data-fs-sort-field')) +
-        ui().field('&nbsp;', ui().select(['Ascending', 'Descending'], f.defaultSortDir, 'data-fs-sort-dir', 'Sort direction')) +
-        '</div>', { help: 'Default item ordering in folders' }) +
-        ui().section('Versioning',
-          '<p>Enable Versioning</p>' +
-          ui().radioYesNo('fs-versioning', f.versioningEnabled, 'data-fs-versioning') +
-          '<div class="tma-portal-toolbar__group">' +
-          ui().field('Maximum Versions:', ui().select(['Custom…', 'Unlimited'], f.maxVersionsMode === 'Custom' ? 'Custom…' : 'Unlimited', 'data-fs-versions-mode')) +
-          ui().field('&nbsp;', ui().input({ type: 'number', value: String(f.maxVersions), attrs: 'data-fs-versions min="1" max="10000"', ariaLabel: 'Maximum versions' }) + ' <span class="tma-portal-note">versions</span>') +
-          '</div>', { help: 'Keep previous versions when files change' }) +
-        ui().section('File Box',
-          ui().field('Keep files in the File Box for:', ui().input({ type: 'number', value: String(f.fileBoxRetentionDays), attrs: 'data-fs-filebox min="1" max="365"', ariaLabel: 'File Box retention days' }) + ' <span class="tma-portal-note">days (default 180)</span>'), { help: 'File Box retention period' }) +
-        ui().section('Watermark',
-          '<p class="tma-portal-note">You can overlay a watermark on supported file types. Users with download permission will not see the watermark.</p>' +
-          '<p>Enable Watermarking</p>' +
-          ui().radioYesNo('fs-watermark', f.watermarkEnabled, 'data-fs-watermark') +
-          '<div class="tma-portal-field"><span class="tma-portal-field__label">Watermark:</span>' +
-          '<textarea class="tma-portal-textarea" data-fs-watermark-text>' + ui().esc(f.watermarkText) + '</textarea></div>' +
-          '<p class="tma-portal-note">Insert dynamic text:</p>' +
-          '<div class="tma-portal-watermark-tokens">' +
-          tokens.map(function (t) { return '<button type="button" class="tma-portal-link" data-fs-token="{' + t.replace(/ /g, '') + '}">' + t + '</button>'; }).join('') +
-          '</div>') +
-        ui().section('Editing',
-          '<p>Microsoft Office Editing <span class="tma-portal-help" title="Edit Office documents in the browser">&#9432;</span></p>' +
-          '<p>Enable Editing</p>' +
-          ui().radioYesNo('fs-editing', f.officeEditing, 'data-fs-editing')) +
-        ui().section('Cloud Rendering',
-          '<p>Enable Cloud Rendering of files on Customer Managed StorageZones for Feedback &amp; Approval and Custom Workflows</p>' +
-          ui().radioYesNo('fs-cloud', f.cloudRendering, 'data-fs-cloud') +
-          '<p class="tma-portal-note">If Cloud Rendering is enabled, the cloud keeps a temporary copy of the files (images, audio, PDF etc.) involved in your workflow. When the workflow completes:</p>' +
-          '<ol>' +
-          '<li>The cloud moves the files to the selected on-prem folder</li>' +
-          '<li>If an end user views any file related to a completed workflow, a temporary copy of the file is made from on-prem to the cloud cache</li>' +
-          '<li>A file will be available for up to 1 week in the cloud cache after the last time the file is viewed</li>' +
-          '</ol>' +
-          '<p class="tma-portal-note">If Cloud Rendering is disabled, end users will not be able to use Feedback and Approval or Custom Workflow features with files stored on Customer Managed StorageZones. It is recommended that all administrators communicate this information to their end users along with reviewing the End User Services Agreement and Privacy Policy.</p>') +
-        saveBtn('data-fs-save');
-    },
-    wire: function (el, s) {
-      el.querySelectorAll('[data-fs-token]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var ta = el.querySelector('[data-fs-watermark-text]');
-          ta.value = (ta.value + ' ' + b.getAttribute('data-fs-token')).trim();
-          ta.focus();
-        });
-      });
-      wireSave(el, 'data-fs-save', function () {
-        var f = s.settings.fileSettings;
-        f.sortingEnabled = radioValue(el, 'fs-sorting', 'no');
-        f.defaultSortField = el.querySelector('[data-fs-sort-field]').value;
-        f.defaultSortDir = el.querySelector('[data-fs-sort-dir]').value;
-        f.versioningEnabled = radioValue(el, 'fs-versioning', 'yes');
-        f.maxVersionsMode = el.querySelector('[data-fs-versions-mode]').value.indexOf('Custom') === 0 ? 'Custom' : 'Unlimited';
-        f.maxVersions = parseInt(el.querySelector('[data-fs-versions]').value, 10) || 10000;
-        f.fileBoxRetentionDays = parseInt(el.querySelector('[data-fs-filebox]').value, 10) || 180;
-        f.watermarkEnabled = radioValue(el, 'fs-watermark', 'yes');
-        f.watermarkText = el.querySelector('[data-fs-watermark-text]').value.trim();
-        f.officeEditing = radioValue(el, 'fs-editing', 'yes');
-        f.cloudRendering = radioValue(el, 'fs-cloud', 'no');
-      });
-    },
-  };
+  /* ── Folder templates (real: /portal/file-library/folder-templates) ──
+     A template is a named list of subfolder names. Creating one is only half
+     the feature — "Apply" is the half that makes it worth having, and it goes
+     through the same folder creation the client defaults use, so a name that
+     already exists is skipped rather than duplicated. */
+  var FTPL = { loaded: false, loading: false, error: '', templates: [], targets: [] };
 
-  PAGES['tools'] = {
-    render: function (s) {
-      var t = s.settings.tools;
-      return '<p class="tma-portal-subtitle">Enable or disable access to individual components of the Power Tools suite using the options below. <strong>Note that any changes will affect all users of your account.</strong></p>' +
-        ui().section('',
-          '<label class="tma-portal-checkbox"><input type="checkbox" data-tools-apps' + (t.showAppsPage ? ' checked' : '') + '><span>Show Apps Page in Navigation Bar</span></label>' +
-          '<label class="tma-portal-checkbox"><input type="checkbox" data-tools-betas' + (t.desktopBetas ? ' checked' : '') + '><span>Enable Desktop Apps Betas</span></label>' +
-          ui().field('Show Tools in App List', ui().select(['All Available', 'Enabled Only', 'None'], t.showInList, 'data-tools-list'))) +
-        ui().section('Desktop Apps',
-          '<div class="tma-portal-feature"><img src="images/icons/phosphor/EnvelopeSimple.svg" alt="">' +
-          '<div class="tma-portal-feature__body">' +
-          '<span class="tma-portal-feature__title">Outlook Plug-in</span>' +
-          '<label class="tma-portal-checkbox"><input type="checkbox" data-tools-outlook' + (t.outlookPlugin ? ' checked' : '') + '><span>Enabled</span></label>' +
-          '<span class="tma-portal-feature__desc">The Outlook Plug-in integrates with Outlook on Windows to provide an easy interface to the portal, allowing you to quickly send and request files through e-mail.</span>' +
-          '</div></div>' +
-          '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Configure Plug-in', variant: 'ghost', attrs: 'data-tools-configure' }) + '</div>') +
-        ui().section('External Tools',
-          '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">FTPS Access</span>' +
-          ui().toggle(t.ftpsAccess, 'data-tools-ftps', 'FTPS Access') + '</div>');
-    },
-    wire: function (el, s) {
-      var t = s.settings.tools;
-      el.querySelector('[data-tools-apps]').addEventListener('change', function (e) { t.showAppsPage = e.target.checked; data().save(); });
-      el.querySelector('[data-tools-betas]').addEventListener('change', function (e) { t.desktopBetas = e.target.checked; data().save(); });
-      el.querySelector('[data-tools-list]').addEventListener('change', function (e) { t.showInList = e.target.value; data().save(); });
-      el.querySelector('[data-tools-outlook]').addEventListener('change', function (e) { t.outlookPlugin = e.target.checked; data().save(); });
-      el.querySelector('[data-tools-ftps]').addEventListener('change', function (e) { t.ftpsAccess = e.target.checked; data().save(); });
-      el.querySelector('[data-tools-configure]').addEventListener('click', function () {
-        ui().openModal({
-          title: 'Configure Outlook Plug-in',
-          body: '<p>Default sharing options for files sent through the Outlook plug-in.</p>' +
-            ui().field('Attachments larger than', ui().select(['5 MB', '10 MB', '20 MB', 'Always convert'], '10 MB', 'data-outlook-threshold')) +
-            ui().field('Link expires after', ui().select(['7 days', '30 days', '90 days', 'Never'], '30 days', 'data-outlook-expiry')) +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-outlook-save' }) + '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-outlook-save]').addEventListener('click', function () {
-              ui().closeModal(); ui().toast('Plug-in settings saved');
-            });
-          },
+  function loadTemplates() {
+    if (FTPL.loading) return;
+    FTPL.loading = true;
+    filelibJson('GET', '/portal/file-library/folder-templates')
+      .then(function (d) {
+        FTPL.templates = d.templates || [];
+        FTPL.targets = d.targets || [];
+        FTPL.error = '';
+      })
+      .catch(function (e) { FTPL.error = e.message; })
+      .then(function () { FTPL.loading = false; FTPL.loaded = true; render(); });
+  }
+
+  /* The target list is grouped (organization folders, then each client's), and
+     ui().select has no optgroup support — so this builds one, reusing the same
+     class so it still looks like every other select on the page. */
+  function targetSelect(targets) {
+    var groups = [];
+    var byGroup = {};
+    targets.forEach(function (t) {
+      if (!byGroup[t.group]) { byGroup[t.group] = []; groups.push(t.group); }
+      byGroup[t.group].push(t);
+    });
+
+    return '<select class="tma-portal-select" data-ftpl-target aria-label="Destination folder">' +
+      groups.map(function (g) {
+        return '<optgroup label="' + ui().esc(g) + '">' +
+          byGroup[g].map(function (t) {
+            return '<option value="' + ui().esc(t.id) + '">' + ui().esc(t.name) + '</option>';
+          }).join('') + '</optgroup>';
+      }).join('') +
+      '</select>';
+  }
+
+  function templateModal(existing) {
+    var editing = !!existing;
+    ui().openModal({
+      title: editing ? 'Edit folder template' : 'Create folder template',
+      body:
+        ui().field('Template name', ui().input({
+          value: editing ? existing.name : '',
+          placeholder: 'e.g. New Client Setup',
+          attrs: 'data-ftpl-name',
+        })) +
+        ui().field('Subfolders (comma separated)', ui().input({
+          value: editing ? existing.subfolders.join(', ') : '',
+          placeholder: 'Documents, Contracts, Invoices',
+          attrs: 'data-ftpl-folders',
+        })) +
+        '<p class="tma-portal-note">Applying this template creates any of these folders that aren’t already there.</p>' +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: editing ? 'Save' : 'Create', attrs: 'data-ftpl-save' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-ftpl-save]').addEventListener('click', function () {
+          var nameEl = host.querySelector('[data-ftpl-name]');
+          var name = nameEl.value.trim();
+          if (!name) { nameEl.focus(); return; }
+
+          var subfolders = host.querySelector('[data-ftpl-folders]').value
+            .split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+          if (!subfolders.length) { host.querySelector('[data-ftpl-folders]').focus(); return; }
+
+          var body = { name: name, subfolders: subfolders };
+          var call = editing
+            ? filelibJson('PUT', '/portal/file-library/folder-templates/' + encodeURIComponent(existing.id), body)
+            : filelibJson('POST', '/portal/file-library/folder-templates', body);
+
+          call.then(function (d) {
+            FTPL.templates = d.templates || [];
+            ui().closeModal();
+            ui().toast(editing ? 'Template saved' : 'Folder template created');
+            render();
+          }).catch(function (e) { ui().toastError(e.message); });
         });
-      });
-    },
-  };
+      },
+    });
+  }
+
+  function applyTemplateModal(template) {
+    if (!FTPL.targets.length) {
+      ui().toast('There are no organization or client folders to apply this to yet');
+      return;
+    }
+
+    ui().openModal({
+      title: 'Apply “' + template.name + '”',
+      body:
+        '<p>This creates ' + template.subfolders.length + ' folder' + (template.subfolders.length === 1 ? '' : 's') +
+        ' — ' + ui().esc(template.subfolders.join(', ')) + ' — inside the folder you pick.</p>' +
+        ui().field('Destination folder', targetSelect(FTPL.targets)) +
+        '<p class="tma-portal-note">Folders that already exist are left alone.</p>' +
+        '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Apply template', attrs: 'data-ftpl-apply-go' }) + '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-ftpl-apply-go]').addEventListener('click', function () {
+          var folder = host.querySelector('[data-ftpl-target]').value;
+          filelibJson('POST', '/portal/file-library/folder-templates/' + encodeURIComponent(template.id) + '/apply', { folder: folder })
+            .then(function (d) {
+              ui().closeModal();
+              // "Applied, nothing to do" and "applied, made five folders" are
+              // different outcomes and the toast should not blur them.
+              var made = (d.created || []).length;
+              ui().toast(made
+                ? 'Created ' + made + ' folder' + (made === 1 ? '' : 's') + ' in ' + d.folder.name
+                : 'Everything in this template was already in ' + d.folder.name);
+            })
+            .catch(function (e) { ui().toastError(e.message); });
+        });
+      },
+    });
+  }
 
   PAGES['folder-templates'] = {
-    render: function (s) {
-      return '<p class="tma-portal-subtitle">Folder templates create a consistent subfolder structure whenever they are applied.</p>' +
-        (s.folderTemplates.length
-          ? ui().table(['Template', 'Subfolders', ''], s.folderTemplates.map(function (t) {
+    render: function () {
+      if (FTPL.error) return '<p class="tma-portal-note">Couldn’t load folder templates: ' + ui().esc(FTPL.error) + '</p>';
+      if (!FTPL.loaded) return ui().loading();
+
+      return '<p class="tma-portal-subtitle">Folder templates create a consistent subfolder structure wherever you apply them.</p>' +
+        (FTPL.templates.length
+          ? ui().table(['Template', 'Subfolders', ''], FTPL.templates.map(function (t) {
               return '<tr><td><strong>' + ui().esc(t.name) + '</strong></td>' +
                 '<td class="tma-portal-table__muted">' + ui().esc(t.subfolders.join(', ')) + '</td>' +
                 '<td><div class="tma-portal-row-actions">' +
-                '<button type="button" class="tma-portal-icon-btn" data-ftpl-delete="' + t.id + '" title="Delete template" aria-label="Delete template"><img src="images/icons/phosphor/Trash.svg" alt=""></button>' +
+                '<button type="button" class="tma-portal-icon-btn" data-ftpl-apply="' + ui().esc(t.id) + '" title="Apply to a folder" aria-label="Apply to a folder"><img src="images/icons/phosphor/FolderPlus.svg" alt=""></button>' +
+                '<button type="button" class="tma-portal-icon-btn" data-ftpl-edit="' + ui().esc(t.id) + '" title="Edit template" aria-label="Edit template"><img src="images/icons/phosphor/PencilSimple.svg" alt=""></button>' +
+                '<button type="button" class="tma-portal-icon-btn" data-ftpl-delete="' + ui().esc(t.id) + '" title="Delete template" aria-label="Delete template"><img src="images/icons/phosphor/Trash.svg" alt=""></button>' +
                 '</div></td></tr>';
             }).join(''))
-          : ui().emptyState({ illustration: 'Illustration03', title: 'No folder templates yet', subtitle: 'Create a template like “Client / Tax / 2026” to standardize folder structures.' })) +
+          : ui().emptyState({ illustration: 'Illustration03', title: 'No folder templates yet', subtitle: 'Create a template like “Documents, Contracts, Invoices” and apply it to any client or organization folder.' })) +
         '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create folder template', attrs: 'data-ftpl-add' }) + '</div>';
     },
-    wire: function (el, s) {
-      el.querySelector('[data-ftpl-add]').addEventListener('click', function () {
-        ui().openModal({
-          title: 'Create folder template',
-          body:
-            ui().field('Template name', ui().input({ placeholder: 'e.g. New Client Setup', attrs: 'data-ftpl-name' })) +
-            ui().field('Subfolders (comma separated)', ui().input({ placeholder: 'Documents, Contracts, Invoices', attrs: 'data-ftpl-folders' })) +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create', attrs: 'data-ftpl-save' }) + '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-ftpl-save]').addEventListener('click', function () {
-              var name = host.querySelector('[data-ftpl-name]').value.trim();
-              if (!name) { host.querySelector('[data-ftpl-name]').focus(); return; }
-              var subfolders = host.querySelector('[data-ftpl-folders]').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-              s.folderTemplates.push({ id: data().uid('ftpl'), name: name, subfolders: subfolders });
-              data().save(); ui().closeModal(); ui().toast('Folder template created'); render();
-            });
-          },
+    wire: function (el) {
+      if (!FTPL.loaded) { loadTemplates(); return; }
+
+      function templateFor(btn, attr) {
+        var id = btn.getAttribute(attr);
+        return FTPL.templates.filter(function (t) { return t.id === id; })[0];
+      }
+
+      var add = el.querySelector('[data-ftpl-add]');
+      if (add) add.addEventListener('click', function () { templateModal(null); });
+
+      el.querySelectorAll('[data-ftpl-apply]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var t = templateFor(b, 'data-ftpl-apply');
+          if (t) applyTemplateModal(t);
         });
       });
+
+      el.querySelectorAll('[data-ftpl-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var t = templateFor(b, 'data-ftpl-edit');
+          if (t) templateModal(t);
+        });
+      });
+
       el.querySelectorAll('[data-ftpl-delete]').forEach(function (b) {
         b.addEventListener('click', function () {
-          s.folderTemplates = s.folderTemplates.filter(function (t) { return t.id !== b.getAttribute('data-ftpl-delete'); });
-          data().save(); render();
+          var t = templateFor(b, 'data-ftpl-delete');
+          if (!t) return;
+          // Deleting a template never touches the folders it created, so this
+          // needs no scarier warning than naming what goes away.
+          if (!window.confirm('Delete the “' + t.name + '” template? Folders it already created stay where they are.')) return;
+          filelibJson('DELETE', '/portal/file-library/folder-templates/' + encodeURIComponent(t.id))
+            .then(function (d) { FTPL.templates = d.templates || []; ui().toast('Template deleted'); render(); })
+            .catch(function (e) { ui().toastError(e.message); });
         });
       });
     },
   };
 
-  PAGES['upload-forms'] = {
-    render: function (s) {
-      return '<p class="tma-portal-subtitle">Remote Upload Forms let you place HTML code on your web site that allows visitors to upload file(s) from your web site directly into your account. You can specify the folder that uploaded files get saved to, and what additional information to collect from the person uploading files.</p>' +
-        '<p class="tma-portal-note">For more information about this feature, please visit our <span class="tma-portal-link">knowledge base</span>.</p>' +
-        '<div class="tma-portal-toolbar"><span></span>' + ui().btn({ label: 'Add New Form', variant: 'ghost', attrs: 'data-ruf-add' }) + '</div>' +
-        (s.remoteUploadForms.length
-          ? ui().table(['Form', 'Destination folder', 'Created', ''], s.remoteUploadForms.map(function (f) {
-              return '<tr><td><strong>' + ui().esc(f.name) + '</strong></td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(f.folder) + '</td>' +
-                '<td class="tma-portal-table__muted">' + ui().esc(f.created) + '</td>' +
-                '<td><div class="tma-portal-row-actions">' +
-                '<button type="button" class="tma-portal-icon-btn" data-ruf-code="' + f.id + '" title="Get HTML code" aria-label="Get HTML code"><img src="images/icons/phosphor/FileCode.svg" alt=""></button>' +
-                '<button type="button" class="tma-portal-icon-btn" data-ruf-delete="' + f.id + '" title="Deactivate form" aria-label="Deactivate form"><img src="images/icons/phosphor/Trash.svg" alt=""></button>' +
-                '</div></td></tr>';
-            }).join(''))
-          : '<div class="tma-portal-table-wrap"><div style="padding:var(--space-24);text-align:center"><p class="tma-portal-note">No forms exist yet.</p></div></div>');
-    },
-    wire: function (el, s) {
-      el.querySelector('[data-ruf-add]').addEventListener('click', function () {
-        var folders = s.folders.personal.map(function (f) { return f.name; });
-        ui().openModal({
-          title: 'Add New Form',
-          body:
-            ui().field('Form name', ui().input({ placeholder: 'e.g. Website uploads', attrs: 'data-ruf-name' })) +
-            ui().field('Destination folder', ui().select(folders.length ? folders : ['File Box'], folders[0] || 'File Box', 'data-ruf-folder')) +
-            ui().field('Collect from uploader', ui().select(['Name and email', 'Email only', 'Nothing'], 'Name and email', 'data-ruf-info')) +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create form', attrs: 'data-ruf-save' }) + '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-ruf-save]').addEventListener('click', function () {
-              var name = host.querySelector('[data-ruf-name]').value.trim();
-              if (!name) { host.querySelector('[data-ruf-name]').focus(); return; }
-              s.remoteUploadForms.push({
-                id: data().uid('ruf'), name: name,
-                folder: host.querySelector('[data-ruf-folder]').value,
-                info: host.querySelector('[data-ruf-info]').value,
-                created: data().shortDate(),
-              });
-              data().save(); ui().closeModal(); ui().toast('Upload form created'); render();
-            });
-          },
-        });
-      });
-      el.querySelectorAll('[data-ruf-code]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var f = s.remoteUploadForms.filter(function (x) { return x.id === b.getAttribute('data-ruf-code'); })[0];
-          ui().openModal({
-            title: 'Embed code - ' + (f ? f.name : ''),
-            body: '<p>Paste this snippet into your website:</p>' +
-              '<div class="tma-portal-section__card"><code style="font-size:var(--text-size-12);word-break:break-all">&lt;iframe src="https://portal.tmantoinelaw.com/upload/' + (f ? f.id : '') + '" width="100%" height="480"&gt;&lt;/iframe&gt;</code></div>',
-          });
-        });
-      });
-      el.querySelectorAll('[data-ruf-delete]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          s.remoteUploadForms = s.remoteUploadForms.filter(function (x) { return x.id !== b.getAttribute('data-ruf-delete'); });
-          data().save(); ui().toast('Form deactivated'); render();
-        });
-      });
-    },
-  };
-
-  PAGES['file-drops'] = {
-    selected: {},
-    render: function (s) {
-      var self = PAGES['file-drops'];
-      var hasSelection = Object.keys(self.selected).some(function (k) { return self.selected[k]; });
-      return '<p class="tma-portal-subtitle">A File Drop is a page you can link to from your website, where visitors can select an employee and upload one or more files to their File Box. Your account can have one public File Drop, and you can make other File Drop links for different groups of employee users. A File Drop can also be integrated more tightly into your website when used in conjunction with a Remote Upload form.</p>' +
-        '<p class="tma-portal-note">The recipient of a file drop upload will automatically receive an email notification.</p>' +
-        '<div class="tma-portal-toolbar"><span></span><div class="tma-portal-toolbar__group">' +
-        ui().btn({ label: 'Delete Selected File Drops', variant: 'ghost', attrs: 'data-drop-delete', disabled: !hasSelection }) +
-        ui().btn({ label: 'Create New File Drop', attrs: 'data-drop-add' }) +
-        '</div></div>' +
-        ui().table(['', 'Name', 'Public', 'Require User Info', 'Members', 'Direct Link'],
-          s.fileDrops.length
-            ? s.fileDrops.map(function (d) {
-                return '<tr>' +
-                  '<td><label class="tma-portal-checkbox"><input type="checkbox" data-drop-select="' + d.id + '"' + (self.selected[d.id] ? ' checked' : '') + '></label></td>' +
-                  '<td><strong>' + ui().esc(d.name) + '</strong></td>' +
-                  '<td class="tma-portal-table__muted">' + (d.isPublic ? 'Yes' : 'No') + '</td>' +
-                  '<td class="tma-portal-table__muted">' + (d.requireInfo ? 'Yes' : 'No') + '</td>' +
-                  '<td class="tma-portal-table__muted">' + d.members + '</td>' +
-                  '<td><button type="button" class="tma-portal-link" data-drop-link="' + d.id + '">Copy link</button></td>' +
-                  '</tr>';
-              }).join('')
-            : '<tr class="tma-portal-table__empty"><td colspan="6">No file drops yet.</td></tr>');
-    },
-    wire: function (el, s) {
-      var self = PAGES['file-drops'];
-      el.querySelector('[data-drop-add]').addEventListener('click', function () {
-        var hasPublic = s.fileDrops.some(function (d) { return d.isPublic; });
-        ui().openModal({
-          title: 'Create New File Drop',
-          body:
-            ui().field('Name', ui().input({ placeholder: 'e.g. Client uploads', attrs: 'data-drop-name' })) +
-            '<label class="tma-portal-checkbox"><input type="checkbox" data-drop-public' + (hasPublic ? ' disabled' : ' checked') + '><span>Public file drop' + (hasPublic ? ' (your account already has one)' : '') + '</span></label>' +
-            '<label class="tma-portal-checkbox"><input type="checkbox" data-drop-info checked><span>Require uploader name and email</span></label>' +
-            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Create', attrs: 'data-drop-save' }) + '</div>',
-          onMount: function (host) {
-            host.querySelector('[data-drop-save]').addEventListener('click', function () {
-              var name = host.querySelector('[data-drop-name]').value.trim();
-              if (!name) { host.querySelector('[data-drop-name]').focus(); return; }
-              s.fileDrops.push({
-                id: data().uid('drop'), name: name,
-                isPublic: host.querySelector('[data-drop-public]').checked && !hasPublic,
-                requireInfo: host.querySelector('[data-drop-info]').checked,
-                members: s.employees.length,
-              });
-              data().save(); ui().closeModal(); ui().toast('File drop created'); render();
-            });
-          },
-        });
-      });
-      el.querySelectorAll('[data-drop-select]').forEach(function (cb) {
-        cb.addEventListener('change', function () { self.selected[cb.getAttribute('data-drop-select')] = cb.checked; render(); });
-      });
-      var del = el.querySelector('[data-drop-delete]');
-      if (del) del.addEventListener('click', function () {
-        s.fileDrops = s.fileDrops.filter(function (d) { return !self.selected[d.id]; });
-        self.selected = {};
-        data().save(); ui().toast('File drops deleted'); render();
-      });
-      el.querySelectorAll('[data-drop-link]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          var url = 'https://portal.tmantoinelaw.com/filedrop/' + b.getAttribute('data-drop-link');
-          if (navigator.clipboard) navigator.clipboard.writeText(url);
-          ui().toast('Direct link copied');
-        });
-      });
-    },
-  };
 
   /* ── shell ──────────────────────────────────────── */
   function navIcon(name) {

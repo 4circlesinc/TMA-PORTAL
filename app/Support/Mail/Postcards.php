@@ -185,6 +185,47 @@ class Postcards
         ]);
     }
 
+    /**
+     * Two-factor authentication was turned on, turned off, or had its recovery
+     * codes replaced. $action is the past-tense phrase for the lead line.
+     */
+    public static function twoFactorChanged(string $title, string $action, string $reviewUrl): Postcard
+    {
+        $details = [['When', now()->format('j M Y, g:i A')]];
+        if ($device = self::deviceLabel(request()?->userAgent())) {
+            $details[] = ['Device', $device];
+        }
+
+        return new Postcard($title, [
+            'preheader' => 'A two-factor authentication setting on your account just changed.',
+            'eyebrow' => 'Security',
+            'title' => $title,
+            'lead' => 'Someone '.$action.' two-factor authentication on your account.',
+            'details' => $details,
+            'quote' => 'Didn\'t make this change? Change your password immediately and review your active sessions — someone else may have access to your account.',
+            'button' => ['label' => 'Review security settings', 'url' => $reviewUrl],
+        ]);
+    }
+
+    /**
+     * The optional monthly recap of account activity.
+     *
+     * @param  array<int,array{0:string,1:string}>  $details  the counted rows
+     */
+    public static function securitySummary(string $period, array $details, string $reviewUrl, ?string $name = null): Postcard
+    {
+        return new Postcard('Your security summary for '.$period, [
+            'preheader' => 'A short recap of account activity in '.$period.'.',
+            'eyebrow' => 'Security',
+            'greeting' => $name ? "Hi {$name}," : null,
+            'title' => 'Your security summary',
+            'lead' => 'Here\'s what happened on your account in '.$period.'.',
+            'details' => $details,
+            'bodyHtml' => '<p>Nothing here needs your attention unless something looks unfamiliar. You can turn this summary off under Account settings → Security.</p>',
+            'button' => ['label' => 'Review security settings', 'url' => $reviewUrl],
+        ]);
+    }
+
     // ---------------------------------------------------------------- signatures
     // These return payload arrays (the mailables keep their own subject lines).
 

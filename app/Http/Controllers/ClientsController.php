@@ -41,7 +41,7 @@ class ClientsController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeManage($request);
 
         $data = $this->validated($request, requireUid: true);
 
@@ -89,7 +89,7 @@ class ClientsController extends Controller
 
     public function update(Request $request, string $uid): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeManage($request);
 
         $client = ClientScope::findOrFail($request->user(), $uid);
         $data = $this->validated($request, requireUid: false);
@@ -115,7 +115,7 @@ class ClientsController extends Controller
 
     public function destroy(Request $request, string $uid): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeManage($request);
 
         $client = ClientScope::findOrFail($request->user(), $uid);
         ActivityLogger::log([
@@ -135,7 +135,7 @@ class ClientsController extends Controller
 
     public function bulkDestroy(Request $request): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeManage($request);
 
         $data = $request->validate([
             'uids' => ['required', 'array', 'min:1'],
@@ -151,7 +151,7 @@ class ClientsController extends Controller
 
     public function duplicate(Request $request, string $uid): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeManage($request);
 
         $source = ClientScope::findOrFail($request->user(), $uid);
 
@@ -295,6 +295,26 @@ class ClientsController extends Controller
             Role::can($request->user(), 'clients.view'),
             403,
             'Only staff can manage the client directory.'
+        );
+    }
+
+    /**
+     * Writing to the directory, as opposed to reading it.
+     *
+     * `clients.manage` sat in the matrix from the start and nothing ever read
+     * it, so every reader was a writer and the capability decided nothing.
+     * It is switchable from Account settings > Client hub access now, which
+     * only means anything if the write paths ask. Checked before validation,
+     * so a refusal reads as a refusal rather than a form error.
+     */
+    private function authorizeManage(Request $request): void
+    {
+        $this->authorizeStaff($request);
+
+        abort_unless(
+            Role::can($request->user(), 'clients.manage'),
+            403,
+            'You do not have permission to change client records.'
         );
     }
 }

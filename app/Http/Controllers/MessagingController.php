@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\CallSignal;
+use App\Support\UserTime;
 use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
 use App\Events\InboxUpdated;
@@ -550,7 +551,7 @@ class MessagingController extends Controller
                     'senderName' => $a->message?->user_id === $user->id
                         ? 'You'
                         : ($a->message?->sender?->name ?? 'Unknown'),
-                    'date' => $a->created_at->format('j M Y'),
+                    'date' => UserTime::format($a->created_at, $user, 'j M Y'),
                 ]
             ))
             ->values();
@@ -628,7 +629,7 @@ class MessagingController extends Controller
                     'senderName' => $a->message?->user_id === $user->id
                         ? 'You'
                         : ($a->message?->sender?->name ?? 'Unknown'),
-                    'date' => $a->created_at->format('j M Y'),
+                    'date' => UserTime::format($a->created_at, $user, 'j M Y'),
                     // Which thread it came from, so a hit can be traced back.
                     'conversationId' => $a->conversation?->uuid,
                     'conversationName' => $a->conversation
@@ -692,7 +693,7 @@ class MessagingController extends Controller
                     'messageId' => $m->uuid,
                     'seq' => $m->id,
                     'senderName' => $m->user_id === $user->id ? 'You' : ($m->sender?->name ?? 'Unknown'),
-                    'date' => $m->created_at->format('j M Y'),
+                    'date' => UserTime::format($m->created_at, $user, 'j M Y'),
                     'conversationId' => $m->conversation?->uuid,
                     'conversationName' => $m->conversation
                         ? MessagingPresenter::title($m->conversation, $user)
@@ -823,7 +824,7 @@ class MessagingController extends Controller
                         'messageId' => $m->uuid,
                         'seq' => $m->id,
                         'senderName' => $m->user_id === $user->id ? 'You' : ($m->sender?->name ?? 'Unknown'),
-                        'date' => $m->created_at->format('j M Y'),
+                        'date' => UserTime::format($m->created_at, $user, 'j M Y'),
                     ];
                 });
             })
@@ -1306,7 +1307,7 @@ class MessagingController extends Controller
                     'media' => $event['media'] ?? 'audio',
                     'answered' => (bool) ($event['answered'] ?? false),
                     'initiatorId' => $event['initiatorId'] ?? null,
-                    'time' => MessagingPresenter::listTime($m->created_at),
+                    'time' => MessagingPresenter::listTime($m->created_at, $user),
                 ];
             })
             ->filter()

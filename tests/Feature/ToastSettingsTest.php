@@ -31,10 +31,11 @@ class ToastSettingsTest extends TestCase
             ->assertJsonPath('toasts.enabled', true)
             ->assertJsonPath('toasts.position', 'bottom-right')
             ->assertJsonPath('toasts.durationSec', 10)
-            ->assertJsonPath('toasts.stickyImportant', false)
-            ->assertJsonPath('toasts.sound', false)
+            // Every notification setting ships on.
+            ->assertJsonPath('toasts.stickyImportant', true)
+            ->assertJsonPath('toasts.sound', true)
             ->assertJsonPath('toasts.previewText', true)
-            ->assertJsonPath('toasts.groupSimilar', false);
+            ->assertJsonPath('toasts.groupSimilar', true);
     }
 
     public function test_preferences_round_trip_for_toast_settings(): void

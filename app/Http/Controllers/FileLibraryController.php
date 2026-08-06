@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\FileLibrarySetting;
 use App\Models\Folder;
 use App\Support\Access\Role;
+use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Files\FolderTemplates;
 use App\Support\Files\Naming;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -152,6 +154,134 @@ class FileLibraryController extends Controller
         $folder->save();
 
         return response()->json(['folder' => $this->presentOrg($folder)]);
+    }
+
+    /* ── Folder templates ─────────────────────────────────────────────
+       A template is a named set of subfolder names and nothing else. All the
+       interest is in applyTemplate(), which is what stops this being another
+       list that saves and does nothing. */
+
+    public function templates(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        return response()->json([
+            'templates' => FolderTemplates::all(),
+            // Where a template can be applied. Organization folders and client
+            // folders are the two places a firm actually files things; a
+            // template dropped into somebody's personal folder is not what the
+            // screen is for.
+            'targets' => $this->templateTargets(),
+            'maxSubfolders' => FolderTemplates::MAX_SUBFOLDERS,
+        ]);
+    }
+
+    public function storeTemplate(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $data = $this->templateRules($request);
+
+        abort_if(
+            count(FolderTemplates::all()) >= FolderTemplates::MAX_TEMPLATES,
+            422,
+            'You already have '.FolderTemplates::MAX_TEMPLATES.' folder templates. Delete one first.'
+        );
+
+        $template = FolderTemplates::create($data['name'], $data['subfolders']);
+
+        abort_if($template['name'] === '', 422, 'Please enter a template name.');
+
+        return response()->json(['template' => $template, 'templates' => FolderTemplates::all()], 201);
+    }
+
+    public function updateTemplate(Request $request, string $id): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $data = $this->templateRules($request);
+
+        $template = FolderTemplates::update($id, $data['name'], $data['subfolders']);
+
+        abort_if($template === null, 404, 'That folder template no longer exists.');
+        abort_if($template['name'] === '', 422, 'Please enter a template name.');
+
+        return response()->json(['template' => $template, 'templates' => FolderTemplates::all()]);
+    }
+
+    public function destroyTemplate(Request $request, string $id): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        abort_unless(FolderTemplates::delete($id), 404, 'That folder template no longer exists.');
+
+        // Deleting a template never touches folders it created. They are
+        // ordinary folders the moment they exist — the template is a shortcut,
+        // not an owner, and deleting one must not delete a firm's filing.
+        return response()->json(['templates' => FolderTemplates::all()]);
+    }
+
+    /** Create a template's subfolders inside a folder. */
+    public function applyTemplate(Request $request, string $id): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $data = $request->validate(['folder' => ['required', 'string']]);
+
+        $template = FolderTemplates::find($id);
+        abort_if($template === null, 404, 'That folder template no longer exists.');
+
+        $folder = Folder::where('uuid', $data['folder'])->firstOrFail();
+
+        // `files.settings` says who may manage templates; it does not say who
+        // may write into a given folder. That is FileAccess's question, and it
+        // is asked separately so a template can never become a way around a
+        // folder's own permissions.
+        FileAccess::authorize($request->user(), 'upload', $folder);
+
+        $created = FolderTemplates::apply($template, $folder);
+
+        return response()->json([
+            'created' => $created,
+            // Names that were already there. Worth returning rather than
+            // silently reporting success: "applied, nothing to do" and
+            // "applied, made five folders" are different outcomes.
+            'skipped' => array_values(array_diff($template['subfolders'], $created)),
+            'folder' => ['id' => $folder->uuid, 'name' => $folder->name],
+        ]);
+    }
+
+    /** @return array{name: string, subfolders: array<int, string>} */
+    private function templateRules(Request $request): array
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'subfolders' => ['required', 'array', 'min:1', 'max:'.FolderTemplates::MAX_SUBFOLDERS],
+            'subfolders.*' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        return ['name' => $data['name'], 'subfolders' => $data['subfolders']];
+    }
+
+    /**
+     * Folders a template may be applied to: the firm's shared internal
+     * folders and each client's folder.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function templateTargets(): array
+    {
+        return Folder::whereIn('folder_type', [Folder::TYPE_ORGANIZATION, Folder::TYPE_CLIENT])
+            ->where('is_archived', false)
+            ->orderBy('folder_type')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Folder $f) => [
+                'id' => $f->uuid,
+                'name' => $f->name,
+                'group' => $f->folder_type === Folder::TYPE_ORGANIZATION ? 'Organization folders' : 'Client folders',
+            ])
+            ->all();
     }
 
     /** @return array<int, array<string, mixed>> */

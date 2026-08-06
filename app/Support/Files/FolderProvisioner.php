@@ -148,9 +148,22 @@ class FolderProvisioner
         $folder->forceFill(['name' => self::uniqueChildName($desired, $folder->parent_id, $folder->id)])->save();
     }
 
-    /** Create any of the named subfolders that don't already exist. */
-    private static function ensureSubfolders(Folder $parent, array $names): void
+    /**
+     * Create any of the named subfolders that don't already exist, and say
+     * which ones were actually created.
+     *
+     * Public because folder templates create folders the same way the client
+     * defaults do — see {@see FolderTemplates::apply()}. Skipping a name that
+     * is already there (rather than making "Contracts (2)") is what lets a
+     * template be applied to the same folder twice without consequence.
+     *
+     * @param  array<int, string>  $names
+     * @return list<string> the names created, in order
+     */
+    public static function applySubfolders(Folder $parent, array $names): array
     {
+        $created = [];
+
         foreach ($names as $name) {
             $clean = Naming::clean((string) $name);
             if ($clean === '') {
@@ -173,7 +186,16 @@ class FolderProvisioner
                 'owner_id' => $parent->owner_id,
                 'created_by' => $parent->created_by,
             ]);
+
+            $created[] = $clean;
         }
+
+        return $created;
+    }
+
+    private static function ensureSubfolders(Folder $parent, array $names): void
+    {
+        self::applySubfolders($parent, $names);
     }
 
     /** A sibling-unique name under a parent, appending " (2)", " (3)" as needed. */

@@ -12,6 +12,7 @@ use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Access\PortalPermissions;
 use App\Support\Access\Role;
 use App\Support\Companies\CompanyAccess;
 use Illuminate\Support\Collection;
@@ -405,7 +406,22 @@ class FileAccess
             return false;
         }
 
-        return in_array($ability, self::CAPS[$role] ?? [], true);
+        if (! in_array($ability, self::CAPS[$role] ?? [], true)) {
+            return false;
+        }
+
+        /* A client's right to re-share is the firm's to decide, not the item
+           role's — an owner or editor role says what they may do with the
+           file, not who else may end up holding it. Settings > Advanced
+           Preferences > Permissions turns this on; it is off by default, so a
+           client sharing onward is something a firm opts into. Every share
+           path in the portal reaches this method, which is why the rule lives
+           here rather than in each controller. */
+        if ($ability === 'share' && Role::isClient($user) && ! PortalPermissions::allowsClientSharing()) {
+            return false;
+        }
+
+        return true;
     }
 
     /** Abort with a clear 403 unless the user may perform the ability. */

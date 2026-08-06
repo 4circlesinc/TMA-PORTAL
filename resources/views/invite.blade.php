@@ -2,6 +2,7 @@
   The screen an emailed invitation link opens. One view, one `$state`:
 
     register      — no account for this address yet; create one
+    registration-closed — no account yet, and the firm creates them itself
     signin        — the address already has a login; sign in to accept
     wrong-account — signed in as somebody else
     accept        — signed in as the invited person; confirm
@@ -11,7 +12,7 @@
   page still matches the portal's auth screens.
 --}}
 @php
-  $dead = in_array($state, ['expired', 'accepted', 'cancelled', 'invalid', 'declined'], true);
+  $dead = in_array($state, ['expired', 'accepted', 'cancelled', 'invalid', 'declined', 'registration-closed'], true);
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -86,6 +87,15 @@
       <h1>This invitation link isn't valid</h1>
       <p class="note">The link may be incomplete, or it may have been replaced by a newer invitation. Please request a new one.</p>
       <a class="btn" href="mailto:support@tmantoine.com?subject={{ rawurlencode('New portal invitation request') }}">Request a new invitation</a>
+      <a class="btn btn--ghost" href="{{ url('/auth/login') }}">Go to sign in</a>
+
+    {{-- The firm has switched self-registration off in Client hub access, so
+         the account has to be created for them. Deliberately vague about why:
+         the visitor cannot act on the firm's settings. --}}
+    @elseif ($state === 'registration-closed')
+      <h1>We'll finish setting up your account</h1>
+      <p class="note">{{ $organisation }} creates portal accounts for its clients. We'll be in touch with your sign-in details shortly.</p>
+      <a class="btn" href="mailto:support@tmantoine.com?subject={{ rawurlencode('Portal account setup') }}">Contact support</a>
       <a class="btn btn--ghost" href="{{ url('/auth/login') }}">Go to sign in</a>
 
     {{-- --------------------------------------------- create an account --}}

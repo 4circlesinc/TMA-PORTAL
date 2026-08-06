@@ -37,7 +37,10 @@ class MessagingSettings
         'notificationSounds' => true,
         'messageTone' => 'chime',
         'ringtone' => 'ringtone-1',
-        'desktopNotifications' => false,
+        // On by default like every other notification setting. The browser
+        // permission prompt is still the real gate — this only means the
+        // portal may ask, and may use it once granted.
+        'desktopNotifications' => true,
         'notificationPreview' => true,
 
         // Composer

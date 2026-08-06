@@ -13,6 +13,13 @@
   var DELETED_RETENTION_DAYS = 45;
   var FILEBOX_RETENTION_DAYS = 180;
 
+  /* Removed settings pages, listed so load() can clear what they left behind.
+     Super user group and quarantine duplicated or invented things the portal
+     does not do; File Drops, Remote Upload Forms, File Settings, Portal Tools,
+     AI and Email Settings described a product this is not. */
+  var RETIRED_KEYS = ['superUsers', 'hideSuperGroup', 'quarantinedFiles', 'fileDrops', 'remoteUploadForms', 'folderTemplates'];
+  var RETIRED_SETTINGS = ['dlp', 'emailSettings', 'fileSettings', 'tools', 'ai', 'permissions'];
+
   function uid(prefix) {
     return (prefix || 'id') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
   }
@@ -125,8 +132,6 @@
       personalAddressBook: [],
       // distributionGroups removed: groups are server-backed now, via
       // /portal/groups (see portal-people.js).
-      superUsers: [],
-      hideSuperGroup: false,
       serviceTeams: [],
       customFields: [],
       clientHubAccess: { enabled: true, allowSelfRegistration: false },
@@ -142,10 +147,6 @@
       recurringReports: [],
       notificationHistory: [],
       backgroundOps: [],
-      quarantinedFiles: [],
-      fileDrops: [],
-      remoteUploadForms: [],
-      folderTemplates: [],
       settings: {
         deviceSecurity: {
           defaultMode: 'standard',
@@ -172,56 +173,6 @@
           failedSignIns: { admin: true, employees: true, clients: true },
           suspiciousUpload: { admin: true, employees: true, clients: true },
           alternateContacts: '',
-        },
-        dlp: {
-          limitAccess: 'yes',
-          rejected: {
-            download: { anonymous: false, client: false, employee: true },
-            share: { anonymous: false, client: false, employee: false },
-          },
-          ok: {
-            download: { anonymous: true, client: true, employee: true },
-            share: { anonymous: false, client: true, employee: true },
-          },
-          unscanned: {
-            download: { anonymous: true, client: true, employee: true },
-            share: { anonymous: false, client: true, employee: true },
-          },
-        },
-        emailSettings: {
-          sendVia: 'both',
-          uploadReceipts: 'no',
-          notifyFrequency: 'Every 15 minutes',
-          language: 'Invariant',
-          qaText: 'yes',
-        },
-        permissions: {
-          clientShares: 'no',
-          showPeopleTab: 'no',
-        },
-        fileSettings: {
-          sortingEnabled: 'no',
-          defaultSortField: 'Name',
-          defaultSortDir: 'Ascending',
-          versioningEnabled: 'yes',
-          maxVersionsMode: 'Custom',
-          maxVersions: 10000,
-          fileBoxRetentionDays: FILEBOX_RETENTION_DAYS,
-          watermarkEnabled: 'yes',
-          watermarkText: '{Email}',
-          officeEditing: 'yes',
-          cloudRendering: 'no',
-        },
-        tools: {
-          showAppsPage: true,
-          desktopBetas: true,
-          showInList: 'All Available',
-          outlookPlugin: true,
-          ftpsAccess: true,
-        },
-        ai: {
-          requestList: true,
-          docAssistant: true,
         },
       },
     };
@@ -256,10 +207,17 @@
           state.employees = state.employees.filter(function (emp) { return !isSeededFakeEmployee(emp); });
           if (state.employees.length !== employeesBefore) stripped = true;
         }
-        if (state.superUsers && state.superUsers.length) {
-          var supersBefore = state.superUsers.length;
-          state.superUsers = state.superUsers.filter(function (id) { return id !== 'emp-1'; });
-          if (state.superUsers.length !== supersBefore) stripped = true;
+        /* Settings pages that were removed rather than built. Their state sat
+           in localStorage and nothing reads it now, but a browser that used
+           the portal before the removal still carries it — and the merge above
+           only ever adds keys, so without this it would live there forever. */
+        RETIRED_KEYS.forEach(function (k) {
+          if (state[k] !== undefined) { delete state[k]; stripped = true; }
+        });
+        if (state.settings) {
+          RETIRED_SETTINGS.forEach(function (k) {
+            if (state.settings[k] !== undefined) { delete state.settings[k]; stripped = true; }
+          });
         }
         // Signature requests are server-backed now; drop any seeded copies a
         // browser still holds from the prototype so nothing stale can surface.

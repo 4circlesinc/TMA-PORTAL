@@ -1964,11 +1964,18 @@
         return;
       }
 
+      // The firm's own page title (Settings → Edit Company Branding) is the
+      // name of the portal, so it stands in wherever the shell has no view
+      // heading of its own — a named view still wins, which is the point of
+      // having one.
+      var siteName = (window.TMABranding && window.TMABranding.get()
+        && window.TMABranding.get().pageTitle) || 'TMA Portal';
+
       var pageName = (pageTitleEl && pageTitleEl.textContent.trim())
         || document.title.replace(/^\(\d+\)\s+/, '').trim()
-        || 'TMA Portal';
+        || siteName;
       // Don't let a previous Email title leak onto other pages.
-      if (/^Inbox\s+\d+/.test(pageName)) pageName = 'TMA Portal';
+      if (/^Inbox\s+\d+/.test(pageName)) pageName = siteName;
       root._titleBase = pageName;
       var count = getNotificationBadgeCount();
       document.title = count > 0 ? '(' + String(count) + ') ' + pageName : pageName;

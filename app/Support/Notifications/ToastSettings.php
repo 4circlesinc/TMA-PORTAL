@@ -32,10 +32,11 @@ class ToastSettings
         'enabled' => true,
         'position' => self::POSITION_BOTTOM_RIGHT,
         'durationSec' => 10,
-        'stickyImportant' => false,
-        'sound' => false,
+        // Everything on by default — see NotificationPreferences::groupDefault.
+        'stickyImportant' => true,
+        'sound' => true,
         'previewText' => true,
-        'groupSimilar' => false,
+        'groupSimilar' => true,
     ];
 
     /** @return array<string, mixed> */

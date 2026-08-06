@@ -940,7 +940,7 @@
       '</span>' +
       '</span>' +
       '<span class="tma-dash__messages-row-time">' +
-      esc(row.time) +
+      esc(row.timestamp ? (listTime(row.timestamp) || row.time || '') : (row.time || '')) +
       '</span>' +
       (row.unread
         ? '<span class="tma-dash__messages-row-meta">' + renderBadge(row.unread) + '</span>'
@@ -2278,8 +2278,51 @@
     );
   }
 
+  /*
+   * Times are formatted HERE, from the ISO instant, never taken from the
+   * server's pre-formatted string.
+   *
+   * A message fans out to everyone in the conversation at once, so no single
+   * server-rendered clock time can be right for all of them — it used to be
+   * rendered in the app's zone (UTC), which is nobody's. toLocale* honours
+   * the reader's zone, and i18n.js redirects it to a manually chosen zone
+   * and language. The server's string stays as the fallback for any payload
+   * that predates the ISO field.
+   */
+  function clockTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  /* Chat-list stamps compress with age, judged on the READER's calendar day
+     (toLocaleDateString resolves in the display zone, so a message sent at
+     23:30 UTC is "Yesterday" only if it is yesterday where you are). */
+  function listTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+
+    var now = new Date();
+    var day = d.toLocaleDateString();
+    if (day === now.toLocaleDateString()) return clockTime(iso);
+
+    var yesterday = new Date(now.getTime() - 86400000);
+    if (day === yesterday.toLocaleDateString()) return 'Yesterday';
+
+    var sameYear = d.toLocaleDateString(undefined, { year: 'numeric' }) ===
+      now.toLocaleDateString(undefined, { year: 'numeric' });
+
+    return d.toLocaleDateString(undefined, sameYear
+      ? { month: 'short', day: 'numeric' }
+      : { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   function resolveMessageTime(msg, row) {
+    if (msg && msg.sentAt) return clockTime(msg.sentAt) || msg.time || '';
     if (msg && msg.time) return msg.time;
+    if (row && row.timestamp) return listTime(row.timestamp) || row.time || '';
     if (row && row.time) return row.time;
     return '';
   }

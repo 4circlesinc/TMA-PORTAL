@@ -151,18 +151,18 @@ class PortalAccessTest extends TestCase
     {
         // /account-settings is the one settings home, so everybody loads it —
         // but the rail it draws also held the firm's security policy,
-        // branding, billing, storage and Advanced Preferences, offered to
-        // employees and clients alike because it is one static list.
+        // branding, storage and Advanced Preferences, offered to employees and
+        // clients alike because it is one static list.
         $employee = $this->user(Role::EMPLOYEE);
         $client = $this->user(Role::CLIENT);
         $admin = $this->user(Role::ADMINISTRATOR);
 
         $administration = [
             'background-ops', 'reporting', 'notification-history',
-            'branding', 'billing-convert', 'billing-cancel', 'clienthub-access',
+            'branding', 'clienthub-access',
             'service-teams', 'custom-fields', 'security-policy', 'signin-policy',
-            'dlp', 'super-users', 'storage-usage',
-            'ai-settings', 'permissions', 'tools', 'default-folders',
+            'alert-settings', 'storage-usage',
+            'permissions', 'default-folders', 'folder-templates',
         ];
 
         foreach ($administration as $section) {

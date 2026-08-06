@@ -161,6 +161,120 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/settings-access.mjs
   ```
 
+- **`account-reporting.mjs`** — Account settings → Account and Reporting, after
+  its three pages stopped reading `window.TMAPortalData`. Reporting used to file
+  a name and a date into localStorage with no numbers behind them, the
+  notification history listed whatever the mock had pushed into it, and branding
+  applied to the one browser that typed it.
+
+  `ReportingTest`, `NotificationHistoryTest` and `BrandingTest` cover the
+  endpoints; what only a browser can show is that the pages reach them. It
+  creates a usage report and a storage report through the dialog and checks the
+  metric strip carries the *seeded* figures (three sign-ins, two uploads,
+  3.0 MB), drills into one, runs it again, deletes it — and then wipes
+  `localStorage` and reloads, which is the sharpest check in the file: under the
+  old build the page went blank.
+
+  For the history it checks the two states a mock never had: a queued email
+  reported as queued rather than sent, and a failed one carrying its reason.
+  For branding it saves, reloads, then opens a **second browser context** on an
+  employee account that never visited Settings — their shell can only know the
+  firm's name and title if it really is stored server-side — and confirms their
+  own write is refused.
+
+  Two things it was written around: the tab title is owned by the shell's
+  per-view heading, so branding's page title is the name it *falls back* to, not
+  a replacement (check the value through `window.TMABranding.get()`, not
+  `document.title`); and step 11 was flaky until the branding cache stopped
+  merging edits over a possibly-stale cached copy — see
+  `BrandingTest::test_a_save_is_not_lost_to_a_reader_that_cached_the_row_late`.
+
+  Needs `e2e@example.com` (Administrator) and `emp@example.com` (Employee), plus
+  a few rows to measure:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute='
+    $admin = App\Models\User::where("email", "e2e@example.com")->first();
+    foreach (range(1, 3) as $i) {
+      App\Models\ActivityLog::create(["uid" => (string) Str::ulid(), "actor_id" => $admin->id,
+        "activity_type" => "security.login", "module" => "security", "action" => "login",
+        "description" => "Test Admin signed in"]);
+    }
+    $folder = App\Models\Folder::create(["uuid" => (string) Str::uuid(), "name" => "Docs",
+      "owner_id" => $admin->id, "created_by" => $admin->id]);
+    foreach ([1048576, 2097152] as $i => $size) {
+      App\Models\FileItem::create(["uuid" => (string) Str::uuid(), "folder_id" => $folder->id,
+        "owner_id" => $admin->id, "uploaded_by" => $admin->id, "name" => "brief-$i.pdf",
+        "extension" => "pdf", "mime_type" => "application/pdf", "size" => $size,
+        "disk" => "local", "storage_path" => "files/x$i.pdf"]);
+    }
+    App\Models\EmailDelivery::create(["recipient" => "dana@example.com", "status" => "sent",
+      "subject" => "Your invitation to the portal", "template" => "clientInvite",
+      "queued_at" => now(), "sent_at" => now()]);
+    App\Models\EmailDelivery::create(["recipient" => "sam@example.com", "status" => "queued",
+      "subject" => "Password reset", "template" => "passwordReset", "queued_at" => now()]);
+    App\Models\EmailDelivery::create(["recipient" => "lost@example.com", "status" => "failed",
+      "subject" => "Welcome aboard", "template" => "welcome", "error" => "Mailbox unavailable",
+      "queued_at" => now(), "failed_at" => now()]);'
+
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/account-reporting.mjs
+  ```
+
+  It creates and deletes its own reports and leaves branding on the portal
+  defaults, so it is safe to re-run.
+
+- **`security-settings.mjs`** — Account settings → Security, after the panels
+  that only *rendered* were wired to the server: the phone number, the four
+  Security notifications switches, and the empty column beside every session.
+
+  `SecuritySettingsTest` covers the endpoints; only a browser can show a panel
+  is actually connected to one. So each check goes through the UI and reads the
+  result back from `/security-settings/data` rather than from the markup. Two
+  things the script had to learn: the portal's tel inputs re-format as you type
+  (compare digits, not strings), and a hand-seeded `sessions` row older than
+  the session lifetime is garbage-collected before the page loads — so step 6
+  signs the same account in from a **second browser context** to have something
+  real to sign out, then confirms that browser is bounced to the login page.
+  That last check is the one that matters: deleting the session row alone left
+  a "stay signed in" browser able to walk back in on its remember-me cookie.
+
+  Step 7 needs the account flipped to `password_auto` (the state a Google/
+  Microsoft or administrator-created account arrives in, where "Change
+  password" can never work), so it only runs when `TMA_DB` points at the sqlite
+  file. It restores the harness password afterwards.
+
+  Needs `SESSION_DRIVER=database` — with any other driver the sessions table is
+  empty and step 6 has nothing to work with:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= SESSION_DRIVER=database \
+    MAIL_MAILER=log php artisan serve --host=127.0.0.1 --port=8899 &
+
+  TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/security-settings.mjs
+  ```
+
+- **`clienthub-access.mjs`** — Settings → Client hub management → Client hub
+  access, which used to be two localStorage toggles and is now the firm's real
+  client-hub capability grid.
+
+  `ClientHubSettingsTest` covers the API and the matrix; what only a browser
+  can show is that a saved toggle *travels*. The script revokes "Open the
+  client hub" as the administrator, then opens a second context as the
+  employee and checks the Clients row has actually left their sidebar and the
+  page 404s — then puts it back and watches the row return. It also checks the
+  four dependent permissions disable themselves when reach is off, since a
+  granted permission on a page nobody can open is a lie.
+
+  The switch input sits under its own track, so toggles need `{ force: true }`.
+
+  Needs the administrator and employee accounts. Step 1 reads the matrix
+  defaults, so re-seed (`DELETE FROM portal_settings WHERE key =
+  'clienthub.access'`) if a run ever aborts part-way:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/clienthub-access.mjs
+  ```
+
 - **`calendar-sync.mjs`** — Phase 4 (Google/Microsoft). Real providers can't be
   reached from a test, so the seed supplies a `google`-source calendar carrying
   one conflicted event (its `conflict_snapshot` holds the overwritten local

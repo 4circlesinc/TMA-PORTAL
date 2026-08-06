@@ -3,6 +3,7 @@
 namespace App\Support\Access;
 
 use App\Models\User;
+use App\Support\Clients\ClientHubSettings;
 
 /**
  * Who may see and do what, in one place.
@@ -26,7 +27,9 @@ use App\Models\User;
 class Role
 {
     public const CLIENT = 'Client';
+
     public const EMPLOYEE = 'Employee';
+
     public const ADMINISTRATOR = 'Administrator';
 
     /** Every assignable account type, in ascending order of reach. */
@@ -44,6 +47,11 @@ class Role
      */
     private const MATRIX = [
         /* ── Clients ─────────────────────────────────────────────────── */
+        // These five are the baseline, not the last word: an administrator can
+        // grant or revoke each of them for employees from Account settings >
+        // Client hub management > Client hub access. See ClientHubSettings,
+        // which self::can() consults for exactly this block.
+        //
         // Reach the Clients hub at all.
         'clients.view' => [self::EMPLOYEE],
         // See every client record, rather than only the ones you are assigned
@@ -152,16 +160,14 @@ class Role
         'settings.reporting' => [],
         // The company name, logo and colours every account sees.
         'settings.branding' => [],
-        // The plan, the trial and cancellation.
-        'settings.billing' => [],
         // Who may reach the client hub, the service teams, the custom fields
         // every client record inherits. Employees *use* the hub; deciding how
         // it is shaped is a different thing.
         'settings.clientHub' => [],
         // Firm-wide storage usage against the licence.
         'settings.storage' => [],
-        // Advanced Preferences — AI, org email, the permission defaults and
-        // which portal tools are switched on at all.
+        // Advanced Preferences — the firm-wide sharing and visibility defaults
+        // every account inherits.
         'settings.advanced' => [],
     ];
 
@@ -226,33 +232,22 @@ class Role
         'reporting' => 'settings.reporting',
         'notification-history' => 'settings.reporting',
         'branding' => 'settings.branding',
-        'billing-convert' => 'settings.billing',
-        'billing-cancel' => 'settings.billing',
         'clienthub-access' => 'settings.clientHub',
         'service-teams' => 'settings.clientHub',
         'custom-fields' => 'settings.clientHub',
         // "Account security" is the reader's own password and 2FA and stays
         // open; everything else under Security is firm-wide policy.
         'security-insights' => 'settings.security',
-        'dlp' => 'settings.security',
         'signin-policy' => 'settings.security',
         'security-policy' => 'settings.security',
         'alert-settings' => 'settings.security',
         'device-security' => 'settings.security',
-        'super-users' => 'settings.security',
-        'quarantined' => 'settings.security',
         // "Connectors" stays open — it is where anyone links their own
         // Microsoft account (Outlook, Calendar, OneDrive).
         'storage-usage' => 'settings.storage',
-        'ai-settings' => 'settings.advanced',
-        'email-settings' => 'settings.advanced',
         'permissions' => 'settings.advanced',
-        'tools' => 'settings.advanced',
-        'file-settings' => 'files.settings',
         'default-folders' => 'files.settings',
         'folder-templates' => 'files.settings',
-        'upload-forms' => 'files.settings',
-        'file-drops' => 'files.settings',
     ];
 
     /** Every capability name the portal knows about. */
@@ -336,7 +331,61 @@ class Role
             return false;
         }
 
-        return in_array(self::of($user), self::MATRIX[$capability], true);
+        return in_array(self::of($user), self::holders($capability), true);
+    }
+
+    /**
+     * The non-administrator roles holding a capability right now.
+     *
+     * The matrix is the baseline for everything. Two blocks of it may be
+     * re-shaped by a firm from the settings rail — the client-hub
+     * capabilities, and the People directory under Advanced Preferences >
+     * Permissions — so those resolve against their stored grants instead.
+     * Only Employee is in play in either: a client never holds a client-hub
+     * capability or the staff directory, whatever is saved.
+     */
+    private static function holders(string $capability): array
+    {
+        if (in_array($capability, ClientHubSettings::MANAGED, true)) {
+            return ClientHubSettings::employeeHolds($capability) ? [self::EMPLOYEE] : [];
+        }
+
+        if (in_array($capability, PortalPermissions::MANAGED, true)) {
+            return PortalPermissions::employeeHolds($capability) ? [self::EMPLOYEE] : [];
+        }
+
+        return self::MATRIX[$capability];
+    }
+
+    /**
+     * Whether employees hold each client-hub capability out of the box — the
+     * defaults the Client hub access screen starts from, read from the matrix
+     * so the two cannot drift.
+     *
+     * @return array<string,bool>
+     */
+    public static function baselineEmployeeGrants(): array
+    {
+        return self::baselineGrantsFor(ClientHubSettings::MANAGED);
+    }
+
+    /**
+     * Whether employees hold each of these capabilities in the matrix — the
+     * defaults an overlay screen starts from. Read from the matrix so a
+     * stored grant and the baseline it overlays cannot drift apart.
+     *
+     * @param  list<string>  $capabilities
+     * @return array<string,bool>
+     */
+    public static function baselineGrantsFor(array $capabilities): array
+    {
+        $grants = [];
+
+        foreach ($capabilities as $capability) {
+            $grants[$capability] = in_array(self::EMPLOYEE, self::MATRIX[$capability] ?? [], true);
+        }
+
+        return $grants;
     }
 
     /** Every capability this user holds — the list handed to the browser. */

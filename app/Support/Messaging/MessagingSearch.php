@@ -3,6 +3,7 @@
 namespace App\Support\Messaging;
 
 use App\Models\Conversation;
+use App\Support\UserTime;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
@@ -154,7 +155,7 @@ class MessagingSearch
                 // Enough context to recognise the message without opening it.
                 'excerpt' => self::excerpt($m->body, $term),
                 'sentAt' => $m->created_at->toIso8601String(),
-                'date' => $m->created_at->format('j M Y'),
+                'date' => UserTime::format($m->created_at, $user, 'j M Y'),
             ])
             ->all();
     }
@@ -181,7 +182,7 @@ class MessagingSearch
                     'senderName' => $a->message->user_id === $user->id
                         ? 'You'
                         : ($a->message->sender?->name ?? 'Unknown'),
-                    'date' => $a->created_at->format('j M Y'),
+                    'date' => UserTime::format($a->created_at, $user, 'j M Y'),
                 ]
             ))
             ->values()
@@ -218,7 +219,7 @@ class MessagingSearch
                         'conversationId' => $m->conversation->uuid,
                         'conversationName' => self::conversationLabel($m->conversation, $user),
                         'senderName' => $m->user_id === $user->id ? 'You' : ($m->sender?->name ?? 'Unknown'),
-                        'date' => $m->created_at->format('j M Y'),
+                        'date' => UserTime::format($m->created_at, $user, 'j M Y'),
                     ]);
             })
             ->take(self::PER_GROUP)

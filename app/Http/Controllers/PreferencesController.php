@@ -33,11 +33,9 @@ class PreferencesController extends Controller
         'themeMode' => 'system',
         'fontScale' => 3,
         'accentColor' => 'indigo',
-        // Privacy panel. "necessary" cookies are not stored: they are always
-        // on and the switch is hard-locked in the UI.
-        'cookieFunctional' => true,
-        'cookieAnalytics' => true,
-        'cookieMarketing' => true,
+        // Privacy panel. The cookie switches are gone: the portal sets only
+        // strictly necessary cookies (see the published Privacy Policy), so
+        // there was nothing for them to turn off.
         'historyDays' => 30,
         // Plugins panel. null means "never customized" — the client falls
         // back to its shipped catalog. Once set, the stored list is
@@ -74,9 +72,6 @@ class PreferencesController extends Controller
         'themeMode' => ['string', 'in:system,light,dark'],
         'fontScale' => ['integer', 'between:1,5'],
         'accentColor' => ['string', 'in:indigo,yellow,red,blue,orange,green'],
-        'cookieFunctional' => ['boolean'],
-        'cookieAnalytics' => ['boolean'],
-        'cookieMarketing' => ['boolean'],
         'historyDays' => ['integer', 'in:7,14,30,60,90,365'],
         // Plugin catalog lives in the client; we only keep id + on/off.
         'plugins' => ['array'],
@@ -172,7 +167,6 @@ class PreferencesController extends Controller
         $current = $user->preferences ?? [];
         $booleans = [
             'autoTimezone', 'calendarSidebarOpen', 'notifyAlwaysEmail',
-            'cookieFunctional', 'cookieAnalytics', 'cookieMarketing',
         ];
         foreach ($data as $key => $value) {
             if ($key === 'toasts') {

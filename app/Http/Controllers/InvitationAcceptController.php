@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Invitation;
+use App\Support\Clients\ClientHubSettings;
 use App\Support\Invitations\Invitations;
 use App\Support\Mail\Postcards;
 use Illuminate\Http\RedirectResponse;
@@ -50,7 +51,7 @@ class InvitationAcceptController extends Controller
         $current = $request->user();
 
         if ($existing === null) {
-            return $this->screen($invitation, $token, 'register');
+            return $this->screen($invitation, $token, $this->mayRegister($invitation) ? 'register' : 'registration-closed');
         }
 
         // The address already has a login, so nothing new may be created.
@@ -77,6 +78,13 @@ class InvitationAcceptController extends Controller
         // An account created between the page loading and this submit must not
         // be duplicated — send them down the sign-in path instead.
         if ($invitation->existingUser() !== null) {
+            return redirect('/invite/'.$token);
+        }
+
+        // Self-registration can be switched off between the page rendering and
+        // this submit, and the form is a plain POST anyone can replay. Checked
+        // again here, because the screen state is not the gate.
+        if (! $this->mayRegister($invitation)) {
             return redirect('/invite/'.$token);
         }
 
@@ -138,6 +146,24 @@ class InvitationAcceptController extends Controller
         $request->session()->put('url.intended', url('/invite/'.$token));
 
         return redirect()->route('login');
+    }
+
+    /**
+     * May this invitation mint a brand-new account?
+     *
+     * Only the client-facing invitations are the client hub's to govern. A
+     * staff invitation still creates its account whatever the hub says —
+     * turning that off would leave an administrator unable to onboard anyone.
+     */
+    private function mayRegister(Invitation $invitation): bool
+    {
+        $clientFacing = in_array(
+            $invitation->type,
+            [Invitation::TYPE_CLIENT, Invitation::TYPE_COMPANY_MEMBER],
+            true,
+        );
+
+        return ! $clientFacing || ClientHubSettings::allowsSelfRegistration();
     }
 
     private function screen(?Invitation $invitation, string $token, string $state): View

@@ -393,11 +393,73 @@
     repaint: paint,
   };
 
+  /* ── firm branding ────────────────────────────────────────────────
+     The company name, page title, logo and accent colour an administrator
+     set in Account settings → Edit Company Branding. It lives here rather
+     than with the settings page because it is shell chrome — the shells are
+     static HTML carrying the portal's own logo and title, and every one of
+     them loads this file. Branding an administrator saved is applied on the
+     spot too, so they see the change without a reload. */
+  var branding = null;
+
+  function applyBranding(b) {
+    if (!b) return;
+    branding = b;
+
+    if (b.pageTitle) document.title = b.pageTitle;
+
+    var name = b.accountName || 'TM ANTOINE Advisory';
+    document.querySelectorAll('.tma-dash__sidebar-logo').forEach(function (el) {
+      el.setAttribute('aria-label', name);
+    });
+
+    // Only replace the mark when a logo was actually uploaded: with none, the
+    // shells keep the portal's own artwork rather than showing a gap.
+    if (b.logo) {
+      document.querySelectorAll('.tma-dash__logo-horizontal, .tma-dash__logo-mark').forEach(function (img) {
+        img.src = b.logo;
+        img.alt = name;
+      });
+    }
+
+    /* The accent is the documented brand token every accent consumer derives
+       from (links, badges, highlights, focus tints — see tokens.css), so
+       setting it here re-tints all of them at once instead of introducing a
+       parallel colour nothing else honours. */
+    if (b.accentColor) {
+      document.documentElement.style.setProperty('--color-accent', b.accentColor);
+    }
+    if (b.headerColor) {
+      document.querySelectorAll('.tma-dash__header').forEach(function (el) {
+        el.style.background = b.headerColor;
+      });
+    }
+  }
+
+  function loadBranding() {
+    fetch('/admin/branding', {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.branding) applyBranding(d.branding); })
+      // Branding is decoration: a shell that cannot reach it keeps the
+      // portal's own look rather than failing to finish booting.
+      .catch(function () {});
+  }
+
+  window.TMABranding = {
+    get: function () { return branding; },
+    apply: applyBranding,
+    load: loadBranding,
+  };
+
   function boot() {
     // Show the loading skeleton first, so the shells' hardcoded dummy
     // name/photo is never what the user sees.
     if (me) { paint(); } else { setLoading(); }
     load();
+    loadBranding();
   }
 
   if (document.readyState === 'loading') {
@@ -410,5 +472,7 @@
      user hasn't loaded yet, the freshly rendered markup gets the skeleton too. */
   document.addEventListener('tma:view-rendered', function () {
     if (me) { paint(); } else { setLoading(); }
+    // A view render can replace the header the branding colour was on.
+    if (branding) applyBranding(branding);
   });
 })();

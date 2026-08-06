@@ -1119,11 +1119,6 @@ a.tma-flowmap__name:hover {
   color: var(--color-text-primary);
 }
 
-.tma-security__title img {
-  width: 18px;
-  height: 18px;
-}
-
 .tma-security__desc {
   margin: 0;
   font-size: var(--text-size-12);

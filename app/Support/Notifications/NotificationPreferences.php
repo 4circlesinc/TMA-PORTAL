@@ -24,20 +24,23 @@ final class NotificationPreferences
     public const CHANNELS = ['portal', 'email', 'desktop', 'sound'];
 
     /**
-     * Per-group defaults. Portal is on everywhere. Email is on only for the
-     * things a user genuinely needs to hear about away from the portal —
-     * emailing every chat message or file touch would be noise (and depends on
-     * a running queue worker), so those default off.
+     * Per-group defaults: everything on, for every module and every channel
+     * (firm decision, 2026-08-05). A person who has never opened the settings
+     * hears about everything and turns off what they don't want, rather than
+     * missing something because a channel was quietly off.
+     *
+     * Two things this leans on: notification email needs a running queue
+     * worker to leave the building, and desktop banners still require the
+     * browser permission prompt to be accepted — the preference being on is
+     * permission to ask, not a way around it.
      */
     private static function groupDefault(string $group): array
     {
-        $emailOn = in_array($group, ['security', 'approvals', 'signatures', 'clients', 'calendar'], true);
-
         return [
             'portal' => true,
-            'email' => $emailOn,
-            'desktop' => false,
-            'sound' => false,
+            'email' => true,
+            'desktop' => true,
+            'sound' => true,
         ];
     }
 

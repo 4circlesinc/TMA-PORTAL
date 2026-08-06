@@ -11,6 +11,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Clients\ClientHubSettings;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Mail\Deliveries;
@@ -39,6 +40,19 @@ final class Invitations
 {
     /** How long a new invitation stays valid, in days. */
     public const EXPIRY_DAYS = 7;
+
+    /**
+     * How long an invitation of this kind stays valid.
+     *
+     * Client-facing links honour the firm's Client hub access setting; a staff
+     * invitation is not the client hub's business and keeps the constant.
+     */
+    private static function expiryDaysFor(string $type): int
+    {
+        return in_array($type, [Invitation::TYPE_CLIENT, Invitation::TYPE_COMPANY_MEMBER], true)
+            ? ClientHubSettings::inviteExpiryDays()
+            : self::EXPIRY_DAYS;
+    }
 
     /**
      * Create an invitation, or refresh the live one that already exists for
@@ -74,7 +88,7 @@ final class Invitations
             'role' => $attrs['role'] ?? Role::CLIENT,
             'access' => $attrs['access'] ?? null,
             'invited_by' => $attrs['invited_by'] ?? null,
-            'expires_at' => now()->addDays($attrs['expiryDays'] ?? self::EXPIRY_DAYS),
+            'expires_at' => now()->addDays($attrs['expiryDays'] ?? self::expiryDaysFor($attrs['type'])),
             'status' => Invitation::STATUS_PENDING,
             'last_error' => null,
         ]);

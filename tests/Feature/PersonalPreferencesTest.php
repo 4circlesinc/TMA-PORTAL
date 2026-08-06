@@ -33,9 +33,6 @@ class PersonalPreferencesTest extends TestCase
             ->assertJsonPath('themeMode', 'system')
             ->assertJsonPath('fontScale', 3)
             ->assertJsonPath('accentColor', 'indigo')
-            ->assertJsonPath('cookieFunctional', true)
-            ->assertJsonPath('cookieAnalytics', true)
-            ->assertJsonPath('cookieMarketing', true)
             ->assertJsonPath('historyDays', 30)
             // null, not [] — the client falls back to its shipped catalog.
             ->assertJsonPath('plugins', null);
@@ -63,16 +60,11 @@ class PersonalPreferencesTest extends TestCase
         $user = $this->user();
 
         $this->actingAs($user)->putJson('/me/preferences', [
-            'cookieAnalytics' => false,
-            'cookieMarketing' => false,
             'historyDays' => 365,
         ])->assertOk();
 
         $this->actingAs($user)->getJson('/me/preferences')
             ->assertOk()
-            ->assertJsonPath('cookieFunctional', true)
-            ->assertJsonPath('cookieAnalytics', false)
-            ->assertJsonPath('cookieMarketing', false)
             ->assertJsonPath('historyDays', 365);
     }
 

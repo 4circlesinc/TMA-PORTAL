@@ -398,9 +398,6 @@
     'tma.sidebarStyle': 'sidebarStyle',
     'tma.themeMode': 'themeMode',
     'tma.fontScale': 'fontScale',
-    'tma.privacy.cookie.functional': 'cookieFunctional',
-    'tma.privacy.cookie.analytics': 'cookieAnalytics',
-    'tma.privacy.cookie.marketing': 'cookieMarketing',
     'tma.privacy.historyDays': 'historyDays',
     'tma.plugins.list': 'plugins',
     'tma.files.syncNoticeDismissed': 'fileSyncNoticeDismissed',
@@ -423,9 +420,6 @@
   var PREF_CODECS = {
     autoTimezone: prefBoolCodec(),
     notifyAlwaysEmail: prefBoolCodec(),
-    cookieFunctional: prefBoolCodec(),
-    cookieAnalytics: prefBoolCodec(),
-    cookieMarketing: prefBoolCodec(),
     // Without a codec this round-trips as the string "true"/"false", and the
     // column wants a real boolean — the validator rejects the string.
     fileSyncNoticeDismissed: prefBoolCodec(),
@@ -904,19 +898,10 @@
 
   function closePickers(root) {
     closeMobileSelect(root);
-    root.querySelectorAll('[data-settings-picker], [data-settings-cookie-popover]').forEach(function (picker) {
+    root.querySelectorAll('[data-settings-picker]').forEach(function (picker) {
       picker.hidden = true;
     });
     root.classList.remove('is-settings-picker-open');
-  }
-
-  function openCookiePopover(root) {
-    closePickers(root);
-    var anchor = root.querySelector('[data-picker-anchor="cookies"]');
-    var popover = anchor && anchor.querySelector('[data-settings-cookie-popover]');
-    if (!popover) return;
-    popover.hidden = false;
-    root.classList.add('is-settings-picker-open');
   }
 
   function openPicker(root, id) {
@@ -1000,6 +985,12 @@
           syncNotificationsPanelUI(root);
           return;
         }
+        if (id === 'online-status' || id === 'last-seen') {
+          savePrivacySetting(id === 'online-status' ? 'onlineStatus' : 'lastSeen', value);
+          closeMobileSelect(root);
+          applyPrivacySettings(root);
+          return;
+        }
         var storageKey = PICKER_STORAGE_KEYS[id];
         if (!storageKey) return;
         store.set(storageKey, value);
@@ -1077,6 +1068,12 @@
           syncNotificationsPanelUI(root);
           return;
         }
+        if (id === 'online-status' || id === 'last-seen') {
+          savePrivacySetting(id === 'online-status' ? 'onlineStatus' : 'lastSeen', value);
+          closePickers(root);
+          applyPrivacySettings(root);
+          return;
+        }
         if (!storageKey) return;
         store.set(storageKey, value);
         closePickers(root);
@@ -1090,7 +1087,7 @@
       root.dataset.pickerDismissBound = '1';
       document.addEventListener('click', function (e) {
         if (!root.classList.contains('is-settings-picker-open')) return;
-        if (e.target.closest('[data-settings-picker], [data-settings-cookie-popover], [data-settings-action^="pick-"], [data-settings-action="open-cookies"]')) return;
+        if (e.target.closest('[data-settings-picker], [data-settings-action^="pick-"]')) return;
         closePickers(root);
       });
       document.addEventListener('keydown', function (e) {
@@ -1123,10 +1120,10 @@
     enabled: true,
     position: 'bottom-right',
     durationSec: 10,
-    stickyImportant: false,
-    sound: false,
+    stickyImportant: true,
+    sound: true,
     previewText: true,
-    groupSimilar: false,
+    groupSimilar: true,
   };
 
   var NOTIFY_STORAGE_KEYS = {
@@ -1556,58 +1553,18 @@
     { id: '365', label: '1 year' },
   ];
 
-  var COOKIE_STORAGE_KEYS = {
-    functional: 'tma.privacy.cookie.functional',
-    analytics: 'tma.privacy.cookie.analytics',
-    marketing: 'tma.privacy.cookie.marketing',
-  };
-
   function readPrivacyPrefs() {
     return {
-      functional: store.get('tma.privacy.cookie.functional', '1') === '1',
-      analytics: store.get('tma.privacy.cookie.analytics', '1') === '1',
-      marketing: store.get('tma.privacy.cookie.marketing', '1') === '1',
       historyDays: store.get('tma.privacy.historyDays', '30'),
     };
   }
 
-  function renderCookieSwitchRow(opts) {
-    return '<div class="tma-dash__settings-cookie-row">' +
-      '<div class="tma-dash__settings-cookie-copy">' +
-      '<span class="tma-dash__settings-cookie-label">' + esc(opts.label) + '</span>' +
-      '<span class="tma-dash__settings-cookie-desc">' + esc(opts.desc) + '</span></div>' +
-      renderSwitch(!!opts.checked, opts.switchLabel || opts.label, opts.switchAttrs || '') +
-      '</div>';
-  }
-
-  function renderCookiePopover(prefs) {
-    return '<div class="tma-dash__settings-cookie-popover" data-settings-cookie-popover hidden data-node-id="33303:7651" role="dialog" aria-label="Cookie settings">' +
-      renderCookieSwitchRow({
-        label: 'Strictly necessary',
-        desc: 'Essential for the site to function. Always On.',
-        checked: true,
-        switchAttrs: 'data-settings-cookie="necessary" disabled checked',
-      }) +
-      renderCookieSwitchRow({
-        label: 'Functional',
-        desc: 'Used to remember preference selections and provide enhanced features.',
-        checked: prefs.functional,
-        switchAttrs: 'data-settings-cookie="functional"',
-      }) +
-      renderCookieSwitchRow({
-        label: 'Analytics',
-        desc: 'Used to measure usage and improve your experience.',
-        checked: prefs.analytics,
-        switchAttrs: 'data-settings-cookie="analytics"',
-      }) +
-      renderCookieSwitchRow({
-        label: 'Marketing',
-        desc: 'Used for targeted advertising.',
-        checked: prefs.marketing,
-        switchAttrs: 'data-settings-cookie="marketing"',
-      }) +
-      '</div>';
-  }
+  /* Who may see a given signal. Mirrors MessagingSettings' constants. */
+  var VISIBILITY_OPTIONS = [
+    { id: 'everyone', label: 'Everyone' },
+    { id: 'contacts', label: 'People I message' },
+    { id: 'nobody', label: 'Nobody' },
+  ];
 
   function renderPrivacyPanel() {
     var prefs = readPrivacyPrefs();
@@ -1615,20 +1572,56 @@
 
     return '<section class="tma-dash__settings-panel" data-settings-panel="privacy" hidden data-node-id="33319:118350">' +
       '<h2 class="tma-dash__settings-section-title">Privacy</h2>' +
-      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="cookies">' +
+
+      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="online-status">' +
       renderRow({
-        label: 'Cookie settings',
-        descHtml: 'Customize cookies. See <a class="tma-dash__settings-row-link" href="#" data-settings-cookie-notice>Cookie Notice</a> for details.',
-        action: 'open-cookies',
-        value: 'Customize',
+        label: 'Who can see when I’m online',
+        desc: 'Your online dot in Messages and People.',
+        action: 'pick-online-status',
+        value: 'Everyone',
         valueMuted: true,
       }) +
-      renderCookiePopover(prefs) +
+      renderPicker('online-status', '33319:118350', VISIBILITY_OPTIONS, 'everyone') +
       '</div>' +
+      profileInnerDivider() +
+
+      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="last-seen">' +
+      renderRow({
+        label: 'Who can see my last seen',
+        desc: 'The “last seen” time on your profile.',
+        action: 'pick-last-seen',
+        value: 'Everyone',
+        valueMuted: true,
+      }) +
+      renderPicker('last-seen', '33319:118350', VISIBILITY_OPTIONS, 'everyone') +
+      '</div>' +
+      profileInnerDivider() +
+
+      renderRow({
+        label: 'Read receipts',
+        desc: 'Let people see when you’ve read their message. You won’t see theirs either if this is off.',
+        switch: true,
+        switchChecked: true,
+        switchLabel: 'Read receipts',
+        switchAttrs: 'data-settings-privacy="readReceipts"',
+        chevron: false,
+      }) +
+      profileInnerDivider() +
+      renderRow({
+        label: 'Typing indicator',
+        desc: 'Show others when you’re typing.',
+        switch: true,
+        switchChecked: true,
+        switchLabel: 'Typing indicator',
+        switchAttrs: 'data-settings-privacy="typingIndicator"',
+        chevron: false,
+      }) +
+      profileInnerDivider() +
+
       '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="history">' +
       renderRow({
         label: 'History',
-        desc: 'Number of days to keep history.',
+        desc: 'Your activity trail and read notifications are deleted after this.',
         action: 'pick-history',
         value: history.label,
         valueMuted: true,
@@ -1637,20 +1630,70 @@
       '</div></section>';
   }
 
+  /* The four messaging privacy controls are stored with the other messaging
+     settings (and enforced there — presence, receipts and typing all check
+     them server-side), so this panel reads and writes that endpoint rather
+     than duplicating the state. */
+  var privacyCache = null;
+
+  function loadPrivacySettings(root) {
+    if (privacyCache) { applyPrivacySettings(root); return; }
+    fetch('/portal/messaging/settings', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d || !d.settings) return;
+      privacyCache = d.settings;
+      applyPrivacySettings(root);
+    }).catch(function () {});
+  }
+
+  function applyPrivacySettings(root) {
+    if (!privacyCache) return;
+    var map = { 'online-status': 'onlineStatus', 'last-seen': 'lastSeen' };
+
+    Object.keys(map).forEach(function (id) {
+      var value = privacyCache[map[id]] || 'everyone';
+      var row = root.querySelector('[data-settings-action="pick-' + id + '"]');
+      if (row) {
+        var out = row.querySelector('[data-settings-row-value="pick-' + id + '"]');
+        if (out) out.textContent = findOption(VISIBILITY_OPTIONS, value, 'everyone').label;
+      }
+      var picker = root.querySelector('[data-settings-picker="' + id + '"]');
+      if (picker) {
+        var list = picker.querySelector('[data-picker-list]');
+        if (list) list.innerHTML = renderPickerList(VISIBILITY_OPTIONS, value);
+      }
+    });
+
+    root.querySelectorAll('[data-settings-privacy]').forEach(function (input) {
+      var key = input.getAttribute('data-settings-privacy');
+      if (typeof privacyCache[key] === 'boolean') input.checked = privacyCache[key];
+    });
+  }
+
+  function savePrivacySetting(key, value) {
+    if (privacyCache) privacyCache[key] = value;
+    var body = {};
+    body[key] = value;
+    fetch('/portal/messaging/settings', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': csrfToken(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify(body),
+    }).catch(function () {});
+  }
+
   function syncPrivacyPanelUI(root) {
     var prefs = readPrivacyPrefs();
     var history = findOption(HISTORY_DAYS, prefs.historyDays, '30');
 
-    root.querySelectorAll('[data-settings-cookie]').forEach(function (input) {
-      var key = input.getAttribute('data-settings-cookie');
-      if (key === 'necessary') {
-        input.checked = true;
-        return;
-      }
-      if (key === 'functional') input.checked = prefs.functional;
-      else if (key === 'analytics') input.checked = prefs.analytics;
-      else if (key === 'marketing') input.checked = prefs.marketing;
-    });
+    loadPrivacySettings(root);
 
     var historyRow = root.querySelector('[data-settings-action="pick-history"]');
     if (historyRow) {
@@ -1666,49 +1709,11 @@
   }
 
   function bindPrivacyPanel(root) {
-    var cookieBtn = root.querySelector('[data-settings-action="open-cookies"]');
-    if (cookieBtn && !cookieBtn.dataset.privacyBound) {
-      cookieBtn.dataset.privacyBound = '1';
-      cookieBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        var popover = root.querySelector('[data-settings-cookie-popover]');
-        if (popover && !popover.hidden) {
-          closePickers(root);
-          return;
-        }
-        openCookiePopover(root);
-      });
-    }
-
-    root.querySelectorAll('[data-settings-cookie-notice]').forEach(function (link) {
-      if (link.dataset.noticeBound) return;
-      link.dataset.noticeBound = '1';
-      link.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-      });
-    });
-
-    var cookiePopover = root.querySelector('[data-settings-cookie-popover]');
-    if (cookiePopover && !cookiePopover.dataset.bound) {
-      cookiePopover.dataset.bound = '1';
-      cookiePopover.addEventListener('click', function (e) {
-        e.stopPropagation();
-      });
-    }
-
-    root.querySelectorAll('[data-settings-cookie]').forEach(function (input) {
-      if (input.dataset.cookieBound) return;
-      input.dataset.cookieBound = '1';
+    root.querySelectorAll('[data-settings-privacy]').forEach(function (input) {
+      if (input.dataset.privacyBound) return;
+      input.dataset.privacyBound = '1';
       input.addEventListener('change', function () {
-        var key = input.getAttribute('data-settings-cookie');
-        if (key === 'necessary') {
-          input.checked = true;
-          return;
-        }
-        var storageKey = COOKIE_STORAGE_KEYS[key];
-        if (storageKey) store.set(storageKey, input.checked ? '1' : '0');
-        syncPrivacyPanelUI(root);
+        savePrivacySetting(input.getAttribute('data-settings-privacy'), !!input.checked);
       });
     });
 

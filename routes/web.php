@@ -5,12 +5,15 @@ use App\Http\Controllers\AdminRecycleBinController;
 use App\Http\Controllers\AdminSecurityController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\AvatarController;
+use App\Http\Controllers\BackgroundOperationsController;
+use App\Http\Controllers\BrandingController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\ClientAssignmentController;
+use App\Http\Controllers\ClientHubSettingsController;
 use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientOnboardingController;
 use App\Http\Controllers\ClientsController;
@@ -62,13 +65,17 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingGroupController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PeopleController;
-use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\MeSyncStatusController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\NotificationHistoryController;
+use App\Http\Controllers\PeopleController;
+use App\Http\Controllers\PortalPermissionsController;
+use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SecuritySettingsController;
+use App\Http\Controllers\ServiceTeamsController;
 use App\Http\Controllers\Signatures\PublicSigningController;
 use App\Http\Controllers\Signatures\SignatureFieldController;
 use App\Http\Controllers\Signatures\SignatureRequestController;
@@ -76,6 +83,7 @@ use App\Http\Controllers\SignInActivityController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Http\Controllers\StaySignedInController;
+use App\Http\Controllers\StorageUsageController;
 use App\Http\Controllers\WorkPlanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -89,6 +97,10 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware(['auth'])->group(function () {
     Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
+
+    // The company logo, for the same reason: the onboarding and profile-setup
+    // screens wear the firm's branding before 'profile.complete' passes.
+    Route::get('/media/branding/{name}', [BrandingController::class, 'logo'])->name('branding.logo');
 });
 
 /*
@@ -139,6 +151,21 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
 
     Route::delete('/security-settings/trusted-devices', [SecuritySettingsController::class, 'revokeAllTrustedDevices'])
         ->name('security-settings.trusted-devices.revoke-all');
+
+    Route::put('/security-settings/phone', [SecuritySettingsController::class, 'updatePhone'])
+        ->name('security-settings.phone.update');
+
+    Route::delete('/security-settings/phone', [SecuritySettingsController::class, 'removePhone'])
+        ->name('security-settings.phone.remove');
+
+    Route::put('/security-settings/alerts', [SecuritySettingsController::class, 'updateAlerts'])
+        ->name('security-settings.alerts');
+
+    Route::post('/security-settings/password', [SecuritySettingsController::class, 'setPassword'])
+        ->name('security-settings.password.set');
+
+    Route::delete('/security-settings/sessions/{session}', [SecuritySettingsController::class, 'revokeSession'])
+        ->name('security-settings.sessions.revoke');
 
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -226,11 +253,76 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
 
     Route::get('/admin/connectors', [ConnectorsController::class, 'index'])->name('admin.connectors');
 
+    // Settings → Background Operations: the real queue.
+    Route::get('/admin/background-ops', [BackgroundOperationsController::class, 'index'])->name('admin.background-ops');
+    Route::post('/admin/background-ops/retry', [BackgroundOperationsController::class, 'retry'])->name('admin.background-ops.retry');
+    Route::post('/admin/background-ops/flush', [BackgroundOperationsController::class, 'flush'])->name('admin.background-ops.flush');
+
+    // Settings → Client hub management → Client hub access: the firm-wide
+    // shape of the hub. Reading needs `settings.clientHub`; writing needs an
+    // administrator, both re-checked in the controller.
+    Route::get('/admin/client-hub', [ClientHubSettingsController::class, 'show'])
+        ->name('admin.client-hub');
+    Route::put('/admin/client-hub', [ClientHubSettingsController::class, 'update'])
+        ->name('admin.client-hub.update');
+
+    // Settings → Advanced Preferences → Permissions: the firm-wide sharing and
+    // visibility defaults. Same split as the client hub above — reading needs
+    // `settings.advanced`, writing needs an administrator.
+    Route::get('/admin/permissions', [PortalPermissionsController::class, 'show'])
+        ->name('admin.permissions');
+    Route::put('/admin/permissions', [PortalPermissionsController::class, 'update'])
+        ->name('admin.permissions.update');
+
+    // Settings → Client hub management → Service teams. Teams themselves are
+    // groups (People → Groups); this only puts one onto a client, or takes it
+    // off, fanning out into ordinary per-person assignments.
+    Route::get('/admin/service-teams', [ServiceTeamsController::class, 'index'])
+        ->name('admin.service-teams');
+    Route::post('/admin/service-teams/{id}/assign', [ServiceTeamsController::class, 'assign'])
+        ->name('admin.service-teams.assign');
+    Route::post('/admin/service-teams/{id}/unassign', [ServiceTeamsController::class, 'unassign'])
+        ->name('admin.service-teams.unassign');
+
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])
         ->name('admin.security-policies');
 
     Route::put('/admin/security-policies/{section}', [AdminSecurityController::class, 'update'])
         ->name('admin.security-policies.update');
+
+    // Settings → Storage → Usage: bytes measured from the tables that hold
+    // them, not only the File Library.
+    Route::get('/admin/storage-usage', [StorageUsageController::class, 'index'])
+        ->name('admin.storage-usage');
+
+    /*
+     * Settings → Account and Reporting.
+     *
+     * Reports are computed from the portal's own tables (ReportBuilder), the
+     * notification history reads `email_deliveries`, and branding is stored
+     * once for the whole firm. All three are gated in their controllers.
+     */
+    Route::prefix('admin/reports')->name('admin.reports.')->group(function () {
+        Route::get('/', [ReportsController::class, 'index'])->name('index');
+        Route::post('/', [ReportsController::class, 'store'])->name('store');
+        Route::get('/{uid}', [ReportsController::class, 'show'])->name('show');
+        Route::get('/{uid}/export', [ReportsController::class, 'export'])->name('export');
+        Route::post('/{uid}/run', [ReportsController::class, 'run'])->name('run');
+        Route::delete('/{uid}', [ReportsController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::get('/admin/notification-history', [NotificationHistoryController::class, 'index'])
+        ->name('admin.notification-history');
+
+    Route::prefix('admin/branding')->name('admin.branding.')->group(function () {
+        // Readable by any signed-in account: the firm's name, title and
+        // colours are chrome every shell paints. The writes below are not.
+        Route::get('/', [BrandingController::class, 'show'])->name('show');
+        Route::put('/', [BrandingController::class, 'update'])->name('update');
+        Route::post('/logo', [BrandingController::class, 'uploadLogo'])->name('logo.store');
+        Route::delete('/logo', [BrandingController::class, 'destroyLogo'])->name('logo.destroy');
+        Route::post('/reset', [BrandingController::class, 'reset'])->name('reset');
+    });
 
     /*
      * File & folder manager API. Everything is authorized server-side in the
@@ -477,6 +569,15 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/organization-folders', [FileLibraryController::class, 'storeOrganizationFolder'])->name('org.store');
         Route::patch('/organization-folders/{uuid}', [FileLibraryController::class, 'updateOrganizationFolder'])->name('org.update');
         Route::post('/adopt-folder', [FileLibraryController::class, 'adoptFolder'])->name('adopt-folder');
+
+        // Folder templates: named sets of subfolders. Managing them needs
+        // `files.settings`; applying one also needs write access to the target
+        // folder, checked separately in the controller.
+        Route::get('/folder-templates', [FileLibraryController::class, 'templates'])->name('templates.index');
+        Route::post('/folder-templates', [FileLibraryController::class, 'storeTemplate'])->name('templates.store');
+        Route::put('/folder-templates/{id}', [FileLibraryController::class, 'updateTemplate'])->name('templates.update');
+        Route::delete('/folder-templates/{id}', [FileLibraryController::class, 'destroyTemplate'])->name('templates.destroy');
+        Route::post('/folder-templates/{id}/apply', [FileLibraryController::class, 'applyTemplate'])->name('templates.apply');
     });
 
     /*

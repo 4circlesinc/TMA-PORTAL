@@ -109,6 +109,45 @@ Artisan::command('files:prune-presence', function () {
 Schedule::command('files:prune-presence')->everyThirtyMinutes();
 
 /*
+ * Each person's History retention choice (Settings → Privacy). Daily is
+ * enough for a window measured in days, and it runs off-peak because it
+ * touches every account.
+ */
+Schedule::command('portal:prune-history')->dailyAt('03:20')->withoutOverlapping();
+
+/*
+ * Recompute recurring account reports whose next run is due.
+ *
+ * This is what makes the Reporting page's "recurring" tab mean anything: a
+ * recurring report rolls its window forward to end today and re-measures, so
+ * opening it a month later shows the month it was asked about rather than the
+ * numbers it was created with. A due date in the past is still run — a
+ * scheduler that was down must catch up, not skip.
+ */
+Artisan::command('reports:run {--all : Recompute every recurring report, due or not}', function () {
+    $due = App\Models\Report::query()
+        ->whereNotNull('frequency')
+        ->when(! $this->option('all'), fn ($q) => $q->where(function ($w) {
+            $w->whereNull('next_run_at')->orWhere('next_run_at', '<=', now());
+        }))
+        ->orderBy('next_run_at')
+        ->get();
+
+    foreach ($due as $report) {
+        App\Support\Reports\ReportRunner::run(
+            App\Support\Reports\ReportRunner::rollWindow($report)
+        );
+        $this->info("{$report->status}: {$report->name}");
+    }
+
+    $this->info('Recomputed '.$due->count().' recurring report(s).');
+})->purpose('Recompute recurring account reports that are due');
+
+// Hourly rather than daily: the cadences are weekly and monthly, so this only
+// has to be fine enough that a report lands on the right day.
+Schedule::command('reports:run')->hourly()->withoutOverlapping();
+
+/*
  * Pull every connected SharePoint library on a timer.
  *
  * Without this, sync only ever happens when somebody runs the command by hand —
@@ -480,3 +519,55 @@ Artisan::command('cbi:remap {--sheet= : Remote sheet id to remap alone}', functi
 
     $this->info('Remapped '.$sheets->count().' sheet(s).');
 })->purpose('Re-run the Smartsheet mirror → CBI application mapping');
+
+/*
+ * The optional "Monthly security summary" email from Account settings →
+ * Security. Off by default; only accounts that switched it on are mailed.
+ *
+ * Reads the month that just ended, so running it on the 1st describes a
+ * complete month rather than a month-so-far. Nothing here can be triggered
+ * by a user action — the summary is owed because a month passed — so like
+ * every other periodic job it lives on the scheduler.
+ */
+Artisan::command('security:monthly-summary {--user= : Send to one user id, for a manual check}', function () {
+    $start = now()->subMonthNoOverflow()->startOfMonth();
+    $end = $start->copy()->endOfMonth();
+    $period = $start->format('F Y');
+
+    $users = User::query()
+        ->where('status', User::STATUS_APPROVED)
+        ->when($this->option('user'), fn ($q) => $q->where('id', (int) $this->option('user')))
+        ->get()
+        ->filter(fn (User $user) => $user->email
+            && \App\Support\Security\SecurityAlerts::enabled($user, 'monthly_summary'));
+
+    $sent = 0;
+    foreach ($users as $user) {
+        $events = \App\Models\AuthEvent::where('user_id', $user->id)
+            ->whereBetween('created_at', [$start, $end])
+            ->get();
+
+        $devices = $events->where('event', 'login')
+            ->map(fn ($e) => (string) $e->user_agent)->unique()->count();
+
+        $details = [
+            ['Sign-ins', (string) $events->where('event', 'login')->count()],
+            ['Devices used', (string) $devices],
+            ['Failed sign-in attempts', (string) $events->whereIn('event', ['login_failed', 'lockout'])->count()],
+            ['Password changes', (string) $events->where('event', 'password_reset')->count()],
+            ['Two-factor authentication', $user->two_factor_confirmed_at ? 'On' : 'Off'],
+        ];
+
+        \App\Support\Mail\Deliveries::send(
+            \App\Support\Mail\Postcards::securitySummary($period, $details, url('/security-settings'), $user->first_name ?: null),
+            $user->email,
+            $user,
+            'securitySummary',
+        );
+        $sent++;
+    }
+
+    $this->info("Sent {$sent} security summary email(s) for {$period}.");
+})->purpose('Email the opt-in monthly security summary');
+
+Schedule::command('security:monthly-summary')->monthlyOn(1, '08:00');
