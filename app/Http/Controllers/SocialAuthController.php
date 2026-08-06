@@ -116,14 +116,19 @@ class SocialAuthController extends Controller
                 $params = ['access_type' => 'offline', 'prompt' => 'consent'];
             } else {
                 // offline_access is what makes Entra return a refresh token.
-                // prompt=consent forces a fresh consent covering the newly
-                // requested Mail scopes: without it, an account that already
-                // signed in with basic scopes gets an incremental-consent token
-                // limited to the *previously* granted scopes — a sign-in token
-                // with no Mail.* and no refresh token, which reads as
-                // "connected for reading only".
+                //
+                // No prompt=consent here. Consent is granted tenant-wide by an
+                // administrator (Entra → TMA Portal → API permissions → Grant
+                // admin consent), and forcing a fresh per-user consent sends
+                // every non-admin to Microsoft's "Need admin approval" wall —
+                // users in the firm's tenant may not self-consent at all, so
+                // the existing grant can never satisfy a forced re-consent.
+                // A scope that genuinely lacks consent still surfaces
+                // Microsoft's own consent screen without the prompt; a token
+                // that comes back narrower than asked is caught by
+                // canSyncMail()/canWriteCalendar() and the UI asks to
+                // reconnect.
                 $driver->scopes(['offline_access']);
-                $params = ['prompt' => 'consent'];
             }
         }
 
