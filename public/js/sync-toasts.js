@@ -14,9 +14,9 @@
   var DONE_LINGER_MS = 6000;
 
   var SERVICES = {
-    email: { label: 'Email', icon: '/images/icons/phosphor/MicrosoftOutlookLogo.svg' },
-    calendar: { label: 'Calendar', icon: '/images/icons/phosphor/Calendar.svg' },
-    onedrive: { label: 'OneDrive', icon: '/images/icons/brands/OneDrive40.svg' },
+    email: { label: 'Email', syncing: 'Syncing email…', icon: '/images/icons/phosphor/MicrosoftOutlookLogo.svg' },
+    calendar: { label: 'Calendar', syncing: 'Syncing calendar…', icon: '/images/icons/phosphor/Calendar.svg' },
+    onedrive: { label: 'OneDrive', syncing: 'Syncing OneDrive…', icon: '/images/icons/brands/OneDrive40.svg' },
   };
 
   var host = null;
@@ -40,12 +40,13 @@
   }
 
   function title(key, s) {
-    var label = SERVICES[key].label;
-    if (s.state === 'done') return label + ' synced';
-    if (s.state === 'error') return label + ' sync problem';
-    return 'Syncing ' + label.toLowerCase() + '…';
+    var svc = SERVICES[key];
+    if (s.state === 'done') return svc.label + ' synced';
+    if (s.state === 'error') return svc.label + ' sync problem';
+    return svc.syncing;
   }
 
+  // Every card reads the same way: "synced of total <unit>".
   function detail(key, s) {
     if (s.state === 'error') return 'Check Settings → Connectors.';
     if (key === 'email') {
@@ -54,17 +55,20 @@
         : fmt(s.synced) + ' messages';
     }
     if (key === 'calendar') {
-      return s.count
-        ? s.count + ' calendar' + (s.count === 1 ? '' : 's')
-        : 'Finding your calendars…';
+      if (!s.count) return 'Finding your calendars…';
+      return s.state === 'syncing'
+        ? fmt(s.synced) + ' of ' + fmt(s.count) + ' calendars'
+        : fmt(s.count) + ' calendar' + (s.count === 1 ? '' : 's');
     }
-    return fmt(s.synced) + ' items';
+    return s.total
+      ? fmt(s.synced) + ' of ' + fmt(s.total) + ' items'
+      : fmt(s.synced) + ' items';
   }
 
   function pct(key, s) {
-    if (key === 'onedrive') return null; // total is top-level only; keep it indeterminate
-    if (!s.total || !s.synced) return null;
-    return Math.max(2, Math.min(100, Math.round((s.synced / s.total) * 100)));
+    var total = key === 'calendar' ? s.count : s.total;
+    if (!total || !s.synced) return null;
+    return Math.max(2, Math.min(100, Math.round((s.synced / total) * 100)));
   }
 
   function buildCard(key) {

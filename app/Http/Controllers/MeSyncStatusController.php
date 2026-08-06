@@ -82,7 +82,12 @@ class MeSyncStatusController extends Controller
         $errors = $calendars->where('subscription_status', 'error')->count();
 
         if ($syncing > 0) {
-            return ['state' => 'syncing', 'count' => $calendars->count(), 'pending' => $syncing];
+            return [
+                'state' => 'syncing',
+                'count' => $calendars->count(),
+                'synced' => $calendars->count() - $syncing,
+                'pending' => $syncing,
+            ];
         }
 
         return [
@@ -114,19 +119,24 @@ class MeSyncStatusController extends Controller
             return ['state' => 'syncing', 'synced' => 0];
         }
 
+        $synced = $connection->items()->count();
+
+        // Same arithmetic as the Files sync panel: Graph's childCount summed
+        // over every discovered folder plus the root — exact once discovery
+        // finishes, a rising lower bound before that, null while unknown.
+        $total = ($connection->items()
+            ->where('item_type', 'folder')
+            ->sum('child_count') + (int) $connection->root_child_count) ?: null;
+
         if ($connection->status === SharePointConnection::STATUS_ERROR) {
-            return ['state' => 'error', 'synced' => $connection->items()->count()];
+            return ['state' => 'error', 'synced' => $synced];
         }
 
         // No delta cursor yet = the initial walk has not finished.
         if ($connection->delta_link === null || $connection->status === SharePointConnection::STATUS_SYNCING) {
-            return [
-                'state' => 'syncing',
-                'synced' => $connection->items()->count(),
-                'total' => $connection->root_child_count,
-            ];
+            return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
         }
 
-        return ['state' => 'done', 'synced' => $connection->items()->count()];
+        return ['state' => 'done', 'synced' => $synced];
     }
 }

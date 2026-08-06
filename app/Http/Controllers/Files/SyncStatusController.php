@@ -27,7 +27,13 @@ class SyncStatusController extends BaseFilesController
             return response()->json(['connections' => [], 'syncing' => false]);
         }
 
-        $connections = SharePointConnection::with('folder:id,uuid,name')->get();
+        // Personal OneDrives are private plumbing: their progress shows as
+        // the owner's own bottom-right sync toast (sync-toasts.js), never as
+        // a firm-wide pill — one presentation, and nobody else's drive name
+        // paraded across the Files page.
+        $connections = SharePointConnection::with('folder:id,uuid,name')
+            ->where('drive_kind', '!=', 'onedrive')
+            ->get();
 
         $rows = $connections->map(function (SharePointConnection $c) {
             $failed = SharePointItem::where('connection_id', $c->id)
