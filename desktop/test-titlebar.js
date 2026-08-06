@@ -207,6 +207,63 @@ app.whenReady().then(async () => {
   // The insets are on the cells, so the search stays on the window's centre.
   check('windows: search is still centred', Math.abs(windows.searchCentre - WIDTH / 2) <= 2, true);
 
+  /*
+   * The narrow window, which is the one that shipped looking stripped.
+   *
+   * Under 1025px the portal switches to its phone layout and hides the search,
+   * the activity button and the bell, because on a phone they live in the
+   * bottom tab bar. A Windows laptop at 150% scaling puts the *maximised* app
+   * inside that band, so the app has to keep its own chrome there. 960 is the
+   * window's minWidth — the narrowest this can ever be asked to work.
+   */
+  const NARROW = 960;
+  const n = new BrowserWindow({ width: NARROW, height: 900, show: false });
+  await n.loadURL(`http://127.0.0.1:${port}/`);
+  await n.webContents.insertCSS(titlebar.buildCss('win32'));
+  await titlebar.refresh(n.webContents);
+
+  const narrow = await n.webContents.executeJavaScript(`
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve((() => {
+      const seen = (sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      const header = document.querySelector('.tma-dash__header').getBoundingClientRect();
+      const rightbar = document.querySelector('[data-action="toggle-rightbar"]').getBoundingClientRect();
+      const doc = document.scrollingElement;
+
+      return {
+        search:        seen('.tma-dash__search'),
+        activities:    seen('[data-action="toggle-activities-popup"]'),
+        notifications: seen('[data-action="toggle-notifications-popup"]'),
+        title:         seen('.tma-tb-title'),
+        back:          seen('[data-tb="back"]'),
+        headerTop:     Math.round(header.top),
+        headerHeight:  Math.round(header.height),
+        rightbarRight: Math.round(rightbar.right),
+        // The phone layout reserves a header's height at the top of the
+        // scroller because there the header floats over it. Here that is a
+        // second empty strip under the bar.
+        mainPadTop:    Math.round(parseFloat(getComputedStyle(document.querySelector('.tma-dash__main')).paddingTop)),
+        overflow:      doc.scrollHeight - doc.clientHeight,
+      };
+    })()))))
+  `, true);
+
+  check('narrow: the search is there', narrow.search, true);
+  check('narrow: the activity button is there', narrow.activities, true);
+  check('narrow: the bell is there', narrow.notifications, true);
+  check('narrow: the heading is there', narrow.title, true);
+  check('narrow: the nav buttons are there', narrow.back, true);
+  check('narrow: the header is the bar, not a second row', narrow.headerTop, 0);
+  check('narrow: the bar is one bar tall', narrow.headerHeight, titlebar.HEIGHT);
+  check('narrow: no empty strip under the bar', narrow.mainPadTop, 0);
+  check('narrow: the right-panel toggle still clears the caption buttons',
+    narrow.rightbarRight <= NARROW - winMetrics.caption, true);
+  check('narrow: page does not scroll', narrow.overflow, 0);
+
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');
 
   server.close();

@@ -1,2 +1,3 @@
-- Windows: the page name shows in the title bar again
-- Windows: the right panel button is no longer hidden behind the window buttons
+- Windows: the search, activity and notification buttons no longer disappear from the title bar in a smaller window
+- Windows: the unread count shows on the taskbar icon again
+- Windows: a new install now says how to pin the app to your taskbar

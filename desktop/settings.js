@@ -20,6 +20,9 @@ const DEFAULTS = {
   // Whether the OS has been asked to allow notifications. Set once, on the
   // first launch after install — see notifications.js.
   notificationsPrimed: false,
+  // Whether the one-time "pin me to the taskbar" ask has been made. Windows
+  // only — see taskbar-pin.js for why the app cannot just do it.
+  taskbarPinPrompted: false,
 };
 
 let cache = null;

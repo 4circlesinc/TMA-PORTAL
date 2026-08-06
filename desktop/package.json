@@ -1,6 +1,6 @@
 {
   "name": "tma-portal-desktop",
-  "version": "0.8.22",
+  "version": "0.8.23",
   "private": true,
   "description": "TM ANTOINE Advisory portal — macOS desktop shell",
   "main": "main.js",
@@ -12,7 +12,7 @@
     "dist": "electron-builder --mac",
     "release": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never",
     "release:win": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --win --x64 --publish never",
-    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js",
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-badge.js && env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js",
     "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js",
     "test:call": "env -u ELECTRON_RUN_AS_NODE electron test-call-panel.js",
     "test:notify": "env -u ELECTRON_RUN_AS_NODE electron test-notify.js",
@@ -21,7 +21,9 @@
     "test:update-available": "env -u ELECTRON_RUN_AS_NODE electron test-update-available.js",
     "test:call-avatar": "env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js",
     "assets": "node bundle-assets.js",
-    "test:asset-cache": "env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js"
+    "test:asset-cache": "env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js",
+    "test:badge": "env -u ELECTRON_RUN_AS_NODE electron test-badge.js",
+    "test:taskbar-pin": "env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -49,6 +51,8 @@
       "settings.js",
       "titlebar.js",
       "tray.js",
+      "badge.js",
+      "taskbar-pin.js",
       "notifications.js",
       "package.json",
       "assets/tray.png",

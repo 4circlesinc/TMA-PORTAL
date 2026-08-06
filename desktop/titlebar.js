@@ -102,10 +102,11 @@ function buildCss(platform = process.platform) {
   }
 
   @media (max-width: 1024px) {
-    /* Narrow window: the rail and rightbar become drawers and the header pins. */
+    /* Narrow window: the rail and rightbar become drawers, pinned below the bar.
+       The header is deliberately not in this list — see the narrow-window
+       section at the foot of this file, where it stays the bar itself. */
     .tma-dash__sidebar,
-    .tma-dash__rightbar,
-    .tma-dash__header {
+    .tma-dash__rightbar {
       top: ${HEIGHT}px !important;
     }
   }
@@ -327,6 +328,91 @@ function buildCss(platform = process.platform) {
 
   .tma-dash--desktop-bar .tma-dash__sidebar-logo { display: none !important; }
   .tma-dash--desktop-bar .tma-dash__page-title { display: none !important; }
+
+  /*
+   * ── The narrow window ────────────────────────────────────────────────────
+   *
+   * Below 1025px the portal switches to its phone layout: the search, the
+   * activity button and the notification bell are all hidden, because on a
+   * phone they live in the bottom tab bar instead, and the header becomes a
+   * transparent overlay floating above the content.
+   *
+   * That is right for a phone and wrong for this window, and the app reaches it
+   * far more easily than a desktop browser does. Windows laptops commonly run
+   * at 125% or 150% display scaling, which divides the usable CSS width: a
+   * 1366px panel at 150% is 911px, so the app *maximised* is inside the phone
+   * band. The window cannot go under 960px (minWidth), so the whole band this
+   * has to cover is 960-1024 — narrow, but where a good number of Windows
+   * machines sit by default. It is why the bar looked stripped there while the
+   * same build on a Mac looked complete.
+   *
+   * So the desktop chrome is put back for those widths. Only the chrome: the
+   * rail and rightbar stay drawers and the tab bar stays, which is the right
+   * shape for a small window. Scoped to .tma-dash--desktop-bar throughout, so a
+   * browser at the same width is untouched and still gets the phone layout.
+   */
+  @media (max-width: 1024px) {
+    /*
+     * The header is the bar, at every width. The phone layout floats it over
+     * the content at top:0 with the page scrolling underneath; here it stays
+     * put in the strip the body padding has already reserved for it.
+     */
+    .tma-dash--desktop-bar .tma-dash__header {
+      top: 0 !important;
+      pointer-events: auto !important;
+      padding: 0 14px !important;
+    }
+
+    /* The search is the one control people go looking for by name. */
+    .tma-dash--desktop-bar .tma-dash__header-center > .tma-dash__search {
+      display: flex !important;
+    }
+
+    /* It cannot keep its 260px floor in a 960px window and leave room for the
+       strip, the icons and the caption buttons, so it is allowed to shrink. */
+    .tma-dash--desktop-bar .tma-dash__search {
+      min-width: 0 !important;
+      width: 100%;
+    }
+
+    .tma-dash--desktop-bar .tma-dash__header-icons [data-action="toggle-activities-popup"],
+    .tma-dash--desktop-bar .tma-dash__header-icons [data-action="toggle-notifications-popup"] {
+      display: grid !important;
+    }
+
+    /*
+     * The phone layout groups the icons into one bordered pill on a card
+     * background. On the blue that reads as a white box sitting in the bar, so
+     * the group is flattened back to plain buttons at the size they are at
+     * every other width.
+     */
+    .tma-dash--desktop-bar .tma-dash__header-icons {
+      background: transparent !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      gap: 2px;
+    }
+
+    .tma-dash--desktop-bar .tma-dash__header-icons .tma-dash__icon-btn {
+      width: 32px !important;
+      height: 32px !important;
+      min-width: 32px !important;
+      min-height: 32px !important;
+      border-radius: 8px !important;
+      border-right: 0 !important;
+      background: transparent !important;
+    }
+
+    /*
+     * The phone layout reserves a header's worth of space at the top of the
+     * scroller, because there the header floats over it. Here the body padding
+     * already accounts for the bar, so that reserve is a second empty strip
+     * under the first — which is what the gap below the bar was.
+     */
+    .tma-dash--desktop-bar .tma-dash__main {
+      padding-top: 0 !important;
+    }
+  }
 `;
 }
 

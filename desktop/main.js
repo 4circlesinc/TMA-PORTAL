@@ -12,6 +12,8 @@ const { installCloseToBackground } = require('./window-policy');
 const callWindow = require('./call-window');
 const titlebar = require('./titlebar');
 const tray = require('./tray');
+const badge = require('./badge');
+const taskbarPin = require('./taskbar-pin');
 const notifications = require('./notifications');
 const splash = require('./splash');
 const assetCache = require('./asset-cache');
@@ -468,11 +470,19 @@ function claimBrowserSession(deepLink) {
 /* ----------------------------------------------------------------- unread badge */
 
 /**
- * Windows has no dock badge. `app.setBadgeCount` is macOS and Linux only and
- * returns false here without doing anything, so the count is drawn as a
- * taskbar overlay icon instead — the same convention Mail and Teams use.
+ * Which count the taskbar is being asked to show. Drawing is a round trip into
+ * the renderer, so two counts arriving close together can come back in either
+ * order — and the loser would be the one left on screen. Anything that returns
+ * to find the number has moved on drops its result.
  */
-function taskbarOverlay(count) {
+let badgeWanted = 0;
+
+/**
+ * Windows has no dock badge; the count is stamped over the taskbar button as an
+ * overlay icon instead. badge.js explains why drawing it is not as simple as
+ * handing over an image.
+ */
+async function taskbarOverlay(count) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   if (count <= 0) {
@@ -480,23 +490,12 @@ function taskbarOverlay(count) {
     return;
   }
 
-  const label = count > 99 ? '99+' : String(count);
-  const size = 32;
-  const font = label.length > 2 ? 13 : 18;
+  const icon = await badge.image(mainWindow.webContents, count);
 
-  // An SVG data URL keeps this to one file with no extra image assets, and
-  // scales cleanly to whatever the taskbar asks for.
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-    <circle cx="16" cy="16" r="15" fill="#d21c1c"/>
-    <text x="16" y="16" fill="#fff" font-family="Segoe UI, sans-serif" font-size="${font}"
-      font-weight="600" text-anchor="middle" dominant-baseline="central">${label}</text>
-  </svg>`;
+  if (!icon || count !== badgeWanted) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
 
-  const image = nativeImage.createFromDataURL(
-    `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
-  );
-
-  mainWindow.setOverlayIcon(image, `${label} unread`);
+  mainWindow.setOverlayIcon(icon, `${badge.label(count)} unread`);
 }
 
 function applyBadge(count) {
@@ -507,7 +506,12 @@ function applyBadge(count) {
     return;
   }
 
-  taskbarOverlay(n);
+  badgeWanted = n;
+
+  // Deliberately not awaited: the badge is not worth holding anything up for,
+  // and every failure inside is already handled by leaving the last one alone.
+  taskbarOverlay(n).catch(() => {});
+
   tray.setTooltipCount(n);
 }
 
@@ -1028,6 +1032,10 @@ if (!app.requestSingleInstanceLock()) {
     // even listed in System Settings → Notifications. Posting one now puts the
     // prompt in front of someone who is looking at the app they just installed.
     notifications.primeOnFirstRun(() => revealWindow({ steal: true }));
+
+    // And on Windows, where the app it was just installed from is sitting on
+    // the taskbar unpinned and will vanish from it the moment it is closed.
+    taskbarPin.promptOnFirstRun({ parent: mainWindow });
 
     // Off macOS this is the only thing left on screen once the window is
     // closed, so it carries Show and Quit. Rebuilt alongside the menu bar so
