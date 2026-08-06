@@ -49,6 +49,23 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/feed.mjs
   ```
+- **`sync-toasts.mjs`** — the bottom-right sync cards, driven for the mailbox.
+  The only script here that needs **no server and no login**: it loads
+  `public/js/sync-toasts.js` into a blank page over a stubbed `/me/sync-status`,
+  which is the only practical way to watch a queued sync change state on cue.
+
+  It covers the mailbox case the toast used to miss entirely — a sync started
+  after the first import, when `/me/sync-status` answered `done` because the
+  backfill was long finished. Checks the card appears the moment the page calls
+  `TMASyncToasts.watch('email')`, survives the queue grace (the job is queued,
+  not running, so the honest server answer is still `done`), follows the real
+  run, retires itself, and stands down while the mail page's own import panel
+  (`.tma-mail-sync`) is on screen.
+
+  ```sh
+  node tests/Browser/sync-toasts.mjs
+  ```
+
 - **`email-sidebar.mjs`** — the mailbox sidebar after it was restyled to match
   the Feed's: a card at 232px with collapsible Mailboxes and Labels groups,
   rather than the bare 72px icon rail that sat flush against the main menu.

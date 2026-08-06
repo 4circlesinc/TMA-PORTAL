@@ -68,11 +68,37 @@
     });
   }
 
-  /* keep one leading +, digits only after it; treat 00... as + */
+  /* After an exit code, a Caribbean area code reads as a country code to the
+     longest-prefix match (011 758... looks like +7 585...). A full 10-digit
+     number behind a named NANP area code is the island, not Russia. */
+  function isNanpNumber(digits) {
+    if (digits.charAt(0) === '1') return true;
+    var area = digits.slice(0, 3);
+    return digits.length === 10 && (NANP[area] || CANADA.indexOf(area) !== -1);
+  }
+
+  /* keep one leading +, digits only after it; the exit codes people dial
+     before an international number (00 anywhere, 011 in North America) mean
+     the same thing as + */
   function clean(value) {
     var v = String(value || '').replace(/[^0-9+]/g, '');
-    if (v.indexOf('00') === 0) v = '+' + v.slice(2);
-    return v.charAt(0) === '+' ? '+' + v.slice(1).replace(/\+/g, '') : v;
+    if (v.charAt(0) !== '+') {
+      if (/^011\d/.test(v)) v = (isNanpNumber(v.slice(3)) ? '+1' : '+') + v.slice(3);
+      else if (/^00\d/.test(v)) v = '+' + v.slice(2);
+    }
+    return v.charAt(0) === '+' ? '+' + v.slice(1).replace(/\+/g, '') : v.replace(/\+/g, '');
+  }
+
+  /* Drop the trunk digit people habitually dial in front of an area code -
+     1 758..., 0 758... and 758... are all the same island. Only a real area
+     code ([2-9]NN) counts, so a part-typed "17" is left alone. */
+  function nanpTail(digits) {
+    return /^[01][2-9]\d{2}/.test(digits) ? digits.slice(1) : digits;
+  }
+
+  /* does this look like a North American number typed without a country code? */
+  function looksNanp(digits) {
+    return /^[2-9]\d{2}/.test(nanpTail(digits));
   }
 
   function nanpInfo(area) {
@@ -88,13 +114,14 @@
   function describe(value) {
     var v = clean(value);
     if (v.charAt(0) !== '+') {
-      if (/^[2-9]\d{2}/.test(v)) return nanpInfo(v.slice(0, 3));
+      var bare = nanpTail(v);
+      if (/^[2-9]\d{2}/.test(bare)) return nanpInfo(bare.slice(0, 3));
       return null;
     }
     var d = v.slice(1);
     if (!d) return null;
 
-    if (d.charAt(0) === '1') return nanpInfo(d.slice(1, 4));
+    if (d.charAt(0) === '1') return nanpInfo(nanpTail(d.slice(1)).slice(0, 3));
 
     for (var len = 3; len >= 1; len--) {
       var code = d.slice(0, len);
@@ -108,14 +135,15 @@
   function format(value) {
     var v = clean(value);
     if (v.charAt(0) !== '+') {
-      if (/^[2-9]\d{2}/.test(v)) v = '+1' + v;      /* 758... -> +1 758... */
+      /* 758... and 1758... both -> +1 758... */
+      if (looksNanp(v)) v = '+1' + nanpTail(v);
       else return String(value || '').trim();
     }
     var d = v.slice(1);
 
     /* NANP: +1 758 555-0100 */
     if (d.charAt(0) === '1') {
-      var rest = d.slice(1);
+      var rest = nanpTail(d.slice(1));
       return ('+1 ' + rest.slice(0, 3) + ' ' + rest.slice(3, 6) +
         (rest.length > 6 ? '-' + rest.slice(6, 10) : '') + (rest.length > 10 ? ' ' + rest.slice(10) : '')).trim();
     }
@@ -149,7 +177,8 @@
     var info = describe(v);
     if (info) {
       hint.textContent = info.flag + ' ' + info.name + ' \u00b7 ' + info.dial;
-    } else if (v.charAt(0) === '+') {
+    } else if (v.charAt(0) === '+' || /^[01]\d{0,3}$/.test(v)) {
+      /* "+..." or a part-typed trunk/exit prefix like 1, 0, 00, 011 */
       hint.textContent = 'Keep typing\u2026';
     } else {
       hint.textContent = 'Include a country code, like +1 758.';
@@ -165,7 +194,7 @@
          +1 758 without the user doing anything */
       var atEnd = input.selectionStart === input.value.length;
       var v = clean(input.value);
-      if (atEnd && (v.charAt(0) === '+' || /^[2-9]\d{2}/.test(v))) {
+      if (atEnd && (v.charAt(0) === '+' || looksNanp(v))) {
         var next = format(input.value);
         if (next !== input.value) {
           input.value = next;
@@ -176,7 +205,7 @@
     });
     input.addEventListener('blur', function () {
       var v = clean(input.value);
-      if (v.charAt(0) === '+' || /^[2-9]\d{2}/.test(v)) input.value = format(input.value);
+      if (v.charAt(0) === '+' || looksNanp(v)) input.value = format(input.value);
       paint(input);
     });
     if (input.value) paint(input);

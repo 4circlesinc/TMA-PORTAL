@@ -4,17 +4,23 @@
 </div>
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
-  <div class="tma-auth__field">
-    <span class="tma-auth__section-label">Email address</span>
-    <input class="tma-auth__input" type="email" value="{{ $user->email }}" disabled>
-    <span class="tma-auth__hint">To change this, ask your contact at {{ \App\Support\Mail\Postcards::site() }}.</span>
+  <div class="tma-auth__group">
+    <label class="tma-auth__field tma-auth__field--icon-start">
+      <img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16" aria-hidden="true">
+      <input class="tma-auth__input" type="email" aria-label="Email address" value="{{ $user->email }}" disabled>
+    </label>
+    <p class="tma-auth__hint">To change this, ask your contact at {{ \App\Support\Mail\Postcards::site() }}.</p>
   </div>
-  <label class="tma-auth__check">
-    <input type="checkbox" name="email_confirmed" value="1" required
-           @checked(old('email_confirmed', $values['email_confirmed'] ?? false))>
-    <span>Yes, this is the right email address.</span>
-  </label>
-  @error('email_confirmed')<span class="tma-auth__field-msg">{{ $message }}</span>@enderror
+
+  <div class="tma-auth__group">
+    <label class="tma-auth__check">
+      <input type="checkbox" name="email_confirmed" value="1" required
+             @checked(old('email_confirmed', $values['email_confirmed'] ?? false))>
+      <span>Yes, this is the right email address.</span>
+    </label>
+    @include('onboarding.steps._error', ['field' => 'email_confirmed'])
+  </div>
+
   @include('onboarding.steps._nav')
 </form>
 @include('onboarding.steps._back-form')

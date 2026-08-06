@@ -4,24 +4,28 @@
 </div>
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
-  <div class="tma-auth__fields">
+  <div class="tma-auth__group">
     <label class="tma-auth__field @error('company_name') tma-auth__field--error @enderror">
-      <span class="tma-auth__section-label">Company name</span>
-      <input class="tma-auth__input" type="text" name="company_name" required maxlength="255"
-             autocomplete="organization" value="{{ old('company_name', $values['company_name'] ?? '') }}">
-      @error('company_name')<span class="tma-auth__field-msg">{{ $message }}</span>@enderror
+      <input class="tma-auth__input" type="text" name="company_name" placeholder="Company name" aria-label="Company name"
+             required maxlength="255" autocomplete="organization" value="{{ old('company_name', $values['company_name'] ?? '') }}">
     </label>
+    @include('onboarding.steps._error', ['field' => 'company_name'])
+  </div>
+
+  <div class="tma-auth__group">
     <label class="tma-auth__field">
-      <span class="tma-auth__section-label">Your role there <span class="tma-auth__hint">optional</span></span>
-      <input class="tma-auth__input" type="text" name="company_role" maxlength="120"
-             autocomplete="organization-title" value="{{ old('company_role', $values['company_role'] ?? '') }}">
-    </label>
-    <label class="tma-auth__field">
-      <span class="tma-auth__section-label">Website <span class="tma-auth__hint">optional</span></span>
-      <input class="tma-auth__input" type="text" name="company_website" maxlength="255"
-             placeholder="example.com" value="{{ old('company_website', $values['company_website'] ?? '') }}">
+      <input class="tma-auth__input" type="text" name="company_role" placeholder="Your role there (optional)" aria-label="Your role there"
+             maxlength="120" autocomplete="organization-title" value="{{ old('company_role', $values['company_role'] ?? '') }}">
     </label>
   </div>
+
+  <div class="tma-auth__group">
+    <label class="tma-auth__field">
+      <input class="tma-auth__input" type="text" name="company_website" placeholder="Website (optional)" aria-label="Website"
+             maxlength="255" value="{{ old('company_website', $values['company_website'] ?? '') }}">
+    </label>
+  </div>
+
   @include('onboarding.steps._nav')
 </form>
 @include('onboarding.steps._back-form')
