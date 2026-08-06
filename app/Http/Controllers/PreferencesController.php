@@ -21,7 +21,8 @@ class PreferencesController extends Controller
         // stores it in `timezone`, which the calendar reads for new users.
         'autoTimezone' => true,
         'timezone' => 'utc+0',
-        'language' => 'en',
+        // 'auto' follows the browser's language; i18n.js resolves it.
+        'language' => 'auto',
         'voice' => 'en-us',
         'sidebarStyle' => 'hover',
         // Email notifications even while actively using the portal — off means
@@ -66,7 +67,7 @@ class PreferencesController extends Controller
         // (CalendarProvisioner::defaultTimezone re-validates against PHP's
         // timezone list).
         'timezone' => ['string', 'max:64', 'regex:#^(utc[+-]\d{1,2}|[A-Za-z][A-Za-z_]*(/[A-Za-z0-9_+\-]+){1,2})$#'],
-        'language' => ['string', 'max:16', 'regex:/^[a-z]{2}(-[a-z]{2,7})?$/i'],
+        'language' => ['string', 'max:16', 'regex:/^(auto|[a-z]{2}(-[a-z]{2,7})?)$/i'],
         'voice' => ['string', 'max:32'],
         'sidebarStyle' => ['string', 'in:standard,hover'],
         'notifyAlwaysEmail' => ['boolean'],

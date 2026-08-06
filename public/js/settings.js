@@ -514,7 +514,8 @@
   function applyLanguage() {
     try {
       var lang = localStorage.getItem('tma.language');
-      if (lang) document.documentElement.setAttribute('lang', lang);
+      // 'auto' is resolved by i18n.js, which stamps the real tag itself.
+      if (lang && lang !== 'auto') document.documentElement.setAttribute('lang', lang);
     } catch (e) {}
   }
 
@@ -614,7 +615,9 @@
 
   // Only languages with a shipped translation dictionary (i18n.js) are
   // offered \u2014 a language that changed nothing would read as broken.
+  // Automatic follows the browser's language.
   var LANGUAGES = [
+    { id: 'auto', label: 'Automatic' },
     { id: 'en', label: 'English' },
     { id: 'es', label: 'Espa\u00f1ol' },
     { id: 'fr', label: 'Fran\u00e7ais' },
@@ -670,7 +673,7 @@
     return {
       autoTimezone: store.get('tma.autoTimezone', '1') === '1',
       timezone: store.get('tma.timezone', 'utc+0'),
-      language: store.get('tma.language', 'en'),
+      language: store.get('tma.language', 'auto'),
       voice: store.get('tma.voice', 'en-us'),
     };
   }
