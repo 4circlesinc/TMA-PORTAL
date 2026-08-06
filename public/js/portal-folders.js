@@ -488,7 +488,10 @@
       '</div>' +
       '<div class="tma-portal-section__card">' +
       '<p>You can temporarily store your files in the File Box when sending or requesting files. ' +
-      'The default expiration policy for this folder is ' + s.settings.fileSettings.fileBoxRetentionDays + ' days. ' +
+      // The retention constant, not the old File Settings blob: that page was
+      // removed (it configured versioning, watermarking and cloud rendering
+      // the portal does not do), and its localStorage state went with it.
+      'The default expiration policy for this folder is ' + data().FILEBOX_RETENTION_DAYS + ' days. ' +
       'To store files for a longer period of time, use Move to move your files into a permanent folder.</p>' +
       '</div>' +
       '<div class="tma-portal-fab-anchor">' +
