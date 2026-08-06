@@ -142,13 +142,10 @@ class Role
         // the account limits. Split from `overview.view` when the Overview
         // *page* opened to employees, so the page could travel without the
         // firm's account summary going with it.
-        'settings.adminOverview' => [],
         // The firm-wide recycle bin.
         'recyclebin.admin' => [],
         // Password, session and two-factor policy for the whole portal.
         'settings.security' => [],
-        // Google/Microsoft connectors, enabled org-wide.
-        'settings.connectors' => [],
         // The queue of long-running jobs for the whole firm.
         'settings.operations' => [],
         // Usage reports and the firm-wide notification history.
@@ -225,7 +222,6 @@ class Role
      * PortalAccessTest, so the two cannot drift apart unnoticed.
      */
     private const SETTINGS_PAGE_CAPABILITIES = [
-        'admin-overview' => 'settings.adminOverview',
         'background-ops' => 'settings.operations',
         'reporting' => 'settings.reporting',
         'notification-history' => 'settings.reporting',
@@ -246,9 +242,7 @@ class Role
         'super-users' => 'settings.security',
         'quarantined' => 'settings.security',
         // "Connectors" stays open — it is where anyone links their own
-        // OneDrive, and it already shows the org-wide switches to admins only.
-        // The Connection Manager lists what the firm has enabled.
-        'connection-manager' => 'settings.connectors',
+        // Microsoft account (Outlook, Calendar, OneDrive).
         'storage-usage' => 'settings.storage',
         'ai-settings' => 'settings.advanced',
         'email-settings' => 'settings.advanced',

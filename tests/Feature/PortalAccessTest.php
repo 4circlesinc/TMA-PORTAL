@@ -158,10 +158,10 @@ class PortalAccessTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
 
         $administration = [
-            'admin-overview', 'background-ops', 'reporting', 'notification-history',
+            'background-ops', 'reporting', 'notification-history',
             'branding', 'billing-convert', 'billing-cancel', 'clienthub-access',
             'service-teams', 'custom-fields', 'security-policy', 'signin-policy',
-            'dlp', 'super-users', 'connection-manager', 'storage-usage',
+            'dlp', 'super-users', 'storage-usage',
             'ai-settings', 'permissions', 'tools', 'default-folders',
         ];
 
@@ -177,7 +177,7 @@ class PortalAccessTest extends TestCase
         // The point of the rail is still personal settings — gating must not
         // take a client's own password or theme away from them.
         $personal = ['profile', 'theme', 'time', 'notifications', 'privacy',
-            'account-security', 'payment', 'plugins', 'connectors'];
+            'account-security', 'connectors'];
 
         foreach ([Role::CLIENT, Role::EMPLOYEE] as $accountType) {
             $user = $this->user($accountType);
@@ -274,7 +274,6 @@ class PortalAccessTest extends TestCase
         $this->actingAs($this->user(Role::ADMINISTRATOR))->get('/overview')->assertOk();
 
         $this->assertTrue(Role::can($employee, 'overview.view'));
-        $this->assertFalse(Role::canViewSettingsPage($employee, 'admin-overview'));
         $this->assertFalse(Role::can($employee, 'users.view'));
         $this->assertFalse(Role::can($employee, 'recyclebin.admin'));
     }

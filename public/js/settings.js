@@ -17,8 +17,6 @@
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
     { id: 'account-security', label: 'Account security', icon: 'ShieldCheck' },
-    { id: 'payment', label: 'Payment', icon: 'CurrencyCircleDollar' },
-    { id: 'plugins', label: 'Plugins', icon: 'Plugs' },
   ];
 
   var TRANSPARENT_AVATAR = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -4806,7 +4804,7 @@
     var snap = currentUserSnapshot();
     CURRENT_EMAIL = snap.email || '';
     var initialNav = (opts && (opts.activeNav || opts.settingsNav)) || 'profile';
-    var openDetailOnMobile = !!(opts && (opts.activeNav || opts.settingsNav || opts.paymentAdded || opts.openChangeEmail));
+    var openDetailOnMobile = !!(opts && (opts.activeNav || opts.settingsNav || opts.openChangeEmail));
     root.innerHTML = render(initialNav);
     delete root.dataset.settingsBound;
     bind(root);
@@ -4825,14 +4823,6 @@
       });
     }
     if (opts && opts.openChangeEmail) openChangeEmailPopup(root);
-    if (opts && opts.paymentAdded) {
-      activateNav(root, 'payment');
-      syncPaymentPanelUI(root);
-      showToast(root, 'Payment method added');
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState({}, '', '/settings?nav=payment');
-      }
-    }
   }
 
   window.TMASettings = {

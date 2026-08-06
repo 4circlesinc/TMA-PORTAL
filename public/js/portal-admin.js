@@ -38,8 +38,6 @@
     { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
-    { id: 'payment', label: 'Payment', icon: 'CurrencyCircleDollar' },
-    { id: 'plugins', label: 'Plugins', icon: 'Plugs' },
   ];
 
   var NAV = [
@@ -48,9 +46,6 @@
     { id: 'time', label: 'Time and language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
-    { id: 'payment', label: 'Payment', icon: 'CurrencyCircleDollar' },
-    { id: 'plugins', label: 'Plugins', icon: 'Plugs' },
-    { id: 'admin-overview', label: 'Admin Overview', icon: 'SquaresFour' },
     { id: 'background-ops', label: 'Background Operations', icon: 'ArrowsClockwise' },
     { group: 'reporting-group', label: 'Account and Reporting', icon: 'ChartBar', items: [
       { id: 'reporting', label: 'Reporting' },
@@ -74,7 +69,6 @@
       { id: 'quarantined', label: 'Quarantined files' },
     ] },
     { id: 'connectors', label: 'Connectors', icon: 'Plugs' },
-    { id: 'connection-manager', label: 'Connection Manager', icon: 'LinkSimple' },
     { group: 'storage-group', label: 'Storage', icon: 'HardDrives', items: [
       { id: 'storage-usage', label: 'Usage' },
     ] },
@@ -153,28 +147,6 @@
 
   /* ── pages ──────────────────────────────────────── */
   var PAGES = {};
-
-  PAGES['admin-overview'] = {
-    render: function (s) {
-      var sigLeft = Math.max(0, s.trial.signatureLimit - s.trial.signatureUsed);
-      return ui().section('Account',
-        '<p><strong>Account name:</strong> ' + ui().esc(s.branding.accountName) + '</p>' +
-        '<p><strong>Plan:</strong> Premium' + (s.trial.active ? ' (Trial - ' + s.trial.daysLeft + ' days left)' : '') + '</p>' +
-        '<p><strong>Employees:</strong> ' + s.employees.length + ' of ' + s.trial.employeeLimit + '</p>' +
-        '<p><strong>Signature requests remaining:</strong> ' + sigLeft + '</p>') +
-        ui().section('Quick links',
-          '<ul>' +
-          '<li><button type="button" class="tma-portal-link" data-admin-go="branding">Edit company branding</button></li>' +
-          '<li><button type="button" class="tma-portal-link" data-admin-go="device-security">Configure device security</button></li>' +
-          '<li><button type="button" class="tma-portal-link" data-admin-go="email-settings">Email settings</button></li>' +
-          '</ul>');
-    },
-    wire: function (el) {
-      el.querySelectorAll('[data-admin-go]').forEach(function (b) {
-        b.addEventListener('click', function () { setPage(b.getAttribute('data-admin-go')); });
-      });
-    },
-  };
 
   PAGES['background-ops'] = {
     render: function (s) {
@@ -1797,18 +1769,6 @@
       }).catch(function () {
         root.innerHTML = '<p class="tma-portal-note">Couldn\'t load connectors. Refresh to try again.</p>';
       });
-    },
-  };
-
-  PAGES['connection-manager'] = {
-    render: function (s) {
-      var enabled = s.connectors.filter(function (c) { return c.enabled; });
-      return '<p class="tma-portal-subtitle">Review the external services currently connected to your account.</p>' +
-        (enabled.length
-          ? ui().table(['Service', 'Status'], enabled.map(function (c) {
-              return '<tr><td><strong>' + ui().esc(c.name) + '</strong></td><td><span class="tma-portal-chip">Connected</span></td></tr>';
-            }).join(''))
-          : ui().emptyState({ illustration: 'Illustration08', title: 'No active connections', subtitle: 'Enable a connector to link an external storage service.' }));
     },
   };
 
