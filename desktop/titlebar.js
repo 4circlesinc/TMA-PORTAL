@@ -22,15 +22,43 @@
 
 const HEIGHT = 52;
 
-const IS_MAC = process.platform === 'darwin';
-
-// Traffic lights + back/forward/reload + separator + heading. The header is
-// padded by this much so its own contents start clear of them.
-const CONTROLS = IS_MAC ? 300 : 250;
-
 // --color-primary from public/css/tokens.css. The one the design system calls
 // primary, not --color-blue (#7dbbff), which is the lighter badge blue.
 const BLUE = '#03a5e9';
+
+/**
+ * Every platform-dependent number in one place, taken as an argument rather
+ * than read from process.platform, so the Windows layout can be built — and
+ * measured by the tests — on a Mac. Getting it wrong is invisible from here:
+ * nothing on macOS reserves space at the right, so a Windows-only overlap
+ * shows up only on Windows.
+ */
+function metrics(platform) {
+  const isMac = platform === 'darwin';
+
+  return {
+    isMac,
+
+    // Traffic lights + back/forward/reload + separator + heading. The header is
+    // padded by this much so its own contents start clear of them.
+    controls: isMac ? 300 : 250,
+
+    /*
+     * What the OS draws over our strip at the right-hand end.
+     *
+     * On Windows the minimise/maximise/close buttons stay native and are
+     * painted on top of the window by the compositor — they are not in the page
+     * and no z-index reaches them. Anything the portal puts under them is both
+     * invisible and unclickable, so that width has to be reserved. Three
+     * caption buttons at 46px. macOS puts its traffic lights at the left, and
+     * we draw those ourselves, so nothing is reserved at the right.
+     */
+    caption: isMac ? 0 : 138,
+
+    // The strip's own inset. On macOS the left side clears the traffic lights.
+    barPadLeft: isMac ? 92 : 8,
+  };
+}
 
 /**
  * Pushes the page down by the bar's height.
@@ -39,7 +67,12 @@ const BLUE = '#03a5e9';
  * screen a bar taller than the window and hand it a scrollbar it never had.
  * The shell has to shrink by exactly what the padding adds.
  */
-const CSS = `
+function buildCss(platform = process.platform) {
+  const {
+    isMac, controls, caption, barPadLeft,
+  } = metrics(platform);
+
+  return `
   body { padding-top: ${HEIGHT}px !important; }
 
   .tma-dash {
@@ -104,7 +137,7 @@ const CSS = `
     align-items: center;
     /* Traffic lights sit at the left on macOS; Windows puts its caption
        buttons at the right. Either way the controls need to clear them. */
-    padding: 0 ${IS_MAC ? '12px 0 92px' : '138px 0 8px'};
+    padding: 0 ${Math.max(caption, 12)}px 0 ${barPadLeft}px;
     font: 600 13px/1 -apple-system, "Segoe UI", system-ui, sans-serif;
     letter-spacing: 0.01em;
     /* The whole strip is the drag handle, standing in for the frame we hid. */
@@ -119,6 +152,10 @@ const CSS = `
     gap: 2px;
     /* Carved out of the drag region, or the buttons swallow their own clicks. */
     -webkit-app-region: no-drag;
+    /* Never squeezed. The strip is a fixed width beside the shell, and a flex
+       item that may shrink gives up its width silently — the buttons narrow
+       and the heading beside them ends up at zero. */
+    flex: none;
   }
 
   #tma-desktop-titlebar .tma-tb-btn {
@@ -166,6 +203,7 @@ const CSS = `
 
   #tma-desktop-titlebar .tma-tb-title {
     max-width: 60vw;
+    min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -190,7 +228,20 @@ const CSS = `
    * rebuild the header as often as it likes; injected CSS applies to whatever
    * it puts there.
    */
-  .tma-desktop-has-shell #tma-desktop-titlebar { width: ${CONTROLS}px; }
+  .tma-desktop-has-shell #tma-desktop-titlebar {
+    width: ${controls}px;
+    /*
+     * The caption reserve above is dropped here, and has to be. It exists to
+     * keep content out from under buttons the OS draws at the *window's* right
+     * edge — but beside the shell this strip is only ${controls}px wide and
+     * sits at the left, nowhere near them. Kept, it ate the strip from the
+     * inside: 138 of 250px reserved for buttons that are hundreds of pixels
+     * away left barely enough for the three nav buttons and nothing at all for
+     * the heading, so the page title was laid out at zero width. It was never
+     * missing or hidden behind anything — it was squeezed out.
+     */
+    padding-right: 12px;
+  }
   .tma-desktop-has-shell #tma-desktop-titlebar .tma-tb-title { max-width: 24vw; }
 
   /*
@@ -222,7 +273,25 @@ const CSS = `
   }
 
   .tma-dash--desktop-bar .tma-dash__header-left {
-    padding-left: ${CONTROLS - 14}px;
+    padding-left: ${controls - 14}px;
+  }
+
+  /*
+   * The mirror of the left inset, for the OS's own caption buttons.
+   *
+   * The header runs the full width of the window, so on Windows its right-hand
+   * end is underneath the native minimise/maximise/close buttons — and the last
+   * thing in that end is the right-panel toggle, which was therefore covered by
+   * the close button and could not be clicked.
+   *
+   * Inset on the cell, not as header padding, for the same reason as the left:
+   * the header is minmax(0,1fr) auto minmax(0,1fr) and padding on the header
+   * would shrink the box the centre column is centred in, dragging the search
+   * off the window's centre. Zero on macOS, where we draw the controls
+   * ourselves at the other end.
+   */
+  .tma-dash--desktop-bar .tma-dash__header-right {
+    padding-right: ${Math.max(caption - 14, 0)}px;
   }
 
   /* The heading lives in the controls strip, so the crumb is a duplicate. */
@@ -259,6 +328,9 @@ const CSS = `
   .tma-dash--desktop-bar .tma-dash__sidebar-logo { display: none !important; }
   .tma-dash--desktop-bar .tma-dash__page-title { display: none !important; }
 `;
+}
+
+const CSS = buildCss();
 
 const ICONS = {
   back: '<path d="M10 3 L5 8 L10 13"/>',
@@ -452,4 +524,9 @@ async function apply(webContents) {
 // `script` is exported for tests: it is a template literal that builds
 // JavaScript, and a stray backslash or backtick in it is a syntax error the
 // page swallows silently. Checking the emitted text is the only way to catch it.
-module.exports = { apply, refresh, windowOptions, script, CSS, HEIGHT, BLUE };
+// `buildCss` and `metrics` are exported for the same reason: the Windows layout
+// has to be measurable from a Mac, or its two reserved-space bugs are only ever
+// found by shipping.
+module.exports = {
+  apply, refresh, windowOptions, script, buildCss, metrics, CSS, HEIGHT, BLUE,
+};

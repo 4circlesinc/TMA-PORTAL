@@ -1,4 +1,2 @@
-- The app waits until the screen is fully loaded before showing it
-- Icons, styles and scripts ship with the app instead of downloading each time
-- The loading screen covers every start and every refresh
-- The title bar looks the same on every screen, including sign-in
+- Windows: the page name shows in the title bar again
+- Windows: the right panel button is no longer hidden behind the window buttons

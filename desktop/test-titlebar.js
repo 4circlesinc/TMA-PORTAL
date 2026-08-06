@@ -157,6 +157,56 @@ app.whenReady().then(async () => {
   check('collapsed: the rail logo is hidden, not clipped', collapsed.logoHidden, true);
   check('collapsed: page does not scroll', collapsed.overflow, 0);
 
+  /*
+   * The Windows layout, measured on whatever this is running on.
+   *
+   * Windows reserves space at the right of the strip for caption buttons the OS
+   * draws itself, and both bugs this catches were that reserve applied in the
+   * wrong place: on the narrow strip beside the shell it squeezed the heading to
+   * zero width, and on the header it was missing entirely, so the right-panel
+   * toggle sat under the close button. Neither is visible on macOS, which
+   * reserves nothing — hence a second window with the Windows CSS in it.
+   */
+  const WIDTH = 1400;
+  const winMetrics = titlebar.metrics('win32');
+
+  const w = new BrowserWindow({ width: WIDTH, height: 900, show: false });
+  await w.loadURL(`http://127.0.0.1:${port}/`);
+  await w.webContents.insertCSS(titlebar.buildCss('win32'));
+  await titlebar.refresh(w.webContents);
+
+  const windows = await w.webContents.executeJavaScript(`
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve((() => {
+      const title = document.querySelector('#tma-desktop-titlebar .tma-tb-title');
+      const nav = document.querySelector('#tma-desktop-titlebar .tma-tb-nav');
+      const rightbar = document.querySelector('[data-action="toggle-rightbar"]');
+
+      return {
+        titleText: (title.textContent || '').trim(),
+        titleWidth: Math.round(title.getBoundingClientRect().width),
+        navWidth: Math.round(nav.getBoundingClientRect().width),
+        rightbarRight: Math.round(rightbar.getBoundingClientRect().right),
+        searchCentre: Math.round(
+          document.querySelector('.tma-dash__search').getBoundingClientRect().left
+          + document.querySelector('.tma-dash__search').getBoundingClientRect().width / 2
+        ),
+      };
+    })()))))
+  `, true);
+
+  check('windows: the heading has text', windows.titleText, 'Dashboard');
+  // The exact width depends on the string; that it is laid out at all is the point.
+  check('windows: the heading is not squeezed to nothing', windows.titleWidth > 40, true);
+  // Three 32px buttons and two 2px gaps — unshrunk.
+  check('windows: the nav buttons keep their size', windows.navWidth, 100);
+  check(
+    'windows: the right-panel toggle clears the caption buttons',
+    windows.rightbarRight <= WIDTH - winMetrics.caption,
+    true,
+  );
+  // The insets are on the cells, so the search stays on the window's centre.
+  check('windows: search is still centred', Math.abs(windows.searchCentre - WIDTH / 2) <= 2, true);
+
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');
 
   server.close();
