@@ -47,6 +47,24 @@ class DesktopReleasesController extends Controller
 
     private const TTL = 300;
 
+    private const CACHE_KEY = 'desktop.release.';
+
+    /**
+     * Drops the cached manifest reads, so the download button points at a
+     * release the moment it is published rather than up to TTL later.
+     *
+     * Called by desktop:publish. Without it the button spends the five minutes
+     * after every release handing people the *previous* version — which reads
+     * as a broken publish, and is the one moment someone is certain to be
+     * clicking it to check the release they just made.
+     */
+    public static function forgetCache(): void
+    {
+        foreach (array_keys(self::MANIFESTS) as $platform) {
+            Cache::forget(self::CACHE_KEY.$platform);
+        }
+    }
+
     public function index(): JsonResponse
     {
         $out = [];
@@ -87,7 +105,7 @@ class DesktopReleasesController extends Controller
         }
 
         return Cache::remember(
-            'desktop.release.'.$platform,
+            self::CACHE_KEY.$platform,
             self::TTL,
             fn () => $this->readManifest($platform)
         );

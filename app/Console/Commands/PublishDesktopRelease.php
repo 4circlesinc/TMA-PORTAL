@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Http\Controllers\DesktopReleasesController;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
@@ -82,7 +83,14 @@ class PublishDesktopRelease extends Command
             }
         }
 
+        // The download button resolves the current build from these manifests
+        // and caches what it reads. Left alone, it hands people the previous
+        // version for the next five minutes — right when the release is being
+        // checked. Dropped here, after the manifests are up and never before.
+        DesktopReleasesController::forgetCache();
+
         $this->info('Published '.$files->count().' files. Installed apps will pick this up within the hour.');
+        $this->line('The download button is already on this version.');
 
         return self::SUCCESS;
     }
