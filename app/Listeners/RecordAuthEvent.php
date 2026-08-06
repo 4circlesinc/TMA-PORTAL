@@ -158,6 +158,8 @@ class RecordAuthEvent
                 'title' => 'Your password was changed',
                 'message' => 'If this was not you, secure your account immediately.',
                 'action_url' => '/account-settings?settings-page=security',
+                // Fortify's actions mail passwordChangedFor separately.
+                'email' => false,
             ]);
         }
     }

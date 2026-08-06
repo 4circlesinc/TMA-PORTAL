@@ -457,6 +457,21 @@
    * reached the bell and then died there — silently, which is the worst way
    * for a notification to fail.
    * ------------------------------------------------------------------- */
+  /* Per-module delivery channels from Settings → Notifications ("Notify me
+     about"). Loaded once; until it arrives — or for a module the grid doesn't
+     know — the answer is "on", because a fetch hiccup must never mute a
+     banner the user asked for. Sound is additionally behind the global
+     notification-sounds switch, as before. */
+  var channelPrefs = null;
+  api(NOTIF_BASE + '/preferences').then(function (d) {
+    if (d && d.preferences) channelPrefs = d.preferences;
+  }).catch(function () { /* fail open */ });
+
+  function channelOn(module, channel) {
+    if (!channelPrefs || !module || !(module in channelPrefs)) return true;
+    return !!channelPrefs[module][channel];
+  }
+
   var desktop = (function () {
     var prefs = { enabled: false, preview: true };
     var live = [];
@@ -501,8 +516,9 @@
      * by the banner when the app is in the background, by the page when it is
      * in front. Without the check, backgrounding the app would double it.
      */
-    function willSound() {
-      return prefs.enabled && permission() === 'granted' && backgrounded() && soundOn();
+    function willSound(module) {
+      return prefs.enabled && permission() === 'granted' && backgrounded() && soundOn()
+        && channelOn(module || 'messages', 'sound');
     }
 
     function seenRecently(key) {
@@ -546,6 +562,8 @@
       if (!prefs.enabled || !item) return;
       if (permission() !== 'granted') return;
       if (!backgrounded()) return;
+      // The per-module Desktop column in Settings → Notifications.
+      if (!channelOn(item.module, 'desktop')) return;
       if (seenRecently(item.id + '@' + (item.createdAt || ''))) return;
 
       try {
@@ -571,7 +589,8 @@
            * policy and background throttling apply. messages.js stands down
            * while we are sounding — see playIncomingMessageSound's caller.
            */
-          silent: !soundOn(),
+          // The per-module Sound column, on top of the global sounds switch.
+          silent: !soundOn() || !channelOn(item.module, 'sound'),
         });
         note.onclick = function () {
           note.close();

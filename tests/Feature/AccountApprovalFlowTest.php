@@ -168,7 +168,9 @@ class AccountApprovalFlowTest extends TestCase
 
         Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
             && $m->subjectLine === 'We\'ve received your request for access');
-        Mail::assertNothingQueued();
+        // The person's own mail must go INLINE — the queue can't be trusted to
+        // deliver it. Admin notification emails may still queue.
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email));
         $this->assertDatabaseHas('email_deliveries', [
             'recipient' => $newbie->email, 'template' => 'accountPending',
         ]);
@@ -185,7 +187,8 @@ class AccountApprovalFlowTest extends TestCase
 
         Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
             && $m->subjectLine === 'Your account is ready');
-        Mail::assertNothingQueued();
+        // Inline for the person; admin notification emails may still queue.
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email));
         $this->assertDatabaseHas('email_deliveries', [
             'recipient' => $newbie->email, 'template' => 'welcome',
         ]);

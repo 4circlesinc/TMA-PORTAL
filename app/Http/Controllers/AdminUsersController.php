@@ -371,6 +371,8 @@ class AdminUsersController extends Controller
             'title' => 'Your account has been approved',
             'message' => 'Welcome to the portal — you now have full access.',
             'action_url' => '/',
+            // The welcome postcard below is the email for this moment.
+            'email' => false,
         ]);
         // Inline, and tracked: a queued approval email is indistinguishable
         // from no approval email at all when no worker is draining the queue,
@@ -422,6 +424,8 @@ class AdminUsersController extends Controller
             'type' => 'account.denied',
             'title' => 'Your access request was declined',
             'message' => $data['reason'] ?? null,
+            // The denial postcard below is the email for this moment.
+            'email' => false,
         ]);
         // A denied account can never sign in, so the in-portal notification
         // above is one nobody will ever see. Email is the only way the decision

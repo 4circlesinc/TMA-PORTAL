@@ -118,6 +118,8 @@ final class FeedNotifier
             // One notification per post per reader, however many times a
             // scheduled publish is retried.
             'dedupe_key' => 'feed.post.'.$post->uuid,
+            // The feed runs its own post-email fan-out below.
+            'email' => false,
         ]);
     }
 
@@ -142,6 +144,8 @@ final class FeedNotifier
             'subject' => $post,
             'action_url' => self::postUrl($post),
             'dedupe_key' => 'feed.mention.'.$post->uuid,
+            // Mentioned people are covered by the feed's own email fan-out.
+            'email' => false,
         ]);
     }
 

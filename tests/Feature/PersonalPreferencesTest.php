@@ -173,4 +173,44 @@ class PersonalPreferencesTest extends TestCase
             ->assertJsonPath('themeMode', 'dark')
             ->assertJsonPath('historyDays', 7);
     }
+
+    public function test_auto_timezone_defaults_on_and_accepts_iana_zones(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)->getJson('/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('autoTimezone', true);
+
+        $this->actingAs($user)->putJson('/me/preferences', ['timezone' => 'America/New_York'])
+            ->assertOk()
+            ->assertJsonPath('timezone', 'America/New_York');
+
+        $this->actingAs($user)->putJson('/me/preferences', ['timezone' => 'not a zone'])
+            ->assertStatus(422);
+    }
+
+    public function test_changing_the_timezone_retimes_local_calendars(): void
+    {
+        $user = $this->user();
+        $calendar = \App\Support\Calendar\CalendarProvisioner::personalFor($user);
+        $this->assertSame('UTC', $calendar->timezone);
+
+        $this->actingAs($user)->putJson('/me/preferences', ['timezone' => 'America/New_York'])
+            ->assertOk();
+
+        $this->assertSame('America/New_York', $calendar->fresh()->timezone);
+    }
+
+    public function test_a_manual_offset_pick_maps_to_a_real_zone(): void
+    {
+        $user = $this->user();
+        $calendar = \App\Support\Calendar\CalendarProvisioner::personalFor($user);
+
+        $this->actingAs($user)->putJson('/me/preferences', ['timezone' => 'utc-5'])
+            ->assertOk();
+
+        // POSIX Etc zones carry inverted signs: UTC-5 is Etc/GMT+5.
+        $this->assertSame('Etc/GMT+5', $calendar->fresh()->timezone);
+    }
 }

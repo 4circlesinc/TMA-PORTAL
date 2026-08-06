@@ -393,6 +393,7 @@
     'tma.autoTimezone': 'autoTimezone',
     'tma.timezone': 'timezone',
     'tma.language': 'language',
+    'tma.notify.alwaysEmail': 'notifyAlwaysEmail',
     'tma.voice': 'voice',
     'tma.sidebarStyle': 'sidebarStyle',
     'tma.themeMode': 'themeMode',
@@ -421,6 +422,7 @@
   }
   var PREF_CODECS = {
     autoTimezone: prefBoolCodec(),
+    notifyAlwaysEmail: prefBoolCodec(),
     cookieFunctional: prefBoolCodec(),
     cookieAnalytics: prefBoolCodec(),
     cookieMarketing: prefBoolCodec(),
@@ -516,6 +518,14 @@
     } catch (e) {}
   }
 
+  /* A changed language needs a full re-render through i18n.js — reload once
+     the preference has flushed to the account. */
+  function reloadForLanguage() {
+    applyLanguage();
+    try { flushPrefSync(); } catch (e) {}
+    setTimeout(function () { window.location.reload(); }, 250);
+  }
+
   /* Applying a hydrated value walks the same setters a click does, which would
      bounce it straight back to the server. Held up while we replay. */
   var prefsSuppressPush = false;
@@ -602,29 +612,19 @@
     { id: 'utc+8', label: 'UTC+8 China Standard Time' },
   ];
 
+  // Only languages with a shipped translation dictionary (i18n.js) are
+  // offered \u2014 a language that changed nothing would read as broken.
   var LANGUAGES = [
     { id: 'en', label: 'English' },
     { id: 'es', label: 'Espa\u00f1ol' },
-    { id: 'zh-hans', label: '\u4e2d\u6587(\u7b80\u4f53)' },
-    { id: 'zh-hant', label: '\u4e2d\u6587(\u7e41\u4f53)' },
     { id: 'fr', label: 'Fran\u00e7ais' },
-    { id: 'de', label: 'Deutsch' },
-    { id: 'ja', label: '\u65e5\u672c\u8a9e' },
-    { id: 'ko', label: '\ud55c\uad6d\uc5b4' },
-    { id: 'ar', label: '\u0627\u0644\u0639\u0631\u0628\u064a\u0629' },
-    { id: 'nl', label: 'Nederlands' },
-    { id: 'sv', label: 'Svenska' },
-    { id: 'no', label: 'Norsk' },
-    { id: 'da', label: 'Dansk' },
-    { id: 'fi', label: 'Suomi' },
-    { id: 'el', label: '\u0395\u03bb\u03bb\u03b7\u03bd\u03b9\u03ba\u03ac' },
+    { id: 'zh-hans', label: '\u4e2d\u6587(\u7b80\u4f53)' },
   ];
 
   var MOBILE_SELECT_TITLES = {
     timezone: 'Select time zone',
     language: 'Select language',
     voice: 'Select voice',
-    slack: 'Slack notifications',
     'toast-position': 'Toast position',
     'toast-duration': 'Display duration',
   };
@@ -633,7 +633,6 @@
     timezone: 'time',
     language: 'time',
     voice: 'time',
-    slack: 'notifications',
     'toast-position': 'notifications',
     'toast-duration': 'notifications',
   };
@@ -812,14 +811,12 @@
   }
 
   function getMobileSelectList(id) {
-    if (id === 'slack') return SLACK_STATES;
     if (id === 'toast-position') return TOAST_POSITIONS;
     if (id === 'toast-duration') return TOAST_DURATIONS;
     return getTimeSelectList(id);
   }
 
   function getMobileSelectValue(id) {
-    if (id === 'slack') return readNotificationsPrefs().slack;
     if (id === 'toast-position') return String(readToastPrefs().position);
     if (id === 'toast-duration') return String(readToastPrefs().durationSec);
     return getTimeSelectValue(readTimePrefs(), id);
@@ -1004,8 +1001,8 @@
         if (!storageKey) return;
         store.set(storageKey, value);
         closeMobileSelect(root);
-        if (id === 'slack') syncNotificationsPanelUI(root);
-        else syncTimePanelUI(root);
+        if (id === 'language') { reloadForLanguage(); return; }
+        syncTimePanelUI(root);
       });
     });
   }
@@ -1080,8 +1077,8 @@
         if (!storageKey) return;
         store.set(storageKey, value);
         closePickers(root);
-        if (id === 'slack') syncNotificationsPanelUI(root);
-        else if (id === 'history') syncPrivacyPanelUI(root);
+        if (id === 'language') { reloadForLanguage(); return; }
+        if (id === 'history') syncPrivacyPanelUI(root);
         else syncTimePanelUI(root);
       });
     });
@@ -1105,11 +1102,6 @@
 
     syncTimePanelUI(root);
   }
-
-  var SLACK_STATES = [
-    { id: 'off', label: 'Off' },
-    { id: 'on', label: 'On' },
-  ];
 
   var TOAST_POSITIONS = [
     { id: 'bottom-right', label: 'Bottom Right' },
@@ -1135,8 +1127,6 @@
   };
 
   var NOTIFY_STORAGE_KEYS = {
-    'mobile-push': 'tma.notify.mobilePush',
-    email: 'tma.notify.email',
     'always-email': 'tma.notify.alwaysEmail',
   };
 
@@ -1144,7 +1134,6 @@
     timezone: 'tma.timezone',
     language: 'tma.language',
     voice: 'tma.voice',
-    slack: 'tma.notify.slack',
     history: 'tma.privacy.historyDays',
   };
 
@@ -1205,11 +1194,36 @@
 
   function readNotificationsPrefs() {
     return {
-      mobilePush: store.get('tma.notify.mobilePush', '1') === '1',
-      email: store.get('tma.notify.email', '1') === '1',
-      alwaysEmail: store.get('tma.notify.alwaysEmail', '1') === '1',
-      slack: store.get('tma.notify.slack', 'off'),
+      alwaysEmail: store.get('tma.notify.alwaysEmail', '0') === '1',
     };
+  }
+
+  /* The per-module preference map, cached once loaded so the master switch
+     and the grid stay one source of truth. */
+  var notifPrefsCache = null;
+
+  function notifEmailMasterOn() {
+    if (!notifPrefsCache) return true;
+    return NOTIF_PREF_MODULES.some(function (m) {
+      return notifPrefsCache[m.id] && notifPrefsCache[m.id].email;
+    });
+  }
+
+  /* The master switch writes the Email column for every module in one save. */
+  function setAllEmailChannels(root, on) {
+    var body = {};
+    NOTIF_PREF_MODULES.forEach(function (m) {
+      body[m.id] = { email: on };
+      if (notifPrefsCache && notifPrefsCache[m.id]) notifPrefsCache[m.id].email = on;
+    });
+    fetch('/portal/notifications/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': csrfToken() },
+      credentials: 'same-origin',
+      body: JSON.stringify({ preferences: body }),
+    }).catch(function () {});
+    var host = root.querySelector('[data-notif-prefs]');
+    if (host && notifPrefsCache) host.innerHTML = notifPrefsGridHtml(notifPrefsCache);
   }
 
   function renderToastSettingsGroup() {
@@ -1296,7 +1310,6 @@
 
   function renderNotificationsPanel() {
     var prefs = readNotificationsPrefs();
-    var slack = findOption(SLACK_STATES, prefs.slack, 'off');
 
     return '<section class="tma-dash__settings-panel tma-dash__settings-panel--notifications" data-settings-panel="notifications" hidden data-node-id="30919:278125" data-node-id-mobile="30919:293271">' +
       '<h2 class="tma-dash__settings-section-title tma-dash__settings-notifications-section-title">Notifications</h2>' +
@@ -1304,20 +1317,10 @@
       '<div class="tma-dash__settings-notifications-group">' +
       '<p class="tma-dash__settings-notifications-group-label">Notifications</p>' +
       renderRow({
-        label: 'Mobile push notifications',
-        desc: 'Receive push notifications on your mobile app.',
-        switch: true,
-        switchChecked: prefs.mobilePush,
-        switchLabel: 'Mobile push notifications',
-        switchAttrs: 'data-settings-notify="mobile-push"',
-        chevron: false,
-      }) +
-      profileInnerDivider() +
-      renderRow({
         label: 'Email notifications',
         desc: 'Receive email updates.',
         switch: true,
-        switchChecked: prefs.email,
+        switchChecked: notifEmailMasterOn(),
         switchLabel: 'Email notifications',
         switchAttrs: 'data-settings-notify="email"',
         chevron: false,
@@ -1332,17 +1335,7 @@
         switchAttrs: 'data-settings-notify="always-email"',
         chevron: false,
       }) +
-      profileInnerDivider() +
-      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="slack">' +
-      renderRow({
-        label: 'Slack notifications',
-        desc: 'Receive notifications in your Slack workspace.',
-        action: 'pick-slack',
-        value: slack.label,
-        valueMuted: true,
-      }) +
-      renderPicker('slack', '30919:278125', SLACK_STATES, prefs.slack) +
-      '</div></div>' +
+      '</div>' +
       renderToastSettingsGroup() +
       renderNotificationPrefsGroup() +
       '</div>' +
@@ -1418,7 +1411,10 @@
         host.dataset.loading = '';
         if (!data || !data.preferences) { host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; return; }
         host.dataset.loaded = '1';
+        notifPrefsCache = data.preferences;
         host.innerHTML = notifPrefsGridHtml(data.preferences);
+        var master = root.querySelector('[data-settings-notify="email"]');
+        if (master) master.checked = notifEmailMasterOn();
       })
       .catch(function () { host.dataset.loading = ''; if (host) host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; });
   }
@@ -1442,14 +1438,12 @@
     loadNotificationPrefs(root);
     var prefs = readNotificationsPrefs();
     var toastPrefs = readToastPrefs();
-    var slack = findOption(SLACK_STATES, prefs.slack, 'off');
     var position = findOption(TOAST_POSITIONS, toastPrefs.position, 'bottom-right');
     var duration = findOption(TOAST_DURATIONS, String(toastPrefs.durationSec), '10');
 
     root.querySelectorAll('[data-settings-notify]').forEach(function (input) {
       var key = input.getAttribute('data-settings-notify');
-      if (key === 'mobile-push') input.checked = prefs.mobilePush;
-      else if (key === 'email') input.checked = prefs.email;
+      if (key === 'email') input.checked = notifEmailMasterOn();
       else if (key === 'always-email') input.checked = prefs.alwaysEmail;
     });
 
@@ -1459,12 +1453,6 @@
         input.checked = !!toastPrefs[key];
       }
     });
-
-    var slackRow = root.querySelector('[data-settings-action="pick-slack"]');
-    if (slackRow) {
-      var slackValue = slackRow.querySelector('[data-settings-row-value="pick-slack"]');
-      if (slackValue) slackValue.textContent = slack.label;
-    }
 
     var positionRow = root.querySelector('[data-settings-action="pick-toast-position"]');
     if (positionRow) {
@@ -1478,12 +1466,6 @@
     if (durationRow) {
       var durationValue = durationRow.querySelector('[data-settings-row-value="pick-toast-duration"]');
       if (durationValue) durationValue.textContent = duration.label;
-    }
-
-    var slackPicker = root.querySelector('[data-settings-picker="slack"]');
-    if (slackPicker) {
-      var listEl = slackPicker.querySelector('[data-picker-list]');
-      if (listEl) listEl.innerHTML = renderPickerList(SLACK_STATES, prefs.slack);
     }
 
     var positionPicker = root.querySelector('[data-settings-picker="toast-position"]');
@@ -1513,6 +1495,11 @@
       input.dataset.notifyBound = '1';
       input.addEventListener('change', function () {
         var key = input.getAttribute('data-settings-notify');
+        if (key === 'email') {
+          // Master switch over the per-module Email column below.
+          setAllEmailChannels(root, input.checked);
+          return;
+        }
         var storageKey = NOTIFY_STORAGE_KEYS[key];
         if (storageKey) store.set(storageKey, input.checked ? '1' : '0');
         syncNotificationsPanelUI(root);
@@ -1544,6 +1531,13 @@
         if (!input) return;
         var parts = input.getAttribute('data-notif-pref').split(':');
         saveNotificationPref(parts[0], parts[1], input.checked);
+        if (notifPrefsCache && notifPrefsCache[parts[0]]) {
+          notifPrefsCache[parts[0]][parts[1]] = input.checked;
+        }
+        // Keep the master Email switch honest as the column changes.
+        var master = panel.querySelector('[data-settings-notify="email"]') ||
+          root.querySelector('[data-settings-notify="email"]');
+        if (master) master.checked = notifEmailMasterOn();
       });
     }
 

@@ -389,6 +389,8 @@ class SignatureRequestController extends Controller
                 'subject' => $signatureRequest,
                 'action_url' => '/signatures',
                 'dedupe_key' => 'signature:'.$signatureRequest->id.':'.$user->id,
+                // Sender.php mails every recipient their signing link already.
+                'email' => false,
             ]);
         }
     }

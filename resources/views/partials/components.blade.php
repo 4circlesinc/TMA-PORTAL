@@ -41,6 +41,7 @@
 <script src="{{ asset('js/table-filter-sort.js') }}" defer></script>
 <script src="{{ asset('js/global-search.js') }}" defer></script>
 <script src="{{ asset('js/toast-icons.js') }}" defer></script>
+<script src="{{ asset('js/i18n.js') }}" defer></script>
 <script src="{{ asset('js/toast.js') }}" defer></script>
 <script src="{{ asset('js/sync-toasts.js') }}" defer></script>
 <script src="{{ asset('js/date-picker-icons.js') }}" defer></script>

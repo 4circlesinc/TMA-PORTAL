@@ -6,9 +6,12 @@ use App\Events\PortalNotificationCreated;
 use App\Models\Client;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\UserPresence;
+use App\Support\Mail\Postcards;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * The single entry point for raising a portal notification (§13, §23).
@@ -172,7 +175,59 @@ final class Notifier
 
         self::broadcast($notification);
 
+        // 'email' => false opts a send out of the email channel — for flows
+        // that already deliver their own, richer email (approval, invites),
+        // where a second "you were approved" mail would read as a duplicate.
+        if (($attrs['email'] ?? true) !== false) {
+            self::email($recipient, $notification);
+        }
+
         return $notification;
+    }
+
+    /**
+     * The email twin of a fresh notification, for modules whose email channel
+     * is on. Skipped while the person is actively using the portal — the bell
+     * already has it — unless they chose "always send email". Only fresh rows
+     * email: a dedupe refresh never re-sends. Queued, so a mail hiccup can
+     * never fail the action that raised the notification.
+     */
+    private static function email(User $recipient, Notification $notification): void
+    {
+        if (! $recipient->email) {
+            return;
+        }
+
+        if (! NotificationPreferences::channelEnabled($recipient, $notification->type, 'email')) {
+            return;
+        }
+
+        $always = (bool) data_get($recipient->preferences, 'notifyAlwaysEmail', false);
+        if (! $always && self::isActivelyOnline($recipient)) {
+            return;
+        }
+
+        try {
+            Mail::to($recipient->email)->queue(Postcards::notification(
+                $notification->title,
+                $notification->message,
+                $notification->action_url,
+                $notification->action_label,
+                $recipient->first_name ?: $recipient->name,
+                (string) $notification->module,
+            ));
+        } catch (\Throwable $e) {
+            Log::warning('Notifier.email failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private static function isActivelyOnline(User $user): bool
+    {
+        try {
+            return UserPresence::query()->where('user_id', $user->id)->first()?->isOnline() ?? false;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

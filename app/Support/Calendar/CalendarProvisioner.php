@@ -95,8 +95,16 @@ class CalendarProvisioner
             $tz = $n === 0 ? 'Etc/GMT' : 'Etc/GMT'.($m[1] === '-' ? '+' : '-').$n;
         }
 
-        if (is_string($tz) && in_array($tz, timezone_identifiers_list(), true)) {
-            return $tz;
+        // Constructing the zone is the real test — the default identifier
+        // list excludes the Etc/GMT± zones the offset mapping produces.
+        if (is_string($tz) && $tz !== '') {
+            try {
+                new \DateTimeZone($tz);
+
+                return $tz;
+            } catch (\Exception) {
+                // fall through to the app default
+            }
         }
 
         return config('app.timezone') ?: 'UTC';

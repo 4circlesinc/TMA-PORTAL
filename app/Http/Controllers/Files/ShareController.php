@@ -162,6 +162,8 @@ class ShareController extends BaseFilesController
                 'subject' => $item,
                 'action_url' => '/portal/files',
                 'dedupe_key' => 'share:'.$type.':'.$item->id.':'.$target->id,
+                // The fileShared postcard below is the email for this moment.
+                'email' => false,
             ]);
             Mail::to($target->email)->queue(
                 Postcards::fileShared($user->name, $item->name, $type === 'folder', url('/portal/files'))

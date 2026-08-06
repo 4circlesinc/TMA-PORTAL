@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Calendar;
 use App\Models\User;
+use App\Support\Calendar\CalendarProvisioner;
 use App\Support\Notifications\ToastSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +24,9 @@ class PreferencesController extends Controller
         'language' => 'en',
         'voice' => 'en-us',
         'sidebarStyle' => 'hover',
+        // Email notifications even while actively using the portal — off means
+        // "don't email me what the bell already showed me".
+        'notifyAlwaysEmail' => false,
         // Theme panel. These used to live only in localStorage, so the look
         // reset on every new browser — they follow the account now.
         'themeMode' => 'system',
@@ -64,6 +69,7 @@ class PreferencesController extends Controller
         'language' => ['string', 'max:16', 'regex:/^[a-z]{2}(-[a-z]{2,7})?$/i'],
         'voice' => ['string', 'max:32'],
         'sidebarStyle' => ['string', 'in:standard,hover'],
+        'notifyAlwaysEmail' => ['boolean'],
         'themeMode' => ['string', 'in:system,light,dark'],
         'fontScale' => ['integer', 'between:1,5'],
         'accentColor' => ['string', 'in:indigo,yellow,red,blue,orange,green'],
@@ -164,7 +170,7 @@ class PreferencesController extends Controller
         $user = $request->user();
         $current = $user->preferences ?? [];
         $booleans = [
-            'autoTimezone', 'calendarSidebarOpen',
+            'autoTimezone', 'calendarSidebarOpen', 'notifyAlwaysEmail',
             'cookieFunctional', 'cookieAnalytics', 'cookieMarketing',
         ];
         foreach ($data as $key => $value) {
@@ -207,6 +213,16 @@ class PreferencesController extends Controller
 
         if (isset($data['toasts']) && is_array($data['toasts'])) {
             ToastSettings::update($user, $data['toasts']);
+        }
+
+        // A changed time zone re-times the person's own local calendars, so
+        // the setting is visible immediately — provider-synced calendars keep
+        // the zone the provider reports.
+        if (array_key_exists('timezone', $data)) {
+            Calendar::query()
+                ->where('owner_id', $user->id)
+                ->where('source', Calendar::SOURCE_LOCAL)
+                ->update(['timezone' => CalendarProvisioner::defaultTimezone($user->fresh())]);
         }
 
         return response()->json($this->payload($user->fresh()));

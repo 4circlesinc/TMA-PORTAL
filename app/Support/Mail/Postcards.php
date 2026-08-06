@@ -582,4 +582,26 @@ class Postcards
 
         return $payload;
     }
+
+    /**
+     * The email twin of a portal notification, for accounts that switched the
+     * email channel on for that module. Kept deliberately spare: the subject
+     * and body ARE the notification; the button deep-links to whatever the
+     * bell entry would open.
+     */
+    public static function notification(string $title, ?string $message, ?string $actionUrl, ?string $actionLabel, ?string $name, string $module): Postcard
+    {
+        $url = $actionUrl
+            ? (str_starts_with($actionUrl, 'http') ? $actionUrl : rtrim(config('app.url'), '/').$actionUrl)
+            : null;
+
+        return new Postcard($title, array_filter([
+            'preheader' => $message ?: $title,
+            'eyebrow' => ucfirst($module ?: 'notification'),
+            'greeting' => $name ? "Hi {$name}," : 'Hello,',
+            'title' => $title,
+            'bodyHtml' => $message ? '<p>'.e($message).'</p>' : null,
+            'button' => $url ? ['label' => $actionLabel ?: 'Open the portal', 'url' => $url] : null,
+        ]));
+    }
 }

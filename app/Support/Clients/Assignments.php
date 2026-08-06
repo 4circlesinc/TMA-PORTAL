@@ -183,6 +183,8 @@ final class Assignments
             'subject' => $client,
             'client' => $client,
             'action_url' => '/clients?client='.$client->uid,
+            // emailStaff() sends the assignment postcard separately.
+            'email' => false,
         ]);
 
         self::emailStaff($client, $assignment, $by);
@@ -273,6 +275,8 @@ final class Assignments
             'subject' => $client,
             'client' => $client,
             'action_url' => '/social/messages',
+            // The clientStaffAssigned postcard below is the email.
+            'email' => false,
         ]);
 
         if ($account->email) {
