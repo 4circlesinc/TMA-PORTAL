@@ -16,6 +16,7 @@ const badge = require('./badge');
 const taskbarPin = require('./taskbar-pin');
 const notifications = require('./notifications');
 const splash = require('./splash');
+const handoff = require('./signin-handoff');
 const assetCache = require('./asset-cache');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
@@ -406,6 +407,27 @@ const base64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\
 
 let pendingVerifier = null;
 
+/*
+ * The verifier also goes to disk, because it has to outlive the process that
+ * created it — see signin-handoff.js for the Windows cold start that made a
+ * successful sign-in look like being dumped back on the login page.
+ */
+const verifierDir = () => app.getPath('userData');
+
+function rememberVerifier(verifier) {
+  pendingVerifier = verifier;
+  handoff.remember(verifierDir(), verifier);
+}
+
+function storedVerifier() {
+  return pendingVerifier || handoff.stored(verifierDir());
+}
+
+function forgetVerifier() {
+  pendingVerifier = null;
+  handoff.forget(verifierDir());
+}
+
 function isSocialRedirect(url) {
   try {
     const parsed = new URL(url);
@@ -439,7 +461,7 @@ function signInProviderFor(url, currentUrl) {
 function startBrowserSignIn(provider) {
   const verifier = base64url(crypto.randomBytes(32));
   const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
-  pendingVerifier = verifier;
+  rememberVerifier(verifier);
 
   const url = new URL('/auth/desktop/start', PORTAL_ORIGIN);
   url.searchParams.set('challenge', challenge);
@@ -456,12 +478,33 @@ function claimBrowserSession(deepLink) {
     return;
   }
 
-  if (!token || !pendingVerifier || !mainWindow) return;
+  if (!token) return;
+
+  const verifier = storedVerifier();
+
+  // A hand-off we cannot complete must say so. Silently returning here is what
+  // made this look like "signing in just puts me back on the login page": the
+  // browser leg succeeded every time, so the server recorded a login, and the
+  // app gave no hint that the last step never happened.
+  if (!verifier) {
+    if (mainWindow) revealWindow({ steal: true });
+    dialog.showMessageBox(mainWindow ?? undefined, {
+      type: 'warning',
+      title: 'Sign-in could not be completed',
+      message: 'That sign-in could not be completed.',
+      detail: 'Start signing in from this window rather than from the browser, and finish in the tab it opens.',
+      buttons: ['OK'],
+    });
+
+    return;
+  }
+
+  if (!mainWindow) return;
 
   const url = new URL('/auth/desktop/claim', PORTAL_ORIGIN);
   url.searchParams.set('token', token);
-  url.searchParams.set('verifier', pendingVerifier);
-  pendingVerifier = null;
+  url.searchParams.set('verifier', verifier);
+  forgetVerifier();
 
   revealWindow({ steal: true });
   loadPortal(mainWindow, url.toString());
