@@ -139,8 +139,27 @@ class SocialAuthController extends Controller
     {
         abort_unless(in_array($provider, self::PROVIDERS, true), 404);
 
+        // A provider that turns someone away reports it here rather than by
+        // throwing, and the reason is the only thing separating "I changed my
+        // mind" from "this tenant will not allow it without an administrator".
+        // Discarding it — as this did — leaves the person on the sign-in screen
+        // being told they cancelled something they did not, with nothing in the
+        // log to contradict them, so the only move left is to try again and be
+        // refused identically. Entra refuses this way for a whole class of
+        // policy reasons, none of which the user can fix by retrying.
         if ($request->has('error')) {
-            return $this->fail($request, 'Connection cancelled - nothing was changed.');
+            $error = (string) $request->query('error');
+            $description = (string) $request->query('error_description');
+
+            Log::warning('Social sign-in refused by provider', [
+                'provider' => $provider,
+                'host' => $request->getHost(),
+                'error' => $error,
+                'error_subcode' => (string) $request->query('error_subcode'),
+                'error_description' => Str::limit($description, 500, ''),
+            ]);
+
+            return $this->fail($request, $this->refusalMessage($provider, $error, $description));
         }
 
         try {
@@ -476,6 +495,43 @@ class SocialAuthController extends Controller
         $route = $return === 'getting-started' ? 'getting-started' : 'security-settings';
 
         return redirect()->route($route)->with($ok ? 'status' : 'social_error', $ok ? 'social-connected' : $message);
+    }
+
+    /**
+     * What to tell someone a provider turned away.
+     *
+     * "Cancelled" is only true when they cancelled. A Microsoft 365 tenant that
+     * restricts which apps its people may consent to refuses with the same
+     * shape, and so does a blocked or conditional-access-gated account — and in
+     * every one of those cases the fix belongs to their administrator, not to
+     * them. Telling that person they cancelled sends them round the same loop
+     * indefinitely, because retrying is precisely what cannot work.
+     *
+     * The AADSTS codes arrive inside error_description, not as their own field.
+     */
+    private function refusalMessage(string $provider, string $error, string $description): string
+    {
+        $name = ucfirst($provider);
+
+        // 65001: no consent recorded for this app. 90094 / 900941: the grant
+        // needs an administrator. 53000-53004: conditional access / device
+        // compliance. All are "an administrator has to act", not "try again".
+        $needsAdmin = $error === 'consent_required'
+            || $error === 'admin_consent_required'
+            || (bool) preg_match('/AADSTS(65001|90094|900941|530\d{2})/', $description);
+
+        if ($needsAdmin) {
+            return 'Your Microsoft administrator needs to approve the portal before you can sign in this way.';
+        }
+
+        // A genuine "no" from the person in front of the consent screen.
+        if ($error === 'access_denied' && ! preg_match('/AADSTS/', $description)) {
+            return $name.' sign-in was cancelled - nothing was changed.';
+        }
+
+        // Anything else is a policy or configuration refusal we have not named.
+        // Say it is not their doing, and leave the detail to the log.
+        return $name." sign-in was refused. Ask an administrator to check the portal's ".$name.' access.';
     }
 
     private function fail(Request $request, string $message): RedirectResponse
