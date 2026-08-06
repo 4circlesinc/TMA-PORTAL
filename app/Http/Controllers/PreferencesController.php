@@ -15,7 +15,9 @@ class PreferencesController extends Controller
      * can't stuff arbitrary data into the column.
      */
     private const DEFAULTS = [
-        'autoTimezone' => false,
+        // Auto by default: the client detects the device's IANA zone and
+        // stores it in `timezone`, which the calendar reads for new users.
+        'autoTimezone' => true,
         'timezone' => 'utc+0',
         'language' => 'en',
         'voice' => 'en-us',
@@ -54,7 +56,11 @@ class PreferencesController extends Controller
 
     private const RULES = [
         'autoTimezone' => ['boolean'],
-        'timezone' => ['string', 'max:32', 'regex:/^utc[+-]\d{1,2}$/'],
+        // Legacy utc±N picker ids, or a real IANA name ("America/New_York")
+        // from auto-detection — only IANA values are honoured downstream
+        // (CalendarProvisioner::defaultTimezone re-validates against PHP's
+        // timezone list).
+        'timezone' => ['string', 'max:64', 'regex:#^(utc[+-]\d{1,2}|[A-Za-z][A-Za-z_]*(/[A-Za-z0-9_+\-]+){1,2})$#'],
         'language' => ['string', 'max:16', 'regex:/^[a-z]{2}(-[a-z]{2,7})?$/i'],
         'voice' => ['string', 'max:32'],
         'sidebarStyle' => ['string', 'in:standard,hover'],

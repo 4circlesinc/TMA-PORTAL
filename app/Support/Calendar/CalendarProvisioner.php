@@ -87,6 +87,14 @@ class CalendarProvisioner
         $prefs = $user->preferences ?? [];
         $tz = data_get($prefs, 'calendar.timezone') ?? data_get($prefs, 'timezone');
 
+        // The settings picker's manual ids are utc±N offsets; PHP's Etc/GMT
+        // zones express the same thing (with POSIX's inverted sign), so a
+        // manual pick counts too — not only the auto-detected IANA name.
+        if (is_string($tz) && preg_match('/^utc([+-])(\d{1,2})$/i', $tz, $m)) {
+            $n = (int) $m[2];
+            $tz = $n === 0 ? 'Etc/GMT' : 'Etc/GMT'.($m[1] === '-' ? '+' : '-').$n;
+        }
+
         if (is_string($tz) && in_array($tz, timezone_identifiers_list(), true)) {
             return $tz;
         }

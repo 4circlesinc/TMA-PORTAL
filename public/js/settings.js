@@ -573,6 +573,10 @@
       }
       // Panels only exist when Settings is on screen.
       syncSyncedPanels(root);
+      // After hydration, so the server's autoTimezone answer is respected —
+      // this pushes the device's real zone up when auto is on, from any
+      // shell, without the user ever opening Settings.
+      applyAutoTimezone();
     }).catch(function () {});
   }
 
@@ -665,11 +669,44 @@
 
   function readTimePrefs() {
     return {
-      autoTimezone: store.get('tma.autoTimezone', '0') === '1',
+      autoTimezone: store.get('tma.autoTimezone', '1') === '1',
       timezone: store.get('tma.timezone', 'utc+0'),
-      language: store.get('tma.language', 'zh-hans'),
+      language: store.get('tma.language', 'en'),
       voice: store.get('tma.voice', 'en-us'),
     };
+  }
+
+  function detectedTimezone() {
+    try {
+      var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return tz && tz.indexOf('/') !== -1 ? tz : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function timezoneDisplayLabel(prefs) {
+    if (prefs.autoTimezone) {
+      var detected = detectedTimezone();
+      if (detected) return 'Automatic — ' + detected.replace(/_/g, ' ');
+    }
+    for (var i = 0; i < TIMEZONES.length; i++) {
+      if (TIMEZONES[i].id === prefs.timezone) return TIMEZONES[i].label;
+    }
+    return prefs.timezone && prefs.timezone.indexOf('/') !== -1
+      ? prefs.timezone.replace(/_/g, ' ')
+      : 'UTC+0 Greenwich Mean Time';
+  }
+
+  /* With auto on, the device's zone IS the setting: store the real IANA name
+     so the server side (calendar, reminders) uses it. The utc±N picker ids
+     never matched a real zone, so everything silently fell back to UTC. */
+  function applyAutoTimezone() {
+    if (store.get('tma.autoTimezone', '1') !== '1') return;
+    var detected = detectedTimezone();
+    if (detected && store.get('tma.timezone', '') !== detected) {
+      store.set('tma.timezone', detected);
+    }
   }
 
   function renderPickerList(items, selectedId) {
@@ -709,7 +746,6 @@
 
   function renderTimePanel() {
     var prefs = readTimePrefs();
-    var timezone = findOption(TIMEZONES, prefs.timezone, 'utc+0');
 
     return '<section class="tma-dash__settings-panel tma-dash__settings-panel--time" data-settings-panel="time" hidden data-node-id="30919:278124" data-node-id-mobile="30919:293272">' +
       '<h2 class="tma-dash__settings-section-title tma-dash__settings-time-section-title">Time and language</h2>' +
@@ -733,7 +769,7 @@
         label: 'Time Zone',
         desc: 'Current time zone setting.',
         action: 'pick-timezone',
-        value: timezone.label,
+        value: timezoneDisplayLabel(prefs),
         valueMuted: true,
         disabled: prefs.autoTimezone,
       }) +
@@ -758,16 +794,6 @@
         value: '',
       }) +
       renderPicker('language', '30919:278186', LANGUAGES, prefs.language) +
-      '</div>' +
-      profileInnerDivider() +
-      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="voice">' +
-      renderRow({
-        label: 'Voice',
-        desc: 'Speech language, speech recognition, sound.',
-        action: 'pick-voice',
-        value: '',
-      }) +
-      renderPicker('voice', '30919:278186', VOICES, prefs.voice) +
       '</div></div></div>' +
       renderMobileSelectOverlay() +
       '</section>';
@@ -925,13 +951,11 @@
 
   function syncTimePanelUI(root) {
     var prefs = readTimePrefs();
-    var timezone = findOption(TIMEZONES, prefs.timezone, 'utc+0');
-
     root.querySelectorAll('[data-settings-action="pick-timezone"]').forEach(function (tzRow) {
       tzRow.disabled = prefs.autoTimezone;
       tzRow.classList.toggle('tma-dash__settings-row--disabled', prefs.autoTimezone);
       var tzValue = tzRow.querySelector('[data-settings-row-value="pick-timezone"]');
-      if (tzValue) tzValue.textContent = timezone.label;
+      if (tzValue) tzValue.textContent = timezoneDisplayLabel(prefs);
     });
 
     var autoToggle = root.querySelector('[data-settings-auto-timezone]');
@@ -987,11 +1011,14 @@
   }
 
   function bindTimePanel(root) {
+    applyAutoTimezone();
+
     var autoToggle = root.querySelector('[data-settings-auto-timezone]');
     if (autoToggle && !autoToggle.dataset.bound) {
       autoToggle.dataset.bound = '1';
       autoToggle.addEventListener('change', function () {
         store.set('tma.autoTimezone', autoToggle.checked ? '1' : '0');
+        if (autoToggle.checked) applyAutoTimezone();
         syncTimePanelUI(root);
         if (autoToggle.checked) closePickers(root);
       });
