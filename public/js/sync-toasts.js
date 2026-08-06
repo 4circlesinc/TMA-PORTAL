@@ -155,6 +155,22 @@
     }
   }
 
+  /*
+   * The card is only removed by a 'done' payload, so anything that ends the
+   * poll loop early — the lifetime cap, a failed request, a service that stops
+   * being reported — used to leave it pinned on screen for the rest of the
+   * session with no way back except a reload. Whenever polling stops, retire
+   * whatever is still showing: the Files and Mail pages own the real status.
+   */
+  function retireAll() {
+    Object.keys(cards).forEach(function (key) {
+      var card = cards[key];
+      if (card && card.el && !card.doneTimer) {
+        card.doneTimer = setTimeout(function () { dismiss(key); }, DONE_LINGER_MS);
+      }
+    });
+  }
+
   function anySyncing(data) {
     return ['email', 'calendar', 'onedrive'].some(function (key) {
       return data[key] && data[key].state === 'syncing';
@@ -177,10 +193,12 @@
         timer = setTimeout(poll, POLL_MS);
       } else {
         timer = null;
+        retireAll();
       }
     }).catch(function () {
       // Signed out, offline, or the endpoint is unavailable — stop quietly.
       timer = null;
+      retireAll();
     });
   }
 

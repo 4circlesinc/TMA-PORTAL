@@ -40,7 +40,7 @@ class Synchroniser
     private const MAX_PAGES = 50;
 
     /** How long a run may hold the lock before another may take over. */
-    private const LOCK_MINUTES = 30;
+    public const LOCK_MINUTES = 30;
 
     /**
      * This connection's mappings, keyed by Graph item id.

@@ -6,6 +6,7 @@ use App\Models\Calendar;
 use App\Models\MailMessage;
 use App\Models\SharePointConnection;
 use App\Support\Mail\Mailbox;
+use App\Support\SharePoint\Synchroniser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -26,10 +27,28 @@ class MeSyncStatusController extends Controller
         $user = $request->user();
 
         return response()->json([
-            'email' => $this->email($user),
-            'calendar' => $this->calendar($user),
-            'onedrive' => $this->onedrive($user),
+            'email' => $this->guard(fn () => $this->email($user)),
+            'calendar' => $this->guard(fn () => $this->calendar($user)),
+            'onedrive' => $this->guard(fn () => $this->onedrive($user)),
         ]);
+    }
+
+    /*
+     * A status poll must never be the thing that breaks. A stored token whose
+     * ciphertext no longer matches APP_KEY throws on read, and one throw here
+     * used to 500 the whole endpoint — which killed the poll loop and left the
+     * sync toast frozen on screen for the rest of the session. Report the
+     * service as unhealthy and let the other two answer.
+     */
+    private function guard(callable $probe): array
+    {
+        try {
+            return $probe();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['state' => 'error'];
+        }
     }
 
     private function email($user): array
@@ -132,8 +151,21 @@ class MeSyncStatusController extends Controller
             return ['state' => 'error', 'synced' => $synced];
         }
 
+        /*
+         * `syncing` is a lock, not a fact. A run that is killed mid-pass (worker
+         * restart, deploy, no worker at all) never reaches its final update and
+         * leaves the flag set for ever — which pinned a "Syncing OneDrive…"
+         * toast on screen all night with 1,103 of 1,103 items already imported.
+         * The synchroniser already treats a lock older than LOCK_MINUTES as
+         * abandoned; the status has to read it the same way or the UI keeps
+         * reporting a run that no longer exists.
+         */
+        $running = $connection->status === SharePointConnection::STATUS_SYNCING
+            && $connection->last_synced_at
+            && $connection->last_synced_at->gt(now()->subMinutes(Synchroniser::LOCK_MINUTES));
+
         // No delta cursor yet = the initial walk has not finished.
-        if ($connection->delta_link === null || $connection->status === SharePointConnection::STATUS_SYNCING) {
+        if ($connection->delta_link === null || $running) {
             return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
         }
 

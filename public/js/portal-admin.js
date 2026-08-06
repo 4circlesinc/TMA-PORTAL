@@ -76,6 +76,11 @@
     ] },
   ];
 
+  /* Every group in the rail starts open. The sections inside them are what the
+     page is for, and leaving them shut hid most of Settings behind a caret.
+     Collapsing still works — it just isn't where a reader starts. */
+  NAV.forEach(function (n) { if (n.group) state.expanded[n.group] = true; });
+
   function groupForPage(pageId) {
     var found = null;
     NAV.forEach(function (n) {
