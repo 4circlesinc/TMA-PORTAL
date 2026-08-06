@@ -184,8 +184,9 @@
   }
 
   function getAccentColor() {
-    var color = store.get('tma.accentColor', 'indigo');
-    return ACCENT_COLORS[color] ? color : 'indigo';
+    // The accent picker was removed from Theme settings — everyone gets the
+    // TMA brand blue. Stored values from before the removal are ignored.
+    return 'indigo';
   }
 
   function getSidebarStyle() {

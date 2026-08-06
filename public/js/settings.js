@@ -222,15 +222,6 @@
     { id: 'dark', label: 'Dark', preview: 'dark' },
   ];
 
-  var ACCENT_SWATCHES = [
-    { id: 'indigo', color: 'var(--color-indigo)' },
-    { id: 'yellow', color: 'var(--color-yellow)' },
-    { id: 'red', color: 'var(--color-red)' },
-    { id: 'blue', color: 'var(--color-blue)' },
-    { id: 'orange', color: 'var(--color-orange)' },
-    { id: 'green', color: 'var(--color-green)' },
-  ];
-
   var SIDEBAR_STYLES = [
     {
       id: 'standard',
@@ -309,16 +300,6 @@
       '</div></div>' +
       '<hr class="tma-dash__settings-divider tma-dash__settings-theme-divider">' +
       '<div class="tma-dash__settings-theme-group">' +
-      '<h2 class="tma-dash__settings-section-title tma-dash__settings-theme-section-title">Color</h2>' +
-      '<p class="tma-dash__settings-theme-group-label">Color</p>' +
-      '<div class="tma-dash__settings-color-row" role="radiogroup" aria-label="Accent color">' +
-      ACCENT_SWATCHES.map(function (swatch) {
-        return '<button type="button" class="tma-dash__settings-color-swatch" data-accent-color="' + esc(swatch.id) + '" style="--settings-swatch:' + swatch.color + '" aria-pressed="false" aria-label="' + esc(swatch.id) + '">' +
-          '<img src="' + ICON + 'Check.svg" alt="" width="28" height="28"></button>';
-      }).join('') +
-      '</div></div>' +
-      '<hr class="tma-dash__settings-divider tma-dash__settings-theme-divider">' +
-      '<div class="tma-dash__settings-theme-group">' +
       '<h2 class="tma-dash__settings-section-title tma-dash__settings-theme-section-title">Sidebar style</h2>' +
       '<p class="tma-dash__settings-theme-group-label">Sidebar style</p>' +
       '<div class="tma-dash__settings-theme-options tma-dash__settings-sidebar-style-options" role="radiogroup" aria-label="Sidebar style">' +
@@ -348,11 +329,6 @@
       btn.classList.toggle('is-active', on);
       btn.setAttribute('aria-checked', String(on));
     });
-    root.querySelectorAll('[data-accent-color]').forEach(function (btn) {
-      var on = btn.getAttribute('data-accent-color') === prefs.accentColor;
-      btn.classList.toggle('is-active', on);
-      btn.setAttribute('aria-pressed', String(on));
-    });
     root.querySelectorAll('[data-sidebar-style]').forEach(function (btn) {
       var on = btn.getAttribute('data-sidebar-style') === (prefs.sidebarStyle || 'hover');
       btn.classList.toggle('is-active', on);
@@ -379,17 +355,6 @@
         var scale = parseInt(btn.getAttribute('data-font-scale'), 10);
         var api = getPrefsApi();
         if (api && api.setFontScale) api.setFontScale(scale);
-        syncThemePanelUI(root);
-      });
-    });
-
-    root.querySelectorAll('[data-accent-color]').forEach(function (btn) {
-      if (btn.dataset.accentBound) return;
-      btn.dataset.accentBound = '1';
-      btn.addEventListener('click', function () {
-        var colorId = btn.getAttribute('data-accent-color');
-        var api = getPrefsApi();
-        if (api && api.setAccentColor) api.setAccentColor(colorId);
         syncThemePanelUI(root);
       });
     });
@@ -432,7 +397,6 @@
     'tma.sidebarStyle': 'sidebarStyle',
     'tma.themeMode': 'themeMode',
     'tma.fontScale': 'fontScale',
-    'tma.accentColor': 'accentColor',
     'tma.privacy.cookie.functional': 'cookieFunctional',
     'tma.privacy.cookie.analytics': 'cookieAnalytics',
     'tma.privacy.cookie.marketing': 'cookieMarketing',
@@ -570,7 +534,6 @@
     withoutPrefPush(function () {
       if (p.themeMode && api.setThemeMode) api.setThemeMode(p.themeMode);
       if (p.fontScale && api.setFontScale) api.setFontScale(p.fontScale);
-      if (p.accentColor && api.setAccentColor) api.setAccentColor(p.accentColor);
       if (p.sidebarStyle && api.setSidebarStyle) api.setSidebarStyle(p.sidebarStyle);
     });
   }
