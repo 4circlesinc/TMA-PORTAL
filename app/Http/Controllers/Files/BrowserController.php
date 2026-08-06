@@ -200,12 +200,18 @@ class BrowserController extends BaseFilesController
             $ids = FileAccess::sharedFileIds($user);
             $q->where(fn ($w) => $w->where('owner_id', $user->id)->orWhereIn('id', $ids ?: [0]));
         })->when(FileAccess::isAdmin($user), function ($q) use ($user) {
-            // Mirror of the folder rule: unfiled root files of a root-mirrored
-            // OneDrive are that person's drive contents.
+            // Mirror of the folder rule, at ANY depth — Recent and search list
+            // nested files, so "top level only" here leaked the inside of
+            // people's drives. A hidden owner's file is personal space when it
+            // is unfiled or inside a personal (user-type) folder; only an
+            // explicit share overrides that.
             $hidden = array_values(array_diff(FileAccess::personalRootOwnerIds(), [$user->id]));
             if ($hidden !== []) {
-                $q->whereNot(fn ($w) => $w->whereNull('folder_id')
-                    ->whereIn('owner_id', $hidden)
+                $q->whereNot(fn ($w) => $w->whereIn('owner_id', $hidden)
+                    ->where(fn ($p) => $p->whereNull('folder_id')
+                        ->orWhereIn('folder_id', Folder::query()->select('id')
+                            ->where('folder_type', Folder::TYPE_USER)
+                            ->whereIn('owner_id', $hidden)))
                     ->whereNotIn('id', FileAccess::sharedFileIds($user) ?: [0]));
             }
         });
