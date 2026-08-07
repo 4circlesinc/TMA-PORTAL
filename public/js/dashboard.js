@@ -29,11 +29,11 @@
     'calendar',
     'signatures',
     'folders',
+    'cbi',
   ];
   var APPROVED_PAGES_NAV = [
     'users',
     'templates',
-    'cbi',
     'projects',
     'workflows',
     'people',
