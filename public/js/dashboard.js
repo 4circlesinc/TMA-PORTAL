@@ -23,13 +23,13 @@
     'dash-dashboard',
     'dash-project-overview',
     'clients',
+    'cbi',
     'email',
     'so-messages',
     'so-feed',
     'calendar',
     'signatures',
     'folders',
-    'cbi',
   ];
   var APPROVED_PAGES_NAV = [
     'users',
