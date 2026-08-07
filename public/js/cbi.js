@@ -77,7 +77,7 @@
   }
 
   var STAGES = [
-    { key: '', label: 'All' },
+    { key: 'all', label: 'All' },
     { key: 'applications', label: 'Applications' },
     { key: 'assessment', label: 'Assessment' },
     { key: 'tracker', label: 'Tracker' },
@@ -279,7 +279,11 @@
     var unhealthy = !!(s && s.sync && (s.sync.sheetsWithErrors > 0 || !s.sync.configured));
     var actions =
       ui().btn({
-        label: 'Sync', icon: 'ArrowsClockwise', variant: 'ghost', small: true,
+        label: 'Sync now', icon: 'ArrowsClockwise', variant: 'ghost', small: true,
+        attrs: ' data-cbi-action="sync-now" title="Check Smartsheet for changes now"',
+      }) +
+      ui().btn({
+        label: 'Sync status', icon: 'Info', variant: 'ghost', small: true,
         attrs: ' data-cbi-action="sync-status" title="' + esc(syncLine()) + '"',
       });
     return '<div class="tma-portal-head"><div>' +
@@ -292,10 +296,12 @@
     var counts = (state.summary && state.summary.stages) || {};
     var total = state.summary ? state.summary.total : null;
     var items = STAGES.map(function (s) {
-      var n = s.key === '' ? total : counts[s.key];
+      var n = s.key === 'all' ? total : counts[s.key];
       return { key: s.key, label: s.label + (n != null ? '  ' + num(n) : '') };
     });
-    return ui().tabs(items, state.filters.stage);
+    // 'all' rather than '': tab-group.js turns an empty key into null and
+    // wireTabs drops null, which made the All tab a no-op.
+    return ui().tabs(items, state.filters.stage || 'all');
   }
 
   /* Flat documented toolbar icon button (Users-table recipe). */
@@ -371,8 +377,8 @@
 
     var rows = l.items.map(function (a) {
       return '<tr data-cbi-open="' + esc(a.uuid) + '" data-id="' + esc(a.uuid) + '">' +
-        '<td><span class="cbi-name">' + esc(a.applicantName || 'Unnamed applicant') + '</span>' +
-          (a.applicantNumber ? '<span class="tma-portal-table__muted cbi-sub">' + esc(a.applicantNumber) + '</span>' : '') + '</td>' +
+        '<td data-cbi-name>' + esc(a.applicantName || 'Unnamed applicant') +
+          (a.applicantNumber ? '<div class="tma-portal-table__muted">' + esc(a.applicantNumber) + '</div>' : '') + '</td>' +
         (showStage ? '<td class="tma-portal-table__muted">' + esc(STAGE_LABELS[a.stage] || a.stage || '—') + '</td>' : '') +
         '<td>' + statusCell(a.status) + (a.needsReview ? ' ' + reviewChip() : '') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.referredBy || '—') + '</td>' +
@@ -420,7 +426,12 @@
   }
 
   function renderList() {
-    return renderHead() + renderTabs() + renderToolbar() + renderFilterChips() +
+    // The tab group is wrapped: PortalTabGroup stamps data-tab-group-init on
+    // the live node, so its role signature never matches the freshly rendered
+    // one and morph rebuilds it. Contained in a plain wrapper, that rebuild
+    // stops there instead of taking the toolbar (and search focus) with it.
+    return renderHead() + '<div class="cbi-tabs">' + renderTabs() + '</div>' +
+      renderToolbar() + renderFilterChips() +
       '<div data-cbi-body>' + renderRows() + '</div>';
   }
 
@@ -510,6 +521,15 @@
     el.style.top = Math.round(top) + 'px';
   }
 
+  /* The view is live when its element is still in the document and, in the
+     SPA shell, its .tma-dash__view is not hidden. The standalone /dev/cbi
+     shell has no such ancestor, which the `!view` arm allows for. */
+  function live() {
+    if (!state.el || !state.el.isConnected) return false;
+    var view = state.el.closest ? state.el.closest('.tma-dash__view') : null;
+    return !view || !view.hidden;
+  }
+
   function closePopovers(keep) {
     if (!pop) return;
     [pop.fields, pop.values, pop.sort].forEach(function (el) {
@@ -536,6 +556,8 @@
 
   function wirePopovers() {
     pop.host.addEventListener('click', function (e) {
+      // A popover that outlived its view must not drive a hidden page.
+      if (!live()) { closePopovers(); return; }
       var field = e.target.closest('[data-cbi-field]');
       if (field) {
         e.preventDefault();
@@ -569,6 +591,7 @@
 
     document.addEventListener('click', function (e) {
       if (!pop || !pop.host.isConnected) return;
+      if (!live()) { closePopovers(); return; }
       if (e.target.closest('.cbi-popover') ||
           e.target.closest('[data-cbi-filter-trigger]') ||
           e.target.closest('[data-cbi-sort-trigger]')) return;
@@ -591,32 +614,33 @@
    * facts do not belong in filled form cards, which is what made the first
    * pass read as boxes-inside-boxes.
    */
-  function listRow(label, value, rawHtml) {
+  function fact(label, value, rawHtml) {
     if (value == null || value === '') return '';
-    return '<div class="cbi-row">' +
-      '<span class="cbi-row__label">' + esc(label) + '</span>' +
-      '<span class="cbi-row__value">' + (rawHtml ? value : esc(value)) + '</span></div>';
+    return '<div class="tma-dash__clients-list-main">' +
+      '<span class="tma-dash__clients-list-label">' + esc(label) + '</span>' +
+      '<span class="tma-dash__clients-list-value">' + (rawHtml ? value : esc(value)) + '</span></div>';
   }
-  var fact = listRow;
 
   function rowCount(html) {
-    return (String(html || '').match(/class="cbi-row"/g) || []).length;
+    return (String(html || '').match(/clients-list-main/g) || []).length;
   }
 
-  /* A titled group of facts — heading plus rows, no fill, no border box. */
+  /* A titled group of facts. The shared section primitive carries the
+     heading type; the grey fill lives on its separate __card class, which
+     read-only facts do not want, so we omit it. */
   function factGroup(title, rowsHtml) {
     if (!rowsHtml) return '';
-    return '<section class="cbi-group">' +
-      '<h3 class="cbi-group__title">' + esc(title) + '</h3>' +
+    return '<section class="tma-portal-section">' +
+      '<h3 class="tma-portal-section__title">' + esc(title) + '</h3>' +
       '<div class="cbi-group__body">' + rowsHtml + '</div></section>';
   }
 
   /* A titled group wrapping arbitrary content (a table, a thread). */
   function contentGroup(title, html, note) {
     if (!html) return '';
-    return '<section class="cbi-group">' +
-      '<h3 class="cbi-group__title">' + esc(title) +
-      (note ? '<span class="cbi-group__note">' + esc(note) + '</span>' : '') + '</h3>' +
+    return '<section class="tma-portal-section">' +
+      '<h3 class="tma-portal-section__title">' + esc(title) +
+      (note ? '<span class="tma-portal-section__desc">' + esc(note) + '</span>' : '') + '</h3>' +
       html + '</section>';
   }
 
@@ -680,12 +704,12 @@
     // Key facts as flat rows on the page surface — no card. Six values a
     // case worker reads first, in one quiet band under the name.
     var strip =
-      listRow('Received', fmtDate(a.timeline && a.timeline.received)) +
-      listRow('Submitted', fmtDate(a.timeline && a.timeline.submitted)) +
-      listRow('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
-      listRow('Investment', a.investmentOption) +
-      listRow('Referred by', a.referredBy) +
-      listRow('Assigned', a.assignedTo);
+      fact('Received', fmtDate(a.timeline && a.timeline.received)) +
+      fact('Submitted', fmtDate(a.timeline && a.timeline.submitted)) +
+      fact('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
+      fact('Investment', a.investmentOption) +
+      fact('Referred by', a.referredBy) +
+      fact('Assigned', a.assignedTo);
     var stripHtml = strip ? '<div class="cbi-strip">' + strip + '</div>' : '';
 
     var tabs = [{ key: 'overview', label: 'Overview' }];
@@ -708,7 +732,7 @@
     }
 
     return head + stripHtml +
-      ui().tabs(tabs, activeTab) +
+      '<div class="cbi-tabs">' + ui().tabs(tabs, activeTab) + '</div>' +
       tabPanel('overview', renderOverviewTab(a)) +
       (assess.length ? tabPanel('assessment', renderAssessmentTab(assess)) : '') +
       tabPanel('documents', renderDocumentsTab(files)) +
@@ -762,8 +786,9 @@
     var timelineRows = TIMELINE_LABELS.map(function (t) {
       var v = a.timeline && a.timeline[t[0]];
       if (!v) return '';
-      return '<li><span>' + esc(t[1]) + '</span>' +
-        '<span class="cbi-tl__date">' + esc(fmtDate(v)) + '</span></li>';
+      return '<li class="tma-portal-details__row">' +
+        '<span>' + esc(t[1]) + '</span>' +
+        '<span class="tma-portal-details__label">' + esc(fmtDate(v)) + '</span></li>';
     }).join('');
     var timeline = timelineRows ? '<ul class="cbi-tl">' + timelineRows + '</ul>' : '';
 
@@ -1015,18 +1040,23 @@
   }
 
   function postComment() {
+    // Capture the request's own detail object exactly as loadDetail does: the
+    // reader can go back and open another applicant while the POST is in
+    // flight, and a late response must not land on whoever is open then.
+    var d = state.detail;
     var input = state.el.querySelector('[data-cbi-comment-input]');
     if (!input) return;
     var body = input.value.trim();
-    if (!body || state.detail.posting) return;
-    state.detail.posting = true;
-    state.detail.commentDraft = body;
+    if (!body || d.posting) return;
+    d.posting = true;
+    d.commentDraft = body;
     render();
-    cbiFetch(BASE + '/applications/' + encodeURIComponent(state.detail.uuid) + '/comments', { method: 'POST', json: { body: body } })
+    cbiFetch(BASE + '/applications/' + encodeURIComponent(d.uuid) + '/comments', { method: 'POST', json: { body: body } })
       .then(function (c) {
-        state.detail.posting = false;
-        state.detail.commentDraft = '';
-        if (state.detail.data) state.detail.data.comments.push(c);
+        d.posting = false;
+        d.commentDraft = '';
+        if (d.data) d.data.comments.push(c);
+        if (state.detail !== d) return;   // reader moved on; nothing to repaint
         render();
         // The morph never rewrites a FOCUSED textarea, so clear it directly
         // for the case where the cursor stayed in the composer.
@@ -1037,7 +1067,8 @@
       })
       .catch(function (e) {
         // Draft stays in state, so the failure render restores the text.
-        state.detail.posting = false; render();
+        d.posting = false;
+        if (state.detail === d) render();
         toast((e && e.message) || 'Couldn’t post the comment', false);
       });
   }
@@ -1091,7 +1122,7 @@
           state.detail.tab = key;
           render();
         } else {
-          state.filters.stage = key;
+          state.filters.stage = (key === 'all') ? '' : key;
           state.list.page = 1;
           loadList();
         }
@@ -1101,12 +1132,19 @@
 
   function mount(el) {
     state.el = el;
+    // A stale popover from a previous visit must not hang over the fresh one.
+    closePopovers();
     render();
     loadSummary();
     syncRoute();
     if (!window.__cbiHashWired) {
       window.__cbiHashWired = true;
       window.addEventListener('hashchange', syncRoute);
+      // Leaving CBI hides the view rather than unmounting it, so nothing else
+      // would ever dismiss a popover left open on the way out.
+      document.addEventListener('tma:view-rendered', function () {
+        if (!live()) closePopovers();
+      });
     }
   }
 

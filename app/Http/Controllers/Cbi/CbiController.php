@@ -21,11 +21,13 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 /**
  * CBI — Citizenship by Investment (development preview).
  *
- * The module is dark: no sidebar entry, no SPA page, no capability in the
- * Role matrix, nothing for search or quick actions to index. The only door
- * is /dev/cbi, and every endpoint here 404s — never 403s — unless the
- * FEATURE_CBI flag is on AND the caller is an administrator. To everyone
- * else this module does not exist.
+ * Administrator-only while the module beds in. It ships in the SPA shell
+ * (/cbi, with a sidebar row and the cbi.view capability) and also as a
+ * chromeless preview at /dev/cbi. Every endpoint here 404s — never 403s —
+ * unless the FEATURE_CBI flag is on AND the caller is an administrator, so
+ * to everyone else the module still does not exist. Role::can() checks the
+ * same flag before its admin short-circuit, which keeps the nav row, the
+ * page gate and this API in agreement.
  */
 class CbiController extends Controller
 {

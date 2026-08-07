@@ -1,13 +1,17 @@
 /*
  * CBI — page-layout glue ONLY.
  *
- * Every component on the page (head, tabs, toolbar, search, filter chips,
- * tables, pagination, status chips, sections, fields, buttons, modal) is a
- * documented design-system component styled by its own stylesheet
- * (dashboard.css, portal.css, portal-files.css, pagination.css,
- * table-filter-sort.css). This file may only arrange them: grids, gaps and
- * a handful of page-specific rows — tokens only, no new component styling,
- * no hex values, no hover inventions (DESIGN_SYSTEM.md rules 1–3, 8).
+ * Every component on the page is a documented design-system component
+ * styled by its own stylesheet: the head, tabs, toolbar, search, filter
+ * chips, tables, pagination, status chips, sections, buttons and modal all
+ * come from dashboard.css, portal.css, portal-files.css, pagination.css and
+ * table-filter-sort.css. This file may only arrange them — grids, gaps and
+ * page-scoped modifiers, in tokens (DESIGN_SYSTEM.md rules 1-3, 8, 9).
+ *
+ * Where a shape already exists it is reused rather than retyped: groups are
+ * `.tma-portal-section` without its `__card` fill, read-only facts are the
+ * Clients profile's `.tma-dash__clients-list-*` rows, and timeline rows are
+ * `.tma-portal-details__row`.
  */
 
 /* ── Standalone /dev/cbi shell ─────────────────────── */
@@ -47,16 +51,8 @@
 
 /* ── List page ─────────────────────────────────────── */
 
-/* Wide tables scroll inside their wrap (design rule: never cut columns). */
-.tma-portal-page--cbi .tma-portal-table-wrap { overflow-x: auto; }
-
 .tma-portal-page--cbi .cbi-table tbody tr { cursor: pointer; }
 
-/* ── List page extras ──────────────────────────────── */
-
-/* Applicant cell: name over a quiet reference number. */
-.cbi-name { display: block; }
-.cbi-sub { display: block; }
 .cbi-nowrap { white-space: nowrap; }
 
 /* ── Detail page (the application workspace) ───────── */
@@ -93,6 +89,10 @@
   border-bottom: 1px solid var(--color-border-soft);
 }
 
+/* Wrapper isolating the tab group from DOM reconciliation — see the note in
+   cbi.js renderList(). Purely structural. */
+.cbi-tabs { min-width: 0; }
+
 /* Workspace tab panels: room under the underline tab group. The explicit
    display beats the UA's [hidden] rule, so hidden must be restated. */
 .cbi-tabpanel {
@@ -118,63 +118,36 @@
   min-width: 0;
 }
 
-/* A titled group: quiet heading, content flat on the page surface. */
-.cbi-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-12);
-  min-width: 0;
-}
+/* Page-scoped modifiers on the shared section primitive: CBI groups sit
+   flat (the __card fill is never emitted) and carry their note inline on
+   the heading rather than as a block below it. */
+.tma-portal-page--cbi .tma-portal-section { gap: var(--space-12); }
 
-.cbi-group__title {
+.tma-portal-page--cbi .tma-portal-section__title {
   display: flex;
   align-items: baseline;
   gap: var(--space-8);
-  margin: 0;
-  font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
-  font-weight: 600;
-  color: var(--color-black);
 }
 
-.cbi-group__note {
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
+.tma-portal-page--cbi .tma-portal-section__title .tma-portal-section__desc {
   font-weight: 400;
-  color: var(--color-text-secondary);
 }
 
+/* The fact grid inside a group — genuinely page-specific. */
 .cbi-group__body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-12) var(--space-24);
 }
 
-/* Read-only fact: quiet label, prominent value — the Clients profile's
-   list-item treatment (label 12 muted over value 14 primary). */
-.cbi-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.cbi-row__label {
-  font-size: var(--text-size-12);
-  line-height: 16px;
-  color: var(--color-text-secondary);
-}
-
-.cbi-row__value {
-  font-size: var(--text-size-14);
-  line-height: 20px;
-  color: var(--color-black);
-  overflow-wrap: anywhere;
-}
+/* The reused Clients list row is a flex row with an icon slot; CBI renders
+   the label/value stack alone, so it needs no further styling. */
+.cbi-group__body .tma-dash__clients-list-value,
+.cbi-strip .tma-dash__clients-list-value { overflow-wrap: anywhere; }
 
 .cbi-indent { padding-left: var(--space-24); }
 
-/* Timeline: milestone label left, date right, hairline rows. */
+/* Timeline: reuses .tma-portal-details__row; only the list reset is ours. */
 .cbi-tl {
   list-style: none;
   margin: 0;
@@ -183,23 +156,7 @@
   flex-direction: column;
 }
 
-.cbi-tl li {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-16);
-  padding: var(--space-8) 0;
-  border-bottom: 1px solid var(--color-border-soft);
-  font-size: var(--text-size-14);
-  line-height: 20px;
-}
-
 .cbi-tl li:last-child { border-bottom: 0; }
-
-.cbi-tl__date {
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
 
 /* ── Filter / sort popovers ────────────────────────── */
 
@@ -243,7 +200,7 @@
 
 .cbi-comment__body {
   font-size: var(--text-size-14);
-  line-height: var(--text-lh-20, 20px);
+  line-height: var(--text-lh-14);
   color: var(--color-black);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -285,11 +242,7 @@
 
 .cbi-activity__time { flex: 0 0 130px; }
 
-/* ── Folded import dump + sync modal ───────────────── */
-
-.cbi-fold summary { cursor: pointer; }
-.cbi-fold[open] summary { margin-bottom: var(--space-12); }
-.cbi-fold .tma-portal-table-wrap { margin-bottom: var(--space-12); }
+/* ── Sync modal ────────────────────────────────────── */
 
 .cbi-sync-scroll {
   max-height: 60vh;
