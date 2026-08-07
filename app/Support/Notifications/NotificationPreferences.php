@@ -25,9 +25,10 @@ final class NotificationPreferences
 
     /**
      * Per-group defaults: everything on, for every module and every channel
-     * (firm decision, 2026-08-05). A person who has never opened the settings
-     * hears about everything and turns off what they don't want, rather than
-     * missing something because a channel was quietly off.
+     * (firm decision, 2026-08-05) — with the one exception below. A person who
+     * has never opened the settings hears about everything and turns off what
+     * they don't want, rather than missing something because a channel was
+     * quietly off.
      *
      * Two things this leans on: notification email needs a running queue
      * worker to leave the building, and desktop banners still require the
@@ -38,7 +39,15 @@ final class NotificationPreferences
     {
         return [
             'portal' => true,
-            'email' => true,
+            // The email group is the exception, because its notifications are
+            // the only ones that mirror something already delivered to the very
+            // inbox we would send the notification to. "Kryshna replied to your
+            // email" landing beside Kryshna's actual reply tells the reader
+            // nothing they are not already holding — one event, two mails, and
+            // the notification is the less useful of the pair. The bell, the
+            // desktop banner and the toast still announce it immediately; only
+            // the email twin is opt-in.
+            'email' => $group !== 'email',
             'desktop' => true,
             'sound' => true,
         ];

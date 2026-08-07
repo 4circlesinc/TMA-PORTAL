@@ -88,6 +88,37 @@ class NotificationsFoundationTest extends TestCase
         $this->assertSame(Notification::LEVEL_SECURITY, $security->level);
     }
 
+    /**
+     * A notification about mail that has just been delivered to the same inbox
+     * must not be posted back to that inbox. Everything else still emails by
+     * default, and the person can switch the email twin on if they want it.
+     */
+    public function test_the_email_group_does_not_email_by_default(): void
+    {
+        $recipient = $this->user();
+
+        $prefs = NotificationPreferences::forUser($recipient);
+        $this->assertFalse($prefs['email']['email']);
+        $this->assertTrue($prefs['email']['portal']);
+        $this->assertTrue($prefs['email']['desktop']);
+        $this->assertTrue($prefs['email']['sound']);
+
+        $this->assertFalse(
+            NotificationPreferences::channelEnabled($recipient, 'email.received', 'email'),
+        );
+
+        // Only this one group. A shared file or a new message still emails.
+        foreach (['files', 'messages', 'calendar', 'security'] as $group) {
+            $this->assertTrue($prefs[$group]['email'], $group.' should still email by default');
+        }
+
+        // It is a default, not a ban: switching it on has to stick.
+        NotificationPreferences::update($recipient, ['email' => ['email' => true]]);
+        $this->assertTrue(
+            NotificationPreferences::channelEnabled($recipient->refresh(), 'email.received', 'email'),
+        );
+    }
+
     public function test_dedupe_key_refreshes_an_existing_unread_row(): void
     {
         $recipient = $this->user();
