@@ -77,12 +77,12 @@ try {
   await page.waitForTimeout(900);
 
   step(4, 'Search narrows the table');
-  const firstName = (await page.locator('.cbi-table tbody tr strong').first().textContent() || '').trim();
+  const firstName = (await page.locator('.cbi-table tbody tr .cbi-name').first().textContent() || '').trim();
   const needle = firstName.split(/\s+/)[0] || '';
   if (needle.length > 2) {
     await page.fill('[data-cbi-search]', needle);
     await page.waitForTimeout(1200);
-    const names = await page.locator('.cbi-table tbody tr strong').allTextContents();
+    const names = await page.locator('.cbi-table tbody tr .cbi-name').allTextContents();
     check(names.length > 0 && names.every((n) => n.toLowerCase().includes(needle.toLowerCase())),
       `every result matches '${needle}' (${names.length} rows)`);
     await page.fill('[data-cbi-search]', '');
@@ -96,7 +96,7 @@ try {
   await page.waitForSelector('.cbi-overview-grid', { timeout: 10000 });
   check(page.url().includes('#/app/'), 'hash route points at the application');
   check(await page.locator('.tma-portal-head__title').count() === 1, 'applicant title painted');
-  const panels = await page.locator('.tma-portal-section__title').allTextContents();
+  const panels = await page.locator('.cbi-group__title').allTextContents();
   log(`    panels: ${panels.map((p) => p.trim()).join(' · ')}`);
   // The Applicant panel deliberately hides itself when a record carries no
   // personal fields (common on COR-tracker rows), so it isn't asserted.

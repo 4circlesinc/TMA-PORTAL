@@ -6,11 +6,15 @@
  * /portal/cbi/* — loading, empty and error states only, never mock rows.
  *
  * Rendering is design-system components only (DESIGN_SYSTEM.md):
- * .tma-portal-head, ui().tabs, the .tma-dash__toolbar recipe from the Users
- * table (tool buttons, head-dropdown menus, documented search, filter chips),
- * ui().table, .tma-pagination-bar, ui().section/field, tma-portal-status
- * chips, ui().openModal. cbi.css carries page-layout glue only — no new
- * component styling.
+ * .tma-portal-head, ui().tabs, the Users-table .tma-dash__toolbar (icon tool
+ * buttons + tma-filter-popover menus + documented search + filter chips),
+ * ui().table, .tma-pagination-bar, tma-portal-status, ui().openModal.
+ *
+ * Two restraint rules earned the hard way, after a first pass that read as
+ * clutter: colour marks exceptions only (a chip on every row carries no
+ * information), and read-only facts sit flat on the page — filled cards are
+ * for forms, and nesting them produced boxes inside boxes. cbi.css is
+ * page-layout glue only: tokens, no new component styling.
  */
 (function () {
   'use strict';
@@ -218,27 +222,36 @@
     return s.length > n ? s.slice(0, n - 1) + '…' : s;
   }
 
-  /* Documented tone-only status chip (portal-files.css). Never a bespoke
-     colour per status — statuses map onto the four documented tones. */
+  /*
+   * Colour is reserved for the exceptions. Painting a chip on every row is
+   * what made this read as noise: in a 50-row table nearly every status is
+   * some flavour of "in progress", so the colour carried no information.
+   * Ordinary statuses render as plain muted text (the File Library's
+   * treatment of Type/Sharing); only a decided outcome earns a chip.
+   */
   function statusTone(status) {
     var s = String(status || '').toUpperCase();
     if (!s) return null;
-    if (/GRANTED|CITIZEN|APPROVED|COMPLETED/.test(s)) return 'success';
-    if (/DENIED|NON COMPLIANT|RESCINDED|FAILED/.test(s)) return 'danger';
-    if (/PENDING|DELAYED|QUERIES|TO SUBMIT|BACKGROUND CHECK|UPDATE|INTERVIEW|APPEAL/.test(s)) return 'pending';
-    return 'neutral';
+    if (/GRANTED|CITIZEN/.test(s)) return 'success';
+    if (/DENIED|NON COMPLIANT|RESCINDED|WITHDRAWN/.test(s)) return 'danger';
+    return null;
   }
-  function statusChip(status) {
+  function statusCell(status) {
+    if (!status) return '<span class="tma-portal-table__muted">—</span>';
     var tone = statusTone(status);
-    if (!tone) return '';
-    return '<span class="tma-portal-status tma-portal-status--' + tone + '">' + esc(status) + '</span>';
+    return tone
+      ? '<span class="tma-portal-status tma-portal-status--' + tone + '">' + esc(status) + '</span>'
+      : esc(status);
   }
   function stageChip(stage) {
     var label = STAGE_LABELS[stage] || stage || '—';
-    return '<span class="tma-portal-chip' + (stage === 'closed' ? '' : ' tma-portal-chip--ok') + '">' + esc(label) + '</span>';
+    return '<span class="tma-portal-status tma-portal-status--neutral">' + esc(label) + '</span>';
   }
   function reviewChip() {
     return '<span class="tma-portal-status tma-portal-status--pending" title="Weak identity — check for duplicates">Review</span>';
+  }
+  function num(n) {
+    return (n == null) ? '' : Number(n).toLocaleString();
   }
 
   /* ── render: list ── */
@@ -248,20 +261,30 @@
     var line = 'Synchronised from Smartsheet.';
     if (s && s.sync) {
       if (!s.sync.configured) line = 'Smartsheet is not configured in this environment.';
-      else if (s.sync.syncing > 0) line = 'Syncing ' + s.sync.syncing + ' sheet(s)…';
+      else if (s.sync.syncing > 0) line = s.sync.syncing === 1 ? 'Syncing 1 sheet…' : 'Syncing ' + s.sync.syncing + ' sheets…';
       else if (s.sync.lastSuccessAt) line = 'Last synced ' + fmtDateTime(s.sync.lastSuccessAt);
-      if (s.sync.sheetsWithErrors > 0) line += ' · ' + s.sync.sheetsWithErrors + ' sheet(s) with errors';
+      if (s.sync.sheetsWithErrors > 0) {
+        line += s.sync.sheetsWithErrors === 1
+          ? ' · 1 sheet needs attention'
+          : ' · ' + s.sync.sheetsWithErrors + ' sheets need attention';
+      }
     }
     return line;
   }
 
   function renderHead() {
+    // Title and actions only, like every other list page. The sync state is
+    // detail, not headline — it lives on the Sync button and in its dialog.
+    var s = state.summary;
+    var unhealthy = !!(s && s.sync && (s.sync.sheetsWithErrors > 0 || !s.sync.configured));
     var actions =
-      ui().btn({ label: 'Sync status', icon: 'Info', variant: 'ghost', small: true, attrs: ' data-cbi-action="sync-status"' }) +
-      ui().btn({ label: 'Sync now', icon: 'ArrowsClockwise', variant: 'ghost', small: true, attrs: ' data-cbi-action="sync-now"' });
+      ui().btn({
+        label: 'Sync', icon: 'ArrowsClockwise', variant: 'ghost', small: true,
+        attrs: ' data-cbi-action="sync-status" title="' + esc(syncLine()) + '"',
+      });
     return '<div class="tma-portal-head"><div>' +
       '<h2 class="tma-portal-head__title">Citizenship by Investment</h2>' +
-      '<p class="tma-portal-subtitle" data-cbi-syncline>' + esc(syncLine()) + '</p>' +
+      (unhealthy ? '<p class="tma-portal-subtitle">' + esc(syncLine()) + '</p>' : '') +
       '</div><div class="tma-portal-head__actions">' + actions + '</div></div>';
   }
 
@@ -270,51 +293,31 @@
     var total = state.summary ? state.summary.total : null;
     var items = STAGES.map(function (s) {
       var n = s.key === '' ? total : counts[s.key];
-      return { key: s.key, label: s.label + (n != null ? ' (' + n + ')' : '') };
+      return { key: s.key, label: s.label + (n != null ? '  ' + num(n) : '') };
     });
     return ui().tabs(items, state.filters.stage);
   }
 
   /* Flat documented toolbar icon button (Users-table recipe). */
-  function toolBtn(iconPath, action, label, pressed) {
+  function toolBtn(iconPath, action, label, pressed, extraAttrs) {
     return '<button type="button" class="tma-dash__tool-btn' + (pressed ? ' is-active' : '') + '"' +
       ' data-cbi-action="' + esc(action) + '" aria-label="' + esc(label) + '" title="' + esc(label) + '"' +
-      (pressed != null ? ' aria-pressed="' + pressed + '"' : '') + '>' +
+      (pressed != null ? ' aria-pressed="' + pressed + '"' : '') + (extraAttrs || '') + '>' +
       '<img src="' + iconPath + '" alt=""></button>';
   }
 
-  /* Toolbar "select": the documented head-dropdown component (styled button
-     + caret + menu), never a raw <select> — same as the File Library. */
-  function menuControl(name, label, options, current) {
-    var sel = null;
-    for (var i = 0; i < options.length; i++) {
-      if (String(options[i].value) === String(current)) { sel = options[i]; break; }
-    }
-    return ui().headDropdown({
-      label: current && sel ? short(sel.label, 20) : label,
-      menuLabel: label,
-      wrapAttrs: 'data-cbi-menu-' + name,
-      items: options.map(function (o) { return { label: o.label, action: o.value }; }),
-    });
-  }
-
-  function facetOptions(facetKey, label) {
-    var rows = (state.summary && state.summary.facets && state.summary.facets[facetKey]) || [];
-    var options = [{ value: '', label: 'All' }];
-    rows.forEach(function (r) { options.push({ value: r.value, label: r.value + ' (' + r.n + ')' }); });
-    return options;
-  }
-
+  /*
+   * Two icon buttons and a search field — the Users table's toolbar. Filter
+   * values live in the documented tma-filter-popover (a fields list that
+   * cascades into values), so the bar stays quiet however many facets the
+   * data has; what is actually applied shows as chips underneath.
+   */
   function renderToolbar() {
     var f = state.filters;
+    var anyFilter = !!(f.status || f.referred_by || f.investment_option || f.assigned_to || f.needs_review);
     var actions =
-      toolBtn(TMA_ICON + 'FunnelSimple-16.svg', 'noop-filter', 'Filters are the dropdowns to the right', null) +
-      menuControl('status', 'Status', facetOptions('statuses'), f.status) +
-      menuControl('referred', 'Referred by', facetOptions('referredBy'), f.referred_by) +
-      menuControl('investment', 'Investment', facetOptions('investmentOptions'), f.investment_option) +
-      menuControl('assigned', 'Assigned', facetOptions('assigned'), f.assigned_to) +
-      menuControl('sort', 'Sort', SORTS, f.sort) +
-      toolBtn(PH_ICON + 'Flag.svg', 'needs-review', 'Only records needing review', f.needs_review);
+      toolBtn(TMA_ICON + 'FunnelSimple-16.svg', 'filter', 'Filter', anyFilter, ' data-cbi-filter-trigger aria-expanded="false"') +
+      toolBtn(TMA_ICON + 'ArrowsDownUp.svg', 'sort', 'Sort', f.sort !== 'recent', ' data-cbi-sort-trigger aria-expanded="false"');
 
     return '<div class="tma-dash__toolbar">' +
       '<div class="tma-dash__toolbar-actions">' + actions + '</div>' +
@@ -333,7 +336,7 @@
     if (f.sort !== 'recent') {
       var sortLabel = 'Sort';
       SORTS.forEach(function (s) { if (s.value === f.sort) sortLabel = s.label; });
-      tags.push({ id: 'sort', label: 'Sorted: ' + sortLabel, icon: 'arrows' });
+      tags.push({ id: 'sort', label: sortLabel, icon: 'arrows' });
     }
     if (!tags.length) return '';
 
@@ -362,24 +365,28 @@
       });
     }
 
+    // The stage column only earns its place on the unfiltered view — inside
+    // a stage tab every row would repeat the tab's own name.
+    var showStage = !state.filters.stage;
+
     var rows = l.items.map(function (a) {
       return '<tr data-cbi-open="' + esc(a.uuid) + '" data-id="' + esc(a.uuid) + '">' +
-        '<td><strong>' + esc(a.applicantName || 'Unnamed applicant') + '</strong>' +
-          (a.applicantNumber ? '<div class="tma-portal-table__muted">' + esc(a.applicantNumber) + '</div>' : '') + '</td>' +
-        '<td>' + stageChip(a.stage) + '</td>' +
-        '<td>' + statusChip(a.status) + (a.needsReview ? ' ' + reviewChip() : '') + '</td>' +
+        '<td><span class="cbi-name">' + esc(a.applicantName || 'Unnamed applicant') + '</span>' +
+          (a.applicantNumber ? '<span class="tma-portal-table__muted cbi-sub">' + esc(a.applicantNumber) + '</span>' : '') + '</td>' +
+        (showStage ? '<td class="tma-portal-table__muted">' + esc(STAGE_LABELS[a.stage] || a.stage || '—') + '</td>' : '') +
+        '<td>' + statusCell(a.status) + (a.needsReview ? ' ' + reviewChip() : '') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.referredBy || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.assignedTo || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(fmtDate(a.receivedAt) || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(fmtDate(a.modifiedAt) || '—') + '</td>' +
+        '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.receivedAt) || '—') + '</td>' +
+        '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.modifiedAt) || '—') + '</td>' +
         '</tr>';
     }).join('');
 
-    return ui().table(
-      ['Applicant', 'Stage', 'Status', 'Referred by', 'Assigned', 'Received', 'Updated'],
-      rows,
-      { cls: 'cbi-table' }
-    ) + renderPagination();
+    var headers = ['Applicant'];
+    if (showStage) headers.push('Stage');
+    headers.push('Status', 'Referred by', 'Assigned', 'Received', 'Updated');
+
+    return ui().table(headers, rows, { cls: 'cbi-table' }) + renderPagination();
   }
 
   /* Documented pagination bar (pagination.css + the Users-table recipe). */
@@ -417,18 +424,200 @@
       '<div data-cbi-body>' + renderRows() + '</div>';
   }
 
-  /* ── render: detail ── */
+  /* ── filter + sort popovers (documented tma-filter-popover) ──
+   *
+   * Created once into document.body and positioned on open, exactly like
+   * the Users table: a fields list that cascades into a values list, plus a
+   * sort list. Living outside the view means a re-render never destroys
+   * them mid-interaction.
+   */
 
-  /* Read-only fact row: the documented field recipe with a plain value. */
-  function fact(label, value, rawHtml) {
-    if (value == null || value === '') return '';
-    return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(label) + '</span>' +
-      '<span class="cbi-fact-value">' + (rawHtml ? value : esc(value)) + '</span></div>';
+  var pop = null;
+
+  function popShell(name, inner) {
+    return '<div class="tma-filter-popover tma-filter-popover--fixed cbi-popover" data-cbi-popover="' + name + '" aria-hidden="true">' +
+      (inner || '') + '</div>';
   }
 
-  function factSection(title, factsHtml, opts) {
-    if (!factsHtml) return '';
-    return ui().section(title, '<div class="cbi-facts">' + factsHtml + '</div>', opts);
+  function ensurePopovers() {
+    if (pop && pop.host && document.body.contains(pop.host)) return pop;
+    var host = document.createElement('div');
+    host.className = 'cbi-popover-host';
+    host.innerHTML = popShell('fields') + popShell('values') + popShell('sort');
+    document.body.appendChild(host);
+    pop = {
+      host: host,
+      fields: host.querySelector('[data-cbi-popover="fields"]'),
+      values: host.querySelector('[data-cbi-popover="values"]'),
+      sort: host.querySelector('[data-cbi-popover="sort"]'),
+    };
+    wirePopovers();
+    return pop;
+  }
+
+  function popItem(attr, value, label, opts) {
+    opts = opts || {};
+    return '<button type="button" class="tma-filter-popover__item"' +
+      ' ' + attr + '="' + esc(value) + '"' + (opts.selected ? ' data-selected' : '') + '>' +
+      (opts.icon ? '<img src="' + opts.icon + '" alt="" class="tma-filter-popover__item-icon" width="16" height="16">' : '') +
+      '<span class="tma-filter-popover__item-label">' + esc(label) + '</span>' +
+      (opts.meta ? '<span class="tma-filter-popover__item-meta">' + esc(opts.meta) + '</span>' : '') +
+      (opts.chevron ? '<img src="' + TMA_ICON + 'ArrowLineRight-16.svg" alt="" class="tma-filter-popover__item-chevron" width="16" height="16" aria-hidden="true">' : '') +
+      '</button>';
+  }
+
+  function fillFields() {
+    var f = state.filters;
+    var html = FACETS.map(function (fc) {
+      return popItem('data-cbi-field', fc.name, fc.label, { chevron: true, meta: f[fc.name] ? short(f[fc.name], 14) : '' });
+    }).join('') +
+      '<div class="tma-filter-popover__divider"></div>' +
+      popItem('data-cbi-toggle', 'needs_review', 'Needs review', { selected: f.needs_review, meta: f.needs_review ? 'On' : '' });
+    pop.fields.innerHTML = html;
+  }
+
+  function fillValues(fieldName) {
+    var fc = null;
+    FACETS.forEach(function (x) { if (x.name === fieldName) fc = x; });
+    if (!fc) return;
+    var rows = (state.summary && state.summary.facets && state.summary.facets[fc.facet]) || [];
+    var current = state.filters[fieldName];
+    var html = popItem('data-cbi-value', '', 'All', { selected: !current });
+    html += rows.map(function (r) {
+      return popItem('data-cbi-value', r.value, r.value, { selected: current === r.value, meta: num(r.n) });
+    }).join('');
+    pop.values.innerHTML = html;
+    pop.values.setAttribute('data-cbi-field-name', fieldName);
+  }
+
+  function fillSort() {
+    pop.sort.innerHTML = SORTS.map(function (s) {
+      return popItem('data-cbi-sort', s.value, s.label, { selected: state.filters.sort === s.value });
+    }).join('');
+  }
+
+  function positionPopover(el, anchorOrRect) {
+    var rect = anchorOrRect;
+    if (!rect) return;
+    if (typeof rect.getBoundingClientRect === 'function') rect = rect.getBoundingClientRect();
+    var width = el.offsetWidth || 240;
+    var left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+    var top = rect.bottom + 4;
+    if (top + el.offsetHeight > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - el.offsetHeight - 4);
+    }
+    el.style.left = Math.round(left) + 'px';
+    el.style.top = Math.round(top) + 'px';
+  }
+
+  function closePopovers(keep) {
+    if (!pop) return;
+    [pop.fields, pop.values, pop.sort].forEach(function (el) {
+      if (!el || (keep && keep.indexOf(el) !== -1)) return;
+      el.removeAttribute('data-open');
+      el.setAttribute('aria-hidden', 'true');
+    });
+    if (!keep && state.el) {
+      state.el.querySelectorAll('[data-cbi-filter-trigger],[data-cbi-sort-trigger]').forEach(function (b) {
+        b.setAttribute('aria-expanded', 'false');
+      });
+    }
+  }
+
+  function openPopover(el, anchor, keep) {
+    closePopovers(keep);
+    el.setAttribute('data-open', 'true');
+    el.setAttribute('aria-hidden', 'false');
+    el._anchorRect = anchor ? anchor.getBoundingClientRect() : null;
+    if (anchor && anchor.setAttribute) anchor.setAttribute('aria-expanded', 'true');
+    // offsetWidth is 0 until the element is displayed.
+    requestAnimationFrame(function () { positionPopover(el, el._anchorRect); });
+  }
+
+  function wirePopovers() {
+    pop.host.addEventListener('click', function (e) {
+      var field = e.target.closest('[data-cbi-field]');
+      if (field) {
+        e.preventDefault();
+        fillValues(field.getAttribute('data-cbi-field'));
+        openPopover(pop.values, field, [pop.fields]);
+        return;
+      }
+      var toggle = e.target.closest('[data-cbi-toggle]');
+      if (toggle) {
+        e.preventDefault();
+        state.filters.needs_review = !state.filters.needs_review;
+        closePopovers();
+        state.list.page = 1;
+        loadList();
+        return;
+      }
+      var value = e.target.closest('[data-cbi-value]');
+      if (value) {
+        e.preventDefault();
+        setFilter(pop.values.getAttribute('data-cbi-field-name'), value.getAttribute('data-cbi-value'));
+        closePopovers();
+        return;
+      }
+      var sort = e.target.closest('[data-cbi-sort]');
+      if (sort) {
+        e.preventDefault();
+        setFilter('sort', sort.getAttribute('data-cbi-sort'));
+        closePopovers();
+      }
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!pop || !pop.host.isConnected) return;
+      if (e.target.closest('.cbi-popover') ||
+          e.target.closest('[data-cbi-filter-trigger]') ||
+          e.target.closest('[data-cbi-sort-trigger]')) return;
+      closePopovers();
+    });
+
+    window.addEventListener('resize', function () {
+      if (!pop) return;
+      [pop.fields, pop.values, pop.sort].forEach(function (el) {
+        if (el && el.hasAttribute('data-open')) positionPopover(el, el._anchorRect);
+      });
+    });
+  }
+
+  /* ── render: detail ── */
+
+  /*
+   * A read-only fact: quiet 12px label above a 14px value, on the page
+   * surface. This is the Clients profile's list-item treatment — read-only
+   * facts do not belong in filled form cards, which is what made the first
+   * pass read as boxes-inside-boxes.
+   */
+  function listRow(label, value, rawHtml) {
+    if (value == null || value === '') return '';
+    return '<div class="cbi-row">' +
+      '<span class="cbi-row__label">' + esc(label) + '</span>' +
+      '<span class="cbi-row__value">' + (rawHtml ? value : esc(value)) + '</span></div>';
+  }
+  var fact = listRow;
+
+  function rowCount(html) {
+    return (String(html || '').match(/class="cbi-row"/g) || []).length;
+  }
+
+  /* A titled group of facts — heading plus rows, no fill, no border box. */
+  function factGroup(title, rowsHtml) {
+    if (!rowsHtml) return '';
+    return '<section class="cbi-group">' +
+      '<h3 class="cbi-group__title">' + esc(title) + '</h3>' +
+      '<div class="cbi-group__body">' + rowsHtml + '</div></section>';
+  }
+
+  /* A titled group wrapping arbitrary content (a table, a thread). */
+  function contentGroup(title, html, note) {
+    if (!html) return '';
+    return '<section class="cbi-group">' +
+      '<h3 class="cbi-group__title">' + esc(title) +
+      (note ? '<span class="cbi-group__note">' + esc(note) + '</span>' : '') + '</h3>' +
+      html + '</section>';
   }
 
   var TIMELINE_LABELS = [
@@ -463,16 +652,16 @@
     var comments = d.data.comments || [];
     var events = d.data.events || [];
 
+    // One chip for the stage; the outcome only when it is decided.
     var chips =
       stageChip(a.stage) +
-      (a.status ? ' ' + statusChip(a.status) : '') +
       (a.granted ? ' <span class="tma-portal-status tma-portal-status--success">Granted</span>' : '') +
       (a.needsReview ? ' ' + reviewChip() : '');
 
     var meta = [];
-    if (a.applicantNumber) meta.push('№ ' + esc(a.applicantNumber));
+    if (a.applicantNumber) meta.push(esc(a.applicantNumber));
+    if (a.status) meta.push(esc(a.status));
     if (a.progress) meta.push(esc(a.progress));
-    if (a.syncedAt) meta.push('Synced ' + esc(fmtDateTime(a.syncedAt)));
 
     var headActions =
       (safeUrl(a.sourcePermalink)
@@ -488,20 +677,21 @@
       (meta.length ? '<span class="cbi-meta__facts">' + meta.join(' &middot; ') + '</span>' : '') + '</p>' +
       '</div><div class="tma-portal-head__actions">' + headActions + '</div></div>';
 
-    // Key-facts strip: the at-a-glance row every case file opens with.
+    // Key facts as flat rows on the page surface — no card. Six values a
+    // case worker reads first, in one quiet band under the name.
     var strip =
-      stripFact('Received', fmtDate(a.timeline && a.timeline.received)) +
-      stripFact('Submitted', fmtDate(a.timeline && a.timeline.submitted)) +
-      stripFact('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
-      stripFact('Investment', a.investmentOption) +
-      stripFact('Referred by', a.referredBy) +
-      stripFact('Assigned', a.assignedTo);
-    var stripHtml = strip ? '<div class="tma-portal-section__card"><div class="cbi-facts cbi-facts--strip">' + strip + '</div></div>' : '';
+      listRow('Received', fmtDate(a.timeline && a.timeline.received)) +
+      listRow('Submitted', fmtDate(a.timeline && a.timeline.submitted)) +
+      listRow('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
+      listRow('Investment', a.investmentOption) +
+      listRow('Referred by', a.referredBy) +
+      listRow('Assigned', a.assignedTo);
+    var stripHtml = strip ? '<div class="cbi-strip">' + strip + '</div>' : '';
 
     var tabs = [{ key: 'overview', label: 'Overview' }];
-    if (assess.length) tabs.push({ key: 'assessment', label: 'Assessment (' + assess.length + ')' });
-    tabs.push({ key: 'documents', label: 'Documents (' + files.length + ')' });
-    tabs.push({ key: 'comments', label: 'Comments (' + comments.length + ')' });
+    if (assess.length) tabs.push({ key: 'assessment', label: 'Assessment  ' + num(assess.length) });
+    tabs.push({ key: 'documents', label: 'Documents  ' + num(files.length) });
+    tabs.push({ key: 'comments', label: 'Comments  ' + num(comments.length) });
     tabs.push({ key: 'activity', label: 'Activity' });
     if ((a.financials && Object.keys(a.financials).length) || (a.extra && Object.keys(a.extra).length)) {
       tabs.push({ key: 'fields', label: 'All fields' });
@@ -527,11 +717,6 @@
       tabPanel('fields', renderFieldsTab(a));
   }
 
-  function stripFact(label, value) {
-    if (value == null || value === '') return '';
-    return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(label) + '</span>' +
-      '<span class="cbi-fact-value">' + esc(value) + '</span></div>';
-  }
 
   function renderOverviewTab(a) {
     var applicant =
@@ -582,17 +767,28 @@
     }).join('');
     var timeline = timelineRows ? '<ul class="cbi-tl">' + timelineRows + '</ul>' : '';
 
-    var left =
-      (applicant ? factSection('Applicant', applicant) : '') +
-      (caseFacts ? factSection('Case', caseFacts) : '') +
-      (team ? factSection('Team', team) : '');
-    var right =
-      (timeline ? ui().section('Timeline', timeline) : '') +
-      (narrative ? factSection('Notes', narrative) : '');
+    /* Balance the two columns by content weight. A fixed left/right split
+       left one column stranded whenever a file carried few fields — which
+       is most of them, since the trackers are sparsely filled. */
+    var groups = [
+      { html: factGroup('Applicant', applicant), weight: rowCount(applicant) },
+      { html: factGroup('Case', caseFacts), weight: rowCount(caseFacts) },
+      { html: factGroup('Team', team), weight: rowCount(team) },
+      { html: contentGroup('Timeline', timeline), weight: (timeline.match(/<li>/g) || []).length },
+      { html: factGroup('Notes', narrative), weight: rowCount(narrative) * 2 },
+    ].filter(function (g) { return !!g.html; });
+
+    var cols = [{ html: '', w: 0 }, { html: '', w: 0 }];
+    groups.forEach(function (g) {
+      var target = cols[0].w <= cols[1].w ? cols[0] : cols[1];
+      target.html += g.html;
+      target.w += g.weight + 1;   // +1 so the heading itself carries weight
+    });
 
     return '<div class="cbi-overview-grid">' +
-      '<div class="cbi-overview-grid__col">' + left + '</div>' +
-      '<div class="cbi-overview-grid__col">' + right + '</div>' +
+      cols.map(function (c) {
+        return c.html ? '<div class="cbi-overview-grid__col">' + c.html + '</div>' : '';
+      }).join('') +
       '</div>';
   }
 
@@ -609,9 +805,9 @@
         (notes ? '<div class="tma-portal-table__muted">' + esc(notes) + '</div>' : '') + '</td>' +
         '</tr>';
     }).join('');
-    return ui().section('Assessment checklist',
+    return contentGroup('Assessment checklist',
       ui().table([{ html: '', attrs: ' class="tma-portal-cell--tight"' }, 'Item'], rows),
-      { description: doneCount + ' of ' + assess.length + ' complete' });
+      doneCount + ' of ' + assess.length + ' complete');
   }
 
   function renderDocumentsTab(files) {
@@ -626,9 +822,9 @@
         '<td class="tma-portal-table__muted">' + esc(fmtDate(f.at) || '—') + '</td>' +
         '</tr>';
     }).join('');
-    return ui().section('Documents',
+    return contentGroup('Documents',
       ui().table(['Name', 'Size', 'Added by', 'Date'], rows),
-      { description: files.length + ' file(s), stored in Smartsheet until migration completes' });
+      files.length === 1 ? '1 file' : files.length + ' files');
   }
 
   function renderCommentsTab(comments, d) {
@@ -649,8 +845,8 @@
         '<textarea class="tma-portal-input" data-cbi-comment-input placeholder="Add a comment…" maxlength="8000" aria-label="Add a comment">' + esc(d.commentDraft || '') + '</textarea>' +
         ui().btn({ label: d.posting ? 'Posting…' : 'Post', small: true, attrs: ' data-cbi-action="post-comment"', disabled: d.posting }) +
       '</div>';
-    return ui().section('Comments', thread,
-      sources.length > 1 ? { description: sources.length + ' Smartsheet rows merged into this file' } : undefined);
+    return contentGroup('Comments', thread,
+      sources.length > 1 ? sources.length + ' Smartsheet rows merged into this file' : '');
   }
 
   function renderActivityTab(events) {
@@ -670,7 +866,7 @@
     } else {
       body = '<p class="tma-portal-subtitle">History accrues from the first sync onward.</p>';
     }
-    return ui().section('Activity', body, { description: 'Every change, attributable to a person or to the sync' });
+    return contentGroup('Activity', body);
   }
 
   function renderFieldsTab(a) {
@@ -686,9 +882,9 @@
     if (!finRows && !extraRows) {
       return ui().emptyState({ title: 'Nothing extra imported', illustration: 'Illustration07' });
     }
-    return (finRows ? ui().section('Billing & payments', ui().table(['Field', 'Value'], finRows)) : '') +
-      (extraRows ? ui().section('Other imported fields', ui().table(['Field', 'Value'], extraRows),
-        { description: 'Everything else the Smartsheet trackers carried, kept for completeness' }) : '');
+    return (finRows ? contentGroup('Billing & payments', ui().table(['Field', 'Value'], finRows)) : '') +
+      (extraRows ? contentGroup('Other imported fields', ui().table(['Field', 'Value'], extraRows),
+        'Imported for completeness') : '');
   }
 
   /* ── render root ── */
@@ -731,6 +927,25 @@
       else state.filters[id] = '';
       state.list.page = 1;
       loadList();
+      return;
+    }
+
+    var filterBtn = e.target.closest('[data-cbi-filter-trigger]');
+    if (filterBtn) {
+      e.preventDefault();
+      var p = ensurePopovers();
+      if (p.fields.hasAttribute('data-open')) { closePopovers(); return; }
+      fillFields();
+      openPopover(p.fields, filterBtn);
+      return;
+    }
+    var sortBtn = e.target.closest('[data-cbi-sort-trigger]');
+    if (sortBtn) {
+      e.preventDefault();
+      var p2 = ensurePopovers();
+      if (p2.sort.hasAttribute('data-open')) { closePopovers(); return; }
+      fillSort();
+      openPopover(p2.sort, sortBtn);
       return;
     }
 
@@ -779,11 +994,6 @@
         state.filters.assigned_to = '';
         state.filters.needs_review = false;
         state.filters.sort = 'recent';
-        state.list.page = 1;
-        loadList();
-        break;
-      case 'needs-review':
-        state.filters.needs_review = !state.filters.needs_review;
         state.list.page = 1;
         loadList();
         break;
@@ -853,10 +1063,6 @@
 
   /* ── mount ── */
 
-  function onMenuSelect(name) {
-    return function (pick) { setFilter(name, pick.action); };
-  }
-
   function wire() {
     var el = state.el;
     if (!el) return;
@@ -868,16 +1074,6 @@
     // classes and keystroke commits; its own guard makes re-calls safe.
     if (ui() && ui().wireToolbarSearch) {
       ui().wireToolbarSearch(el, '[data-cbi-search]', commitSearch);
-    }
-
-    // Head-dropdown filter menus (documented component; guard is a JS
-    // property inside wireHeadDropdown, so re-calls are safe under morph).
-    if (ui() && ui().wireHeadDropdownAll) {
-      ui().wireHeadDropdownAll(el, '[data-cbi-menu-status]', onMenuSelect('status'));
-      ui().wireHeadDropdownAll(el, '[data-cbi-menu-referred]', onMenuSelect('referred_by'));
-      ui().wireHeadDropdownAll(el, '[data-cbi-menu-investment]', onMenuSelect('investment_option'));
-      ui().wireHeadDropdownAll(el, '[data-cbi-menu-assigned]', onMenuSelect('assigned_to'));
-      ui().wireHeadDropdownAll(el, '[data-cbi-menu-sort]', onMenuSelect('sort'));
     }
 
     /* The tab markup is new on every repaint and needs re-initialising, but

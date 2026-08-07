@@ -52,6 +52,13 @@
 
 .tma-portal-page--cbi .cbi-table tbody tr { cursor: pointer; }
 
+/* ── List page extras ──────────────────────────────── */
+
+/* Applicant cell: name over a quiet reference number. */
+.cbi-name { display: block; }
+.cbi-sub { display: block; }
+.cbi-nowrap { white-space: nowrap; }
+
 /* ── Detail page (the application workspace) ───────── */
 
 .cbi-backrow { display: flex; }
@@ -75,9 +82,15 @@
 
 .cbi-meta__facts { color: var(--color-text-secondary); }
 
-/* Key-facts strip under the header: one card, facts in a fluid row. */
-.cbi-facts--strip {
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+/* Key facts under the header: flat on the page, a hairline to close the
+   band off. No fill — a filled card here is what made the page read as
+   boxes inside boxes. */
+.cbi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-12) var(--space-24);
+  padding-bottom: var(--space-20);
+  border-bottom: 1px solid var(--color-border-soft);
 }
 
 /* Workspace tab panels: room under the underline tab group. The explicit
@@ -85,45 +98,83 @@
 .cbi-tabpanel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-20);
+  gap: var(--space-28);
 }
 
 .cbi-tabpanel[hidden] { display: none; }
 
-/* Overview: two even columns of section cards, stacking on narrow. */
+/* Overview: two even columns of groups, stacking on narrow. */
 .cbi-overview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-20);
+  gap: var(--space-28);
   align-items: start;
 }
 
 .cbi-overview-grid__col {
   display: flex;
   flex-direction: column;
-  gap: var(--space-20);
+  gap: var(--space-28);
   min-width: 0;
 }
 
-/* Read-only fact rows inside a section card: label over value, flowing in
-   responsive columns (auto-fit, per the responsive-layout rule). */
-.cbi-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-12) var(--space-16);
+/* A titled group: quiet heading, content flat on the page surface. */
+.cbi-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
 }
 
-.cbi-fact-value {
+.cbi-group__title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  margin: 0;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.cbi-group__note {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.cbi-group__body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-12) var(--space-24);
+}
+
+/* Read-only fact: quiet label, prominent value — the Clients profile's
+   list-item treatment (label 12 muted over value 14 primary). */
+.cbi-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cbi-row__label {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.cbi-row__value {
+  font-size: var(--text-size-14);
+  line-height: 20px;
   color: var(--color-black);
   overflow-wrap: anywhere;
 }
 
 .cbi-indent { padding-left: var(--space-24); }
 
-/* Timeline: milestone label left, date right, soft dividers — the settings
-   row rhythm, in process order. */
+/* Timeline: milestone label left, date right, hairline rows. */
 .cbi-tl {
   list-style: none;
   margin: 0;
@@ -140,15 +191,21 @@
   padding: var(--space-8) 0;
   border-bottom: 1px solid var(--color-border-soft);
   font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
+  line-height: 20px;
 }
 
 .cbi-tl li:last-child { border-bottom: 0; }
 
 .cbi-tl__date {
-  font-weight: 600;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
+
+/* ── Filter / sort popovers ────────────────────────── */
+
+/* The documented tma-filter-popover carries its own surface, position and
+   [data-open] visibility; only the stacking context is page business. */
+.cbi-popover { z-index: 260; }
 
 /* ── Comments ──────────────────────────────────────── */
 
