@@ -54,35 +54,35 @@ try {
   await signIn(page, 'e2e@example.com');
   await page.goto(`${BASE}/dev/cbi`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
-  check(await page.locator('.cbi-head__title').count() === 1, 'page head painted');
+  check(await page.locator('.tma-portal-head__title').count() === 1, 'page head painted');
   check((await page.locator('.cbi-shell__flag').textContent() || '').includes('Development'), 'development-preview flag visible');
 
   step(2, 'Applications table paints real rows');
   await page.waitForSelector('.cbi-table tbody tr', { timeout: 15000 });
   const rowCount = await page.locator('.cbi-table tbody tr').count();
   check(rowCount > 0, `table shows ${rowCount} application row(s)`);
-  const total = await page.locator('.cbi-pagination span').textContent();
+  const total = await page.locator('.tma-pagination-bar__results').textContent();
   log(`    pagination: ${total?.trim()}`);
   await page.screenshot({ path: 'tests/Browser/cbi-list.png', fullPage: false });
 
   step(3, 'Stage tabs filter the list');
   const stages = ['applications', 'assessment', 'tracker', 'closed'];
   for (const s of stages) {
-    await page.click(`[data-cbi-stage="${s}"]`);
+    await page.click(`.tma-tab[data-tab-key="${s}"]`);
     await page.waitForTimeout(900);
-    const chip = await page.locator(`[data-cbi-stage="${s}"][aria-pressed="true"]`).count();
-    check(chip === 1, `stage tab '${s}' activates`);
+    const on = await page.locator(`.tma-tab[data-tab-key="${s}"].is-active`).count();
+    check(on === 1, `stage tab '${s}' activates`);
   }
-  await page.click('[data-cbi-stage=""]');
+  await page.click('.tma-tab[data-tab-key=""]');
   await page.waitForTimeout(900);
 
   step(4, 'Search narrows the table');
-  const firstName = (await page.locator('.cbi-app__name').first().textContent() || '').trim();
+  const firstName = (await page.locator('.cbi-table tbody tr strong').first().textContent() || '').trim();
   const needle = firstName.split(/\s+/)[0] || '';
   if (needle.length > 2) {
     await page.fill('[data-cbi-search]', needle);
     await page.waitForTimeout(1200);
-    const names = await page.locator('.cbi-app__name').allTextContents();
+    const names = await page.locator('.cbi-table tbody tr strong').allTextContents();
     check(names.length > 0 && names.every((n) => n.toLowerCase().includes(needle.toLowerCase())),
       `every result matches '${needle}' (${names.length} rows)`);
     await page.fill('[data-cbi-search]', '');
@@ -93,10 +93,10 @@ try {
 
   step(5, 'Opening an application workspace');
   await page.click('.cbi-table tbody tr');
-  await page.waitForSelector('.cbi-detail__title', { timeout: 10000 });
+  await page.waitForSelector('.cbi-detail-grid', { timeout: 10000 });
   check(page.url().includes('#/app/'), 'hash route points at the application');
-  check(await page.locator('.cbi-detail__title').count() === 1, 'applicant title painted');
-  const panels = await page.locator('.cbi-panel__title').allTextContents();
+  check(await page.locator('.tma-portal-head__title').count() === 1, 'applicant title painted');
+  const panels = await page.locator('.tma-portal-section__title').allTextContents();
   log(`    panels: ${panels.map((p) => p.trim()).join(' · ')}`);
   // The Applicant panel deliberately hides itself when a record carries no
   // personal fields (common on COR-tracker rows), so it isn't asserted.
@@ -127,9 +127,9 @@ try {
   // modules whose requests all queue behind the dev server's single PHP
   // worker, so networkidle/fixed waits are flaky here.
   await page.goto(`${BASE}/cbi`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.tma-dash__view[data-view="cbi"] .cbi-head__title', { timeout: 20000 });
+  await page.waitForSelector('.tma-dash__view[data-view="cbi"] .tma-portal-head__title', { timeout: 20000 });
   check(await page.locator('.tma-dash__nav-item[data-nav="cbi"]').count() >= 1, 'sidebar CBI row present for admin');
-  check(await page.locator('.tma-dash__view[data-view="cbi"] .cbi-head__title').count() === 1, 'module mounted inside the shell view');
+  check(await page.locator('.tma-dash__view[data-view="cbi"] .tma-portal-head__title').count() === 1, 'module mounted inside the shell view');
   const shellRows = await page.waitForSelector('tr[data-cbi-open]', { timeout: 20000 }).then(() => true).catch(() => false);
   check(shellRows, 'shell-mounted table paints rows');
 
