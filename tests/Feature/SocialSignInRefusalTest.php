@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -25,7 +26,7 @@ class SocialSignInRefusalTest extends TestCase
     use RefreshDatabase;
 
     /** The callback for a signed-out visitor lands back on the sign-in screen. */
-    private function refuse(array $query): \Illuminate\Testing\TestResponse
+    private function refuse(array $query): TestResponse
     {
         return $this->get('/auth/social/microsoft/callback?'.http_build_query($query));
     }
@@ -54,14 +55,58 @@ class SocialSignInRefusalTest extends TestCase
         );
     }
 
-    public function test_a_conditional_access_block_is_not_reported_as_a_cancellation(): void
+    /**
+     * The one that turns new starters away while every existing account keeps
+     * working: "user assignment required" is on, and nobody assigned them.
+     * It used to land on the unnamed catch-all, which pointed at the portal's
+     * Microsoft access — the one thing that was not wrong.
+     */
+    public function test_an_unassigned_account_is_told_it_was_never_given_access(): void
+    {
+        $this->refuse([
+            'error' => 'access_denied',
+            'error_description' => 'AADSTS50105: Your administrator has configured the application to block users unless they are specifically granted access.',
+        ])->assertSessionHas(
+            'social_error',
+            "Your Microsoft administrator hasn't given your account access to the portal yet.",
+        );
+    }
+
+    /** Declining and being bounced off "Need admin approval" look identical. */
+    public function test_an_unapproved_consent_does_not_accuse_the_person_of_cancelling(): void
+    {
+        $this->refuse([
+            'error' => 'access_denied',
+            'error_description' => 'AADSTS65004: User declined to consent to access the app.',
+        ])->assertSessionHas(
+            'social_error',
+            "Microsoft sign-in wasn't approved - if you weren't offered a choice, your administrator has to approve the portal.",
+        );
+    }
+
+    public function test_an_account_outside_the_organisation_is_told_so(): void
+    {
+        $this->refuse([
+            'error' => 'access_denied',
+            'error_description' => 'AADSTS50020: User account from identity provider does not exist in tenant.',
+        ])->assertSessionHas(
+            'social_error',
+            "That Microsoft account isn't part of the organisation the portal signs people in from.",
+        );
+    }
+
+    /**
+     * Conditional access blocks the sign-in, not the app — so "approve the
+     * portal" is advice that cannot work. It still must not read as a cancel.
+     */
+    public function test_a_conditional_access_block_names_the_security_policy(): void
     {
         $this->refuse([
             'error' => 'access_denied',
             'error_description' => 'AADSTS53003: Access has been blocked by Conditional Access policies.',
         ])->assertSessionHas(
             'social_error',
-            'Your Microsoft administrator needs to approve the portal before you can sign in this way.',
+            "Your organisation's security policy blocked this sign-in - your Microsoft administrator can say why.",
         );
     }
 
@@ -71,12 +116,30 @@ class SocialSignInRefusalTest extends TestCase
             ->assertSessionHas('social_error', 'Microsoft sign-in was cancelled - nothing was changed.');
     }
 
-    public function test_an_unnamed_refusal_points_at_an_administrator_rather_than_a_retry(): void
+    /**
+     * A broken app registration is ours to fix. Sending these people to their
+     * own administrator wastes everybody's time - nothing in their tenant can
+     * put it right.
+     */
+    public function test_a_registration_fault_is_pointed_at_support_not_their_admin(): void
     {
         $this->refuse(['error' => 'unauthorized_client', 'error_description' => 'Something we have not named.'])
             ->assertSessionHas(
                 'social_error',
-                "Microsoft sign-in was refused. Ask an administrator to check the portal's Microsoft access.",
+                "The portal's Microsoft connection needs attention - please contact support.",
+            );
+    }
+
+    /**
+     * An unnamed code still has to be readable back to support, otherwise the
+     * only record of it is a log the person reporting it cannot reach.
+     */
+    public function test_an_unnamed_refusal_carries_its_code(): void
+    {
+        $this->refuse(['error' => 'access_denied', 'error_description' => 'AADSTS99999: Something new.'])
+            ->assertSessionHas(
+                'social_error',
+                "Microsoft sign-in was refused (AADSTS99999). Ask an administrator to check the portal's Microsoft access.",
             );
     }
 

@@ -156,6 +156,10 @@ class SocialAuthController extends Controller
                 'host' => $request->getHost(),
                 'error' => $error,
                 'error_subcode' => (string) $request->query('error_subcode'),
+                // Lifted out of the description so refusals can be counted and
+                // grepped by cause — the description itself carries a unique
+                // trace id and timestamp, so no two are ever the same string.
+                'aadsts' => self::refusalCodes($description),
                 'error_description' => Str::limit($description, 500, ''),
             ]);
 
@@ -498,6 +502,34 @@ class SocialAuthController extends Controller
     }
 
     /**
+     * The AADSTS codes Entra reports a refusal with. They arrive inside
+     * error_description rather than as a field of their own, and one
+     * description can carry several.
+     *
+     * @return list<string>
+     */
+    private static function refusalCodes(string $description): array
+    {
+        preg_match_all('/AADSTS(\d+)/', $description, $matches);
+
+        return array_values(array_unique($matches[1]));
+    }
+
+    /**
+     * @param  list<string>  $codes
+     */
+    private static function anyCode(array $codes, string $pattern): bool
+    {
+        foreach ($codes as $code) {
+            if (preg_match($pattern, $code)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * What to tell someone a provider turned away.
      *
      * "Cancelled" is only true when they cancelled. A Microsoft 365 tenant that
@@ -507,31 +539,88 @@ class SocialAuthController extends Controller
      * them. Telling that person they cancelled sends them round the same loop
      * indefinitely, because retrying is precisely what cannot work.
      *
-     * The AADSTS codes arrive inside error_description, not as their own field.
+     * Naming only a handful of codes was nearly as bad: everything else landed
+     * on one catch-all that named no cause at all, so the single most common
+     * refusal a *new* person meets — 50105, the account was never assigned to
+     * the app — was indistinguishable from a misconfigured client secret. A
+     * tenant can sign its existing staff in happily for months while turning
+     * every new starter away, and nothing on the screen or in the log said
+     * which setting to look at.
+     *
+     * Order matters: the specific causes are tested before the general ones.
      */
     private function refusalMessage(string $provider, string $error, string $description): string
     {
         $name = ucfirst($provider);
+        $codes = self::refusalCodes($description);
 
-        // 65001: no consent recorded for this app. 90094 / 900941: the grant
-        // needs an administrator. 53000-53004: conditional access / device
-        // compliance. All are "an administrator has to act", not "try again".
-        $needsAdmin = $error === 'consent_required'
-            || $error === 'admin_consent_required'
-            || (bool) preg_match('/AADSTS(65001|90094|900941|530\d{2})/', $description);
-
-        if ($needsAdmin) {
-            return 'Your Microsoft administrator needs to approve the portal before you can sign in this way.';
+        // 50105: the app has "user assignment required" switched on and this
+        // account is not in the assigned list. Nothing is wrong with their
+        // account, the portal, or the consent — an administrator simply has to
+        // add them. This is what breaks new starters and only new starters.
+        if (self::anyCode($codes, '/^50105$/')) {
+            return 'Your '.$name." administrator hasn't given your account access to the portal yet.";
         }
 
-        // A genuine "no" from the person in front of the consent screen.
-        if ($error === 'access_denied' && ! preg_match('/AADSTS/', $description)) {
+        // 65001: no consent recorded for this app. 90094 / 900941: the grant
+        // needs an administrator to give it.
+        if (
+            $error === 'consent_required'
+            || $error === 'admin_consent_required'
+            || self::anyCode($codes, '/^(65001|90094|900941)$/')
+        ) {
+            return 'Your '.$name.' administrator needs to approve the portal before you can sign in this way.';
+        }
+
+        // 65004 is returned both when someone declines a consent screen and
+        // when they are bounced off Microsoft's "Need admin approval" wall,
+        // and the two are indistinguishable from here. Cover both rather than
+        // accuse someone of cancelling a choice they were never offered.
+        if (self::anyCode($codes, '/^65004$/')) {
+            return $name." sign-in wasn't approved - if you weren't offered a choice, your administrator has to approve the portal.";
+        }
+
+        // The account is not a member of the organisation this portal signs
+        // people in from, so no amount of retrying or approving will help.
+        if (self::anyCode($codes, '/^(50020|50128|50129)$/')) {
+            return 'That '.$name." account isn't part of the organisation the portal signs people in from.";
+        }
+
+        // Conditional access, device compliance, MFA policy, risky sign-in.
+        // "Approve the portal" is the wrong advice here — the block is on the
+        // sign-in itself, not on the app.
+        if (self::anyCode($codes, '/^(50005|50076|50079|50158|53\d{3})$/')) {
+            return "Your organisation's security policy blocked this sign-in - your ".$name.' administrator can say why.';
+        }
+
+        // The Microsoft account itself is disabled, locked or expired.
+        if (self::anyCode($codes, '/^(50053|50055|50057|50058)$/')) {
+            return 'That '.$name.' account cannot sign in at the moment - check it with your '.$name.' administrator.';
+        }
+
+        // Ours to fix, not theirs: a redirect URI, requested permission or
+        // credential on the app registration is wrong. Sending these people to
+        // their own administrator wastes everybody's time — nothing in their
+        // tenant can put it right.
+        if (
+            in_array($error, ['unauthorized_client', 'invalid_client', 'invalid_request'], true)
+            || self::anyCode($codes, '/^(50011|500011|650056|650057|700016|900971|7000112|7000215|7000222)$/')
+        ) {
+            return "The portal's ".$name.' connection needs attention - please contact support.';
+        }
+
+        // A genuine "no" from the person in front of the consent screen. Only
+        // when the provider gave no code at all: every refusal that carries one
+        // has a cause behind it that the person did not choose.
+        if ($error === 'access_denied' && $codes === []) {
             return $name.' sign-in was cancelled - nothing was changed.';
         }
 
-        // Anything else is a policy or configuration refusal we have not named.
-        // Say it is not their doing, and leave the detail to the log.
-        return $name." sign-in was refused. Ask an administrator to check the portal's ".$name.' access.';
+        // Anything we have not named. The code is the only thing that makes it
+        // diagnosable, so put it where the person can read it back to support
+        // rather than leaving it in a log nobody can reach.
+        return $name.' sign-in was refused'.($codes ? ' (AADSTS'.$codes[0].')' : '')
+            .". Ask an administrator to check the portal's ".$name.' access.';
     }
 
     private function fail(Request $request, string $message): RedirectResponse
