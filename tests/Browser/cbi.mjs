@@ -93,7 +93,7 @@ try {
 
   step(5, 'Opening an application workspace');
   await page.click('.cbi-table tbody tr');
-  await page.waitForSelector('.cbi-detail-grid', { timeout: 10000 });
+  await page.waitForSelector('.cbi-overview-grid', { timeout: 10000 });
   check(page.url().includes('#/app/'), 'hash route points at the application');
   check(await page.locator('.tma-portal-head__title').count() === 1, 'applicant title painted');
   const panels = await page.locator('.tma-portal-section__title').allTextContents();
@@ -107,12 +107,16 @@ try {
 
   step(6, 'Posting a portal comment');
   const marker = 'E2E note ' + Date.now();
+  await page.click('.tma-tab[data-tab-key="comments"]');
+  await page.waitForTimeout(300);
   await page.fill('[data-cbi-comment-input]', marker);
   await page.click('[data-cbi-action="post-comment"]');
   await page.waitForTimeout(1200);
   let bodies = await page.locator('.cbi-comment__body').allTextContents();
   check(bodies.some((b) => b.includes(marker)), 'comment appears in the thread');
   await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.cbi-overview-grid', { timeout: 10000 });
+  await page.click('.tma-tab[data-tab-key="comments"]');
   await page.waitForSelector('.cbi-comment__body', { timeout: 10000 });
   bodies = await page.locator('.cbi-comment__body').allTextContents();
   check(bodies.some((b) => b.includes(marker)), 'comment survives a reload (server-backed)');

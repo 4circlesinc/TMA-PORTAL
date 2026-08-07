@@ -103,7 +103,7 @@
     summary: null,
     list: { items: [], total: 0, page: 1, lastPage: 1, loading: false, error: null },
     filters: { stage: '', status: '', referred_by: '', investment_option: '', assigned_to: '', q: '', sort: 'recent', needs_review: false },
-    detail: { data: null, loading: false, error: null, uuid: null, posting: false, commentDraft: '' },
+    detail: { data: null, loading: false, error: null, uuid: null, posting: false, commentDraft: '', tab: 'overview' },
     searchTimer: null,
   };
 
@@ -158,7 +158,7 @@
     // Identity check on the request's own detail object: a response only
     // applies while this object is still the live one, which also covers
     // re-opening the same uuid.
-    var req = { data: null, loading: true, error: null, uuid: uuid, posting: false, commentDraft: '' };
+    var req = { data: null, loading: true, error: null, uuid: uuid, posting: false, commentDraft: '', tab: 'overview' };
     state.detail = req;
     render();
     cbiFetch(BASE + '/applications/' + encodeURIComponent(uuid))
@@ -443,26 +443,36 @@
     ['appealRequested', 'Appeal requested'], ['appealSent', 'Appeal sent'], ['appealDecided', 'Appeal decided'],
   ];
 
+  /*
+   * The application workspace mirrors the portal's flagship record screen —
+   * the Clients profile: a case header (name, chips, actions), a key-facts
+   * strip, then underline tabs whose panels all render at once and toggle
+   * with `hidden` (the documented clients-profile pattern), so switching
+   * tabs never refetches.
+   */
   function renderDetail() {
     var d = state.detail;
     var back = ui().btn({ label: 'Back to applications', icon: 'CaretLeft', variant: 'ghost', small: true, attrs: ' data-cbi-action="back"' });
-    if (d.loading) return '<div class="tma-portal-head"><div>' + back + '</div></div>' + ui().loading({ count: 6 });
-    if (d.error) return '<div class="tma-portal-head"><div>' + back + '</div></div>' + ui().banner('warning', esc(d.error));
+    if (d.loading) return '<div class="cbi-backrow">' + back + '</div>' + ui().loading({ count: 6 });
+    if (d.error) return '<div class="cbi-backrow">' + back + '</div>' + ui().banner('warning', esc(d.error));
     if (!d.data) return '';
 
     var a = d.data.application;
+    var assess = d.data.assessment || [];
+    var files = d.data.attachments || [];
+    var comments = d.data.comments || [];
+    var events = d.data.events || [];
 
-    // Meta line: ·-joined facts with inline documented status chips (the
-    // File Library viewer-head recipe).
+    var chips =
+      stageChip(a.stage) +
+      (a.status ? ' ' + statusChip(a.status) : '') +
+      (a.granted ? ' <span class="tma-portal-status tma-portal-status--success">Granted</span>' : '') +
+      (a.needsReview ? ' ' + reviewChip() : '');
+
     var meta = [];
     if (a.applicantNumber) meta.push('№ ' + esc(a.applicantNumber));
     if (a.progress) meta.push(esc(a.progress));
     if (a.syncedAt) meta.push('Synced ' + esc(fmtDateTime(a.syncedAt)));
-    var metaLine = meta.join(' &middot; ') +
-      ' ' + stageChip(a.stage) +
-      (a.status ? ' ' + statusChip(a.status) : '') +
-      (a.granted ? ' <span class="tma-portal-status tma-portal-status--success">Granted</span>' : '') +
-      (a.needsReview ? ' ' + reviewChip() : '');
 
     var headActions =
       (safeUrl(a.sourcePermalink)
@@ -470,12 +480,60 @@
           '<img class="tma-no-data__btn-icon" src="' + PH_ICON + 'ArrowSquareOut.svg" alt="" width="16" height="16"><span>Open in Smartsheet</span></a>'
         : '');
 
-    var head = '<div class="tma-portal-head"><div>' +
+    var head =
       '<div class="cbi-backrow">' + back + '</div>' +
-      '<h2 class="tma-portal-head__title">' + esc(a.applicantName || 'Unnamed applicant') + '</h2>' +
-      '<p class="tma-portal-subtitle cbi-meta">' + metaLine + '</p>' +
+      '<div class="tma-portal-head cbi-detail-head"><div>' +
+      '<h2 class="tma-portal-head__title cbi-detail-name">' + esc(a.applicantName || 'Unnamed applicant') + '</h2>' +
+      '<p class="tma-portal-subtitle cbi-meta">' + chips +
+      (meta.length ? '<span class="cbi-meta__facts">' + meta.join(' &middot; ') + '</span>' : '') + '</p>' +
       '</div><div class="tma-portal-head__actions">' + headActions + '</div></div>';
 
+    // Key-facts strip: the at-a-glance row every case file opens with.
+    var strip =
+      stripFact('Received', fmtDate(a.timeline && a.timeline.received)) +
+      stripFact('Submitted', fmtDate(a.timeline && a.timeline.submitted)) +
+      stripFact('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
+      stripFact('Investment', a.investmentOption) +
+      stripFact('Referred by', a.referredBy) +
+      stripFact('Assigned', a.assignedTo);
+    var stripHtml = strip ? '<div class="tma-portal-section__card"><div class="cbi-facts cbi-facts--strip">' + strip + '</div></div>' : '';
+
+    var tabs = [{ key: 'overview', label: 'Overview' }];
+    if (assess.length) tabs.push({ key: 'assessment', label: 'Assessment (' + assess.length + ')' });
+    tabs.push({ key: 'documents', label: 'Documents (' + files.length + ')' });
+    tabs.push({ key: 'comments', label: 'Comments (' + comments.length + ')' });
+    tabs.push({ key: 'activity', label: 'Activity' });
+    if ((a.financials && Object.keys(a.financials).length) || (a.extra && Object.keys(a.extra).length)) {
+      tabs.push({ key: 'fields', label: 'All fields' });
+    }
+    var activeTab = d.tab || 'overview';
+    var known = tabs.some(function (t) { return t.key === activeTab; });
+    if (!known) activeTab = 'overview';
+
+    // Every panel renders; the inactive ones carry `hidden` — the documented
+    // clients-profile tab-panel pattern (no refetch on switch).
+    function tabPanel(key, html) {
+      return '<div class="cbi-tabpanel" role="tabpanel" data-cbi-panel="' + key + '"' +
+        (key === activeTab ? '' : ' hidden') + '>' + html + '</div>';
+    }
+
+    return head + stripHtml +
+      ui().tabs(tabs, activeTab) +
+      tabPanel('overview', renderOverviewTab(a)) +
+      (assess.length ? tabPanel('assessment', renderAssessmentTab(assess)) : '') +
+      tabPanel('documents', renderDocumentsTab(files)) +
+      tabPanel('comments', renderCommentsTab(comments, d)) +
+      tabPanel('activity', renderActivityTab(events)) +
+      tabPanel('fields', renderFieldsTab(a));
+  }
+
+  function stripFact(label, value) {
+    if (value == null || value === '') return '';
+    return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(label) + '</span>' +
+      '<span class="cbi-fact-value">' + esc(value) + '</span></div>';
+  }
+
+  function renderOverviewTab(a) {
     var applicant =
       fact('Main applicant', a.mainApplicantName && a.mainApplicantName !== a.applicantName ? a.mainApplicantName : null) +
       fact('Date of birth', fmtDate(a.dateOfBirth)) +
@@ -507,11 +565,6 @@
       fact('Submitted by', a.submittedBy) +
       fact('Verified by', a.verifiedBy);
 
-    var timeline = TIMELINE_LABELS.map(function (t) {
-      var v = a.timeline && a.timeline[t[0]];
-      return v ? fact(t[1], fmtDate(v)) : '';
-    }).join('');
-
     var narrative =
       fact('Notes', a.notes) +
       fact('Latest comment', a.latestComment) +
@@ -519,66 +572,95 @@
       fact('Agent assessment', a.agentAssessment) +
       fact('Assessment response', a.assessmentResponse);
 
-    var assess = d.data.assessment || [];
+    // Milestones as clean label/date rows, in process order — only the
+    // dates the file has actually reached.
+    var timelineRows = TIMELINE_LABELS.map(function (t) {
+      var v = a.timeline && a.timeline[t[0]];
+      if (!v) return '';
+      return '<li><span>' + esc(t[1]) + '</span>' +
+        '<span class="cbi-tl__date">' + esc(fmtDate(v)) + '</span></li>';
+    }).join('');
+    var timeline = timelineRows ? '<ul class="cbi-tl">' + timelineRows + '</ul>' : '';
+
+    var left =
+      (applicant ? factSection('Applicant', applicant) : '') +
+      (caseFacts ? factSection('Case', caseFacts) : '') +
+      (team ? factSection('Team', team) : '');
+    var right =
+      (timeline ? ui().section('Timeline', timeline) : '') +
+      (narrative ? factSection('Notes', narrative) : '');
+
+    return '<div class="cbi-overview-grid">' +
+      '<div class="cbi-overview-grid__col">' + left + '</div>' +
+      '<div class="cbi-overview-grid__col">' + right + '</div>' +
+      '</div>';
+  }
+
+  function renderAssessmentTab(assess) {
     var doneCount = assess.filter(function (i) { return i.done; }).length;
-    var assessHtml = '';
-    if (assess.length) {
-      var assessRows = assess.map(function (i) {
-        var main = i.description || i.applicantLabel || i.label || '';
-        var notes = [i.notes, i.agentAssessment, i.response].filter(Boolean).join(' · ');
-        return '<tr>' +
-          '<td>' + (i.done
-            ? '<span class="tma-portal-status tma-portal-status--success">Done</span>'
-            : '<span class="tma-portal-status tma-portal-status--neutral">Open</span>') + '</td>' +
-          '<td' + (i.indent ? ' class="cbi-indent"' : '') + '>' + esc(main) +
-          (notes ? '<div class="tma-portal-table__muted">' + esc(notes) + '</div>' : '') + '</td>' +
-          '</tr>';
-      }).join('');
-      assessHtml = ui().table([{ html: '', attrs: ' class="tma-portal-cell--tight"' }, 'Item'], assessRows);
-    }
+    var rows = assess.map(function (i) {
+      var main = i.description || i.applicantLabel || i.label || '';
+      var notes = [i.notes, i.agentAssessment, i.response].filter(Boolean).join(' · ');
+      return '<tr>' +
+        '<td class="tma-portal-cell--tight">' + (i.done
+          ? '<span class="tma-portal-status tma-portal-status--success">Done</span>'
+          : '<span class="tma-portal-status tma-portal-status--neutral">Open</span>') + '</td>' +
+        '<td' + (i.indent ? ' class="cbi-indent"' : '') + '>' + esc(main) +
+        (notes ? '<div class="tma-portal-table__muted">' + esc(notes) + '</div>' : '') + '</td>' +
+        '</tr>';
+    }).join('');
+    return ui().section('Assessment checklist',
+      ui().table([{ html: '', attrs: ' class="tma-portal-cell--tight"' }, 'Item'], rows),
+      { description: doneCount + ' of ' + assess.length + ' complete' });
+  }
 
-    var files = d.data.attachments || [];
-    var filesHtml;
-    if (files.length) {
-      var fileRows = files.map(function (f) {
-        return '<tr>' +
-          '<td><a class="tma-portal-file-link" href="' + BASE + '/attachments/' + f.id + '" target="_blank" rel="noopener">' + esc(f.name) + '</a></td>' +
-          '<td class="tma-portal-table__muted">' + esc(fmtSize(f.sizeKb) || '—') + '</td>' +
-          '<td class="tma-portal-table__muted">' + esc(f.by || '—') + '</td>' +
-          '<td class="tma-portal-table__muted">' + esc(fmtDate(f.at) || '—') + '</td>' +
-          '</tr>';
-      }).join('');
-      filesHtml = ui().table(['Name', 'Size', 'Added by', 'Date'], fileRows);
-    } else {
-      filesHtml = '<p class="tma-portal-subtitle">No documents attached yet.</p>';
+  function renderDocumentsTab(files) {
+    if (!files.length) {
+      return ui().emptyState({ title: 'No documents yet', subtitle: 'Files attached in Smartsheet appear here after a sync.', illustration: 'Illustration07' });
     }
+    var rows = files.map(function (f) {
+      return '<tr>' +
+        '<td><a class="tma-portal-file-link" href="' + BASE + '/attachments/' + f.id + '" target="_blank" rel="noopener">' + esc(f.name) + '</a></td>' +
+        '<td class="tma-portal-table__muted">' + esc(fmtSize(f.sizeKb) || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(f.by || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(fmtDate(f.at) || '—') + '</td>' +
+        '</tr>';
+    }).join('');
+    return ui().section('Documents',
+      ui().table(['Name', 'Size', 'Added by', 'Date'], rows),
+      { description: files.length + ' file(s), stored in Smartsheet until migration completes' });
+  }
 
-    var comments = d.data.comments || [];
-    var commentsHtml = '<div class="cbi-comments" data-cbi-comments>' +
+  function renderCommentsTab(comments, d) {
+    var sources = (d.data && d.data.sources) || [];
+    var thread = '<div class="cbi-comments" data-cbi-comments>' +
       (comments.length ? comments.map(function (c) {
         return '<div class="cbi-comment" data-id="c' + esc(c.id) + '">' +
           '<div class="cbi-comment__head"><span class="cbi-comment__author">' + esc(c.author) + '</span>' +
           '<span class="tma-portal-table__muted">' + esc(fmtDateTime(c.at)) + '</span>' +
           (c.source === 'smartsheet' ? '<span class="tma-portal-chip">Smartsheet</span>' : '') + '</div>' +
           '<div class="cbi-comment__body">' + esc(c.body) + '</div></div>';
-      }).join('') : '<p class="tma-portal-subtitle">No comments yet.</p>') +
+      }).join('') : '<p class="tma-portal-subtitle">No comments yet — start the conversation below.</p>') +
       '</div>' +
       '<div class="cbi-composer">' +
         // The draft lives in state, not just the DOM: a morph that touches
         // an unfocused textarea syncs it to the rendered value, so an
         // unmanaged draft would vanish on the next re-render.
-        '<textarea class="tma-portal-input" data-cbi-comment-input placeholder="Add a comment…" maxlength="8000" aria-label="Add a comment">' + esc(state.detail.commentDraft || '') + '</textarea>' +
-        ui().btn({ label: state.detail.posting ? 'Posting…' : 'Post', small: true, attrs: ' data-cbi-action="post-comment"', disabled: state.detail.posting }) +
+        '<textarea class="tma-portal-input" data-cbi-comment-input placeholder="Add a comment…" maxlength="8000" aria-label="Add a comment">' + esc(d.commentDraft || '') + '</textarea>' +
+        ui().btn({ label: d.posting ? 'Posting…' : 'Post', small: true, attrs: ' data-cbi-action="post-comment"', disabled: d.posting }) +
       '</div>';
+    return ui().section('Comments', thread,
+      sources.length > 1 ? { description: sources.length + ' Smartsheet rows merged into this file' } : undefined);
+  }
 
-    var events = d.data.events || [];
+  function renderActivityTab(events) {
     var EVENT_LABELS = {
       imported: 'Imported from Smartsheet', stage_changed: 'Stage changed', status_changed: 'Status changed',
       assigned: 'Assignment changed', comment_added: 'Comment added', field_changed: 'Field changed',
     };
-    var activityHtml;
+    var body;
     if (events.length) {
-      activityHtml = '<ul class="cbi-activity">' + events.map(function (e) {
+      body = '<ul class="cbi-activity">' + events.map(function (e) {
         var what = '<strong>' + esc(EVENT_LABELS[e.type] || e.type) + '</strong>';
         if (e.from || e.to) what += ' ' + (e.from ? esc(e.from) : '—') + ' → ' + (e.to ? esc(e.to) : '—');
         if (e.actor) what += ' · ' + esc(e.actor);
@@ -586,9 +668,12 @@
           '<span>' + what + '</span></li>';
       }).join('') + '</ul>';
     } else {
-      activityHtml = '<p class="tma-portal-subtitle">History accrues from the first sync onward.</p>';
+      body = '<p class="tma-portal-subtitle">History accrues from the first sync onward.</p>';
     }
+    return ui().section('Activity', body, { description: 'Every change, attributable to a person or to the sync' });
+  }
 
+  function renderFieldsTab(a) {
     function kvRows(obj) {
       var keys = Object.keys(obj || {});
       if (!keys.length) return '';
@@ -598,33 +683,13 @@
     }
     var finRows = kvRows(a.financials);
     var extraRows = kvRows(a.extra);
-    var foldHtml = (finRows || extraRows)
-      ? '<details class="cbi-fold">' +
-          '<summary class="tma-portal-subtitle">Show all imported fields</summary>' +
-          (finRows ? ui().table(['Billing & payments', ''], finRows) : '') +
-          (extraRows ? ui().table(['Other fields', ''], extraRows) : '') +
-        '</details>'
-      : '';
-
-    var sources = d.data.sources || [];
-    var sourcesHint = sources.length > 1 ? sources.length + ' Smartsheet rows merged' : null;
-
-    return head + '<div class="cbi-detail-grid">' +
-      wrapCol(factSection('Applicant', applicant)) +
-      wrapCol(factSection('Case', caseFacts)) +
-      wrapCol(factSection('Team', team)) +
-      wrapWide(timeline ? factSection('Timeline', timeline) : '') +
-      wrapWide(assessHtml ? ui().section('Assessment checklist', assessHtml, { description: doneCount + ' of ' + assess.length + ' complete' }) : '') +
-      wrapCol(narrative ? factSection('Notes', narrative) : '') +
-      wrapCol(ui().section('Documents', filesHtml, files.length ? { description: files.length + ' file(s)' } : undefined)) +
-      wrapWide(ui().section('Comments', commentsHtml, sourcesHint ? { description: sourcesHint } : undefined)) +
-      wrapWide(ui().section('Activity', activityHtml)) +
-      wrapWide(foldHtml ? ui().section('Everything else', foldHtml, { description: 'Imported for completeness' }) : '') +
-      '</div>';
+    if (!finRows && !extraRows) {
+      return ui().emptyState({ title: 'Nothing extra imported', illustration: 'Illustration07' });
+    }
+    return (finRows ? ui().section('Billing & payments', ui().table(['Field', 'Value'], finRows)) : '') +
+      (extraRows ? ui().section('Other imported fields', ui().table(['Field', 'Value'], extraRows),
+        { description: 'Everything else the Smartsheet trackers carried, kept for completeness' }) : '');
   }
-
-  function wrapCol(html) { return html ? '<div class="cbi-detail-grid__col">' + html + '</div>' : ''; }
-  function wrapWide(html) { return html ? '<div class="cbi-detail-grid__wide">' + html + '</div>' : ''; }
 
   /* ── render root ── */
 
@@ -817,15 +882,23 @@
 
     /* The tab markup is new on every repaint and needs re-initialising, but
        `el` is the same node — wiring the change listener again would stack
-       another handler on it each time (the documented portal-admin guard). */
+       another handler on it each time (the documented portal-admin guard).
+       One handler serves both tab groups: the stage tabs on the list and
+       the workspace tabs on the detail never coexist, so the route decides
+       what a key means. */
     if (el._cbiTabsWired) {
       if (window.PortalTabGroup) window.PortalTabGroup.init(el);
     } else if (ui() && ui().wireTabs) {
       el._cbiTabsWired = true;
       ui().wireTabs(el, function (key) {
-        state.filters.stage = key;
-        state.list.page = 1;
-        loadList();
+        if (state.route.view === 'detail') {
+          state.detail.tab = key;
+          render();
+        } else {
+          state.filters.stage = key;
+          state.list.page = 1;
+          loadList();
+        }
       });
     }
   }

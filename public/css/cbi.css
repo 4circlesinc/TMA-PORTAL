@@ -52,26 +52,58 @@
 
 .tma-portal-page--cbi .cbi-table tbody tr { cursor: pointer; }
 
-/* ── Detail page ───────────────────────────────────── */
+/* ── Detail page (the application workspace) ───────── */
 
-.cbi-backrow { margin-bottom: var(--space-8); }
+.cbi-backrow { display: flex; }
+
+/* The case header: record name a step larger than the page-title scale,
+   matching the Clients profile name; chips + facts flow on one meta line. */
+.cbi-detail-head { align-items: flex-start; }
+
+.cbi-detail-name {
+  font-size: var(--text-size-18);
+  line-height: var(--text-lh-18);
+}
 
 .cbi-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-8);
+  margin-top: var(--space-4);
 }
 
-.cbi-detail-grid {
+.cbi-meta__facts { color: var(--color-text-secondary); }
+
+/* Key-facts strip under the header: one card, facts in a fluid row. */
+.cbi-facts--strip {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+/* Workspace tab panels: room under the underline tab group. The explicit
+   display beats the UA's [hidden] rule, so hidden must be restated. */
+.cbi-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.cbi-tabpanel[hidden] { display: none; }
+
+/* Overview: two even columns of section cards, stacking on narrow. */
+.cbi-overview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--space-20);
   align-items: start;
 }
 
-.cbi-detail-grid__col { min-width: 0; }
-.cbi-detail-grid__wide { grid-column: 1 / -1; min-width: 0; }
+.cbi-overview-grid__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: 0;
+}
 
 /* Read-only fact rows inside a section card: label over value, flowing in
    responsive columns (auto-fit, per the responsive-layout rule). */
@@ -89,6 +121,34 @@
 }
 
 .cbi-indent { padding-left: var(--space-24); }
+
+/* Timeline: milestone label left, date right, soft dividers — the settings
+   row rhythm, in process order. */
+.cbi-tl {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cbi-tl li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-16);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+}
+
+.cbi-tl li:last-child { border-bottom: 0; }
+
+.cbi-tl__date {
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 /* ── Comments ──────────────────────────────────────── */
 
