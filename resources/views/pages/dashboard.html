@@ -37,11 +37,12 @@
   <link rel="stylesheet" href="css/portal-files.css?v=9">
   <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=11">
   <link rel="stylesheet" href="css/feed.css?v=2">
+  <link rel="stylesheet" href="css/cbi.css?v=1">
   <!-- In <head> on purpose: it settles the role-gated nav items before the
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
-  <script src="js/portal-access.js?v=5"></script>
+  <script src="js/portal-access.js?v=6"></script>
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -84,6 +85,11 @@
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--usersthree" aria-hidden="true"></span>
           <span>Client hub</span>
+        </a>
+        <a class="tma-dash__nav-item" href="/cbi" data-nav="cbi" data-title="CBI" data-crumb="CBI" data-view="cbi">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--primary tma-dash__nav-icon--kanban" aria-hidden="true"></span>
+          <span>CBI</span>
         </a>
         <a class="tma-dash__nav-item" href="/email" data-nav="email" data-title="Email" data-crumb="Email" data-view="email">
           <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
@@ -265,6 +271,10 @@
       </div>
 
       <div class="tma-dash__view" data-view="client-hub" hidden>
+        <div data-portal-mount></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="cbi" hidden>
         <div data-portal-mount></div>
       </div>
 
@@ -557,10 +567,11 @@
   <script src="js/portal-admin.js?v=3"></script>
   <script src="js/portal-upload-manager.js?v=5"></script>
   <script src="js/portal-files.js?v=5"></script>
+  <script src="js/cbi.js?v=2"></script>
   <script src="js/portal-shortcuts.js"></script>
   <script src="js/portal-home-library.js?v=10"></script>
   <script src="js/portal-home.js?v=21"></script>
-  <script src="js/dashboard.js?v=25"></script>
+  <script src="js/dashboard.js?v=26"></script>
   <script src="js/phone-input.js"></script>
   <script src="js/current-user.js?v=2"></script>
   <script src="js/sign-out.js"></script>

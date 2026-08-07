@@ -67,6 +67,12 @@ class Role
         // Decide which staff are assigned to which client.
         'clients.assign' => [],
 
+        /* ── CBI (Citizenship by Investment) ─────────────────────────── */
+        // Admin-only while the module is in development, and additionally
+        // dark everywhere FEATURE_CBI is off — see the flag check in can().
+        // Widen to [self::EMPLOYEE] (or per-role grants) at launch.
+        'cbi.view' => [],
+
         /* ── People and users ────────────────────────────────────────── */
         // The Users page — the account-management table. It lists every
         // account with its status, sign-in history and the approve / suspend /
@@ -181,6 +187,7 @@ class Role
      * permission errors.
      */
     private const PAGE_CAPABILITIES = [
+        'cbi' => 'cbi.view',
         'clients' => 'clients.view',
         'email' => 'mail.use',
         'email/templates' => 'mail.use',
@@ -323,6 +330,17 @@ class Role
             return false;
         }
 
+        /*
+         * CBI ships behind FEATURE_CBI. While the flag is off the module
+         * does not exist for anyone — administrators included — so this
+         * check sits BEFORE the admin short-circuit. One line here keeps
+         * the page gate, the sidebar row and the capability list in
+         * agreement across every environment.
+         */
+        if ($capability === 'cbi.view' && ! config('services.smartsheet.cbi_enabled')) {
+            return false;
+        }
+
         if (self::isAdmin($user)) {
             return true;
         }
@@ -395,10 +413,8 @@ class Role
             return [];
         }
 
-        if (self::isAdmin($user)) {
-            return self::capabilityNames();
-        }
-
+        // Both branches route through can(), so per-capability conditions
+        // (the FEATURE_CBI gate) hold for administrators too.
         return array_values(array_filter(
             self::capabilityNames(),
             fn (string $capability) => self::can($user, $capability),

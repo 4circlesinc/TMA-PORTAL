@@ -31,6 +31,9 @@ class LegacyPageController extends Controller
         'account',
         'account-settings',
         'calendar',
+        // Admin-only while in development (Role::PAGE_CAPABILITIES gates it,
+        // and the whole module vanishes when FEATURE_CBI is off).
+        'cbi',
         'clients',
         'email',
         'email/templates',

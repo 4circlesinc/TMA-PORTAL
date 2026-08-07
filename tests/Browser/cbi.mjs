@@ -122,7 +122,18 @@ try {
   await page.waitForSelector('.cbi-table tbody tr', { timeout: 10000 });
   check(!page.url().includes('#/app/'), 'back returns to the list');
 
-  step(8, 'A non-admin gets a 404, not a page');
+  step(8, 'The SPA shell: admin sees CBI in the sidebar and /cbi mounts the module');
+  // domcontentloaded + explicit selector waits: the shell boots a dozen
+  // modules whose requests all queue behind the dev server's single PHP
+  // worker, so networkidle/fixed waits are flaky here.
+  await page.goto(`${BASE}/cbi`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.tma-dash__view[data-view="cbi"] .cbi-head__title', { timeout: 20000 });
+  check(await page.locator('.tma-dash__nav-item[data-nav="cbi"]').count() >= 1, 'sidebar CBI row present for admin');
+  check(await page.locator('.tma-dash__view[data-view="cbi"] .cbi-head__title').count() === 1, 'module mounted inside the shell view');
+  const shellRows = await page.waitForSelector('tr[data-cbi-open]', { timeout: 20000 }).then(() => true).catch(() => false);
+  check(shellRows, 'shell-mounted table paints rows');
+
+  step(9, 'A non-admin gets a 404, not a page');
   const emp = await browser.newPage();
   const canTry = await (async () => {
     try { await signIn(emp, 'emp@example.com'); return true; } catch { return false; }
@@ -130,6 +141,8 @@ try {
   if (canTry) {
     const res = await emp.goto(`${BASE}/dev/cbi`, { waitUntil: 'domcontentloaded' });
     check(res.status() === 404, `employee sees ${res.status()} (expected 404)`);
+    const spa = await emp.goto(`${BASE}/cbi`, { waitUntil: 'domcontentloaded' });
+    check(spa.status() === 404, `employee /cbi (shell) sees ${spa.status()} (expected 404)`);
     const api = await emp.evaluate(async (base) => {
       const r = await fetch(base + '/portal/cbi/summary', {
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -138,6 +151,11 @@ try {
       return r.status;
     }, BASE);
     check(api === 404, `employee API status ${api} (expected 404)`);
+    // The sidebar must not even hint the module exists to a non-admin.
+    await emp.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await emp.waitForSelector('.tma-dash__nav-item[data-nav="clients"], .tma-dash__nav-item[data-nav="calendar"]', { timeout: 20000 }).catch(() => {});
+    await emp.waitForTimeout(1000);
+    check(await emp.locator('.tma-dash__nav-item[data-nav="cbi"]').count() === 0, 'employee sidebar has no CBI row');
   } else {
     log('    (skipped — no emp@example.com account seeded)');
   }
