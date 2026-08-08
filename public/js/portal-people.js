@@ -83,13 +83,25 @@
   };
 
   /* Fetch a feed once. `pick` maps the response onto { items, extra }. */
+  /*
+   * Set while a live update is refetching in the background.
+   *
+   * A flag rather than another parameter because every caller reaches load()
+   * through ensure(), whose eight branches would each have to thread it — and
+   * the one that got missed would be the screen that blanks itself. Refreshes
+   * are driven one at a time by TMALive, which suppresses overlapping runs,
+   * so there is only ever one refresh this could describe.
+   */
+  var liveRefreshing = false;
+
   function load(key, url, pick, force) {
     var f = store[key];
     if (f.loading || (f.loaded && !force)) return;
+    var silent = liveRefreshing;
     f.loading = true;
     f.error = null;
 
-    net(url)
+    return net(url)
       .then(function (d) {
         var out = pick(d || {});
         f.items = out.items || [];
@@ -102,7 +114,9 @@
       .catch(function (e) {
         f.loaded = true;
         f.loading = false;
-        f.error = errMsg(e, 'Couldn’t load this list.');
+        // Keep a list that is already on screen rather than swapping it for an
+        // error because a refresh nobody requested happened to fail.
+        if (!silent) f.error = errMsg(e, 'Couldn’t load this list.');
         render();
       });
   }
@@ -1324,4 +1338,40 @@
   }
 
   if (window.TMAPortalViews) window.TMAPortalViews.register('people', mount);
+
+  /*
+   * Live updates: employees, client contacts, address books, groups and
+   * invitations all read from tables other people are editing.
+   *
+   * Only the feed behind the screen on show is refetched, plus the summary
+   * counts the other screens display — refetching all eight caches on every
+   * signal would be seven wasted requests for a list nobody is looking at.
+   */
+  if (window.TMALive) {
+    var refreshPeople = function () {
+      liveRefreshing = true;
+
+      try {
+        var key = SCREEN_FEED[state.screen];
+        if (key) reload(key);
+        reload('summary');
+      } finally {
+        // reload() kicks the fetches off synchronously; the flag only has to
+        // survive until load() has read it.
+        liveRefreshing = false;
+      }
+    };
+
+    var watchPeople = function (resource) {
+      window.TMALive.register(resource, refreshPeople, {
+        active: function () { return !!state.el && document.contains(state.el); },
+      });
+    };
+
+    // People is assembled from accounts *and* the client directory, so it has
+    // to listen for both — a new client contact is not a `users` change.
+    watchPeople(window.TMALive.RESOURCES.USERS);
+    watchPeople(window.TMALive.RESOURCES.CLIENTS);
+    watchPeople(window.TMALive.RESOURCES.CONTACTS);
+  }
 })();

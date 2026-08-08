@@ -49,6 +49,18 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\ClientAssignment::observe(\App\Observers\ClientDirectoryObserver::class);
 
         /*
+         * The rest of the list surfaces. Class names, not instances:
+         * Model::observe() registers by class and resolves from the container
+         * when an event fires, so an instance is discarded and a constructor
+         * argument throws on the first write. See LiveResourceObserver.
+         */
+        \App\Models\Contact::observe(\App\Observers\ContactObserver::class);
+        \App\Models\Calendar::observe(\App\Observers\CalendarLiveObserver::class);
+        \App\Models\CalendarEvent::observe(\App\Observers\CalendarLiveObserver::class);
+        \App\Models\SignatureRequest::observe(\App\Observers\SignatureLiveObserver::class);
+        \App\Models\SignatureRecipient::observe(\App\Observers\SignatureLiveObserver::class);
+
+        /*
          * Send whatever a job collected.
          *
          * Live defers its broadcasts to the end of the request, but a queue

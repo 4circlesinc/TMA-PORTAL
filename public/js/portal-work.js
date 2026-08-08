@@ -174,7 +174,11 @@
         if (seq !== sig.searchSeq) return;
         sig.loading = false;
         sig.loaded = true;
-        sig.error = (err && err.message) || 'Could not load signature requests.';
+        // A silent refresh is a live update, not a request from the reader —
+        // a failed one leaves the list they have rather than erasing it.
+        if (!opts.silent) {
+          sig.error = (err && err.message) || 'Could not load signature requests.';
+        }
         renderSignatures();
       });
   }
@@ -2113,5 +2117,21 @@
     window.TMAPortalViews.register('workflows', mountWorkflows);
     window.TMAPortalViews.register('templates', mountTemplates);
     window.TMAPortalViews.register('signatures', mountSignatures);
+
+    /*
+     * Live updates for the signature list.
+     *
+     * Worth having even on a quiet screen: a request changes state when a
+     * *recipient* signs, which happens in someone else's browser entirely, so
+     * the sender would otherwise sit on "awaiting signature" long after it was
+     * signed. loadSignatures already has the silent path.
+     */
+    if (window.TMALive) {
+      window.TMALive.register(
+        window.TMALive.RESOURCES.SIGNATURES,
+        function () { return loadSignatures({ silent: true }); },
+        { active: function () { return !!sig.el && document.contains(sig.el); } }
+      );
+    }
   }
 })();

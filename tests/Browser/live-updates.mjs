@@ -248,6 +248,54 @@ await liveTable('clients', '/clients', NEW_CLIENT, `
   echo 'made';
 `)
 
+console.log('\nLive updates — Signatures\n')
+
+const NEW_SIG = `Live Sig ${stamp}`
+await liveTable('signatures', '/signatures', NEW_SIG, `
+  App\\Models\\SignatureRequest::create([
+    'uuid' => (string) Illuminate\\Support\\Str::uuid(),
+    'title' => '${NEW_SIG}',
+    'status' => 'draft',
+    'created_by' => App\\Models\\User::where('email','e2e@example.com')->value('id'),
+  ]);
+  echo 'made';
+`)
+
+console.log('\nLive updates — People (contacts)\n')
+
+const NEW_CONTACT = `LiveContact${stamp}`
+await liveTable('people', '/people/shared-address-book', NEW_CONTACT, `
+  $id = App\\Models\\User::where('email','e2e@example.com')->value('id');
+  App\\Models\\Contact::create([
+    'uuid' => (string) Illuminate\\Support\\Str::uuid(),
+    'scope' => 'shared',
+    'first_name' => '${NEW_CONTACT}',
+    'last_name' => 'Tester',
+    'email' => 'contact${stamp}@example.com',
+    'owner_id' => $id,
+    'created_by' => $id,
+  ]);
+  echo 'made';
+`)
+
+console.log('\nLive updates — Calendar\n')
+
+const NEW_EVENT = `Live Event ${stamp}`
+await liveTable('calendar', '/calendar', NEW_EVENT, `
+  $id = App\\Models\\User::where('email','e2e@example.com')->value('id');
+  $cal = App\\Models\\Calendar::where('owner_id', $id)->first();
+  if (! $cal) { echo 'no calendar'; return; }
+  App\\Models\\CalendarEvent::create([
+    'uuid' => (string) Illuminate\\Support\\Str::uuid(),
+    'calendar_id' => $cal->id,
+    'title' => '${NEW_EVENT}',
+    'starts_at' => now()->addHour(),
+    'ends_at' => now()->addHours(2),
+    'organizer_id' => $id,
+  ]);
+  echo 'made';
+`)
+
 /* ── account type ──────────────────────────────────────────────────────
  *
  * The opposite assertion to the one above, and deliberately so: a changed

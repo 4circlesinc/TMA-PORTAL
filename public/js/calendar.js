@@ -368,7 +368,9 @@
       .catch(function (err) {
         state.loading = false;
         state.refreshing = false;
-        state.error = errorMessage(err, 'Couldn’t load your calendars.');
+        // A background refresh nobody asked for must not replace a calendar
+        // somebody is reading with an error; the next signal can correct it.
+        if (!background) state.error = errorMessage(err, 'Couldn’t load your calendars.');
         render();
       });
   }
@@ -4466,6 +4468,21 @@
     todayCount.value = count;
     todayCount.fetchedAt = Date.now();
     document.dispatchEvent(new CustomEvent('tma-calendar-count', { detail: { count: count } }));
+  }
+
+  /*
+   * Live updates: an event someone else creates, moves or cancels — and any
+   * calendar shared with you — lands here without a refresh.
+   *
+   * load(true) is the existing background path, so it already shows the quiet
+   * "refreshing" state rather than the full loading one.
+   */
+  if (window.TMALive) {
+    window.TMALive.register(
+      window.TMALive.RESOURCES.CALENDAR,
+      function () { return load(true); },
+      { active: function () { return !!state.el && document.contains(state.el); } }
+    );
   }
 
   window.TMACalendar = {
