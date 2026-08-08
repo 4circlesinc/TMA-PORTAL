@@ -9,6 +9,11 @@
   <!-- tma-shell:2026-07-24-menu-v3 -->
   <title>TM ANTOINE Advisory</title>
   <link rel="icon" type="image/png" href="images/brand/tma/favicon.png">
+  <!-- Inter comes from a third-party origin, so the font file costs a DNS
+       lookup + TCP + TLS handshake before it can even start downloading.
+       Warming both origins here overlaps that with the stylesheet parse. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/theme.css">
@@ -484,96 +489,94 @@
 
   <div class="tma-add-data__toast" data-add-toast role="status" aria-live="polite"></div>
 
-  <script src="js/auth-session.js"></script>
-  <script src="js/dom-morph.js"></script>
-  <script src="js/tooltip.js"></script>
-  <script src="js/input-icons.js"></script>
-  <script src="js/input.js"></script>
-  <script src="js/input-interactive.js"></script>
-  <script src="js/date-picker-icons.js"></script>
-  <script src="js/date-picker.js"></script>
-  <script src="js/table-add-data.js"></script>
-  <script src="js/illustration-theme.js?v=1"></script>
-  <script src="js/no-data.js?v=3"></script>
-  <script src="js/section-error.js?v=1"></script>
-  <script src="js/table-view-toggle.js"></script>
-  <script src="js/dashboard-add-data.js"></script>
-  <script src="js/card-icons.js"></script>
-  <script src="js/card.js"></script>
-  <script src="js/strip.js"></script>
-  <script src="js/projects.js"></script>
-  <script src="js/dashboard-metrics.js"></script>
-  <script src="js/file-icons.js"></script>
-  <script src="js/folder-colours.js"></script>
-  <script src="js/folder-icons.js"></script>
-  <script src="js/overview-files.js?v=11"></script>
-  <script src="js/overview-employees.js?v=1"></script>
-  <script src="js/overview-activity.js?v=2"></script>
-  <script src="js/overview-recycle.js?v=5"></script>
-  <script src="js/overview-notifications.js?v=2"></script>
-  <script src="js/overview.js?v=12"></script>
-  <script src="js/table-b.js"></script>
-  <script src="js/chart-motion.js"></script>
-  <script src="js/account.js?v=5"></script>
-  <script src="js/tag-icons.js"></script>
-  <script src="js/tag.js"></script>
-  <script src="js/badge-icons.js"></script>
-  <script src="js/badge.js"></script>
-  <script src="js/email-templates.js"></script>
-  <script src="js/email-api.js?v=9"></script>
-  <script src="js/email.js?v=28"></script>
-  <script src="js/portal-lightbox.js?v=2"></script>
-  <script src="js/emoji-data.js"></script>
-  <script src="js/messaging-recorder.js"></script>
-  <script src="js/messaging-api.js"></script>
-  <script src="js/messaging-realtime.js?v=2"></script>
-  <script src="js/messaging-image-editor.js"></script>
-  <script src="js/messaging-calls.js?v=3"></script>
-  <script src="js/messages.js?v=14"></script>
-  <script src="js/feed-api.js?v=1"></script>
-  <script src="js/feed.js?v=3"></script>
-  <script src="js/schedule.js"></script>
-  <script src="js/tab-group.js?v=2"></script>
-  <script src="js/toast-icons.js"></script>
-  <script src="js/i18n.js?v=1"></script>
-  <script src="js/toast.js?v=11"></script>
-  <script src="js/sync-toasts.js?v=2"></script>
-  <script src="js/head-dropdown.js"></script>
-  <script src="js/clients.js?v=5"></script>
-  <script src="js/calendar.js?v=4"></script>
-  <script src="js/pricing.js"></script>
-  <script src="js/two-step-countries.js"></script>
-  <script src="js/two-step-countries.js"></script>
-  <script src="js/two-step-countries.js"></script>
-  <script src="js/settings.js?v=2"></script>
-  <script src="js/user-info-panel-icons.js"></script>
-  <script src="js/user-info-panel.js"></script>
-  <script src="js/users.js?v=6"></script>
-  <script src="js/notify-store.js?v=12"></script>
-  <script src="js/notify-render.js?v=9"></script>
-  <script src="js/right-sidebar.js?v=5"></script>
-  <script src="js/notify-realtime.js?v=2"></script>
-  <script src="js/activity-popups.js?v=3"></script>
-  <script src="js/portal-search-index.js?v=3"></script>
-  <script src="js/global-search.js?v=4"></script>
-  <script src="js/dash-search-chrome.js"></script>
-    <script src="js/tabbar-indicator.js"></script>
-  <script src="js/portal-data.js"></script>
-  <script src="js/portal-views.js?v=2"></script>
-  <script src="js/portal-projects.js"></script>
-  <script src="js/portal-folders.js?v=2"></script>
-  <script src="js/portal-work.js"></script>
-  <script src="js/portal-people.js?v=2"></script>
-  <script src="js/portal-admin.js?v=3"></script>
-  <script src="js/portal-upload-manager.js?v=5"></script>
-  <script src="js/portal-files.js?v=5"></script>
-  <script src="js/cbi.js?v=7"></script>
-  <script src="js/portal-shortcuts.js"></script>
-  <script src="js/portal-home-library.js?v=10"></script>
-  <script src="js/portal-home.js?v=21"></script>
-  <script src="js/dashboard.js?v=29"></script>
-  <script src="js/phone-input.js"></script>
-  <script src="js/current-user.js?v=2"></script>
-  <script src="js/sign-out.js"></script>
+  <script src="js/auth-session.js" defer></script>
+  <script src="js/dom-morph.js" defer></script>
+  <script src="js/tooltip.js" defer></script>
+  <script src="js/input-icons.js" defer></script>
+  <script src="js/input.js" defer></script>
+  <script src="js/input-interactive.js" defer></script>
+  <script src="js/date-picker-icons.js" defer></script>
+  <script src="js/date-picker.js" defer></script>
+  <script src="js/table-add-data.js" defer></script>
+  <script src="js/illustration-theme.js?v=1" defer></script>
+  <script src="js/no-data.js?v=3" defer></script>
+  <script src="js/section-error.js?v=1" defer></script>
+  <script src="js/table-view-toggle.js" defer></script>
+  <script src="js/dashboard-add-data.js" defer></script>
+  <script src="js/card-icons.js" defer></script>
+  <script src="js/card.js" defer></script>
+  <script src="js/strip.js" defer></script>
+  <script src="js/projects.js" defer></script>
+  <script src="js/dashboard-metrics.js" defer></script>
+  <script src="js/file-icons.js" defer></script>
+  <script src="js/folder-colours.js" defer></script>
+  <script src="js/folder-icons.js" defer></script>
+  <script src="js/overview-files.js?v=11" defer></script>
+  <script src="js/overview-employees.js?v=1" defer></script>
+  <script src="js/overview-activity.js?v=2" defer></script>
+  <script src="js/overview-recycle.js?v=5" defer></script>
+  <script src="js/overview-notifications.js?v=2" defer></script>
+  <script src="js/overview.js?v=12" defer></script>
+  <script src="js/table-b.js" defer></script>
+  <script src="js/chart-motion.js" defer></script>
+  <script src="js/account.js?v=5" defer></script>
+  <script src="js/tag-icons.js" defer></script>
+  <script src="js/tag.js" defer></script>
+  <script src="js/badge-icons.js" defer></script>
+  <script src="js/badge.js" defer></script>
+  <script src="js/email-templates.js" defer></script>
+  <script src="js/email-api.js?v=9" defer></script>
+  <script src="js/email.js?v=28" defer></script>
+  <script src="js/portal-lightbox.js?v=2" defer></script>
+  <script src="js/emoji-data.js" defer></script>
+  <script src="js/messaging-recorder.js" defer></script>
+  <script src="js/messaging-api.js" defer></script>
+  <script src="js/messaging-realtime.js?v=2" defer></script>
+  <script src="js/messaging-image-editor.js" defer></script>
+  <script src="js/messaging-calls.js?v=3" defer></script>
+  <script src="js/messages.js?v=14" defer></script>
+  <script src="js/feed-api.js?v=1" defer></script>
+  <script src="js/feed.js?v=3" defer></script>
+  <script src="js/schedule.js" defer></script>
+  <script src="js/tab-group.js?v=2" defer></script>
+  <script src="js/toast-icons.js" defer></script>
+  <script src="js/i18n.js?v=1" defer></script>
+  <script src="js/toast.js?v=11" defer></script>
+  <script src="js/sync-toasts.js?v=2" defer></script>
+  <script src="js/head-dropdown.js" defer></script>
+  <script src="js/clients.js?v=5" defer></script>
+  <script src="js/calendar.js?v=4" defer></script>
+  <script src="js/pricing.js" defer></script>
+  <script src="js/two-step-countries.js" defer></script>
+  <script src="js/settings.js?v=2" defer></script>
+  <script src="js/user-info-panel-icons.js" defer></script>
+  <script src="js/user-info-panel.js" defer></script>
+  <script src="js/users.js?v=6" defer></script>
+  <script src="js/notify-store.js?v=12" defer></script>
+  <script src="js/notify-render.js?v=9" defer></script>
+  <script src="js/right-sidebar.js?v=5" defer></script>
+  <script src="js/notify-realtime.js?v=2" defer></script>
+  <script src="js/activity-popups.js?v=3" defer></script>
+  <script src="js/portal-search-index.js?v=3" defer></script>
+  <script src="js/global-search.js?v=4" defer></script>
+  <script src="js/dash-search-chrome.js" defer></script>
+    <script src="js/tabbar-indicator.js" defer></script>
+  <script src="js/portal-data.js" defer></script>
+  <script src="js/portal-views.js?v=2" defer></script>
+  <script src="js/portal-projects.js" defer></script>
+  <script src="js/portal-folders.js?v=2" defer></script>
+  <script src="js/portal-work.js" defer></script>
+  <script src="js/portal-people.js?v=2" defer></script>
+  <script src="js/portal-admin.js?v=3" defer></script>
+  <script src="js/portal-upload-manager.js?v=5" defer></script>
+  <script src="js/portal-files.js?v=5" defer></script>
+  <script src="js/cbi.js?v=7" defer></script>
+  <script src="js/portal-shortcuts.js" defer></script>
+  <script src="js/portal-home-library.js?v=10" defer></script>
+  <script src="js/portal-home.js?v=21" defer></script>
+  <script src="js/dashboard.js?v=29" defer></script>
+  <script src="js/phone-input.js" defer></script>
+  <script src="js/current-user.js?v=2" defer></script>
+  <script src="js/sign-out.js" defer></script>
 </body>
 </html>

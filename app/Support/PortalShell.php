@@ -55,7 +55,10 @@ final class PortalShell
             abort(404);
         }
 
-        return response(self::inject($html, $user), 200, self::HEADERS);
+        // Bundles first, capabilities second: the rewrite leaves the
+        // portal-access.js tag alone (it is the one script the shell loads
+        // undeferred), so the anchor below is still there to find.
+        return response(self::inject(AssetBundle::apply($html), $user), 200, self::HEADERS);
     }
 
     private static function inject(string $html, ?User $user): string
