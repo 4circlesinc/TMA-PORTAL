@@ -2,7 +2,10 @@
 
 namespace App\Support\Files;
 
+use App\Models\FileComment;
 use App\Models\FileItem;
+use App\Models\FileVersion;
+use App\Models\FileWorkflow;
 use App\Models\Folder;
 use App\Models\User;
 
@@ -26,6 +29,34 @@ class FileDetails
         $folder = $file->folder;
 
         return [
+            /*
+             * What the other tabs hold, so the Details panel can say so without
+             * the reader opening each one.
+             *
+             * Carried here rather than fetched separately because this request
+             * is already being made when the panel opens — three more round
+             * trips to render three numbers would cost more than the numbers
+             * are worth.
+             *
+             * "Open" comments, not all of them: a resolved thread is finished
+             * business, and counting it would leave a file reading "3 comments"
+             * forever after the discussion ended. Same definition the Comments
+             * tab badge uses — see CommentPresenter::thread().
+             */
+            'counts' => [
+                'comments' => FileComment::where('file_id', $file->id)
+                    ->whereColumn('id', 'root_id')
+                    ->whereNull('resolved_at')
+                    ->count(),
+                'versions' => FileVersion::where('file_id', $file->id)->count(),
+                // Not-closed rather than a list of open states: the column is a
+                // plain string with no enum behind it, so naming the open
+                // values means this silently under-counts the day another one
+                // is added. Only 'closed' is definitively finished.
+                'approvals' => FileWorkflow::where('file_id', $file->id)
+                    ->where('status', '!=', 'closed')
+                    ->count(),
+            ],
             'groups' => array_values(array_filter([
                 self::group('File', [
                     self::row('File name', $file->name),

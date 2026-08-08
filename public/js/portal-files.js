@@ -1614,6 +1614,18 @@
             detailRow('Owner', f.owner ? f.owner.name : null) +
             detailRow('Modified', f.modifiedAt ? fmtDate(f.modifiedAt) : null) +
           '</section>' +
+          /*
+           * What the other tabs are holding.
+           *
+           * Buttons, not labels: having told somebody there are two open
+           * comments, the next thing they want is to read them, and making
+           * them find the tab afterwards would be a worse panel than one that
+           * never mentioned it.
+           *
+           * Rendered empty until the details request answers — the counts ride
+           * along with it, so there is nothing to show and nothing to fetch.
+           */
+          '<div data-lb-counts>' + (e.details ? countsHtml(e.details) : '') + '</div>' +
         '</div>' +
         /*
          * No skeleton while the extra metadata loads.
@@ -1633,6 +1645,8 @@
           if (current().id !== f.id || viewerPrefs.tab !== 'details') return;
           var slot = lb.querySelector('[data-lb-more]');
           if (slot) slot.innerHTML = moreDetailsHtml(data);
+          var counts = lb.querySelector('[data-lb-counts]');
+          if (counts) counts.innerHTML = countsHtml(data);
         })
         .catch(function (err) { panelError('[data-lb-more]', err, 'details'); });
     }
@@ -1656,6 +1670,33 @@
       if (f.sizeLabel) bits.push(f.sizeLabel);
 
       return bits.join(' · ');
+    }
+
+    /**
+     * "2 comments · 3 versions" — each one a way into its tab.
+     *
+     * Zeroes are left out rather than shown as "0 comments". A file with
+     * nothing on it says nothing, which is the honest answer and keeps the
+     * card short; three zeroes would be three lines of nothing to do.
+     */
+    function countsHtml(data) {
+      var counts = (data && data.counts) || {};
+
+      var chips = [
+        { tab: 'comments', n: counts.comments, one: 'comment', many: 'comments' },
+        { tab: 'versions', n: counts.versions, one: 'version', many: 'versions' },
+        { tab: 'approvals', n: counts.approvals, one: 'approval', many: 'approvals' },
+      ].filter(function (c) { return c.n > 0; });
+
+      if (!chips.length) return '';
+
+      return '<div class="tma-portal-viewer__counts">' +
+        chips.map(function (c) {
+          return '<button type="button" class="tma-portal-viewer__count" data-lb-tab="' + c.tab + '">' +
+            c.n + ' ' + (c.n === 1 ? c.one : c.many) +
+          '</button>';
+        }).join('') +
+      '</div>';
     }
 
     function detailRow(label, value) {

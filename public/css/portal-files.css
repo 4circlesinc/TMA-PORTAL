@@ -496,6 +496,21 @@
    under itself and leave the border floating away from the content. */
 .tma-portal-viewer__card .tma-portal-viewer__section:last-child { margin-bottom: 0; }
 
+/* What the other tabs are holding, as ways in rather than statements.
+   Hover is the sanctioned --color-hover overlay and nothing else (Rule 8:
+   buttons may take a background overlay; no lift, no shadow). */
+.tma-portal-viewer__counts {
+  display: flex; flex-wrap: wrap; gap: var(--space-4);
+  margin-top: var(--space-12); padding-top: var(--space-12);
+  border-top: 1px solid var(--color-border-soft);
+}
+.tma-portal-viewer__count {
+  padding: var(--space-4) var(--space-8); border: 0; border-radius: var(--radius-8);
+  background: transparent; color: var(--color-primary-dark);
+  font-size: var(--text-size-13); font-weight: 500; cursor: pointer;
+}
+.tma-portal-viewer__count:hover { background: var(--color-hover); }
+
 /* The file itself, as the subject of the panel. */
 .tma-portal-viewer__file {
   display: flex; align-items: center; gap: var(--space-12);
@@ -1164,3 +1179,4 @@
    names it for links and emphasis — so this stays on-brand rather than
    lightening the deep tone into something that is neither. */
 .tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__more-summary { color: var(--color-primary); }
+.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__count { color: var(--color-primary); }
