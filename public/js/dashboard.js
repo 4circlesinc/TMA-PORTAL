@@ -2850,7 +2850,15 @@
           contactId: bootRoute.contactId,
         },
         '',
-        pathForRoute(bootRoute.navId, bootRoute.view, bootRoute)
+        /*
+         * Keep the query string. This normalises the *path* on arrival, and
+         * dropping everything after the `?` while doing so threw away the
+         * deep link the reader had just followed — the File Library's open
+         * folder and file, and anything else that records where it is in the
+         * URL. Page-to-page navigation still drops it, which is right: leaving
+         * the library should not carry `folder=` to the next screen.
+         */
+        pathForRoute(bootRoute.navId, bootRoute.view, bootRoute) + window.location.search
       );
     } else {
       activate(savedNav, { keepDrawer: true, skipExpand: true, skipUrl: true });

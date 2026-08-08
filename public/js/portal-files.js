@@ -1116,10 +1116,75 @@
 
   /* ── navigation ─────────────────────────────────────── */
 
+  /* ── deep links ─────────────────────────────────────────
+   *
+   * Where you are is in the URL: which folder you opened, and which file you
+   * have in the viewer. Reloading used to drop you back at All Files, which
+   * on a hard refresh mid-read meant finding your way back through the tree.
+   *
+   * Query parameters rather than path segments, so no route has to exist for
+   * every folder: the section paths in SPA_PAGES keep serving the shell
+   * exactly as they do, and anything after the `?` never reaches the router.
+   */
+  function currentUrl(params) {
+    var qs = params.toString();
+
+    return window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+  }
+
+  /**
+   * Write the open folder and file into the address bar.
+   *
+   * @param {boolean} [replace] Replace the entry instead of adding one. Used
+   *   when restoring on mount, where pushing would put a duplicate of the page
+   *   you just arrived at into the history and make Back a no-op.
+   */
+  /*
+   * Set while the view is being rebuilt *from* the URL rather than changing
+   * it. Reopening the viewer during a restore goes through openLightbox, which
+   * writes the URL — so without this, arriving on a link would push a copy of
+   * the entry just landed on, and pressing Back after popstate would push a
+   * forward entry and trap the reader in the viewer.
+   */
+  var restoringFromUrl = false;
+
+  function syncUrl(replace) {
+    if (restoringFromUrl) return;
+    if (!window.history || !window.history.pushState) return;
+
+    var params = new URLSearchParams(window.location.search);
+
+    if (state.folder) params.set('folder', state.folder);
+    else params.delete('folder');
+
+    if (state.openFile) params.set('file', state.openFile);
+    else params.delete('file');
+
+    var url = currentUrl(params);
+    if (url === window.location.pathname + window.location.search + window.location.hash) return;
+
+    try {
+      if (replace) window.history.replaceState(null, '', url);
+      else window.history.pushState(null, '', url);
+    } catch (e) {
+      // A blocked pushState is not a reason to fail the navigation itself.
+    }
+  }
+
+  function urlParam(name) {
+    try {
+      return new URLSearchParams(window.location.search).get(name);
+    } catch (e) {
+      return null;
+    }
+  }
+
   function openFolder(uuid) {
     state.folder = uuid;
     state.selected = {};
-    load();
+    syncUrl();
+
+    return load();
   }
 
   function openItem(id) {
@@ -1192,11 +1257,17 @@
   ];
 
   function openLightbox(file) {
-    closeLightbox();
+    // Quietly: the close is an implementation detail of reopening, and letting
+    // it write the URL would push a fileless entry between the two files and
+    // make Back land on the folder instead of the previous file.
+    closeLightbox(true);
 
     var gallery = items().filter(function (it) { return it.type === 'file'; });
     var idx = gallery.findIndex(function (f) { return f.id === file.id; });
     if (idx < 0) { gallery = [file]; idx = 0; }
+
+    state.openFile = file.id;
+    syncUrl();
 
     // Per-file caches, so flipping back to a file doesn't re-fetch it.
     var cache = {};
@@ -2757,6 +2828,11 @@
       idx = next;
       var f = current();
 
+      // Flipping through the rail is navigation too — reloading on the third
+      // file should reopen the third file, not the one first clicked.
+      state.openFile = f.id;
+      syncUrl();
+
       // Only the regions that depend on the file change; the panel keeps its
       // tab and the reader keeps their place in the shell.
       var head = lb.querySelector('.tma-portal-viewer__head');
@@ -3078,8 +3154,13 @@
       '</div>';
   }
 
-  function closeLightbox() {
+  /** @param {boolean} [silent] Skip the URL update — see openLightbox. */
+  function closeLightbox(silent) {
     if (!lb) return;
+    if (!silent) {
+      state.openFile = null;
+      syncUrl();
+    }
     if (lb._key) document.removeEventListener('keydown', lb._key);
     if (lb._leave) lb._leave();
     // Leave the file's channel, or every file opened this session keeps a
@@ -4207,12 +4288,100 @@
     state.el = el;
     state.navId = opts.navId && NAV_SECTION[opts.navId] ? opts.navId : (opts.navId || 'folders-all');
     state.section = NAV_SECTION[state.navId] || 'all';
-    // A sidebar folder shortcut lands straight inside its folder.
-    state.folder = opts.folderId || null;
+    /*
+     * A sidebar folder shortcut lands straight inside its folder; otherwise
+     * the URL decides. The shortcut wins because it is a fresh instruction,
+     * where the URL is only ever a record of where the reader already was.
+     */
+    state.folder = opts.folderId || urlParam('folder') || null;
     state.selected = {};
     state.error = null;
+
+    /*
+     * Read the wanted file *before* touching the URL. syncUrl below clears the
+     * file parameter (nothing is open yet at this point), so reading it
+     * afterwards returns null every time and the viewer never reopens.
+     */
+    var wanted = opts.folderId ? null : urlParam('file');
+
+    // Replace rather than push: this entry *is* the page just arrived at, and
+    // pushing a copy of it would make the first Back a no-op.
+    state.openFile = null;
+    syncUrl(true);
+
     render();
-    load();
+
+    return load().then(function () {
+      if (!wanted) return;
+
+      /*
+       * Reopen the viewer on the file the URL names.
+       *
+       * Only if it is in the folder that was just loaded — the file parameter
+       * travels with a folder parameter, so a file that is not here means a
+       * stale or hand-edited link, and silently showing a file from somewhere
+       * else would be worse than showing the folder.
+       */
+      var file = findItem(wanted);
+
+      if (file && file.type === 'file') {
+        restoringFromUrl = true;
+        try { openLightbox(file); } finally { restoringFromUrl = false; }
+        // The address bar already says this; record it without a second entry.
+        syncUrl(true);
+      } else {
+        // A stale link: drop the file parameter rather than leaving the URL
+        // claiming a viewer that is not open.
+        syncUrl(true);
+      }
+    });
+  }
+
+  /*
+   * Back and forward.
+   *
+   * Without this the address bar would change while the page stayed put — the
+   * reader presses Back expecting to leave the viewer and nothing happens.
+   */
+  window.addEventListener('popstate', function () {
+    if (!state.el || !document.contains(state.el)) return;
+
+    var folder = urlParam('folder') || null;
+    var file = urlParam('file');
+
+    if (folder !== state.folder) {
+      state.folder = folder;
+      state.selected = {};
+      load().then(function () { restoreViewer(file); });
+
+      return;
+    }
+
+    restoreViewer(file);
+  });
+
+  function restoreViewer(fileId) {
+    if (!fileId) {
+      if (lb) closeLightbox(true);
+      state.openFile = null;
+
+      return;
+    }
+
+    if (state.openFile === fileId) return;
+
+    var file = findItem(fileId);
+    if (!file || file.type !== 'file') return;
+
+    // Rebuilding from history, not navigating: openLightbox must not write a
+    // new entry on top of the one being restored.
+    restoringFromUrl = true;
+    try {
+      openLightbox(file);
+      state.openFile = fileId;
+    } finally {
+      restoringFromUrl = false;
+    }
   }
 
   if (window.TMAPortalViews) {
