@@ -38,15 +38,32 @@ class ClientAssignmentController extends Controller
         ]);
     }
 
-    /** Clients assigned to the signed-in staff member (their client list). */
+    /**
+     * Clients assigned to the signed-in staff member (their client list).
+     *
+     * An administrator's list is every client, whether or not anybody ever
+     * created an assignment row for them. They can already open, edit and
+     * manage every client, so a "my clients" list that came back empty was
+     * only ever describing the paperwork rather than their actual reach.
+     *
+     * Derived rather than stored: writing a row per administrator per client
+     * would need a backfill, a hook on every new client, another on every
+     * promotion to Administrator, and a cleanup on every demotion — four
+     * chances for the table to drift out of step with the rule it is meant to
+     * express. The rule lives here instead, so it is right by construction.
+     */
     public function mine(Request $request): JsonResponse
     {
         $this->authorizeStaff($request);
 
-        $clients = Client::whereIn(
-            'id',
-            ClientAssignment::live()->where('user_id', $request->user()->id)->pluck('client_id')
-        )->orderBy('name')->get();
+        $user = $request->user();
+
+        $clients = Role::isAdmin($user)
+            ? Client::orderBy('name')->get()
+            : Client::whereIn(
+                'id',
+                ClientAssignment::live()->where('user_id', $user->id)->pluck('client_id')
+            )->orderBy('name')->get();
 
         return response()->json([
             'clients' => $clients->map(fn (Client $c) => [
