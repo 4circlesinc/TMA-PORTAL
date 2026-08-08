@@ -2012,17 +2012,25 @@
 
     function threadHtml(t, e) {
       var replies = (t.replies || []).map(function (r) {
-        return '<div class="tma-portal-viewer__reply">' + commentHtml(r, e) + '</div>';
+        return '<div class="tma-portal-viewer__reply">' + commentHtml(r, e, { root: false }) + '</div>';
       }).join('');
 
       return '<div class="tma-portal-viewer__thread' + (t.resolved ? ' is-resolved' : '') + '" data-thread="' + esc(t.id) + '">' +
-        commentHtml(t, e) +
+        // Reply belongs to the thread, so it is drawn with the opening
+        // comment's own actions rather than as a row of its own underneath —
+        // which is what put two lines of controls under every comment.
+        commentHtml(t, e, { root: true, canReply: !!t.can.reply, threadId: t.id }) +
         replies +
         (t.can.reply ? replyControlHtml(t, e) : '') +
       '</div>';
     }
 
-    function commentHtml(c, e) {
+    /**
+     * @param {object} [opts] { root, canReply, threadId } — a reply is not a
+     *   thread, so it gets neither the Reply control nor Resolve.
+     */
+    function commentHtml(c, e, opts) {
+      opts = opts || { root: true };
       if (c.deleted) {
         return '<div class="tma-portal-viewer__comment is-deleted">' +
           '<p class="tma-portal-viewer__comment-body"><em>This comment was deleted.</em></p></div>';
@@ -2031,9 +2039,21 @@
       var editing = e.editing === c.id;
       var who = c.author ? (c.author.isSelf ? 'You' : c.author.name) : 'Someone';
 
+      /*
+       * One row, in the order they get used: reply, then resolve, then the
+       * two that change what is already written.
+       *
+       * Resolve only on the opening comment — resolving is something that
+       * happens to a *thread*, so offering it against every reply was both
+       * repetition and a small lie about what the button does.
+       */
       var actions = '';
       if (!editing) {
-        if (c.can.resolve) {
+        if (opts.root && opts.canReply && e.replyingTo !== opts.threadId) {
+          actions += '<button type="button" class="tma-portal-viewer__comment-act tma-portal-viewer__reply-open"' +
+            ' data-lb-replyopen="' + esc(opts.threadId) + '">Reply</button>';
+        }
+        if (opts.root && c.can.resolve) {
           actions += '<button type="button" class="tma-portal-viewer__comment-act" data-lb-resolve="' + esc(c.id) + '"' +
             ' data-resolved="' + c.resolved + '">' + (c.resolved ? 'Reopen' : 'Resolve') + '</button>';
         }
@@ -2094,7 +2114,9 @@
           '</div>' +
         '</div>';
       }
-      return '<button type="button" class="tma-portal-viewer__comment-act tma-portal-viewer__reply-open" data-lb-replyopen="' + esc(t.id) + '">Reply</button>';
+      // The collapsed Reply now sits in the opening comment's action row; all
+      // that is left down here is the box it opens.
+      return '';
     }
 
     function composerHtml(f, e) {
@@ -2103,8 +2125,11 @@
       }
 
       return '<div class="tma-portal-viewer__composer" data-lb-composer>' +
+        // "Use @ to mention someone" was a second sentence teaching a
+        // convention every messaging surface in the portal already uses, sat
+        // in front of an empty box on every single file.
         '<textarea class="tma-portal-viewer__input" data-lb-input rows="3" ' +
-          'placeholder="Add a comment. Use @ to mention someone."></textarea>' +
+          'placeholder="Add a comment"></textarea>' +
         '<div class="tma-portal-viewer__mention-pop" data-lb-mentions hidden></div>' +
         '<div class="tma-portal-viewer__composer-actions">' +
           '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-emoji title="Insert emoji" aria-label="Insert emoji">🙂</button>' +
@@ -3327,12 +3352,22 @@
       : (avatar || '');
   }
 
+  /*
+   * The year only when it is not this one.
+   *
+   * Almost everything in a viewer panel happened recently, so "Aug 7, 2026 at
+   * 3:58 PM" spent four characters on the one part nobody was asking about —
+   * against every comment, version and activity row at once. An older file
+   * still says which year, because there it is the whole question.
+   */
   function fmtDateTime(iso) {
     var d = new Date(iso);
     if (isNaN(d)) return '';
-    return d.toLocaleString(undefined, {
-      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
-    });
+
+    var opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+
+    return d.toLocaleString(undefined, opts);
   }
 
   function lightboxBody(f) {
