@@ -3,12 +3,14 @@
 namespace App\Providers;
 
 use App\Mail\Transport\MicrosoftGraphTransport;
+use App\Support\Realtime;
 use App\Support\StaySignedIn;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -32,6 +34,23 @@ class AppServiceProvider extends ServiceProvider
     {
         // Portal file changes mirror out to any linked SharePoint library.
         \App\Models\FileItem::observe(\App\Observers\FileSharePointObserver::class);
+
+        // …and tell any open File Library to refetch itself.
+        \App\Models\FileItem::observe(\App\Observers\FileLibraryObserver::class);
+        \App\Models\Folder::observe(\App\Observers\FileLibraryObserver::class);
+
+        /*
+         * Send whatever a job collected.
+         *
+         * Live defers its broadcasts to the end of the request, but a queue
+         * worker is one long-lived process with no request to end — without
+         * this, everything a job signalled would sit in memory until the
+         * worker was restarted, which is indistinguishable from live updates
+         * simply not working for anything the queue does (SharePoint sync,
+         * mail import, thumbnails).
+         */
+        Queue::after(fn () => Realtime\Live::flush());
+        Queue::failing(fn () => Realtime\Live::flush());
 
         // In production the app sits behind Laravel Cloud's TLS-terminating
         // proxy, so PHP sees plain http. Force https on every generated URL so

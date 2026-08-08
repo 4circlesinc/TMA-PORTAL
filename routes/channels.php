@@ -4,12 +4,28 @@ use App\Models\Conversation;
 use App\Models\FeedChannel;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Feed\FeedAccess;
 use App\Support\Files\FileAccess;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
+});
+
+/**
+ * The staff-wide "refetch this" channel — the Users, Clients, People, calendar
+ * and admin tables.
+ *
+ * Staff only, and it is the reason {@see App\Events\PortalDataChanged} carries
+ * a resource name and nothing else. Every subscriber here has a different
+ * reach (an employee is not assigned to every client), so the event cannot
+ * describe *what* changed without describing it to people who may not see it.
+ * Naming only the surface keeps the read rules where they are enforced: in the
+ * endpoint each tab refetches through.
+ */
+Broadcast::channel('portal.staff', function (User $user) {
+    return Role::isStaff($user);
 });
 
 /**

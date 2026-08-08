@@ -197,7 +197,9 @@
     params.set('dir', state.dir);
     params.set('perPage', '200');
 
-    net().fetchJSON(net().url('/?' + params.toString()))
+    // Returned so a live refresh can wait for it and avoid stacking refetches
+    // on top of each other when several changes land at once.
+    return net().fetchJSON(net().url('/?' + params.toString()))
       .then(function (res) {
         state.loading = false;
         state.data = { folders: res.folders || [], files: res.files || [] };
@@ -208,6 +210,10 @@
       })
       .catch(function (err) {
         state.loading = false;
+        // A silent refresh is nobody's request. Replacing a working list with
+        // an error because a background poll lost the network is a worse
+        // outcome than showing slightly stale rows until the next one lands.
+        if (silent) return;
         state.error = err.message || 'Could not load this folder.';
         render();
       });
@@ -4183,6 +4189,24 @@
 
   if (window.TMAPortalViews) {
     window.TMAPortalViews.register('folders', mount);
+  }
+
+  /*
+   * Live updates: somebody else uploading, renaming, sharing or binning
+   * something shows up here without a refresh.
+   *
+   * Registered once rather than per mount — this module is a singleton and
+   * mount() only re-points state.el, so registering there would stack a new
+   * watcher on every navigation. The active() check is what makes that safe:
+   * the view stays registered after you navigate away, and refetching a
+   * detached element would be work nobody can see.
+   */
+  if (window.TMALive) {
+    window.TMALive.register(
+      window.TMALive.RESOURCES.FILES,
+      function () { return load(true); },
+      { active: function () { return !!state.el && document.contains(state.el); } }
+    );
   }
 
   /*
