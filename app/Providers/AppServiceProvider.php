@@ -54,6 +54,17 @@ class AppServiceProvider extends ServiceProvider
          * when an event fires, so an instance is discarded and a constructor
          * argument throws on the first write. See LiveResourceObserver.
          */
+        /*
+         * The file viewer's side panels. Comments and presence were already
+         * live; without these the Versions and Approvals tabs beside them sat
+         * on whatever was true when the file was opened.
+         */
+        \App\Models\FileVersion::observe(\App\Observers\FileDetailObserver::class);
+        \App\Models\FileWorkflow::observe(\App\Observers\FileDetailObserver::class);
+        \App\Models\FileWorkflowStep::observe(\App\Observers\FileDetailObserver::class);
+        \App\Models\FileWorkflowEvent::observe(\App\Observers\FileDetailObserver::class);
+        \App\Models\FileActivity::observe(\App\Observers\FileDetailObserver::class);
+
         \App\Models\Contact::observe(\App\Observers\ContactObserver::class);
         \App\Models\Calendar::observe(\App\Observers\CalendarLiveObserver::class);
         \App\Models\CalendarEvent::observe(\App\Observers\CalendarLiveObserver::class);

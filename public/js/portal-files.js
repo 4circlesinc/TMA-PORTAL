@@ -1633,6 +1633,34 @@
         if (viewerPrefs.tab === 'comments') loadComments(current());
         else refreshOpenCountOnly(current());
       });
+
+      /*
+       * Versions, approvals and activity, on the same terms as comments above.
+       *
+       * Only the tab on show is refetched; the others have their cache dropped
+       * so they reload when opened. Refetching all three on every signal would
+       * be two wasted requests for panels nobody is looking at, and leaving the
+       * caches alone would show a stale list the moment the reader switched
+       * tabs — which looks more broken than never updating at all.
+       */
+      rt.listen(name, 'file.detail.changed', function (payload) {
+        if (!lb || !payload || payload.fileId !== current().id) return;
+
+        var f = current();
+        var e = entry(f);
+        var section = payload.section;
+
+        if (section === 'versions') {
+          e.versions = null;
+          if (viewerPrefs.tab === 'versions') loadVersions(f);
+        } else if (section === 'approvals') {
+          e.approvals = null;
+          if (viewerPrefs.tab === 'approvals') loadApprovals(f);
+        } else if (section === 'activity') {
+          e.activity = null;
+          if (viewerPrefs.tab === 'activity') loadActivity(f);
+        }
+      });
     }
 
     // Keeps the tab's badge honest while the reader is on another tab.
