@@ -1247,11 +1247,17 @@
   // stepping through a folder keeps the reader where they were.
   var viewerPrefs = { panel: true, tab: 'details', filter: 'all' };
 
+  /*
+   * `count` names the key in the details payload's `counts` block that this
+   * tab should show. Tabs without one are never numbered: Activity is a log
+   * that only grows, so a number on it measures the file's age rather than
+   * anything to attend to, and Access counts people rather than work.
+   */
   var VIEWER_TABS = [
     { id: 'details', label: 'Details' },
-    { id: 'comments', label: 'Comments' },
-    { id: 'versions', label: 'Versions' },
-    { id: 'approvals', label: 'Approvals' },
+    { id: 'comments', label: 'Comments', count: 'comments' },
+    { id: 'versions', label: 'Versions', count: 'versions' },
+    { id: 'approvals', label: 'Approvals', count: 'approvals' },
     { id: 'activity', label: 'Activity' },
     { id: 'access', label: 'Access' },
   ];
@@ -1327,6 +1333,9 @@
       paintPanel();
       subscribeToFile(f);
       startPresence(f);
+      // Same reasoning as the approval badge below: the tab counts say what is
+      // worth opening, so they cannot wait for the reader to open something.
+      loadTabCounts(f);
       // Fetch the badge up front: §20 puts the approval status in the centre
       // header, which must not wait for the reader to open a tab.
       if (!entry(f).approvals) loadApprovals(f);
@@ -1556,12 +1565,18 @@
      * anything writing to the button's textContent erases both.
      */
     function tabsHtml() {
+      var counts = (entry(current()).details || {}).counts || {};
+
       return VIEWER_TABS.map(function (t) {
         var active = viewerPrefs.tab === t.id;
+        var n = t.count ? counts[t.count] : 0;
+        // Only when there is something there. A row of "(0)" tells the reader
+        // nothing except that six tabs exist, which they can already see.
+        var label = n > 0 ? t.label + ' (' + n + ')' : t.label;
 
         return '<button type="button" role="tab" class="tma-tab' + (active ? ' is-active' : '') + '"' +
           ' data-lb-tab="' + t.id + '" aria-selected="' + active + '">' +
-          '<span class="tma-tab__label">' + esc(t.label) + '</span>' +
+          '<span class="tma-tab__label">' + esc(label) + '</span>' +
           '<span class="tma-tab__indicator"></span>' +
         '</button>';
       }).join('');
@@ -1651,9 +1666,8 @@
         '<div data-lb-more>' + (e.details ? moreDetailsHtml(e.details) : '') + '</div>';
 
       if (e.details) return;
-      net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/details'))
+      ensureDetails(f)
         .then(function (data) {
-          e.details = data;
           if (current().id !== f.id || viewerPrefs.tab !== 'details') return;
           var slot = lb.querySelector('[data-lb-more]');
           if (slot) slot.innerHTML = moreDetailsHtml(data);
@@ -1661,6 +1675,49 @@
           if (counts) counts.innerHTML = countsHtml(data);
         })
         .catch(function (err) { panelError('[data-lb-more]', err, 'details'); });
+    }
+
+    /**
+     * Fetch a file's details once, whoever asks first.
+     *
+     * Both the Details panel and the tab counts want this, and the counts are
+     * wanted whichever tab is showing — so it can no longer live inside
+     * paintDetails. The in-flight promise is cached as well as the result:
+     * opening on Comments asks for it to label the tabs while the panel asks
+     * for it too, and without that they would both fetch.
+     */
+    function ensureDetails(f) {
+      var e = entry(f);
+
+      if (e.details) return Promise.resolve(e.details);
+      if (e.detailsPromise) return e.detailsPromise;
+
+      e.detailsPromise = net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/details'))
+        .then(function (data) {
+          e.details = data;
+          e.detailsPromise = null;
+
+          return data;
+        })
+        .catch(function (err) {
+          e.detailsPromise = null;
+          throw err;
+        });
+
+      return e.detailsPromise;
+    }
+
+    /* Load the counts and label the tabs, whatever tab is on show. */
+    function loadTabCounts(f) {
+      ensureDetails(f)
+        .then(function () {
+          if (!lb || current().id !== f.id) return;
+          var tabs = lb.querySelector('.tma-portal-viewer__tabs');
+          if (tabs) tabs.innerHTML = tabsHtml();
+        })
+        .catch(function () {
+          // No counts is the state the tabs already render in.
+        });
     }
 
     /**
@@ -1850,6 +1907,12 @@
         var e = entry(f);
         var section = payload.section;
 
+        // The counts live in the details payload, so a new version landing has
+        // to invalidate that too — otherwise the panel shows the new version
+        // while the tab beside it still says how many there were before.
+        e.details = null;
+        loadTabCounts(f);
+
         if (section === 'versions') {
           e.versions = null;
           if (viewerPrefs.tab === 'versions') loadVersions(f);
@@ -1912,11 +1975,23 @@
     // The tab label carries the open-thread count, so an unread discussion is
     // visible without opening the panel.
     function refreshCommentCount(data) {
+      var n = (data && data.openCount) || 0;
+
+      /*
+       * Into the cache as well as onto the label.
+       *
+       * The tab row is rebuilt from the cached counts on every panel repaint,
+       * so a count written only to the DOM survives until the reader switches
+       * tabs and then silently reverts to whatever the details request last
+       * said — which, after posting a comment, is one short.
+       */
+      var e = entry(current());
+      if (e.details && e.details.counts) e.details.counts.comments = n;
+
       // The label span, not the button: the underline tab keeps its indicator
       // as a sibling, and writing to the button's textContent removes it.
       var label = lb.querySelector('[data-lb-tab="comments"] .tma-tab__label');
       if (!label) return;
-      var n = data && data.openCount;
       label.textContent = n ? 'Comments (' + n + ')' : 'Comments';
     }
 
@@ -2977,6 +3052,8 @@
 
       paintPanel();
       subscribeToFile(f);
+      // Stepping to the next file needs its counts, not the last file's.
+      loadTabCounts(f);
       if (f.previewable && f.category === 'text' && f.previewUrl) loadText(f);
     }
 
