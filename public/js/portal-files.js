@@ -1277,6 +1277,22 @@
     lb.setAttribute('role', 'dialog');
     lb.setAttribute('aria-modal', 'true');
     lb.setAttribute('aria-label', 'File viewer');
+
+    /*
+     * Carry the shell's theme across.
+     *
+     * Every dark rule in the portal is written as `.tma-dash[data-theme=…]`,
+     * and the viewer is appended to <body> so that it can sit above the whole
+     * shell — which also puts it outside .tma-dash, where none of those rules
+     * can reach it. That is why this panel stayed white in dark mode.
+     *
+     * Copied once at open: the theme toggle lives in the shell header, which
+     * the viewer covers, so it cannot change while this is on screen.
+     */
+    var dash = document.querySelector('.tma-dash');
+    var theme = dash && dash.getAttribute('data-theme');
+    if (theme) lb.setAttribute('data-theme', theme);
+
     document.body.appendChild(lb);
     document.body.style.overflow = 'hidden';
 
@@ -1571,14 +1587,28 @@
       var f = current();
       var e = entry(f);
 
-      // What we already hold renders instantly; the fuller metadata block
-      // arrives from the server underneath it.
+      /*
+       * The file leads, then only what the name does not already say.
+       *
+       * This used to open with a "FILE" heading over six rows, the first of
+       * which repeated the filename already in the viewer's title bar, and two
+       * more of which ("Pdf", "176.9 KB") are one short line together. The
+       * heading labelled a panel whose tab already says Details, and the rows
+       * left a wide empty gutter between each label and its value.
+       *
+       * So: the file's own icon and name as the subject, its type and size as
+       * the caption beneath, and rows only for the three facts the name cannot
+       * carry — where it lives, whose it is, when it last changed.
+       */
       host.innerHTML =
+        '<div class="tma-portal-viewer__file">' +
+          '<img class="tma-portal-viewer__file-icon" src="' + esc(fileIconSrc(f)) + '" alt="" width="36" height="36">' +
+          '<div class="tma-portal-viewer__file-text">' +
+            '<p class="tma-portal-viewer__file-name" title="' + esc(f.name) + '">' + esc(f.name) + '</p>' +
+            '<p class="tma-portal-viewer__file-meta">' + esc(fileMetaLine(f)) + '</p>' +
+          '</div>' +
+        '</div>' +
         '<section class="tma-portal-viewer__section">' +
-          '<h4 class="tma-portal-viewer__section-title">File</h4>' +
-          detailRow('Name', f.name) +
-          detailRow('Type', f.category ? cap(f.category) : 'File') +
-          detailRow('Size', f.sizeLabel) +
           detailRow('Location', f.folder ? f.folder.name : 'File Box') +
           detailRow('Owner', f.owner ? f.owner.name : null) +
           detailRow('Modified', f.modifiedAt ? fmtDate(f.modifiedAt) : null) +
@@ -1596,6 +1626,27 @@
         .catch(function (err) { panelError('[data-lb-more]', err, 'details'); });
     }
 
+    /**
+     * "PDF · 176.9 KB" — the two facts that used to be a row each.
+     *
+     * The extension rather than the category, uppercased: the category made
+     * "Pdf", which reads as a typo for a format everybody writes as PDF. Any
+     * extension survives this correctly (DOCX, XLSX, PNG), which a list of
+     * special cases would not.
+     */
+    function fileMetaLine(f) {
+      var bits = [];
+      var dot = String(f.name || '').lastIndexOf('.');
+      var ext = dot > 0 ? f.name.slice(dot + 1) : '';
+
+      if (ext && ext.length <= 5) bits.push(ext.toUpperCase());
+      else if (f.category) bits.push(cap(f.category));
+
+      if (f.sizeLabel) bits.push(f.sizeLabel);
+
+      return bits.join(' · ');
+    }
+
     function detailRow(label, value) {
       if (value == null || value === '') return '';
       return '<div class="tma-portal-viewer__row">' +
@@ -1609,7 +1660,13 @@
       var groups = (data && data.groups) || [];
       if (!groups.length) return '';
       return '<details class="tma-portal-viewer__more">' +
-        '<summary class="tma-portal-viewer__more-summary">More details</summary>' +
+        '<summary class="tma-portal-viewer__more-summary">' +
+          // The phosphor caret rather than a "▸" character: the glyph renders
+          // at a different weight and baseline on every platform, and it was
+          // the only arrow in the portal not drawn from the icon set.
+          '<img class="tma-portal-viewer__more-caret" src="images/icons/phosphor/CaretRight.svg" alt="" width="12" height="12">' +
+          '<span>More details</span>' +
+        '</summary>' +
         groups.map(function (g) {
           return '<section class="tma-portal-viewer__section">' +
             '<h4 class="tma-portal-viewer__section-title">' + esc(g.title) + '</h4>' +
