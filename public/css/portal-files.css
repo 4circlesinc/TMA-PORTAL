@@ -442,15 +442,34 @@
 }
 
 /* Panel -------------------------------------------------------------- */
-/* The panel is the *shell* tone, not a card tone.
-   --color-bg-card is #f9f9fa — two percent off white, which is no separation
-   at all across a full-height sheet. Taking the panel to --color-bg-page and
-   putting the content on a card gives the same relationship the dashboard
-   already uses: tinted ground, white card, real structure instead of one
-   blank field. */
+/* The viewer is a dark overlay, and this panel is part of it.
+ *
+ * Its own header is #17181a and its backdrop dims the page to 82%, so a white
+ * column down the side was the one surface not playing along — which is why it
+ * kept reading as "still white" whatever near-white tone it was given. Chasing
+ * that with #f9f9fa and then #f5f5f7 was solving the wrong problem: the panel
+ * did not need a quieter white, it needed to belong to the viewer.
+ *
+ * Declaring the token set here rather than on each rule means everything
+ * inside — including the shared tab component — resolves against it, so the
+ * panel does not need a parallel set of dark rules to maintain.
+ */
 .tma-portal-viewer__panel {
+  --color-white: #1c1d1f;
+  --color-black: #ffffff;
+  --color-bg-page: #1c1d1f;
+  --color-bg-card: rgba(255, 255, 255, 0.05);
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.45);
+  --color-text-placeholder: rgba(255, 255, 255, 0.25);
+  --color-border-soft: rgba(255, 255, 255, 0.12);
+  --color-hover: rgba(255, 255, 255, 0.08);
+  /* The tab component draws its label and indicator in --component-black. */
+  --component-black: #ffffff;
+
   flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0;
-  background: var(--color-bg-page); border-left: 1px solid var(--color-border-soft);
+  background: var(--color-bg-page); color: var(--color-text-primary);
+  border-left: 1px solid var(--color-border-soft);
 }
 .tma-portal-viewer__panel[hidden] { display: none; }
 .tma-portal-viewer__panel-head {
@@ -464,14 +483,11 @@
   overflow-x: auto; scrollbar-width: none;
 }
 .tma-portal-viewer__tabs::-webkit-scrollbar { display: none; }
-.tma-portal-viewer__tab {
-  padding: var(--space-6) var(--space-8); border: 0; border-radius: var(--radius-8);
-  background: transparent; color: var(--color-text-secondary);
-  font-size: var(--text-size-13); font-weight: 500; cursor: pointer;
-  white-space: nowrap; flex: 0 0 auto;
-}
-.tma-portal-viewer__tab:hover { background: var(--color-hover); }
-.tma-portal-viewer__tab.is-active { background: var(--color-hover); color: var(--color-text-primary); font-weight: 600; }
+/* The tabs are the shared Tab Group (underline) — see components.css. Only
+   the two things the component leaves to its host are set here: it must not
+   wrap inside a 340px column, and its tighter gap suits a panel rail. */
+.tma-portal-viewer__tabs.tma-tab-group--underline { flex-wrap: nowrap; gap: var(--space-12); }
+.tma-portal-viewer__tabs .tma-tab { flex: 0 0 auto; }
 .tma-portal-viewer__panel-close {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; border: 0; border-radius: var(--radius-8);
@@ -484,9 +500,11 @@
    happens to have more room beneath it. */
 .tma-portal-viewer__panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-12) var(--space-12) var(--space-24); }
 
-/* Card radius 16 per the design system ("Cards: 16-20px"). */
+/* Card radius 16 per the design system ("Cards: 16-20px"). Lifted off the
+   panel by a 5% white wash rather than a different hue — on a dark surface
+   that is what reads as raised. */
 .tma-portal-viewer__card {
-  background: var(--color-white);
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
   padding: var(--space-16);
@@ -1167,16 +1185,18 @@
    being read is the brightest thing on screen rather than the panel. */
 .tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__stage { background: var(--color-bg-page); }
 
-/* File-type icons are drawn for light surfaces; unmodified they sit as dark
+/* Not theme-scoped: the panel is dark in both themes now, because it belongs
+   to the viewer rather than to the page behind it.
+   Phosphor icons are drawn for light surfaces and would otherwise sit as dark
    shapes on a dark panel. */
-.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__more-caret,
-.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__panel-close img {
+.tma-portal-viewer__more-caret,
+.tma-portal-viewer__panel-close img {
   filter: invert(1) brightness(1.6);
 }
 
 /* The deep brand blue is legible on white but sits close to the surface on
-   #2a2a2c. --color-primary is the same brand blue, and the design system
+   #1c1d1f. --color-primary is the same brand blue, and the design system
    names it for links and emphasis — so this stays on-brand rather than
    lightening the deep tone into something that is neither. */
-.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__more-summary { color: var(--color-primary); }
-.tma-portal-viewer[data-theme="dark"] .tma-portal-viewer__count { color: var(--color-primary); }
+.tma-portal-viewer__more-summary { color: var(--color-primary); }
+.tma-portal-viewer__count { color: var(--color-primary); }

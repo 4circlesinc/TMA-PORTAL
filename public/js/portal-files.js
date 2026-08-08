@@ -1547,14 +1547,30 @@
 
     /* ── right panel ─────────────────────────────────── */
 
+    /**
+     * The documented Tab Group (underline), not a set of buttons of our own.
+     *
+     * These were a bespoke `.tma-portal-viewer__tab` — a second tab component
+     * in a portal that already has one, which Rule 5 exists to prevent. The
+     * label lives in its own span because the indicator is a sibling element;
+     * anything writing to the button's textContent erases both.
+     */
+    function tabsHtml() {
+      return VIEWER_TABS.map(function (t) {
+        var active = viewerPrefs.tab === t.id;
+
+        return '<button type="button" role="tab" class="tma-tab' + (active ? ' is-active' : '') + '"' +
+          ' data-lb-tab="' + t.id + '" aria-selected="' + active + '">' +
+          '<span class="tma-tab__label">' + esc(t.label) + '</span>' +
+          '<span class="tma-tab__indicator"></span>' +
+        '</button>';
+      }).join('');
+    }
+
     function panelChromeHtml() {
       return '<div class="tma-portal-viewer__panel-head">' +
-        '<div class="tma-portal-viewer__tabs" role="tablist">' +
-          VIEWER_TABS.map(function (t) {
-            return '<button type="button" role="tab" class="tma-portal-viewer__tab' +
-              (viewerPrefs.tab === t.id ? ' is-active' : '') + '" data-lb-tab="' + t.id + '"' +
-              ' aria-selected="' + (viewerPrefs.tab === t.id) + '">' + esc(t.label) + '</button>';
-          }).join('') +
+        '<div class="tma-portal-viewer__tabs tma-tab-group tma-tab-group--underline" role="tablist">' +
+          tabsHtml() +
         '</div>' +
         '<button type="button" class="tma-portal-viewer__panel-close" data-lb-act="panel" aria-label="Hide details">' +
           '<img src="images/icons/phosphor/X.svg" alt="" width="16" height="16"></button>' +
@@ -1567,11 +1583,7 @@
       if (!host) return;
 
       var tabs = lb.querySelector('.tma-portal-viewer__tabs');
-      if (tabs) tabs.innerHTML = VIEWER_TABS.map(function (t) {
-        return '<button type="button" role="tab" class="tma-portal-viewer__tab' +
-          (viewerPrefs.tab === t.id ? ' is-active' : '') + '" data-lb-tab="' + t.id + '"' +
-          ' aria-selected="' + (viewerPrefs.tab === t.id) + '">' + esc(t.label) + '</button>';
-      }).join('');
+      if (tabs) tabs.innerHTML = tabsHtml();
 
       if (viewerPrefs.tab === 'details') return paintDetails(host);
       if (viewerPrefs.tab === 'comments') return paintComments(host);
@@ -1706,12 +1718,20 @@
         '<span class="tma-portal-viewer__row-value">' + esc(value) + '</span></div>';
     }
 
-    // "More details" is collapsed by default: §30 says the panel must not
-    // dump every field on open.
+    /*
+     * Open by default.
+     *
+     * §30 asked for this collapsed so the panel would not dump every field on
+     * open. In practice the card above now carries the handful of facts people
+     * actually came for, so what is left behind the disclosure is the detail
+     * somebody opening a Details tab is looking for — and a closed <details>
+     * over an otherwise empty panel just made them click once more to reach
+     * it. Kept as a <details> so it can still be collapsed.
+     */
     function moreDetailsHtml(data) {
       var groups = (data && data.groups) || [];
       if (!groups.length) return '';
-      return '<details class="tma-portal-viewer__more">' +
+      return '<details class="tma-portal-viewer__more" open>' +
         '<summary class="tma-portal-viewer__more-summary">' +
           // The phosphor caret rather than a "▸" character: the glyph renders
           // at a different weight and baseline on every platform, and it was
@@ -1892,10 +1912,12 @@
     // The tab label carries the open-thread count, so an unread discussion is
     // visible without opening the panel.
     function refreshCommentCount(data) {
-      var tab = lb.querySelector('[data-lb-tab="comments"]');
-      if (!tab) return;
+      // The label span, not the button: the underline tab keeps its indicator
+      // as a sibling, and writing to the button's textContent removes it.
+      var label = lb.querySelector('[data-lb-tab="comments"] .tma-tab__label');
+      if (!label) return;
       var n = data && data.openCount;
-      tab.textContent = n ? 'Comments (' + n + ')' : 'Comments';
+      label.textContent = n ? 'Comments (' + n + ')' : 'Comments';
     }
 
     function commentsHtml(data, e) {

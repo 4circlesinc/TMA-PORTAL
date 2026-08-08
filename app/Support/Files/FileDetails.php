@@ -8,6 +8,8 @@ use App\Models\FileVersion;
 use App\Models\FileWorkflow;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\UserTime;
+use Illuminate\Support\Carbon;
 
 /**
  * The "More details" metadata block in the file viewer.
@@ -74,9 +76,9 @@ class FileDetails
                     self::row('SharePoint path', null),
                 ]),
                 self::group('History', [
-                    self::row('Created', self::datetime($file->created_at)),
+                    self::row('Created', self::datetime($file->created_at, $viewer)),
                     self::row('Created by', $file->uploader?->name),
-                    self::row('Modified', self::datetime($file->source_modified_at ?? $file->updated_at)),
+                    self::row('Modified', self::datetime($file->source_modified_at ?? $file->updated_at, $viewer)),
                     self::row('Modified by', $file->uploader?->name),
                     self::row('Owner', $file->owner?->name),
                     // Phase 3.
@@ -152,9 +154,24 @@ class FileDetails
         };
     }
 
-    private static function datetime(mixed $value): ?string
+    /**
+     * A date somebody can read, in their own zone.
+     *
+     * This was toIso8601String(), so the panel showed
+     * "2026-08-08T22:09:15+00:00" against Created and Modified — a machine
+     * value in a place people go to answer "when was this last touched?", and
+     * in UTC rather than the reader's zone, so it was also wrong by however
+     * far they sit from Greenwich.
+     *
+     * UserTime is the one display-zone helper; see the note on the class.
+     */
+    private static function datetime(mixed $value, ?User $viewer): ?string
     {
-        return $value ? $value->toIso8601String() : null;
+        if (! $value instanceof Carbon) {
+            return null;
+        }
+
+        return UserTime::format($value, $viewer, 'M j, Y \a\t g:i A');
     }
 
     /** A row with no value is dropped by the group filter below. */
