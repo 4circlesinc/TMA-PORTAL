@@ -1601,19 +1601,30 @@
        * carry — where it lives, whose it is, when it last changed.
        */
       host.innerHTML =
-        '<div class="tma-portal-viewer__file">' +
-          '<img class="tma-portal-viewer__file-icon" src="' + esc(fileIconSrc(f)) + '" alt="" width="36" height="36">' +
-          '<div class="tma-portal-viewer__file-text">' +
-            '<p class="tma-portal-viewer__file-name" title="' + esc(f.name) + '">' + esc(f.name) + '</p>' +
-            '<p class="tma-portal-viewer__file-meta">' + esc(fileMetaLine(f)) + '</p>' +
+        '<div class="tma-portal-viewer__card">' +
+          '<div class="tma-portal-viewer__file">' +
+            '<img class="tma-portal-viewer__file-icon" src="' + esc(fileIconSrc(f)) + '" alt="" width="36" height="36">' +
+            '<div class="tma-portal-viewer__file-text">' +
+              '<p class="tma-portal-viewer__file-name" title="' + esc(f.name) + '">' + esc(f.name) + '</p>' +
+              '<p class="tma-portal-viewer__file-meta">' + esc(fileMetaLine(f)) + '</p>' +
+            '</div>' +
           '</div>' +
+          '<section class="tma-portal-viewer__section">' +
+            detailRow('Location', f.folder ? f.folder.name : 'File Box') +
+            detailRow('Owner', f.owner ? f.owner.name : null) +
+            detailRow('Modified', f.modifiedAt ? fmtDate(f.modifiedAt) : null) +
+          '</section>' +
         '</div>' +
-        '<section class="tma-portal-viewer__section">' +
-          detailRow('Location', f.folder ? f.folder.name : 'File Box') +
-          detailRow('Owner', f.owner ? f.owner.name : null) +
-          detailRow('Modified', f.modifiedAt ? fmtDate(f.modifiedAt) : null) +
-        '</section>' +
-        '<div data-lb-more>' + (e.details ? moreDetailsHtml(e.details) : ui().loading({ count: 3 })) + '</div>';
+        /*
+         * No skeleton while the extra metadata loads.
+         *
+         * "More details" is a collapsed disclosure — one line when it arrives.
+         * Standing in for it with three placeholder rows put the largest,
+         * greyest shape on the panel where almost nothing was about to appear,
+         * so a slow request looked like a broken panel rather than a link that
+         * had not shown up yet. It fades in when it is ready.
+         */
+        '<div data-lb-more>' + (e.details ? moreDetailsHtml(e.details) : '') + '</div>';
 
       if (e.details) return;
       net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/details'))

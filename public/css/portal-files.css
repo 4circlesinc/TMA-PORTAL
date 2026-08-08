@@ -442,13 +442,15 @@
 }
 
 /* Panel -------------------------------------------------------------- */
-/* --color-bg-card, not --color-white: the token set reserves flat white for
-   surfaces sitting *on* dark, and the design system names bg-card for cards
-   and inner panels. A full-height sheet of #fff beside the preview read as
-   unfinished rather than clean. */
+/* The panel is the *shell* tone, not a card tone.
+   --color-bg-card is #f9f9fa — two percent off white, which is no separation
+   at all across a full-height sheet. Taking the panel to --color-bg-page and
+   putting the content on a card gives the same relationship the dashboard
+   already uses: tinted ground, white card, real structure instead of one
+   blank field. */
 .tma-portal-viewer__panel {
   flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0;
-  background: var(--color-bg-card); border-left: 1px solid var(--color-border-soft);
+  background: var(--color-bg-page); border-left: 1px solid var(--color-border-soft);
 }
 .tma-portal-viewer__panel[hidden] { display: none; }
 .tma-portal-viewer__panel-head {
@@ -478,7 +480,21 @@
 .tma-portal-viewer__panel-close:hover { background: var(--color-hover); }
 
 /* Scrolls independently of the preview — §14. */
-.tma-portal-viewer__panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-12) var(--space-16) var(--space-24); }
+/* Even inset all round, so the card sits as a card rather than a band that
+   happens to have more room beneath it. */
+.tma-portal-viewer__panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-12) var(--space-12) var(--space-24); }
+
+/* Card radius 16 per the design system ("Cards: 16-20px"). */
+.tma-portal-viewer__card {
+  background: var(--color-white);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  padding: var(--space-16);
+  margin-bottom: var(--space-12);
+}
+/* The card already closes the group, so the last row must not add a gap
+   under itself and leave the border floating away from the content. */
+.tma-portal-viewer__card .tma-portal-viewer__section:last-child { margin-bottom: 0; }
 
 /* The file itself, as the subject of the panel. */
 .tma-portal-viewer__file {
@@ -512,7 +528,8 @@
    every label and its value wide enough to read as two unrelated lists. */
 .tma-portal-viewer__row-label { flex: 0 0 96px; color: var(--color-text-secondary); }
 .tma-portal-viewer__row-value { flex: 1; min-width: 0; color: var(--color-text-primary); word-break: break-word; }
-.tma-portal-viewer__more { margin-top: var(--space-8); }
+/* Aligned with the card's text, not the panel edge. */
+.tma-portal-viewer__more { margin-top: 0; padding: 0 var(--space-16); }
 .tma-portal-viewer__more-summary {
   display: flex; align-items: center; gap: var(--space-6);
   cursor: pointer; font-size: var(--text-size-13); font-weight: 600;
