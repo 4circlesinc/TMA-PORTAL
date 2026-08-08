@@ -34,6 +34,7 @@
     PROJECTS: 'projects',
     SIGNATURES: 'signatures',
     ACTIVITY: 'activity',
+    IDENTITY: 'identity',
   };
 
   /* Bursts are the normal case, not the exception — a bulk delete or a folder
@@ -252,6 +253,44 @@
       bind(rt, me);
     });
   }
+
+  /*
+   * Your own account type changed.
+   *
+   * This reloads rather than re-applying the capability rules, because
+   * TMAPortalAccess.apply() only ever *removes* nav rows. Re-running it after
+   * a promotion cannot bring back rows it already deleted from the DOM, so the
+   * newly-allowed sections would stay invisible until the next navigation —
+   * the exact case someone changing an account type is watching for.
+   *
+   * A reload also settles the rest of it in one go: the shell re-inlines fresh
+   * boot capabilities, and anyone demoted while sitting on a page they may no
+   * longer open is moved off it instead of left looking at stale contents.
+   *
+   * Only when the capability set actually differs. Status changes and
+   * re-approvals hit the same signal, and reloading somebody's page for a
+   * change that grants and removes nothing is an interruption for no reason.
+   */
+  function watchIdentity() {
+    register(RESOURCES.IDENTITY, function () {
+      return fetch((window.__TMA_SITE_ROOT || '') + '/me', {
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (me) {
+          if (!me || !window.TMAPortalAccess) return;
+
+          var next = (me.capabilities || []).slice().sort().join('|');
+          var current = window.TMAPortalAccess.capabilities().slice().sort().join('|');
+
+          if (next !== current) window.location.reload();
+        })
+        .catch(function () {});
+    });
+  }
+
+  watchIdentity();
 
   window.TMALive = {
     RESOURCES: RESOURCES,

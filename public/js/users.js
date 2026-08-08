@@ -669,9 +669,18 @@ if (state.filters.user) {
     container.setAttribute('data-users-context', context);
     var popoverEls = createPopovers(state);
 
-    function loadRealUsers() {
-      usersApi('GET', '/admin/users').then(function (res) {
+    /**
+     * @param {boolean} [silent] Background refresh driven by a live update
+     *   rather than by the person at the keyboard. Keeps the page they are on
+     *   and the rows they have ticked, and leaves a working table alone if the
+     *   refresh fails — see the guards below.
+     */
+    function loadRealUsers(silent) {
+      return usersApi('GET', '/admin/users').then(function (res) {
         if (!res.ok) {
+          // A refresh nobody asked for must not replace a working directory
+          // with an error banner; the next one can correct it.
+          if (silent) return;
           // Keep empty — never fall back to design-system demo rows in production.
           state.rows = [];
           state.loadError = true;
@@ -694,11 +703,27 @@ if (state.filters.user) {
           state.loadErrorMessage = '';
           state.canManage = !!j.canManage;
           state.live = true;
-          state.selected = {};
-          state.page = 1;
+
+          if (silent) {
+            // Someone else's change must not move this reader: staying on
+            // page 3 with their ticks intact is the point of a live update.
+            // Only selections whose row has gone are dropped.
+            var present = {};
+            state.rows.forEach(function (row) { present[row.id] = true; });
+            Object.keys(state.selected).forEach(function (id) {
+              if (!present[id]) delete state.selected[id];
+            });
+          } else {
+            state.selected = {};
+            state.page = 1;
+          }
+
           render();
         });
       }).catch(function (err) {
+        // Same reasoning as the !res.ok branch: a dropped background refresh
+        // is not a reason to empty a directory the reader is using.
+        if (silent) return;
         state.rows = [];
         state.loadError = true;
         state.loadErrorStatus = 0;
@@ -714,6 +739,11 @@ if (state.filters.user) {
       });
     }
     state.reloadReal = loadRealUsers;
+    // Reachable from module scope for live refreshes. Kept on the element, the
+    // way clients.js hangs its controller off the mount root, because this
+    // module mounts more than once (the Users page and the Overview tab each
+    // get their own state) and a live refresh has to reach every live one.
+    container._usersReload = loadRealUsers;
     loadRealUsers();
 
     function closeStatusMenu() {
@@ -1575,6 +1605,30 @@ e.target.closest('[data-filter-user]') ||
       });
     });
     wrap.querySelector('input[name="name"]').focus();
+  }
+
+  /*
+   * Live updates: an account created, approved, deleted or re-typed by anyone
+   * shows up here without a refresh.
+   *
+   * Registered once at module scope and fanned out to whichever mounts are on
+   * screen, rather than once per mount — this module mounts twice (the Users
+   * page and the Overview tab), and registering inside mount() would stack a
+   * new watcher every time either is navigated to.
+   */
+  if (window.TMALive) {
+    window.TMALive.register(window.TMALive.RESOURCES.USERS, function () {
+      var mounts = document.querySelectorAll('[data-users-mounted]');
+      var pending = [];
+
+      Array.prototype.forEach.call(mounts, function (el) {
+        if (typeof el._usersReload === 'function') pending.push(el._usersReload(true));
+      });
+
+      return Promise.all(pending);
+    }, {
+      active: function () { return !!document.querySelector('[data-users-mounted]'); },
+    });
   }
 
   window.TMAUsers = {

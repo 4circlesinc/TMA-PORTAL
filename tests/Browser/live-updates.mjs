@@ -180,6 +180,135 @@ check(sentinel === 'alive', 'page never reloaded (sentinel survived)')
 
 check(errors.length === 0, `no uncaught page errors${errors.length ? ': ' + errors[0] : ''}`)
 
+/* ── Users and Clients ─────────────────────────────────────────────────
+ *
+ * Same shape as the File Library check: change it from outside the browser,
+ * and the open table has to show it without navigating.
+ */
+async function tinker(php) {
+  return run('php', ['artisan', 'tinker', '--execute', php], {
+    env: {
+      ...process.env,
+      DB_CONNECTION: 'sqlite',
+      DB_DATABASE: DB,
+      DB_URL: '',
+      BROADCAST_CONNECTION: 'reverb',
+      REVERB_HOST: '127.0.0.1',
+      REVERB_PORT: '8080',
+      REVERB_SCHEME: 'http',
+    },
+  })
+}
+
+/** Open `path`, make a change elsewhere, and wait for the table to show it. */
+async function liveTable(label, path, needle, php) {
+  await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' })
+  await page.waitForTimeout(2500)
+  await page.evaluate(() => { window.__tableSentinel = 'alive' })
+
+  await tinker(php)
+
+  let seen = false
+  const until = Date.now() + WAIT_MS
+  while (Date.now() < until) {
+    seen = await page.evaluate((n) => document.body.innerText.includes(n), needle)
+    if (seen) break
+    await page.waitForTimeout(400)
+  }
+
+  check(seen, `${label}: "${needle}" appeared without a refresh`)
+  const alive = await page.evaluate(() => window.__tableSentinel)
+  check(alive === 'alive', `${label}: page never reloaded`)
+}
+
+console.log('\nLive updates — Users\n')
+
+const NEW_USER = `Live User ${stamp}`
+await liveTable('users', '/users', NEW_USER, `
+  $u = App\\Models\\User::create([
+    'name' => '${NEW_USER}',
+    'email' => 'live${stamp}@example.com',
+    'password' => Illuminate\\Support\\Facades\\Hash::make('password12345'),
+  ]);
+  $u->forceFill(['email_verified_at' => now(), 'status' => 'approved', 'account_type' => 'Employee'])->save();
+  echo 'made';
+`)
+
+console.log('\nLive updates — Clients\n')
+
+const NEW_CLIENT = `Live Client ${stamp}`
+await liveTable('clients', '/clients', NEW_CLIENT, `
+  App\\Models\\Client::create([
+    'uid' => 'live-${stamp}',
+    'name' => '${NEW_CLIENT}',
+    'email' => 'client${stamp}@example.com',
+    'data' => [],
+    'created_by' => App\\Models\\User::where('email','e2e@example.com')->value('id'),
+  ]);
+  echo 'made';
+`)
+
+/* ── account type ──────────────────────────────────────────────────────
+ *
+ * The opposite assertion to the one above, and deliberately so: a changed
+ * account type *must* reload. TMAPortalAccess.apply() only removes nav rows,
+ * so re-running it after a promotion cannot restore rows already deleted —
+ * the newly-allowed sections would stay invisible, which is precisely what
+ * whoever changed the account type is watching for.
+ *
+ * So here the sentinel has to die.
+ */
+console.log('\nLive updates — account type\n')
+
+async function setAccountType(type) {
+  return run('php', ['artisan', 'tinker', '--execute', `
+    $u = App\\Models\\User::where('email','e2e@example.com')->firstOrFail();
+    $u->forceFill(['account_type' => '${type}'])->save();
+    echo 'set';
+  `], {
+    env: {
+      ...process.env,
+      DB_CONNECTION: 'sqlite',
+      DB_DATABASE: DB,
+      DB_URL: '',
+      BROADCAST_CONNECTION: 'reverb',
+      REVERB_HOST: '127.0.0.1',
+      REVERB_PORT: '8080',
+      REVERB_SCHEME: 'http',
+    },
+  })
+}
+
+try {
+  await page.evaluate(() => { window.__typeSentinel = 'alive' })
+
+  const capsBefore = await page.evaluate(() => window.TMAPortalAccess.capabilities().length)
+
+  await setAccountType('Employee')
+  console.log('  ..    demoted Administrator -> Employee from an artisan process')
+
+  let reloaded = false
+  const end = Date.now() + WAIT_MS
+  while (Date.now() < end) {
+    // Survives navigation only if the page never reloaded.
+    const alive = await page.evaluate(() => window.__typeSentinel).catch(() => null)
+    if (alive !== 'alive') { reloaded = true; break }
+    await page.waitForTimeout(400)
+  }
+
+  check(reloaded, `page reloaded itself on the account-type change (within ${WAIT_MS / 1000}s)`)
+
+  await page.waitForTimeout(1500)
+  const capsAfter = await page.evaluate(() =>
+    (window.TMAPortalAccess && window.TMAPortalAccess.capabilities().length) || 0)
+
+  check(capsAfter > 0, 'capabilities re-resolved after the reload')
+  check(capsAfter < capsBefore, `capability set shrank (${capsBefore} -> ${capsAfter})`)
+} finally {
+  // Leave the account as we found it so the suite is re-runnable.
+  await setAccountType('Administrator')
+}
+
 await browser.close()
 
 console.log(failures === 0 ? '\nPASS\n' : `\n${failures} failure(s)\n`)

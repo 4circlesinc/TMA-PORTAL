@@ -46,6 +46,15 @@ final class Live
 
     public const ACTIVITY = 'activity';
 
+    /**
+     * "Who you are changed" — account type, status, approval.
+     *
+     * Goes to the affected person's own channel, never a shared one. It is the
+     * one signal that is about the reader rather than about a list they happen
+     * to be looking at.
+     */
+    public const IDENTITY = 'identity';
+
     /** resource => channel name => PrivateChannel, built up during the request. */
     private static array $pending = [];
 

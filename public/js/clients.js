@@ -4230,6 +4230,44 @@
     }
   }
 
+  /*
+   * Live updates: a client added, edited, invited or deleted by a colleague
+   * appears here without a refresh.
+   *
+   * Note the null-on-failure catches. The bootstrap above deliberately falls
+   * back to an empty list so a first mount can still render something, but the
+   * same fallback on a background refresh would quietly empty a directory
+   * somebody is reading because one request timed out. Here a failed fetch
+   * means "keep what we have and wait for the next signal".
+   */
+  if (window.TMALive) {
+    window.TMALive.register(window.TMALive.RESOURCES.CLIENTS, function () {
+      return Promise.all([
+        ClientsAPI.list().catch(function () { return null; }),
+        CompaniesAPI.list().catch(function () { return null; }),
+      ]).then(function (results) {
+        var clients = results[0];
+        var companies = results[1];
+
+        if (clients && clients.clients) hydrateClients(clients.clients);
+        if (companies && companies.companies) hydrateCompanies(companies.companies);
+        if (!clients && !companies) return;
+
+        if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
+
+        // syncRoute rather than render: it re-derives which client should be
+        // selected from the URL and renders, which also settles the case where
+        // the client being viewed was just deleted by somebody else. The view
+        // state lives inside mount(), so it cannot be corrected from here.
+        clientsMountRoot._clientsController.syncRoute(parseClientsPath(window.location.pathname));
+      });
+    }, {
+      active: function () {
+        return !!clientsMountRoot && document.contains(clientsMountRoot);
+      },
+    });
+  }
+
   window.TMAClients = {
     mount: mount,
     contactFor: contactFor,

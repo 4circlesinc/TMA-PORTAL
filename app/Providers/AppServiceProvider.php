@@ -39,6 +39,15 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\FileItem::observe(\App\Observers\FileLibraryObserver::class);
         \App\Models\Folder::observe(\App\Observers\FileLibraryObserver::class);
 
+        // An account type or status change reaches the person it is about
+        // straight away, not on their next refresh.
+        \App\Models\User::observe(\App\Observers\UserAccountObserver::class);
+
+        // The client hub keeps up with whoever else is editing it.
+        \App\Models\Client::observe(\App\Observers\ClientDirectoryObserver::class);
+        \App\Models\Company::observe(\App\Observers\ClientDirectoryObserver::class);
+        \App\Models\ClientAssignment::observe(\App\Observers\ClientDirectoryObserver::class);
+
         /*
          * Send whatever a job collected.
          *
