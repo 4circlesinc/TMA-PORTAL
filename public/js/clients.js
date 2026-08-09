@@ -46,6 +46,7 @@
     Trash: ICON + 'Trash.svg',
     Copy: 'images/icons/tma/Copy-16.svg',
     CaretLeft: ICON + 'CaretLeft.svg',
+    CaretRight: ICON + 'CaretRight.svg',
     User: ICON + 'User.svg',
     XCircle: ICON + 'Xcircle.svg',
     Loading16: 'images/icons/tma/Loading-16.svg',
@@ -690,10 +691,17 @@
         '</span>'
       );
     }
-    var colorClass = source.color === 'green' ? ' tma-dash__clients-avatar--green' : ' tma-dash__clients-avatar--blue';
+    var uri = initialsAvatarUri(item.name, item.id);
+    if (uri) {
+      return (
+        '<span class="tma-dash__clients-avatar" style="width:' + size + 'px;height:' + size + 'px">' +
+        '<img src="' + esc(uri) + '" alt="">' +
+        '</span>'
+      );
+    }
     return (
-      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial' + colorClass +
-      '" style="width:' + size + 'px;height:' + size + 'px">' + esc(source.initial) + '</span>'
+      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue"' +
+      ' style="width:' + size + 'px;height:' + size + 'px">' + esc(source.initial) + '</span>'
     );
   }
 
@@ -867,6 +875,20 @@
     return 'list';
   }
 
+  var PAGE_SIZE_KEY = 'tma.clientsPageSize.v1';
+
+  function loadPageSize() {
+    try {
+      var saved = parseInt(localStorage.getItem(PAGE_SIZE_KEY), 10);
+      if (CLIENTS_PAGE_SIZES.indexOf(saved) !== -1) return saved;
+    } catch (e) { /* ignore */ }
+    return CLIENTS_PAGE_SIZES[0];
+  }
+
+  function savePageSize(size) {
+    try { localStorage.setItem(PAGE_SIZE_KEY, String(size)); } catch (e) { /* ignore */ }
+  }
+
   function saveViewMode(mode) {
     try {
       localStorage.setItem(VIEW_KEY, mode === 'list' ? 'list' : 'grid');
@@ -937,6 +959,21 @@
     return item.id;
   }
 
+  /*
+   * The initials avatar the whole portal uses (TMACurrentUser.initialsFor):
+   * initials on one of seven colours, picked by hashing the seed. Colour by
+   * *name* rather than by the record's stored initial_color, which the
+   * importer had no basis to choose and so left blue on all eleven thousand
+   * — a directory where everybody is the same colour is a directory where the
+   * avatar tells you nothing. Hashing means one person keeps their colour
+   * across pages and reloads.
+   */
+  function initialsAvatarUri(name, seed) {
+    var cu = window.TMACurrentUser;
+    if (cu && typeof cu.initialsFor === 'function') return cu.initialsFor(name, seed || name);
+    return '';
+  }
+
   function clientAvatarMarkup(item) {
     var av = directoryAvatarItem(item);
     if (av.avatar) {
@@ -945,10 +982,15 @@
     if (av.photo) {
       return '<img src="' + esc(av.photo) + '" alt="">';
     }
-    var colorClass = av.initialColor === 'green' ? ' tma-dash__clients-avatar--green' : ' tma-dash__clients-avatar--blue';
+    var uri = initialsAvatarUri(item.name, item.id);
+    if (uri) {
+      return '<img class="tma-dash__clients-avatar" style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)"' +
+        ' src="' + esc(uri) + '" alt="">';
+    }
+    // current-user.js not loaded on this shell — keep a readable circle.
     return (
-      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial' + colorClass +
-      '" style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)">' + esc(av.initial || '?') + '</span>'
+      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue"' +
+      ' style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)">' + esc(av.initial || '?') + '</span>'
     );
   }
 
@@ -1128,8 +1170,15 @@
     return counts;
   }
 
+  /*
+   * The Type counts have to agree with what the table draws, and the table
+   * draws two kinds of record. A registered company is a Company row, so it
+   * counts as one — reporting only the handful of *clients* flagged company
+   * while sixty-four company rows sat in the list made the filter look broken,
+   * because picking Company then returned far more rows than the count.
+   */
   function clientTypeFacets() {
-    var counts = { private: 0, company: 0 };
+    var counts = { private: 0, company: COMPANIES.length };
     DIRECTORY.forEach(function (group) {
       group.items.forEach(function (item) {
         var type = clientTypeOf(item.id);
@@ -1223,11 +1272,13 @@
     return rows.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
   }
 
-  var CLIENTS_PAGE_SIZES = [5, 10, 20];
+  // 100 first: the directory holds eleven thousand people, and ten to a page
+  // made reaching anyone a hundred-click expedition.
+  var CLIENTS_PAGE_SIZES = [100, 25, 50, 250, 500];
 
   function getTablePageData(state) {
     var items = tableRowEntries(state);
-    var pageSize = state.pageSize || 10;
+    var pageSize = clientsPageSize(state);
     var totalPages = Math.max(1, Math.ceil(items.length / pageSize));
     if (state.page > totalPages) state.page = totalPages;
     var start = (state.page - 1) * pageSize;
@@ -1316,30 +1367,62 @@
       return '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">' +
         empty + '</div></div>';
     }
-    var start = (state.page - 1) * (state.pageSize || 10);
+    var start = (state.page - 1) * clientsPageSize(state);
     return page.items.map(function (entry, i) {
       return renderFullTableRow(entry, start + i, !!(state.selected && state.selected[entry.key]));
     }).join('');
   }
 
+  function clientsPageSize(state) {
+    return state.pageSize || CLIENTS_PAGE_SIZES[0];
+  }
+
+  function clientsTotalPages(state, totalRows) {
+    return Math.max(1, Math.ceil(totalRows / clientsPageSize(state)));
+  }
+
+  /*
+   * A window of page buttons that follows the reader.
+   *
+   * It used to render pages 1–5 and nothing else, so with eleven thousand
+   * clients pages 6 to 111 could only be reached by pressing Next a hundred
+   * times — and the last page could not be reached at all. The window now
+   * centres on the current page and the ends are always one press away.
+   */
   function renderClientsPagination(state, totalRows) {
-    var pageSize = state.pageSize || 10;
-    var totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+    var pageSize = clientsPageSize(state);
+    var totalPages = clientsTotalPages(state, totalRows);
     if (state.page > totalPages) state.page = totalPages;
 
-    var pages = '';
-    var maxButtons = Math.min(5, totalPages);
-    for (var p = 1; p <= maxButtons; p++) {
+    var pageBtn = function (p, label, extraClass, aria) {
       var active = p === state.page;
-      pages +=
-        '<button type="button" class="tma-pagination__button' + (active ? ' tma-pagination__button--active' : '') +
-        '" aria-label="Page ' + p + '"' + (active ? ' aria-current="page"' : '') +
-        ' data-page="' + p + '"><span class="tma-pagination__label">' + p + '</span></button>';
+      return '<button type="button" class="tma-pagination__button' +
+        (active ? ' tma-pagination__button--active' : '') + (extraClass || '') +
+        '" aria-label="' + esc(aria || ('Page ' + p)) + '"' + (active ? ' aria-current="page"' : '') +
+        ' data-page="' + p + '"><span class="tma-pagination__label">' + esc(label == null ? p : label) +
+        '</span></button>';
+    };
+
+    var window_ = 5;
+    var start = Math.max(1, Math.min(state.page - Math.floor(window_ / 2), totalPages - window_ + 1));
+    var end = Math.min(totalPages, start + window_ - 1);
+
+    var pages = '';
+    // Keep page 1 reachable when the window has moved past it.
+    if (start > 1) {
+      pages += pageBtn(1);
+      if (start > 2) pages += '<span class="tma-pagination__gap" aria-hidden="true">…</span>';
+    }
+    for (var p = start; p <= end; p++) pages += pageBtn(p);
+    if (end < totalPages) {
+      if (end < totalPages - 1) pages += '<span class="tma-pagination__gap" aria-hidden="true">…</span>';
+      pages += pageBtn(totalPages);
     }
 
     var prevDisabled = state.page <= 1 ? ' disabled' : '';
     var nextDisabled = state.page >= totalPages ? ' disabled' : '';
-    var resultsText = totalRows + (totalRows === 1 ? ' result' : ' results');
+    var resultsText = totalRows.toLocaleString() + (totalRows === 1 ? ' result' : ' results') +
+      ' · page ' + state.page.toLocaleString() + ' of ' + totalPages.toLocaleString();
 
     return (
       '<div class="tma-pagination-bar tma-pagination-bar--footer" data-clients-pagination>' +
@@ -1348,12 +1431,17 @@
       '<span class="tma-pagination__label">' + pageSize + '</span>' +
       '<img src="' + ICONS.ArrowLineDown + '" class="tma-pagination__icon" width="16" height="16" alt="" aria-hidden="true">' +
       '</button>' +
-      '<span class="tma-pagination-bar__results" data-clients-results-count>' + resultsText + '</span>' +
+      '<span class="tma-pagination-bar__results" data-clients-results-count>' + esc(resultsText) + '</span>' +
       '</div>' +
-      '<nav class="tma-pagination" aria-label="Pagination">' + pages +
-      '<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" data-direction="prev"' + prevDisabled + '>' +
+      '<nav class="tma-pagination" aria-label="Pagination">' +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="First page" data-direction="first"' + prevDisabled + '>' +
       '<img src="' + ICONS.ArrowLineLeft + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
-      '<button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Next page" data-direction="next"' + nextDisabled + '>' +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Previous page" data-direction="prev"' + prevDisabled + '>' +
+      '<img src="' + ICONS.CaretLeft + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      pages +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon" aria-label="Next page" data-direction="next"' + nextDisabled + '>' +
+      '<img src="' + ICONS.CaretRight + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon tma-pagination__button--next" aria-label="Last page" data-direction="last"' + nextDisabled + '>' +
       '<img src="' + ICONS.ArrowLineRight + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
       '</nav></div>'
     );
@@ -1362,8 +1450,13 @@
   function renderTableListPage(state) {
     var page = getTablePageData(state);
     return (
+      renderClientsCount(state, page.total) +
       renderTableToolbar(state) +
       renderClientsFilterChips(state) +
+      // The grid is wider than a narrow window; without a scroller of its own
+      // the last columns are simply unreachable, and the page body scrolling
+      // sideways drags the whole shell with it.
+      '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
       '<div class="tma-dash__ctable tma-dash__ctable--clients" role="table" aria-label="Clients">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
@@ -1374,9 +1467,39 @@
       '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
       '</div>' +
       '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
-      '</div>' +
+      '</div></div>' +
       renderClientsPagination(state, page.total)
     );
+  }
+
+  /*
+   * How many people are in here, said once and plainly at the top.
+   *
+   * The count used to exist only as "11,037 results" in the footer, below a
+   * hundred rows — the one number a reader wants first was the last thing they
+   * could reach. When a filter is on it reports both, because "showing 8,210
+   * of 11,037" is the honest answer and a bare 8,210 is not.
+   */
+  function renderClientsCount(state, shown) {
+    var total = totalClientRecords();
+    var filtered = anyClientFilter(state.filters) || !!state.search;
+    var label = filtered
+      ? shown.toLocaleString() + ' of ' + total.toLocaleString()
+      : total.toLocaleString();
+
+    return (
+      '<div class="tma-dash__clients-count" data-clients-count>' +
+      '<span class="tma-dash__clients-count-value">' + esc(label) + '</span>' +
+      '<span class="tma-dash__clients-count-label">' +
+      (filtered ? 'clients match' : (total === 1 ? 'client' : 'clients')) +
+      '</span></div>'
+    );
+  }
+
+  function totalClientRecords() {
+    var people = 0;
+    DIRECTORY.forEach(function (group) { people += group.items.length; });
+    return people + COMPANIES.length;
   }
   function renderDirectoryListBody(state) {
     var groups = filteredDirectoryGroups(state.search);
@@ -2115,7 +2238,7 @@
           return '<option value="' + esc(sc.value) + '">' + esc(sc.label) + '</option>';
         }).join('') +
         '</select>' +
-        '<button type="button" class="tma-dash__clients-message-btn" data-company-staff-add>Assign</button>' +
+        '<button type="button" class="tma-dash__clients-assign-btn" data-company-staff-add>Assign</button>' +
         '</div>'
       : '';
 
@@ -2974,7 +3097,7 @@
             esc(l.label) + '</option>';
         }).join('') +
         '</select>' +
-        '<button type="button" class="tma-dash__clients-message-btn" data-clients-assign-submit>Assign</button>' +
+        '<button type="button" class="tma-dash__clients-assign-btn" data-clients-assign-submit>Assign</button>' +
         '</div>';
     }
 
@@ -3480,31 +3603,32 @@
       });
     });
 
-    var prev = pagination.querySelector('[data-direction="prev"]');
-    if (prev) {
-      MORPH.on(prev, 'click', function () {
-        if (state.page <= 1) return;
-        state.page -= 1;
+    // First and last were never wired, so with a hundred pages the end of the
+    // directory was unreachable however long you pressed Next.
+    MORPH.unwired(pagination, '[data-direction]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        if (btn.disabled) return;
+        var totalPages = clientsTotalPages(state, tableRowEntries(state).length);
+        var target = state.page;
+        switch (btn.getAttribute('data-direction')) {
+          case 'first': target = 1; break;
+          case 'prev': target = state.page - 1; break;
+          case 'next': target = state.page + 1; break;
+          case 'last': target = totalPages; break;
+        }
+        target = Math.min(Math.max(1, target), totalPages);
+        if (target === state.page) return;
+        state.page = target;
         render({ forceFull: true });
       });
-    }
-
-    var next = pagination.querySelector('[data-direction="next"]');
-    if (next) {
-      MORPH.on(next, 'click', function () {
-        var totalPages = Math.max(1, Math.ceil(tableRowEntries(state).length / (state.pageSize || 10)));
-        if (state.page >= totalPages) return;
-        state.page += 1;
-        render({ forceFull: true });
-      });
-    }
+    });
 
     var pageSizeBtn = pagination.querySelector('[data-clients-page-size]');
     if (pageSizeBtn) {
       MORPH.on(pageSizeBtn, 'click', function () {
-        var idx = CLIENTS_PAGE_SIZES.indexOf(state.pageSize || 10);
-        var nextSize = CLIENTS_PAGE_SIZES[(idx + 1) % CLIENTS_PAGE_SIZES.length];
-        state.pageSize = nextSize;
+        var idx = CLIENTS_PAGE_SIZES.indexOf(clientsPageSize(state));
+        state.pageSize = CLIENTS_PAGE_SIZES[(idx + 1) % CLIENTS_PAGE_SIZES.length];
+        savePageSize(state.pageSize);
         state.page = 1;
         render({ forceFull: true });
       });
@@ -3565,51 +3689,73 @@
     });
   }
 
+  /*
+   * Selection, read from the DOM at the moment it is asked.
+   *
+   * This used to capture the checkbox list and the row array when it wired up.
+   * The select-all box survives a re-render (that is the point of morphing),
+   * so its handler was bound once and kept the very first render's nodes for
+   * ever — change the page size or turn a page and ticking it set `checked`
+   * on elements no longer in the document. Nothing visibly happened.
+   *
+   * Rows are also identified by their own uid rather than by their position in
+   * a captured array, so a re-ordered or re-filtered table cannot select
+   * somebody other than the person whose box was ticked.
+   */
   function wireTableSelection(root, state) {
-    var items = tableRowEntries(state);
-    var selectAll = root.querySelector('[data-clients-selectall]');
-    var rowChecks = Array.prototype.slice.call(root.querySelectorAll('[data-clients-check]'));
+    var table = root.querySelector('.tma-dash__ctable--clients');
+    if (!table) return;
 
-    function syncRow(cb, rowIndex) {
-      var rowEl = cb.closest('[data-row-index]');
-      var entry = items[rowIndex];
-      // Company rows carry no checkbox, so nothing here can select one.
-      if (!entry || entry.kind !== 'client') return;
-      var key = entry.key;
+    function boxes() {
+      return Array.prototype.slice.call(table.querySelectorAll('[data-clients-check]'));
+    }
+
+    function keyOf(cb) {
+      var row = cb.closest('[data-clients-row]');
+      return row ? row.getAttribute('data-clients-row') : null;
+    }
+
+    function applyRow(cb) {
+      var key = keyOf(cb);
+      if (!key) return;
       if (cb.checked) state.selected[key] = true;
       else delete state.selected[key];
+      var rowEl = cb.closest('[data-row-index]');
       if (rowEl) rowEl.classList.toggle('tma-dash__ctr--selected', cb.checked);
-      updateTableToolbarSelection(root, state);
     }
 
     function syncSelectAll() {
+      var selectAll = table.querySelector('[data-clients-selectall]');
       if (!selectAll) return;
-      var checked = rowChecks.filter(function (c) { return c.checked; }).length;
-      selectAll.checked = checked === rowChecks.length && rowChecks.length > 0;
-      selectAll.indeterminate = checked > 0 && checked < rowChecks.length;
+      var all = boxes();
+      var checked = all.filter(function (c) { return c.checked; }).length;
+      selectAll.checked = all.length > 0 && checked === all.length;
+      selectAll.indeterminate = checked > 0 && checked < all.length;
     }
 
-    rowChecks.forEach(function (cb) {
-      var rowEl = cb.closest('[data-row-index]');
-      var rowIndex = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : 0;
+    MORPH.unwired(table, '[data-clients-check]').forEach(function (cb) {
       MORPH.on(cb, 'change', function () {
-        syncRow(cb, rowIndex);
+        applyRow(cb);
+        updateTableToolbarSelection(root, state);
         syncSelectAll();
       });
     });
 
+    var selectAll = MORPH.unwiredOne(table, '[data-clients-selectall]');
     if (selectAll) {
       MORPH.on(selectAll, 'change', function () {
-        rowChecks.forEach(function (cb) {
-          var rowEl = cb.closest('[data-row-index]');
-          var rowIndex = rowEl ? parseInt(rowEl.getAttribute('data-row-index'), 10) : 0;
+        // Live nodes, not the ones that existed when this was bound.
+        boxes().forEach(function (cb) {
           cb.checked = selectAll.checked;
-          syncRow(cb, rowIndex);
+          applyRow(cb);
         });
         selectAll.indeterminate = false;
+        updateTableToolbarSelection(root, state);
       });
-      syncSelectAll();
     }
+
+    syncSelectAll();
+    updateTableToolbarSelection(root, state);
   }
 
   function refreshDirectoryFromSearch(root, state) {
@@ -4489,7 +4635,7 @@
       filters: emptyClientFilters(),
       viewMode: loadViewMode(),
       page: 1,
-      pageSize: 10,
+      pageSize: loadPageSize(),
       selected: {},
       removedIds: {},
     };

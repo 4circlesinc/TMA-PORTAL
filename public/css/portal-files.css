@@ -786,7 +786,16 @@
 }
 .tma-portal-viewer__comment-flag--warn { background: color-mix(in srgb, #f59e0b 22%, transparent); }
 
-/* Status badge. Tones only — never a bespoke colour per status. */
+/*
+ * Status badge. Tones only — never a bespoke colour per status.
+ *
+ * Five tones, and they answer one question: whose move is it? Green it is
+ * finished and went well, red it was refused, amber we are waiting on somebody
+ * else, blue the firm has to act next, grey it is closed or parked. The CBI
+ * caseload alone carries forty distinct status strings, so a colour each would
+ * be forty colours nobody could learn; grouped this way a reader can scan a
+ * table and see where the work is without reading a word.
+ */
 .tma-portal-status {
   display: inline-flex; align-items: center; padding: 1px var(--space-8);
   border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
@@ -794,7 +803,15 @@
 .tma-portal-status--success { background: color-mix(in srgb, #16a34a 16%, transparent); color: #15803d; }
 .tma-portal-status--danger  { background: color-mix(in srgb, #dc2626 16%, transparent); color: #b91c1c; }
 .tma-portal-status--pending { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #b45309; }
+.tma-portal-status--action  { background: color-mix(in srgb, #2563eb 15%, transparent); color: #1d4ed8; }
 .tma-portal-status--neutral { background: var(--color-hover); color: var(--color-text-secondary); }
+
+/* The tinted backgrounds are mixed against a light surface; on dark they read
+   as muddy smears, so the tone moves to the text and a faint wash. */
+.tma-dash[data-theme="dark"] .tma-portal-status--success { background: color-mix(in srgb, #16a34a 22%, transparent); color: #4ade80; }
+.tma-dash[data-theme="dark"] .tma-portal-status--danger  { background: color-mix(in srgb, #dc2626 22%, transparent); color: #fca5a5; }
+.tma-dash[data-theme="dark"] .tma-portal-status--pending { background: color-mix(in srgb, #f59e0b 22%, transparent); color: #fcd34d; }
+.tma-dash[data-theme="dark"] .tma-portal-status--action  { background: color-mix(in srgb, #2563eb 26%, transparent); color: #93c5fd; }
 /* In the viewer header the surrounding text is white-on-dark, so the badge
    needs its own opaque backing to stay readable. */
 .tma-portal-viewer__sub .tma-portal-status { background: rgba(255, 255, 255, 0.16); color: #fff; }

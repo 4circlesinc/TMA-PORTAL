@@ -78,7 +78,7 @@ class CbiController extends Controller
                 'statuses' => $facet('status'),
                 'referredBy' => $facet('referred_by'),
                 'investmentOptions' => $facet('investment_option'),
-                'assigned' => $facet('assigned_to'),
+                'assigned' => $facet('assigned_to_canonical'),
                 'nationalities' => $facet('nationality'),
             ],
             'sync' => [
@@ -99,16 +99,21 @@ class CbiController extends Controller
     {
         $this->gate($request);
 
-        $query = CbiApplication::query();
+        $query = CbiApplication::query()->with('assignedUser');
 
         if (($stage = (string) $request->query('stage')) !== ''
             && in_array($stage, CbiApplication::STAGES, true)) {
             $query->where('stage', $stage);
         }
-        foreach (['status', 'referred_by', 'investment_option', 'assigned_to', 'nationality'] as $filter) {
+        foreach (['status', 'referred_by', 'investment_option', 'nationality'] as $filter) {
             if (($value = (string) $request->query($filter)) !== '') {
                 $query->where($filter, $value);
             }
+        }
+        // Filtering by a person means all their spellings, so it reads the
+        // canonical column the assignee matcher writes — not the raw cell.
+        if (($assignee = (string) $request->query('assigned_to')) !== '') {
+            $query->where('assigned_to_canonical', $assignee);
         }
         if ($request->boolean('needs_review')) {
             $query->where('needs_review', true);
@@ -150,7 +155,7 @@ class CbiController extends Controller
                 'status' => $a->status,
                 'progress' => $a->progress,
                 'referredBy' => $a->referred_by,
-                'assignedTo' => $a->assigned_to,
+                'assignee' => self::assignee($a),
                 'investmentOption' => $a->investment_option,
                 'nationality' => $a->nationality,
                 'dependents' => $a->number_of_dependents,
@@ -171,7 +176,7 @@ class CbiController extends Controller
     {
         $this->gate($request);
 
-        $application = CbiApplication::query()->with('client')->where('uuid', $uuid)->firstOrFail();
+        $application = CbiApplication::query()->with(['client', 'assignedUser'])->where('uuid', $uuid)->firstOrFail();
 
         $sources = $application->sources()->get();
 
@@ -247,6 +252,37 @@ class CbiController extends Controller
         ]);
     }
 
+    /**
+     * The person a file is with, as the table needs to draw them: a name to
+     * print and a face to put beside it.
+     *
+     * `assigned_to_canonical` is one spelling per person (see
+     * App\Support\Cbi\AssigneeDirectory); the raw cell is kept alongside so a
+     * reader can still see what the sheet actually said. Where the colleague
+     * has a portal account their real photo comes with them — where they have
+     * none, the name alone is enough for the browser to draw initials.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function assignee(CbiApplication $a): ?array
+    {
+        $name = $a->assigned_to_canonical ?: null;
+        $user = $a->relationLoaded('assignedUser') ? $a->assignedUser : null;
+
+        if (! $name && ! $user) {
+            return null;
+        }
+
+        return [
+            'name' => $user?->name ?? $name,
+            'email' => $user?->email,
+            'photo' => $user?->photoUrl(),
+            'userId' => $user?->id,
+            // What Smartsheet actually holds, shown only when it differs.
+            'raw' => $a->assigned_to !== ($user?->name ?? $name) ? $a->assigned_to : null,
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function detailPayload(CbiApplication $a): array
     {
@@ -279,7 +315,7 @@ class CbiController extends Controller
             'promoter' => $a->promoter,
             'serviceProvider' => $a->service_provider,
             'mainContact' => $a->main_contact,
-            'assignedTo' => $a->assigned_to,
+            'assignee' => self::assignee($a),
             'verificationOfficer' => $a->verification_officer,
             'ddOfficer' => $a->dd_officer,
             'paAssignment' => $a->pa_assignment,

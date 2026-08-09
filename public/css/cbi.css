@@ -164,6 +164,33 @@
    [data-open] visibility; only the stacking context is page business. */
 .cbi-popover { z-index: 260; }
 
+/* ── A colleague: face then name ─────────────────────── */
+
+.cbi-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.cbi-person__avatar {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  /* Provider photos arrive at any aspect ratio; without this a wide one
+     stretches into an oval that reads as a rendering fault. */
+  background: var(--color-hover);
+}
+
+.cbi-person__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Comments ──────────────────────────────────────── */
 
 .cbi-comments {

@@ -229,19 +229,38 @@
    * Ordinary statuses render as plain muted text (the File Library's
    * treatment of Type/Sharing); only a decided outcome earns a chip.
    */
+  /*
+   * Which of the five tones a status wears. Smartsheet is free text, so this
+   * matches on meaning rather than listing the forty strings the caseload
+   * happens to hold today — a status typed tomorrow still lands somewhere,
+   * and the order is load-bearing: "PENDING COR - NCR" is waiting on somebody,
+   * "APPLY FOR COR" is ours to do, and both mention COR.
+   */
   function statusTone(status) {
-    var s = String(status || '').toUpperCase();
+    var s = String(status || '').toUpperCase().trim();
     if (!s) return null;
-    if (/GRANTED|CITIZEN/.test(s)) return 'success';
-    if (/DENIED|NON COMPLIANT|RESCINDED|WITHDRAWN/.test(s)) return 'danger';
-    return null;
+
+    // Refused, and every way the caseload says so.
+    if (/DENIED|NON.?COMPLIANT|RESCINDED|REJECT|APPEAL LOST|FAILED/.test(s)) return 'danger';
+    // Finished, and it went well.
+    if (/GRANTED|CITIZEN|APPROVED|APPEAL WON|COMPLETE|RECEIVED|REVIEWED|DELIVERED/.test(s)) return 'success';
+    // Parked or over without an outcome.
+    if (/CLOSED|WITHDRAWN|CANCEL|FUNDS RETURNED|ON HOLD/.test(s)) return 'neutral';
+    // Waiting on somebody else — the whole PENDING family, including the
+    // artefact stages (NIC, COR, PADS, passport) the office tracks by name.
+    if (/PENDING|AWAITING|DELAYED|BACKGROUND CHECK|APPEALED|IN PROGRESS/.test(s)) return 'pending';
+    // The firm's move next.
+    if (/^NEW|TO SUBMIT|APPLY FOR|READY FOR|SUBMIT|REVISION|POST APPROVAL|ASSESS/.test(s)) return 'action';
+
+    // Anything unrecognised still gets a chip. A status with no colour reads
+    // as a status with no meaning, which is what this change set out to fix.
+    return 'neutral';
   }
+
   function statusCell(status) {
     if (!status) return '<span class="tma-portal-table__muted">—</span>';
-    var tone = statusTone(status);
-    return tone
-      ? '<span class="tma-portal-status tma-portal-status--' + tone + '">' + esc(status) + '</span>'
-      : esc(status);
+    return '<span class="tma-portal-status tma-portal-status--' + statusTone(status) + '">' +
+      esc(status) + '</span>';
   }
   function stageChip(stage) {
     var label = STAGE_LABELS[stage] || stage || '—';
@@ -252,6 +271,31 @@
   }
   function num(n) {
     return (n == null) ? '' : Number(n).toLocaleString();
+  }
+
+  /*
+   * A colleague, as a face and a name. The portal's own initials avatar
+   * (TMACurrentUser.initialsFor) colours the circle by hashing the name, so
+   * one person keeps the same colour everywhere and two people beside each
+   * other are told apart at a glance — which a column of identical grey
+   * circles never managed.
+   */
+  function personAvatar(person, size) {
+    size = size || 24;
+    var src = person.photo;
+    if (!src && window.TMACurrentUser && window.TMACurrentUser.initialsFor) {
+      src = window.TMACurrentUser.initialsFor(person.name, person.email || person.name);
+    }
+    if (!src) return '';
+    return '<img class="cbi-person__avatar" src="' + esc(src) + '" alt="" width="' + size +
+      '" height="' + size + '" loading="lazy">';
+  }
+
+  function personCell(person) {
+    if (!person || !person.name) return '<span class="tma-portal-table__muted">Unassigned</span>';
+    return '<span class="cbi-person"' + (person.raw ? ' title="' + esc('Smartsheet: ' + person.raw) + '"' : '') + '>' +
+      personAvatar(person) +
+      '<span class="cbi-person__name">' + esc(person.name) + '</span></span>';
   }
 
   /* ── render: list ── */
@@ -382,7 +426,7 @@
         (showStage ? '<td class="tma-portal-table__muted">' + esc(STAGE_LABELS[a.stage] || a.stage || '—') + '</td>' : '') +
         '<td>' + statusCell(a.status) + (a.needsReview ? ' ' + reviewChip() : '') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.referredBy || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(a.assignedTo || '—') + '</td>' +
+        '<td>' + personCell(a.assignee) + '</td>' +
         '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.receivedAt) || '—') + '</td>' +
         '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.modifiedAt) || '—') + '</td>' +
         '</tr>';
@@ -709,7 +753,7 @@
       fact('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
       fact('Investment', a.investmentOption) +
       fact('Referred by', a.referredBy) +
-      fact('Assigned', a.assignedTo) +
+      fact('Assigned', a.assignee ? personCell(a.assignee) : null, true) +
       // The applicant's record in the Client hub. The case is the record of
       // truth for the file; the client is the record of truth for the person.
       fact('Client record', a.clientUid
@@ -772,7 +816,7 @@
       fact('File location', a.fileLocation);
 
     var team =
-      fact('Assigned', a.assignedTo) +
+      fact('Assigned', a.assignee ? personCell(a.assignee) : null, true) +
       fact('Verification officer', a.verificationOfficer) +
       fact('Due diligence officer', a.ddOfficer) +
       fact('PA assignment', a.paAssignment) +

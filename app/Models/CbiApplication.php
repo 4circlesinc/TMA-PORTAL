@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
     'applicant_number', 'applicant_name', 'main_applicant_name', 'date_of_birth',
     'nationality', 'number_of_dependents', 'family_structure', 'contact_details',
     'stage', 'status', 'application_review', 'progress', 'granted', 'closed', 'action_needed',
-    'referred_by', 'promoter', 'service_provider', 'main_contact', 'assigned_to',
+    'referred_by', 'promoter', 'service_provider', 'main_contact', 'assigned_to', 'assigned_to_canonical',
     'verification_officer', 'dd_officer', 'pa_assignment', 'file_owner',
     'submitted_by', 'verified_by', 'assigned_user_id', 'client_id',
     'investment_option', 'application_type', 'clio_matter_number', 'clio_matter_link', 'file_location',

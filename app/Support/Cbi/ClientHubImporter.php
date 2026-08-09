@@ -88,7 +88,7 @@ class ClientHubImporter
 
         $report = [];
         foreach ($groups as $key => $group) {
-            $name = $this->displayName($group['variants']);
+            $name = Names::display($group['variants']);
             $existing = $this->companies[$key] ?? null;
 
             if ($existing) {
@@ -386,48 +386,9 @@ class ClientHubImporter
         }
     }
 
-    /**
-     * Which spelling of a referral source to show.
-     *
-     * Prefer a variant that someone typed in mixed case — it is the readable
-     * one. Where every variant is shouted, keep it shouted: upper case is as
-     * likely to be an acronym (GCC, RIF Trust) as a stuck caps lock, and
-     * title-casing an acronym is a worse error than leaving it alone.
-     *
-     * @param  array<int, array{name: string, n: int}>  $variants
-     */
-    private function displayName(array $variants): string
-    {
-        usort($variants, fn ($a, $b) => $b['n'] <=> $a['n']);
-
-        foreach ($variants as $variant) {
-            $name = $this->tidy($variant['name']);
-            // Mixed case means somebody typed it deliberately: it differs from
-            // both its shouted and its whispered form. All-lower is a stuck
-            // shift key, not a choice, so it does not win.
-            if ($name !== mb_strtoupper($name) && $name !== mb_strtolower($name)) {
-                return $name;
-            }
-        }
-
-        $fallback = $this->tidy($variants[0]['name']);
-
-        // Nothing but lower case: title-case it, since no acronym is written
-        // that way. Nothing but upper case: leave it, because GCC and RIF are
-        // as likely as a stuck caps lock and mangling those is the worse error.
-        return $fallback === mb_strtolower($fallback)
-            ? mb_convert_case($fallback, MB_CASE_TITLE, 'UTF-8')
-            : $fallback;
-    }
-
-    private function tidy(string $value): string
-    {
-        return trim(preg_replace('/\s+/', ' ', $value) ?? '');
-    }
-
     private function normalise(string $value): string
     {
-        return mb_strtolower(trim(preg_replace('/\s+/', ' ', $value) ?? ''));
+        return Names::normalise($value);
     }
 
     private function isPrivateMarker(string $normalised): bool
