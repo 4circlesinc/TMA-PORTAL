@@ -5028,6 +5028,25 @@
       openContextMenu(x, y, item);
     },
 
+    /**
+     * Open a file in the viewer, from a list that is not the File Library.
+     *
+     * The client's Documents tab used to window.open() the raw preview URL, so
+     * the same PDF was a browser tab from one screen and the portal's viewer
+     * from the other — no comments, no versions, no review, and no way back
+     * except the back button. It is the same file, so it gets the same window.
+     *
+     * The item is registered as an external one first: the viewer resolves the
+     * file it was handed through findItem, which otherwise only knows about
+     * rows the library itself loaded.
+     */
+    open: function (item, onChange) {
+      if (!item || item.type === 'folder') return;
+      externalItems = [item];
+      externalOnChange = onChange || null;
+      openLightbox(item);
+    },
+
     /** Download one file or folder. */
     download: downloadItem,
 

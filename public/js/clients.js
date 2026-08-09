@@ -2106,11 +2106,16 @@
       ' tma-portal-status--inline">' + esc(s.label) + '</span>';
   }
 
+  /* The rows currently on show, so a click can hand the viewer the whole file
+     rather than re-fetching one it already has. */
+  var clientFolderFiles = [];
+
   function renderClientFolderList(root, res) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap) return;
     var folders = (res && res.folders) || [];
     var files = (res && res.files) || [];
+    clientFolderFiles = files;
     if (!folders.length && !files.length) {
       wrap.innerHTML = '<div class="tma-dash__clients-assigned-empty" data-clients-folder-list>' +
         'No files yet. Use “Upload”, “New folder”, or drag files here.</div>';
@@ -2210,7 +2215,28 @@
     root.querySelectorAll('[data-clients-file]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var fu = btn.getAttribute('data-clients-file');
-        if (fu && filesNet()) window.open(filesNet().url('/files/' + encodeURIComponent(fu) + '/preview'), '_blank', 'noopener');
+        if (!fu) return;
+
+        /*
+         * The File Library's viewer, not a new browser tab.
+         *
+         * These are the same files the library lists, so opening one here used
+         * to give a bare PDF in another tab — no comments, no versions, no
+         * review controls — while opening it from the library gave the full
+         * viewer. TMAFileActions.open hands the row we already hold straight
+         * to it, and the callback refreshes this list for anything the viewer
+         * changed (a review moved on, a version added).
+         */
+        var row = (clientFolderFiles || []).filter(function (f) { return f.id === fu; })[0];
+
+        if (row && window.TMAFileActions && window.TMAFileActions.open) {
+          window.TMAFileActions.open(row, function () { loadClientFolder(root); });
+
+          return;
+        }
+
+        // No viewer on this shell — the old behaviour beats doing nothing.
+        if (filesNet()) window.open(filesNet().url('/files/' + encodeURIComponent(fu) + '/preview'), '_blank', 'noopener');
       });
     });
   }

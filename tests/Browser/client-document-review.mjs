@@ -35,6 +35,9 @@ const { stdout } = await tinker(`
   $u = App\\Models\\User::where('email','e2e@example.com')->firstOrFail();
   $c = App\\Models\\Client::create(['uid'=>'rev-${stamp}','name'=>'Review Client ${stamp}','email'=>'rev${stamp}@example.com','data'=>[],'created_by'=>$u->id]);
   $root = App\\Models\\Folder::create(['uuid'=>(string)Illuminate\\Support\\Str::uuid(),'name'=>'Review Client ${stamp}','folder_type'=>'client','client_id'=>$c->id,'owner_id'=>$u->id,'created_by'=>$u->id]);
+  // FolderProvisioner links both ends in the real flow; the Documents tab
+  // reads client.folder_id and shows "folder isn't ready yet" without it.
+  $c->forceFill(['folder_id'=>$root->id])->save();
   $sub = App\\Models\\Folder::create(['uuid'=>(string)Illuminate\\Support\\Str::uuid(),'name'=>'Citizenship Applications','parent_id'=>$root->id,'owner_id'=>$u->id,'created_by'=>$u->id]);
   foreach ([['Passport.pdf','pdf','application/pdf'],['Application.docx','docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document'],['Photo.png','png','image/png']] as $f) {
     App\\Models\\FileItem::create(['uuid'=>(string)Illuminate\\Support\\Str::uuid(),'folder_id'=>$sub->id,'name'=>$f[0],'extension'=>$f[1],'mime_type'=>$f[2],'size'=>2048,'disk'=>'local','storage_path'=>'vault/contract.pdf','owner_id'=>$u->id,'uploaded_by'=>$u->id]);
@@ -113,6 +116,50 @@ check(docs.every((d) => d.status), 'every document carries a status for the clie
 
 const icons = new Set(docs.map((d) => d.icon))
 check(icons.size > 1, `documents carry distinct type icons, not one generic file (${[...icons].join(', ')})`)
+
+/* ── a client document opens in the library's own viewer ── */
+
+/*
+ * Driven through the seam rather than the directory UI.
+ *
+ * Reaching the tab means finding one client among many in a paginated list
+ * with no address of its own (/clients/{uid} is not in SPA_PAGES), and that
+ * navigation is not what is under test here — the handoff is. This calls the
+ * exact API the Documents tab now calls, with a row shaped exactly as that
+ * list holds it, and checks the viewer opens in place rather than in a tab.
+ */
+await page.goto(`${BASE}/folders/all`, { waitUntil: 'networkidle' })
+await page.waitForTimeout(2500)
+
+check(await page.evaluate(() => !!(window.TMAFileActions && window.TMAFileActions.open)),
+  'TMAFileActions.open exists for lists outside the File Library')
+
+const tabsBefore = page.context().pages().length
+
+const opened = await page.evaluate(async (uuid) => {
+  const r = await fetch('/portal/files/?folder=' + uuid + '&perPage=200', {
+    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+  })
+  const j = await r.json()
+  const file = (j.files || [])[0]
+  if (!file) return { ok: false }
+
+  window.TMAFileActions.open(file)
+
+  return { ok: true, name: file.name }
+}, subUuid)
+
+check(opened.ok, `handed a client document to the viewer (${opened.name || 'none'})`)
+await page.waitForTimeout(3500)
+
+check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer')),
+  'it opens in the File Library viewer, in place')
+check(page.context().pages().length === tabsBefore, 'and does not open a browser tab')
+check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer__tabs')),
+  'with the full panel — comments, versions, review')
+check(await page.evaluate(() => !!document.querySelector('[data-lb-review]')),
+  'and its review controls')
 
 await browser.close()
 console.log(failures === 0 ? '\nPASS\n' : `\n${failures} failure(s)\n`)
