@@ -2506,14 +2506,22 @@
      * click would be the interface hiding a rule it could have just asked
      * about. Every other move goes straight through.
      */
-    /* Labels and icons for the four states, in the order the process runs. */
+    /*
+     * The states, in the order the process runs. No icons.
+     *
+     * Nearly every phosphor file in this portal is drawn `fill="currentColor"`
+     * with no width or height, which renders as an empty square when loaded
+     * through an <img> the way this menu does — only eleven of the sixteen
+     * hundred carry their own dimensions. Six unambiguous labels do not need
+     * pictures, and an empty box beside each one is worse than none.
+     */
     var REVIEW_STATES = [
-      { id: 'pending_review', label: 'Pending review', icon: 'Clock' },
-      { id: 'under_review', label: 'Under review', icon: 'Eye' },
-      { id: 'awaiting_approval', label: 'Awaiting approval', icon: 'PaperPlaneTilt' },
-      { id: 'changes_requested', label: 'Changes requested', icon: 'ArrowUUpLeft' },
-      { id: 'approved', label: 'Approved', icon: 'CheckCircle' },
-      { id: 'rejected', label: 'Rejected', icon: 'XCircle' },
+      { id: 'pending_review', label: 'Pending review' },
+      { id: 'under_review', label: 'Under review' },
+      { id: 'awaiting_approval', label: 'Awaiting approval' },
+      { id: 'changes_requested', label: 'Changes requested' },
+      { id: 'approved', label: 'Approved' },
+      { id: 'rejected', label: 'Rejected' },
     ];
 
     /**
@@ -2532,7 +2540,6 @@
 
         return {
           label: s.label + (isCurrent ? ' ✓' : ''),
-          icon: s.icon,
           fn: isCurrent ? function () {} : function () { setReviewStatus(s.id); },
         };
       });
