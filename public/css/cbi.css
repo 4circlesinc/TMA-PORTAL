@@ -278,3 +278,39 @@
   flex-direction: column;
   gap: var(--space-12);
 }
+
+
+/* ── Overview cards ──────────────────────────────────
+ *
+ * The overview was two columns of flat headings balanced by content weight,
+ * which kept the page tidy but gave the reader no edges to navigate by. Short
+ * groups now pair up as cards and the two that run long — Timeline and Notes —
+ * span the width, so the shape of a file is visible before a word is read.
+ */
+.cbi-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-16);
+  align-items: start;
+}
+
+.cbi-card {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-20);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card, var(--color-white));
+  border: 1px solid var(--color-overlay-4);
+}
+
+.cbi-card--full { grid-column: 1 / -1; }
+
+@media (max-width: 1100px) {
+  .cbi-cards { grid-template-columns: minmax(0, 1fr); }
+  .cbi-card--full { grid-column: 1 / -1; }
+}
+
+/* A card already has its own padding; the empty state inside one is a marker,
+   not a hero. */
+.cbi-card .tma-portal-empty { padding: var(--space-12) 0; }
+.cbi-card .tma-portal-empty__illustration { width: 72px; height: 72px; }

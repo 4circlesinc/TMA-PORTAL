@@ -16188,6 +16188,79 @@
   overflow: visible;
 }
 
+/*
+ * The card grid.
+ *
+ * Two short sections pair up on a wide screen, the lists that grow take the
+ * full width, and each is a surface of its own — so the eye can find a
+ * section instead of scanning headings down one flat column.
+ */
+.tma-dash__clients-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-16);
+  align-content: start;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--space-8);
+}
+
+.tma-dash__clients-card {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
+  padding: var(--space-20);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card, var(--color-white));
+  border: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__clients-card--half { grid-column: span 1; }
+
+/* One column below the point where two cards stop being readable. */
+@media (max-width: 1100px) {
+  .tma-dash__clients-cards { grid-template-columns: minmax(0, 1fr); }
+  .tma-dash__clients-card--half { grid-column: 1 / -1; }
+}
+
+.tma-dash__clients-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-8);
+}
+
+.tma-dash__clients-card-title {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__clients-card-count {
+  margin-left: auto;
+  font-size: var(--text-size-13, 13px);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inside a card the empty state is a small marker, not a hero. */
+.tma-dash__clients-card .tma-portal-empty { padding: var(--space-16) 0; }
+.tma-dash__clients-card .tma-portal-empty__illustration { width: 72px; height: 72px; }
+
+/* The blocks inside a card already have the card's padding around them. */
+.tma-dash__clients-card .tma-dash__clients-access-block { margin: 0; }
+.tma-dash__clients-card .tma-dash__clients-assign-form:first-child { margin-top: 0; }
+.tma-dash__clients-card .tma-dash__clients-profile-body {
+  display: block;
+  padding: 0;
+  overflow: visible;
+}
+
 /* Section headers carry a count on the right. */
 .tma-dash__clients-assigned-total {
   margin-left: auto;
@@ -16272,12 +16345,48 @@
   text-decoration: underline;
 }
 
+/*
+ * One line: pick somebody, say what they get, press Assign.
+ *
+ * It was a three-column grid holding four controls, so the button dropped to a
+ * row of its own and stretched across it. And the person picker carries
+ * `--select--full`, which is `width: 100%` — inside a row that meant it took
+ * the whole line by itself and pushed everything else underneath. A wrapping
+ * flex row with each control sized to its job keeps them together on any
+ * sensible width, and still wraps rather than overflowing when there is not
+ * room.
+ */
 .tma-dash__clients-assign-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.8fr) auto;
-  gap: var(--space-8);
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: var(--space-8);
   margin: 0 0 var(--space-12);
+}
+
+/* The person picker gets the slack, up to a readable cap. */
+.tma-dash__clients-assign-form .tma-dash__clients-field-select--full {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 0;
+  max-width: 340px;
+}
+
+/* Role and scope size to their options. */
+.tma-dash__clients-assign-form .tma-dash__clients-field-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 240px;
+}
+
+/* The member's email field takes the slack in its own row, on the same terms
+   as the person picker — an input stretched to eight hundred pixels for an
+   address reads as a mistake. */
+.tma-dash__clients-assign-form .tma-dash__clients-field-input {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 0;
+  max-width: 340px;
 }
 
 /*
@@ -16966,12 +17075,9 @@
   border-bottom: 1px solid var(--color-overlay-4);
 }
 
-/* The buttons here are a plain strip. The same class lays out the three-column
-   staff picker further down the panel, so it is re-declared rather than shared. */
+/* The buttons here are a plain strip; only the spacing differs from the staff
+   picker above, which is now the same wrapping row. */
 .tma-dash__clients-access-block .tma-dash__clients-assign-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-8);
   margin: var(--space-12) 0 0;
 }
 
@@ -17591,10 +17697,26 @@
   background: var(--color-hover);
 }
 
-/* The pill is used for links as well as buttons (the CBI file shortcut), and
-   an anchor brings its own underline and colour. */
+/* The pill is used for links as well as buttons (the Citizenship by Investment
+   shortcut), and an anchor brings its own underline and colour. */
 a.tma-dash__clients-edit-btn { text-decoration: none; }
 a.tma-dash__clients-edit-btn:visited { color: var(--color-text-primary); }
+
+/* Accent variant: the one action in this toolbar that leaves the page. */
+.tma-dash__clients-edit-btn--accent,
+a.tma-dash__clients-edit-btn--accent,
+a.tma-dash__clients-edit-btn--accent:visited {
+  background: var(--color-accent);
+  color: var(--color-text-white);
+}
+
+.tma-dash__clients-edit-btn--accent:hover { background: var(--color-primary); }
+
+.tma-dash__clients-edit-btn--accent img {
+  /* The phosphor glyphs are black outlines; on a solid fill they need to be
+     white or they read as a smudge. */
+  filter: brightness(0) invert(1);
+}
 
 .tma-dash__clients-edit-btn img {
   width: 16px;

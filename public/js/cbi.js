@@ -672,17 +672,17 @@
   /* A titled group of facts. The shared section primitive carries the
      heading type; the grey fill lives on its separate __card class, which
      read-only facts do not want, so we omit it. */
-  function factGroup(title, rowsHtml) {
+  function factGroup(title, rowsHtml, full) {
     if (!rowsHtml) return '';
-    return '<section class="tma-portal-section">' +
+    return '<section class="tma-portal-section cbi-card' + (full ? ' cbi-card--full' : '') + '">' +
       '<h3 class="tma-portal-section__title">' + esc(title) + '</h3>' +
       '<div class="cbi-group__body">' + rowsHtml + '</div></section>';
   }
 
   /* A titled group wrapping arbitrary content (a table, a thread). */
-  function contentGroup(title, html, note) {
+  function contentGroup(title, html, note, full) {
     if (!html) return '';
-    return '<section class="tma-portal-section">' +
+    return '<section class="tma-portal-section cbi-card' + (full ? ' cbi-card--full' : '') + '">' +
       '<h3 class="tma-portal-section__title">' + esc(title) +
       (note ? '<span class="tma-portal-section__desc">' + esc(note) + '</span>' : '') + '</h3>' +
       html + '</section>';
@@ -842,29 +842,30 @@
     }).join('');
     var timeline = timelineRows ? '<ul class="cbi-tl">' + timelineRows + '</ul>' : '';
 
-    /* Balance the two columns by content weight. A fixed left/right split
-       left one column stranded whenever a file carried few fields — which
-       is most of them, since the trackers are sparsely filled. */
-    var groups = [
-      { html: factGroup('Applicant', applicant), weight: rowCount(applicant) },
-      { html: factGroup('Case', caseFacts), weight: rowCount(caseFacts) },
-      { html: factGroup('Team', team), weight: rowCount(team) },
-      { html: contentGroup('Timeline', timeline), weight: (timeline.match(/<li>/g) || []).length },
-      { html: factGroup('Notes', narrative), weight: rowCount(narrative) * 2 },
-    ].filter(function (g) { return !!g.html; });
+    /*
+     * A card grid rather than two balanced columns of headings. The short
+     * groups pair up; Timeline and Notes are the two that run long, so they
+     * take the full width instead of stretching one column down the page.
+     * Empty groups drop out, so a sparsely filled file shows three tidy cards
+     * rather than a scaffold of empty headings.
+     */
+    var cards = [
+      factGroup('Applicant', applicant),
+      factGroup('Case', caseFacts),
+      factGroup('Team', team),
+      contentGroup('Timeline', timeline, '', true),
+      factGroup('Notes', narrative, true),
+    ].filter(Boolean).join('');
 
-    var cols = [{ html: '', w: 0 }, { html: '', w: 0 }];
-    groups.forEach(function (g) {
-      var target = cols[0].w <= cols[1].w ? cols[0] : cols[1];
-      target.html += g.html;
-      target.w += g.weight + 1;   // +1 so the heading itself carries weight
-    });
+    if (!cards) {
+      return ui().emptyState({
+        title: 'Nothing recorded yet',
+        subtitle: 'Details appear here as the trackers are filled in.',
+        illustration: 'Illustration07',
+      });
+    }
 
-    return '<div class="cbi-overview-grid">' +
-      cols.map(function (c) {
-        return c.html ? '<div class="cbi-overview-grid__col">' + c.html + '</div>' : '';
-      }).join('') +
-      '</div>';
+    return '<div class="cbi-cards">' + cards + '</div>';
   }
 
   function renderAssessmentTab(assess) {
@@ -911,7 +912,7 @@
           '<span class="tma-portal-table__muted">' + esc(fmtDateTime(c.at)) + '</span>' +
           (c.source === 'smartsheet' ? '<span class="tma-portal-chip">Smartsheet</span>' : '') + '</div>' +
           '<div class="cbi-comment__body">' + esc(c.body) + '</div></div>';
-      }).join('') : '<p class="tma-portal-subtitle">No comments yet — start the conversation below.</p>') +
+      }).join('') : ui().emptyState({ title: 'No comments yet', illustration: 'Illustration02' })) +
       '</div>' +
       '<div class="cbi-composer">' +
         // The draft lives in state, not just the DOM: a morph that touches

@@ -39,6 +39,7 @@
     Line: 'images/icons/tma/Line-16.svg',
     Close12: 'images/icons/tma/Close-12.svg',
     Briefcase: ICON + 'Briefcase.svg',
+    ArrowUpRight: ICON + 'ArrowUpRight.svg',
     Buildings: ICON + 'Buildings.svg',
     Globe: ICON + 'Globe.svg',
     CalendarBlank: ICON + 'CalendarBlank.svg',
@@ -1831,12 +1832,14 @@
     if (access && access.can && !access.can('cbi.view')) return '';
 
     return (
-      // Secondary pill, like Edit: Message stays the single primary action in
-      // this toolbar.
-      '<a class="tma-dash__clients-edit-btn" href="' +
+      // Spelled out rather than "CBI": the toolbar is read by people who do
+      // not live in the module, and the arrow says it leaves this page.
+      '<a class="tma-dash__clients-edit-btn tma-dash__clients-edit-btn--accent" href="' +
       esc((window.__TMA_SITE_ROOT || '') + '/cbi#/app/' + encodeURIComponent(cbi.applicationUuid)) +
-      '" title="' + esc('Open the CBI application' + (cbi.applicantNumber ? ' ' + cbi.applicantNumber : '')) + '">' +
-      '<img src="' + ICONS.Briefcase + '" alt=""><span>CBI file</span></a>'
+      '" title="' + esc('Open the Citizenship by Investment file' +
+        (cbi.applicantNumber ? ' ' + cbi.applicantNumber : '')) + '">' +
+      '<img src="' + ICONS.ArrowUpRight + '" alt="">' +
+      '<span>Citizenship by Investment file</span></a>'
     );
   }
 
@@ -2290,90 +2293,104 @@
     );
   }
 
+  /*
+   * Cards, not one long scroll of headings.
+   *
+   * The page was a stack of labelled sections running the full width, each a
+   * line or two of content followed by a lot of nothing — a long way to travel
+   * to learn very little. The two short ones pair up on a wide screen; the
+   * lists that can grow take the full width. Empty sections show an
+   * illustration rather than a sentence of apology.
+   */
   function renderCompanyProfile(state, opts) {
     opts = opts || {};
     var company = companyFor(state.companyId);
     if (!company) {
-      return '<div class="tma-dash__clients-detail"><div class="tma-dash__clients-assigned-empty">Company not found.</div></div>';
+      return '<div class="tma-dash__clients-detail">' +
+        clientsEmpty('Company not found', 'Illustration07') + '</div>';
     }
-    var people = company.people || [];
-    var peopleHtml = people.length
-      ? '<div class="tma-dash__clients-company-people">' + people.map(function (p) {
-          return (
-            '<button type="button" class="tma-dash__clients-row" data-clients-row="' + esc(p.id) + '">' +
-            clientAvatarMarkup(p) +
-            '<span class="tma-dash__clients-row-name">' + esc(p.name) + '</span>' +
-            (p.email ? '<span class="tma-dash__clients-row-meta">' + esc(p.email) + '</span>' : '') +
-            '</button>'
-          );
-        }).join('') + '</div>'
-      : '<div class="tma-dash__clients-assigned-empty">No people at this company yet.</div>';
-
-    var toolbar = opts.elevateToolbar ? '' : renderCompanyProfileToolbar(company);
 
     return (
       '<div class="tma-dash__clients-detail">' +
       '<div class="tma-dash__clients-profile tma-dash__clients-profile--company' +
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
-      toolbar +
-      (company.website
-        ? '<div class="tma-dash__clients-profile-body"><ul class="tma-dash__clients-list tma-dash__clients-list--profile" role="list">' +
-          renderListItem({ icon: ICONS.Globe, label: 'Website', value: company.website, href: company.website, linkLabel: company.website }) +
-          '</ul></div>'
-        : '') +
-      (company.notes
-        ? '<p class="tma-dash__clients-company-notes">' + esc(company.notes) + '</p>'
-        : '') +
-      renderCompanyDetails(company) +
-      renderCompanyReferredBlock(company) +
-      // Contacts who belong to the company, as distinct from the clients it
-      // referred. Both are "its clients" to a reader, so they sit together —
-      // but a referral confers no membership and the page must not imply it.
-      '<div class="tma-dash__clients-assigned-head"><span class="tma-dash__clients-assigned-count">People at this company</span></div>' +
-      peopleHtml +
-      renderCompanyMembersBlock(state, company) +
-      renderCompanyStaffBlock(state, company) +
-      '</div></div>'
+      (opts.elevateToolbar ? '' : renderCompanyProfileToolbar(company)) +
+      '<div class="tma-dash__clients-cards">' +
+      // Details and Access share a row, but only when both have something to
+      // say — one half-width card beside an empty gap reads as a load failure.
+      companyPair(
+        ['Details', renderCompanyDetails(company)],
+        ['Access', renderCompanyMembersBlock(state, company)]
+      ) +
+      companyCard('Clients referred', renderCompanyReferredBlock(company), { count: company.referredCount || 0 }) +
+      companyCard('People', renderCompanyPeople(company), { count: (company.people || []).length }) +
+      companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {}) +
+      '</div></div></div>'
     );
   }
 
+  function companyPair(a, b) {
+    var both = !!a[1] && !!b[1];
+    return companyCard(a[0], a[1], { half: both }) + companyCard(b[0], b[1], { half: both });
+  }
+
+  /* One section. `half` pairs with its neighbour on a wide screen; the rest
+     run full width. */
+  function companyCard(title, body, opts) {
+    opts = opts || {};
+    if (!body) return '';
+    return (
+      '<section class="tma-dash__clients-card' + (opts.half ? ' tma-dash__clients-card--half' : '') + '">' +
+      '<header class="tma-dash__clients-card-head">' +
+      '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
+      (opts.count ? '<span class="tma-dash__clients-card-count">' + opts.count.toLocaleString() + '</span>' : '') +
+      '</header>' + body + '</section>'
+    );
+  }
+
+  /* The documented empty state (portal-views.js): an illustration and four
+     words, instead of a grey apology. */
+  function clientsEmpty(title, illustration) {
+    var ui = window.TMAPortalUI;
+    if (ui && ui.emptyState) return ui.emptyState({ title: title, illustration: illustration });
+    return '<div class="tma-dash__clients-assigned-empty">' + esc(title) + '</div>';
+  }
+
+  function companyPersonRow(p) {
+    return (
+      '<button type="button" class="tma-dash__clients-row" data-clients-row="' + esc(p.id) + '">' +
+      clientAvatarMarkup(p) +
+      '<span class="tma-dash__clients-row-name">' + esc(p.name) + '</span>' +
+      (p.email ? '<span class="tma-dash__clients-row-meta">' + esc(p.email) + '</span>' : '') +
+      '</button>'
+    );
+  }
+
+  function renderCompanyPeople(company) {
+    var people = company.people || [];
+    if (!people.length) return clientsEmpty('No contacts yet', 'Illustration04');
+
+    return '<div class="tma-dash__clients-company-people">' +
+      people.map(companyPersonRow).join('') + '</div>';
+  }
+
   /*
-   * The clients this company sent us — the thing a referral partner's page is
-   * actually for, and which the page used to answer with "No people at this
-   * company yet" while the header said it had referred two thousand.
-   *
-   * Only the first dozen are carried in the record; the rest are one click
-   * away in the directory, filtered to this company. Loading eight thousand
-   * names into a profile card would be slower and no more useful.
+   * The clients this company sent us — what a referral partner's page is for,
+   * and which the page used to answer with "No people at this company yet".
+   * Only the first dozen travel in the record; the rest are one click away in
+   * the directory, filtered to this company.
    */
   function renderCompanyReferredBlock(company) {
     var total = company.referredCount || 0;
-    if (!total) return '';
+    if (!total) return clientsEmpty('No referrals yet', 'Illustration07');
 
     var shown = company.referred || [];
-    var rows = shown.map(function (c) {
-      return (
-        '<button type="button" class="tma-dash__clients-row" data-clients-row="' + esc(c.id) + '">' +
-        clientAvatarMarkup(c) +
-        '<span class="tma-dash__clients-row-name">' + esc(c.name) + '</span>' +
-        (c.email ? '<span class="tma-dash__clients-row-meta">' + esc(c.email) + '</span>' : '') +
-        '</button>'
-      );
-    }).join('');
-
-    var more = total > shown.length
-      ? '<button type="button" class="tma-dash__clients-see-all" data-clients-see-referred="' + esc(company.id) + '">' +
-        'See all ' + total.toLocaleString() + ' clients</button>'
-      : '';
-
-    return (
-      '<div class="tma-dash__clients-assigned-head">' +
-      '<span class="tma-dash__clients-assigned-count">Clients referred</span>' +
-      '<span class="tma-dash__clients-assigned-total">' + total.toLocaleString() + '</span>' +
-      '</div>' +
-      '<div class="tma-dash__clients-company-people">' + rows + '</div>' +
-      more
-    );
+    return '<div class="tma-dash__clients-company-people">' +
+      shown.map(companyPersonRow).join('') + '</div>' +
+      (total > shown.length
+        ? '<button type="button" class="tma-dash__clients-see-all" data-clients-see-referred="' +
+          esc(company.id) + '">See all ' + total.toLocaleString() + '</button>'
+        : '');
   }
 
   /* The account details that belong to the organization rather than to any one
@@ -2460,12 +2477,11 @@
               : '') +
             '</div>';
         }).join('') + '</div>'
-      : '<div class="tma-dash__clients-assigned-empty">' +
-        (loading ? 'Loading members…' : 'Nobody at this company has portal access yet.') + '</div>';
+      : (loading
+        ? '<div class="tma-dash__clients-assigned-empty">Loading…</div>'
+        : clientsEmpty('No portal access yet', 'Illustration09'));
 
     return '<div class="tma-dash__clients-access-block">' +
-      '<div class="tma-dash__clients-assigned-head">' +
-      '<span class="tma-dash__clients-assigned-count">Company access</span></div>' +
       form + list + '</div>';
   }
 
@@ -2515,12 +2531,11 @@
             esc(String(a.userId)) + '" aria-label="End assignment"><img src="' + ICONS.Trash + '" alt=""></button>' +
             '</div>';
         }).join('') + '</div>'
-      : '<div class="tma-dash__clients-assigned-empty">' +
-        (loading ? 'Loading…' : 'No staff assigned to this company yet.') + '</div>';
+      : (loading
+        ? '<div class="tma-dash__clients-assigned-empty">Loading…</div>'
+        : clientsEmpty('No staff assigned', 'Illustration04'));
 
     return '<div class="tma-dash__clients-access-block">' +
-      '<div class="tma-dash__clients-assigned-head">' +
-      '<span class="tma-dash__clients-assigned-count">Assigned staff</span></div>' +
       form + list + '</div>';
   }
 
