@@ -1180,10 +1180,53 @@
     );
   }
 
+  /*
+   * The table lists both kinds of record the hub holds — the people and the
+   * companies — because a company is a client too, and until now the only way
+   * to reach one was to already know it existed. Companies carry no checkbox:
+   * the bulk actions speak to the clients endpoint, and a company is deleted
+   * from its own profile, where what that would do to its people is visible.
+   */
+  function companyMatchesFilters(company, filters) {
+    if (!anyClientFilter(filters)) return true;
+    // Nobody refers a company into the hub; a referral filter is about people.
+    if (filters.referral) return false;
+    return !filters.clientType || filters.clientType === 'company';
+  }
+
+  function companyMatchesSearch(company, query) {
+    var q = String(query || '').trim().toLowerCase();
+    if (!q) return true;
+    return [company.name, company.email, company.website, company.industry]
+      .filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
+  }
+
+  // Client rows keep the bare uid as their key: it is what `selected` holds and
+  // what bulk-delete posts, so a company key has to be namespaced instead.
+  function tableRowEntries(state) {
+    var rows = filteredDirectoryItems(state).map(function (item) {
+      return { kind: 'client', key: item.id, id: item.id, name: item.name, item: item };
+    });
+
+    var filters = state && state.filters;
+    var search = state && state.search;
+    var removed = (state && state.removedIds) || {};
+    COMPANIES.forEach(function (company) {
+      if (!company || !company.id) return;
+      if (!companyMatchesFilters(company, filters)) return;
+      if (!companyMatchesSearch(company, search)) return;
+      var key = 'company:' + company.id;
+      if (removed[key]) return;
+      rows.push({ kind: 'company', key: key, id: company.id, name: company.name || 'Company', company: company });
+    });
+
+    return rows.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+  }
+
   var CLIENTS_PAGE_SIZES = [5, 10, 20];
 
   function getTablePageData(state) {
-    var items = filteredDirectoryItems(state);
+    var items = tableRowEntries(state);
     var pageSize = state.pageSize || 10;
     var totalPages = Math.max(1, Math.ceil(items.length / pageSize));
     if (state.page > totalPages) state.page = totalPages;
@@ -1195,10 +1238,56 @@
     };
   }
 
-  function renderFullTableRow(item, index, checked) {
+  /* The tinted circle with a Buildings glyph the company profile head already
+     uses, at row size. */
+  function companyAvatarMarkup(company) {
+    if (company.logoUrl) return '<img src="' + esc(company.logoUrl) + '" alt="">';
+    return (
+      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue"' +
+      ' style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)">' +
+      '<img src="' + ICONS.Buildings + '" alt="" width="16" height="16"></span>'
+    );
+  }
+
+  /* What a company is to the firm, in one phrase. Referrals lead, because a
+     referral source that has sent 4,000 files and employs nobody here would
+     otherwise read as "0 people" — the emptiest possible description of the
+     busiest record in the hub. */
+  function companyRowSummary(company) {
+    var referred = company.referredCount || 0;
+    if (referred) return referred === 1 ? '1 referred' : referred + ' referred';
+    var people = company.peopleCount || 0;
+    if (people) return people === 1 ? '1 person' : people + ' people';
+    return '—';
+  }
+
+  function renderCompanyTableRow(company, index) {
+    var contact = company.email || company.phone || '—';
+    var people = companyRowSummary(company);
+    return (
+      '<div class="tma-dash__ctr tma-dash__ctr--body" data-clients-open-company="' + esc(company.id) +
+      '" data-row-index="' + index + '" role="row">' +
+      // No checkbox: the bulk actions post to the clients endpoint.
+      '<div class="tma-dash__cc tma-dash__cc--check"></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--user">' + companyAvatarMarkup(company) +
+      '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Company') + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">Company</span></div>' +
+      // Its own name belongs in the first column, not repeated here; what the
+      // reader wants of a company at a glance is how many people it holds.
+      '<div class="tma-dash__cc tma-dash__cc--referral"><span class="tma-dash__cc-truncate">' +
+      esc(people) + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--contact"><span class="tma-dash__cc-truncate">' +
+      esc(contact) + '</span></div></div>'
+    );
+  }
+
+  function renderFullTableRow(entry, index, checked) {
+    if (entry.kind === 'company') return renderCompanyTableRow(entry.company, index);
+
+    var item = entry.item;
     var cols = clientTableColumns(item);
     var selected = checked ? ' tma-dash__ctr--selected' : '';
-    var referralCell = cols.referrerId
+    var companyCell = cols.referrerId
       ? '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
         esc(cols.referrerId) + '">' + esc(cols.referral) + '</button>'
       : '<span class="tma-dash__cc-truncate">' + esc(cols.referral) + '</span>';
@@ -1212,7 +1301,7 @@
       '<span class="tma-dash__cc-truncate">' + esc(cols.name) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' +
       esc(cols.type) + '</span></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--referral">' + referralCell + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--referral">' + companyCell + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact"><span class="tma-dash__cc-truncate">' +
       esc(cols.contact) + '</span></div></div>'
     );
@@ -1228,9 +1317,8 @@
         empty + '</div></div>';
     }
     var start = (state.page - 1) * (state.pageSize || 10);
-    return page.items.map(function (item, i) {
-      var key = clientRowKey(item);
-      return renderFullTableRow(item, start + i, !!(state.selected && state.selected[key]));
+    return page.items.map(function (entry, i) {
+      return renderFullTableRow(entry, start + i, !!(state.selected && state.selected[entry.key]));
     }).join('');
   }
 
@@ -1282,7 +1370,7 @@
       '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all"></div>' +
       '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">Client</div>' +
       '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">Referred by</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">Company</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
       '</div>' +
       '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
@@ -3389,7 +3477,7 @@
     var next = pagination.querySelector('[data-direction="next"]');
     if (next) {
       MORPH.on(next, 'click', function () {
-        var totalPages = Math.max(1, Math.ceil(filteredDirectoryItems(state).length / (state.pageSize || 10)));
+        var totalPages = Math.max(1, Math.ceil(tableRowEntries(state).length / (state.pageSize || 10)));
         if (state.page >= totalPages) return;
         state.page += 1;
         render({ forceFull: true });
@@ -3463,15 +3551,16 @@
   }
 
   function wireTableSelection(root, state) {
-    var items = filteredDirectoryItems(state);
+    var items = tableRowEntries(state);
     var selectAll = root.querySelector('[data-clients-selectall]');
     var rowChecks = Array.prototype.slice.call(root.querySelectorAll('[data-clients-check]'));
 
     function syncRow(cb, rowIndex) {
       var rowEl = cb.closest('[data-row-index]');
-      var item = items[rowIndex];
-      if (!item) return;
-      var key = clientRowKey(item);
+      var entry = items[rowIndex];
+      // Company rows carry no checkbox, so nothing here can select one.
+      if (!entry || entry.kind !== 'client') return;
+      var key = entry.key;
       if (cb.checked) state.selected[key] = true;
       else delete state.selected[key];
       if (rowEl) rowEl.classList.toggle('tma-dash__ctr--selected', cb.checked);

@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
     'stage', 'status', 'application_review', 'progress', 'granted', 'closed', 'action_needed',
     'referred_by', 'promoter', 'service_provider', 'main_contact', 'assigned_to',
     'verification_officer', 'dd_officer', 'pa_assignment', 'file_owner',
-    'submitted_by', 'verified_by', 'assigned_user_id',
+    'submitted_by', 'verified_by', 'assigned_user_id', 'client_id',
     'investment_option', 'application_type', 'clio_matter_number', 'clio_matter_link', 'file_location',
     'received_at', 'pre_processing_at', 'submitted_at', 'accepted_at', 'compliance_due_at',
     'decision_required_at', 'decision_received_at',
@@ -113,5 +113,15 @@ class CbiApplication extends Model
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    /**
+     * The applicant's record in the firm's client directory. Set by
+     * App\Support\Cbi\ClientHubImporter; null until the caseload is imported,
+     * or where the row carries no applicant name to file a person under.
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class, 'client_id');
     }
 }
