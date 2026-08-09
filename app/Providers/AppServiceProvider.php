@@ -35,6 +35,16 @@ class AppServiceProvider extends ServiceProvider
         // Portal file changes mirror out to any linked SharePoint library.
         \App\Models\FileItem::observe(\App\Observers\FileSharePointObserver::class);
 
+        /*
+         * FileAccess caches which folders are personal OneDrives — the single
+         * biggest cost in a file listing. Connecting or disconnecting a drive
+         * is the only thing that changes the answer, so it is also the only
+         * thing that has to drop the cache. Without this the cache would fail
+         * open, which is what the note on that method warned about.
+         */
+        \App\Models\SharePointConnection::saved(fn () => \App\Support\Files\FileAccess::forgetPersonalDrives());
+        \App\Models\SharePointConnection::deleted(fn () => \App\Support\Files\FileAccess::forgetPersonalDrives());
+
         // A file landing in a client folder enters that client's review queue,
         // whichever of the seven upload paths put it there.
         \App\Models\FileItem::observe(\App\Observers\ClientDocumentObserver::class);

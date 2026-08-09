@@ -177,15 +177,39 @@ class FileAccess
         return null;
     }
 
+    /** folder_id => is a connected personal drive. */
+    private static array $personalDrives = [];
+
+    /**
+     * Is this folder a connected personal OneDrive?
+     *
+     * This used to run an uncached exists() per folder per call — over a
+     * thousand queries to list one folder, the largest single cost in a file
+     * listing. The note that stood here said memoising it fails OPEN, and it
+     * was right: a naive static let a colleague open somebody's drive, and the
+     * tests caught it within minutes.
+     *
+     * What makes caching safe is invalidation, not avoidance. The answer only
+     * changes when a connection is written, so AppServiceProvider drops this
+     * whenever one is saved or deleted. A drive connected mid-request is seen
+     * by the next call, not the next deploy — and the failure mode is now
+     * closed rather than open, because a cleared cache re-queries.
+     */
     private static function isPersonalDriveFolder(Folder $folder): bool
     {
-        // Deliberately not memoised in a static. Nothing else in this class
-        // caches, and a privacy answer held over from an earlier request — or
-        // an earlier test — fails OPEN, publishing a drive that was since
-        // connected. An extra indexed lookup is the cheaper mistake.
-        return SharePointConnection::where('drive_kind', 'onedrive')
-            ->where('folder_id', $folder->id)
-            ->exists();
+        if (! array_key_exists($folder->id, self::$personalDrives)) {
+            self::$personalDrives[$folder->id] = SharePointConnection::where('drive_kind', 'onedrive')
+                ->where('folder_id', $folder->id)
+                ->exists();
+        }
+
+        return self::$personalDrives[$folder->id];
+    }
+
+    /** Called whenever a SharePoint connection changes — see AppServiceProvider. */
+    public static function forgetPersonalDrives(): void
+    {
+        self::$personalDrives = [];
     }
 
     /**
@@ -551,6 +575,19 @@ class FileAccess
      *
      * @return Collection<int, Folder>
      */
+    /**
+     * Folder rows already fetched, by id.
+     *
+     * Rows, not answers. The distinction matters: memoising *whether a folder
+     * is a personal drive* fails open, because a drive connected mid-flight
+     * would be read from a cache that says otherwise. A folder's own row is
+     * not a permission decision — every rule above is still evaluated against
+     * it on every call — and it is invalidated the moment any folder is
+     * written, from the observer that already watches them.
+     */
+    private static array $folders = [];
+
+    /** Every caller here walks the same few chains; this fetches each once. */
     private static function chainFolders(?int $folderId): Collection
     {
         $chain = collect();
@@ -558,15 +595,43 @@ class FileAccess
 
         while ($folderId !== null && ! isset($seen[$folderId])) {
             $seen[$folderId] = true;
-            $folder = Folder::withTrashed()->find($folderId);
+
+            if (! array_key_exists($folderId, self::$folders)) {
+                self::$folders[$folderId] = Folder::withTrashed()->find($folderId);
+            }
+
+            $folder = self::$folders[$folderId];
             if (! $folder) {
                 break;
             }
+
             $chain->push($folder);
             $folderId = $folder->parent_id;
         }
 
         return $chain;
+    }
+
+    /**
+     * Drop the folder rows.
+     *
+     * Called whenever a folder is created, moved, renamed or removed — a move
+     * changes parent_id, which is the one field this cache is walking, so a
+     * stale row would evaluate the rules against a tree that no longer exists.
+     */
+    public static function forgetFolders(): void
+    {
+        self::$folders = [];
+
+        /*
+         * The personal-drive answers go with them. Both caches are keyed by
+         * folder id, and ids are reused — by a fresh database between tests,
+         * and by any deployment restoring one. An id cached as "is a personal
+         * drive" and then handed to a different folder is wrong in whichever
+         * direction it lands: it denied firm-wide access to four ordinary
+         * files before this line existed.
+         */
+        self::$personalDrives = [];
     }
 
     private static function highest(array $roles): ?string

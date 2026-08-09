@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\FileItem;
 use App\Models\Folder;
+use App\Support\Files\FileAccess;
 use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Model;
 
@@ -49,6 +50,13 @@ class FileLibraryObserver
 
     private function signal(Model $model): void
     {
+        // A folder that just moved or vanished must not be evaluated from a
+        // row fetched before it did. Runs in tests too, where a fixture built
+        // mid-process would otherwise inherit the previous test's tree.
+        if ($model instanceof Folder) {
+            FileAccess::forgetFolders();
+        }
+
         // Only tests are excluded. Deliberately *not* runningInConsole(): a
         // queue worker reports as console, and the SharePoint synchroniser and
         // mail import run there — those are precisely the changes a browser
