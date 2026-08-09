@@ -16146,26 +16146,73 @@
   background: var(--color-surface, var(--color-white));
 }
 
-/* The count, stated once at the top of the directory. */
-.tma-dash__clients-count {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-8);
-  padding: 0 0 var(--space-12);
+/*
+ * The client count, at the head of the toolbar.
+ *
+ * Sized like the rest of the bar rather than as a display figure: it is a
+ * label on the table, not a statistic being celebrated. Only the number itself
+ * takes the darker weight, so the eye lands on it without the row shouting.
+ */
+.tma-dash__toolbar-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-left: var(--space-4);
+  white-space: nowrap;
+  font-size: var(--text-size-13, 13px);
+  line-height: 20px;
+  color: var(--color-text-secondary);
 }
 
-.tma-dash__clients-count-value {
-  font-size: var(--text-size-24, 24px);
-  line-height: 1.1;
+.tma-dash__toolbar-count-value {
   font-weight: 600;
   color: var(--color-text-primary);
+  /* Lining figures stop the count jittering as it changes width. */
   font-variant-numeric: tabular-nums;
 }
 
-.tma-dash__clients-count-label {
-  font-size: var(--text-size-14);
-  color: var(--color-text-secondary);
+/* On a narrow toolbar the controls matter more than the tally. */
+@media (max-width: 700px) {
+  .tma-dash__toolbar-count,
+  .tma-dash__toolbar-count + .tma-dash__toolbar-divider { display: none; }
 }
+
+/*
+ * A company profile is a stack of short sections, not one tall pane. The
+ * shared profile body is `flex: 1` so a contact's details fill the column;
+ * on a company that left a single row of details floating above an acre of
+ * grey. Here it takes only the height it needs.
+ */
+.tma-dash__clients-profile--company .tma-dash__clients-profile-body {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+/* Section headers carry a count on the right. */
+.tma-dash__clients-assigned-total {
+  margin-left: auto;
+  font-size: var(--text-size-13, 13px);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "See all 8,210 clients" — a quiet link-button under a truncated list. */
+.tma-dash__clients-see-all {
+  align-self: flex-start;
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+  font-weight: 500;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.tma-dash__clients-see-all:hover { background: var(--color-accent-bg); }
 
 /* The window of page buttons skips a range; the gap marks where. */
 .tma-pagination__gap {
@@ -16248,6 +16295,17 @@
   justify-content: center;
   gap: var(--space-4);
   min-height: 40px;
+  /*
+   * Sized to its label, wherever it sits. As a grid item it inherited
+   * `stretch` and, when the selects pushed it onto a row of its own, became a
+   * full-width slab — a button the width of the page reads as a banner, not a
+   * control. `width: max-content` holds it even in a flex row.
+   */
+  justify-self: start;
+  align-self: center;
+  width: max-content;
+  max-width: 100%;
+  flex: 0 0 auto;
   padding: 0 var(--space-20);
   border: none;
   border-radius: var(--radius-12);
@@ -16327,8 +16385,49 @@
   overflow: hidden;
 }
 
+/*
+ * The reader sets the list's width, the way the Messages inbox works. It was
+ * a fixed 208px, which is fine for "Jane Smith" and useless for the caseload's
+ * "AASHA MORSHED ABDELAZIZ ELATI" — those wrapped to four lines each and made
+ * the column unreadable.
+ */
+.tma-dash__clients-resizer {
+  flex: 0 0 var(--space-24, 24px);
+  align-self: stretch;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* The page's own 28px gap would otherwise sit either side of the handle and
+     push the panes twice as far apart as they need to be. */
+  margin: 0 calc(var(--space-28) * -1 + var(--space-8));
+}
+
+.tma-dash__clients-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-overlay-8, var(--color-overlay-4));
+  transition: background 120ms ease, height 120ms ease;
+}
+
+.tma-dash__clients-resizer:hover::before,
+.tma-dash__clients-resizer:focus-visible::before,
+.tma-dash__clients-resizer--dragging::before {
+  background: var(--color-primary, #03a5e9);
+  height: 64px;
+}
+
+.tma-dash__clients-resizer:focus-visible { outline: none; }
+
 .tma-dash__clients-directory {
-  flex: 0 0 208px;
+  flex: 0 0 var(--clients-dir-w, 208px);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -17491,6 +17590,11 @@
 .tma-dash__clients-edit-btn:hover {
   background: var(--color-hover);
 }
+
+/* The pill is used for links as well as buttons (the CBI file shortcut), and
+   an anchor brings its own underline and colour. */
+a.tma-dash__clients-edit-btn { text-decoration: none; }
+a.tma-dash__clients-edit-btn:visited { color: var(--color-text-primary); }
 
 .tma-dash__clients-edit-btn img {
   width: 16px;

@@ -708,6 +708,11 @@
   function directoryAvatarItem(item) {
     var profile = PROFILES[item.id] || {};
     return {
+      // id and name travel with it: the initials avatar is drawn from the
+      // person's name and coloured by hashing it, so an avatar object that
+      // dropped them rendered every row as the same grey "?".
+      id: item.id,
+      name: item.name,
       avatar: item.avatar,
       initial: item.initial,
       initialColor: item.initialColor,
@@ -986,8 +991,11 @@
    */
   function initialsAvatarUri(name, seed) {
     var cu = window.TMACurrentUser;
-    if (cu && typeof cu.initialsFor === 'function') return cu.initialsFor(name, seed || name);
-    return '';
+    // No name means no initials and no colour — every circle would come back
+    // an identical grey "?", which is worse than the letter we already have.
+    if (!name || !cu || typeof cu.initialsFor !== 'function') return '';
+
+    return cu.initialsFor(name, seed || name);
   }
 
   function clientAvatarMarkup(item) {
@@ -1098,6 +1106,8 @@
     return (
       '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
       '<div class="tma-dash__toolbar-actions">' +
+      renderClientsCount(state) +
+      '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
       // aria-pressed carries the lit state on its own — see the tool-btn rule.
       '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter' +
       ' aria-pressed="' + (filtered ? 'true' : 'false') + '" aria-expanded="false">' +
@@ -1499,7 +1509,6 @@
   function renderTableListPage(state) {
     var page = getTablePageData(state);
     return (
-      renderClientsCount(state, page.total) +
       renderTableToolbar(state) +
       renderClientsFilterChips(state) +
       // The grid is wider than a narrow window; without a scroller of its own
@@ -1522,26 +1531,26 @@
   }
 
   /*
-   * How many people are in here, said once and plainly at the top.
+   * How many clients there are, at the head of the toolbar.
    *
-   * The count used to exist only as "11,037 results" in the footer, below a
-   * hundred rows — the one number a reader wants first was the last thing they
-   * could reach. When a filter is on it reports both, because "showing 8,210
-   * of 11,037" is the honest answer and a bare 8,210 is not.
+   * It began as a display-sized number in its own band above the table, which
+   * read as a stray fragment sitting in whitespace rather than part of the
+   * page. Set at the left of the toolbar it does the same job — the first
+   * number the reader wants, before they touch a control — while belonging to
+   * something. When a filter is on it reports both figures, because "8,210 of
+   * 11,101" is the honest answer and a bare 8,210 is not.
    */
-  function renderClientsCount(state, shown) {
+  function renderClientsCount(state) {
     var total = totalClientRecords();
     var filtered = anyClientFilter(state.filters) || !!state.search;
-    var label = filtered
-      ? shown.toLocaleString() + ' of ' + total.toLocaleString()
-      : total.toLocaleString();
+    var shown = filtered ? tableRowEntries(state).length : total;
 
     return (
-      '<div class="tma-dash__clients-count" data-clients-count>' +
-      '<span class="tma-dash__clients-count-value">' + esc(label) + '</span>' +
-      '<span class="tma-dash__clients-count-label">' +
-      (filtered ? 'clients match' : (total === 1 ? 'client' : 'clients')) +
-      '</span></div>'
+      '<span class="tma-dash__toolbar-count" data-clients-count aria-live="polite">' +
+      '<span class="tma-dash__toolbar-count-value">' +
+      esc(filtered ? shown.toLocaleString() + ' of ' + total.toLocaleString() : total.toLocaleString()) +
+      '</span> ' + (total === 1 && !filtered ? 'client' : 'clients') +
+      '</span>'
     );
   }
 
@@ -1620,13 +1629,148 @@
     return renderProfile(state, opts);
   }
 
-  function renderDesktopPage(state) {
+  /*
+   * The directory column was a fixed 208px, which is fine for "Jane Smith" and
+   * useless for "AASHA MORSHED ABDELAZIZ ELATI" — the caseload is full of the
+   * latter and they wrapped to four lines. The reader sets the width instead,
+   * with the same handle the Messages inbox uses.
+   */
+  var DIR_WIDTH_KEY = 'tma.clientsDirectoryWidth.v1';
+  var DIR_WIDTH_DEFAULT = 208;
+  var DIR_WIDTH_MIN = 180;
+  var DIR_WIDTH_MAX = 520;
+
+  function clampDirWidth(px, layoutWidth) {
+    var max = DIR_WIDTH_MAX;
+    // Never let the list crowd the detail pane below a readable width.
+    if (layoutWidth) max = Math.min(max, layoutWidth - 420);
+    if (max < DIR_WIDTH_MIN) max = DIR_WIDTH_MIN;
+    return Math.max(DIR_WIDTH_MIN, Math.min(px, max));
+  }
+
+  function loadDirWidth() {
+    try {
+      var v = parseInt(localStorage.getItem(DIR_WIDTH_KEY), 10);
+      if (!isNaN(v)) return v;
+    } catch (e) { /* ignore */ }
+    return DIR_WIDTH_DEFAULT;
+  }
+
+  function saveDirWidth(px) {
+    try { localStorage.setItem(DIR_WIDTH_KEY, String(Math.round(px))); } catch (e) { /* ignore */ }
+  }
+
+  function renderClientsResizer(state) {
+    var w = typeof state.dirWidth === 'number' ? state.dirWidth : DIR_WIDTH_DEFAULT;
     return (
-      '<div class="tma-dash__clients-page" data-node-id="clients-page">' +
+      '<div class="tma-dash__clients-resizer" data-clients-resizer role="separator"' +
+      ' aria-orientation="vertical" aria-label="Resize the client list" tabindex="0"' +
+      ' aria-valuemin="' + DIR_WIDTH_MIN + '" aria-valuemax="' + DIR_WIDTH_MAX + '"' +
+      ' aria-valuenow="' + Math.round(w) + '"></div>'
+    );
+  }
+
+  function renderDesktopPage(state) {
+    if (typeof state.dirWidth !== 'number') state.dirWidth = loadDirWidth();
+    return (
+      '<div class="tma-dash__clients-page" data-node-id="clients-page"' +
+      ' style="--clients-dir-w:' + Math.round(state.dirWidth) + 'px">' +
       renderDirectory(state, false) +
+      renderClientsResizer(state) +
       renderDetailContent(state) +
       '</div>'
     );
+  }
+
+  /*
+   * Sets the width variable live during a drag rather than re-rendering, and
+   * only writes the preference on release — re-rendering per pointermove would
+   * rebuild the whole directory on every pixel. Re-run after each render; the
+   * stored cleanup keeps listeners from stacking.
+   */
+  function attachClientsResizer(root, state) {
+    if (root._clientsResizeCleanup) {
+      root._clientsResizeCleanup();
+      root._clientsResizeCleanup = null;
+    }
+
+    var layout = root.querySelector('.tma-dash__clients-page');
+    var resizer = root.querySelector('[data-clients-resizer]');
+    if (!layout || !resizer) return;
+
+    if (typeof state.dirWidth !== 'number') state.dirWidth = loadDirWidth();
+
+    function apply(px) {
+      layout.style.setProperty('--clients-dir-w', Math.round(px) + 'px');
+      resizer.setAttribute('aria-valuenow', String(Math.round(px)));
+    }
+
+    function widthFrom(clientX) {
+      var rect = layout.getBoundingClientRect();
+      if (rect.width <= 0) return state.dirWidth;
+      return clampDirWidth(clientX - rect.left, rect.width);
+    }
+
+    var dragging = false;
+
+    function onPointerDown(e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      resizer.classList.add('tma-dash__clients-resizer--dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      if (typeof resizer.setPointerCapture === 'function') resizer.setPointerCapture(e.pointerId);
+      state.dirWidth = widthFrom(e.clientX);
+      apply(state.dirWidth);
+    }
+
+    function onPointerMove(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      state.dirWidth = widthFrom(e.clientX);
+      apply(state.dirWidth);
+    }
+
+    function onPointerUp(e) {
+      if (!dragging) return;
+      dragging = false;
+      resizer.classList.remove('tma-dash__clients-resizer--dragging');
+      document.body.style.removeProperty('cursor');
+      document.body.style.removeProperty('user-select');
+      if (typeof resizer.releasePointerCapture === 'function' &&
+          resizer.hasPointerCapture && resizer.hasPointerCapture(e.pointerId)) {
+        resizer.releasePointerCapture(e.pointerId);
+      }
+      saveDirWidth(state.dirWidth);
+    }
+
+    function onKeyDown(e) {
+      var step = 24;
+      var w = layout.getBoundingClientRect().width;
+      if (e.key === 'ArrowLeft') state.dirWidth = clampDirWidth((state.dirWidth || DIR_WIDTH_DEFAULT) - step, w);
+      else if (e.key === 'ArrowRight') state.dirWidth = clampDirWidth((state.dirWidth || DIR_WIDTH_DEFAULT) + step, w);
+      else if (e.key === 'Home') state.dirWidth = DIR_WIDTH_MIN;
+      else if (e.key === 'End') state.dirWidth = clampDirWidth(DIR_WIDTH_MAX, w);
+      else return;
+      e.preventDefault();
+      apply(state.dirWidth);
+      saveDirWidth(state.dirWidth);
+    }
+
+    resizer.addEventListener('pointerdown', onPointerDown);
+    resizer.addEventListener('pointermove', onPointerMove);
+    resizer.addEventListener('pointerup', onPointerUp);
+    resizer.addEventListener('pointercancel', onPointerUp);
+    resizer.addEventListener('keydown', onKeyDown);
+
+    root._clientsResizeCleanup = function () {
+      resizer.removeEventListener('pointerdown', onPointerDown);
+      resizer.removeEventListener('pointermove', onPointerMove);
+      resizer.removeEventListener('pointerup', onPointerUp);
+      resizer.removeEventListener('pointercancel', onPointerUp);
+      resizer.removeEventListener('keydown', onKeyDown);
+    };
   }
 
   function renderClientsBackBtn() {
@@ -1660,12 +1804,39 @@
         ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
         : '') +
+      cbiToolbarBtn(c) +
       inviteToolbarBtn(c, state) +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
       '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
       '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span></button>' +
       '</div></div>'
+    );
+  }
+
+  /*
+   * Straight to this person's citizenship file, beside Edit and Message.
+   *
+   * The link was only a row in the info list, which meant the one thing a case
+   * worker opens a CBI client's record to reach was buried under their phone
+   * numbers. Hidden from anyone without cbi.view — the module is still
+   * admin-only, and a button that 403s is worse than no button.
+   */
+  function cbiToolbarBtn(c) {
+    if (!c) return '';
+    var cbi = (PROFILES[c.id] || {}).cbi;
+    if (!cbi || !cbi.applicationUuid) return '';
+
+    var access = window.TMAPortalAccess;
+    if (access && access.can && !access.can('cbi.view')) return '';
+
+    return (
+      // Secondary pill, like Edit: Message stays the single primary action in
+      // this toolbar.
+      '<a class="tma-dash__clients-edit-btn" href="' +
+      esc((window.__TMA_SITE_ROOT || '') + '/cbi#/app/' + encodeURIComponent(cbi.applicationUuid)) +
+      '" title="' + esc('Open the CBI application' + (cbi.applicantNumber ? ' ' + cbi.applicantNumber : '')) + '">' +
+      '<img src="' + ICONS.Briefcase + '" alt=""><span>CBI file</span></a>'
     );
   }
 
@@ -2142,7 +2313,7 @@
 
     return (
       '<div class="tma-dash__clients-detail">' +
-      '<div class="tma-dash__clients-profile' +
+      '<div class="tma-dash__clients-profile tma-dash__clients-profile--company' +
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
       toolbar +
       (company.website
@@ -2154,11 +2325,54 @@
         ? '<p class="tma-dash__clients-company-notes">' + esc(company.notes) + '</p>'
         : '') +
       renderCompanyDetails(company) +
-      '<div class="tma-dash__clients-assigned-head"><span class="tma-dash__clients-assigned-count">People</span></div>' +
+      renderCompanyReferredBlock(company) +
+      // Contacts who belong to the company, as distinct from the clients it
+      // referred. Both are "its clients" to a reader, so they sit together —
+      // but a referral confers no membership and the page must not imply it.
+      '<div class="tma-dash__clients-assigned-head"><span class="tma-dash__clients-assigned-count">People at this company</span></div>' +
       peopleHtml +
       renderCompanyMembersBlock(state, company) +
       renderCompanyStaffBlock(state, company) +
       '</div></div>'
+    );
+  }
+
+  /*
+   * The clients this company sent us — the thing a referral partner's page is
+   * actually for, and which the page used to answer with "No people at this
+   * company yet" while the header said it had referred two thousand.
+   *
+   * Only the first dozen are carried in the record; the rest are one click
+   * away in the directory, filtered to this company. Loading eight thousand
+   * names into a profile card would be slower and no more useful.
+   */
+  function renderCompanyReferredBlock(company) {
+    var total = company.referredCount || 0;
+    if (!total) return '';
+
+    var shown = company.referred || [];
+    var rows = shown.map(function (c) {
+      return (
+        '<button type="button" class="tma-dash__clients-row" data-clients-row="' + esc(c.id) + '">' +
+        clientAvatarMarkup(c) +
+        '<span class="tma-dash__clients-row-name">' + esc(c.name) + '</span>' +
+        (c.email ? '<span class="tma-dash__clients-row-meta">' + esc(c.email) + '</span>' : '') +
+        '</button>'
+      );
+    }).join('');
+
+    var more = total > shown.length
+      ? '<button type="button" class="tma-dash__clients-see-all" data-clients-see-referred="' + esc(company.id) + '">' +
+        'See all ' + total.toLocaleString() + ' clients</button>'
+      : '';
+
+    return (
+      '<div class="tma-dash__clients-assigned-head">' +
+      '<span class="tma-dash__clients-assigned-count">Clients referred</span>' +
+      '<span class="tma-dash__clients-assigned-total">' + total.toLocaleString() + '</span>' +
+      '</div>' +
+      '<div class="tma-dash__clients-company-people">' + rows + '</div>' +
+      more
     );
   }
 
@@ -2168,11 +2382,6 @@
   function renderCompanyDetails(company) {
     var rows = [
       { icon: ICONS.Buildings, label: 'Type', value: company.companyTypeLabel },
-      {
-        icon: ICONS.ShareNetwork,
-        label: 'Clients referred',
-        value: company.referredCount ? String(company.referredCount) : '',
-      },
       { icon: ICONS.Briefcase, label: 'Industry', value: company.industry },
       { icon: ICONS.EnvelopeSimple, label: 'Email', value: company.email },
       { icon: ICONS.Phone, label: 'Phone', value: company.phone },
@@ -2225,7 +2434,7 @@
             esc(r.label) + '</option>';
         }).join('') +
         '</select>' +
-        '<button type="button" class="tma-dash__clients-message-btn" data-company-member-add>Add</button>' +
+        '<button type="button" class="tma-dash__clients-assign-btn" data-company-member-add>Add</button>' +
         '</div>'
       : '';
 
@@ -2404,18 +2613,14 @@
       value: clientReferralLabel(c.id) || 'Not recorded',
     }));
 
-    /* The other half of the link the import made: this person's citizenship
-       file. Hidden from anyone who cannot open CBI — a link that 403s tells
-       the reader less than no link at all. */
+    // The applicant number is worth stating; the link to the case itself is a
+    // button on the toolbar (see cbiToolbarBtn) rather than a row down here.
     var cbi = (PROFILES[c.id] || {}).cbi;
-    var access = window.TMAPortalAccess;
-    if (cbi && cbi.applicationUuid && (!access || !access.can || access.can('cbi.view'))) {
+    if (cbi && cbi.applicantNumber) {
       listItems.push(renderListItem({
         icon: ICONS.Briefcase,
         label: 'CBI application',
-        value: cbi.applicantNumber || 'Open the case',
-        href: (window.__TMA_SITE_ROOT || '') + '/cbi#/app/' + encodeURIComponent(cbi.applicationUuid),
-        linkLabel: 'Open the CBI application for ' + c.name,
+        value: cbi.applicantNumber,
       }));
     }
     if (c.work.jobTitle) listItems.push(renderListItem({ icon: ICONS.Briefcase, label: 'Job title', value: c.work.jobTitle }));
@@ -3380,6 +3585,30 @@
     });
   }
 
+  /*
+   * "See all N clients" on a company: show the directory filtered to the
+   * people that company referred. It sets the same filter the reader could
+   * have set by hand, so the chip appears and the × puts it back.
+   */
+  function wireSeeAllReferred(root, state, navigate) {
+    MORPH.unwired(root, '[data-clients-see-referred]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.filters = emptyClientFilters();
+        state.filters.referral = 'company:' + btn.getAttribute('data-clients-see-referred');
+        state.page = 1;
+        state.selected = {};
+        state.search = '';
+        // The filter only has a surface in the table view; landing on the
+        // directory list would apply it invisibly.
+        state.viewMode = 'list';
+        saveViewMode('list');
+        navigate('list', null, { forceFull: true });
+      });
+    });
+  }
+
   function syncSearchWrap(root, state) {
     root.querySelectorAll('[data-clients-search-wrap]').forEach(function (wrap) {
       var isToolbar = wrap.classList.contains('tma-dash__toolbar-search');
@@ -4006,9 +4235,13 @@
   function wireEvents(root, state, scope, navigate, render) {
     // Rows appear in the directory, table list, and company people lists.
     wireDirectoryRows(root, state, navigate);
+    wireSeeAllReferred(root, state, navigate);
 
     if (scope === 'list' || scope === 'split') {
       wireSearchEvents(root, state);
+      // The split view carries the drag handle between the list and the
+      // detail pane; re-attached each render, and a no-op where there is none.
+      attachClientsResizer(root, state);
 
       MORPH.unwired(root, '[data-clients-layout]').forEach(function (btn) {
         btn.remove();

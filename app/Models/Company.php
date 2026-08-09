@@ -21,6 +21,9 @@ class Company extends Model
 {
     use SoftDeletes;
 
+    /** How many referred clients a company card carries before linking on. */
+    public const REFERRED_PREVIEW = 12;
+
     public const STATUS_ACTIVE = 'active';
 
     public const STATUS_PROSPECT = 'prospect';
@@ -77,6 +80,20 @@ class Company extends Model
         return $this->hasMany(CompanyStaffAssignment::class);
     }
 
+    /**
+     * @param  \Illuminate\Support\Collection<int, Client>  $clients
+     * @return array<int, array<string, mixed>>
+     */
+    private function referredClientCards($clients): array
+    {
+        return $clients->take(self::REFERRED_PREVIEW)->map(fn (Client $c) => [
+            'id' => $c->uid,
+            'name' => $c->name,
+            'initial' => $c->initial,
+            'email' => $c->email,
+        ])->values()->all();
+    }
+
     public function isArchived(): bool
     {
         return $this->status === self::STATUS_ARCHIVED;
@@ -117,6 +134,15 @@ class Company extends Model
             // withCount() when the list loaded it, a query when a single
             // company was fetched on its own.
             'referredCount' => $this->referred_clients_count ?? $this->referredClients()->count(),
+            /*
+             * The first page of the people this company sent us. Capped hard:
+             * the largest referral partner has eight thousand clients, and the
+             * company card wants to show who they are, not carry the lot. The
+             * page links through to the filtered directory for the rest.
+             */
+            'referred' => $this->relationLoaded('referredClients')
+                ? $this->referredClientCards($this->referredClients)
+                : $this->referredClientCards($this->referredClients()->orderBy('name')->limit(self::REFERRED_PREVIEW)->get()),
             'people' => $people->map(fn (Client $c) => [
                 'id' => $c->uid,
                 'name' => $c->name,
