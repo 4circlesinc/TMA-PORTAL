@@ -83,6 +83,25 @@
 
   /* ── helpers ───────────────────────────────────────── */
 
+  /**
+   * A file's review state, beside its name.
+   *
+   * Next to the name rather than in a column of its own: most files have never
+   * been sent anywhere, so a Status column would be empty down almost its whole
+   * length while taking width from the name — and a badge reads as belonging to
+   * the thing it sits against, which a distant column does not.
+   *
+   * Nothing at all when there is no status. "Draft" against every ordinary file
+   * would be decoration, not information.
+   */
+  function statusChip(it) {
+    var s = it.status;
+    if (!s || !s.label) return '';
+
+    return '<span class="tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
+      ' tma-portal-status--inline">' + esc(s.label) + '</span>';
+  }
+
   function fileIconSrc(item) {
     if (item.type === 'folder') {
       var base = item.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
@@ -600,7 +619,8 @@
         '<td class="tma-portal-cell--tight"><input type="checkbox" class="tma-dash__check" data-files-check="' + esc(it.id) + '" ' + (state.selected[it.id] ? 'checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></td>' +
         star +
         '<td><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
-        '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '">' + esc(it.name) + '</button>' + busySpin + '</span></td>' +
+        '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '">' + esc(it.name) + '</button>' +
+        statusChip(it) + busySpin + '</span></td>' +
         '<td class="tma-portal-table__muted">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(size || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' + owner + '</td>' +
@@ -639,6 +659,7 @@
         '<button type="button" class="tma-portal-file-card__thumb" data-files-open="' + esc(it.id) + '">' + thumb + '</button>' +
         '<button type="button" class="tma-portal-file-card__name" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         '<span class="tma-portal-file-card__meta">' + esc(sub) + '</span>' +
+        statusChip(it) +
         '</div>';
     }).join('');
     return '<div class="tma-portal-grid">' + cards + '</div>';

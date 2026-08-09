@@ -1285,3 +1285,13 @@
   border-left: 2px solid var(--color-primary);
   padding-left: var(--space-12);
 }
+
+/* A review status sitting beside a filename rather than in a badge column.
+   Inline-block with its own baseline so a long name wrapping does not drag
+   the badge onto a line of its own, away from the file it describes. */
+.tma-portal-status--inline {
+  margin-left: var(--space-8);
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+.tma-portal-file-card .tma-portal-status--inline { margin: var(--space-4) 0 0; }

@@ -3,10 +3,12 @@
 namespace App\Support\Files;
 
 use App\Models\FileItem;
+use App\Models\FileWorkflow;
 use App\Models\Folder;
 use App\Models\FolderColourPreference;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Files\Workflow\Status;
 
 /**
  * Shapes files/folders into safe JSON for the client. Only the public uuid is
@@ -21,6 +23,9 @@ class Presenter
 
     /** item_id => array of assignee display names */
     private array $assignFile = [];
+
+    /** file_id => ['status','label','tone'] for the file's live review state. */
+    private array $statusFile = [];
 
     private array $assignFolder = [];
 
@@ -53,6 +58,7 @@ class Presenter
         }
 
         $this->assignFile = $this->assigneeMap('file', $fileIds);
+        $this->statusFile = $this->statusMap($fileIds);
         $this->assignFolder = $this->assigneeMap('folder', $folderIds);
         $this->prefRows = FolderColours::preferenceRows($this->viewer, $folderIds);
     }
@@ -89,6 +95,9 @@ class Presenter
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFile[$file->id]),
+            // Null when the file has never been sent anywhere — most files.
+            // A badge reading "Draft" on everything would be noise, not status.
+            'status' => $this->statusFile[$file->id] ?? null,
             'permissions' => $this->filePerms($file),
             'downloadUrl' => route('files.download', $file->uuid),
             'previewUrl' => FileType::isPreviewable($ext)
@@ -287,6 +296,57 @@ class Presenter
     private function assigneeNames(string $type, int $id): array
     {
         return $this->assigneeMap($type, [$id])[$id] ?? [];
+    }
+
+    /**
+     * The review state of many files, in one query.
+     *
+     * Derived from the workflows rather than stored on the file. A column
+     * would be a second answer to a question the workflow tables already
+     * answer, and the two would part company the first time a request was
+     * cancelled, expired or superseded — leaving a row reading "Approved"
+     * with nothing behind it. Nothing to backfill and nothing to keep in step.
+     *
+     * The rule matches Engine::activeFor: the newest unfinished request, or
+     * failing that the newest request at all, so a settled file still shows
+     * how it settled. Done as one grouped pass because the alternative is a
+     * query per row, and a folder listing is 200 rows.
+     *
+     * @param  int[]  $fileIds
+     * @return array<int, array{status:string,label:string,tone:string}>
+     */
+    private function statusMap(array $fileIds): array
+    {
+        if (! $fileIds) {
+            return [];
+        }
+
+        $rows = FileWorkflow::whereIn('file_id', $fileIds)
+            ->orderBy('file_id')
+            ->orderByDesc('id')
+            ->get(['file_id', 'status']);
+
+        $out = [];
+
+        foreach ($rows as $row) {
+            $open = ! Status::isTerminal($row->status);
+
+            // Rows arrive newest-first per file. Keep the first one seen, then
+            // let a later *open* request replace a settled one — the same
+            // "unfinished wins" precedence activeFor applies.
+            if (isset($out[$row->file_id]) && ! ($open && ! $out[$row->file_id]['open'])) {
+                continue;
+            }
+
+            $out[$row->file_id] = [
+                'status' => $row->status,
+                'label' => Status::label($row->status),
+                'tone' => Status::tone($row->status),
+                'open' => $open,
+            ];
+        }
+
+        return $out;
     }
 
     public static function humanSize(int $bytes): string
