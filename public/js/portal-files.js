@@ -871,9 +871,18 @@
      file-manager page; the drop uploads into the current folder. */
   function bindDrop() {
     var depth = 0;
-    function hasFiles(e) { var dt = e.dataTransfer; return dt && Array.prototype.indexOf.call(dt.types || [], 'Files') !== -1; }
     function dropActive() {
       if (!state.el || !state.el.isConnected) return false;
+      /*
+       * Not while the viewer is open.
+       *
+       * This listens on the window and uploads into the current folder, so
+       * with a file open it would answer a drop aimed at the viewer's own
+       * version drop zone — quietly adding a *new file* to the folder behind
+       * it instead of a new version of the thing on screen. Two very different
+       * outcomes for the same gesture.
+       */
+      if (lb) return false;
       var view = state.el.closest('.tma-dash__view');
       if (view && view.hasAttribute('hidden')) return false; // folders view not on screen
       return canCreateHere() && !isRecycle();
@@ -1216,6 +1225,13 @@
 
   var lb = null;
 
+  /** Is this drag carrying files, as opposed to a row being moved? */
+  function hasFiles(e) {
+    var dt = e.dataTransfer;
+
+    return !!dt && Array.prototype.indexOf.call(dt.types || [], 'Files') !== -1;
+  }
+
   /* The websocket details come from /me, the same place notifications and
    * messaging read them. Fetched once per page and remembered — including a
    * negative answer, so a portal with no socket configured does not re-ask on
@@ -1329,6 +1345,10 @@
             '</aside>' +
           '</div>' +
         '</div>';
+
+      // Once per viewer, not per file: the panel is rebuilt constantly and
+      // binding on render would stack a listener every time.
+      bindVersionDrop();
 
       paintPanel();
       subscribeToFile(f);
@@ -2334,13 +2354,37 @@
         .catch(function (err) { panelError('[data-lb-versions]', err, 'version history'); });
     }
 
+    /**
+     * A database value, said out loud.
+     *
+     * The approval chip printed the column verbatim, so a version sat there
+     * labelled "changes_requested" — the underscore and all. Done generically
+     * rather than as a lookup table so a status added later reads properly
+     * instead of leaking through the same way this one did.
+     */
+    function statusLabel(value) {
+      var words = String(value || '').replace(/[_-]+/g, ' ').trim();
+
+      return words ? words.charAt(0).toUpperCase() + words.slice(1) : '';
+    }
+
     function versionsHtml(data, f) {
       var list = (data && data.versions) || [];
       if (!list.length) return '<p class="tma-portal-viewer__empty">No version history for this file.</p>';
 
+      /*
+       * Drop target as well as a button.
+       *
+       * The hint earns its line: dragging a file here is otherwise invisible,
+       * and the alternative — dragging onto the file list behind — adds a
+       * separate file to the folder rather than a version of this one.
+       */
       var head = data.canAddVersion
-        ? '<button type="button" class="tma-portal-viewer__btn tma-portal-viewer__version-add" data-lb-newversion>' +
-            'Upload new version</button>' +
+        ? '<div class="tma-portal-viewer__vdrop" data-lb-vdrop>' +
+            '<button type="button" class="tma-portal-viewer__btn tma-portal-viewer__version-add" data-lb-newversion>' +
+              'Upload new version</button>' +
+            '<p class="tma-portal-viewer__vdrop-hint">or drop a file here</p>' +
+          '</div>' +
           '<input type="file" hidden data-lb-versionfile>'
         : '';
 
@@ -2361,7 +2405,7 @@
               '<time datetime="' + esc(v.uploadedAt) + '">' + esc(fmtDateTime(v.uploadedAt)) + '</time>' +
               (v.isCurrent ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--ok">Current</span>' : '') +
               (v.restoredFrom ? '<span class="tma-portal-viewer__comment-flag">restored from v' + v.restoredFrom + '</span>' : '') +
-              (v.approvalStatus ? '<span class="tma-portal-viewer__comment-flag">' + esc(v.approvalStatus) + '</span>' : '') +
+              (v.approvalStatus ? '<span class="tma-portal-viewer__comment-flag">' + esc(statusLabel(v.approvalStatus)) + '</span>' : '') +
             '</div>' +
             (v.note ? '<p class="tma-portal-viewer__version-note">' + esc(v.note) + '</p>' : '') +
             '<p class="tma-portal-viewer__version-meta">' + esc(v.sizeLabel) +
@@ -2380,6 +2424,59 @@
     function pickNewVersion() {
       var input = lb.querySelector('[data-lb-versionfile]');
       if (input) input.click();
+    }
+
+    /**
+     * Dropping a file onto the versions panel.
+     *
+     * Bound once on the viewer rather than per render, since the panel is
+     * rebuilt on every tab switch and refresh — binding inside versionsHtml
+     * would stack a listener each time.
+     *
+     * stopPropagation on both: the window-level folder drop is already stood
+     * down while the viewer is open, but a drag that starts here should not
+     * reach it even if that guard is ever relaxed.
+     */
+    function bindVersionDrop() {
+      var zoneFor = function (e) {
+        return e.target && e.target.closest ? e.target.closest('[data-lb-vdrop]') : null;
+      };
+
+      lb.addEventListener('dragover', function (e) {
+        var zone = zoneFor(e);
+        if (!zone || !hasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+        zone.classList.add('is-over');
+      });
+
+      lb.addEventListener('dragleave', function (e) {
+        var zone = zoneFor(e);
+        // Leaving for a child of the zone is not leaving the zone.
+        if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove('is-over');
+      });
+
+      lb.addEventListener('drop', function (e) {
+        var zone = zoneFor(e);
+        if (!zone || !hasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('is-over');
+
+        var files = (e.dataTransfer && e.dataTransfer.files) || [];
+        if (!files.length) return;
+
+        // A version is one file. Saying so beats silently ignoring the rest,
+        // and beats uploading five versions of the same document at once.
+        if (files.length > 1) {
+          ui().toast('Drop one file — a version replaces a single document.', false);
+
+          return;
+        }
+
+        uploadNewVersion(files[0]);
+      });
     }
 
     function uploadNewVersion(file) {

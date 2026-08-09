@@ -1220,3 +1220,26 @@
    lightening the deep tone into something that is neither. */
 .tma-portal-viewer__more-summary { color: var(--color-primary); }
 .tma-portal-viewer__count { color: var(--color-primary); }
+
+/* Upload-a-version drop target.
+   Dashed, because a dashed edge is the one border convention that reads as
+   "put something here" rather than "this is a box". The hint is part of the
+   target, so dragging over the words highlights it too. */
+.tma-portal-viewer__vdrop {
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--space-8);
+  padding: var(--space-12); margin-bottom: var(--space-12);
+  border: 1px dashed var(--color-border-medium); border-radius: var(--radius-12);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.tma-portal-viewer__vdrop.is-over {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.tma-portal-viewer__vdrop-hint {
+  margin: 0; text-align: center;
+  font-size: var(--text-size-12); color: var(--color-text-secondary);
+}
+/* Nothing inside the zone may become the drag target itself, or dragleave
+   fires as the pointer crosses from the hint onto the button and the
+   highlight flickers off mid-drag. */
+.tma-portal-viewer__vdrop.is-over * { pointer-events: none; }
