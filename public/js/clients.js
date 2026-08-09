@@ -810,6 +810,22 @@
     return parts.filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
   }
 
+  /* What the Sort button offers. `name` ascending is the directory's natural
+     order and stays the default. */
+  var CLIENT_SORTS = [
+    { value: 'name', label: 'Name (A–Z)' },
+    { value: 'name-desc', label: 'Name (Z–A)' },
+    { value: 'company', label: 'Company' },
+    { value: 'type', label: 'Type' },
+  ];
+
+  function clientSortLabel(value) {
+    for (var i = 0; i < CLIENT_SORTS.length; i++) {
+      if (CLIENT_SORTS[i].value === value) return CLIENT_SORTS[i].label;
+    }
+    return CLIENT_SORTS[0].label;
+  }
+
   function emptyClientFilters() {
     return { referral: '', clientType: '' };
   }
@@ -1086,7 +1102,8 @@
       '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter' +
       ' aria-pressed="' + (filtered ? 'true' : 'false') + '" aria-expanded="false">' +
       '<img src="' + ICONS.FunnelSimple + '" alt=""></button>' +
-      '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort aria-pressed="false">' +
+      '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort' +
+      ' aria-pressed="' + (state.sort && state.sort !== 'name' ? 'true' : 'false') + '" aria-expanded="false">' +
       '<img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
       '<div class="tma-dash__toolbar-bulk" data-clients-bulk' + bulkHidden + '>' +
       '<img class="tma-dash__toolbar-divider" src="' + ICONS.Line + '" alt="" aria-hidden="true">' +
@@ -1131,11 +1148,14 @@
     if (filters.clientType) {
       tags.push({ id: 'clientType', label: 'Type: ' + clientTypeLabel(filters.clientType) });
     }
+    if (state.sort && state.sort !== 'name') {
+      tags.push({ id: 'sort', label: 'Sorted by ' + clientSortLabel(state.sort), icon: ICONS.ArrowsDownUp });
+    }
     if (!tags.length) return '';
 
     var html = tags.map(function (tag) {
       return '<div class="tma-dash__filter-tag" role="listitem" data-tag-id="' + esc(tag.id) + '">' +
-        '<img src="' + ICONS.FunnelSimple + '" width="16" height="16" alt="" aria-hidden="true">' +
+        '<img src="' + (tag.icon || ICONS.FunnelSimple) + '" width="16" height="16" alt="" aria-hidden="true">' +
         '<span>' + esc(tag.label) + '</span>' +
         '<button type="button" class="tma-dash__filter-tag-remove" aria-label="Remove ' + esc(tag.label) +
         '" data-clients-remove-filter="' + esc(tag.id) + '">' +
@@ -1269,7 +1289,36 @@
       rows.push({ kind: 'company', key: key, id: company.id, name: company.name || 'Company', company: company });
     });
 
-    return rows.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    return sortTableRows(rows, state && state.sort);
+  }
+
+  /* Sorting the merged list. Every comparison falls back to the name so the
+     order is total — otherwise two rows sharing a type swap places on every
+     re-render, which reads as the table twitching. */
+  function sortTableRows(rows, sort) {
+    var byName = function (a, b) { return String(a.name).localeCompare(String(b.name)); };
+
+    var keyed = function (fn) {
+      return function (a, b) {
+        var d = String(fn(a) || '').localeCompare(String(fn(b) || ''));
+        return d !== 0 ? d : byName(a, b);
+      };
+    };
+
+    if (sort === 'name-desc') return rows.sort(function (a, b) { return byName(b, a); });
+    if (sort === 'company') {
+      return rows.sort(keyed(function (r) {
+        // Companies sort under their own name; people under their referrer.
+        return r.kind === 'company' ? r.name : clientReferralLabel(r.id);
+      }));
+    }
+    if (sort === 'type') {
+      return rows.sort(keyed(function (r) {
+        return r.kind === 'company' ? 'Company' : clientTypeLabel(clientTypeOf(r.id));
+      }));
+    }
+
+    return rows.sort(byName);
   }
 
   // 100 first: the directory holds eleven thousand people, and ten to a page
@@ -3382,12 +3431,13 @@
     if (clientsPop && clientsPop.host && document.body.contains(clientsPop.host)) return clientsPop;
     var host = document.createElement('div');
     host.className = 'tma-dash__clients-popover-host';
-    host.innerHTML = clientsPopShell('fields') + clientsPopShell('values');
+    host.innerHTML = clientsPopShell('fields') + clientsPopShell('values') + clientsPopShell('sort');
     document.body.appendChild(host);
     clientsPop = {
       host: host,
       fields: host.querySelector('[data-clients-popover="fields"]'),
       values: host.querySelector('[data-clients-popover="values"]'),
+      sort: host.querySelector('[data-clients-popover="sort"]'),
     };
     wireClientsPopovers();
     return clientsPop;
@@ -3472,13 +3522,13 @@
 
   function closeClientsPopovers(keep) {
     if (!clientsPop) return;
-    [clientsPop.fields, clientsPop.values].forEach(function (el) {
+    [clientsPop.fields, clientsPop.values, clientsPop.sort].forEach(function (el) {
       if (!el || (keep && keep.indexOf(el) !== -1)) return;
       el.removeAttribute('data-open');
       el.setAttribute('aria-hidden', 'true');
     });
     if (!keep && clientsFilterCtx && clientsFilterCtx.root) {
-      clientsFilterCtx.root.querySelectorAll('[data-clients-filter]').forEach(function (b) {
+      clientsFilterCtx.root.querySelectorAll('[data-clients-filter],[data-clients-sort]').forEach(function (b) {
         b.setAttribute('aria-expanded', 'false');
       });
     }
@@ -3529,6 +3579,17 @@
         return;
       }
 
+      var sortItem = e.target.closest('[data-clients-sort-value]');
+      if (sortItem) {
+        e.preventDefault();
+        var state = clientsFilterCtx.state;
+        state.sort = sortItem.getAttribute('data-clients-sort-value');
+        state.page = 1;
+        closeClientsPopovers();
+        clientsFilterCtx.render({ forceFull: true });
+        return;
+      }
+
       var value = e.target.closest('[data-clients-filter-value]');
       if (value) {
         e.preventDefault();
@@ -3543,13 +3604,14 @@
     document.addEventListener('click', function (e) {
       if (!clientsPop || !clientsPop.host.isConnected) return;
       if (!clientsFilterLive()) { closeClientsPopovers(); return; }
-      if (e.target.closest('[data-clients-popover]') || e.target.closest('[data-clients-filter]')) return;
+      if (e.target.closest('[data-clients-popover]') || e.target.closest('[data-clients-filter]') ||
+          e.target.closest('[data-clients-sort]')) return;
       closeClientsPopovers();
     });
 
     window.addEventListener('resize', function () {
       if (!clientsPop) return;
-      [clientsPop.fields, clientsPop.values].forEach(function (el) {
+      [clientsPop.fields, clientsPop.values, clientsPop.sort].forEach(function (el) {
         if (el && el.hasAttribute('data-open')) positionClientsPopover(el, el._anchorRect);
       });
     });
@@ -3573,9 +3635,33 @@
       });
     }
 
+    var sortTrigger = MORPH.unwiredOne(root, '[data-clients-sort]');
+    if (sortTrigger) {
+      MORPH.on(sortTrigger, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (clientsPop.sort.hasAttribute('data-open')) {
+          closeClientsPopovers();
+          return;
+        }
+        var current = state.sort || 'name';
+        clientsPop.sort.innerHTML = CLIENT_SORTS.map(function (s) {
+          return clientsPopItem('data-clients-sort-value', s.value, s.label, { selected: current === s.value });
+        }).join('');
+        openClientsPopover(clientsPop.sort, sortTrigger);
+      });
+    }
+
     MORPH.unwired(root, '[data-clients-remove-filter]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
-        setClientsFilter(btn.getAttribute('data-clients-remove-filter'), '');
+        var id = btn.getAttribute('data-clients-remove-filter');
+        if (id === 'sort') {
+          state.sort = 'name';
+          state.page = 1;
+          render({ forceFull: true });
+          return;
+        }
+        setClientsFilter(id, '');
       });
     });
 
@@ -3583,6 +3669,7 @@
     if (reset) {
       MORPH.on(reset, 'click', function () {
         state.filters = emptyClientFilters();
+        state.sort = 'name';
         state.page = 1;
         state.selected = {};
         render({ forceFull: true });
@@ -4633,6 +4720,7 @@
       searchFocused: false,
       searchLoading: false,
       filters: emptyClientFilters(),
+      sort: 'name',
       viewMode: loadViewMode(),
       page: 1,
       pageSize: loadPageSize(),

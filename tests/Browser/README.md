@@ -52,6 +52,29 @@ field placement and drawing, and computed CSS only exist in a browser.
   "
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/client-referrals.mjs
   ```
+- **`clients-table.mjs`** — the directory table at scale. Written against ~11k
+  rows because every one of these behaved perfectly with five clients and fell
+  over with eleven thousand: the total stated above the table, a default page
+  size of 100, pagination that says "page 4 of 111" and can actually reach 111,
+  the table scrolling sideways in its own container rather than dragging the
+  shell, row checkboxes, select-all, the Type facet counts agreeing with what
+  filtering returns, and filter popovers that neither clip a long company name
+  nor run off-screen.
+
+  The bug it was written to catch: select-all captured its checkboxes when it
+  was wired, and being a node that survives morphing it kept the first render's
+  elements for ever — after a page turn it ticked boxes that had left the
+  document and nothing happened. Anything that reads a node list at wire time
+  in this page is suspect for the same reason.
+
+  Same two harness rules as `client-referrals.mjs` (scope selectors to the
+  clients table; park the pointer away from the hover-overlay sidebar), plus a
+  third: scope pagination to `[data-clients-pagination]`, or a hidden view's
+  pager in the shared shell matches too.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/clients-table.mjs
+  ```
 - **`feed.mjs`** — the Feed module. PHPUnit covers the API
   (`tests/Feature/FeedTest.php`); what only a browser can check is §22 — that
   posting, commenting, reacting, voting, bookmarking and pinning all *patch*
