@@ -100,6 +100,20 @@ class LegacyPageController extends Controller
         return resource_path('views/pages/dashboard.html');
     }
 
+    /**
+     * Any path under /clients — a client, a company, an edit screen.
+     *
+     * The shell is the same one /clients gets; clients.js reads the path and
+     * opens the right screen. Gated on the same capability as /clients itself,
+     * so a deep link is no way around the directory being closed to somebody.
+     */
+    public function clients(Request $request): Response
+    {
+        abort_unless(Role::canViewPage($request->user(), 'clients'), 404);
+
+        return PortalShell::respond(self::spaShellPath(), $request->user());
+    }
+
     public function __invoke(Request $request, string $page): Response
     {
         if (in_array($page, self::PUBLIC_PAGES, true)) {

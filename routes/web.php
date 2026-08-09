@@ -900,6 +900,22 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/comments', [CbiController::class, 'storeComment'])->name('applications.comments');
     });
 
+    /*
+     * Client deep links.
+     *
+     * clients.js has parsed these paths for a long time — detail, edit,
+     * companies — but nothing served them, so the URL was only ever correct
+     * until you reloaded, and a link to a client opened the directory. They
+     * cannot go in PORTAL_PAGES because whereIn compiles that list into the
+     * route pattern, and a uid is not a value anybody can list.
+     *
+     * Declared before the catch-all: `{page}` would otherwise swallow
+     * "clients" and 404 on the segment after it.
+     */
+    Route::get('/clients/{rest}', [LegacyPageController::class, 'clients'])
+        ->where('rest', '[A-Za-z0-9][A-Za-z0-9\-_/]*')
+        ->name('clients.deep');
+
     Route::get('/{page}', LegacyPageController::class)
         ->whereIn('page', LegacyPageController::PORTAL_PAGES);
 });
