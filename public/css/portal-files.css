@@ -466,6 +466,16 @@
   --color-hover: rgba(255, 255, 255, 0.08);
   /* The tab component draws its label and indicator in --component-black. */
   --component-black: #ffffff;
+  /*
+   * --color-border is used a dozen times in this file and is not defined in
+   * tokens.css, theme.css or anywhere else. An undefined custom property makes
+   * the whole `border` declaration invalid, so every one of those borders was
+   * simply absent — the composer's divider, the panel's separators. Aliasing it
+   * to the documented divider token brings them all back at once. dashboard.css
+   * and portal.css use it too and are still missing it; fixing that properly
+   * belongs in tokens.css.
+   */
+  --color-border: var(--color-border-soft);
 
   flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0;
   background: var(--color-bg-page); color: var(--color-text-primary);
@@ -663,15 +673,25 @@
 }
 .tma-portal-viewer__comment-act:hover { color: var(--color-primary-dark); text-decoration: underline; }
 .tma-portal-viewer__reply { margin-left: 38px; }
-.tma-portal-viewer__reply-open { margin-left: 38px; margin-top: var(--space-4); }
+/* No indent: Reply is one button in the comment's action row now, not a row of
+   its own that had to line itself up under the avatar. The old 38px pushed the
+   whole row — Resolve, Edit and Delete with it — off to the right of the text
+   it belongs to. */
+.tma-portal-viewer__reply-open { margin-top: 0; }
 .tma-portal-viewer__replybox, .tma-portal-viewer__editbox { margin-top: var(--space-6); }
 
 .tma-portal-viewer__composer { position: relative; margin-top: var(--space-16); padding-top: var(--space-12); border-top: 1px solid var(--color-border); }
+/* A box you can see.
+   The background was --color-white, which on this panel is the panel's own
+   colour, and the border named --color-border — a token that is not defined
+   anywhere, so the whole declaration was invalid and there was no border at
+   all. Between them the composer was an invisible rectangle with a placeholder
+   floating in it. */
 .tma-portal-viewer__input {
   width: 100%; resize: vertical; min-height: 64px;
   padding: var(--space-8) var(--space-10);
-  border: 1px solid var(--color-border); border-radius: var(--radius-8);
-  background: var(--color-white); color: var(--color-text-primary);
+  border: 1px solid var(--color-border-soft); border-radius: var(--radius-8);
+  background: var(--color-bg-card); color: var(--color-text-primary);
   font-family: inherit; font-size: var(--text-size-13); line-height: 1.5;
 }
 .tma-portal-viewer__input:focus { outline: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent); outline-offset: 1px; }
