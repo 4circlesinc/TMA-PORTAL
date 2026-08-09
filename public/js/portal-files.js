@@ -1835,16 +1835,20 @@
       var r = f.review;
       if (!r || !r.status) return '';
 
-      var label = { pending_review: 'Start review', under_review: 'Start review',
-        approved: 'Approve', rejected: 'Reject' };
-
+      /*
+       * One picker rather than a row of verbs.
+       *
+       * Three buttons — Start review, Approve, Reject — read as three
+       * unrelated actions when they are one field with four possible values,
+       * and they could only ever offer the moves allowed from where the
+       * document already was. A picker shows the whole set, says which one is
+       * current, and grows a state without growing the panel.
+       */
       var actions = r.canReview
-        ? (r.next || []).map(function (s) {
-            var primary = s === 'approved';
-            return '<button type="button" class="' +
-              (primary ? 'tma-portal-viewer__btn' : 'tma-portal-viewer__btn-ghost') + '"' +
-              ' data-lb-review="' + esc(s) + '">' + esc(label[s] || s) + '</button>';
-          }).join('')
+        ? '<button type="button" class="tma-portal-viewer__review-pick" data-lb-review-open>' +
+            '<span>Change status</span>' +
+            '<img src="images/icons/phosphor/CaretDown.svg" alt="" width="12" height="12">' +
+          '</button>'
         : '';
 
       return '<div class="tma-portal-viewer__review">' +
@@ -2501,6 +2505,39 @@
      * click would be the interface hiding a rule it could have just asked
      * about. Every other move goes straight through.
      */
+    /* Labels and icons for the four states, in the order the process runs. */
+    var REVIEW_STATES = [
+      { id: 'pending_review', label: 'Pending review', icon: 'Clock' },
+      { id: 'under_review', label: 'Under review', icon: 'Eye' },
+      { id: 'approved', label: 'Approved', icon: 'CheckCircle' },
+      { id: 'rejected', label: 'Rejected', icon: 'XCircle' },
+    ];
+
+    /**
+     * The status picker, on the portal's own menu.
+     *
+     * All four are listed, current one included: leaving it out makes the list
+     * shorter than the thing it describes, and the reader has to remember what
+     * is missing to know where they are. It carries a tick and does nothing
+     * instead.
+     */
+    function openReviewMenu(anchor) {
+      var r = current().review || {};
+
+      var list = REVIEW_STATES.map(function (s) {
+        var isCurrent = s.id === r.status;
+
+        return {
+          label: s.label + (isCurrent ? ' ✓' : ''),
+          icon: s.icon,
+          fn: isCurrent ? function () {} : function () { setReviewStatus(s.id); },
+        };
+      });
+
+      var box = anchor.getBoundingClientRect();
+      openContextMenu(box.left, box.bottom + 4, current(), list);
+    }
+
     function setReviewStatus(status) {
       var f = current();
 
@@ -3485,8 +3522,8 @@
       if (wfCancel) { cancelWorkflow(wfCancel.getAttribute('data-lb-wf-cancel')); return; }
 
       /* ── versions ─────────────────────────────────── */
-      var review = e.target.closest('[data-lb-review]');
-      if (review) { setReviewStatus(review.getAttribute('data-lb-review')); return; }
+      var pick = e.target.closest('[data-lb-review-open]');
+      if (pick) { openReviewMenu(pick); return; }
       if (e.target.closest('[data-lb-newversion]')) { pickNewVersion(); return; }
       var vPrev = e.target.closest('[data-lb-vpreview]');
       if (vPrev) { window.open(versionUrl(vPrev.getAttribute('data-lb-vpreview'), 'preview'), '_blank'); return; }

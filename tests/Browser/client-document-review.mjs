@@ -82,10 +82,23 @@ check(rows.every((r) => r.badge === 'Pending review'),
 await page.locator('[data-files-open]', { hasText: 'Passport.pdf' }).first().click()
 await page.waitForTimeout(3000)
 
-const startBtn = page.locator('[data-lb-review="under_review"]')
-check(await startBtn.count() > 0, 'the viewer offers a review action')
-if (await startBtn.count()) {
-  await startBtn.first().click()
+// The picker, then the state — all four are listed whatever the current one.
+const picker = page.locator('[data-lb-review-open]')
+check(await picker.count() > 0, 'the viewer offers a status picker')
+
+if (await picker.count()) {
+  await picker.first().click()
+  await page.waitForTimeout(800)
+
+  const options = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.tma-portal-menu button, [class*="menu"] button'))
+      .map((b) => b.textContent.trim())
+      .filter((t) => /review|approved|rejected/i.test(t)))
+
+  check(options.length >= 4, `all four statuses listed (${options.join(' | ')})`)
+  check(options.some((t) => t.includes('✓')), 'the current status is marked')
+
+  await page.locator('text=Under review').first().click()
   await page.waitForTimeout(2500)
 }
 
@@ -158,7 +171,7 @@ check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer')),
 check(page.context().pages().length === tabsBefore, 'and does not open a browser tab')
 check(await page.evaluate(() => !!document.querySelector('.tma-portal-viewer__tabs')),
   'with the full panel — comments, versions, review')
-check(await page.evaluate(() => !!document.querySelector('[data-lb-review]')),
+check(await page.evaluate(() => !!document.querySelector('[data-lb-review-open]')),
   'and its review controls')
 
 await browser.close()

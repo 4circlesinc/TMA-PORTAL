@@ -33,18 +33,23 @@ final class ReviewStatus
     public const FINAL = [self::APPROVED, self::REJECTED];
 
     /**
-     * What may follow what.
+     * Any state may be set from any other.
      *
-     * Approved and rejected are not dead ends: a reviewer who approves the
-     * wrong document, or a client who sends a corrected copy, needs a way back
-     * without deleting the file and losing its history.
+     * This was a transition table that forbade a few moves — approved and
+     * rejected could not go back to pending. The picker lists all four
+     * statuses, and an option that is visible but refused is worse than one
+     * that is simply absent: the reader has no way to know which of the four
+     * are real until one errors.
+     *
+     * The moves it blocked were legitimate anyway. A reviewer who approves the
+     * wrong document, or one who wants a settled file to start over because
+     * the client sent a corrected copy, is doing ordinary work — and the
+     * history of who changed it to what is recorded either way.
      */
-    public const NEXT = [
-        self::PENDING => [self::UNDER_REVIEW, self::APPROVED, self::REJECTED],
-        self::UNDER_REVIEW => [self::APPROVED, self::REJECTED, self::PENDING],
-        self::APPROVED => [self::UNDER_REVIEW, self::REJECTED],
-        self::REJECTED => [self::UNDER_REVIEW, self::APPROVED],
-    ];
+    public static function next(?string $from): array
+    {
+        return array_values(array_filter(self::ALL, fn (string $s) => $s !== $from));
+    }
 
     public static function label(?string $status): ?string
     {
@@ -82,13 +87,9 @@ final class ReviewStatus
             return false;
         }
 
-        // A file that has no review yet can be started at any state; this is
-        // the "set a status on a document that predates the feature" case.
-        if (! self::isValid($from)) {
-            return true;
-        }
-
-        return in_array($to, self::NEXT[$from] ?? [], true);
+        // Only "move it to where it already is" is refused — everything else
+        // is a decision somebody is entitled to change.
+        return $to !== $from;
     }
 
     /** @return array{status:string,label:string,tone:string}|null */

@@ -1316,3 +1316,14 @@
 .tma-portal-viewer__review-actions {
   display: flex; flex-wrap: wrap; gap: var(--space-6); margin-top: var(--space-8);
 }
+
+/* The review status picker — a field, not a row of verbs. */
+.tma-portal-viewer__review-pick {
+  display: inline-flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border-soft); border-radius: var(--radius-8);
+  background: transparent; color: var(--color-text-primary);
+  font-size: var(--text-size-13); font-weight: 500; cursor: pointer;
+}
+.tma-portal-viewer__review-pick:hover { background: var(--color-hover); }
+.tma-portal-viewer__review-pick img { filter: invert(1) brightness(1.6); }

@@ -118,9 +118,10 @@ class Presenter
                 'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
                 // What this viewer may move it to from here.
                 'canReview' => $perms['review'],
-                'next' => ReviewStatus::isValid($file->review_status)
-                    ? (ReviewStatus::NEXT[$file->review_status] ?? [])
-                    : ReviewStatus::ALL,
+                // Every state, so the picker can list them all — the current
+                // one included, marked rather than missing.
+                'all' => ReviewStatus::ALL,
+                'next' => ReviewStatus::next($file->review_status),
             ],
             'permissions' => $perms,
             'downloadUrl' => route('files.download', $file->uuid),
