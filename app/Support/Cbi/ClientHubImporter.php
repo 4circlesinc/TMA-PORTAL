@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\User;
 use App\Support\Files\FolderProvisioner;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -31,6 +32,9 @@ class ClientHubImporter
 
     /** @var array<string, Company> keyed by the normalised referral name */
     private array $companies = [];
+
+    /** @var array<string, true> every client uid already spoken for */
+    private array $takenUids = [];
 
     /** @var array<string, int> */
     public array $stats = [
@@ -79,13 +83,15 @@ class ClientHubImporter
             $groups[$key]['total'] = ($groups[$key]['total'] ?? 0) + (int) $row->n;
         }
 
+        // One read for the whole table beats one read per group.
+        $this->loadCompanies();
+
         $report = [];
         foreach ($groups as $key => $group) {
             $name = $this->displayName($group['variants']);
-            $existing = Company::whereRaw('LOWER(name) = ?', [$key])->first();
+            $existing = $this->companies[$key] ?? null;
 
             if ($existing) {
-                $this->companies[$key] = $existing;
                 $this->stats['companiesMatched']++;
                 $report[$key] = ['name' => $existing->name, 'applications' => $group['total'], 'created' => false];
 
@@ -118,11 +124,18 @@ class ClientHubImporter
     /**
      * Create a client for every applicant that does not have one yet.
      *
-     * Chunked by id: eleven thousand applications will not fit in memory
-     * alongside their clients, and the link column means a run interrupted
-     * half way can simply be started again.
+     * Written in batches, and that is the whole design. The production
+     * database is a remote serverless Postgres about 400ms away, so the cost
+     * of this import is round trips, not rows: a per-row insert plus a uid
+     * check plus a link update is three round trips each, which put eleven
+     * thousand applicants several hours away. A batch of 500 costs four round
+     * trips in total, and the same work lands in about a minute.
+     *
+     * Uid uniqueness therefore has to be settled in memory — every existing
+     * uid is read once up front, and each new one joins the set as it is
+     * minted, so no row asks the database whether its own name is free.
      */
-    public function importClients(?callable $progress = null): void
+    public function importClients(?callable $progress = null, int $batchSize = 500): void
     {
         // registerCompanies() may not have run in this process (a resumed run,
         // or clients-only); either way the map has to be complete before a
@@ -131,64 +144,158 @@ class ClientHubImporter
             $this->loadCompanies();
         }
 
+        if (! $this->dryRun) {
+            $this->takenUids = Client::withTrashed()->pluck('uid')->flip()->all();
+        }
+
+        $batch = [];
         CbiApplication::query()
             ->whereNull('client_id')
             ->orderBy('id')
-            ->chunkById(200, function ($applications) use ($progress) {
+            ->chunkById($batchSize, function ($applications) use (&$batch, $progress, $batchSize) {
                 foreach ($applications as $application) {
-                    $this->importOne($application);
+                    $row = $this->rowFor($application);
+                    if ($row !== null) {
+                        $batch[] = $row;
+                    }
                     if ($progress) {
                         $progress();
                     }
                 }
+
+                if (count($batch) >= $batchSize) {
+                    $this->flush($batch);
+                    $batch = [];
+                }
             });
+
+        if ($batch !== []) {
+            $this->flush($batch);
+        }
     }
 
-    private function importOne(CbiApplication $application): void
+    /**
+     * Build one client row, or null where there is nothing to file a person
+     * under. Touches no database.
+     *
+     * @return array{applicationId: int, columns: array<string, mixed>}|null
+     */
+    private function rowFor(CbiApplication $application): ?array
     {
         $name = trim((string) $application->applicant_name);
         if ($name === '') {
-            // Nothing to file a person under. Left unlinked on purpose so a
-            // later sync that fills the name in will pick it up.
+            // Left unlinked on purpose so a later sync that fills the name in
+            // will pick it up.
             $this->stats['unnamed']++;
             $this->stats['clientsSkipped']++;
 
-            return;
+            return null;
         }
 
         $referral = $this->referralFor($application->referred_by);
+        $this->stats['clientsCreated']++;
 
         if ($this->dryRun) {
-            $this->stats['clientsCreated']++;
+            return null;
+        }
 
+        $now = now();
+
+        return [
+            'applicationId' => $application->id,
+            'columns' => [
+                'uid' => $this->mintClientUid($name, $application),
+                'name' => $name,
+                'client_type' => 'private',
+                'referral_type' => $referral['type'],
+                'referred_by_company_id' => $referral['company']?->id,
+                // The employer column stays empty: a referrer is not an
+                // employer, and the caseload says nothing about who these
+                // people work for.
+                'company' => null,
+                'company_id' => null,
+                'initial' => mb_strtoupper(mb_substr($name, 0, 1)),
+                'initial_color' => 'blue',
+                'data' => json_encode($this->profileFor($application, $name)),
+                'created_by' => $this->actor?->id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        ];
+    }
+
+    /**
+     * Write one batch: insert the clients, read back the ids their uids were
+     * given, then point each application at its client in a single statement.
+     *
+     * @param  array<int, array{applicationId: int, columns: array<string, mixed>}>  $batch
+     */
+    private function flush(array $batch): void
+    {
+        if ($batch === []) {
             return;
         }
 
-        $client = Client::create([
-            'uid' => $this->uniqueClientUid($name, $application),
-            'name' => $name,
-            'client_type' => 'private',
-            'referral_type' => $referral['type'],
-            'referred_by_company_id' => $referral['company']?->id,
-            // The employer column stays empty: a referrer is not an employer,
-            // and the caseload says nothing about who these people work for.
-            'company' => null,
-            'company_id' => null,
-            'initial' => mb_strtoupper(mb_substr($name, 0, 1)),
-            'initial_color' => 'blue',
-            'data' => $this->profileFor($application, $name),
-            'created_by' => $this->actor?->id,
-        ]);
+        DB::table('clients')->insert(array_column($batch, 'columns'));
 
-        $application->forceFill(['client_id' => $client->id])->saveQuietly();
-        $this->stats['clientsCreated']++;
+        // The uid is what the insert and the read-back have in common; it is
+        // unique, so this cannot pick up somebody else's row.
+        $uids = array_column(array_column($batch, 'columns'), 'uid');
+        $ids = DB::table('clients')->whereIn('uid', $uids)->pluck('id', 'uid');
 
-        // Off by default: eleven thousand main folders and their configured
-        // subfolders is a far bigger write than the directory itself.
-        if ($this->withFolders && $this->actor) {
+        $links = [];
+        foreach ($batch as $row) {
+            $id = $ids[$row['columns']['uid']] ?? null;
+            if ($id !== null) {
+                $links[$row['applicationId']] = $id;
+            }
+        }
+
+        $this->linkApplications($links);
+
+        if (! $this->withFolders || ! $this->actor) {
+            return;
+        }
+
+        // Opt-in, and deliberately not batched: the provisioner owns folder
+        // naming, nesting and the configured default subfolders, and
+        // reimplementing that here to save round trips would fork it.
+        foreach (Client::whereIn('uid', $uids)->get() as $client) {
             FolderProvisioner::provisionClientFolder($client, $this->actor);
             $this->stats['foldersCreated']++;
         }
+    }
+
+    /**
+     * One UPDATE for the whole batch. A `CASE id WHEN … THEN …` is the
+     * portable way to give every row a different value in a single statement;
+     * five hundred separate updates would be five hundred round trips, which
+     * is the cost this class exists to avoid.
+     *
+     * @param  array<int, int>  $links  application id => client id
+     */
+    private function linkApplications(array $links): void
+    {
+        if ($links === []) {
+            return;
+        }
+
+        $case = 'CASE id';
+        $bindings = [];
+        foreach ($links as $applicationId => $clientId) {
+            $case .= ' WHEN ? THEN ?';
+            $bindings[] = $applicationId;
+            $bindings[] = $clientId;
+        }
+        $case .= ' END';
+
+        $ids = array_keys($links);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+        DB::update(
+            "UPDATE cbi_applications SET client_id = {$case} WHERE id IN ({$placeholders})",
+            array_merge($bindings, $ids)
+        );
     }
 
     /**
@@ -263,7 +370,7 @@ class ClientHubImporter
     private function loadCompanies(): void
     {
         foreach (Company::all() as $company) {
-            $this->companies[$this->normalise($company->name)] = $company;
+            $this->companies[$this->normalise($company->name)] ??= $company;
         }
     }
 
@@ -316,17 +423,33 @@ class ClientHubImporter
         return in_array($normalised, self::PRIVATE_MARKERS, true);
     }
 
+    /**
+     * Only ~60 of these, so the round trips do not matter and the clarity of
+     * asking the database does.
+     */
     private function uniqueCompanyUid(string $name): string
     {
-        return $this->uniqueUid(Str::slug($name) ?: 'company', Company::class);
+        $base = trim(Str::slug($name) ?: 'company', '-') ?: 'company';
+        $uid = $base;
+        $n = 2;
+        while (Company::withTrashed()->where('uid', $uid)->exists()) {
+            $uid = $base.'-'.$n;
+            $n++;
+        }
+
+        return $uid;
     }
 
     /**
      * Applicant names repeat, so the number disambiguates where there is one.
      * The uid is public (it is the /clients URL), which is why it is built
      * from the name rather than the application's uuid.
+     *
+     * Settled against the in-memory set rather than the database: eleven
+     * thousand existence checks at 400ms each is most of an afternoon, and the
+     * set holds every uid already taken plus every one minted in this run.
      */
-    private function uniqueClientUid(string $name, CbiApplication $application): string
+    private function mintClientUid(string $name, CbiApplication $application): string
     {
         $base = Str::slug($name) ?: 'client';
         if ($application->applicant_number) {
@@ -336,19 +459,15 @@ class ClientHubImporter
             }
         }
 
-        return $this->uniqueUid(Str::limit($base, 80, ''), Client::class);
-    }
-
-    /** @param  class-string<\Illuminate\Database\Eloquent\Model>  $model */
-    private function uniqueUid(string $base, string $model): string
-    {
-        $base = trim($base, '-') ?: 'record';
+        $base = trim(Str::limit($base, 80, ''), '-') ?: 'client';
         $uid = $base;
         $n = 2;
-        while ($model::withTrashed()->where('uid', $uid)->exists()) {
+        while (isset($this->takenUids[$uid])) {
             $uid = $base.'-'.$n;
             $n++;
         }
+
+        $this->takenUids[$uid] = true;
 
         return $uid;
     }

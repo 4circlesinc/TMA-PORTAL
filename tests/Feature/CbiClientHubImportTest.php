@@ -169,6 +169,61 @@ class CbiClientHubImportTest extends TestCase
         $this->assertSame(0, $second->stats['companiesCreated']);
     }
 
+    public function test_it_spans_batches_without_losing_or_crossing_links(): void
+    {
+        $staff = $this->staff();
+        // Deliberately more rows than a batch holds, all sharing one name so
+        // the uid set has to stay coherent across flushes, and one nameless
+        // row mid-run so the batch boundaries do not line up with the chunks.
+        for ($i = 1; $i <= 7; $i++) {
+            $this->application('GALAXY', 'Ali Hassan', 'CBI-'.$i);
+        }
+        $this->application('GALAXY', null, 'CBI-blank');
+
+        $importer = new ClientHubImporter($staff);
+        $importer->registerCompanies();
+        $importer->importClients(batchSize: 3);
+
+        $this->assertSame(7, Client::count());
+        $this->assertSame(7, Client::distinct('uid')->count('uid'));
+
+        // Every named application points at its own client, and no two share.
+        $linked = CbiApplication::whereNotNull('client_id')->pluck('client_id', 'applicant_number');
+        $this->assertCount(7, $linked);
+        $this->assertCount(7, array_unique($linked->all()));
+        $this->assertNull(CbiApplication::where('applicant_number', 'CBI-blank')->first()->client_id);
+
+        // And the link is to the right person, not merely to some client.
+        foreach ($linked as $number => $clientId) {
+            $this->assertSame($number, Client::find($clientId)->data['cbi']['applicantNumber']);
+        }
+    }
+
+    public function test_a_second_run_finishes_what_an_interrupted_one_started(): void
+    {
+        $staff = $this->staff();
+        for ($i = 1; $i <= 5; $i++) {
+            $this->application('GALAXY', 'Person '.$i, 'CBI-'.$i);
+        }
+
+        // Stand in for a run killed part way: two applications already linked.
+        $first = new ClientHubImporter($staff);
+        $first->registerCompanies();
+        $first->importClients(batchSize: 2);
+        CbiApplication::orderByDesc('id')->limit(3)->get()
+            ->each(function ($a) {
+                $a->client->forceDelete();
+                $a->forceFill(['client_id' => null])->saveQuietly();
+            });
+        $this->assertSame(2, Client::count());
+
+        (new ClientHubImporter($staff))->importClients();
+
+        $this->assertSame(5, Client::count());
+        $this->assertSame(0, CbiApplication::whereNull('client_id')->count());
+        $this->assertSame(5, Client::distinct('uid')->count('uid'));
+    }
+
     public function test_a_dry_run_writes_nothing(): void
     {
         $staff = $this->staff();
