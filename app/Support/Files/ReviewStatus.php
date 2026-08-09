@@ -26,10 +26,34 @@ final class ReviewStatus
 
     public const REJECTED = 'rejected';
 
-    /** Every state, in the order the process runs. */
-    public const ALL = [self::PENDING, self::UNDER_REVIEW, self::APPROVED, self::REJECTED];
+    /**
+     * Set when an approval request goes out, and when one comes back asking
+     * for changes. Both are states the document genuinely occupies and neither
+     * fitted the four it had: a file out for approval is not "under review" by
+     * the person who sent it, and one that came back with changes wanted is
+     * not "rejected" — it is expected to return.
+     */
+    public const AWAITING_APPROVAL = 'awaiting_approval';
 
-    /** Settled — the review is over, whichever way it went. */
+    public const CHANGES_REQUESTED = 'changes_requested';
+
+    /** Every state, in the order the process runs. */
+    public const ALL = [
+        self::PENDING,
+        self::UNDER_REVIEW,
+        self::AWAITING_APPROVAL,
+        self::CHANGES_REQUESTED,
+        self::APPROVED,
+        self::REJECTED,
+    ];
+
+    /**
+     * Settled by a person — the review is over, whichever way it went.
+     *
+     * Automatic moves stop at these. A comment arriving on a document somebody
+     * has already approved is a remark about finished work, not a reason to
+     * quietly reopen it and lose their decision.
+     */
     public const FINAL = [self::APPROVED, self::REJECTED];
 
     /**
@@ -56,6 +80,8 @@ final class ReviewStatus
         return match ($status) {
             self::PENDING => 'Pending review',
             self::UNDER_REVIEW => 'Under review',
+            self::AWAITING_APPROVAL => 'Awaiting approval',
+            self::CHANGES_REQUESTED => 'Changes requested',
             self::APPROVED => 'Approved',
             self::REJECTED => 'Rejected',
             default => null,
@@ -70,8 +96,8 @@ final class ReviewStatus
     {
         return match ($status) {
             self::APPROVED => 'success',
-            self::REJECTED => 'danger',
-            self::UNDER_REVIEW, self::PENDING => 'pending',
+            self::REJECTED, self::CHANGES_REQUESTED => 'danger',
+            self::UNDER_REVIEW, self::PENDING, self::AWAITING_APPROVAL => 'pending',
             default => 'neutral',
         };
     }

@@ -1826,7 +1826,8 @@
     function reviewTone(status) {
       if (status === 'approved') return 'success';
       if (status === 'rejected') return 'danger';
-      if (status === 'pending_review' || status === 'under_review') return 'pending';
+      if (status === 'changes_requested') return 'danger';
+      if (status === 'pending_review' || status === 'under_review' || status === 'awaiting_approval') return 'pending';
 
       return 'neutral';
     }
@@ -2509,6 +2510,8 @@
     var REVIEW_STATES = [
       { id: 'pending_review', label: 'Pending review', icon: 'Clock' },
       { id: 'under_review', label: 'Under review', icon: 'Eye' },
+      { id: 'awaiting_approval', label: 'Awaiting approval', icon: 'PaperPlaneTilt' },
+      { id: 'changes_requested', label: 'Changes requested', icon: 'ArrowUUpLeft' },
       { id: 'approved', label: 'Approved', icon: 'CheckCircle' },
       { id: 'rejected', label: 'Rejected', icon: 'XCircle' },
     ];

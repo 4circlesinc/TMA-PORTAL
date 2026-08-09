@@ -93,12 +93,21 @@ if (await picker.count()) {
   const options = await page.evaluate(() =>
     Array.from(document.querySelectorAll('.tma-portal-menu button, [class*="menu"] button'))
       .map((b) => b.textContent.trim())
-      .filter((t) => /review|approved|rejected/i.test(t)))
+      // Matched against the states themselves, not a guess at their wording —
+      // "Awaiting approval" contains neither "review" nor "approved", which is
+      // how an earlier version of this filter hid two of the six.
+      .filter((t) => /pending review|under review|awaiting approval|changes requested|approved|rejected/i.test(t)))
 
-  check(options.length >= 4, `all four statuses listed (${options.join(' | ')})`)
+  check(options.length >= 6, `every status listed (${options.join(' | ')})`)
   check(options.some((t) => t.includes('✓')), 'the current status is marked')
 
-  await page.locator('text=Under review').first().click()
+  // Inside the menu: "Under review" is also the badge just above it, and an
+  // unscoped locator picks the badge and then times out clicking through it.
+  await page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll('.tma-portal-menu button, [class*="menu"] button'))
+      .find((b) => b.textContent.trim().startsWith('Under review'))
+    if (btn) btn.click()
+  })
   await page.waitForTimeout(2500)
 }
 

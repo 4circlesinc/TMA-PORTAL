@@ -63,6 +63,14 @@ class AppServiceProvider extends ServiceProvider
          * live; without these the Versions and Approvals tabs beside them sat
          * on whatever was true when the file was opened.
          */
+        /*
+         * Comments and approval requests keep a client document's review
+         * status current, so nobody has to maintain it by hand — see
+         * App\Support\Files\ReviewAuto for what it refuses to overwrite.
+         */
+        \App\Models\FileComment::observe(\App\Observers\ReviewActivityObserver::class);
+        \App\Models\FileWorkflow::observe(\App\Observers\ReviewActivityObserver::class);
+
         \App\Models\FileVersion::observe(\App\Observers\FileDetailObserver::class);
         \App\Models\FileWorkflow::observe(\App\Observers\FileDetailObserver::class);
         \App\Models\FileWorkflowStep::observe(\App\Observers\FileDetailObserver::class);

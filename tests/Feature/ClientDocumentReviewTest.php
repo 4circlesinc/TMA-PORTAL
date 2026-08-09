@@ -236,6 +236,110 @@ class ClientDocumentReviewTest extends TestCase
             ->assertJsonPath('files.0.review.status', ReviewStatus::PENDING);
     }
 
+    /* ── automatic transitions ────────────────────────────────────── */
+
+    public function test_a_comment_starts_the_review(): void
+    {
+        $staff = $this->staff();
+        $client = $this->client($staff);
+        $folder = $this->clientFolder($client, $staff);
+        $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        $this->assertSame(ReviewStatus::PENDING, $file->fresh()->review_status);
+
+        $c = \App\Models\FileComment::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'file_id' => $file->id,
+            'author_id' => $staff->id,
+            'body' => 'Checking the dates on page 2.',
+        ]);
+        $c->forceFill(['root_id' => $c->id])->save();
+
+        $this->assertSame(
+            ReviewStatus::UNDER_REVIEW,
+            $file->fresh()->review_status,
+            'Somebody discussing the document means somebody is looking at it.'
+        );
+    }
+
+    public function test_an_approval_request_and_its_outcome_move_the_document(): void
+    {
+        $staff = $this->staff();
+        $client = $this->client($staff);
+        $folder = $this->clientFolder($client, $staff);
+        $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        $wf = \App\Models\FileWorkflow::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'file_id' => $file->id,
+            'type' => 'approval',
+            'status' => \App\Support\Files\Workflow\Status::AWAITING_APPROVAL,
+            'created_by' => $staff->id,
+            'require_all' => true,
+            'ordered' => false,
+            'lock_file' => false,
+        ]);
+
+        $this->assertSame(ReviewStatus::AWAITING_APPROVAL, $file->fresh()->review_status);
+
+        $wf->forceFill(['status' => \App\Support\Files\Workflow\Status::CHANGES_REQUESTED])->save();
+        $this->assertSame(ReviewStatus::CHANGES_REQUESTED, $file->fresh()->review_status);
+
+        $wf->forceFill(['status' => \App\Support\Files\Workflow\Status::APPROVED])->save();
+        $this->assertSame(ReviewStatus::APPROVED, $file->fresh()->review_status);
+    }
+
+    public function test_activity_never_overrules_a_person(): void
+    {
+        $staff = $this->staff();
+        $client = $this->client($staff);
+        $folder = $this->clientFolder($client, $staff);
+        $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        // A reviewer settles it by hand.
+        $this->actingAs($staff)
+            ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::APPROVED])
+            ->assertOk();
+
+        $c = \App\Models\FileComment::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'file_id' => $file->id,
+            'author_id' => $staff->id,
+            'body' => 'Nice one.',
+        ]);
+        $c->forceFill(['root_id' => $c->id])->save();
+
+        $this->assertSame(
+            ReviewStatus::APPROVED,
+            $file->fresh()->review_status,
+            'A remark about finished work is not a reason to reopen it.'
+        );
+    }
+
+    public function test_an_ordinary_library_file_is_untouched_by_comments(): void
+    {
+        $staff = $this->staff();
+
+        $plain = Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'Marketing',
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+        ]);
+
+        $file = $this->file(['folder_id' => $plain->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        $c = \App\Models\FileComment::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'file_id' => $file->id,
+            'author_id' => $staff->id,
+            'body' => 'Looks good.',
+        ]);
+        $c->forceFill(['root_id' => $c->id])->save();
+
+        $this->assertNull($file->fresh()->review_status, 'Nothing to advance — it was never in a review.');
+    }
+
     /* ── assignment rules ─────────────────────────────────────────── */
 
     public function test_the_creator_is_assigned_and_administrators_are_not_offered(): void
