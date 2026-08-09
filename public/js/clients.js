@@ -2316,22 +2316,15 @@
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
       (opts.elevateToolbar ? '' : renderCompanyProfileToolbar(company)) +
       '<div class="tma-dash__clients-cards">' +
-      // Details and Access share a row, but only when both have something to
-      // say — one half-width card beside an empty gap reads as a load failure.
-      companyPair(
-        ['Details', renderCompanyDetails(company)],
-        ['Access', renderCompanyMembersBlock(state, company)]
-      ) +
+      // The top row is always two columns: Details can always answer for
+      // itself, and Access always has at least its form.
+      companyCard('Details', renderCompanyDetails(company), { half: true }) +
+      companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
       companyCard('Clients referred', renderCompanyReferredBlock(company), { count: company.referredCount || 0 }) +
       companyCard('People', renderCompanyPeople(company), { count: (company.people || []).length }) +
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {}) +
       '</div></div></div>'
     );
-  }
-
-  function companyPair(a, b) {
-    var both = !!a[1] && !!b[1];
-    return companyCard(a[0], a[1], { half: both }) + companyCard(b[0], b[1], { half: both });
   }
 
   /* One section. `half` pairs with its neighbour on a wide screen; the rest
@@ -2393,25 +2386,35 @@
         : '');
   }
 
-  /* The account details that belong to the organization rather than to any one
-     contact. Only rows that are filled in are shown — an empty grid of labels
-     tells the reader nothing. */
+  /*
+   * The company at a glance, always with something in it.
+   *
+   * It used to drop every blank row and return nothing at all when a company
+   * had no type, industry or phone — which is every company the CBI import
+   * created. An empty Details card meant the top row never paired up, so the
+   * page had no two-column row anywhere. The first four rows are always
+   * answerable from what we hold; the rest still only appear when filled.
+   */
   function renderCompanyDetails(company) {
+    var website = company.website
+      ? { icon: ICONS.Globe, label: 'Website', value: company.website, href: company.website, linkLabel: company.website }
+      : null;
+
     var rows = [
-      { icon: ICONS.Buildings, label: 'Type', value: company.companyTypeLabel },
+      { icon: ICONS.Buildings, label: 'Type', value: company.companyTypeLabel || 'Referral partner' },
+      { icon: ICONS.ShareNetwork, label: 'Clients referred', value: (company.referredCount || 0).toLocaleString() },
+      { icon: ICONS.User, label: 'Contacts', value: String((company.people || []).length) },
+      { icon: ICONS.UserCircle, label: 'Portal access', value: String(company.memberCount || 0) },
+      website,
       { icon: ICONS.Briefcase, label: 'Industry', value: company.industry },
       { icon: ICONS.EnvelopeSimple, label: 'Email', value: company.email },
       { icon: ICONS.Phone, label: 'Phone', value: company.phone },
       { icon: ICONS.User, label: 'Registration', value: company.registrationNumber },
-    ].filter(function (r) { return !!r.value; });
-
-    if (!rows.length) return '';
+    ].filter(function (r) { return r && !!r.value; });
 
     return '<div class="tma-dash__clients-profile-body">' +
       '<ul class="tma-dash__clients-list tma-dash__clients-list--profile" role="list">' +
-      rows.map(function (r) {
-        return renderListItem({ icon: r.icon, label: r.label, value: r.value });
-      }).join('') +
+      rows.map(function (r) { return renderListItem(r); }).join('') +
       '</ul></div>';
   }
 
