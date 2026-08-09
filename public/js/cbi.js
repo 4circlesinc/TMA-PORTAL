@@ -709,7 +709,13 @@
       fact('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
       fact('Investment', a.investmentOption) +
       fact('Referred by', a.referredBy) +
-      fact('Assigned', a.assignedTo);
+      fact('Assigned', a.assignedTo) +
+      // The applicant's record in the Client hub. The case is the record of
+      // truth for the file; the client is the record of truth for the person.
+      fact('Client record', a.clientUid
+        ? '<a class="tma-dash__clients-list-link" href="' + esc((window.__TMA_SITE_ROOT || '') + '/clients/' + encodeURIComponent(a.clientUid)) +
+          '">' + esc(a.clientName || 'Open in Client hub') + '</a>'
+        : null, true);
     var stripHtml = strip ? '<div class="cbi-strip">' + strip + '</div>' : '';
 
     var tabs = [{ key: 'overview', label: 'Overview' }];

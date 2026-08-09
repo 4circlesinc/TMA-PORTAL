@@ -2231,6 +2231,21 @@
       label: 'Referred by',
       value: clientReferralLabel(c.id) || 'Not recorded',
     }));
+
+    /* The other half of the link the import made: this person's citizenship
+       file. Hidden from anyone who cannot open CBI — a link that 403s tells
+       the reader less than no link at all. */
+    var cbi = (PROFILES[c.id] || {}).cbi;
+    var access = window.TMAPortalAccess;
+    if (cbi && cbi.applicationUuid && (!access || !access.can || access.can('cbi.view'))) {
+      listItems.push(renderListItem({
+        icon: ICONS.Briefcase,
+        label: 'CBI application',
+        value: cbi.applicantNumber || 'Open the case',
+        href: (window.__TMA_SITE_ROOT || '') + '/cbi#/app/' + encodeURIComponent(cbi.applicationUuid),
+        linkLabel: 'Open the CBI application for ' + c.name,
+      }));
+    }
     if (c.work.jobTitle) listItems.push(renderListItem({ icon: ICONS.Briefcase, label: 'Job title', value: c.work.jobTitle }));
     if (c.work.department) listItems.push(renderListItem({ icon: ICONS.UserCircle, label: 'Department', value: c.work.department }));
     if (c.work.company) listItems.push(renderListItem({ icon: ICONS.Buildings, label: 'Company', value: c.work.company }));

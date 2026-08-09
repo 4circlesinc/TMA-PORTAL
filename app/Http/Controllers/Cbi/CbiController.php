@@ -171,7 +171,7 @@ class CbiController extends Controller
     {
         $this->gate($request);
 
-        $application = CbiApplication::query()->where('uuid', $uuid)->firstOrFail();
+        $application = CbiApplication::query()->with('client')->where('uuid', $uuid)->firstOrFail();
 
         $sources = $application->sources()->get();
 
@@ -271,6 +271,11 @@ class CbiController extends Controller
             'actionNeeded' => $a->action_needed,
             'needsReview' => $a->needs_review,
             'referredBy' => $a->referred_by,
+            // The applicant's record in the Client hub, once the caseload has
+            // been imported. Two keys, because the page needs a name to show
+            // and a uid to link to.
+            'clientUid' => $a->client?->uid,
+            'clientName' => $a->client?->name,
             'promoter' => $a->promoter,
             'serviceProvider' => $a->service_provider,
             'mainContact' => $a->main_contact,
