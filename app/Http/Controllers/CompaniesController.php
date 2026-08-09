@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
 use App\Models\Company;
 use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
@@ -22,6 +23,7 @@ class CompaniesController extends Controller
         $this->authorizeStaff($request);
 
         $companies = Company::with(['clients' => fn ($q) => $q->orderBy('name')])
+            ->withCount('referredClients')
             ->orderBy('name')
             ->get()
             ->map->toRecord()
@@ -128,6 +130,12 @@ class CompaniesController extends Controller
         AccessSync::companyArchived($company, $request->user());
         // People stay; they just become unattached.
         $company->clients()->update(['company_id' => null]);
+        // Same for anyone it referred. The referral goes back to "not
+        // recorded" rather than lingering as a company nothing can name.
+        $company->referredClients()->update([
+            'referred_by_company_id' => null,
+            'referral_type' => Client::REFERRAL_NONE,
+        ]);
         $company->delete();
 
         return response()->json(['status' => 'ok']);

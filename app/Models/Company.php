@@ -56,6 +56,15 @@ class Company extends Model
         return $this->hasMany(Client::class);
     }
 
+    /**
+     * Clients this company sent to the firm. Distinct from `clients()`, which
+     * is the people who belong to it — a referral confers no membership.
+     */
+    public function referredClients(): HasMany
+    {
+        return $this->hasMany(Client::class, 'referred_by_company_id');
+    }
+
     /** Everyone at the company who has (or is being given) portal access. */
     public function members(): HasMany
     {
@@ -105,6 +114,9 @@ class Company extends Model
             'notes' => $this->notes,
             'memberCount' => $this->members()->current()->count(),
             'peopleCount' => $people->count(),
+            // withCount() when the list loaded it, a query when a single
+            // company was fetched on its own.
+            'referredCount' => $this->referred_clients_count ?? $this->referredClients()->count(),
             'people' => $people->map(fn (Client $c) => [
                 'id' => $c->uid,
                 'name' => $c->name,

@@ -15,10 +15,30 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * denormalised copies kept for listing and search. `toRecord()` is the single
  * shape the clients UI consumes.
  */
-#[Fillable(['uid', 'user_id', 'folder_id', 'company_id', 'name', 'company', 'email', 'phone', 'initial', 'initial_color', 'data', 'created_by'])]
+#[Fillable([
+    'uid', 'user_id', 'folder_id', 'company_id', 'name', 'client_type', 'company',
+    'referral_type', 'referred_by_company_id', 'email', 'phone', 'initial',
+    'initial_color', 'data', 'created_by',
+])]
 class Client extends Model
 {
     use SoftDeletes;
+
+    /** What the record is: one person, or a company applying in its own name. */
+    public const TYPES = [
+        'private' => 'Private',
+        'company' => 'Company',
+    ];
+
+    /**
+     * Who sent the client to the firm. `private` is an answer — they came on
+     * their own — where `none` means nobody has recorded one yet.
+     */
+    public const REFERRAL_COMPANY = 'company';
+
+    public const REFERRAL_PRIVATE = 'private';
+
+    public const REFERRAL_NONE = 'none';
 
     protected function casts(): array
     {
@@ -51,9 +71,40 @@ class Client extends Model
         return $this->belongsTo(Company::class, 'company_id');
     }
 
+    /**
+     * The company that referred this client. Not membership: the referrer gets
+     * no reach over the record, which is why this is its own key rather than
+     * a second use of `company_id`.
+     */
+    public function referredByCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'referred_by_company_id');
+    }
+
     public function assignments(): HasMany
     {
         return $this->hasMany(ClientAssignment::class);
+    }
+
+    public function typeLabel(): string
+    {
+        return self::TYPES[$this->client_type] ?? self::TYPES['private'];
+    }
+
+    /** What the directory's "Referred by" column shows: a name, or an answer. */
+    public function referralLabel(?Company $referrer = null): ?string
+    {
+        if ($this->referral_type === self::REFERRAL_PRIVATE) {
+            return 'Private';
+        }
+
+        if ($this->referral_type === self::REFERRAL_COMPANY) {
+            $referrer ??= $this->referredByCompany;
+
+            return $referrer?->name;
+        }
+
+        return null;
     }
 
     /**
@@ -68,6 +119,12 @@ class Client extends Model
             ? $this->companyRecord
             : $this->companyRecord()->first();
 
+        $referrer = $this->referral_type === self::REFERRAL_COMPANY
+            ? ($this->relationLoaded('referredByCompany')
+                ? $this->referredByCompany
+                : $this->referredByCompany()->first())
+            : null;
+
         return [
             'id' => $this->uid,
             'name' => $this->name,
@@ -79,6 +136,11 @@ class Client extends Model
             'userId' => $this->user_id,
             'companyId' => $company?->uid,
             'companyName' => $company?->name ?? $this->company,
+            'clientType' => $this->client_type ?? 'private',
+            'clientTypeLabel' => $this->typeLabel(),
+            'referralType' => $this->referral_type ?? self::REFERRAL_NONE,
+            'referredByCompanyId' => $referrer?->uid,
+            'referredByLabel' => $this->referralLabel($referrer),
         ];
     }
 }

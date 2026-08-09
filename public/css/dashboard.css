@@ -16114,15 +16114,29 @@
   gap: var(--space-16);
 }
 
+/* Same host treatment as the Users table: fixed and click-through, so the
+   filter popovers can live outside the view without covering the page. */
+.tma-dash__clients-popover-host {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1200;
+}
+
+.tma-dash__clients-popover-host [data-open] {
+  pointer-events: auto;
+}
+
 .tma-dash__ctable--clients .tma-dash__ctr--head,
 .tma-dash__ctable--clients .tma-dash__ctr--body {
   display: grid;
-  grid-template-columns: 40px minmax(160px, 1.3fr) minmax(140px, 1fr) minmax(160px, 1.1fr);
+  grid-template-columns: 40px minmax(160px, 1.3fr) 96px minmax(140px, 1fr) minmax(160px, 1.1fr);
   align-items: center;
 }
 
 .tma-dash__ctable--clients .tma-dash__cc--user,
-.tma-dash__ctable--clients .tma-dash__cc--company,
+.tma-dash__ctable--clients .tma-dash__cc--type,
+.tma-dash__ctable--clients .tma-dash__cc--referral,
 .tma-dash__ctable--clients .tma-dash__cc--contact {
   flex: unset;
   width: auto;
@@ -19996,7 +20010,7 @@
 
   .tma-dash__ctable--clients .tma-dash__ctr--head,
   .tma-dash__ctable--clients .tma-dash__ctr--body {
-    grid-template-columns: 40px minmax(120px, 1fr) minmax(100px, 0.9fr) minmax(100px, 1fr);
+    grid-template-columns: 40px minmax(120px, 1fr) 80px minmax(100px, 0.9fr) minmax(100px, 1fr);
   }
 
   .tma-dash__clients-form-row--dates {

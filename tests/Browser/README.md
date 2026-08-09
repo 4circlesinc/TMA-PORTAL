@@ -25,6 +25,33 @@ field placement and drawing, and computed CSS only exist in a browser.
   mock: create a client through the form, confirm it survives a reload, then
   bulk-delete it. Reads the directory back through the API so the check doesn't
   depend on how the list renders. Needs a staff account.
+- **`client-referrals.mjs`** — client type and Referred by. `ClientReferralTest`
+  covers the API; what only a browser can check is the reading, because the
+  three referral answers differ only in what the table prints — a company's
+  name, "Private", and an em dash for one nobody has recorded. It creates the
+  four cases from the spec, then drives the filter popover: any company, one
+  named company, Private, No referral, and client type, plus the chip and the
+  Reset. A company that has referred nobody must not be offered as a filter.
+
+  Two things it was written around. The clients table is scoped in every
+  selector: all the portal's pages live in one SPA shell, so a bare
+  `.tma-dash__ctr--body` also collects hidden views' rows. And it parks the
+  pointer on the right of the page before touching the toolbar — the desktop
+  sidebar can be set to Hover Overlay, and it expands over exactly the strip
+  where the Filter button sits.
+
+  Setup is the standard throwaway server plus three companies, one of which
+  deliberately refers nobody:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+    \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+    foreach (['Galaxy', 'Blue Media', 'Nobody Ltd'] as \$n) {
+      App\Models\Company::create(['uid' => Str::slug(\$n), 'name' => \$n, 'created_by' => \$u->id]);
+    }
+  "
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/client-referrals.mjs
+  ```
 - **`feed.mjs`** — the Feed module. PHPUnit covers the API
   (`tests/Feature/FeedTest.php`); what only a browser can check is §22 — that
   posting, commenting, reacting, voting, bookmarking and pinning all *patch*

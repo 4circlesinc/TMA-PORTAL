@@ -32,7 +32,7 @@ class ClientsController extends Controller
         $this->authorizeStaff($request);
 
         $clients = ClientScope::query($request->user())
-            ->with(['folder', 'companyRecord'])
+            ->with(['folder', 'companyRecord', 'referredByCompany'])
             ->orderBy('name')
             ->get()
             ->map->toRecord()
@@ -97,7 +97,7 @@ class ClientsController extends Controller
             'action_url' => '/clients?client='.$client->uid,
         ]);
 
-        return response()->json(['client' => $client->fresh(['folder', 'companyRecord'])->toRecord()]);
+        return response()->json(['client' => $client->fresh(['folder', 'companyRecord', 'referredByCompany'])->toRecord()]);
     }
 
     public function show(Request $request, string $uid): JsonResponse
@@ -105,7 +105,7 @@ class ClientsController extends Controller
         $this->authorizeStaff($request);
 
         $client = ClientScope::query($request->user())
-            ->with(['folder', 'companyRecord'])
+            ->with(['folder', 'companyRecord', 'referredByCompany'])
             ->where('uid', $uid)
             ->firstOrFail();
 
@@ -135,7 +135,7 @@ class ClientsController extends Controller
             'client' => $client,
         ]);
 
-        return response()->json(['client' => $client->fresh(['folder', 'companyRecord'])->toRecord()]);
+        return response()->json(['client' => $client->fresh(['folder', 'companyRecord', 'referredByCompany'])->toRecord()]);
     }
 
     public function destroy(Request $request, string $uid): JsonResponse
@@ -204,6 +204,9 @@ class ClientsController extends Controller
             'initial' => ['nullable', 'string', 'max:4'],
             'initialColor' => ['nullable', 'string', 'max:24'],
             'companyId' => ['nullable', 'string', 'max:96'],
+            'clientType' => ['nullable', 'in:private,company'],
+            'referralType' => ['nullable', 'in:company,private,none'],
+            'referredByCompanyId' => ['nullable', 'string', 'max:96'],
             'profile' => ['required', 'array'],
             'profile.phones' => ['nullable', 'array'],
             'profile.emails' => ['nullable', 'array'],
@@ -241,11 +244,16 @@ class ClientsController extends Controller
             ]);
         }
 
+        $referral = $this->resolveReferral($data);
+
         return [
             'uid' => $uid,
             'name' => $this->deriveName($data, $profile),
+            'client_type' => $data['clientType'] ?? 'private',
             'company_id' => $company?->id,
             'company' => $company?->name ?? ($profile['work']['company'] ?? null),
+            'referral_type' => $referral['type'],
+            'referred_by_company_id' => $referral['company_id'],
             'email' => $this->firstValue($profile['emails'] ?? []),
             'phone' => $this->firstValue($profile['phones'] ?? []),
             'initial' => $data['initial'] ?? null,
@@ -253,6 +261,31 @@ class ClientsController extends Controller
             'data' => $profile,
             'created_by' => $creator?->id,
         ];
+    }
+
+    /**
+     * Settle the referral into a pair the table can trust: the type is only
+     * `company` when a company was actually found, so a referrer that has since
+     * been deleted degrades to "not recorded" rather than leaving a row that
+     * claims a referral it cannot name.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{type: string, company_id: int|null}
+     */
+    private function resolveReferral(array $data): array
+    {
+        $type = $data['referralType'] ?? Client::REFERRAL_NONE;
+
+        if ($type === Client::REFERRAL_PRIVATE) {
+            return ['type' => Client::REFERRAL_PRIVATE, 'company_id' => null];
+        }
+
+        $uid = $data['referredByCompanyId'] ?? null;
+        $referrer = $uid ? Company::where('uid', $uid)->first() : null;
+
+        return $referrer
+            ? ['type' => Client::REFERRAL_COMPANY, 'company_id' => $referrer->id]
+            : ['type' => Client::REFERRAL_NONE, 'company_id' => null];
     }
 
     private function resolveCompany(?string $companyUid, ?string $companyName): ?Company

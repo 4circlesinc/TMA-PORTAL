@@ -37,6 +37,7 @@
     ArrowsDownUp: 'images/icons/tma/ArrowsDownUp.svg',
     Search: 'images/icons/tma/Search-16.svg',
     Line: 'images/icons/tma/Line-16.svg',
+    Close12: 'images/icons/tma/Close-12.svg',
     Briefcase: ICON + 'Briefcase.svg',
     Buildings: ICON + 'Buildings.svg',
     Globe: ICON + 'Globe.svg',
@@ -156,6 +157,20 @@
     { value: 'home', label: 'Home' },
     { value: 'other', label: 'Other' },
   ];
+
+  /* What the record is, mirroring Client::TYPES. An applicant is a private
+     individual unless the firm says otherwise. */
+  var CLIENT_TYPES = [
+    { value: 'private', label: 'Private' },
+    { value: 'company', label: 'Company' },
+  ];
+
+  function clientTypeLabel(value) {
+    for (var i = 0; i < CLIENT_TYPES.length; i++) {
+      if (CLIENT_TYPES[i].value === value) return CLIENT_TYPES[i].label;
+    }
+    return 'Private';
+  }
 
   var DIRECTORY = [];
   var PROFILES = {};
@@ -350,6 +365,10 @@
       userId: rec.userId || null,
       companyId: rec.companyId || null,
       companyName: rec.companyName || null,
+      clientType: rec.clientType || 'private',
+      referralType: rec.referralType || 'none',
+      referredByCompanyId: rec.referredByCompanyId || null,
+      referredByLabel: rec.referredByLabel || null,
     };
   }
 
@@ -370,6 +389,27 @@
     if (meta.companyName) return meta.companyName;
     var profile = PROFILES[id] || {};
     return (profile.work && profile.work.company) || '';
+  }
+
+  function clientTypeOf(id) {
+    return (CLIENT_META[id] && CLIENT_META[id].clientType) || 'private';
+  }
+
+  function clientReferralType(id) {
+    return (CLIENT_META[id] && CLIENT_META[id].referralType) || 'none';
+  }
+
+  function clientReferrerId(id) {
+    return (CLIENT_META[id] && CLIENT_META[id].referredByCompanyId) || '';
+  }
+
+  /* The referrer's name, "Private", or nothing at all — the three answers the
+     Referred by column has to tell apart. */
+  function clientReferralLabel(id) {
+    var meta = CLIENT_META[id] || {};
+    if (meta.referredByLabel) return meta.referredByLabel;
+    if (meta.referralType === 'private') return 'Private';
+    return '';
   }
 
   function isClientsAdmin() {
@@ -421,6 +461,11 @@
     var existing = directoryItemFor(id);
     var profile = cloneDraft(draft);
     delete profile.companyId;
+    // Classification is a column, not part of the contact blob — same reason
+    // companyId is hoisted out: the table and the filters read it directly.
+    delete profile.clientType;
+    delete profile.referralType;
+    delete profile.referredByCompanyId;
     var company = companyFor(draft.companyId);
     if (company) {
       profile.work = profile.work || {};
@@ -432,6 +477,9 @@
       initial: name.charAt(0).toUpperCase(),
       initialColor: (existing && existing.initialColor) || 'blue',
       companyId: draft.companyId || null,
+      clientType: draft.clientType || 'private',
+      referralType: draft.referralType || 'none',
+      referredByCompanyId: draft.referredByCompanyId || null,
       profile: profile,
     };
   }
@@ -474,6 +522,9 @@
       photo: '',
       phones: [emptyPhone('mobile'), emptyPhone('office')],
       emails: [emptyEmail()],
+      clientType: 'private',
+      referralType: opts.referralType || 'none',
+      referredByCompanyId: opts.referredByCompanyId || '',
       companyId: companyId,
       work: {
         jobTitle: '',
@@ -570,6 +621,9 @@
       photo: contact.photo || '',
       phones: contact.phones.length ? contact.phones : [emptyPhone()],
       emails: contact.emails.length ? contact.emails : [emptyEmail()],
+      clientType: clientTypeOf(contact.id),
+      referralType: clientReferralType(contact.id),
+      referredByCompanyId: clientReferrerId(contact.id),
       companyId: companyId,
       work: contact.work || { jobTitle: '', department: '', company: '' },
       addresses: contact.addresses.length ? contact.addresses : [emptyAddress()],
@@ -741,18 +795,48 @@
       profile.nickname,
       profile.work && profile.work.company,
       profile.work && profile.work.jobTitle,
+      clientReferralLabel(item.id),
     ];
     (profile.emails || []).forEach(function (email) { if (email.value) parts.push(email.value); });
     (profile.phones || []).forEach(function (phone) { if (phone.value) parts.push(phone.value); });
     return parts.filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
   }
 
-  function filteredDirectoryGroups(search) {
+  function emptyClientFilters() {
+    return { referral: '', clientType: '' };
+  }
+
+  function anyClientFilter(filters) {
+    return !!(filters && (filters.referral || filters.clientType));
+  }
+
+  /*
+   * `referral` carries all four questions the hub is asked: any company
+   * ('company'), one named company ('company:<uid>'), private individuals
+   * ('private'), and nobody recorded ('none').
+   */
+  function clientMatchesFilters(item, filters) {
+    if (!anyClientFilter(filters)) return true;
+
+    if (filters.clientType && clientTypeOf(item.id) !== filters.clientType) return false;
+
+    var want = filters.referral;
+    if (!want) return true;
+
+    var have = clientReferralType(item.id);
+    if (want === 'company') return have === 'company';
+    if (want.indexOf('company:') === 0) {
+      return have === 'company' && clientReferrerId(item.id) === want.slice('company:'.length);
+    }
+    return have === want;
+  }
+
+  function filteredDirectoryGroups(search, filters) {
     var q = String(search || '').trim();
-    if (!q) return DIRECTORY;
+    if (!q && !anyClientFilter(filters)) return DIRECTORY;
     return DIRECTORY.map(function (group) {
       var items = group.items.filter(function (item) {
-        return contactMatchesSearch(item, q);
+        return clientMatchesFilters(item, filters) && contactMatchesSearch(item, q);
       });
       if (!items.length) return null;
       return { letter: group.letter, items: items };
@@ -761,9 +845,10 @@
 
   function filteredDirectoryItems(state) {
     var search = typeof state === 'string' ? state : (state && state.search);
+    var filters = state && typeof state === 'object' ? state.filters : null;
     var removedIds = state && typeof state === 'object' ? state.removedIds : null;
     var items = [];
-    filteredDirectoryGroups(search).forEach(function (group) {
+    filteredDirectoryGroups(search, filters).forEach(function (group) {
       group.items.forEach(function (item) {
         if (removedIds && removedIds[clientRowKey(item)]) return;
         items.push(item);
@@ -836,10 +921,14 @@
   }
 
   function clientTableColumns(item) {
+    // The referrer is only a link when a company is what referred them:
+    // "Private" names no record to open.
+    var referrerId = clientReferralType(item.id) === 'company' ? clientReferrerId(item.id) : '';
     return {
       name: item.name,
-      company: clientCompanyName(item.id) || '—',
-      companyId: clientCompanyId(item.id) || '',
+      type: clientTypeLabel(clientTypeOf(item.id)),
+      referral: clientReferralLabel(item.id) || '—',
+      referrerId: referrerId,
       contact: primaryContactValue(item.id),
     };
   }
@@ -946,11 +1035,14 @@
     var count = selectedClientCount(state);
     var bulkHidden = count === 0 ? ' hidden' : '';
     var selectionLabel = count === 1 ? '1 Selected' : count + ' Selected';
+    var filtered = anyClientFilter(state.filters);
 
     return (
       '<div class="tma-dash__toolbar' + (count > 0 ? ' tma-dash__toolbar--selected' : '') + '">' +
       '<div class="tma-dash__toolbar-actions">' +
-      '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter aria-pressed="false">' +
+      // aria-pressed carries the lit state on its own — see the tool-btn rule.
+      '<button type="button" class="tma-dash__tool-btn" aria-label="Filter" data-clients-filter' +
+      ' aria-pressed="' + (filtered ? 'true' : 'false') + '" aria-expanded="false">' +
       '<img src="' + ICONS.FunnelSimple + '" alt=""></button>' +
       '<button type="button" class="tma-dash__tool-btn" aria-label="Sort" data-clients-sort aria-pressed="false">' +
       '<img src="' + ICONS.ArrowsDownUp + '" alt=""></button>' +
@@ -975,6 +1067,78 @@
     toolbar.classList.toggle('tma-dash__toolbar--selected', count > 0);
     label.textContent = count === 1 ? '1 Selected' : count + ' Selected';
   }
+  function referralFilterLabel(value) {
+    if (value === 'company') return 'Any company';
+    if (value === 'private') return 'Private';
+    if (value === 'none') return 'No referral';
+    if (value.indexOf('company:') === 0) {
+      var company = companyFor(value.slice('company:'.length));
+      return company ? company.name : 'Company';
+    }
+    return '';
+  }
+
+  /* What is actually applied, as removable chips under the toolbar — the
+     Users-table filter bar recipe, same as the CBI list. */
+  function renderClientsFilterChips(state) {
+    var filters = state.filters || {};
+    var tags = [];
+    if (filters.referral) {
+      tags.push({ id: 'referral', label: 'Referred by: ' + referralFilterLabel(filters.referral) });
+    }
+    if (filters.clientType) {
+      tags.push({ id: 'clientType', label: 'Type: ' + clientTypeLabel(filters.clientType) });
+    }
+    if (!tags.length) return '';
+
+    var html = tags.map(function (tag) {
+      return '<div class="tma-dash__filter-tag" role="listitem" data-tag-id="' + esc(tag.id) + '">' +
+        '<img src="' + ICONS.FunnelSimple + '" width="16" height="16" alt="" aria-hidden="true">' +
+        '<span>' + esc(tag.label) + '</span>' +
+        '<button type="button" class="tma-dash__filter-tag-remove" aria-label="Remove ' + esc(tag.label) +
+        '" data-clients-remove-filter="' + esc(tag.id) + '">' +
+        '<img src="' + ICONS.Close12 + '" width="6" height="6" alt=""></button></div>';
+    }).join('');
+
+    return '<div class="tma-dash__filter-bar" role="list">' + html +
+      '<button type="button" class="tma-dash__filter-reset" data-clients-reset-filters>Reset</button></div>';
+  }
+
+  /*
+   * Only values the directory actually holds are offered. A company that has
+   * referred nobody is a filter that returns nothing, and with every referral
+   * partner registered up front the list would otherwise be mostly dead ends.
+   */
+  function referralFacets() {
+    var counts = { company: 0, private: 0, none: 0, byCompany: {} };
+    DIRECTORY.forEach(function (group) {
+      group.items.forEach(function (item) {
+        var type = clientReferralType(item.id);
+        if (type === 'company') {
+          counts.company += 1;
+          var cid = clientReferrerId(item.id);
+          if (cid) counts.byCompany[cid] = (counts.byCompany[cid] || 0) + 1;
+        } else if (type === 'private') {
+          counts.private += 1;
+        } else {
+          counts.none += 1;
+        }
+      });
+    });
+    return counts;
+  }
+
+  function clientTypeFacets() {
+    var counts = { private: 0, company: 0 };
+    DIRECTORY.forEach(function (group) {
+      group.items.forEach(function (item) {
+        var type = clientTypeOf(item.id);
+        counts[type] = (counts[type] || 0) + 1;
+      });
+    });
+    return counts;
+  }
+
   function renderSearchField(state) {
     var search = state.search || '';
     var cls = 'tma-dash__clients-search';
@@ -1034,10 +1198,10 @@
   function renderFullTableRow(item, index, checked) {
     var cols = clientTableColumns(item);
     var selected = checked ? ' tma-dash__ctr--selected' : '';
-    var companyCell = cols.companyId
+    var referralCell = cols.referrerId
       ? '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
-        esc(cols.companyId) + '">' + esc(cols.company) + '</button>'
-      : '<span class="tma-dash__cc-truncate">' + esc(cols.company) + '</span>';
+        esc(cols.referrerId) + '">' + esc(cols.referral) + '</button>'
+      : '<span class="tma-dash__cc-truncate">' + esc(cols.referral) + '</span>';
     return (
       '<div class="tma-dash__ctr tma-dash__ctr--body' + selected + '" data-clients-row="' + esc(item.id) +
       '" data-row-index="' + index + '" role="row">' +
@@ -1046,7 +1210,9 @@
       ' aria-label="Select ' + esc(cols.name) + '"></div>' +
       '<div class="tma-dash__cc tma-dash__cc--user">' + clientAvatarMarkup(item) +
       '<span class="tma-dash__cc-truncate">' + esc(cols.name) + '</span></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--company">' + companyCell + '</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' +
+      esc(cols.type) + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--referral">' + referralCell + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact"><span class="tma-dash__cc-truncate">' +
       esc(cols.contact) + '</span></div></div>'
     );
@@ -1055,7 +1221,11 @@
   function renderFullTableRows(state) {
     var page = getTablePageData(state);
     if (!page.items.length) {
-      return '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">No clients found</div></div>';
+      var empty = anyClientFilter(state.filters) && !state.search
+        ? 'No clients match these filters'
+        : 'No clients found';
+      return '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">' +
+        empty + '</div></div>';
     }
     var start = (state.page - 1) * (state.pageSize || 10);
     return page.items.map(function (item, i) {
@@ -1105,12 +1275,14 @@
     var page = getTablePageData(state);
     return (
       renderTableToolbar(state) +
+      renderClientsFilterChips(state) +
       '<div class="tma-dash__ctable tma-dash__ctable--clients" role="table" aria-label="Clients">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
       '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all"></div>' +
       '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">Client</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--company tma-dash__cc--head" role="columnheader">Company</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">Referred by</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
       '</div>' +
       '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
@@ -1421,6 +1593,42 @@
     );
   }
 
+  function renderClientTypeSelect(draft) {
+    var selected = draft.clientType || 'private';
+    return (
+      '<label class="tma-dash__clients-form-field">' +
+      '<span class="tma-dash__clients-form-label">Client type</span>' +
+      '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-client-type>' +
+      renderSelectOptions(CLIENT_TYPES, selected) +
+      '</select></label>'
+    );
+  }
+
+  /* One control for all three answers. Splitting "who referred them" across a
+     source picker and a company picker asks the reader to keep two fields
+     consistent; a single list cannot be left half-set. */
+  function renderReferralSelect(draft) {
+    var selected = draft.referralType === 'company' && draft.referredByCompanyId
+      ? 'company:' + draft.referredByCompanyId
+      : (draft.referralType || 'none');
+
+    var companyOpts = COMPANIES.map(function (c) {
+      var value = 'company:' + c.id;
+      return '<option value="' + esc(value) + '"' + (value === selected ? ' selected' : '') + '>' +
+        esc(c.name) + '</option>';
+    }).join('');
+
+    return (
+      '<label class="tma-dash__clients-form-field">' +
+      '<span class="tma-dash__clients-form-label">Referred by</span>' +
+      '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-referral>' +
+      '<option value="none"' + (selected === 'none' ? ' selected' : '') + '>No referral</option>' +
+      '<option value="private"' + (selected === 'private' ? ' selected' : '') + '>Private</option>' +
+      (companyOpts ? '<optgroup label="Companies">' + companyOpts + '</optgroup>' : '') +
+      '</select></label>'
+    );
+  }
+
   function renderFormSection(title, content) {
     return (
       '<section class="tma-dash__clients-form-section">' +
@@ -1560,6 +1768,13 @@
         '</div>'
       ) +
       renderFormSection(
+        'Classification',
+        '<div class="tma-dash__clients-form-grid">' +
+        renderClientTypeSelect(draft) +
+        renderReferralSelect(draft) +
+        '</div>'
+      ) +
+      renderFormSection(
         'Phone numbers',
         '<div class="tma-dash__clients-form-rows" data-clients-phones>' + renderPhoneRows(draft.phones) + '</div>' +
         renderAddGroupButton('phones', 'Add phone number')
@@ -1693,6 +1908,11 @@
   function renderCompanyDetails(company) {
     var rows = [
       { icon: ICONS.Buildings, label: 'Type', value: company.companyTypeLabel },
+      {
+        icon: ICONS.ShareNetwork,
+        label: 'Clients referred',
+        value: company.referredCount ? String(company.referredCount) : '',
+      },
       { icon: ICONS.Briefcase, label: 'Industry', value: company.industry },
       { icon: ICONS.EnvelopeSimple, label: 'Email', value: company.email },
       { icon: ICONS.Phone, label: 'Phone', value: company.phone },
@@ -1911,6 +2131,18 @@
 
   function buildProfileListItems(c) {
     var listItems = [];
+    listItems.push(renderListItem({
+      icon: ICONS.UserCircle,
+      label: 'Client type',
+      value: clientTypeLabel(clientTypeOf(c.id)),
+    }));
+    // Always shown, unlike the optional rows below: "no referral recorded" is
+    // information the firm acts on, not an empty field.
+    listItems.push(renderListItem({
+      icon: ICONS.ShareNetwork,
+      label: 'Referred by',
+      value: clientReferralLabel(c.id) || 'Not recorded',
+    }));
     if (c.work.jobTitle) listItems.push(renderListItem({ icon: ICONS.Briefcase, label: 'Job title', value: c.work.jobTitle }));
     if (c.work.department) listItems.push(renderListItem({ icon: ICONS.UserCircle, label: 'Department', value: c.work.department }));
     if (c.work.company) listItems.push(renderListItem({ icon: ICONS.Buildings, label: 'Company', value: c.work.company }));
@@ -2703,6 +2935,19 @@
     var photoPreview = root.querySelector('[data-clients-photo-preview]');
     draft.photo = photoBtn && photoBtn.dataset.hasImage && photoPreview && photoPreview.src ? photoPreview.src : '';
 
+    var typeSel = root.querySelector('[data-clients-client-type]');
+    draft.clientType = typeSel ? typeSel.value : 'private';
+
+    var referralSel = root.querySelector('[data-clients-referral]');
+    var referral = referralSel ? referralSel.value : 'none';
+    if (referral.indexOf('company:') === 0) {
+      draft.referralType = 'company';
+      draft.referredByCompanyId = referral.slice('company:'.length);
+    } else {
+      draft.referralType = referral === 'private' ? 'private' : 'none';
+      draft.referredByCompanyId = '';
+    }
+
     var companySel = root.querySelector('[data-clients-company-id]');
     var companyId = companySel ? companySel.value : '';
     var company = companyFor(companyId);
@@ -2878,6 +3123,247 @@
     });
   }
 
+  /* ── filter popover (documented tma-filter-popover) ──
+   *
+   * Built once into document.body and positioned on open, the way the Users
+   * table and the CBI list do it: a fields list that cascades into a values
+   * list. Living outside the view means a re-render never destroys it
+   * mid-interaction, and the toolbar stays two icons however many referral
+   * partners the firm registers.
+   */
+
+  var clientsPop = null;
+  var clientsFilterCtx = null;
+
+  function clientsPopShell(name) {
+    return '<div class="tma-filter-popover tma-filter-popover--fixed" data-clients-popover="' +
+      name + '" aria-hidden="true"></div>';
+  }
+
+  function clientsPopItem(attr, value, label, opts) {
+    opts = opts || {};
+    return '<button type="button" class="tma-filter-popover__item" ' + attr + '="' + esc(value) + '"' +
+      (opts.selected ? ' data-selected' : '') + '>' +
+      '<span class="tma-filter-popover__item-label">' + esc(label) + '</span>' +
+      (opts.meta ? '<span class="tma-filter-popover__item-meta">' + esc(opts.meta) + '</span>' : '') +
+      (opts.chevron
+        ? '<img src="' + ICONS.ArrowLineRight + '" alt="" class="tma-filter-popover__item-chevron" width="16" height="16" aria-hidden="true">'
+        : '') +
+      '</button>';
+  }
+
+  function ensureClientsPopovers() {
+    if (clientsPop && clientsPop.host && document.body.contains(clientsPop.host)) return clientsPop;
+    var host = document.createElement('div');
+    host.className = 'tma-dash__clients-popover-host';
+    host.innerHTML = clientsPopShell('fields') + clientsPopShell('values');
+    document.body.appendChild(host);
+    clientsPop = {
+      host: host,
+      fields: host.querySelector('[data-clients-popover="fields"]'),
+      values: host.querySelector('[data-clients-popover="values"]'),
+    };
+    wireClientsPopovers();
+    return clientsPop;
+  }
+
+  function currentClientFilters() {
+    return (clientsFilterCtx && clientsFilterCtx.state.filters) || emptyClientFilters();
+  }
+
+  function fillFilterFields() {
+    var filters = currentClientFilters();
+    clientsPop.fields.innerHTML =
+      clientsPopItem('data-clients-filter-field', 'referral', 'Referred by', {
+        chevron: true,
+        meta: filters.referral ? referralFilterLabel(filters.referral) : '',
+      }) +
+      clientsPopItem('data-clients-filter-field', 'clientType', 'Client type', {
+        chevron: true,
+        meta: filters.clientType ? clientTypeLabel(filters.clientType) : '',
+      });
+  }
+
+  function fillFilterValues(field) {
+    var filters = currentClientFilters();
+    var html;
+
+    if (field === 'referral') {
+      var facets = referralFacets();
+      var current = filters.referral || '';
+      html = clientsPopItem('data-clients-filter-value', '', 'All clients', { selected: !current }) +
+        clientsPopItem('data-clients-filter-value', 'company', 'Any company', {
+          selected: current === 'company',
+          meta: facets.company ? String(facets.company) : '',
+        }) +
+        clientsPopItem('data-clients-filter-value', 'private', 'Private', {
+          selected: current === 'private',
+          meta: facets.private ? String(facets.private) : '',
+        }) +
+        clientsPopItem('data-clients-filter-value', 'none', 'No referral', {
+          selected: current === 'none',
+          meta: facets.none ? String(facets.none) : '',
+        });
+
+      var referrers = COMPANIES.filter(function (c) { return facets.byCompany[c.id]; });
+      if (referrers.length) {
+        html += '<div class="tma-filter-popover__divider"></div>';
+        html += referrers.map(function (c) {
+          var value = 'company:' + c.id;
+          return clientsPopItem('data-clients-filter-value', value, c.name, {
+            selected: current === value,
+            meta: String(facets.byCompany[c.id]),
+          });
+        }).join('');
+      }
+    } else {
+      var typeFacets = clientTypeFacets();
+      var currentType = filters.clientType || '';
+      html = clientsPopItem('data-clients-filter-value', '', 'All types', { selected: !currentType }) +
+        CLIENT_TYPES.map(function (t) {
+          return clientsPopItem('data-clients-filter-value', t.value, t.label, {
+            selected: currentType === t.value,
+            meta: typeFacets[t.value] ? String(typeFacets[t.value]) : '',
+          });
+        }).join('');
+    }
+
+    clientsPop.values.innerHTML = html;
+    clientsPop.values.setAttribute('data-clients-filter-field-name', field);
+  }
+
+  function positionClientsPopover(el, rect) {
+    if (!rect) return;
+    var width = el.offsetWidth || 240;
+    var left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+    var top = rect.bottom + 4;
+    if (top + el.offsetHeight > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - el.offsetHeight - 4);
+    }
+    el.style.left = Math.round(left) + 'px';
+    el.style.top = Math.round(top) + 'px';
+  }
+
+  function closeClientsPopovers(keep) {
+    if (!clientsPop) return;
+    [clientsPop.fields, clientsPop.values].forEach(function (el) {
+      if (!el || (keep && keep.indexOf(el) !== -1)) return;
+      el.removeAttribute('data-open');
+      el.setAttribute('aria-hidden', 'true');
+    });
+    if (!keep && clientsFilterCtx && clientsFilterCtx.root) {
+      clientsFilterCtx.root.querySelectorAll('[data-clients-filter]').forEach(function (b) {
+        b.setAttribute('aria-expanded', 'false');
+      });
+    }
+  }
+
+  function openClientsPopover(el, anchor, keep) {
+    closeClientsPopovers(keep);
+    el.setAttribute('data-open', 'true');
+    el.setAttribute('aria-hidden', 'false');
+    el._anchorRect = anchor ? anchor.getBoundingClientRect() : null;
+    if (anchor && anchor.setAttribute) anchor.setAttribute('aria-expanded', 'true');
+    // offsetWidth is 0 until the element is displayed.
+    requestAnimationFrame(function () { positionClientsPopover(el, el._anchorRect); });
+  }
+
+  /* A popover that outlived its view must not drive a hidden page. */
+  function clientsFilterLive() {
+    var root = clientsFilterCtx && clientsFilterCtx.root;
+    if (!root || !root.isConnected) return false;
+    var view = root.closest ? root.closest('.tma-dash__view') : null;
+    return !view || !view.hidden;
+  }
+
+  /*
+   * A selection made under one filter must not survive into another: the rows
+   * leave the table but the bulk bar would still hold them, and Delete would
+   * take clients the reader can no longer see.
+   */
+  function setClientsFilter(field, value) {
+    if (!clientsFilterCtx) return;
+    var state = clientsFilterCtx.state;
+    state.filters = state.filters || emptyClientFilters();
+    state.filters[field] = value || '';
+    state.page = 1;
+    state.selected = {};
+    clientsFilterCtx.render({ forceFull: true });
+  }
+
+  function wireClientsPopovers() {
+    clientsPop.host.addEventListener('click', function (e) {
+      if (!clientsFilterLive()) { closeClientsPopovers(); return; }
+
+      var field = e.target.closest('[data-clients-filter-field]');
+      if (field) {
+        e.preventDefault();
+        fillFilterValues(field.getAttribute('data-clients-filter-field'));
+        openClientsPopover(clientsPop.values, field, [clientsPop.fields]);
+        return;
+      }
+
+      var value = e.target.closest('[data-clients-filter-value]');
+      if (value) {
+        e.preventDefault();
+        setClientsFilter(
+          clientsPop.values.getAttribute('data-clients-filter-field-name'),
+          value.getAttribute('data-clients-filter-value')
+        );
+        closeClientsPopovers();
+      }
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!clientsPop || !clientsPop.host.isConnected) return;
+      if (!clientsFilterLive()) { closeClientsPopovers(); return; }
+      if (e.target.closest('[data-clients-popover]') || e.target.closest('[data-clients-filter]')) return;
+      closeClientsPopovers();
+    });
+
+    window.addEventListener('resize', function () {
+      if (!clientsPop) return;
+      [clientsPop.fields, clientsPop.values].forEach(function (el) {
+        if (el && el.hasAttribute('data-open')) positionClientsPopover(el, el._anchorRect);
+      });
+    });
+  }
+
+  function wireTableFilters(root, state, render) {
+    clientsFilterCtx = { root: root, state: state, render: render };
+    ensureClientsPopovers();
+
+    var trigger = MORPH.unwiredOne(root, '[data-clients-filter]');
+    if (trigger) {
+      MORPH.on(trigger, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (clientsPop.fields.hasAttribute('data-open')) {
+          closeClientsPopovers();
+          return;
+        }
+        fillFilterFields();
+        openClientsPopover(clientsPop.fields, trigger);
+      });
+    }
+
+    MORPH.unwired(root, '[data-clients-remove-filter]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        setClientsFilter(btn.getAttribute('data-clients-remove-filter'), '');
+      });
+    });
+
+    var reset = MORPH.unwiredOne(root, '[data-clients-reset-filters]');
+    if (reset) {
+      MORPH.on(reset, 'click', function () {
+        state.filters = emptyClientFilters();
+        state.page = 1;
+        state.selected = {};
+        render({ forceFull: true });
+      });
+    }
+  }
+
   function wireTablePagination(root, state, render) {
     var pagination = root.querySelector('[data-clients-pagination]');
     if (!pagination) return;
@@ -2952,6 +3438,9 @@
       records.forEach(function (rec) {
         if (!rec || !rec.id) return;
         PROFILES[rec.id] = rec.profile || {};
+        // A copy inherits the original's type and referral; without this the
+        // new row would claim to be an unreferred private client.
+        rememberMeta(rec);
         insertContact({ id: rec.id, name: rec.name, initial: rec.initial, initialColor: rec.initialColor });
         nextSelected[rec.id] = true;
       });
@@ -3189,6 +3678,7 @@
       });
 
       if (scope === 'list' && state.viewMode === 'list') {
+        wireTableFilters(root, state, render);
         wireTablePagination(root, state, render);
         wireTableSelection(root, state);
         wireTableBulkActions(root, state, render);
@@ -3892,6 +4382,7 @@
       search: '',
       searchFocused: false,
       searchLoading: false,
+      filters: emptyClientFilters(),
       viewMode: loadViewMode(),
       page: 1,
       pageSize: 10,

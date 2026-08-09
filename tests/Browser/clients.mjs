@@ -29,6 +29,14 @@ async function signIn(page, email) {
     page.click('button[type="submit"]:visible'),
   ]);
   await page.waitForTimeout(500);
+  // A fresh session lands on the trust-this-browser gate before the portal.
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      page.click('text=Yes, stay signed in'),
+    ]);
+    await page.waitForTimeout(500);
+  }
   if (page.url().includes('/auth/login')) throw new Error('login failed for ' + email);
 }
 
@@ -67,7 +75,9 @@ try {
   await page.waitForSelector('[data-clients-field="firstName"]', { timeout: 8000 });
   await field(page, 'firstName', unique);
   await field(page, 'lastName', 'Tester');
-  await field(page, 'company', 'Acme Legal');
+  // Company stopped being free text when companies became records of their
+  // own; the form picks one from the registered list now.
+  await field(page, 'jobTitle', 'Counsel');
   await page.click('[data-clients-save]');
   await page.waitForTimeout(1200);
 
