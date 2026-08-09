@@ -2654,6 +2654,7 @@
        * With several people it is the only place you can see who did what.
        */
       var people = w.steps || [];
+      var answered = people.filter(hasAnswered).length;
       var showOutcome = people.length > 1;
 
       var steps = people.map(function (s) {
@@ -2711,13 +2712,34 @@
         if (w.reminderDays) notes.push('Reminders every ' + w.reminderDays + 'd');
       }
 
-      return '<div class="tma-portal-viewer__workflow">' +
-        '<div class="tma-portal-viewer__comment-head">' +
-          statusBadgeHtml(w.status, w.statusLabel, w.tone) +
-          '<strong>' + esc(cap(w.type)) + '</strong>' +
-          '<time datetime="' + esc(w.sentAt) + '">' + esc(fmtDateTime(w.sentAt)) + '</time>' +
-          (w.overdue ? '<span class="tma-portal-viewer__comment-flag tma-portal-viewer__comment-flag--warn">Overdue</span>' : '') +
-        '</div>' +
+      var headline = workflowHeadline(w);
+
+      /*
+       * Type and timing as one quiet line under the headline.
+       *
+       * Both were competing with the status for attention up top — a bold
+       * type name and a full timestamp on the same row as the badge, three
+       * things of equal weight and no obvious reading order. They are context
+       * for the sentence above, so they read as context.
+       */
+      var sub = [cap(w.type)];
+      if (w.isOpen && w.dueAt) sub.push((w.overdue ? 'overdue since ' : 'due ') + relativeWhen(w.dueAt));
+      else if (w.sentAt) sub.push('sent ' + relativeWhen(w.sentAt));
+
+      // Progress, but only where there is any to report. With one reviewer
+      // "0 of 1 responded" is the headline again, in arithmetic.
+      var progress = people.length > 1
+        ? '<p class="tma-portal-viewer__wf-progress">' + answered + ' of ' + people.length + ' responded</p>'
+        : '';
+
+      return '<div class="tma-portal-viewer__workflow' + (w.myStep && w.isOpen ? ' is-mine' : '') + '">' +
+        '<p class="tma-portal-viewer__wf-headline tma-portal-viewer__wf-headline--' + esc(headline.tone) + '">' +
+          esc(headline.text) +
+        '</p>' +
+        '<p class="tma-portal-viewer__wf-sub"' +
+          (w.dueAt ? ' title="Due ' + esc(fmtDateTime(w.dueAt)) + '"' : '') + '>' +
+          esc(sub.join(' · ')) +
+        '</p>' +
         (w.message ? '<p class="tma-portal-viewer__version-note">' + esc(w.message) + '</p>' : '') +
         // §6: when a newer version exists, say so rather than letting the
         // badge imply the file as it stands today was approved.
@@ -2725,10 +2747,8 @@
           ? '<p class="tma-portal-viewer__lock">Version ' + w.supersededBy +
             ' has been uploaded since this was sent. This request still refers to version ' + w.version + '.</p>'
           : '') +
-        // A deadline on something already finished is not a deadline. It was
-        // also showing as overdue against requests that had been answered.
-        (w.dueAt && w.isOpen ? '<p class="tma-portal-viewer__version-meta">Due ' + esc(fmtDateTime(w.dueAt)) + '</p>' : '') +
         (notes.length ? '<p class="tma-portal-viewer__version-meta">' + esc(notes.join(' · ')) + '</p>' : '') +
+        progress +
         '<div class="tma-portal-viewer__source-members">' + steps + '</div>' +
         (w.signedFile
           ? '<p class="tma-portal-viewer__version-meta">Signed copy: ' +
@@ -2772,6 +2792,70 @@
 
     function statusBadgeHtml(status, label, tone) {
       return '<span class="tma-portal-status tma-portal-status--' + esc(tone) + '">' + esc(label) + '</span>';
+    }
+
+    /** Has this person answered yet? */
+    function hasAnswered(step) {
+      return step.status !== 'pending' && step.status !== 'invited';
+    }
+
+    /**
+     * "in 2 days", "2 days ago", "today".
+     *
+     * A deadline is a question about *how long is left*, and an exact
+     * timestamp makes the reader do that arithmetic against today's date
+     * before they know whether to worry. The full date stays on the title
+     * attribute for anyone who wants it.
+     */
+    function relativeWhen(iso) {
+      var then = new Date(iso);
+      if (isNaN(then)) return '';
+
+      var days = Math.round((then - new Date()) / 86400000);
+
+      if (days === 0) return 'today';
+      if (days === 1) return 'tomorrow';
+      if (days === -1) return 'yesterday';
+
+      var n = Math.abs(days);
+      if (n < 31) return days > 0 ? 'in ' + n + ' days' : n + ' days ago';
+
+      var months = Math.round(n / 30);
+
+      return days > 0
+        ? 'in ' + months + (months === 1 ? ' month' : ' months')
+        : months + (months === 1 ? ' month' : ' months') + ' ago';
+    }
+
+    /**
+     * The one sentence this request is about.
+     *
+     * A beginner opening this panel is asking two things: what is happening,
+     * and is it on me? "Awaiting approval" against a status chip answers
+     * neither — it names an internal state and leaves them to work out who is
+     * holding it up. So the request leads with a sentence instead: whose turn
+     * it is, by name where there is a single name to give.
+     */
+    function workflowHeadline(w) {
+      if (w.myStep && w.isOpen) {
+        return { text: 'Your response is needed', tone: 'action' };
+      }
+
+      if (!w.isOpen) {
+        return { text: w.statusLabel, tone: w.tone };
+      }
+
+      var waiting = (w.steps || []).filter(function (s) { return !hasAnswered(s); });
+
+      if (waiting.length === 1) {
+        return { text: 'Waiting on ' + (waiting[0].name || waiting[0].email || 'someone'), tone: w.tone };
+      }
+
+      if (waiting.length > 1) {
+        return { text: 'Waiting on ' + waiting.length + ' people', tone: w.tone };
+      }
+
+      return { text: w.statusLabel, tone: w.tone };
     }
 
     function respondToWorkflow(workflowId, action) {

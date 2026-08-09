@@ -1255,3 +1255,33 @@
 /* The alternatives are links in a sentence, so they take the accent rather
    than the muted tone the surrounding words use. */
 .tma-portal-viewer__send-alt .tma-portal-viewer__comment-act { color: var(--color-primary); }
+
+/* ── a request, as a sentence ───────────────────────────────────────────
+   Each one leads with what is happening and whose turn it is, with the type
+   and timing as context beneath, rather than a badge, a type and a timestamp
+   competing on one row with no reading order. */
+.tma-portal-viewer__wf-headline {
+  margin: 0; font-size: var(--text-size-14); font-weight: 600;
+  color: var(--color-text-primary);
+}
+/* The one case worth colouring: it is on the reader. Everything else is
+   somebody else's turn, and tinting those too would leave nothing standing
+   out from anything. */
+.tma-portal-viewer__wf-headline--action { color: var(--color-primary); }
+/* No text-transform: the type is already capitalised in the markup, and
+   capitalize here hit the whole line — "Overdue Since Yesterday". */
+.tma-portal-viewer__wf-sub {
+  margin: var(--space-2) 0 0; font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+.tma-portal-viewer__wf-progress {
+  margin: var(--space-8) 0 0; font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+/* A request waiting on the reader is the only thing in this panel they can
+   act on, so it gets an edge — a left rule, not a fill, which would fight the
+   respond box sitting inside it. */
+.tma-portal-viewer__workflow.is-mine {
+  border-left: 2px solid var(--color-primary);
+  padding-left: var(--space-12);
+}
