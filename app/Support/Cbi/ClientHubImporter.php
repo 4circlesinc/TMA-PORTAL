@@ -236,22 +236,32 @@ class ClientHubImporter
             return;
         }
 
-        DB::table('clients')->insert(array_column($batch, 'columns'));
-
-        // The uid is what the insert and the read-back have in common; it is
-        // unique, so this cannot pick up somebody else's row.
         $uids = array_column(array_column($batch, 'columns'), 'uid');
-        $ids = DB::table('clients')->whereIn('uid', $uids)->pluck('id', 'uid');
 
-        $links = [];
-        foreach ($batch as $row) {
-            $id = $ids[$row['columns']['uid']] ?? null;
-            if ($id !== null) {
-                $links[$row['applicationId']] = $id;
+        /*
+         * Insert and link together or not at all. Separately, a failure
+         * between the two leaves clients nobody points at — and because their
+         * applications are still unlinked, the next run would import the same
+         * people again. The batch is the unit of work, so it is the
+         * transaction.
+         */
+        DB::transaction(function () use ($batch, $uids) {
+            DB::table('clients')->insert(array_column($batch, 'columns'));
+
+            // The uid is what the insert and the read-back have in common; it
+            // is unique, so this cannot pick up somebody else's row.
+            $ids = DB::table('clients')->whereIn('uid', $uids)->pluck('id', 'uid');
+
+            $links = [];
+            foreach ($batch as $row) {
+                $id = $ids[$row['columns']['uid']] ?? null;
+                if ($id !== null) {
+                    $links[$row['applicationId']] = $id;
+                }
             }
-        }
 
-        $this->linkApplications($links);
+            $this->linkApplications($links);
+        });
 
         if (! $this->withFolders || ! $this->actor) {
             return;
@@ -280,22 +290,24 @@ class ClientHubImporter
             return;
         }
 
+        /*
+         * The ids are cast to int and written into the statement rather than
+         * bound. Both sides are primary keys this class has just read from the
+         * database, so an (int) cast leaves nothing a string could smuggle
+         * through — and bound placeholders are actively wrong here: Postgres
+         * cannot infer a type for `WHEN ? THEN ?` and reads them as text,
+         * which fails against a bigint column. SQLite does not care, so the
+         * test suite would never have caught it.
+         */
         $case = 'CASE id';
-        $bindings = [];
         foreach ($links as $applicationId => $clientId) {
-            $case .= ' WHEN ? THEN ?';
-            $bindings[] = $applicationId;
-            $bindings[] = $clientId;
+            $case .= ' WHEN '.(int) $applicationId.' THEN '.(int) $clientId;
         }
         $case .= ' END';
 
-        $ids = array_keys($links);
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $ids = implode(',', array_map('intval', array_keys($links)));
 
-        DB::update(
-            "UPDATE cbi_applications SET client_id = {$case} WHERE id IN ({$placeholders})",
-            array_merge($bindings, $ids)
-        );
+        DB::update("UPDATE cbi_applications SET client_id = {$case} WHERE id IN ({$ids})");
     }
 
     /**
