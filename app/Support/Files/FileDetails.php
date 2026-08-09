@@ -8,6 +8,7 @@ use App\Models\FileVersion;
 use App\Models\FileWorkflow;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\Workflow\Status;
 use App\Support\UserTime;
 use Illuminate\Support\Carbon;
 
@@ -51,12 +52,18 @@ class FileDetails
                     ->whereNull('resolved_at')
                     ->count(),
                 'versions' => FileVersion::where('file_id', $file->id)->count(),
-                // Not-closed rather than a list of open states: the column is a
-                // plain string with no enum behind it, so naming the open
-                // values means this silently under-counts the day another one
-                // is added. Only 'closed' is definitively finished.
+                /*
+                 * Still open, by the same definition the panel uses.
+                 *
+                 * This previously excluded status 'closed' — a value that does
+                 * not exist. The finished states are Status::TERMINAL
+                 * (approved, changes_requested, declined, signed,
+                 * acknowledged, completed), so every workflow ever created
+                 * counted as open and the tab claimed outstanding approvals on
+                 * files that had none.
+                 */
                 'approvals' => FileWorkflow::where('file_id', $file->id)
-                    ->where('status', '!=', 'closed')
+                    ->whereNotIn('status', Status::TERMINAL)
                     ->count(),
             ],
             'groups' => array_values(array_filter([

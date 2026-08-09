@@ -1243,3 +1243,15 @@
    fires as the pointer crosses from the hint onto the button and the
    highlight flickers off mid-drag. */
 .tma-portal-viewer__vdrop.is-over * { pointer-events: none; }
+
+/* Ask-for row: one button, the alternatives as text beneath it. */
+.tma-portal-viewer__send { margin-bottom: var(--space-16); }
+.tma-portal-viewer__send .tma-portal-viewer__btn { width: 100%; }
+.tma-portal-viewer__send-alt {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-6);
+  margin: var(--space-8) 0 0;
+  font-size: var(--text-size-12); color: var(--color-text-secondary);
+}
+/* The alternatives are links in a sentence, so they take the accent rather
+   than the muted tone the surrounding words use. */
+.tma-portal-viewer__send-alt .tma-portal-viewer__comment-act { color: var(--color-primary); }

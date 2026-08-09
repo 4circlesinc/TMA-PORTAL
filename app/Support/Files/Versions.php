@@ -193,9 +193,16 @@ class Versions
     {
         $lock = Engine::isLocked($file);
 
-        return $lock
-            ? 'This file is locked while a '.$lock->type.' request is open.'
-            : null;
+        if (! $lock) {
+            return null;
+        }
+
+        // "a approval request" — the only type here starting with a vowel is
+        // approval, but testing the word rather than naming it keeps this
+        // right for whatever gets added next.
+        $article = str_contains('aeiou', substr((string) $lock->type, 0, 1)) ? 'an' : 'a';
+
+        return 'This file is locked while '.$article.' '.$lock->type.' request is open.';
     }
 
     /** Restoring changes what everyone else sees, so it needs the same bar. */

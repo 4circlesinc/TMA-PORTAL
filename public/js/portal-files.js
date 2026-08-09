@@ -2602,14 +2602,32 @@
       var list = (data && data.workflows) || [];
       var html = '';
 
+      /*
+       * One primary action, the rest as text.
+       *
+       * These were five buttons of near-equal weight wrapping onto two lines,
+       * which asked the reader to first work out the difference between
+       * Feedback, Review and Acknowledge before doing the thing they came for.
+       * Approval is what this panel is called and what people overwhelmingly
+       * want; the others stay one click away, just not competing for the eye.
+       */
       if (data.canSend) {
-        html += '<div class="tma-portal-viewer__send-row">' +
+        var others = [
+          { type: 'feedback', label: 'feedback' },
+          { type: 'review', label: 'review' },
+          { type: 'acknowledgement', label: 'acknowledgement' },
+        ].map(function (o) {
+          return '<button type="button" class="tma-portal-viewer__comment-act" data-lb-send-wf="' +
+            o.type + '">' + o.label + '</button>';
+        }).join('');
+
+        html += '<div class="tma-portal-viewer__send">' +
           '<button type="button" class="tma-portal-viewer__btn" data-lb-send-wf="approval">Send for approval</button>' +
-          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-wf="feedback">Feedback</button>' +
-          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-wf="review">Review</button>' +
-          '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-wf="acknowledgement">Acknowledge</button>' +
+          '<p class="tma-portal-viewer__send-alt">or ask for ' + others + '</p>' +
           (canSignHere(current())
-            ? '<button type="button" class="tma-portal-viewer__btn-ghost" data-lb-send-signature>Send for signature</button>'
+            ? '<p class="tma-portal-viewer__send-alt">' +
+              '<button type="button" class="tma-portal-viewer__comment-act" data-lb-send-signature>Send for signature</button>' +
+              '</p>'
             : '') +
         '</div>';
       }
@@ -2626,15 +2644,29 @@
     }
 
     function workflowHtml(w) {
-      var steps = (w.steps || []).map(function (s) {
+      /*
+       * Per-person outcomes only when there is more than one person.
+       *
+       * With a single reviewer the badge above already says how it went, so
+       * the line read "Completed … Responded" and "Changes requested …
+       * Requested changes" — the same fact twice, in two different wordings,
+       * which invites the reader to look for the difference between them.
+       * With several people it is the only place you can see who did what.
+       */
+      var people = w.steps || [];
+      var showOutcome = people.length > 1;
+
+      var steps = people.map(function (s) {
         return '<div class="tma-portal-viewer__member">' +
           '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(s)) + '" alt="" width="24" height="24">' +
           '<span class="tma-portal-viewer__member-text">' +
             '<strong>' + esc(s.name || s.email || 'Someone') + '</strong>' +
             (s.comment ? '<span class="tma-portal-viewer__member-email">“' + esc(s.comment) + '”</span>' : '') +
           '</span>' +
-          '<span class="tma-portal-viewer__member-role">' + esc(s.statusLabel) +
-            (s.delegatedFrom ? ' (delegated)' : '') + '</span>' +
+          (showOutcome || s.delegatedFrom
+            ? '<span class="tma-portal-viewer__member-role">' + esc(s.statusLabel) +
+              (s.delegatedFrom ? ' (delegated)' : '') + '</span>'
+            : '') +
         '</div>';
       }).join('');
 
@@ -2657,12 +2689,27 @@
         '</div>';
       }
 
+      /*
+       * The settings only while they still govern something.
+       *
+       * "One at a time", "Any one response settles it", "File locked",
+       * "Reminders every 3d" describe how a request will be *run*. Once it has
+       * finished they are answers to questions nobody is asking, sitting above
+       * the outcome somebody opened the panel to read.
+       *
+       * The version is dropped from this line entirely: it said "Reviewing
+       * version 1" on every request, including the overwhelming case where
+       * version 1 is simply the file. When a newer version does exist,
+       * supersededBy says so below in a full sentence, which is the only time
+       * it changes what the badge means.
+       */
       var notes = [];
-      if (w.version) notes.push('Reviewing version ' + w.version);
-      if (w.ordered) notes.push('One at a time');
-      if (!w.requireAll) notes.push('Any one response settles it');
-      if (w.lockFile) notes.push('File locked');
-      if (w.reminderDays) notes.push('Reminders every ' + w.reminderDays + 'd');
+      if (w.isOpen) {
+        if (w.ordered) notes.push('One at a time');
+        if (!w.requireAll) notes.push('Any one response settles it');
+        if (w.lockFile) notes.push('File locked');
+        if (w.reminderDays) notes.push('Reminders every ' + w.reminderDays + 'd');
+      }
 
       return '<div class="tma-portal-viewer__workflow">' +
         '<div class="tma-portal-viewer__comment-head">' +
@@ -2678,7 +2725,9 @@
           ? '<p class="tma-portal-viewer__lock">Version ' + w.supersededBy +
             ' has been uploaded since this was sent. This request still refers to version ' + w.version + '.</p>'
           : '') +
-        (w.dueAt ? '<p class="tma-portal-viewer__version-meta">Due ' + esc(fmtDateTime(w.dueAt)) + '</p>' : '') +
+        // A deadline on something already finished is not a deadline. It was
+        // also showing as overdue against requests that had been answered.
+        (w.dueAt && w.isOpen ? '<p class="tma-portal-viewer__version-meta">Due ' + esc(fmtDateTime(w.dueAt)) + '</p>' : '') +
         (notes.length ? '<p class="tma-portal-viewer__version-meta">' + esc(notes.join(' · ')) + '</p>' : '') +
         '<div class="tma-portal-viewer__source-members">' + steps + '</div>' +
         (w.signedFile
