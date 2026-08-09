@@ -2091,6 +2091,21 @@
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  /**
+   * A client document's review state, beside its name.
+   *
+   * Reuses the portal's status badge rather than a chip of this page's own, so
+   * "Pending review" here and in the File Library are recognisably the same
+   * fact about the same file.
+   */
+  function clientStatusChip(f) {
+    var s = f && f.status;
+    if (!s || !s.label) return '';
+
+    return '<span class="tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
+      ' tma-portal-status--inline">' + esc(s.label) + '</span>';
+  }
+
   function renderClientFolderList(root, res) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap) return;
@@ -2116,11 +2131,33 @@
         '</button>';
     });
     files.forEach(function (f) {
-      var meta = [f.sizeLabel, f.modifiedAt ? 'Updated ' + fmtShortDate(f.modifiedAt) : null].filter(Boolean).join(' · ');
+      /*
+       * The file's own icon, not a generic page.
+       *
+       * Every document here rendered as the same phosphor File.svg, so a
+       * folder of passports, spreadsheets and photographs looked like one
+       * repeated thing. The listing already carries an `icon` chosen from the
+       * extension, which is what the File Library draws from — the icon set
+       * was there all along, this list just was not asking for it.
+       */
+      var icon = (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc)
+        ? window.TMAFileIcons.fileIconSrc(f.icon, f.name)
+        : 'images/icons/phosphor/File.svg';
+
+      // Who and when, not just how big — the brief asks for both against every
+      // client document, and "uploaded by" is the first question about one.
+      var who = f.uploadedBy && f.uploadedBy.name ? f.uploadedBy.name : null;
+      var meta = [
+        f.sizeLabel,
+        f.uploadedAt ? fmtShortDate(f.uploadedAt) : null,
+        who,
+      ].filter(Boolean).join(' · ');
+
       html += '<button type="button" class="tma-dash__clients-folder" data-clients-file="' + esc(f.id) + '">' +
-        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="images/icons/phosphor/File.svg" alt=""></span>' +
-        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
-        (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + esc(icon) + '" alt=""></span>' +
+        '<span class="tma-dash__clients-folder-main">' +
+          '<span class="tma-dash__clients-folder-name">' + esc(f.name) + clientStatusChip(f) + '</span>' +
+          (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
         '</span></button>';
     });
     wrap.innerHTML = html;

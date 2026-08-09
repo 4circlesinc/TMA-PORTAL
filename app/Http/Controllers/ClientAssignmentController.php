@@ -21,7 +21,8 @@ use Illuminate\Validation\Rule;
  */
 class ClientAssignmentController extends Controller
 {
-    private const STAFF = ['Administrator', 'Employee'];
+    // The assignment list is employees only now — see assignableStaff. The
+    // former ['Administrator', 'Employee'] constant has no other consumer.
 
     /** Staff assigned to a client, live ones first. */
     public function index(Request $request, string $uid): JsonResponse
@@ -226,13 +227,30 @@ class ClientAssignmentController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Who may still be added to this client.
+     *
+     * Three exclusions, each for a different reason:
+     *
+     *  - anyone already assigned, or the list offers work that is done;
+     *  - administrators, who reach every client already (see
+     *    ClientAssignmentController::mine) — an assignment row would grant
+     *    nothing and imply they had been singled out for this one;
+     *  - whoever created the client, who is its default assignee. Offering
+     *    John a chance to assign John is the interface asking a question it
+     *    already knows the answer to.
+     */
     private function assignableStaff(?Client $client = null): array
     {
         $taken = $client
             ? ClientAssignment::live()->where('client_id', $client->id)->pluck('user_id')->all()
             : [];
 
-        return User::whereIn('account_type', self::STAFF)
+        if ($client?->created_by) {
+            $taken[] = (int) $client->created_by;
+        }
+
+        return User::where('account_type', Role::EMPLOYEE)
             ->where('status', 'approved')
             ->whereNotIn('id', $taken)
             ->orderBy('name')

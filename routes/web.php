@@ -45,6 +45,7 @@ use App\Http\Controllers\Files\BulkController;
 use App\Http\Controllers\Files\FavoriteController;
 use App\Http\Controllers\Files\FileCommentController;
 use App\Http\Controllers\Files\FileController;
+use App\Http\Controllers\Files\FileReviewController;
 use App\Http\Controllers\Files\FilePresenceController;
 use App\Http\Controllers\Files\FileVersionController;
 use App\Http\Controllers\Files\FileViewerController;
@@ -361,6 +362,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/files', [FileController::class, 'store'])->name('store');
         Route::get('/files/{uuid}', [FileController::class, 'show'])->name('show');
         Route::patch('/files/{uuid}', [FileController::class, 'update'])->name('update');
+        Route::patch('/files/{uuid}/review', [FileReviewController::class, 'update'])->name('review');
         Route::post('/files/{uuid}/move', [FileController::class, 'move'])->name('move');
         Route::post('/files/{uuid}/copy', [FileController::class, 'copy'])->name('copy');
         Route::delete('/files/{uuid}', [FileController::class, 'destroy'])->name('destroy');

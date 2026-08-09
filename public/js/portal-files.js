@@ -1693,6 +1693,7 @@
            * Rendered empty until the details request answers — the counts ride
            * along with it, so there is nothing to show and nothing to fetch.
            */
+          reviewHtml(f) +
           '<div data-lb-counts>' + (e.details ? countsHtml(e.details) : '') + '</div>' +
         '</div>' +
         /*
@@ -1806,6 +1807,56 @@
             c.n + ' ' + (c.n === 1 ? c.one : c.many) +
           '</button>';
         }).join('') +
+      '</div>';
+    }
+
+    /**
+     * The review state of a client document, and the way to move it on.
+     *
+     * Only for files that are in a review — an ordinary library file has no
+     * status and gets no control, which is what keeps this from appearing on
+     * every logo and template in the portal.
+     *
+     * The buttons are whatever the server says may follow the current state
+     * (review.next), rather than a fixed row: the allowed moves are a rule
+     * about the workflow, and duplicating it here would let the two disagree.
+     */
+    /* Mirrors ReviewStatus::tone so a review badge and an approval badge are
+       the same four colours meaning the same four things. */
+    function reviewTone(status) {
+      if (status === 'approved') return 'success';
+      if (status === 'rejected') return 'danger';
+      if (status === 'pending_review' || status === 'under_review') return 'pending';
+
+      return 'neutral';
+    }
+
+    function reviewHtml(f) {
+      var r = f.review;
+      if (!r || !r.status) return '';
+
+      var label = { pending_review: 'Start review', under_review: 'Start review',
+        approved: 'Approve', rejected: 'Reject' };
+
+      var actions = r.canReview
+        ? (r.next || []).map(function (s) {
+            var primary = s === 'approved';
+            return '<button type="button" class="' +
+              (primary ? 'tma-portal-viewer__btn' : 'tma-portal-viewer__btn-ghost') + '"' +
+              ' data-lb-review="' + esc(s) + '">' + esc(label[s] || s) + '</button>';
+          }).join('')
+        : '';
+
+      return '<div class="tma-portal-viewer__review">' +
+        '<div class="tma-portal-viewer__review-head">' +
+          '<span class="tma-portal-viewer__review-label">Review</span>' +
+          statusBadgeHtml(r.status, r.label || r.status, reviewTone(r.status)) +
+        '</div>' +
+        (r.note ? '<p class="tma-portal-viewer__review-note">“' + esc(r.note) + '”</p>' : '') +
+        (r.reviewedBy && r.reviewedAt
+          ? '<p class="tma-portal-viewer__review-by">' + esc(r.reviewedBy.name) + ' · ' + esc(fmtDateTime(r.reviewedAt)) + '</p>'
+          : '') +
+        (actions ? '<div class="tma-portal-viewer__review-actions">' + actions + '</div>' : '') +
       '</div>';
     }
 
@@ -2442,6 +2493,54 @@
      * because §5 wants the reason recorded — and asking afterwards means a
      * large upload finishes with nothing to say about it.
      */
+    /**
+     * Move a client document to the next review state.
+     *
+     * A rejection asks for a reason before it goes, because the server refuses
+     * one without it — and finding that out through an error message after the
+     * click would be the interface hiding a rule it could have just asked
+     * about. Every other move goes straight through.
+     */
+    function setReviewStatus(status) {
+      var f = current();
+
+      var send = function (note) {
+        net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/review'), {
+          method: 'PATCH',
+          json: { status: status, note: note || '' },
+        })
+          .then(function (res) {
+            // The panel, then the list behind it — closing the viewer must not
+            // reveal a row still showing the badge this just changed.
+            f.review = (res && res.file && res.file.review) || f.review;
+            f.status = (res && res.file && res.file.status) || f.status;
+            paintPanel();
+            load(true);
+            ui().toast('Review updated.');
+          })
+          .catch(function (err) {
+            ui().toast((err && err.message) || 'Could not update the review.', false);
+          });
+      };
+
+      if (status !== 'rejected') return send('');
+
+      confirmModal({
+        title: 'Reject this document',
+        message: 'The uploader will see why it was rejected.',
+        prompt: { label: 'Reason', placeholder: 'e.g. Expired — please send a current copy' },
+        confirmLabel: 'Reject',
+        onConfirm: function (note) {
+          if (!String(note || '').trim()) {
+            ui().toast('Say why the document is being rejected.', false);
+
+            return;
+          }
+          send(note);
+        },
+      });
+    }
+
     function pickNewVersion() {
       var input = lb.querySelector('[data-lb-versionfile]');
       if (input) input.click();
@@ -3386,6 +3485,8 @@
       if (wfCancel) { cancelWorkflow(wfCancel.getAttribute('data-lb-wf-cancel')); return; }
 
       /* ── versions ─────────────────────────────────── */
+      var review = e.target.closest('[data-lb-review]');
+      if (review) { setReviewStatus(review.getAttribute('data-lb-review')); return; }
       if (e.target.closest('[data-lb-newversion]')) { pickNewVersion(); return; }
       var vPrev = e.target.closest('[data-lb-vpreview]');
       if (vPrev) { window.open(versionUrl(vPrev.getAttribute('data-lb-vpreview'), 'preview'), '_blank'); return; }

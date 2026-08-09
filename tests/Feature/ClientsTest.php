@@ -160,23 +160,42 @@ class ClientsTest extends TestCase
         $this->actingAs($client)->postJson('/portal/clients', $this->payload())->assertForbidden();
     }
 
-    public function test_employees_can_create_a_client_but_only_list_their_own(): void
+    public function test_employees_can_create_a_client_and_are_its_first_assignee(): void
     {
-        // Employees are scoped to their live assignments now, so a client they
-        // create is not automatically theirs to see — assignment is a separate,
-        // administrator-held decision (`clients.assign`). See ClientScopeTest.
+        /*
+         * This reverses the rule this test used to assert.
+         *
+         * Employees are scoped to their live assignments, and creating a client
+         * previously left them unable to see it until an administrator assigned
+         * them — which meant an employee could add a client and immediately
+         * lose it. The 2026-08-09 brief makes the creator the default assignee
+         * instead, so the act of creating is itself the assignment.
+         *
+         * Administrators are deliberately *not* assigned: they already reach
+         * every client, so a row would grant nothing. See ClientScopeTest for
+         * the scoping this relies on.
+         */
         $employee = $this->staff(['account_type' => 'Employee']);
 
         $this->actingAs($employee)->postJson('/portal/clients', $this->payload())->assertOk();
-        $this->actingAs($employee)->getJson('/portal/clients')->assertOk()->assertJsonCount(0, 'clients');
-
-        \App\Models\ClientAssignment::create([
-            'client_id' => \App\Models\Client::firstOrFail()->id,
-            'user_id' => $employee->id,
-            'permission_level' => 'editor',
-            'assigned_by' => $this->staff()->id,
-        ]);
-
         $this->actingAs($employee)->getJson('/portal/clients')->assertOk()->assertJsonCount(1, 'clients');
+
+        $this->assertTrue(
+            \App\Models\ClientAssignment::live()
+                ->where('client_id', \App\Models\Client::firstOrFail()->id)
+                ->where('user_id', $employee->id)
+                ->exists()
+        );
+
+        $admin = $this->staff(['account_type' => 'Administrator']);
+        $this->actingAs($admin)->postJson('/portal/clients', $this->payload(['uid' => 'clark-kent']))->assertOk();
+
+        $this->assertFalse(
+            \App\Models\ClientAssignment::live()
+                ->where('client_id', \App\Models\Client::where('uid', 'clark-kent')->firstOrFail()->id)
+                ->where('user_id', $admin->id)
+                ->exists(),
+            'An administrator reaches every client already; an assignment row would say otherwise.'
+        );
     }
 }

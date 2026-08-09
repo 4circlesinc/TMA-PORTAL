@@ -68,6 +68,9 @@ class Presenter
         $ext = (string) $file->extension;
         $assignees = $this->assignFile[$file->id]
             ?? $this->assigneeNames('file', $file->id);
+        // Computed once: the review block reads from it rather than asking
+        // FileAccess the same question a second time per row.
+        $perms = $this->filePerms($file);
 
         return [
             'id' => $file->uuid,
@@ -95,10 +98,31 @@ class Presenter
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFile[$file->id]),
-            // Null when the file has never been sent anywhere — most files.
-            // A badge reading "Draft" on everything would be noise, not status.
-            'status' => $this->statusFile[$file->id] ?? null,
-            'permissions' => $this->filePerms($file),
+            /*
+             * One badge, from whichever of the two systems applies.
+             *
+             * A client document's own review state wins: it is set the moment
+             * the file lands, it is what the client's Documents tab is about,
+             * and a file showing "Pending review" beside "Awaiting approval"
+             * would be two statuses for one document with no way to tell which
+             * governs. The approval-workflow badge still shows for everything
+             * else, and both remain visible in full inside the viewer.
+             */
+            'status' => ReviewStatus::badge($file->review_status)
+                ?? ($this->statusFile[$file->id] ?? null),
+            'review' => [
+                'status' => $file->review_status,
+                'label' => ReviewStatus::label($file->review_status),
+                'note' => $file->review_note,
+                'reviewedAt' => optional($file->reviewed_at)->toIso8601String(),
+                'reviewedBy' => $file->reviewed_by ? $this->person($file->reviewer) : null,
+                // What this viewer may move it to from here.
+                'canReview' => $perms['review'],
+                'next' => ReviewStatus::isValid($file->review_status)
+                    ? (ReviewStatus::NEXT[$file->review_status] ?? [])
+                    : ReviewStatus::ALL,
+            ],
+            'permissions' => $perms,
             'downloadUrl' => route('files.download', $file->uuid),
             'previewUrl' => FileType::isPreviewable($ext)
                 ? route('files.preview', $file->uuid)
@@ -231,6 +255,11 @@ class Presenter
             'delete' => FileAccess::can($this->viewer, 'delete', $file),
             'share' => FileAccess::can($this->viewer, 'share', $file),
             'assign' => FileAccess::can($this->viewer, 'assign', $file),
+            // Reviewing takes the same bar as adding a version: a client who
+            // can see their own folder must not be able to approve their own
+            // passport. Computed here with the rest so the review block below
+            // costs no extra permission checks.
+            'review' => FileAccess::can($this->viewer, 'upload', $file),
         ];
     }
 

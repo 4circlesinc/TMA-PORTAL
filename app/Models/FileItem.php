@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'uuid', 'folder_id', 'name', 'extension', 'mime_type', 'size', 'disk',
     'storage_path', 'checksum', 'content_state', 'version_number', 'origin', 'owner_id', 'uploaded_by',
     'source_modified_at', 'deleted_by',
+    'review_status', 'review_note', 'reviewed_by', 'reviewed_at',
 ])]
 #[Hidden(['storage_path', 'disk'])]
 class FileItem extends Model
@@ -32,7 +33,13 @@ class FileItem extends Model
             'size' => 'integer',
             'source_modified_at' => 'datetime',
             'deleted_at' => 'datetime',
+            'reviewed_at' => 'datetime',
         ];
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 
     public function folder(): BelongsTo

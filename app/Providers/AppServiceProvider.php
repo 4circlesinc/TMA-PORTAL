@@ -35,6 +35,10 @@ class AppServiceProvider extends ServiceProvider
         // Portal file changes mirror out to any linked SharePoint library.
         \App\Models\FileItem::observe(\App\Observers\FileSharePointObserver::class);
 
+        // A file landing in a client folder enters that client's review queue,
+        // whichever of the seven upload paths put it there.
+        \App\Models\FileItem::observe(\App\Observers\ClientDocumentObserver::class);
+
         // …and tell any open File Library to refetch itself.
         \App\Models\FileItem::observe(\App\Observers\FileLibraryObserver::class);
         \App\Models\Folder::observe(\App\Observers\FileLibraryObserver::class);

@@ -1295,3 +1295,24 @@
   flex: 0 0 auto;
 }
 .tma-portal-file-card .tma-portal-status--inline { margin: var(--space-4) 0 0; }
+
+/* ── client document review ─────────────────────────────────────────── */
+.tma-portal-viewer__review {
+  margin-top: var(--space-12); padding-top: var(--space-12);
+  border-top: 1px solid var(--color-border-soft);
+}
+.tma-portal-viewer__review-head { display: flex; align-items: center; gap: var(--space-8); }
+.tma-portal-viewer__review-label {
+  font-size: var(--text-size-12); color: var(--color-text-secondary);
+}
+.tma-portal-viewer__review-note {
+  margin: var(--space-6) 0 0; font-size: var(--text-size-13);
+  color: var(--color-text-primary);
+}
+.tma-portal-viewer__review-by {
+  margin: var(--space-2) 0 0; font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+.tma-portal-viewer__review-actions {
+  display: flex; flex-wrap: wrap; gap: var(--space-6); margin-top: var(--space-8);
+}

@@ -9,6 +9,7 @@ use App\Support\Access\AccessSync;
 use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Clients\Assignments;
 use App\Support\Clients\ClientCustomFields;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Notifications\Notifier;
@@ -61,6 +62,23 @@ class ClientsController extends Controller
         // linked by id. Admins have access immediately; assigned staff get it
         // when assigned; the client sees nothing until something is shared.
         FolderProvisioner::provisionClientFolder($client, $request->user());
+
+        /*
+         * The employee who created the client is its first assignee.
+         *
+         * Employees only. An administrator already reaches every client, so a
+         * row for them would grant nothing while implying they had been picked
+         * out for this one — the same reason they are kept out of the
+         * assignment list. Manager level, because creating a client is the act
+         * of somebody who owns the relationship rather than observes it.
+         */
+        if (Role::of($request->user()) === Role::EMPLOYEE) {
+            Assignments::assign($client, $request->user(), [
+                'role' => 'account_manager',
+                'level' => 'manager',
+                'primary' => true,
+            ], $request->user());
+        }
 
         ActivityLogger::log([
             'actor' => $request->user(),
