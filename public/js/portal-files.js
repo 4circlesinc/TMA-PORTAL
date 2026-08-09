@@ -2513,7 +2513,7 @@
       { id: 'awaiting_approval', label: 'Awaiting approval', icon: 'PaperPlaneTilt' },
       { id: 'changes_requested', label: 'Changes requested', icon: 'ArrowUUpLeft' },
       { id: 'approved', label: 'Approved', icon: 'CheckCircle' },
-      { id: 'rejected', label: 'Rejected', icon: 'XCircle' },
+      { id: 'rejected', label: 'Rejected', icon: 'X' },
     ];
 
     /**
