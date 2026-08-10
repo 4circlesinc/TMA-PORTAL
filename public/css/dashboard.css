@@ -9223,8 +9223,11 @@
 
 /* Email has its own toolbar — never leave the generic page-title row in flow.
  * Inline display:none from showView can get cleared; CSS must stay definitive.
- * Taken completely out of flex flow so a stale style cannot reopen the gap. */
-.tma-dash--email .tma-dash__main-head {
+ * Taken completely out of flex flow so a stale style cannot reopen the gap.
+ * Also key off the visible email view — pin/actions have dropped
+ * .tma-dash--email and reopened a ~74px band (pad 28 + title + margin 28). */
+.tma-dash--email .tma-dash__main-head,
+.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden])) > .tma-dash__main-head {
   display: none !important;
   margin: 0 !important;
   height: 0 !important;
@@ -9296,7 +9299,8 @@
  */
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main,
-.tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
+.tma-dash--desktop-bar.tma-dash--email .tma-dash__main,
+.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden]) .tma-dash__email-toolbar) {
   padding: 0 0 var(--space-12) !important;
   overflow: hidden;
   min-height: 0;
@@ -9416,6 +9420,45 @@
   box-sizing: border-box;
   position: relative;
   z-index: 2;
+}
+
+/* Desktop + browser: toast must never participate in the shell grid. */
+.tma-dash__email-toast {
+  position: fixed !important;
+  left: 50%;
+  bottom: calc(var(--space-28) + env(safe-area-inset-bottom, 0px));
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-16);
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: #ffffff;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  transform: translateX(-50%) translateY(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease, transform 0.24s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tma-dash__email-toast[hidden] {
+  display: none !important;
+}
+
+.tma-dash__email-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tma-dash__email-toast img {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  filter: brightness(0) invert(1);
 }
 
 .tma-dash__email-toolbar .tma-dash__toolbar-actions {

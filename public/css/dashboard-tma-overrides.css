@@ -1158,7 +1158,8 @@ a.tma-dash__tab-btn:visited {
   }
 }
 
-.tma-dash--email .tma-dash__main-head {
+.tma-dash--email .tma-dash__main-head,
+.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden])) > .tma-dash__main-head {
   display: none !important;
   margin: 0 !important;
   height: 0 !important;
@@ -1166,6 +1167,16 @@ a.tma-dash__tab-btn:visited {
   padding: 0 !important;
   position: absolute !important;
   visibility: hidden !important;
+}
+
+.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden]) .tma-dash__email-toolbar) {
+  padding-top: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.tma-dash__email-toast {
+  position: fixed !important;
 }
 
 /*

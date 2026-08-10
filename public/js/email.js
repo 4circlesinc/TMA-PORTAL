@@ -6799,10 +6799,17 @@
     var toast = dash.querySelector('[data-email-toast]');
     var text = dash.querySelector('[data-email-toast-text]');
     if (!toast || !text) return;
+    // Never leave the toast as an in-flow grid child — on desktop it had no
+    // position:fixed rules and created an extra grid row under the shell.
+    if (toast.parentNode !== document.body) {
+      document.body.appendChild(toast);
+    }
     text.textContent = message;
     toast.hidden = false;
+    lockEmailShellSpacing(root);
     window.requestAnimationFrame(function () {
       toast.classList.add('tma-dash__email-toast--visible');
+      lockEmailShellSpacing(root);
     });
     window.clearTimeout(dash._emailToastTimer);
     dash._emailToastTimer = window.setTimeout(function () {
@@ -7775,15 +7782,28 @@
   }
 
   /*
-   * Keep the page-title row closed and kill mobile header padding while the
-   * desktop mail toolbar is on screen. Browser layout must stay alone —
-   * never collapse the shell grid or yank the toolbar with negative margins
-   * (that hid the card under the header / overflow clip in the web app).
-   * Electron title-bar collapse stays CSS-only via .tma-dash--desktop-bar.
+   * Browser bug: pin/star/archive can drop .tma-dash--email off the shell for
+   * a beat (or leave main-head + padding:28px live). That opens a ~74px white
+   * band above the toolbar. Re-assert the email shell class and collapse the
+   * page-title row whenever the email view is the one on screen.
    */
+  function emailViewIsActive(root) {
+    var view = root && root.closest ? root.closest('[data-view="email"]') : null;
+    if (!view) {
+      var dash = getEmailDashRoot(root);
+      view = dash && dash.querySelector('.tma-dash__view[data-view="email"]');
+    }
+    return !!(view && !view.hidden);
+  }
+
   function lockEmailShellSpacing(root) {
     var dash = getEmailDashRoot(root);
-    if (!dash || !dash.classList.contains('tma-dash--email')) return;
+    if (!dash || !emailViewIsActive(root)) return;
+
+    // Spacing CSS is keyed off this class — keep it on while Email is open.
+    if (!dash.classList.contains('tma-dash--email')) {
+      dash.classList.add('tma-dash--email');
+    }
 
     var head = dash.querySelector('.tma-dash__main-head');
     if (head) {
@@ -7791,10 +7811,14 @@
       head.hidden = true;
       head.style.setProperty('display', 'none', 'important');
       head.style.setProperty('margin', '0', 'important');
+      head.style.setProperty('margin-bottom', '0', 'important');
       head.style.setProperty('height', '0', 'important');
       head.style.setProperty('max-height', '0', 'important');
       head.style.setProperty('padding', '0', 'important');
       head.style.setProperty('overflow', 'hidden', 'important');
+      head.style.setProperty('flex', '0 0 0', 'important');
+      head.style.setProperty('position', 'absolute', 'important');
+      head.style.setProperty('visibility', 'hidden', 'important');
     }
 
     var toolbar = dash.querySelector('.tma-dash__email-toolbar');
@@ -7811,6 +7835,35 @@
     if (window.PortalTooltip) {
       if (window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
       if (window.PortalTooltip.purgeOrphans) window.PortalTooltip.purgeOrphans();
+    }
+  }
+
+  function ensureEmailShellWatch(root) {
+    var dash = getEmailDashRoot(root);
+    if (!dash || dash._emailShellWatch) return;
+    dash._emailShellWatch = true;
+    var timer = null;
+    function kick() {
+      if (timer) return;
+      timer = window.setTimeout(function () {
+        timer = null;
+        if (emailViewIsActive(root)) lockEmailShellSpacing(root);
+      }, 0);
+    }
+    var obs = new MutationObserver(kick);
+    obs.observe(dash, { attributes: true, attributeFilter: ['class'] });
+    var main = dash.querySelector('.tma-dash__main');
+    if (main) {
+      obs.observe(main, {
+        attributes: true,
+        attributeFilter: ['style', 'class', 'hidden'],
+        childList: true,
+        subtree: false,
+      });
+      var head = main.querySelector('.tma-dash__main-head');
+      if (head) {
+        obs.observe(head, { attributes: true, attributeFilter: ['style', 'hidden', 'class'] });
+      }
     }
   }
 
@@ -7975,6 +8028,7 @@
         if (!starRow) return;
         var starred = !starRow.starred;
         eachRowCopy(state, id, function (copy) { copy.starred = starred; });
+        if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
         api().setFlags(id, { starred: starred }).catch(function (err) {
           eachRowCopy(state, id, function (copy) { copy.starred = !starred; });
           reportMailError(state, err);
@@ -7990,6 +8044,8 @@
           if (img) img.src = starIconSrc(starred);
         });
         pulseEmailActionBtn(btn);
+        lockEmailShellSpacing(root);
+        window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
       });
     });
 
@@ -8001,6 +8057,7 @@
         if (!impRow) return;
         var important = !impRow.important;
         eachRowCopy(state, id, function (copy) { copy.important = important; });
+        if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
         api().setFlags(id, { important: important }).catch(function (err) {
           eachRowCopy(state, id, function (copy) { copy.important = !important; });
           reportMailError(state, err);
@@ -8016,6 +8073,8 @@
           if (img) img.src = importantIconSrc(important);
         });
         pulseEmailActionBtn(btn);
+        lockEmailShellSpacing(root);
+        window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
       });
     });
 
@@ -8230,15 +8289,19 @@
           var nowPinned = !pinRow.pinned;
           pinRow.pinned = nowPinned;
           resortPinnedRows(state);
+          if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
           // Patch the list only — a full render grows/shrinks the list head.
           updateInboxList(root, state, render);
+          lockEmailShellSpacing(root);
           showEmailToast(root, nowPinned ? 'Message pinned' : 'Message unpinned');
+          window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
           api().setFlags(id, { pinned: nowPinned }).catch(function (err) {
             var revert = findRow(state, id);
             if (revert) revert.pinned = !nowPinned;
             resortPinnedRows(state);
             reportMailError(state, err);
             updateInboxList(root, state, render);
+            lockEmailShellSpacing(root);
           });
           return;
         }
@@ -9343,6 +9406,7 @@
         renderComposeDock(state) +
         renderEmailSettings(state) +
         '</div>');
+      ensureEmailShellWatch(root);
       lockEmailShellSpacing(root);
       window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
       wireEvents(root, state, render);
