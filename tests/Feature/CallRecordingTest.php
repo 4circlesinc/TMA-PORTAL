@@ -139,7 +139,13 @@ class CallRecordingTest extends TestCase
             ->assertJsonPath('recording', null);
     }
 
-    public function test_a_reconnecting_tab_resumes_its_live_recording(): void
+    /**
+     * Never resumed, always a fresh row: a new MediaRecorder is a new WebM
+     * stream with its own init segment, so "continuing" an earlier row could
+     * only splice two incompatible streams. A redial records again from zero
+     * and the abandoned row settles as interrupted.
+     */
+    public function test_a_redial_gets_its_own_recording_row(): void
     {
         $staff = $this->user('staff@example.com');
         $client = $this->user('client@example.com', 'Client');
@@ -152,8 +158,65 @@ class CallRecordingTest extends TestCase
             ->postJson('/portal/messaging/conversations/'.$c->uuid.'/recordings')
             ->json('recording.id');
 
-        $this->assertSame($first, $second);
-        $this->assertSame(1, CallRecording::count());
+        $this->assertNotSame($first, $second);
+        $this->assertSame(2, CallRecording::count());
+    }
+
+    /** The stored Content-Type is derived server-side, never client-supplied —
+     * a chosen mime like text/html would turn playback into stored XSS. */
+    public function test_the_served_mime_cannot_be_chosen_by_the_uploader(): void
+    {
+        $staff = $this->user('staff@example.com');
+        $client = $this->user('client@example.com', 'Client');
+        $c = $this->conversation([$staff, $client]);
+
+        $id = $this->actingAs($staff)
+            ->postJson('/portal/messaging/conversations/'.$c->uuid.'/recordings')
+            ->json('recording.id');
+
+        $this->actingAs($staff)->post('/portal/messaging/recordings/'.$id.'/chunks', [
+            'seq' => 0,
+            'chunk' => UploadedFile::fake()->createWithContent('chunk.webm', '<script>alert(1)</script>'),
+        ])->assertOk();
+
+        $this->actingAs($staff)->postJson('/portal/messaging/recordings/'.$id.'/finish', [
+            'durationMs' => 1000,
+            'media' => 'audio',
+            'mime' => 'text/html',
+        ])->assertOk();
+
+        $this->assertSame('audio/webm', CallRecording::where('uuid', $id)->value('mime'));
+        $this->actingAs($staff)
+            ->get('/portal/call-recordings/'.$id.'/media')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'audio/webm');
+    }
+
+    /** Seeking a long recording needs byte ranges, not a front-to-back download. */
+    public function test_the_media_endpoint_honours_a_byte_range(): void
+    {
+        $staff = $this->user('staff@example.com');
+        $client = $this->user('client@example.com', 'Client');
+        $c = $this->conversation([$staff, $client]);
+
+        $id = $this->actingAs($staff)
+            ->postJson('/portal/messaging/conversations/'.$c->uuid.'/recordings')
+            ->json('recording.id');
+        $this->actingAs($staff)->post('/portal/messaging/recordings/'.$id.'/chunks', [
+            'seq' => 0,
+            'chunk' => UploadedFile::fake()->createWithContent('chunk.webm', 'abcdefghij'),
+        ]);
+        $this->actingAs($staff)->postJson('/portal/messaging/recordings/'.$id.'/finish', [
+            'durationMs' => 1000,
+        ]);
+
+        $response = $this->actingAs($staff)
+            ->get('/portal/call-recordings/'.$id.'/media', ['Range' => 'bytes=2-5']);
+
+        $response->assertStatus(206)
+            ->assertHeader('Content-Range', 'bytes 2-5/10')
+            ->assertHeader('Accept-Ranges', 'bytes');
+        $this->assertSame('cdef', $response->streamedContent());
     }
 
     // ---------------------------------------------------- chunks + finish

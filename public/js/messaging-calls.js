@@ -613,13 +613,23 @@
         ? session.localStream.getVideoTracks()[0]
         : session.localStream.getAudioTracks()[0]);
 
-      if (sender) sender.replaceTrack(track).catch(function () { /* ignore */ });
+      // A live screen share owns the video sender; the new camera waits in
+      // localStream and takes the wire back when the share stops.
+      if (sender && !(wantVideo && session.screenSharing)) {
+        sender.replaceTrack(track).catch(function () { /* ignore */ });
+      }
       if (session.localStream) {
         if (old) { session.localStream.removeTrack(old); try { old.stop(); } catch (e) { /* ignore */ } }
         session.localStream.addTrack(track);
       }
-      if (!wantVideo) track.enabled = !session.muted;
-      else track.enabled = !session.cameraOff;
+      if (!wantVideo) {
+        track.enabled = !session.muted;
+        // A live recording mixes the ORIGINAL microphone track; stopping it
+        // above turned that source to silence, so hand it the new one.
+        rewireRecorderLocalAudio(track);
+      } else {
+        track.enabled = !session.cameraOff;
+      }
       attachStreams();
       render();
     }).catch(function (err) {
@@ -2041,7 +2051,7 @@
   var REC_CHUNK_MS = 10000;
   var REC_NOTICE_LEAD_MS = 1500;
 
-  function maybeStartRecording() {
+  function maybeStartRecording(attempt) {
     if (!session || session.recording) return;
     if (typeof MediaRecorder === 'undefined') return;
     if (!api() || !api().callRecordingStart) return;
@@ -2050,7 +2060,13 @@
     api().callRecordingStart(conversationId, { media: session.media }).then(function (data) {
       var rec = data && data.recording;
       if (!rec || !rec.id) return;
-      if (!session || session.conversationId !== conversationId || session.recording) return;
+      if (!session || session.conversationId !== conversationId || session.recording) {
+        // The call ended (or was replaced) while the request was in flight.
+        // The server already opened a row for it — close it, or it lingers
+        // in the listing as a phantom "interrupted" recording forever.
+        api().callRecordingFinish(rec.id, { failed: true }).catch(function () {});
+        return;
+      }
 
       session.recording = {
         id: rec.id,
@@ -2058,6 +2074,8 @@
         queue: Promise.resolve(),
         recorder: null,
         ctx: null,
+        dest: null,
+        localSource: null,
         mime: '',
         hasVideo: false,
         startedAt: null,
@@ -2073,8 +2091,17 @@
         if (session && session.recording && session.recording.id === rec.id &&
           !session.recording.stopped) beginRecorder();
       }, REC_NOTICE_LEAD_MS);
-    }).catch(function () {
-      // Not a recorded call — silence is the whole answer.
+    }).catch(function (err) {
+      // A 4xx answer means "not a recorded call" and silence is the whole
+      // answer. A network blip or 5xx means an ELIGIBLE call would silently
+      // go unrecorded — that gets one more try before giving up.
+      var transient = !err || err.status === undefined || err.status >= 500;
+      if (transient && !attempt) {
+        setTimeout(function () {
+          if (session && session.conversationId === conversationId &&
+            session.connected && !session.recording) maybeStartRecording(1);
+        }, 4000);
+      }
     });
   }
 
@@ -2097,10 +2124,19 @@
       if (Ctx) {
         ctx = new Ctx();
         var dest = ctx.createMediaStreamDestination();
-        [session.localStream, session.remoteStream].forEach(function (stream) {
-          var track = stream && stream.getAudioTracks()[0];
-          if (track) ctx.createMediaStreamSource(new MediaStream([track])).connect(dest);
-        });
+        // The local source is kept on the bundle: a mid-call microphone
+        // switch stops this exact track, and the recorder has to be handed
+        // the replacement or it captures silence from our side on.
+        var localTrack = session.localStream && session.localStream.getAudioTracks()[0];
+        if (localTrack) {
+          rec.localSource = ctx.createMediaStreamSource(new MediaStream([localTrack]));
+          rec.localSource.connect(dest);
+        }
+        var remoteTrack = session.remoteStream && session.remoteStream.getAudioTracks()[0];
+        if (remoteTrack) {
+          ctx.createMediaStreamSource(new MediaStream([remoteTrack])).connect(dest);
+        }
+        rec.dest = dest;
         tracks = dest.stream.getAudioTracks();
       } else {
         // No AudioContext: the client's voice alone beats nothing at all.
@@ -2140,7 +2176,16 @@
         if (!ev.data || !ev.data.size) return;
         pushRecordingChunk(rec, ev.data);
       };
-      recorder.onerror = function () { stopRecording(); };
+      recorder.onerror = function () {
+        stopRecording();
+        // Mid-call failure, not teardown: the call goes on, so both sides
+        // must stop being told they are recorded when they no longer are.
+        if (session) {
+          render();
+          publishState();
+          announce('Recording stopped');
+        }
+      };
       recorder.start(REC_CHUNK_MS);
     } catch (e) {
       abandonRecording();
@@ -2164,6 +2209,18 @@
       // A lost chunk is a gap in the recording; a rejected chain would lose
       // everything after it, which is worse.
     });
+  }
+
+  /* A mid-call microphone swap hands the recorder the replacement track —
+   * the old source's track was stopped, which reads as silence forever. */
+  function rewireRecorderLocalAudio(track) {
+    var rec = session && session.recording;
+    if (!rec || !rec.ctx || !rec.dest || !track) return;
+    try {
+      if (rec.localSource) rec.localSource.disconnect();
+      rec.localSource = rec.ctx.createMediaStreamSource(new MediaStream([track]));
+      rec.localSource.connect(rec.dest);
+    } catch (e) { /* the call outranks the recording */ }
   }
 
   /* Callable mid-teardown: detaches the bundle from the session first, so the
@@ -2868,7 +2925,12 @@
       session.remoteCameraOff = false;
       session.swapped = false;
       if (session.media === 'video') {
-        if (session.videoSender) session.videoSender.replaceTrack(null).catch(function () {});
+        // Same guard as switchToVoice: during a screen share the sender is
+        // carrying the SCREEN, and the peer turning their camera off must
+        // not rip our share off the wire.
+        if (session.videoSender && !session.screenSharing) {
+          session.videoSender.replaceTrack(null).catch(function () {});
+        }
         if (session.localStream) {
           session.localStream.getVideoTracks().forEach(function (t) {
             session.localStream.removeTrack(t);

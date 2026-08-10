@@ -123,16 +123,25 @@
 
   /* ── Data ── */
 
+  /* Monotonic request token: the LAST REQUEST wins, not whichever response
+   * happens to resolve last — search latency varies per term, and without
+   * this the table could settle on results for a query the box no longer
+   * shows. */
+  var loadSeq = 0;
+
   function load(root) {
+    var seq = ++loadSeq;
     state.loading = true;
     state.error = null;
     renderBody(root);
 
     get(BASE + query()).then(function (data) {
+      if (seq !== loadSeq) return;
       state.data = data;
       state.loading = false;
       renderBody(root);
     }).catch(function (err) {
+      if (seq !== loadSeq) return;
       state.loading = false;
       state.error = err.status === 404
         ? 'Call recordings are not available on this account.'
@@ -401,10 +410,13 @@
     var filterBtn = root.querySelector('[data-recordings-filter]');
     if (filterBtn) filterBtn.addEventListener('click', function () { openFilters(root); });
 
+    // Debounced like the Users table: one fetch per pause, not per keystroke.
+    var searchTimer = null;
     ui().wireToolbarSearch(root, '[data-recordings-search]', function (value) {
       state.q = value;
       state.page = 1;
-      load(root);
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { load(root); }, 250);
     });
 
     load(root);

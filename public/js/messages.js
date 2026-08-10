@@ -4292,7 +4292,6 @@
       row._messagesSwipeBound = true;
 
       var side = row.getAttribute('data-messages-swipe');
-      var index = parseInt(row.getAttribute('data-messages-index'), 10);
       var swipe = row.querySelector('.tma-dash__messages-bubble-swipe');
       var track = row.querySelector('[data-messages-swipe-track]');
       var replyIcon = row.querySelector('.tma-dash__messages-bubble-swipe-reply');
@@ -4379,6 +4378,13 @@
 
       function triggerReply() {
         clearWheelEndTimer();
+
+        // Read the index off the LIVE attribute at trigger time, never the
+        // bind-time capture: paging older history prepends messages and
+        // shifts every bubble's position. The morph layer keeps the
+        // attribute current while a captured variable stays stale — which
+        // quietly quoted a message a whole page older than the one swiped.
+        var index = parseInt(row.getAttribute('data-messages-index'), 10);
 
         // setReplyTo takes a message *id*. This passed the bubble's numeric
         // index — a leftover from when replies were tracked by position — so
