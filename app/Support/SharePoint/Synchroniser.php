@@ -6,7 +6,9 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
+use App\Models\User;
 use App\Support\Files\Activity;
+use App\Support\Files\FolderProvisioner;
 use App\Support\Files\Naming;
 use App\Support\Files\Vault;
 use App\Support\Files\Versions;
@@ -310,6 +312,38 @@ class Synchroniser
         self::applyCreate($connection, $item, $isFolder, $stats);
     }
 
+    /**
+     * Who owns what this connection brings in.
+     *
+     * A personal OneDrive's contents belong to the person whose drive it is,
+     * read from `owner_upn`. It used to be `created_by`, which is only the
+     * same person when somebody connects their own drive — two of these
+     * connections were made by a console command and have no creator at all,
+     * so they were writing a null owner.
+     *
+     * Everything else is a site document library: the firm's own files, owned
+     * by the firm's own account rather than by whichever administrator
+     * happened to set the sync up. Attributing thirty thousand citizenship
+     * documents to one partner is what this is correcting.
+     */
+    private static function ownerIdFor(SharePointConnection $connection): int
+    {
+        if ($connection->drive_kind === 'onedrive' && $connection->owner_upn) {
+            $driveOwner = User::whereRaw('LOWER(email) = ?', [mb_strtolower($connection->owner_upn)])->value('id');
+            if ($driveOwner) {
+                return (int) $driveOwner;
+            }
+
+            // A drive whose person has no portal account yet: the account that
+            // connected it is a better guess than handing it to the firm.
+            if ($connection->created_by) {
+                return (int) $connection->created_by;
+            }
+        }
+
+        return FolderProvisioner::systemOwnerId();
+    }
+
     private static function applyCreate(SharePointConnection $connection, array $item, bool $isFolder, array &$stats): void
     {
         $parentFolder = self::resolveParentFolder($connection, $item);
@@ -320,7 +354,7 @@ class Synchroniser
                 'uuid' => (string) Str::uuid(),
                 'name' => $name,
                 'parent_id' => $parentFolder?->id,
-                'owner_id' => $connection->created_by,
+                'owner_id' => self::ownerIdFor($connection),
                 'created_by' => $connection->created_by,
                 'origin' => 'sharepoint',
             ]);
@@ -427,7 +461,7 @@ class Synchroniser
             'storage_path' => null,
             'checksum' => null,
             'content_state' => RemoteContent::PENDING,
-            'owner_id' => $connection->created_by,
+            'owner_id' => self::ownerIdFor($connection),
             'uploaded_by' => $connection->created_by,
             'source_modified_at' => isset($item['lastModifiedDateTime'])
                 ? \Illuminate\Support\Carbon::parse($item['lastModifiedDateTime']) : null,

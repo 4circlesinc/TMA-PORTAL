@@ -38,4 +38,25 @@ return [
         'per_licence_bytes' => (int) env('PORTAL_STORAGE_PER_LICENCE_BYTES', 1024 ** 4),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | The firm's own account
+    |--------------------------------------------------------------------------
+    |
+    | Who owns a file that belongs to the firm rather than to a person: the
+    | SharePoint document libraries, the folders the portal provisions, and
+    | anything else created with no obvious human owner.
+    |
+    | Before this, "the firm" resolved to the lowest-numbered administrator —
+    | which was whoever was seeded first. Thirty thousand citizenship documents
+    | ended up filed under one partner's name, and the Owner column read as a
+    | wall of that one person for files nobody thought of as theirs.
+    |
+    | Falls back to the oldest administrator if this account does not exist, so
+    | a fresh install with no service account still works.
+    |
+    */
+
+    'system_account_email' => env('PORTAL_SYSTEM_ACCOUNT_EMAIL', 'portal@tmantoinelaw.com'),
+
 ];

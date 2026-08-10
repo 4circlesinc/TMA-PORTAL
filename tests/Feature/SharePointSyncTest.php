@@ -622,4 +622,121 @@ class SharePointSyncTest extends TestCase
 
         $this->assertSame('not-linked', Pusher::pushFile($file)['status']);
     }
+
+    /*
+     * A site library is the firm's, not the connector's.
+     *
+     * The sync filed everything under the connection's created_by, so the four
+     * document libraries — thirty thousand citizenship, advisory and
+     * post-approval documents — all came out owned by whichever administrator
+     * had set the sync up, and the Owner column read as a wall of their name.
+     */
+    public function test_site_content_is_owned_by_the_firms_own_account(): void
+    {
+        $firm = User::create(['name' => 'TM ANTOINE Advisory', 'email' => 'portal@example.com', 'password' => bcrypt('x')]);
+        $firm->forceFill(['status' => 'approved', 'account_type' => 'Administrator'])->save();
+        config(['portal.system_account_email' => 'portal@example.com']);
+
+        $this->deltaItems = [
+            ['id' => 'f1', 'name' => 'Bundle.pdf', 'size' => 9, 'file' => ['mimeType' => 'application/pdf'], 'parentReference' => []],
+            ['id' => 'd1', 'name' => 'Applications', 'folder' => ['childCount' => 0], 'parentReference' => []],
+        ];
+
+        Synchroniser::sync($this->connection->fresh());
+
+        $file = FileItem::where('name', 'Bundle.pdf')->firstOrFail();
+        $folder = Folder::where('name', 'Applications')->firstOrFail();
+
+        $this->assertSame($firm->id, $file->owner_id, 'a synced site file belongs to the firm');
+        $this->assertSame($firm->id, $folder->owner_id, 'and so does a synced site folder');
+
+        // Who set the sync up is still recorded — it is just not ownership.
+        $this->assertSame($this->owner->id, $file->uploaded_by);
+        $this->assertSame($this->owner->id, $folder->created_by);
+    }
+
+    /*
+     * A personal drive is the opposite case: its contents are that person's,
+     * and FileAccess treats a personal tree as private even from
+     * administrators. Owner came from created_by, which is only the same
+     * person when somebody connects their own drive.
+     */
+    public function test_onedrive_content_is_owned_by_whose_drive_it_is(): void
+    {
+        $firm = User::create(['name' => 'TM ANTOINE Advisory', 'email' => 'portal@example.com', 'password' => bcrypt('x')]);
+        $firm->forceFill(['status' => 'approved', 'account_type' => 'Administrator'])->save();
+        config(['portal.system_account_email' => 'portal@example.com']);
+
+        $bea = User::create(['name' => 'Bea Staff', 'email' => 'bea@example.com', 'password' => bcrypt('x')]);
+        $bea->forceFill(['status' => 'approved', 'account_type' => 'Employee'])->save();
+
+        // Connected by an administrator on Bea's behalf: created_by is the
+        // admin, and the drive is still hers.
+        $this->connection->forceFill([
+            'drive_kind' => 'onedrive',
+            'owner_upn' => 'bea@example.com',
+        ])->save();
+
+        $this->deltaItems = [
+            ['id' => 'f2', 'name' => 'Her notes.docx', 'size' => 9, 'file' => ['mimeType' => 'application/msword'], 'parentReference' => []],
+        ];
+
+        Synchroniser::sync($this->connection->fresh());
+
+        $file = FileItem::where('name', 'Her notes.docx')->firstOrFail();
+        $this->assertSame($bea->id, $file->owner_id, "a person's drive stays theirs, whoever connected it");
+        $this->assertNotSame($firm->id, $file->owner_id);
+    }
+
+    public function test_reassign_command_moves_site_content_and_leaves_personal_drives_alone(): void
+    {
+        $firm = User::create(['name' => 'TM ANTOINE Advisory', 'email' => 'portal@example.com', 'password' => bcrypt('x')]);
+        $firm->forceFill(['status' => 'approved', 'account_type' => 'Administrator'])->save();
+        config(['portal.system_account_email' => 'portal@example.com']);
+
+        // A personal connection whose files must not move.
+        $personal = SharePointConnection::create([
+            'uuid' => (string) Str::uuid(), 'site_id' => 'onedrive:me', 'drive_id' => 'drive-2',
+            'drive_name' => 'OneDrive', 'created_by' => $this->owner->id,
+            'drive_kind' => 'onedrive', 'owner_upn' => $this->owner->email,
+        ]);
+
+        $siteFile = FileItem::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Firm.pdf', 'extension' => 'pdf',
+            'mime_type' => 'application/pdf', 'size' => 1, 'disk' => 'local', 'storage_path' => 'x',
+            'owner_id' => $this->owner->id, 'uploaded_by' => $this->owner->id, 'origin' => 'sharepoint',
+        ]);
+        $mineFile = FileItem::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Mine.pdf', 'extension' => 'pdf',
+            'mime_type' => 'application/pdf', 'size' => 1, 'disk' => 'local', 'storage_path' => 'y',
+            'owner_id' => $this->owner->id, 'uploaded_by' => $this->owner->id, 'origin' => 'sharepoint',
+        ]);
+
+        SharePointItem::create([
+            'connection_id' => $this->connection->id, 'graph_item_id' => 'g1',
+            'item_type' => 'file', 'file_id' => $siteFile->id,
+        ]);
+        SharePointItem::create([
+            'connection_id' => $personal->id, 'graph_item_id' => 'g2',
+            'item_type' => 'file', 'file_id' => $mineFile->id,
+        ]);
+
+        $this->artisan('files:reassign-system-owner')->assertSuccessful();
+
+        $this->assertSame($firm->id, $siteFile->fresh()->owner_id, 'site content moves to the firm');
+        $this->assertSame($this->owner->id, $mineFile->fresh()->owner_id, 'a personal drive is left alone');
+
+        // Re-running must be a no-op rather than sweeping anything else up.
+        $this->artisan('files:reassign-system-owner')->assertSuccessful();
+        $this->assertSame($this->owner->id, $mineFile->fresh()->owner_id);
+    }
+
+    public function test_the_firm_account_falls_back_to_the_oldest_admin_when_absent(): void
+    {
+        config(['portal.system_account_email' => 'nobody@example.com']);
+
+        // An install with no service account still has to provision folders.
+        $this->assertSame($this->owner->id, \App\Support\Files\FolderProvisioner::systemOwnerId());
+        $this->assertNull(\App\Support\Files\FolderProvisioner::systemAccountId());
+    }
 }

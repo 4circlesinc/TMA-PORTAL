@@ -23,12 +23,40 @@ class FolderProvisioner
 
     public const ROOT_STAFF = 'Staff Files';
 
-    /** The stable owner for system folders: the earliest administrator. */
+    /**
+     * Who owns something that belongs to the firm rather than to a person.
+     *
+     * The firm's own account (portal.system_account_email), because these
+     * files are the firm's: the SharePoint libraries, the provisioned folders,
+     * anything created with no obvious human owner.
+     *
+     * It used to be "the earliest administrator", which was simply whoever was
+     * seeded first — so thirty thousand citizenship documents were filed under
+     * one partner's name and the Owner column read as a wall of that person.
+     * That fallback is still here for an install with no service account, but
+     * it is the fallback now rather than the rule.
+     */
     public static function systemOwnerId(?User $fallback = null): int
     {
+        $systemId = self::systemAccountId();
+        if ($systemId) {
+            return $systemId;
+        }
+
         $adminId = User::where('account_type', 'Administrator')->orderBy('id')->value('id');
 
         return $adminId ?? $fallback?->id ?? User::orderBy('id')->value('id');
+    }
+
+    /** The firm's own account, if it exists. Null on an install without one. */
+    public static function systemAccountId(): ?int
+    {
+        $email = trim((string) config('portal.system_account_email'));
+        if ($email === '') {
+            return null;
+        }
+
+        return User::whereRaw('LOWER(email) = ?', [mb_strtolower($email)])->value('id');
     }
 
     public static function clientsRoot(): Folder
