@@ -11833,14 +11833,29 @@
 /* ── skeleton rows ─────────────────────────────────────────────────
  *
  * Shaped like the mail they stand in for, so the list fills in rather than
- * jumping. Uses the shared .tma-skeleton shimmer from portal.css.
+ * jumping. Uses the shared .tma-skeleton shimmer from portal.css, with a
+ * softer sweep so placeholders do not flash as hard white bars.
  */
 .tma-dash__email-row--skeleton {
   pointer-events: none;
   background: transparent;
 }
 
-.tma-dash__email-skeleton-avatar {
+.tma-dash__email-row--skeleton .tma-skeleton {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.tma-dash__email-row--skeleton .tma-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 45%,
+    rgba(255, 255, 255, 0.45) 55%,
+    transparent 100%
+  );
+}
+
+.tma-dash__email-skeleton-avatar.tma-skeleton {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
@@ -11854,15 +11869,30 @@
   border-radius: var(--radius-4, 4px);
 }
 
-.tma-dash__email-skeleton-line--sender { width: 34%; }
-.tma-dash__email-skeleton-line--subject { width: 62%; }
-.tma-dash__email-skeleton-line--snippet { width: 82%; }
+.tma-dash__email-skeleton-line--sender { width: 28%; max-width: 140px; }
+.tma-dash__email-skeleton-line--subject { width: 58%; }
+.tma-dash__email-skeleton-line--snippet { width: 78%; }
+
+.tma-dash__email-row--child.tma-dash__email-row--skeleton .tma-dash__email-skeleton-line--sender {
+  width: 22%;
+  max-width: 120px;
+  height: 9px;
+}
+
+.tma-dash__email-row--child.tma-dash__email-row--skeleton .tma-dash__email-skeleton-line--snippet {
+  width: 72%;
+  height: 9px;
+}
 
 .tma-dash__email-skeleton-time {
   display: block;
   width: 34px;
   height: 10px;
   border-radius: var(--radius-4, 4px);
+}
+
+.tma-dash__email-thread-skeleton {
+  display: block;
 }
 
 .tma-dash__email-message--skeleton {

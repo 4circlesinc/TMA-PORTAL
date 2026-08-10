@@ -4006,6 +4006,35 @@
       rows + '</div>';
   }
 
+  /* Compact placeholders for an opened conversation while replies load —
+   * same shape as child rows (dot slot, sender, snippet, time), not a full
+   * inbox row with avatar/subject. */
+  function renderThreadSkeleton(count) {
+    var rows = '';
+    var n = Math.max(1, count || 2);
+    var i;
+
+    for (i = 0; i < n; i++) {
+      rows +=
+        '<div class="tma-dash__email-row tma-dash__email-row--child' +
+        ' tma-dash__email-row--skeleton" aria-hidden="true">' +
+        '<span class="tma-dash__email-row-unread-slot" aria-hidden="true"></span>' +
+        '<div class="tma-dash__email-row-content">' +
+        '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-line' +
+        ' tma-dash__email-skeleton-line--sender"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-line' +
+        ' tma-dash__email-skeleton-line--snippet"></span>' +
+        '</div>' +
+        '<div class="tma-dash__email-row-side">' +
+        '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-time"></span>' +
+        '</div>' +
+        '</div>';
+    }
+
+    return '<div class="tma-dash__email-thread-skeleton" role="status" aria-label="Loading conversation">' +
+      rows + '</div>';
+  }
+
   /* Loading, disconnected, error and empty all get an honest state — never a
    * placeholder message that could be mistaken for real mail. */
   function renderListState(state, rows) {
@@ -7594,7 +7623,7 @@
       if (!children) {
         return html +
           '<div class="tma-dash__email-thread-children" data-email-thread-children="' + esc(row.id) + '">' +
-          renderListSkeleton(Math.min(3, conversationCount(row) - 1)) +
+          renderThreadSkeleton(Math.min(3, conversationCount(row) - 1)) +
           '</div>';
       }
 
