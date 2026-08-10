@@ -39,7 +39,9 @@
       '.tma-dash__profile-email.tma-skeleton{min-width:124px;height:.62em}' +
       '.tma-portal-hello__title.tma-skeleton{min-width:150px;height:1.05em}' +
       '@keyframes tma-shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}' +
-      '@media (prefers-color-scheme:dark){.tma-skeleton{background:linear-gradient(90deg,#2a2f37 25%,#353b45 37%,#2a2f37 63%)!important}}';
+      /* The chosen theme, not the device — the portal stays light on a dark
+         machine, and these skeletons have to stay light with it. */
+      '[data-theme="dark"] .tma-skeleton{background:linear-gradient(90deg,#2a2f37 25%,#353b45 37%,#2a2f37 63%)!important}';
     (document.head || document.documentElement).appendChild(style);
   }
 

@@ -7,7 +7,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <script>(function(){try{var m=localStorage.getItem("tma.themeMode")||"",t=localStorage.getItem("tma.theme")||"",d=m?m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches):t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
+  <!-- Light unless the reader explicitly chose Dark. Dark mode is unfinished, so the device colour scheme is ignored on purpose — see FOLLOW_SYSTEM_THEME in public/js/dashboard.js. -->
+  <script>(function(){try{if((localStorage.getItem("tma.themeMode")||"")==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
   <style>
     :root { --db-border: var(--color-border-soft); }
     [data-theme="dark"] {

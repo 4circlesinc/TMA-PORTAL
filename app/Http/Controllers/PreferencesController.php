@@ -30,7 +30,13 @@ class PreferencesController extends Controller
         'notifyAlwaysEmail' => false,
         // Theme panel. These used to live only in localStorage, so the look
         // reset on every new browser — they follow the account now.
-        'themeMode' => 'system',
+        //
+        // Light, not 'system': dark mode is still being finished, so the
+        // portal ignores the device's colour scheme until someone picks Dark
+        // themselves (FOLLOW_SYSTEM_THEME in dashboard.js). 'system' stays a
+        // valid stored value so old accounts round-trip and re-enabling is a
+        // one-line change.
+        'themeMode' => 'light',
         'fontScale' => 3,
         'accentColor' => 'indigo',
         // Privacy panel. The cookie switches are gone: the portal sets only

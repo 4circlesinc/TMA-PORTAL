@@ -30,7 +30,9 @@ class PersonalPreferencesTest extends TestCase
     {
         $this->actingAs($this->user())->getJson('/me/preferences')
             ->assertOk()
-            ->assertJsonPath('themeMode', 'system')
+            // Light, not 'system' — the portal ignores the device's colour
+            // scheme until dark mode is finished.
+            ->assertJsonPath('themeMode', 'light')
             ->assertJsonPath('fontScale', 3)
             ->assertJsonPath('accentColor', 'indigo')
             ->assertJsonPath('historyDays', 30)

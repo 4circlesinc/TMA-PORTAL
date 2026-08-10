@@ -216,8 +216,12 @@
       '<p class="tma-dash__settings-placeholder">' + esc(label) + ' settings are coming soon.</p></section>';
   }
 
+  /* No "System" tile while dark mode is still being finished: the portal
+     ignores the device's colour scheme (see FOLLOW_SYSTEM_THEME in
+     dashboard.js), so offering it would be a switch that changes nothing.
+     Put `{ id: 'system', label: 'System', preview: 'system' }` back at the
+     front when dark mode ships. */
   var THEME_MODES = [
-    { id: 'system', label: 'System', preview: 'system' },
     { id: 'light', label: 'Light', preview: 'light' },
     { id: 'dark', label: 'Dark', preview: 'dark' },
   ];
@@ -314,7 +318,7 @@
   function readThemePrefs() {
     var api = getPrefsApi();
     if (api && api.getPrefs) return api.getPrefs();
-    return { themeMode: 'system', fontScale: 3, accentColor: 'indigo', sidebarStyle: 'hover' };
+    return { themeMode: 'light', fontScale: 3, accentColor: 'indigo', sidebarStyle: 'hover' };
   }
 
   function syncThemePanelUI(root) {

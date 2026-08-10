@@ -164,9 +164,23 @@
     green: '#71dd8c',
   };
 
+  /*
+   * Dark mode is still being finished, so the portal deliberately ignores the
+   * device's colour scheme: light is the default everywhere and only an
+   * explicit "Dark" choice turns it on. Flip this back to true once dark mode
+   * is done — and restore the "System" tile in settings.js (THEME_MODES) and
+   * the boot snippets in the Blade layouts / static pages at the same time.
+   */
+  var FOLLOW_SYSTEM_THEME = false;
+
   function getThemeMode() {
     var mode = store.get('tma.themeMode', '');
-    if (mode === 'system' || mode === 'light' || mode === 'dark') return mode;
+    if (mode === 'light' || mode === 'dark') return mode;
+    if (mode === 'system') return FOLLOW_SYSTEM_THEME ? 'system' : 'light';
+    /* `tma.theme` mirrors the RESOLVED theme (applyThemeVisual writes it), so
+       on a dark device it reads "dark" even though nobody ever chose dark —
+       it can't be trusted to mean an explicit choice while we force light. */
+    if (!FOLLOW_SYSTEM_THEME) return 'light';
     var legacy = store.get('tma.theme', '');
     if (legacy === 'dark' || legacy === 'light') return legacy;
     return 'system';
@@ -174,6 +188,7 @@
 
   function resolveTheme(mode) {
     if (mode === 'system') {
+      if (!FOLLOW_SYSTEM_THEME) return 'light';
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     return mode === 'dark' ? 'dark' : 'light';
@@ -1499,6 +1514,7 @@
     if (!root.dataset.themeListenerBound) {
       root.dataset.themeListenerBound = '1';
       systemThemeMq.addEventListener('change', function () {
+        if (!FOLLOW_SYSTEM_THEME) return;
         if (getThemeMode() === 'system') applyThemeVisual(resolveTheme('system'));
       });
     }

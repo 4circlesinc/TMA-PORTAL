@@ -36,6 +36,11 @@
 
   var systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 
+  /* Mirrors FOLLOW_SYSTEM_THEME in dashboard.js — dark mode is unfinished, so
+     the device's colour scheme is ignored and light is the default until the
+     reader picks Dark themselves. Flip both together. */
+  var FOLLOW_SYSTEM_THEME = false;
+
   function resolveTheme() {
     try {
       var q = new URL(window.location.href).searchParams.get("theme");
@@ -43,6 +48,9 @@
     } catch (e) {}
     var mode = store.get("tma.themeMode", "");
     if (mode === "dark" || mode === "light") return mode;
+    /* `tma.theme` is a mirror of the resolved theme, not a record of choice,
+       so it says "dark" for anyone on a dark device — ignore it too. */
+    if (!FOLLOW_SYSTEM_THEME) return "light";
     if (mode === "system") return systemDark.matches ? "dark" : "light";
     var legacy = store.get("tma.theme", "");
     if (legacy === "dark" || legacy === "light") return legacy;
@@ -82,6 +90,7 @@
       });
     }
     systemDark.addEventListener("change", function () {
+      if (!FOLLOW_SYSTEM_THEME) return;
       if (store.get("tma.themeMode", "") === "system" || (!store.get("tma.themeMode", "") && !store.get("tma.theme", ""))) {
         applyTheme(resolveTheme());
       }

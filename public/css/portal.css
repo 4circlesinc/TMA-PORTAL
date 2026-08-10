@@ -1707,10 +1707,8 @@
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
   animation: tma-skeleton-shimmer 1.3s ease-in-out infinite;
 }
-@media (prefers-color-scheme: dark) {
-  .tma-skeleton { background: rgba(255, 255, 255, 0.08); }
-  .tma-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); }
-}
+/* Keyed off the chosen theme only — never the device. A dark-mode laptop on a
+   light portal was painting charcoal skeletons onto white cards. */
 :root[data-theme="dark"] .tma-skeleton { background: rgba(255, 255, 255, 0.08); }
 :root[data-theme="dark"] .tma-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); }
 :root[data-theme="light"] .tma-skeleton { background: rgba(0, 0, 0, 0.06); }
