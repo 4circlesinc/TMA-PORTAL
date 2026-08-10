@@ -78,6 +78,8 @@
     ClockFill: ICON + 'ClockFill.svg',
     Tag: ICON + 'Tag.svg',
     PushPin: ICON + 'PushPin.svg',
+    // Blue filled pin for the active pinned state (pair to StarFilled / FlagFilled).
+    PushPinFilled: ICON + 'PushPinFilled.svg',
     PushPinSlash: ICON + 'PushPinSlash.svg',
     ArchiveTray: ICON + 'ArchiveTray.svg',
     Sidebar: ICON + 'SidebarSimple.svg',
@@ -1222,6 +1224,10 @@
 
   function importantIconSrc(important) {
     return important ? ICONS.FlagFilled : ICONS.Important;
+  }
+
+  function pinIconSrc(pinned) {
+    return pinned ? ICONS.PushPinFilled : ICONS.PushPin;
   }
 
   function renderDetailSubjectStar(row, state) {
@@ -2744,7 +2750,7 @@
         important: true,
         attr: ' data-email-important="' + esc(row.id) + '" aria-pressed="' + (important ? 'true' : 'false') + '"',
       },
-      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned, pin: true },
+      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: pinned ? 'PushPinFilled' : 'PushPin', active: pinned, pin: true },
       {
         id: inArchive ? 'inbox' : 'archive',
         label: inArchive ? 'Move to inbox' : 'Archive',
@@ -7090,7 +7096,7 @@
         icon: starred ? 'StarFilled' : 'Star', active: starred },
       { id: 'important', label: important ? 'Mark as not important' : 'Mark as important',
         icon: important ? 'FlagFilled' : 'Important', active: important },
-      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned },
+      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: pinned ? 'PushPinFilled' : 'PushPin', active: pinned },
       { id: 'snooze', label: 'Snooze', icon: 'Clock' },
       { id: 'label', label: 'Label as', icon: 'Tag' },
       { separator: true },

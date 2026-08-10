@@ -12097,14 +12097,14 @@
   height: 14px;
   flex-shrink: 0;
   background: var(--color-primary, #03a5e9);
-  -webkit-mask: url("../images/icons/phosphor/PushPin.svg") center / contain no-repeat;
-  mask: url("../images/icons/phosphor/PushPin.svg") center / contain no-repeat;
+  -webkit-mask: url("../images/icons/phosphor/PushPinFilled.svg") center / contain no-repeat;
+  mask: url("../images/icons/phosphor/PushPinFilled.svg") center / contain no-repeat;
 }
 
 .tma-dash__email-row-action--pinned img {
   opacity: 1;
-  /* Same blue cue when the pin action is active in the hover bar. */
-  filter: invert(52%) sepia(86%) saturate(1800%) hue-rotate(165deg) brightness(98%) contrast(101%);
+  /* Active pins use the blue filled asset — do not recolor via filter. */
+  filter: none;
 }
 
 .tma-dash__email-row:hover .tma-dash__email-row-pinned,
