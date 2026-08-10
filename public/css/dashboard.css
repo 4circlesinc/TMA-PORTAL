@@ -11662,12 +11662,11 @@
   border-bottom: 0;
 }
 
-/* ── row selection: the avatar is the checkbox ─────────────────────
+/* ── row selection: click the avatar ───────────────────────────────
  *
- * The picture is what is normally shown; hovering the row (or selecting it)
- * swaps in the tick box. Both are always in the DOM — only their opacity
- * changes — so the real <input> keeps driving selection, keyboard focus and
- * the select-all, and nothing has to be re-rendered to make the swap.
+ * The picture stays visible. Clicking it toggles bulk selection via a
+ * real (visually hidden) checkbox. When selected, a corner tick badge
+ * marks the row — no hover swap to a bare checkbox.
  */
 .tma-dash__email-row-select {
   position: relative;
@@ -11678,6 +11677,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  border-radius: 50%;
 }
 
 .tma-dash__email-row-select-input {
@@ -11690,50 +11690,45 @@
   cursor: pointer;
 }
 
-.tma-dash__email-row-select-face,
-.tma-dash__email-row-select-box {
-  transition: opacity 120ms ease;
-  pointer-events: none;
-}
-
 .tma-dash__email-row-select-face {
   display: inline-flex;
+  pointer-events: none;
+  border-radius: 50%;
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 
-/* Same visual as .tma-dash__check — not a blue primary fill with a Check glyph. */
+.tma-dash__email-row-select:hover .tma-dash__email-row-select-face {
+  box-shadow: 0 0 0 2px var(--color-overlay-8, rgba(0, 0, 0, 0.08));
+}
+
+.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-face {
+  box-shadow: 0 0 0 2px var(--color-primary, #03a5e9);
+}
+
+/* Corner tick when selected — avatar stays put. */
 .tma-dash__email-row-select-box {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  right: -1px;
+  bottom: -1px;
   width: 16px;
   height: 16px;
   border: 0;
-  border-radius: 5px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  background: #fff url("../images/icons/tma/CheckboxChecked-16.svg") center / 14px 14px no-repeat;
+  box-shadow: 0 0 0 1px var(--color-white, #fff);
   box-sizing: border-box;
   opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
-.tma-dash__email-row:hover .tma-dash__email-row-select-box,
-.tma-dash__email-row-select:focus-within .tma-dash__email-row-select-box,
 .tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box {
   opacity: 1;
 }
 
-.tma-dash__email-row:hover .tma-dash__email-row-select-face,
-.tma-dash__email-row-select:focus-within .tma-dash__email-row-select-face,
-.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-face {
-  opacity: 0;
-}
-
-.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box {
-  box-shadow: none;
-  background: url("../images/icons/tma/CheckboxChecked-16.svg") center / 16px 16px no-repeat;
-}
-
-.tma-dash__email-row-select:focus-within .tma-dash__email-row-select-box {
+.tma-dash__email-row-select:focus-within {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
@@ -14003,24 +13998,7 @@
     height: 40px;
   }
 
-  /* There is no hover on a touch screen, so the tick box only ever appears
-     once the row is actually selected — tapping the picture is what selects
-     it, and tapping anywhere else opens the mail. */
-  .tma-dash__email-row:hover .tma-dash__email-row-select-box {
-    opacity: 0;
-  }
-
-  .tma-dash__email-row:hover .tma-dash__email-row-select-face {
-    opacity: 1;
-  }
-
-  .tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box {
-    opacity: 1;
-  }
-
-  .tma-dash__email-row-select.is-checked .tma-dash__email-row-select-face {
-    opacity: 0;
-  }
+  /* Avatar stays visible; selected rows show the corner tick (same as desktop). */
 
   .tma-dash__email-row-content {
     grid-column: 2;

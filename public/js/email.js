@@ -6573,19 +6573,17 @@
   /*
    * The sender's picture *is* the row's checkbox.
    *
-   * A checkbox drawn permanently on all fifty rows made the list read as a
-   * form; a photo tells you who wrote to you. Hovering a row (or having it
-   * selected) swaps the picture for the box, which is the Gmail behaviour and
-   * costs no extra column. The input is real and stays in the DOM the whole
-   * time — the swap is CSS — so the select-all, the bulk bar and keyboard
-   * users all keep working off the same element they always did.
+   * Click the profile picture to select for bulk actions. The photo stays
+   * visible (no hover swap to a checkbox); a selected row gets a corner tick
+   * badge. The real checkbox input stays in the DOM for select-all, the bulk
+   * bar and keyboard users.
    */
   function rowListAvatar(row, state) {
     var checked = !!(state && isRowChecked(row, state));
 
     return (
       '<label class="tma-dash__email-row-select' + (checked ? ' is-checked' : '') + '"' +
-      ' data-email-row-select>' +
+      ' data-email-row-select title="Select">' +
       '<input type="checkbox" class="tma-dash__email-row-select-input" data-email-check' +
       (checked ? ' checked' : '') +
       ' aria-label="Select mail from ' + esc(row.sender) + '">' +
