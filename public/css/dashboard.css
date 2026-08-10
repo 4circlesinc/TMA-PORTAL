@@ -12401,7 +12401,7 @@
 
 .tma-dash__email-detail-important--active img {
   opacity: 1;
-  filter: brightness(0);
+  filter: none;
 }
 
 .tma-dash__email-row-action--pulse img,
