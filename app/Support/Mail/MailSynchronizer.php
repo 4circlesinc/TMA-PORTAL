@@ -8,6 +8,7 @@ use App\Models\MailLabel;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\MailSyncProgress;
+use App\Models\User;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -551,29 +552,46 @@ class MailSynchronizer
         return $fromName.' sent you an email';
     }
 
-    /** Portal login + connected mailbox addresses that count as "me". */
-    private function ownAddresses(): array
+    private function accountUser(): ?User
     {
-        $emails = [mb_strtolower(trim((string) $this->account->email))];
-
-        $user = $this->account->relationLoaded('user')
+        return $this->account->relationLoaded('user')
             ? $this->account->user
             : $this->account->user()->first();
-
-        if ($user && $user->email) {
-            $emails[] = mb_strtolower(trim((string) $user->email));
-        }
-
-        return array_values(array_unique(array_filter(
-            $emails,
-            fn (string $email): bool => $email !== '' && str_contains($email, '@'),
-        )));
     }
 
-    /** True when this person is on To, Cc or Bcc. */
+    /** Portal login address — the person, not the mailbox. */
+    private function personalAddresses(): array
+    {
+        $email = mb_strtolower(trim((string) ($this->accountUser()?->email ?? '')));
+
+        return ($email !== '' && str_contains($email, '@')) ? [$email] : [];
+    }
+
+    /**
+     * Addresses this person may have sent as (login + mailbox send-as).
+     * Used only to detect replies to their own outbound mail.
+     */
+    private function participationAddresses(): array
+    {
+        $emails = $this->personalAddresses();
+        $mailbox = mb_strtolower(trim((string) $this->account->email));
+        if ($mailbox !== '' && str_contains($mailbox, '@')) {
+            $emails[] = $mailbox;
+        }
+
+        return array_values(array_unique($emails));
+    }
+
+    /**
+     * True when this person is on To, Cc or Bcc.
+     *
+     * Uses the portal login email only — never the connected mailbox address.
+     * Shared inboxes put the mailbox on every message, which is what made
+     * "sent you an email" / "New email from…" fire for colleagues' mail.
+     */
     private function messageAddressedToUser(MailMessage $m): bool
     {
-        $own = $this->ownAddresses();
+        $own = $this->personalAddresses();
         if ($own === []) {
             return false;
         }
@@ -601,7 +619,7 @@ class MailSynchronizer
         }
 
         $threadId = trim((string) ($m->thread_id ?? ''));
-        $own = $this->ownAddresses();
+        $own = $this->participationAddresses();
         if ($threadId === '' || $own === []) {
             return false;
         }

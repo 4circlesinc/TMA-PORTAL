@@ -35,6 +35,9 @@ class MailNewMailNotificationTest extends TestCase
 
     private function account(User $user): ConnectedAccount
     {
+        // Notifications key off the portal login email, not the mailbox alone.
+        $user->forceFill(['email' => 'user@example.com'])->save();
+
         return ConnectedAccount::create([
             'user_id' => $user->id,
             'provider' => 'microsoft',
@@ -200,6 +203,79 @@ class MailNewMailNotificationTest extends TestCase
             0,
             Notification::where('user_id', $user->id)->where('type', 'email.received')->count()
         );
+    }
+
+    public function test_shared_mailbox_address_alone_does_not_notify(): void
+    {
+        $user = $this->user();
+        $user->forceFill(['email' => 'vernon@example.com'])->save();
+
+        // Login is vernon@; mailbox is the shared inbox address.
+        $account = ConnectedAccount::create([
+            'user_id' => $user->id,
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-shared-a',
+            'email' => 'inbox@example.com',
+            'name' => 'Shared Inbox',
+            'token' => 'refresh-token',
+            'scopes' => ['Mail.ReadWrite'],
+            'sync_email' => true,
+        ]);
+        $this->seedMessage($user, $account);
+
+        // Addressed only to the shared mailbox — not to Vernon's login.
+        $this->fakeGraph([
+            $this->graphMessage('to-shared-only', [
+                'subject' => 'Dear Eman',
+                'toRecipients' => [
+                    ['emailAddress' => ['name' => 'Shared', 'address' => 'inbox@example.com']],
+                ],
+            ]),
+        ]);
+
+        new MailSynchronizer($account)->quickCheck();
+
+        $this->assertSame(
+            0,
+            Notification::where('user_id', $user->id)->where('type', 'email.received')->count(),
+            'Mail to the shared mailbox alone must not toast every teammate.'
+        );
+    }
+
+    public function test_shared_mailbox_notifies_when_personal_address_is_on_the_message(): void
+    {
+        $user = $this->user();
+        $user->forceFill(['email' => 'vernon@example.com'])->save();
+
+        $account = ConnectedAccount::create([
+            'user_id' => $user->id,
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-shared-a2',
+            'email' => 'inbox@example.com',
+            'name' => 'Shared Inbox',
+            'token' => 'refresh-token',
+            'scopes' => ['Mail.ReadWrite'],
+            'sync_email' => true,
+        ]);
+        $this->seedMessage($user, $account);
+
+        $this->fakeGraph([
+            $this->graphMessage('cc-personal', [
+                'subject' => 'For Vernon',
+                'toRecipients' => [
+                    ['emailAddress' => ['name' => 'Shared', 'address' => 'inbox@example.com']],
+                ],
+                'ccRecipients' => [
+                    ['emailAddress' => ['name' => 'Vernon', 'address' => 'vernon@example.com']],
+                ],
+            ]),
+        ]);
+
+        new MailSynchronizer($account)->quickCheck();
+
+        $notification = Notification::where('user_id', $user->id)->where('type', 'email.received')->first();
+        $this->assertNotNull($notification);
+        $this->assertSame('Dana Reed sent you an email', $notification->title);
     }
 
     public function test_reply_in_shared_thread_stays_silent(): void
