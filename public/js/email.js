@@ -86,6 +86,8 @@
     // the right shape for "mark as important" to begin with.
     Important: ICON + 'FlagFill.svg',
     FlagFill: ICON + 'FlagFill.svg',
+    // Red filled flag for the active "important" state (pair to StarFilled).
+    FlagFilled: ICON + 'FlagFilled.svg',
     ArrowLineRight: ICON + 'ArrowLineRight.svg',
     ArrowLineLeft: ICON + 'ArrowLineLeft.svg',
     ArrowLineDown: ICON + 'ArrowLineDown.svg',
@@ -1218,6 +1220,10 @@
     return starred ? ICONS.StarFilled : ICONS.Star;
   }
 
+  function importantIconSrc(important) {
+    return important ? ICONS.FlagFilled : ICONS.Important;
+  }
+
   function renderDetailSubjectStar(row, state) {
     var starred = isRowStarred(row, state);
     return renderEmailIconTooltipBtn({
@@ -1247,7 +1253,7 @@
             className: 'tma-dash__email-detail-important' + (important ? ' tma-dash__email-detail-important--active' : ''),
             attrs:
               ' data-email-important="' + esc(row.id) + '" aria-pressed="' + (important ? 'true' : 'false') + '"',
-            innerHtml: '<img src="' + ICONS.Important + '" alt="">',
+            innerHtml: '<img src="' + importantIconSrc(important) + '" alt="">',
           }) +
           (labelsHtml ? '<span class="tma-dash__email-detail-subject-labels">' + labelsHtml + '</span>' : '')) +
       '</span>' +
@@ -2733,8 +2739,9 @@
       {
         id: 'important',
         label: important ? 'Mark as not important' : 'Mark as important',
-        icon: 'Important',
+        icon: important ? 'FlagFilled' : 'Important',
         active: important,
+        important: true,
         attr: ' data-email-important="' + esc(row.id) + '" aria-pressed="' + (important ? 'true' : 'false') + '"',
       },
       { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned, pin: true },
@@ -2759,6 +2766,7 @@
               'tma-dash__email-row-action' +
               (action.active ? ' tma-dash__email-row-action--active' : '') +
               (action.star && action.active ? ' tma-dash__email-row-action--starred' : '') +
+              (action.important && action.active ? ' tma-dash__email-row-action--important' : '') +
               (action.pin && action.active ? ' tma-dash__email-row-action--pinned' : ''),
             attrs:
               (action.attr ||
@@ -7081,7 +7089,7 @@
       { id: starred ? 'unstar' : 'star', label: starred ? 'Remove star' : 'Add star',
         icon: starred ? 'StarFilled' : 'Star', active: starred },
       { id: 'important', label: important ? 'Mark as not important' : 'Mark as important',
-        icon: 'Important', active: important },
+        icon: important ? 'FlagFilled' : 'Important', active: important },
       { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned },
       { id: 'snooze', label: 'Snooze', icon: 'Clock' },
       { id: 'label', label: 'Label as', icon: 'Tag' },
@@ -7944,8 +7952,11 @@
         MORPH.unwired(root, '[data-email-important="' + id + '"]').forEach(function (el) {
           el.classList.toggle('tma-dash__email-detail-important--active', important);
           el.classList.toggle('tma-dash__email-row-action--active', important);
+          el.classList.toggle('tma-dash__email-row-action--important', important);
           el.setAttribute('aria-pressed', important ? 'true' : 'false');
           el.setAttribute('aria-label', important ? 'Mark as not important' : 'Mark as important');
+          var img = el.querySelector('img');
+          if (img) img.src = importantIconSrc(important);
         });
         pulseEmailActionBtn(btn);
       });

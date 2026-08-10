@@ -10162,7 +10162,7 @@
 
 .tma-dash__email-detail-important--active img {
   opacity: 1;
-  filter: brightness(0);
+  filter: none;
 }
 
 .tma-dash__email-detail-label-chip {
@@ -12352,6 +12352,14 @@
 .tma-dash__email-row-action--starred img,
 .tma-dash__email-detail-star--active img,
 .tma-dash__email-action.tma-dash__email-row-action--starred img {
+  opacity: 1;
+  filter: none;
+}
+
+/* Active important flags use the red filled asset — same idea. */
+.tma-dash__email-row-action--important img,
+.tma-dash__email-detail-important--active img,
+.tma-dash__email-action.tma-dash__email-row-action--important img {
   opacity: 1;
   filter: none;
 }
