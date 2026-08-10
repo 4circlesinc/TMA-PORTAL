@@ -471,6 +471,30 @@ field placement and drawing, and computed CSS only exist in a browser.
   ("Assigned Clients", "Organization Folders") in the Folder Shortcuts tab, and
   the client profile's "Open folder" action lands in the File Library. Needs an
   administrator account.
+- **`workflows-hub.mjs`** — the Workflows section, which was two empty-state
+  stubs. `WorkflowHubTest` covers the queries and every access rule; what only
+  a browser proves is that the page is usable *away from the file*. Two
+  contexts: the admin sends an approval and names Bea in a comment, then Bea
+  answers the approval and replies to the thread from the Workflows page
+  without ever opening the file. It also checks the two things that quietly
+  rot — the tab count moving to and from zero as the request is answered, and
+  a reply not being counted as an open thread — and that Bea is **not** offered
+  Resolve on somebody else's question, which is the rule rather than a gap.
+
+  Two things it was written around. `artisan serve` runs a single PHP worker
+  and every action here is two round trips (the write, then the reload it
+  triggers), so the script waits for the list to *say* something rather than
+  for a number of milliseconds. And the desktop sidebar can be set to Hover
+  Overlay, which expands over the cards — the pointer is parked on the right
+  before every click.
+
+  Needs `e2e@example.com` (Administrator) and `bea@example.com` (Employee).
+  It leaves its file and thread behind, so re-runs stack up; the checks are
+  scoped to a per-run stamp, but a fresh database reads more clearly.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/workflows-hub.mjs
+  ```
 - **`sync-notice-dismiss.mjs`** — closing the File Library's "…synced 1d ago"
   line, permanently. It had no close button at all, so a library synced
   yesterday said so above the file list for ever. The assertion that carries
@@ -785,6 +809,18 @@ node tests/Browser/notify-toasts.mjs
   later in the cascade fails here instead of in someone's eyes. Also pins that
   mobile hides the logo block entirely in favour of the mobile head. Any
   signed-in account will do.
+- **`sidebar-nav-refresh.mjs`** — the navigation rules that only exist as
+  geometry and network traffic. It measures row-to-row spacing in the rail with
+  no submenu open, one open and two open (the menu used to pay for an open
+  group by squeezing every other row), clicks a group icon in the collapsed
+  rail and checks it lands on the section's first page, and counts requests to
+  prove that re-selecting the page you are already on refetches it — for a
+  live-backed list, for Overview, and for the Dashboard, which reload three
+  different ways. Then it drives pull-to-refresh through CDP
+  (`Input.dispatchTouchEvent`; Playwright's mouse API cannot produce touch
+  events) and asserts a short drag does *not* refresh. Finishes in a mobile
+  context, because the drawer is a different sidebar and must keep toggling its
+  groups. Any signed-in account will do.
 
 `fixtures/contract.pdf` is a hand-built two-page PDF (no library, no
 dependency) with distinct text on each page, so a wrong page or a blank canvas

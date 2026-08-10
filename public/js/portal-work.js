@@ -267,11 +267,25 @@
     else if (r.completedAt) sub.push(wfRelative(r.completedAt));
     else if (r.sentAt) sub.push('sent ' + wfRelative(r.sentAt));
 
-    var people = (r.people || []).map(function (p) {
+    /*
+     * Per-person outcomes only where they add something.
+     *
+     * With one recipient the headline already says it — "Your response is
+     * needed" above "Bea Adams · Waiting", or "Approved" above "Bea Adams ·
+     * Approved" — the same fact twice in two wordings, which invites the
+     * reader to hunt for the difference. With several people it is the only
+     * place you can see who did what. A comment is always worth showing: it is
+     * the one thing the headline cannot carry.
+     */
+    var showOutcome = (r.people || []).length > 1;
+
+    var people = (r.people || []).filter(function (p) {
+      return showOutcome || p.comment;
+    }).map(function (p) {
       return '<span class="tma-portal-wf-person' + (p.answered ? ' is-answered' : '') + '">' +
         wfAvatar(p) +
         '<span class="tma-portal-wf-person__name">' + esc(p.name || 'Someone') + '</span>' +
-        '<span class="tma-portal-wf-person__state">' + esc(p.statusLabel) + '</span>' +
+        (showOutcome ? '<span class="tma-portal-wf-person__state">' + esc(p.statusLabel) + '</span>' : '') +
         (p.comment ? '<span class="tma-portal-wf-person__comment">“' + esc(p.comment) + '”</span>' : '') +
         '</span>';
     }).join('');

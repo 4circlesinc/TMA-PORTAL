@@ -5079,16 +5079,53 @@
       var file = findItem(wanted);
 
       if (file && file.type === 'file') {
-        restoringFromUrl = true;
-        try { openLightbox(file); } finally { restoringFromUrl = false; }
-        // The address bar already says this; record it without a second entry.
-        syncUrl(true);
-      } else {
-        // A stale link: drop the file parameter rather than leaving the URL
-        // claiming a viewer that is not open.
-        syncUrl(true);
+        openFromUrl(file);
+
+        return;
       }
+
+      return fetchWantedFile(wanted);
     });
+  }
+
+  /* Open the viewer on a file the URL named, without writing a second history
+     entry on top of the one being restored. */
+  function openFromUrl(file) {
+    restoringFromUrl = true;
+    try { openLightbox(file); } finally { restoringFromUrl = false; }
+    // The address bar already says this; record it without a second entry.
+    syncUrl(true);
+  }
+
+  /**
+   * A file the current listing does not contain.
+   *
+   * This used to be treated as a stale link and dropped, which was wrong: the
+   * browse query lists what you own or were shared with, while *access* is
+   * wider than that — the firm-wide staff default reaches files nobody ever
+   * shared explicitly, and they appear in no section's list. So a perfectly
+   * valid link from a notification, the Workflows page or a comment landed on
+   * a folder with no viewer open and no explanation.
+   *
+   * Ask the server for the one file instead. It authorizes the request the
+   * same way it would any other, so a link to something genuinely out of reach
+   * still opens nothing — it just no longer takes reachable files with it.
+   */
+  function fetchWantedFile(id) {
+    return net().fetchJSON(net().url('/files/' + encodeURIComponent(id)))
+      .then(function (item) {
+        if (!item || item.type !== 'file') { syncUrl(true); return; }
+
+        // The viewer resolves what it was handed through findItem, which only
+        // knows rows this listing loaded.
+        externalItems = [item];
+        openFromUrl(item);
+      })
+      .catch(function () {
+        // Gone, or not this reader's to open. Drop the parameter rather than
+        // leaving the URL claiming a viewer that is not there.
+        syncUrl(true);
+      });
   }
 
   /*
@@ -5125,7 +5162,16 @@
     if (state.openFile === fileId) return;
 
     var file = findItem(fileId);
-    if (!file || file.type !== 'file') return;
+
+    // Same reason as on mount: not being in this listing does not mean the
+    // reader may not open it.
+    if (!file) {
+      fetchWantedFile(fileId);
+
+      return;
+    }
+
+    if (file.type !== 'file') return;
 
     // Rebuilding from history, not navigating: openLightbox must not write a
     // new entry on top of the one being restored.
