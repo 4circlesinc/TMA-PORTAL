@@ -223,6 +223,64 @@ class QueryCountTest extends TestCase
     }
 
     /*
+     * As above, but inside a folder granted to all staff — the case the plain
+     * browse test does not reach.
+     *
+     * Those rows resolve who they are shared with: the people the grant covers,
+     * and how many that is. Both are the same answer for every row, so they are
+     * built once per listing; asked per file they would be two more queries on
+     * each of forty thousand.
+     */
+    public function test_file_list_with_a_firm_wide_grant_does_not_scale(): void
+    {
+        $me = $this->staff();
+        $this->actingAs($me);
+
+        $folder = \App\Models\Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Library',
+            'owner_id' => $me->id,
+            'created_by' => $me->id,
+            'folder_type' => \App\Models\Folder::TYPE_ORGANIZATION,
+            'audience' => 'all_staff',
+            'audience_role' => 'editor',
+        ]);
+
+        $addFiles = function (int $count, string $prefix) use ($me, $folder) {
+            for ($i = 0; $i < $count; $i++) {
+                \App\Models\FileItem::create([
+                    'uuid' => (string) Str::uuid(),
+                    'name' => "$prefix-$i.pdf",
+                    'extension' => 'pdf',
+                    'mime_type' => 'application/pdf',
+                    'size' => 1,
+                    'disk' => 'local',
+                    'storage_path' => "vault/$prefix-$i.pdf",
+                    'folder_id' => $folder->id,
+                    'owner_id' => $me->id,
+                    'uploaded_by' => $me->id,
+                ]);
+            }
+        };
+
+        $addFiles(3, 'small');
+        $small = $this->countQueries(function () {
+            $this->get('/portal/files/')->assertOk();
+        });
+
+        $addFiles(25, 'large');
+        $large = $this->countQueries(function () {
+            $this->get('/portal/files/')->assertOk();
+        });
+
+        $this->assertLessThanOrEqual(
+            $small + 2,
+            $large,
+            "File listing is N+1: $small queries for 3 files, $large for 28."
+        );
+    }
+
+    /*
      * The companies listing cost two queries per company: one for memberCount,
      * one for the twelve-client `referred` preview that Eloquent cannot eager
      * load. Sixty-four companies meant a hundred and thirty queries and forty

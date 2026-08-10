@@ -141,13 +141,16 @@ try {
     'with two people it is faces alone, no list of names',
   );
 
-  const soloRow = page.locator('[data-files-row]', { hasText: 'Citizenship Applications' }).first();
+  // Something only its owner can reach: one face, and the name written out.
+  const soloRow = page.locator('[data-files-row]', { hasText: 'Q3 2026 Citizenship' }).first();
   if (await soloRow.count()) {
-    check(await soloRow.locator('[data-tma-person]').count() === 1, 'a single-person row draws one face');
+    check(await soloRow.locator('[data-tma-person]').count() === 1, 'a one-person row draws one face');
     check(
       (await soloRow.locator('.tma-people__names').textContent()).trim().length > 0,
       'and names them beside it',
     );
+  } else {
+    log('      (no single-person row in this database)');
   }
 
   // Owner first: the faces are drawn in the order the server sends them.
@@ -183,8 +186,27 @@ try {
       /Everyone in/.test(await chip.locator('span').getAttribute('title') || ''),
       'with the grant itself on its title',
     );
+
+    /*
+     * The grant reaches every member of staff, and those are the people it is
+     * shared with — so they are drawn, owner first, then administrators, then
+     * everyone else. Four faces and a "+N", which counts up to the real total
+     * rather than to however many the server happened to send.
+     */
     const faceCount = await orgRow.locator('[data-tma-person]').count();
-    check(faceCount <= 2, `and does not draw a face per member of staff (${faceCount})`);
+    check(faceCount > 1, `it draws the staff it is shared with (${faceCount} faces)`);
+    check(faceCount <= 4, 'capped at four');
+
+    const first = await orgRow.locator('[data-tma-person]').first().evaluate((e) =>
+      JSON.parse(e.closest('[data-tma-people]').getAttribute('data-tma-people'))[0].roles.join(','));
+    check(/Owner/.test(first), `the owner is the first face (${first})`);
+
+    const more = await orgRow.locator('.tma-people__face--more').textContent().catch(() => '');
+    const total = Number((await chip.textContent()).replace(/[^0-9]/g, ''));
+    if (total > 4) {
+      check(/^\+\d+$/.test(more), `a fifth circle counts the rest ("${more}")`);
+      check(Number(more.slice(1)) === total - 4, `and counts up to everyone (${more} of ${total})`);
+    }
   } else {
     log('      (no all-staff folder in this database)');
   }

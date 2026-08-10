@@ -54,6 +54,15 @@ class Presenter
     /** Approved staff, counted once per listing. */
     private ?int $staffCount = null;
 
+    /** @var array<int, array<string, mixed>>|null */
+    private ?array $staffPeople = null;
+
+    /**
+     * How many people travel on a row. The cell draws four faces and a "+N",
+     * so a couple spare is enough for the card to name whoever is shown.
+     */
+    private const PEOPLE_PREVIEW = 6;
+
     public function __construct(private User $viewer) {}
 
     /**
@@ -89,6 +98,7 @@ class Presenter
             ?? $this->sharedWithMap('file', [$file->id])[$file->id]
             ?? [];
         $assignees = array_column($sharedWith, 'name');
+        $fileAudience = $this->audienceFor($file->folder);
         // Computed once: the review block reads from it rather than asking
         // FileAccess the same question a second time per row.
         $perms = $this->filePerms($file);
@@ -118,8 +128,9 @@ class Presenter
             'uploadedBy' => $this->person($file->uploader),
             // Everyone on the file, owner first — what the Owner column draws
             // as faces. `assignedTo` stays the bare names it has always been.
-            'people' => $this->peopleOn($file->owner, $sharedWith),
-            'audience' => $this->audienceFor($file->folder),
+            'people' => $this->peopleOn($file->owner, $sharedWith, $fileAudience),
+            'peopleTotal' => $this->peopleTotal($file->owner, $sharedWith, $fileAudience),
+            'audience' => $fileAudience,
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFile[$file->id]),
@@ -163,6 +174,7 @@ class Presenter
             ?? $this->sharedWithMap('folder', [$folder->id])[$folder->id]
             ?? [];
         $assignees = array_column($sharedWith, 'name');
+        $folderAudience = $this->audienceFor($folder);
 
         $stats = $withStats ? FolderTree::aggregate($folder) : ['fileCount' => null, 'folderCount' => null, 'size' => null];
 
@@ -184,10 +196,11 @@ class Presenter
             'deletedAt' => optional($folder->deleted_at)->toIso8601String(),
             'owner' => $this->person($folder->owner),
             'createdBy' => $this->person($folder->creator),
-            'people' => $this->peopleOn($folder->owner, $sharedWith),
+            'people' => $this->peopleOn($folder->owner, $sharedWith, $folderAudience),
+            'peopleTotal' => $this->peopleTotal($folder->owner, $sharedWith, $folderAudience),
             // From the folder itself: a folder granted to all staff is shared
             // with them, not merely sitting inside something that is.
-            'audience' => $this->audienceFor($folder),
+            'audience' => $folderAudience,
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFolder[$folder->id]),
@@ -490,7 +503,7 @@ class Presenter
      * @param  array<int, array<string, mixed>>  $sharedWith
      * @return array<int, array<string, mixed>>
      */
-    private function peopleOn(?User $owner, array $sharedWith): array
+    private function peopleOn(?User $owner, array $sharedWith, ?array $audience = null): array
     {
         $people = [];
 
@@ -518,7 +531,86 @@ class Presenter
             ));
         }
 
+        /*
+         * A firm-wide grant is people too.
+         *
+         * Nothing here is shared person to person, so an owner and no one else
+         * was all the column ever had to draw — one face on every row, which
+         * answers nothing. The grant reaches every member of staff, so they are
+         * who it is shared with, and they are shown: the owner, then the
+         * administrators, then everyone else, which is the order somebody
+         * scanning for "who do I ask about this" wants them in.
+         *
+         * Only the first few travel — the cell draws four and a "+N" — with the
+         * real figure alongside so the "+N" can be honest.
+         */
+        if ($audience && ($audience['count'] ?? null)) {
+            $seen = array_column($people, 'userId');
+
+            foreach ($this->staffPeople() as $member) {
+                if (count($people) >= self::PEOPLE_PREVIEW) {
+                    break;
+                }
+                if (in_array($member['userId'], $seen, true)) {
+                    continue;
+                }
+                $people[] = $member;
+            }
+        }
+
         return $people;
+    }
+
+    /**
+     * How many people can reach it in total — what the "+N" counts up to.
+     *
+     * @param  array<int, array<string, mixed>>  $sharedWith
+     */
+    private function peopleTotal(?User $owner, array $sharedWith, ?array $audience): int
+    {
+        if ($audience && ($audience['count'] ?? null)) {
+            // The grant reaches every member of staff; the owner is already one
+            // of them when they are staff, and is one more when they are not.
+            // Asked of the account, not of staffPeople() — that list is cut to
+            // the handful the cell draws, so the owner may not be in it.
+            $ownerIsStaff = $owner && in_array($owner->account_type, Role::STAFF, true);
+
+            return $audience['count'] + (($owner && ! $ownerIsStaff) ? 1 : 0);
+        }
+
+        $ids = array_unique(array_filter(array_merge(
+            [$owner?->id],
+            array_column($sharedWith, 'userId'),
+        )));
+
+        return max(1, count($ids));
+    }
+
+    /**
+     * Approved staff, administrators first, built once per listing.
+     *
+     * The same people for every row a firm-wide grant covers, so building it
+     * per file would be the same query forty thousand times.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function staffPeople(): array
+    {
+        if ($this->staffPeople === null) {
+            $this->staffPeople = User::query()
+                ->whereIn('account_type', Role::STAFF)
+                ->where('status', User::STATUS_APPROVED)
+                // Administrator before Employee, then by name — a stable order,
+                // so a face does not move between one row and the next.
+                ->orderByRaw("case when account_type = ? then 0 else 1 end", [Role::ADMINISTRATOR])
+                ->orderBy('name')
+                ->limit(self::PEOPLE_PREVIEW)
+                ->get()
+                ->map(fn (User $u) => $this->person($u) + ['roles' => [$u->account_type]])
+                ->all();
+        }
+
+        return $this->staffPeople;
     }
 
     /**

@@ -4572,8 +4572,14 @@
     }
 
     // One person is worth naming; several are quicker to read as faces, and
-    // hovering any of them says who it is. Four fit before the "+n" takes over.
-    return window.TMAPersonCard.faces(people, { max: 4, names: 'single', emptyLabel: '\u2014' });
+    // hovering any of them says who it is. Four fit before the "+N" takes over,
+    // which counts everyone rather than only the handful the server sent.
+    return window.TMAPersonCard.faces(people, {
+      max: 4,
+      names: 'single',
+      total: item && item.peopleTotal,
+      emptyLabel: '\u2014',
+    });
   }
 
   /*
@@ -4596,7 +4602,7 @@
     // gives, so the table and the panel never disagree about one file. Plain
     // text, not a chip: colour marks an exception, and every firm file carries
     // the same answer, so a badge on every row is noise.
-    var count = audience && audience.count != null ? audience.count : people.length;
+    var count = item && item.peopleTotal != null ? item.peopleTotal : people.length;
     var text = count === 1 ? 'Only you' : count + ' people';
     if (audience && audience.count == null) text = audience.label;
 

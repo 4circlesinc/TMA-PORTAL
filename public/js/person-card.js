@@ -79,7 +79,16 @@
     }
 
     var shown = o.max ? list.slice(0, o.max) : list;
-    var hidden = list.length - shown.length;
+    /*
+     * `total` counts everyone, including those the caller did not send.
+     *
+     * A firm-wide grant reaches every member of staff, and no listing wants
+     * thirteen people repeated on every row — so the server sends the first
+     * few and says how many there really are. Without it the "+N" could only
+     * count the ones it was handed, which is not the number anybody wants.
+     */
+    var total = typeof o.total === 'number' && o.total > list.length ? o.total : list.length;
+    var hidden = total - shown.length;
 
     var art = shown.map(function (p, i) {
       var src = faceSrc(p);
@@ -100,7 +109,7 @@
      * names is a paragraph in a table cell; five faces is a glance, and the
      * card names them on hover. Default 'all' keeps CBI as it was.
      */
-    var showNames = o.names === 'single' ? list.length === 1 : o.names !== 'none';
+    var showNames = o.names === 'single' ? total === 1 : o.names !== 'none';
     var names = showNames
       ? list.map(function (p) { return p.first || p.name; }).join(', ')
       : '';
