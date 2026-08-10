@@ -309,6 +309,27 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/sidebar-first-paint.mjs
   ```
 
+- **`boot-skeleton.mjs`** — the main area's first paint, the companion to the
+  sidebar check above. The shell used to serve an empty Dashboard mount, so
+  until the bundle executed the page was a white void with a lone placeholder
+  row in each right-rail section. The shell now carries a boot skeleton inside
+  the mount, and this asserts all of it: "/" paints the dashboard-shaped
+  variant (hero, KPI cards, panel tiles), any other entry path switches to the
+  view-agnostic rows via the inline path check, a client never sees the
+  staff-only KPI placeholder row (portal-access.js prunes `[data-boot-needs]`
+  from its boot capabilities), the right rail carries three rows per section,
+  and — on a normal un-stalled load — portal-home replaces the skeleton with
+  the real board.
+
+  The window under test closes when the deferred bundle runs, so the script
+  stalls every script except portal-access.js and samples after `commit` —
+  waiting for DOMContentLoaded would wait for the very scripts being held.
+  Needs the administrator and client accounts:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/boot-skeleton.mjs
+  ```
+
 - **`account-reporting.mjs`** — Account settings → Account and Reporting, after
   its three pages stopped reading `window.TMAPortalData`. Reporting used to file
   a name and a date into localStorage with no numbers behind them, the
