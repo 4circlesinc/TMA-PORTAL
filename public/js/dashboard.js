@@ -1000,8 +1000,82 @@
       if (btn && btn.getAttribute('aria-expanded') !== 'true') setExpanded(btn, true);
     }
 
+    /*
+     * ── refreshing the page you are already on ──────────────────────
+     *
+     * Two callers: re-selecting the nav item you are already on, and the
+     * pull-to-refresh gesture. Both mean "fetch this again", and both go
+     * through here so every entry point behaves the same way.
+     *
+     * Most views reload themselves simply by being re-mounted — activate()
+     * calls the module's mount, and the module fetches from there. The
+     * exceptions are the singletons below, which mount once and are then kept
+     * current by TMALive: re-mounting those re-renders the same cached rows.
+     * They refetch through TMALive instead, which patches the result in via
+     * TMAMorph and so keeps scroll position, selection and open menus.
+     */
+    var LIVE_BACKED_VIEWS = {
+      folders: 1,
+      clients: 1,
+      users: 1,
+      people: 1,
+      calendar: 1,
+      signatures: 1,
+    };
+
+    var currentNavId = null;
+    var currentViewName = null;
+    var currentRouteOpts = null;
+
+    /* Reload the data behind a view that is already on screen and staying
+       there — no re-mount, no navigation. */
+    function refreshViewData(view) {
+      var jobs = [];
+      if (LIVE_BACKED_VIEWS[view] && window.TMALive && window.TMALive.refreshAll) {
+        jobs.push(window.TMALive.refreshAll());
+      }
+      if (view === 'overview' && window.TMAOverview && window.TMAOverview.refresh) {
+        jobs.push(window.TMAOverview.refresh());
+      }
+      return Promise.all(jobs);
+    }
+
+    /* Re-run the current route from the top: the module re-mounts and fetches
+       again. The URL is left alone — this is the page it already describes. */
+    function reactivateCurrentRoute() {
+      if (!currentNavId) return null;
+      var opts = {};
+      Object.keys(currentRouteOpts || {}).forEach(function (k) {
+        opts[k] = currentRouteOpts[k];
+      });
+      // One-shot instructions that opened something on arrival. Replaying them
+      // would reopen a dialog the reader has since closed.
+      delete opts.openChangeEmail;
+      delete opts.paymentAdded;
+      opts.skipUrl = true;
+      opts.keepDrawer = true;
+      opts.keepMenu = true;
+      opts.skipRefresh = true;
+      return activate(currentNavId, opts);
+    }
+
+    function refreshCurrentView() {
+      var view = currentViewName || 'dashboard';
+      if (LIVE_BACKED_VIEWS[view] || view === 'overview') return refreshViewData(view);
+      // The mailbox owns a heavier refresh than a re-mount: it syncs with the
+      // provider first, and it keeps the open message open.
+      if (view === 'email' && window.TMAEmail && window.TMAEmail.refresh) {
+        return Promise.resolve(window.TMAEmail.refresh());
+      }
+      return Promise.resolve(reactivateCurrentRoute());
+    }
+
     function activate(navId, opts) {
       opts = opts || {};
+      /* Selecting the page you are already on is a refresh, not a no-op. The
+         re-mount below covers most views; refreshViewData at the end covers
+         the ones a re-mount would not reload. */
+      var repeatSelection = !opts.skipRefresh && currentNavId === navId;
       // Navigating away is a completed interaction — release any focus-pin
       // that's keeping the hover-expand overlay open (only touches it when
       // focus is actually inside the sidebar, so this is a no-op otherwise).
@@ -1110,6 +1184,10 @@
       if (!opts.keepDrawer && isMobileSidebar()) closeDrawers();
       if (!opts.keepMenu) closeMobileMenu();
       syncTabFromView(viewName);
+      currentNavId = navId;
+      currentViewName = viewName;
+      currentRouteOpts = opts;
+      if (repeatSelection) refreshViewData(viewName);
     }
 
     /*
@@ -1224,8 +1302,37 @@
       if (sub) sub.hidden = !open;
     }
 
+    /* The rail is showing icons only — no labels, and CSS hides every submenu
+       with them. Toggling a list nobody can see is a dead click. */
+    function railIsIconOnly() {
+      if (!sidebar || isMobileSidebar()) return false;
+      return root.classList.contains('is-sidebar-collapsed') && !isHoverRailOpen();
+    }
+
+    function firstLeafOf(btn) {
+      var sub = root.querySelector('[data-subnav="' + btn.getAttribute('data-expand') + '"]');
+      if (!sub) return null;
+      // Role pruning hides rows rather than reordering them, so the first one
+      // still standing is this section's landing page for this reader.
+      return sub.querySelector('.tma-dash__nav-item[data-nav]:not([hidden])');
+    }
+
     root.querySelectorAll('.tma-dash__nav-item--expand').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        /* Collapsed rail: a group icon behaves as a link to the section's
+           first page (File Library → All Files), so the reader never has to
+           expand the sidebar just to get somewhere. */
+        if (railIsIconOnly()) {
+          var first = firstLeafOf(btn);
+          if (first) {
+            activate(first.getAttribute('data-nav'), {
+              view: first.getAttribute('data-view') || undefined,
+              title: first.getAttribute('data-title') || undefined,
+              crumb: first.getAttribute('data-crumb') || undefined,
+            });
+            return;
+          }
+        }
         setExpanded(btn, btn.getAttribute('aria-expanded') !== 'true');
       });
     });
@@ -1260,6 +1367,9 @@
         keepDrawer: true,
         skipExpand: true,
         skipUrl: true,
+        // Back/forward is not a refresh request — the reader asked for a
+        // different screen, not for this one again.
+        skipRefresh: true,
       });
     });
 
@@ -1464,18 +1574,42 @@
       return !el.hidden && el.getClientRects().length > 0;
     }
 
+    function isSubnav(el) {
+      return !!(el.classList && el.classList.contains('tma-dash__subnav'));
+    }
+
     /* One unit per gap the leftover space is split across: every gap between
        visible rows, plus the break above a divided section (it tracks the same
-       custom property). */
+       custom property). An open submenu is deliberately not a row here — see
+       fitNavSpacing. */
     function countNavGapUnits(sections) {
       var units = 0;
       sections.forEach(function (section) {
-        var rows = Array.prototype.slice.call(section.children).filter(isVisibleNavChild);
+        var rows = Array.prototype.slice.call(section.children).filter(function (el) {
+          return isVisibleNavChild(el) && !isSubnav(el);
+        });
         if (!rows.length) return;
         units += rows.length - 1;
         if (section.classList.contains('tma-dash__nav-section--divided')) units += 1;
       });
       return units;
+    }
+
+    /* How much height the open submenus are taking: each one's box, its
+       margins, and the single row gap that separates it from its parent. */
+    function openSubnavHeight(sections, gap) {
+      var total = 0;
+      sections.forEach(function (section) {
+        Array.prototype.slice.call(section.children).forEach(function (el) {
+          if (!isSubnav(el) || !isVisibleNavChild(el)) return;
+          var cs = window.getComputedStyle(el);
+          total += el.getBoundingClientRect().height +
+            (parseFloat(cs.marginTop) || 0) +
+            (parseFloat(cs.marginBottom) || 0) +
+            gap;
+        });
+      });
+      return total;
     }
 
     function fitNavSpacing() {
@@ -1496,6 +1630,26 @@
       // content box — measure the last section's bottom edge instead.
       var padBottom = parseFloat(window.getComputedStyle(navEl).paddingBottom) || 0;
       var free = navEl.getBoundingClientRect().bottom - padBottom - last.getBoundingClientRect().bottom;
+      /*
+       * Both rects are in viewport coordinates, so a scrolled nav reports its
+       * last section that much higher and the sum reads as spare room that is
+       * not there. Nothing scrolled the rail before an open submenu could
+       * overflow it; now clicking a group near the bottom scrolls it into
+       * view, and without this the menu jumped to its widest spacing.
+       */
+      free -= navEl.scrollTop;
+      /*
+       * Measure as if every group were closed.
+       *
+       * Otherwise opening File Library ate the free space and this handed the
+       * shortfall to every gap in the menu — so expanding one group visibly
+       * squeezed all the rows above and below it together, and closing it
+       * spread them back out. The rail's rhythm is a property of the window's
+       * height, not of which group happens to be open: a submenu now simply
+       * drops in underneath its parent, and the nav scrolls if the two no
+       * longer fit together.
+       */
+      free += openSubnavHeight(sections, NAV_GAP_BASE);
       // Negative free space means the rows already overflow, so the same sum
       // tightens them — a short window (or the desktop app's title bar taking
       // its cut) buys a few more rows back before the rail has to scroll.
@@ -2865,6 +3019,7 @@
     }
     prefixRootAnchors();
     root._activate = activate;
+    root._refreshCurrentView = refreshCurrentView;
     root._updatePageMeta = function (meta) {
       meta = meta || {};
       if (meta.title && pageTitleEl) pageTitleEl.textContent = meta.title;
@@ -2877,6 +3032,13 @@
     navigate: function (opts) {
       var dash = document.querySelector('.tma-dash');
       if (dash && dash._activate) dash._activate(opts.navId || 'dash-dashboard', opts);
+    },
+    /* Reload whatever is on screen. Resolves when the data is back, so a
+       caller can hold a spinner up for exactly as long as it takes. */
+    refresh: function () {
+      var dash = document.querySelector('.tma-dash');
+      if (dash && dash._refreshCurrentView) return Promise.resolve(dash._refreshCurrentView());
+      return Promise.resolve();
     },
     updatePageMeta: function (meta) {
       var dash = document.querySelector('.tma-dash');

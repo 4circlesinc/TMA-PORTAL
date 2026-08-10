@@ -12,22 +12,693 @@
   var SIG_BASE = (window.__TMA_SITE_ROOT || '') + '/portal/signatures';
   function sigUrl(path) { return SIG_BASE + path; }
 
-  /* ── Workflows (minimal) ─────────────────────────── */
-  var wf = { el: null, search: '' };
+  /* ── Workflows ───────────────────────────────────────────────────
+   *
+   * Requests and discussion across the whole library.
+   *
+   * The file viewer answers "what is happening to this file", which is only
+   * useful once you already know which file. Nobody arrives knowing that: they
+   * arrive wanting to know what is waiting on them. So this page is built the
+   * other way round — everything addressed to you first, and the file named as
+   * context underneath it.
+   *
+   * Nothing here has its own write endpoints. Every row carries the uuid of
+   * the file it belongs to, and responding, cancelling, replying and resolving
+   * all go back through the per-file routes that already authorize them.
+   */
+  var WF_PAGES = {
+    'workflows-automated': 'requests',
+    'workflows-feedback': 'comments',
+  };
 
-  function mountWorkflows(el) {
+  var WF_TABS = [
+    { key: 'inbox', label: 'Waiting on you' },
+    { key: 'sent', label: 'Sent by you' },
+    { key: 'all', label: 'All requests', staffOnly: true },
+  ];
+
+  var WF_COMMENT_TABS = [
+    { key: 'mine', label: 'Involving you' },
+    { key: 'unresolved', label: 'Open threads' },
+    { key: 'all', label: 'Everything', staffOnly: true },
+  ];
+
+  var WF_TYPES = [
+    { value: '', label: 'All types' },
+    { value: 'approval', label: 'Approval' },
+    { value: 'feedback', label: 'Feedback' },
+    { value: 'review', label: 'Review' },
+    { value: 'acknowledgement', label: 'Acknowledgement' },
+    { value: 'signature', label: 'Signature' },
+  ];
+
+  var WF_STATES = [
+    { value: 'open', label: 'Open' },
+    { value: 'closed', label: 'Finished' },
+    { value: 'all', label: 'All' },
+  ];
+
+  var WF_ACTION_LABELS = {
+    approve: 'Approve',
+    decline: 'Decline',
+    request_changes: 'Request changes',
+    acknowledge: 'Acknowledge',
+    submit_feedback: 'Send feedback',
+    sign: 'Sign',
+  };
+
+  var wf = {
+    el: null, page: 'requests', tab: 'inbox', commentTab: 'mine',
+    search: '', type: '', state: 'open',
+    items: [], comments: [], counts: null, canSeeAll: false,
+    cursor: null, loading: false, loadingMore: false, loaded: false,
+    error: null, seq: 0, replyingTo: null, searchTimer: null,
+  };
+
+  function mountWorkflows(el, opts) {
+    var page = (opts && WF_PAGES[opts.navId]) || 'requests';
+    var changed = wf.el !== el || wf.page !== page;
+
     wf.el = el;
-    el.innerHTML =
-      '<div class="tma-portal-page">' +
+    wf.page = page;
+
+    // Arriving from the sidebar is a fresh instruction; re-rendering the same
+    // page (a live update, a resize) must keep whatever was typed or picked.
+    if (changed) {
+      wf.search = '';
+      wf.type = '';
+      wf.state = 'open';
+      wf.items = [];
+      wf.comments = [];
+      wf.loaded = false;
+      wf.error = null;
+      wf.replyingTo = null;
+    }
+
+    renderWorkflows();
+    loadWorkflows();
+  }
+
+  function wfTabs() {
+    var all = wf.page === 'comments' ? WF_COMMENT_TABS : WF_TABS;
+
+    // The firm-wide tab is not merely hidden from clients — the server refuses
+    // the scope, so offering it would be a button that quietly does something
+    // else.
+    return all.filter(function (t) { return !t.staffOnly || wf.canSeeAll; });
+  }
+
+  function wfActiveTab() {
+    var key = wf.page === 'comments' ? wf.commentTab : wf.tab;
+    var tabs = wfTabs();
+
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].key === key) return key;
+    }
+
+    return tabs.length ? tabs[0].key : key;
+  }
+
+  /* A count is only worth drawing when it is not zero: "Waiting on you (0)"
+     spends the most prominent label on the page saying nothing is there. */
+  function wfTabLabel(tab) {
+    var c = wf.counts;
+    if (!c) return tab.label;
+
+    var n = tab.key === 'inbox' ? c.waiting
+      : tab.key === 'sent' ? c.sent
+        : (wf.page === 'comments' && tab.key === 'mine') ? c.mentions
+          : 0;
+
+    return n > 0 ? tab.label + ' (' + n + ')' : tab.label;
+  }
+
+  function renderWorkflows() {
+    if (!wf.el) return;
+
+    var isComments = wf.page === 'comments';
+    var body = isComments ? wfCommentsBody() : wfRequestsBody();
+
+    var html =
+      '<div class="tma-portal-page tma-portal-page--workflows">' +
       '<div class="tma-portal-head">' +
-      '<h2 class="tma-portal-head__title">Workflows</h2>' +
+      '<h2 class="tma-portal-head__title">' + (isComments ? 'Feedback and Comments' : 'Requests') + '</h2>' +
       '</div>' +
-      ui().emptyState({
-        illustration: 'Illustration06',
-        title: 'No workflows yet',
-        subtitle: 'Create a workflow to automate feedback, approvals, and more.',
-      }) +
+      '<div data-wfh-tabs>' + ui().tabs(wfTabs().map(function (t) {
+        return { key: t.key, label: wfTabLabel(t) };
+      }), wfActiveTab()) + '</div>' +
+      '<div class="tma-portal-toolbar">' +
+      '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--search">' +
+      ui().searchInput(isComments ? 'Search comments' : 'Search by file name', 'data-wfh-search', wf.search) +
+      '</div>' +
+      (isComments ? '' :
+        '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--filters">' +
+        '<div class="tma-portal-field">' +
+        '<span class="tma-portal-field__label">Type</span>' +
+        ui().select(WF_TYPES, wf.type, 'data-wfh-type', 'Request type') +
+        '</div>' +
+        '<div class="tma-portal-field">' +
+        '<span class="tma-portal-field__label">Show</span>' +
+        ui().select(WF_STATES, wf.state, 'data-wfh-state', 'Which requests to show') +
+        '</div>' +
+        '</div>') +
+      '</div>' +
+      '<div class="tma-portal-wf-body" data-wfh-body>' + body + '</div>' +
       '</div>';
+
+    // patch(), not innerHTML: a reply half-typed into one card must survive
+    // the repaint that another card's response triggers.
+    if (window.TMAMorph) window.TMAMorph.patch(wf.el, html);
+    else wf.el.innerHTML = html;
+
+    wireWorkflows();
+  }
+
+  function wfRequestsBody() {
+    if (wf.loading && !wf.loaded) return ui().loading({ count: 4 });
+    if (wf.error) {
+      return ui().banner('warning', ui().esc(wf.error) +
+        ' <button type="button" class="tma-portal-link" data-wfh-retry>Try again</button>');
+    }
+    if (!wf.items.length) return wfEmptyRequests();
+
+    return '<div class="tma-portal-wf-list">' + wf.items.map(wfRequestCard).join('') + '</div>' + wfMoreButton();
+  }
+
+  function wfCommentsBody() {
+    if (wf.loading && !wf.loaded) return ui().loading({ count: 4 });
+    if (wf.error) {
+      return ui().banner('warning', ui().esc(wf.error) +
+        ' <button type="button" class="tma-portal-link" data-wfh-retry>Try again</button>');
+    }
+    if (!wf.comments.length) return wfEmptyComments();
+
+    return '<div class="tma-portal-wf-list">' + wf.comments.map(wfCommentCard).join('') + '</div>' + wfMoreButton();
+  }
+
+  function wfMoreButton() {
+    if (!wf.cursor) return '';
+
+    return '<div class="tma-portal-wf-more">' +
+      '<button type="button" class="tma-portal-link" data-wfh-more' + (wf.loadingMore ? ' disabled' : '') + '>' +
+      (wf.loadingMore ? 'Loading…' : 'Show older') + '</button></div>';
+  }
+
+  /* Filters and tabs mean an empty list has several different causes, and
+     "nothing here" is only true for one of them. */
+  function wfEmptyRequests() {
+    if (wf.search || wf.type || wf.state !== 'open') {
+      return ui().emptyState({
+        illustration: 'Illustration06',
+        title: 'Nothing matches those filters',
+        subtitle: 'Try a different type, or widen it to all requests.',
+      });
+    }
+
+    var tab = wfActiveTab();
+
+    if (tab === 'sent') {
+      return ui().emptyState({
+        illustration: 'Illustration06',
+        title: 'You haven’t asked anyone for anything',
+        subtitle: 'Open a file and send it for approval, feedback or review.',
+      });
+    }
+
+    if (tab === 'all') {
+      return ui().emptyState({
+        illustration: 'Illustration06',
+        title: 'No requests are open',
+        subtitle: 'Nothing in the library is waiting on a decision.',
+      });
+    }
+
+    return ui().emptyState({
+      illustration: 'Illustration06',
+      title: 'Nothing is waiting on you',
+      subtitle: 'Approvals, reviews and acknowledgements addressed to you land here.',
+    });
+  }
+
+  function wfEmptyComments() {
+    if (wf.search) {
+      return ui().emptyState({
+        illustration: 'Illustration06',
+        title: 'No comments match',
+        subtitle: 'Try a different word, or a file name.',
+      });
+    }
+
+    return ui().emptyState({
+      illustration: 'Illustration06',
+      title: wfActiveTab() === 'unresolved' ? 'No open threads' : 'No comments yet',
+      subtitle: 'Comments on files you own, threads you’re in, and anywhere you’re mentioned.',
+    });
+  }
+
+  /* ── request card ──────────────────────────────── */
+
+  function wfRequestCard(r) {
+    var esc = ui().esc;
+    var sub = [r.typeLabel];
+
+    if (r.sender) sub.push(r.sender.isSelf ? 'sent by you' : 'from ' + r.sender.name);
+    if (r.isOpen && r.dueAt) sub.push((r.overdue ? 'overdue since ' : 'due ') + wfRelative(r.dueAt));
+    else if (r.completedAt) sub.push(wfRelative(r.completedAt));
+    else if (r.sentAt) sub.push('sent ' + wfRelative(r.sentAt));
+
+    var people = (r.people || []).map(function (p) {
+      return '<span class="tma-portal-wf-person' + (p.answered ? ' is-answered' : '') + '">' +
+        wfAvatar(p) +
+        '<span class="tma-portal-wf-person__name">' + esc(p.name || 'Someone') + '</span>' +
+        '<span class="tma-portal-wf-person__state">' + esc(p.statusLabel) + '</span>' +
+        (p.comment ? '<span class="tma-portal-wf-person__comment">“' + esc(p.comment) + '”</span>' : '') +
+        '</span>';
+    }).join('');
+
+    var respond = '';
+    if (r.myStep && r.isOpen) {
+      respond = '<div class="tma-portal-wf-respond" data-wfh-respond="' + esc(r.id) + '">' +
+        '<textarea class="tma-portal-wf-input" data-wfh-comment="' + esc(r.id) + '" rows="2" placeholder="' +
+        (r.requireComment ? 'A comment is required' : 'Add a comment (optional)') + '"></textarea>' +
+        '<div class="tma-portal-wf-respond__actions">' +
+        (r.myActions || []).map(function (a) {
+          var primary = a === 'approve' || a === 'acknowledge' || a === 'submit_feedback' || a === 'sign';
+          return ui().btn({
+            label: WF_ACTION_LABELS[a] || a,
+            small: true,
+            variant: primary ? '' : 'ghost',
+            attrs: 'data-wfh-act="' + esc(a) + '" data-wfh-id="' + esc(r.id) + '"',
+          });
+        }).join('') +
+        '</div></div>';
+    }
+
+    var footer = [];
+    if (r.notYourTurn) footer.push('<span class="tma-portal-muted">It isn’t your turn yet — this request is answered one person at a time.</span>');
+    if (r.canCancel) footer.push('<button type="button" class="tma-portal-link" data-wfh-cancel="' + esc(r.id) + '">Cancel request</button>');
+
+    return '<article class="tma-portal-wf-card' + (r.onMe && r.isOpen ? ' is-mine' : '') + '">' +
+      '<div class="tma-portal-wf-card__head">' +
+      '<p class="tma-portal-wf-card__headline tma-portal-wf-card__headline--' + esc(r.headline.tone) + '">' +
+      esc(r.headline.text) + '</p>' +
+      '<span class="tma-portal-status tma-portal-status--' + esc(r.tone) + '">' + esc(r.statusLabel) + '</span>' +
+      '</div>' +
+      wfFileLine(r.file) +
+      '<p class="tma-portal-wf-card__sub">' + esc(sub.join(' · ')) + '</p>' +
+      (r.message ? '<p class="tma-portal-wf-card__message">' + esc(r.message) + '</p>' : '') +
+      (r.supersededBy
+        ? '<p class="tma-portal-wf-card__warn">Version ' + esc(r.supersededBy) +
+          ' has been uploaded since. This request still refers to version ' + esc(r.version) + '.</p>'
+        : '') +
+      (r.total > 1 ? '<p class="tma-portal-wf-card__progress">' + r.answered + ' of ' + r.total + ' responded</p>' : '') +
+      (people ? '<div class="tma-portal-wf-people">' + people + '</div>' : '') +
+      respond +
+      (footer.length ? '<div class="tma-portal-wf-card__foot">' + footer.join('') + '</div>' : '') +
+      '</article>';
+  }
+
+  /* ── comment card ──────────────────────────────── */
+
+  function wfCommentCard(c) {
+    var esc = ui().esc;
+    var replying = wf.replyingTo === c.id;
+
+    var chips = '';
+    if (c.mentionsMe) chips += '<span class="tma-portal-status tma-portal-status--action">Mentioned you</span>';
+    if (c.resolved) chips += '<span class="tma-portal-status tma-portal-status--success">Resolved</span>';
+    else if (!c.isReply) chips += '<span class="tma-portal-status tma-portal-status--pending">Open</span>';
+
+    var actions = [];
+    if (c.can.reply) {
+      actions.push('<button type="button" class="tma-portal-link" data-wfh-reply="' + esc(c.id) + '">' +
+        (replying ? 'Cancel' : 'Reply') + '</button>');
+    }
+    if (c.can.resolve) {
+      actions.push('<button type="button" class="tma-portal-link" data-wfh-resolve="' + esc(c.id) + '" data-wfh-resolved="' +
+        (c.resolved ? '1' : '0') + '">' + (c.resolved ? 'Reopen' : 'Resolve') + '</button>');
+    }
+
+    return '<article class="tma-portal-wf-card' + (c.mentionsMe && !c.resolved ? ' is-mine' : '') + '">' +
+      '<div class="tma-portal-wf-card__head">' +
+      '<span class="tma-portal-wf-author">' +
+      wfAvatar(c.author) +
+      '<span class="tma-portal-wf-author__name">' +
+      esc(c.author ? c.author.name : 'Someone') +
+      (c.author && c.author.isSelf ? ' <span class="tma-portal-muted">(you)</span>' : '') +
+      '</span>' +
+      '<span class="tma-portal-wf-author__when">' + esc(wfRelative(c.createdAt)) +
+      (c.isReply ? ' · reply' : '') + '</span>' +
+      '</span>' +
+      '<span class="tma-portal-wf-chips">' + chips + '</span>' +
+      '</div>' +
+      (c.deleted
+        ? '<p class="tma-portal-wf-card__message tma-portal-muted">This comment was deleted.</p>'
+        : '<p class="tma-portal-wf-card__message">' + esc(c.body || '') + '</p>') +
+      wfFileLine(c.file) +
+      (c.resolved && c.resolvedBy
+        ? '<p class="tma-portal-wf-card__sub">Resolved by ' + esc(c.resolvedBy) + '</p>' : '') +
+      (replying
+        ? '<div class="tma-portal-wf-respond">' +
+          '<textarea class="tma-portal-wf-input" data-wfh-reply-body="' + esc(c.id) + '" rows="2" placeholder="Write a reply"></textarea>' +
+          '<div class="tma-portal-wf-respond__actions">' +
+          ui().btn({ label: 'Send reply', small: true, attrs: 'data-wfh-reply-send="' + esc(c.id) + '"' }) +
+          '</div></div>'
+        : '') +
+      (actions.length ? '<div class="tma-portal-wf-card__foot">' + actions.join('') + '</div>' : '') +
+      '</article>';
+  }
+
+  /** The file a row is about, and the way back to it. */
+  function wfFileLine(file) {
+    if (!file) return '';
+
+    var esc = ui().esc;
+
+    return '<button type="button" class="tma-portal-wf-file" data-wfh-open="' + esc(file.id) + '"' +
+      (file.folderId ? ' data-wfh-folder="' + esc(file.folderId) + '"' : '') + '>' +
+      '<img class="tma-portal-wf-file__icon" src="images/icons/phosphor/File.svg" alt="" width="16" height="16">' +
+      '<span class="tma-portal-wf-file__name">' + esc(file.name) + '</span>' +
+      (file.folder ? '<span class="tma-portal-wf-file__path">' + esc(file.folder) + '</span>' : '') +
+      '</button>';
+  }
+
+  /* Real photo if there is one, otherwise the shared initials avatar — the
+     same generator the rest of the portal uses, so one person is the same
+     colour everywhere. */
+  function wfAvatar(p) {
+    var name = (p && p.name) || 'Someone';
+    var src = (p && p.avatar) || (window.TMACurrentUser && window.TMACurrentUser.initialsFor
+      ? window.TMACurrentUser.initialsFor(name)
+      : '');
+
+    if (!src) return '';
+
+    return '<img class="tma-portal-wf-avatar" src="' + ui().esc(src) + '" alt="" width="24" height="24">';
+  }
+
+  /* "in 2 days", "2 days ago", "today" — a deadline is a question about how
+     long is left, not a timestamp to do arithmetic against. */
+  function wfRelative(iso) {
+    if (!iso) return '';
+
+    var then = new Date(iso);
+    if (isNaN(then)) return '';
+
+    var days = Math.round((then - new Date()) / 86400000);
+
+    if (days === 0) return 'today';
+    if (days === 1) return 'tomorrow';
+    if (days === -1) return 'yesterday';
+
+    var n = Math.abs(days);
+    if (n < 31) return days > 0 ? 'in ' + n + ' days' : n + ' days ago';
+
+    var months = Math.round(n / 30);
+
+    return days > 0
+      ? 'in ' + months + (months === 1 ? ' month' : ' months')
+      : months + (months === 1 ? ' month' : ' months') + ' ago';
+  }
+
+  /* ── loading ───────────────────────────────────── */
+
+  function wfUrl(path, cursor) {
+    var params = new URLSearchParams();
+    params.set('scope', wfActiveTab());
+    if (wf.search) params.set('q', wf.search);
+    if (wf.page === 'requests') {
+      if (wf.type) params.set('type', wf.type);
+      params.set('state', wf.state);
+    }
+    if (cursor) params.set('cursor', cursor);
+
+    return net().url(path + '?' + params.toString());
+  }
+
+  /* Responses are sequenced: switching tabs fires a second request, and a slow
+     first one landing afterwards would repaint the tab the reader just left. */
+  function loadWorkflows(opts) {
+    opts = opts || {};
+    var seq = ++wf.seq;
+
+    if (!opts.silent && !opts.more) {
+      wf.loading = true;
+      wf.error = null;
+      renderWorkflows();
+    }
+    if (opts.more) {
+      wf.loadingMore = true;
+      renderWorkflows();
+    }
+
+    var path = wf.page === 'comments' ? '/workflows/comments' : '/workflows';
+
+    return net().fetchJSON(wfUrl(path, opts.more ? wf.cursor : null))
+      .then(function (res) {
+        if (seq !== wf.seq) return;
+
+        var items = res.items || [];
+
+        if (wf.page === 'comments') {
+          wf.comments = opts.more ? wf.comments.concat(items) : items;
+        } else {
+          wf.items = opts.more ? wf.items.concat(items) : items;
+        }
+
+        wf.cursor = res.nextCursor || null;
+        wf.counts = res.counts || wf.counts;
+        wf.canSeeAll = !!res.canSeeAll;
+        wf.loading = false;
+        wf.loadingMore = false;
+        wf.loaded = true;
+        wf.error = null;
+        renderWorkflows();
+      })
+      .catch(function (err) {
+        if (seq !== wf.seq) return;
+        wf.loading = false;
+        wf.loadingMore = false;
+        wf.loaded = true;
+        // A live refresh that fails leaves the list the reader already has —
+        // erasing it would be worse than showing it a few seconds stale.
+        if (!opts.silent) wf.error = (err && err.message) || 'Could not load this list.';
+        renderWorkflows();
+      });
+  }
+
+  function wfRecord(id) {
+    var list = wf.page === 'comments' ? wf.comments : wf.items;
+
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) return list[i];
+    }
+
+    return null;
+  }
+
+  /* ── actions (all through the per-file endpoints) ─ */
+
+  function wfRespond(id, action) {
+    var r = wfRecord(id);
+    if (!r || !r.file) return;
+
+    var box = wf.el.querySelector('[data-wfh-comment="' + CSS.escape(id) + '"]');
+    var comment = box ? box.value.trim() : '';
+
+    net().fetchJSON(
+      net().url('/files/' + encodeURIComponent(r.file.id) + '/workflows/' + encodeURIComponent(id) + '/respond'),
+      { method: 'POST', json: { action: action, comment: comment } }
+    )
+      .then(function (updated) {
+        ui().toast(updated.statusLabel || 'Response recorded');
+        loadWorkflows();
+      })
+      .catch(function (err) { ui().toastError((err && err.message) || 'Could not record that response.'); });
+  }
+
+  function wfCancel(id) {
+    var r = wfRecord(id);
+    if (!r || !r.file) return;
+
+    ui().openModal({
+      title: 'Cancel request',
+      body: '<p class="tma-portal-modal__text">Cancel this request? The people asked will no longer be able to respond.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-wfh-keep>Keep it</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-wfh-confirm>Cancel request</button>' +
+        '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-wfh-keep]').addEventListener('click', ui().closeModal);
+        host.querySelector('[data-wfh-confirm]').addEventListener('click', function () {
+          ui().closeModal();
+          net().fetchJSON(
+            net().url('/files/' + encodeURIComponent(r.file.id) + '/workflows/' + encodeURIComponent(id) + '/cancel'),
+            { method: 'POST' }
+          )
+            .then(function () { ui().toast('Request cancelled'); loadWorkflows(); })
+            .catch(function (err) { ui().toastError((err && err.message) || 'Could not cancel that request.'); });
+        });
+      },
+    });
+  }
+
+  function wfSendReply(id) {
+    var c = wfRecord(id);
+    if (!c || !c.file) return;
+
+    var box = wf.el.querySelector('[data-wfh-reply-body="' + CSS.escape(id) + '"]');
+    var body = box ? box.value.trim() : '';
+
+    if (!body) { ui().toastError('Write something first.'); return; }
+
+    net().fetchJSON(net().url('/files/' + encodeURIComponent(c.file.id) + '/comments'), {
+      method: 'POST',
+      // The thread, not the comment: replies are one level deep, so answering
+      // a reply belongs on the thread it is part of.
+      json: { body: body, parent: c.threadId || c.id },
+    })
+      .then(function () {
+        wf.replyingTo = null;
+        ui().toast('Reply posted');
+        loadWorkflows();
+      })
+      .catch(function (err) { ui().toastError((err && err.message) || 'Could not post that reply.'); });
+  }
+
+  function wfResolve(id, resolved) {
+    var c = wfRecord(id);
+    if (!c || !c.file) return;
+
+    net().fetchJSON(
+      net().url('/files/' + encodeURIComponent(c.file.id) + '/comments/' + encodeURIComponent(id) + '/resolve'),
+      { method: 'POST', json: { resolved: resolved } }
+    )
+      .then(function () { ui().toast(resolved ? 'Thread resolved' : 'Thread reopened'); loadWorkflows(); })
+      .catch(function (err) { ui().toastError((err && err.message) || 'Could not update that thread.'); });
+  }
+
+  /**
+   * Back to the file, with its viewer open.
+   *
+   * A full navigation rather than an in-place view swap: the File Library
+   * reads the folder and file from the URL on mount, and there is no way to
+   * hand it both through the SPA router without it clearing one of them.
+   */
+  function wfOpenFile(fileId, folderId) {
+    var root = window.__TMA_SITE_ROOT || '';
+    var params = new URLSearchParams();
+
+    if (folderId) params.set('folder', folderId);
+    params.set('file', fileId);
+
+    window.location.assign(root + '/folders/all?' + params.toString());
+  }
+
+  /* ── wiring ────────────────────────────────────── */
+
+  function wireWorkflows() {
+    var root = wf.el;
+    if (!root) return;
+
+    /*
+     * Underline chrome and keyboard arrows only.
+     *
+     * Switching is delegated below: PortalTabGroup binds a handler per button,
+     * and patch() replaces those buttons whenever a tab count changes — so a
+     * group wired that way stops responding the moment a number moves.
+     */
+    var tabHost = root.querySelector('.tma-tab-group');
+    if (tabHost && !tabHost._wfTabsWired) {
+      tabHost._wfTabsWired = true;
+      if (window.PortalTabGroup) window.PortalTabGroup.init(tabHost);
+    }
+
+    // Per keystroke, not per request: the list is a server query, and firing
+    // one for every letter of a file name would race its own results.
+    ui().wireToolbarSearch(root, '[data-wfh-search]', function (value) {
+      wf.search = value;
+      wf.cursor = null;
+      clearTimeout(wf.searchTimer);
+      wf.searchTimer = setTimeout(function () { loadWorkflows(); }, 250);
+    });
+
+    var type = root.querySelector('[data-wfh-type]');
+    if (type && !type._wfWired) {
+      type._wfWired = true;
+      type.addEventListener('change', function () {
+        wf.type = type.value;
+        wf.cursor = null;
+        loadWorkflows();
+      });
+    }
+
+    var stateSel = root.querySelector('[data-wfh-state]');
+    if (stateSel && !stateSel._wfWired) {
+      stateSel._wfWired = true;
+      stateSel.addEventListener('change', function () {
+        wf.state = stateSel.value;
+        wf.cursor = null;
+        loadWorkflows();
+      });
+    }
+
+    // One delegated listener on the page root: the list is rebuilt on every
+    // load, and per-button handlers would have to be re-bound each time.
+    if (!root._wfClickWired) {
+      root._wfClickWired = true;
+      root.addEventListener('click', onWorkflowsClick);
+    }
+  }
+
+  function onWorkflowsClick(e) {
+    var t = e.target;
+    var hit;
+
+    if ((hit = t.closest('[data-tab-key]'))) {
+      var key = hit.getAttribute('data-tab-key');
+      if (key === wfActiveTab()) return;
+
+      if (wf.page === 'comments') wf.commentTab = key;
+      else wf.tab = key;
+      wf.cursor = null;
+      wf.replyingTo = null;
+      wf.loaded = false;
+      loadWorkflows();
+
+      return;
+    }
+
+    if ((hit = t.closest('[data-wfh-retry]'))) { loadWorkflows(); return; }
+    if ((hit = t.closest('[data-wfh-more]'))) { loadWorkflows({ more: true }); return; }
+
+    if ((hit = t.closest('[data-wfh-open]'))) {
+      wfOpenFile(hit.getAttribute('data-wfh-open'), hit.getAttribute('data-wfh-folder'));
+      return;
+    }
+
+    if ((hit = t.closest('[data-wfh-act]'))) {
+      wfRespond(hit.getAttribute('data-wfh-id'), hit.getAttribute('data-wfh-act'));
+      return;
+    }
+
+    if ((hit = t.closest('[data-wfh-cancel]'))) { wfCancel(hit.getAttribute('data-wfh-cancel')); return; }
+
+    if ((hit = t.closest('[data-wfh-reply]'))) {
+      var id = hit.getAttribute('data-wfh-reply');
+      wf.replyingTo = wf.replyingTo === id ? null : id;
+      renderWorkflows();
+      var box = wf.el.querySelector('[data-wfh-reply-body="' + CSS.escape(id) + '"]');
+      if (box) box.focus();
+      return;
+    }
+
+    if ((hit = t.closest('[data-wfh-reply-send]'))) { wfSendReply(hit.getAttribute('data-wfh-reply-send')); return; }
+
+    if ((hit = t.closest('[data-wfh-resolve]'))) {
+      wfResolve(hit.getAttribute('data-wfh-resolve'), hit.getAttribute('data-wfh-resolved') !== '1');
+      return;
+    }
   }
 
   /* ── Templates (minimal) ─────────────────────────── */
@@ -2131,6 +2802,17 @@
         window.TMALive.RESOURCES.SIGNATURES,
         function () { return loadSignatures({ silent: true }); },
         { active: function () { return !!sig.el && document.contains(sig.el); } }
+      );
+
+      /*
+       * Somebody else approving, commenting or replying happens in their
+       * browser, and this page is precisely a list of what other people owe
+       * you — left alone it would go stale while you watched it.
+       */
+      window.TMALive.register(
+        window.TMALive.RESOURCES.FILES,
+        function () { return loadWorkflows({ silent: true }); },
+        { active: function () { return !!wf.el && document.contains(wf.el); } }
       );
     }
   }

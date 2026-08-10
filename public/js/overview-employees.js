@@ -30,20 +30,34 @@
     return 'neutral';
   }
 
+  /* Presence decides the badge colour; the work plan only tints somebody who
+     is actually here. See presenceBadge() in portal-home.js — the two boards
+     read the same payload and must agree on what green means. */
+  function presenceTone(p) {
+    if (!p.online) return 'offline';
+    var work = p.workStatus || null;
+    return work ? workStatusTone(work.status) : 'online';
+  }
+
+  function lastSeen(p) {
+    if (window.TMALastSeen) return window.TMALastSeen.forPresence(p);
+    return p.online ? 'Online' : (p.lastSeen || 'Offline');
+  }
+
   function subtitle(p) {
     var work = p.workStatus || null;
     if (p.online && work && work.label) return work.label;
-    if (!p.online && work && work.label) return work.label + ' · ' + (p.lastSeen || 'Offline');
+    if (!p.online && work && work.label) return work.label + ' · ' + lastSeen(p);
     if (p.online) return 'Online';
-    return p.lastSeen || 'Offline';
+    return lastSeen(p);
   }
 
   function renderRow(p) {
     var work = p.workStatus || null;
-    var tone = work ? workStatusTone(work.status) : (p.online ? 'online' : 'away');
+    var tone = presenceTone(p);
     var workLabel = work && work.label ? work.label : (p.online ? 'Available' : 'Away');
     return '<div class="tma-dash__overview-employee" data-employee-id="' + esc(p.id) + '">' +
-      '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : '') + '">' +
+      '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : ' is-offline') + '">' +
       '<img src="' + esc(avatarSrc(p)) + '" alt="" width="40" height="40" loading="lazy">' +
       '</span>' +
       '<span class="tma-dash__overview-employee__meta">' +

@@ -48,6 +48,10 @@ class StaffPresenceController extends Controller
                 'self' => $user->id === $viewer->id,
                 'online' => (bool) ($presence['online'] ?? false),
                 'lastSeen' => $presence['lastSeen'] ?? null,
+                // The instant as well as the sentence: the board polls every
+                // 30s, so the browser re-derives "5 minutes ago" between polls
+                // rather than letting the label go stale on screen.
+                'lastSeenAt' => $presence['lastSeenAt'] ?? null,
                 'workStatus' => $workStatuses[(int) $user->id] ?? null,
             ];
         })->sortBy([

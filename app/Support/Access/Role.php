@@ -127,7 +127,8 @@ class Role
         'signatures.create' => [self::EMPLOYEE],
         // Document templates.
         'templates.view' => [self::EMPLOYEE],
-        // Automated workflows and the approval queue.
+        // The Workflows section: requests waiting on you or sent by you, and
+        // the comment threads you are part of, across every file.
         'workflows.view' => [self::EMPLOYEE],
         // The Overview page. Staff-wide: what it opens with — the metrics,
         // the week planner, recent files, the firm's sign-ins — was built for

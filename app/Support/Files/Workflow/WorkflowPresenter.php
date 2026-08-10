@@ -133,22 +133,34 @@ class WorkflowPresenter
             'role' => $step->role,
             'position' => $step->position,
             'status' => $step->status,
-            'statusLabel' => match ($step->status) {
-                'pending' => 'Not yet asked',
-                'invited' => 'Waiting',
-                'approved' => 'Approved',
-                'declined' => 'Declined',
-                'changes_requested' => 'Requested changes',
-                'acknowledged' => 'Acknowledged',
-                'responded' => 'Responded',
-                'signed' => 'Signed',
-                default => ucfirst(str_replace('_', ' ', $step->status)),
-            },
+            'statusLabel' => self::stepLabel($step->status),
             'comment' => $step->comment,
             'respondedAt' => optional($step->responded_at)->toIso8601String(),
             'delegatedFrom' => $step->delegated_from_id ? true : false,
             'reminderCount' => (int) $step->reminder_count,
         ];
+    }
+
+    /**
+     * How one person's outcome reads.
+     *
+     * Public because the cross-file hub shows the same steps away from the
+     * file, and two vocabularies for the same column would let the viewer's
+     * panel and the Requests page disagree about what happened.
+     */
+    public static function stepLabel(string $status): string
+    {
+        return match ($status) {
+            'pending' => 'Not yet asked',
+            'invited' => 'Waiting',
+            'approved' => 'Approved',
+            'declined' => 'Declined',
+            'changes_requested' => 'Requested changes',
+            'acknowledged' => 'Acknowledged',
+            'responded' => 'Responded',
+            'signed' => 'Signed',
+            default => ucfirst(str_replace('_', ' ', $status)),
+        };
     }
 
     /** The workflow's own audit trail, oldest first — §6 "Workflow History". */

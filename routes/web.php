@@ -58,6 +58,7 @@ use App\Http\Controllers\Files\ShortcutController;
 use App\Http\Controllers\Files\SyncStatusController;
 use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
+use App\Http\Controllers\Files\WorkflowHubController;
 use App\Http\Controllers\GettingStartedController;
 use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\InvitationAcceptController;
@@ -395,6 +396,16 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/files/{uuid}/versions/{version}/download', [FileVersionController::class, 'download'])->name('versions.download');
         Route::get('/files/{uuid}/versions/{version}/preview', [FileVersionController::class, 'preview'])->name('versions.preview');
         Route::post('/files/{uuid}/versions/{version}/restore', [FileVersionController::class, 'restore'])->name('versions.restore');
+
+        /*
+         * The Workflows section: requests and discussion gathered across every
+         * file, rather than one file at a time. Read-only — the client acts
+         * through the per-file endpoints below, which is where the permission
+         * checks already live.
+         */
+        Route::get('/workflows', [WorkflowHubController::class, 'index'])->name('workflows.hub');
+        Route::get('/workflows/comments', [WorkflowHubController::class, 'comments'])->name('workflows.hub.comments');
+        Route::get('/workflows/counts', [WorkflowHubController::class, 'counts'])->name('workflows.hub.counts');
 
         // Review / approval / acknowledgement requests. A request is pinned to
         // the version it was sent on and never silently follows the file.

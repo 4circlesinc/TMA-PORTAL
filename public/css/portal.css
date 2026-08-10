@@ -1342,6 +1342,22 @@
   box-sizing: border-box;
 }
 
+/*
+ * Six rows on the card, the rest behind a scroll.
+ *
+ * The dashboard is a masonry board whose column heights come from each tile's
+ * natural height, so a firm with thirty employees pushed this one tile past
+ * everything beside it and left the board lopsided. Capping the list — rather
+ * than the panel — is what keeps the measured height constant: a row is 36px
+ * of avatar plus 8px of padding either side, plus the 2px gap.
+ */
+.tma-portal-employees--scroll {
+  max-height: calc(6 * 52px + 5 * 2px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
 /* Recent email — show ~4 rows upfront; scroll for the rest (up to 8). */
 .tma-portal-email-list {
   display: flex;
@@ -1539,7 +1555,16 @@
   background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
 }
 
-.tma-portal-employee__avatar.is-online::after {
+/*
+ * The presence dot, in both of its states.
+ *
+ * Offline used to render no dot at all, which reads as "we don't know" rather
+ * than "not here" — and left the green dot as the only presence signal on a
+ * board where the badge beside it was also green for anyone whose work plan
+ * said "in office". Green is online. Grey is offline. Nothing else.
+ */
+.tma-portal-employee__avatar.is-online::after,
+.tma-portal-employee__avatar.is-offline::after {
   content: "";
   position: absolute;
   right: 0;
@@ -1549,6 +1574,11 @@
   border-radius: 50%;
   background: #22a06b;
   box-shadow: 0 0 0 2px var(--color-bg-card, #fff);
+}
+
+.tma-portal-employee__avatar.is-offline::after {
+  background: var(--color-text-secondary, #8a8f98);
+  opacity: 0.55;
 }
 
 .tma-portal-employee__meta {
@@ -1605,13 +1635,23 @@
   color: #9a451f;
 }
 
+/* Offline is neutral grey, always — see presenceBadge() in portal-home.js. */
 .tma-portal-employee__badge--away,
+.tma-portal-employee__badge--offline,
 .tma-portal-employee__badge--neutral {
   background: rgba(0, 0, 0, 0.06);
   color: var(--color-text-secondary);
 }
 
+:root[data-theme="dark"] .tma-portal-employee__badge--away,
+:root[data-theme="dark"] .tma-portal-employee__badge--offline,
+:root[data-theme="dark"] .tma-portal-employee__badge--neutral {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-secondary);
+}
+
 :root[data-theme="dark"] .tma-portal-employee__avatar.is-online::after,
+:root[data-theme="dark"] .tma-portal-employee__avatar.is-offline::after,
 :root[data-theme="dark"] .tma-portal-chat-row__avatar.is-online::after {
   box-shadow: 0 0 0 2px var(--color-bg-card, #1a1a1a);
 }
@@ -3925,4 +3965,268 @@ label.tma-portal-check-row:hover {
 
 .tma-portal-home-library tr.is-selected > td {
   background: var(--color-accent-bg);
+}
+
+/* ── Workflows: requests and comments across every file ──────────
+ *
+ * One card shape for both lists. A request and a comment are different
+ * things, but the question the reader brings to this page is the same for
+ * both — what is this, whose file is it, and is it on me — so answering it
+ * in two different layouts would make the page harder to scan, not richer.
+ *
+ * `is-mine` is the only visual weight on offer, and it is spent on exactly
+ * one meaning: this row is waiting on you.
+ */
+.tma-portal-page--workflows .tma-tab-group {
+  margin-top: var(--space-4);
+}
+
+.tma-portal-wf-body {
+  margin-top: var(--space-4);
+}
+
+.tma-portal-wf-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tma-portal-wf-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-16) var(--space-20);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  min-width: 0;
+}
+
+/* A left edge rather than a fill: the row still has to be readable next to
+   twenty others, and a tinted card competes with the status badge it sits
+   beside for the same job. */
+.tma-portal-wf-card.is-mine {
+  border-left: 3px solid var(--color-accent);
+  padding-left: calc(var(--space-20) - 2px);
+}
+
+.tma-portal-wf-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.tma-portal-wf-card__headline {
+  margin: 0;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+  min-width: 0;
+}
+
+.tma-portal-wf-card__headline--action { color: var(--color-primary-dark); }
+.tma-portal-wf-card__headline--danger { color: var(--color-red); }
+
+.tma-portal-wf-card__sub,
+.tma-portal-wf-card__progress {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-wf-card__message {
+  margin: 0;
+  font-size: var(--text-size-13);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tma-portal-wf-card__warn {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  padding: var(--space-6) var(--space-10);
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+}
+
+.tma-portal-wf-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.tma-portal-wf-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-shrink: 0;
+}
+
+/* The file the row is about — context, and the way back to it. */
+.tma-portal-wf-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.tma-portal-wf-file:hover { filter: brightness(0.97); }
+
+.tma-portal-wf-file:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.tma-portal-wf-file__icon { flex-shrink: 0; opacity: 0.6; }
+
+.tma-portal-wf-file__name {
+  font-size: var(--text-size-13);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tma-portal-wf-file__path {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.tma-portal-wf-people {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.tma-portal-wf-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+/* Someone who has answered is settled business; the row stays legible but
+   stops competing with the people still being waited on. */
+.tma-portal-wf-person.is-answered { opacity: 0.7; }
+
+.tma-portal-wf-person__name {
+  font-size: var(--text-size-13);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.tma-portal-wf-person__state {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-portal-wf-person__comment {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tma-portal-wf-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tma-portal-wf-author {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-portal-wf-author__name {
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  color: var(--color-black);
+  white-space: nowrap;
+}
+
+.tma-portal-wf-author__when {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-portal-wf-respond {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-portal-wf-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 56px;
+  padding: var(--space-8) var(--space-10);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--text-size-13);
+  line-height: 1.5;
+}
+
+.tma-portal-wf-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  outline-offset: 1px;
+}
+
+.tma-portal-wf-respond__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.tma-portal-wf-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-16);
+}
+
+@media (max-width: 720px) {
+  .tma-portal-wf-card__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-6);
+  }
+
+  .tma-portal-wf-person {
+    flex-wrap: wrap;
+  }
 }

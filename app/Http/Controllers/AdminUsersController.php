@@ -18,6 +18,7 @@ use App\Support\Invitations\Invitations;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
+use App\Support\Presence\LastSeen;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -72,7 +73,13 @@ class AdminUsersController extends Controller
             'joined' => $user->created_at->format('M j, Y'),
             'joinedIso' => $user->created_at->toIso8601String(),
             'lastActive' => isset($lastSeen[$user->id])
-                ? now()->setTimestamp($lastSeen[$user->id])->diffForHumans()
+                ? LastSeen::short(now()->setTimestamp($lastSeen[$user->id]), $viewer)
+                : null,
+            'lastActiveLabel' => isset($lastSeen[$user->id])
+                ? LastSeen::label(now()->setTimestamp($lastSeen[$user->id]), $viewer)
+                : null,
+            'lastActiveAt' => isset($lastSeen[$user->id])
+                ? now()->setTimestamp($lastSeen[$user->id])->toIso8601String()
                 : null,
             'workStatus' => $workStatuses[(int) $user->id] ?? null,
             'self' => $user->id === $viewer->id,

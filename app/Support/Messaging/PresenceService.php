@@ -6,6 +6,7 @@ use App\Events\PresenceChanged;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Models\UserPresence;
+use App\Support\Presence\LastSeen;
 use Illuminate\Support\Carbon;
 
 /**
@@ -133,28 +134,23 @@ class PresenceService
 
         return [
             'online' => false,
-            'lastSeen' => self::label($presence->last_seen_at),
+            // Rendered on the *viewer's* wall clock — "yesterday at 8:15 PM"
+            // is only true in one time zone, and this answer has one reader.
+            'lastSeen' => LastSeen::label($presence->last_seen_at, $viewer),
             'lastSeenAt' => $presence->last_seen_at->toIso8601String(),
         ];
     }
 
-    /** "Last seen 12 min ago" / "Last seen yesterday" / "Last seen Mar 7". */
+    /**
+     * The label carried by a broadcast presence change.
+     *
+     * Deliberately not the reader-zone formatter: this string is fanned out to
+     * every participant at once, so it can only be one that means the same
+     * thing everywhere. It is only ever emitted on an explicit disconnect,
+     * which is always "just now".
+     */
     private static function label(Carbon $at): string
     {
-        // Signing out puts the timestamp at this instant, which would
-        // otherwise render as the nonsense "Last seen 0s ago".
-        if ($at->diffInSeconds(now(), absolute: true) < 60) {
-            return 'Last seen just now';
-        }
-
-        if ($at->isToday()) {
-            return 'Last seen '.$at->diffForHumans(short: true, syntax: Carbon::DIFF_ABSOLUTE).' ago';
-        }
-
-        if ($at->isYesterday()) {
-            return 'Last seen yesterday';
-        }
-
-        return 'Last seen '.$at->format($at->isCurrentYear() ? 'M j' : 'M j, Y');
+        return LastSeen::label($at);
     }
 }

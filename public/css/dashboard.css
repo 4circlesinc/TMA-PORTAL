@@ -32815,3 +32815,54 @@ span.tma-dash__messages-profile-avatar {
     transition-duration: 1ms !important;
   }
 }
+
+/* ─────────────────────────────────────────
+ * PULL TO REFRESH
+ * The indicator for the drag-down-to-reload gesture (pull-refresh.js). Fixed
+ * and centred on the main column, so it never floats over the sidebar. The
+ * ring reuses the mailbox sync spinner's treatment (portal-files.css) so a
+ * refresh reads the same wherever it is raised from.
+ * ───────────────────────────────────────── */
+.tma-pull-refresh {
+  position: fixed;
+  z-index: 250; /* over the page, under modals (300) — portal z-index layers */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--color-white);
+  box-shadow: var(--shadow-popup);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0);
+}
+
+.tma-pull-refresh--settling {
+  transition: transform 200ms ease-out, opacity 200ms ease-out;
+}
+
+.tma-pull-refresh__ring {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-soft);
+  border-top-color: var(--color-primary);
+  /* Follows the pull before it spins: the ring turning with the finger is what
+     says the gesture is being tracked. */
+  transform: rotate(0deg);
+  transition: transform 120ms linear;
+}
+
+.tma-pull-refresh--ready .tma-pull-refresh__ring { transform: rotate(180deg); }
+
+.tma-pull-refresh--busy .tma-pull-refresh__ring {
+  transition: none;
+  animation: tma-dash-spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-pull-refresh--settling { transition-duration: 1ms; }
+  .tma-pull-refresh--busy .tma-pull-refresh__ring { animation-duration: 1.6s; }
+}

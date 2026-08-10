@@ -102,15 +102,17 @@
     };
   }
 
+  /* Returns a promise that settles when this entry's refetch is done, so a
+     caller driving a visible spinner (pull-to-refresh) knows when to stop. */
   function runEntry(entry) {
     if (entry.running) {
       // Something landed mid-refetch; the data we are about to receive may
       // already be stale, so remember to go again rather than dropping it.
       entry.dirty = true;
-      return;
+      return Promise.resolve();
     }
 
-    if (entry.active && !entry.active()) return;
+    if (entry.active && !entry.active()) return Promise.resolve();
 
     var result;
     entry.running = true;
@@ -119,36 +121,39 @@
       result = entry.refresh();
     } catch (err) {
       entry.running = false;
-      return;
+      return Promise.resolve();
     }
 
     if (!result || typeof result.then !== 'function') {
       entry.running = false;
-      if (entry.dirty) { entry.dirty = false; runEntry(entry); }
-      return;
+      if (entry.dirty) { entry.dirty = false; return runEntry(entry); }
+      return Promise.resolve();
     }
 
-    result.then(done, done);
+    return new Promise(function (resolve) {
+      result.then(done, done);
 
-    function done() {
-      entry.running = false;
-      if (entry.dirty) { entry.dirty = false; runEntry(entry); }
-    }
+      function done() {
+        entry.running = false;
+        if (entry.dirty) { entry.dirty = false; resolve(runEntry(entry)); return; }
+        resolve();
+      }
+    });
   }
 
   function flush(resource) {
     var list = registry[resource];
-    if (!list || !list.length) return;
+    if (!list || !list.length) return Promise.resolve();
 
     // A background tab refetching is pure cost — nobody is looking at it, and
     // with many tabs open it multiplies every write into a burst of requests.
     // Defer to the visibility handler, which catches up on the way back.
     if (document.hidden) {
       list.forEach(function (entry) { entry.dirty = true; });
-      return;
+      return Promise.resolve();
     }
 
-    list.slice().forEach(runEntry);
+    return Promise.all(list.slice().map(runEntry));
   }
 
   function schedule(resource) {
@@ -169,10 +174,10 @@
   /* Refresh everything that is watching — used after a reconnect and when a
      hidden tab comes back, since both may have missed events entirely. */
   function refreshAll() {
-    Object.keys(registry).forEach(function (resource) {
+    return Promise.all(Object.keys(registry).map(function (resource) {
       var list = registry[resource];
-      if (list && list.length) flush(resource);
-    });
+      return list && list.length ? flush(resource) : null;
+    }));
   }
 
   document.addEventListener('visibilitychange', function () {
@@ -297,7 +302,9 @@
     register: register,
     headers: headers,
     socketId: socketId,
-    // Exposed for surfaces that need to force a sweep (e.g. after an import).
+    // Exposed for surfaces that need to force a sweep (e.g. after an import,
+    // or a pull-to-refresh). Both resolve when the refetches have landed.
     refreshAll: refreshAll,
+    flush: flush,
   };
 })();

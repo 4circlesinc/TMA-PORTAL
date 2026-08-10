@@ -243,7 +243,11 @@
       return '<span class="tma-dash__messages-chat-presence tma-dash__messages-chat-workstatus">' +
         esc(workLabel) + '</span>';
     }
-    var label = presence.label || presence.lastSeen || 'Offline';
+    // Re-derived from the instant where the server sent one, so the header
+    // does not still read "5 minutes ago" an hour into a conversation.
+    var label = presence.label ||
+      (window.TMALastSeen && presence.lastSeenAt ? window.TMALastSeen.label(presence.lastSeenAt) : null) ||
+      presence.lastSeen || 'Offline';
     return '<span class="tma-dash__messages-chat-presence">' + esc(label) + '</span>';
   }
 
@@ -4085,9 +4089,9 @@
     var row = findThread(state.selectedId) || {};
     var shelf = state.profileShelf || 'media';
 
-    var presence = p.presence.online
-      ? 'Online'
-      : (p.presence.lastSeen || p.presence.label || '');
+    var presence = window.TMALastSeen
+      ? window.TMALastSeen.forPresence(p.presence)
+      : (p.presence.online ? 'Online' : (p.presence.lastSeen || p.presence.label || ''));
 
     return (
       '<div class="tma-dash__messages-chat tma-dash__messages-chat--profile">' +

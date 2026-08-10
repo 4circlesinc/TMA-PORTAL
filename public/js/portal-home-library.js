@@ -12,6 +12,7 @@
 
   var state = {
     loaded: false,
+    loadedAt: 0,
     inflight: null,
     showAllDefaults: false,
     defaults: [], // { id, name, colour, iconName, files: [], fileCount }
@@ -643,24 +644,102 @@
     // Dashboard not mounted yet — next visit will render from state.
   }
 
+  /*
+   * What the strip currently draws.
+   *
+   * A background revalidation that returns exactly what is already on screen
+   * must not repaint anything — that repaint is what the dashboard's callers
+   * see as the strip "reloading" on every visit.
+   */
+  function itemSig(it) {
+    return [
+      it.id, it.name || '', it.type || '', it.sizeLabel || '',
+      it.modifiedAt || it.createdAt || it.uploadedAt || '',
+      it.favorite ? 1 : 0, it.shared ? 1 : 0, it.thumbUrl || '',
+    ].join(':');
+  }
+
+  function packSig(pack) {
+    return ((pack && pack.folders) || []).concat((pack && pack.files) || []).map(itemSig).join('|');
+  }
+
+  function defaultsSig(list) {
+    return (list || []).map(function (f) {
+      return [
+        f.id, f.name || '', f.colour || '', f.iconName || '',
+        f.fileCount == null ? '' : f.fileCount,
+        f.folderCount == null ? '' : f.folderCount,
+        (f.folders || []).map(function (s) { return s.id + ':' + s.name; }).join(','),
+        (f.files || []).map(function (s) { return s.id + ':' + s.name; }).join(','),
+      ].join('~');
+    }).join('|');
+  }
+
+  function snapshot() {
+    return [defaultsSig(state.defaults), packSig(state.recent), packSig(state.shared)].join('#');
+  }
+
+  /**
+   * Merge a freshly fetched default-folder list onto what is already drawn.
+   *
+   * The previews are a second round of requests, so a folder that survives the
+   * refresh keeps the contents it is already showing until its own preview
+   * comes back. Replacing the list outright — which is what this used to do —
+   * left every card reading "Nothing in this folder yet" for as long as the
+   * preview requests took, on every single visit to the Dashboard.
+   */
+  function mergeDefaults(next) {
+    var known = {};
+    state.defaults.forEach(function (f) { known[f.id] = f; });
+
+    return next.map(function (f) {
+      var prev = known[f.id];
+      if (!prev) return f;
+      f.files = prev.files || [];
+      f.folders = prev.folders || [];
+      if (prev.fileCount != null) f.fileCount = prev.fileCount;
+      if (prev.folderCount != null) f.folderCount = prev.folderCount;
+      return f;
+    });
+  }
+
+  /* Revalidation window. Nothing on this strip moves in the seconds it takes
+     to open another page and come back; a real change arrives on the `files`
+     signal (see watchLiveFiles in portal-home.js), which forces past it. */
+  var FRESH_MS = 60000;
+
   /**
    * Load defaults + recent/shared. Pass true as 2nd arg (or { force: true })
    * to refetch after creating/adopting a default folder.
+   *
+   * `remount` may be a callback or `true` for the default one; it is invoked
+   * only when the payload differs from what is already on screen.
    */
   function load(remount, force) {
     if (force && typeof force === 'object') force = !!force.force;
+    var done = typeof remount === 'function' ? remount : (remount ? remountHome : null);
+
     if (!net()) {
       state.loaded = true;
-      if (typeof remount === 'function') remount();
-      else if (remount) remountHome();
+      if (done) done();
       return Promise.resolve();
     }
     if (state.inflight) {
       if (!force) return state.inflight;
       return state.inflight.then(function () { return load(remount, true); });
     }
+    // Already current — answer from what we have rather than asking again.
+    if (!force && state.loaded && (Date.now() - state.loadedAt) < FRESH_MS) {
+      return Promise.resolve();
+    }
 
-    var done = typeof remount === 'function' ? remount : (remount ? remountHome : null);
+    var before = snapshot();
+
+    function settle() {
+      state.loaded = true;
+      state.loadedAt = Date.now();
+      if (done && snapshot() !== before) done();
+    }
 
     state.inflight = Promise.all([
       net().fetchJSON(net().url('/shortcuts')).catch(function () { return null; }),
@@ -675,12 +754,14 @@
       var shared = res[2];
       var adminOrg = res[3] || [];
 
+      var nextDefaults;
       if (isStaffUser() === false) {
-        state.defaults = [];
+        nextDefaults = [];
       } else {
         var fromShortcuts = (shortcuts && shortcuts.groups && shortcuts.groups.organization) || [];
-        state.defaults = normalizeOrgList(fromShortcuts.concat(adminOrg));
+        nextDefaults = mergeDefaults(normalizeOrgList(fromShortcuts.concat(adminOrg)));
       }
+      state.defaults = nextDefaults;
 
       if (recent) {
         state.recent = {
@@ -695,22 +776,27 @@
         };
       }
 
-      return Promise.all(state.defaults.map(loadFolderPreview)).then(function (folders) {
-        state.defaults = folders;
-        state.loaded = true;
+      // Paint the folder list as soon as we know it, then again once the
+      // previews land — the cards keep their old contents in between.
+      if (snapshot() !== before) {
+        before = snapshot();
         if (done) done();
+      }
+
+      return Promise.all(nextDefaults.map(loadFolderPreview)).then(function (folders) {
+        state.defaults = folders;
+        settle();
       });
     }).catch(function () {
       state.inflight = null;
-      state.loaded = true;
-      if (done) done();
+      settle();
     });
 
     return state.inflight;
   }
 
-  function refresh() {
-    return load(true, true);
+  function refresh(remount) {
+    return load(remount == null ? true : remount, true);
   }
 
   window.TMAPortalHomeLibrary = {

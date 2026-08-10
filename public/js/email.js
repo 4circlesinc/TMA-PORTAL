@@ -2440,6 +2440,29 @@
     }
   }
 
+  /*
+   * Sync with the provider, then reload the open folder.
+   *
+   * Shared by the toolbar's refresh button and the shell's refresh gesture, so
+   * both do the same work: reloading the listing alone would show whatever was
+   * already stored and miss the mail that arrived since.
+   */
+  function refreshMailbox(root, state, render) {
+    if (!root || !state || state.refreshing) return Promise.resolve();
+    state.refreshing = true;
+    render();
+    announceMailSync();
+
+    return api().sync().then(function (data) {
+      if (data && data.folders) state.folderCounts = data.folders;
+    }).catch(function (err) {
+      reportMailError(state, err);
+    }).then(function () {
+      state.refreshing = false;
+      return reloadMessages(root, state, render);
+    });
+  }
+
   function stopSyncPolling() {
     if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
   }
@@ -6403,19 +6426,7 @@
     MORPH.unwired(root, '[data-email-refresh]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
-        if (state.refreshing) return;
-        state.refreshing = true;
-        render();
-        announceMailSync();
-
-        api().sync().then(function (data) {
-          if (data && data.folders) state.folderCounts = data.folders;
-        }).catch(function (err) {
-          reportMailError(state, err);
-        }).then(function () {
-          state.refreshing = false;
-          reloadMessages(root, state, render);
-        });
+        refreshMailbox(root, state, render);
       });
     });
 
@@ -7868,6 +7879,13 @@
 
   window.TMAEmail = {
     mount: mount,
+    /* Reload the mailbox in place — the shell's refresh gesture, which must
+       not re-mount and so must not close the message being read. */
+    refresh: function (rootEl) {
+      var root = rootEl || document.querySelector('[data-email]');
+      if (!root || !root._emailState || !root._emailRender) return Promise.resolve();
+      return refreshMailbox(root, root._emailState, root._emailRender);
+    },
     restoreHeaderSearch: restoreHeaderSearch,
     getInboxUnreadCount: getInboxUnreadCount,
     getPageTitle: getPageTitle,

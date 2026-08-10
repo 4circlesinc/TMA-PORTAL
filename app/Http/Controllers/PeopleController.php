@@ -13,6 +13,7 @@ use App\Support\Activity\ActivityLogger;
 use App\Support\Invitations\Invitations;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
+use App\Support\Presence\LastSeen;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -343,9 +344,12 @@ class PeopleController extends Controller
                 // "Not activated" is the state the Showing filter asks about:
                 // the account exists but nobody has ever signed in with it.
                 'activated' => $signedIn && $u->status === User::STATUS_APPROVED,
-                'lastLogin' => $at ? $this->humanTime($at) : null,
+                'lastLogin' => $at ? $this->humanTime($at, $viewer) : null,
                 'lastActive' => isset($lastSeen[$u->id])
-                    ? now()->setTimestamp((int) $lastSeen[$u->id])->diffForHumans()
+                    ? LastSeen::short(now()->setTimestamp((int) $lastSeen[$u->id]), $viewer)
+                    : null,
+                'lastActiveLabel' => isset($lastSeen[$u->id])
+                    ? LastSeen::label(now()->setTimestamp((int) $lastSeen[$u->id]), $viewer)
                     : null,
                 'joined' => $u->created_at?->format('M j, Y'),
                 'self' => $u->id === $viewer->id,
@@ -527,14 +531,18 @@ class PeopleController extends Controller
         ];
     }
 
-    private function humanTime(mixed $value): ?string
+    private function humanTime(mixed $value, ?User $viewer = null): ?string
     {
         if ($value === null) {
             return null;
         }
 
-        return ($value instanceof \DateTimeInterface ? Carbon::instance($value) : Carbon::parse($value))
-            ->diffForHumans();
+        // One phrasing for every "when did this last happen" cell in the
+        // portal — see App\Support\Presence\LastSeen.
+        return LastSeen::short(
+            $value instanceof \DateTimeInterface ? Carbon::instance($value) : Carbon::parse($value),
+            $viewer,
+        );
     }
 
     private function authorizeView(Request $request): User

@@ -33,7 +33,7 @@
     { id: 'new-user-folders', label: 'Create New User', icon: 'UserPlus' },
     { id: 'shared-folders', label: 'Shared Folders', icon: 'FolderSimpleUser', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
     { id: 'favorites', label: 'Favorites', icon: 'Star', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
-    { id: 'feedback-approval', label: 'Feedback and Approval', icon: 'Checks', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Approval', crumb: 'Workflows / Feedback and Approval' } },
+    { id: 'feedback-approval', label: 'Feedback and Comments', icon: 'Checks', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback and Comments', crumb: 'Workflows / Feedback and Comments' } },
     { id: 'send-signature', label: 'Send for Signature', icon: 'Signature', nav: { navId: 'signatures', view: 'signatures', title: 'Signature requests', crumb: 'Signatures' } },
   ];
 
@@ -100,10 +100,28 @@
    */
   var homeFilesLoaded = false;
   var homeFilesInflight = null;
+  var homeFilesAt = 0;
 
   var homeMetricsLoaded = false;
   var homeMetrics = null;
   var homeMetricsInflight = null;
+  var homeMetricsAt = 0;
+
+  /*
+   * Revalidation windows.
+   *
+   * Coming back to the Dashboard used to refetch six endpoints unconditionally,
+   * and each answer triggered another full render. Nothing on this board
+   * changes in the seconds it takes to look at Email and come back, so a
+   * revisit inside the window paints what it already has and asks the server
+   * nothing. Anything that genuinely changes arrives through TMALive (a file
+   * added, a folder renamed) rather than by polling harder.
+   */
+  var FRESH_MS = 60000;         // Recent Files, Favorites, Default Folders
+  var METRICS_FRESH_MS = 300000; // the KPI row is a rolling measurement
+  var PRESENCE_FRESH_MS = 20000; // who is online moves faster than anything else
+
+  function stale(at, within) { return (Date.now() - at) > (within || FRESH_MS); }
 
   // Pending-approvals count, fetched once and reused. It was previously
   // requested on every mount, including the two re-renders each load triggers.
@@ -233,6 +251,7 @@
   var homeStaff = null;
   var homeStaffInflight = null;
   var homeStaffTimer = null;
+  var homeStaffAt = 0;
   var homeStaffUserBound = false;
 
   function avatarSrcFor(person) {
@@ -249,6 +268,32 @@
     if (status === 'sick_leave' || status === 'on_leave' || status === 'personal_leave') return 'leave';
     if (status === 'out_of_office' || status === 'travelling' || status === 'not_working') return 'away';
     return 'neutral';
+  }
+
+  /*
+   * The colour of a presence badge is decided by presence, and only then by
+   * what somebody's work plan says.
+   *
+   * This used to read the work plan first, so anyone whose plan said "in
+   * office" wore the green badge whether or not they were actually signed in —
+   * a badge reading "Offline" in the green reserved for online. Green now means
+   * one thing. An offline person is grey no matter what today's plan says; an
+   * online one may be tinted by their status (remote is blue, leave is amber),
+   * because that colour is describing a person who is genuinely there.
+   */
+  function presenceBadge(p) {
+    if (!p.online) return { tone: 'offline', label: 'Offline' };
+    var work = p.workStatus || null;
+    if (work && work.label) return { tone: workStatusTone(work.status), label: work.label };
+    return { tone: 'online', label: 'Online' };
+  }
+
+  /* "Last seen 5 minutes ago", re-derived from the instant so it stays true
+     between the 30-second polls. Falls back to the server's sentence for
+     anyone who hides their last-seen (they send no timestamp). */
+  function lastSeenLabel(p) {
+    if (window.TMALastSeen) return window.TMALastSeen.forPresence(p);
+    return p.online ? 'Online' : (p.lastSeen || 'Offline');
   }
 
   function employeesSkeleton() {
@@ -280,30 +325,32 @@
     var onlineCount = people.filter(function (p) { return p.online; }).length;
     var rows = people.map(function (p) {
       var work = p.workStatus || null;
-      var tone = work ? workStatusTone(work.status) : (p.online ? 'online' : 'away');
+      var badge = presenceBadge(p);
       var sub;
       if (p.online && work && work.label) sub = work.label;
-      else if (!p.online && work && work.label) sub = work.label + ' · ' + (p.lastSeen || 'Offline');
+      else if (!p.online && work && work.label) sub = work.label + ' · ' + lastSeenLabel(p);
       else if (p.online) sub = 'Online';
-      else sub = p.lastSeen || 'Offline';
+      else sub = lastSeenLabel(p);
 
       return '<div class="tma-portal-employee" data-key="employee-' + ui().esc(p.id) + '">' +
-        '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : '') + '">' +
+        '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : ' is-offline') + '">' +
         '<img src="' + ui().esc(avatarSrcFor(p)) + '" alt="" width="36" height="36" loading="lazy">' +
         '</span>' +
         '<span class="tma-portal-employee__meta">' +
         '<span class="tma-portal-employee__name">' + ui().esc(p.name) + (p.self ? ' (you)' : '') + '</span>' +
         '<span class="tma-portal-employee__sub">' + ui().esc(sub) + '</span>' +
         '</span>' +
-        '<span class="tma-portal-employee__badge tma-portal-employee__badge--' + tone + '">' +
-        ui().esc(p.online ? 'Online' : 'Offline') +
+        '<span class="tma-portal-employee__badge tma-portal-employee__badge--' + badge.tone + '">' +
+        ui().esc(badge.label) +
         '</span></div>';
     }).join('');
 
     return tileShell(
       'employees', 'panel-employees', 'Employees',
       panelHead('Employees', onlineCount + ' of ' + people.length + ' online'),
-      '<div class="tma-portal-employees">' +
+      // A fixed-height list that scrolls, rather than a card that grows with
+      // the payroll: the board stays the same size at 4 employees and at 40.
+      '<div class="tma-portal-employees tma-portal-employees--scroll">' +
       (rows || '<p class="tma-portal-panel__note">No employees to show.</p>') +
       '</div>',
       'tma-portal-panel--employees'
@@ -646,6 +693,20 @@
     });
   }
 
+  /* Everything the board draws for one person. A poll that returns the same
+     presence and the same work plan must not redraw thirty avatars. */
+  function staffSignature(payload) {
+    if (!payload) return '';
+    if (payload.staff === false) return 'client';
+    return (payload.employees || []).map(function (p) {
+      var work = p.workStatus || {};
+      return [
+        p.id, p.online ? 1 : 0, p.lastSeen || '', p.lastSeenAt || '',
+        p.name || '', p.avatar || '', work.status || '', work.label || '',
+      ].join(':');
+    }).join('|');
+  }
+
   function loadHomeStaff(el, opts) {
     opts = opts || {};
     bindStaffUserListener();
@@ -659,6 +720,8 @@
     }
     if (homeStaffInflight) return;
 
+    var before = staffSignature(homeStaff);
+
     homeStaffInflight = fetch('/portal/dashboard/staff', {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -666,14 +729,18 @@
       .catch(function () { return null; })
       .then(function (json) {
         homeStaffInflight = null;
+        var wasLoaded = homeStaffLoaded;
         homeStaffLoaded = true;
         // A failed request must not permanently hide the widget for staff.
         if (json) {
           homeStaff = json;
+          homeStaffAt = Date.now();
         } else if (!homeStaff) {
           homeStaff = { staff: true, employees: [], error: true };
         }
-        if (el && el.isConnected) mount(el, { fromLoad: true });
+        if ((!wasLoaded || staffSignature(homeStaff) !== before) && el && el.isConnected) {
+          mount(el, { fromLoad: true });
+        }
       });
 
     // Keep presence fresh while the home view is open.
@@ -681,20 +748,12 @@
       homeStaffTimer = setInterval(function () {
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
+        // A hidden tab polling presence is pure cost — the visibilitychange
+        // handler catches up on the way back.
+        if (document.visibilityState === 'hidden') return;
         if (homeStaffInflight) return;
         if (homeStaff && homeStaff.staff === false) return;
-        homeStaffInflight = fetch('/portal/dashboard/staff', {
-          credentials: 'same-origin',
-          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        }).then(function (r) { return r.ok ? r.json() : null; })
-          .catch(function () { return null; })
-          .then(function (json) {
-            homeStaffInflight = null;
-            if (!json) return;
-            homeStaff = json;
-            homeStaffLoaded = true;
-            if (mountEl.isConnected) mount(mountEl, { fromLoad: true });
-          });
+        loadHomeStaff(mountEl, { skipTimer: true });
       }, 30000);
     }
   }
@@ -977,6 +1036,23 @@
     grid.classList.add('is-packed');
     grid._masonryWidth = width;
     grid._masonrySig = items.map(function (i) { return i.id + ':' + i.h; }).join('|');
+  }
+
+  /*
+   * Pack only if the board isn't already packed at the width it is now.
+   *
+   * The path taken when a render produced identical markup. Two cases still
+   * need work: the very first paint, and a return to a view that was packed
+   * while it was hidden (a hidden view measures 0px wide, so layoutHomeMasonry
+   * bails and the tiles are left in the CSS-grid fallback).
+   */
+  function ensureHomeMasonry(root) {
+    var grid = root.querySelector('.tma-portal-home-grid');
+    if (!grid) return;
+    var width = grid.clientWidth || 0;
+    if (width < 40) return;
+    if (grid.classList.contains('is-packed') && Math.abs((grid._masonryWidth || 0) - width) < 1) return;
+    bindHomeMasonry(root);
   }
 
   function bindHomeMasonry(root) {
@@ -1325,6 +1401,14 @@
   /* Real data for the Recent Files + Favorites widgets, from the File Library
    * browse API (the same endpoints the file manager uses). Falls back quietly
    * to whatever is in state if the request fails. */
+  /* What Recent Files / Favorites currently *say*. Two payloads with the same
+     signature paint the same rows, so there is nothing to re-render. */
+  function fileListSignature(list) {
+    return (list || []).map(function (f) {
+      return [f.kind, f.id, f.name, f.path || '', f.thumbUrl || '', f.fileCount == null ? '' : f.fileCount].join(':');
+    }).join('|');
+  }
+
   function loadHomeFiles(el) {
     var net = window.TMAFilesNet;
     if (!net) { homeFilesLoaded = true; return; }
@@ -1370,8 +1454,12 @@
       // and blanking them is both a worse answer and a visible flash.
       if (!res[0] && !res[1]) { homeFilesLoaded = true; return; }
 
+      var wasLoaded = homeFilesLoaded;
       homeFilesLoaded = true;
+      homeFilesAt = Date.now();
       var s = data().state();
+      var beforeRecent = fileListSignature(s.recentFiles);
+      var beforeFavs = fileListSignature(s.folders && s.folders.favorites);
 
       // Each section is applied only if its own request succeeded, so a failing
       // Favorites call cannot wipe a good Recent Files list.
@@ -1407,7 +1495,14 @@
         s.folders.favorites = favFolders.concat(favFiles);
       }
 
-      if (el.isConnected) mount(el, { fromLoad: true });
+      // A revalidation that found nothing new is not a reason to touch the
+      // page. Re-rendering an identical board is where the "cards keep
+      // refreshing" feeling came from.
+      var changed = !wasLoaded ||
+        fileListSignature(s.recentFiles) !== beforeRecent ||
+        fileListSignature(s.folders && s.folders.favorites) !== beforeFavs;
+
+      if (changed && el.isConnected) mount(el, { fromLoad: true });
     });
   }
 
@@ -1418,6 +1513,8 @@
   function loadHomeMetrics(el) {
     if (homeMetricsInflight) return;
 
+    var before = JSON.stringify(homeMetrics || null);
+
     homeMetricsInflight = fetch('/portal/dashboard/metrics', {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -1425,12 +1522,16 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       // A failed refresh keeps the numbers already on the cards; only the very
       // first attempt has nothing to fall back to.
-      .then(function (j) { if (j) homeMetrics = j; })
+      .then(function (j) { if (j) { homeMetrics = j; homeMetricsAt = Date.now(); } })
       .catch(function () {})
       .then(function () {
         homeMetricsInflight = null;
+        var wasLoaded = homeMetricsLoaded;
         homeMetricsLoaded = true;
-        if (el.isConnected) mount(el, { fromLoad: true });
+        // Same numbers, same cards — leave the row alone.
+        if ((!wasLoaded || JSON.stringify(homeMetrics || null) !== before) && el.isConnected) {
+          mount(el, { fromLoad: true });
+        }
       });
   }
 
@@ -1599,8 +1700,25 @@
      * panels and rows carry stable keys, so unchanged rows are now left
      * untouched and only genuinely changed ones are rewritten.
      */
-    if (window.TMAMorph) window.TMAMorph.patch(el, html);
-    else el.innerHTML = html;
+    /*
+     * …and don't reconcile at all when there is nothing to reconcile.
+     *
+     * Six background loaders answer on every visit to this view, and each one
+     * called mount(). Morph made those cheap in DOM terms, but the work either
+     * side of it was not: the masonry pass below tears every tile out of its
+     * absolute position, forces a reflow to re-measure, and packs them again —
+     * twice per render, six times per visit. Comparing the rendered string
+     * first turns a no-op render into an actual no-op.
+     *
+     * The comparison is exact and the string is built from state, so anything
+     * that genuinely changed still gets through.
+     */
+    var unchanged = el._homeHtml === html && el.firstChild;
+    if (!unchanged) {
+      if (window.TMAMorph) window.TMAMorph.patch(el, html);
+      else el.innerHTML = html;
+      el._homeHtml = html;
+    }
 
     // Wiring runs after every render, but the nodes it walks now survive across
     // renders — so each binding is registered once per element rather than once
@@ -1620,7 +1738,11 @@
       window.TMAOverview.refreshRoad(el);
     }
 
-    bindHomeMasonry(el);
+    // Re-packing costs a forced reflow of the whole board; skip it when the
+    // markup it would measure is the one already on screen. The ResizeObserver
+    // inside still handles a genuine width change.
+    if (!unchanged) bindHomeMasonry(el);
+    else ensureHomeMasonry(el);
 
     el._homeLibRerender = function () { mount(el, { fromLoad: true }); };
     if (window.TMAPortalHomeLibrary) {
@@ -1726,24 +1848,38 @@
     bind(el.querySelector('[data-home-edit]'), 'click', function () { editDashboardModal(rerender); });
 
     fillShortcutCounts(el);
-    // Fetch real Recent Files + Favorites, and the KPI metrics, once per
-    // genuine mount (not on the re-render the fetches themselves trigger).
+    watchLiveFiles();
+
+    /*
+     * Revalidate on a genuine mount — but only what has actually gone stale.
+     *
+     * This block used to run every endpoint unconditionally on every visit to
+     * the Dashboard, force-refreshing the Default Folders as well. Leaving for
+     * Email and coming back therefore cost six requests and six renders, for a
+     * board that had not changed in the twenty seconds you were away. Each
+     * loader is now asked only when its own data is past its window; anything
+     * that changes in between arrives through TMALive instead.
+     */
     if (!opts.fromLoad) {
       hydrateLayoutFromServer(function (changed) {
         // Re-render once when the account layout differs from local cache.
         if (changed && el.isConnected) mount(el, { fromLoad: true, fromHydrate: true });
       });
-      loadHomeFiles(el);
-      loadHomeMetrics(el);
-      loadHomeStaff(el);
+      if (!homeFilesLoaded || stale(homeFilesAt)) loadHomeFiles(el);
+      if (!homeMetricsLoaded || stale(homeMetricsAt, METRICS_FRESH_MS)) loadHomeMetrics(el);
+      if (!homeStaffLoaded || stale(homeStaffAt, PRESENCE_FRESH_MS)) loadHomeStaff(el);
+      else bindStaffUserListener();
       loadHomeEmail(el);
       loadHomeChats(el);
       if (window.TMAPortalHomeLibrary) {
-        // Always force-refresh defaults when the dashboard is (re)opened so
-        // newly adopted organization folders show up immediately.
+        // Not forced any more. A forced load replaced state.defaults with
+        // preview-less folders straight away, so every card on the strip read
+        // "Nothing in this folder yet" until the previews came back — the
+        // Default Folders blanking on every visit. The strip revalidates on its
+        // own schedule and repaints only what changed.
         window.TMAPortalHomeLibrary.load(function () {
           if (el.isConnected) mount(el, { fromLoad: true });
-        }, true);
+        });
       }
     } else if (!homeStaffInflight && (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
       // Retry when identity arrives after an early "not staff" guess.
@@ -1751,6 +1887,48 @@
     } else {
       bindStaffUserListener();
     }
+  }
+
+  /*
+   * Files change → the file tiles change, and nothing else does.
+   *
+   * The Dashboard's answer to "update automatically when new files are added"
+   * is the signal the rest of the portal already uses (App\Support\Realtime\Live
+   * → TMALive), not a shorter poll. An upload, a rename, a move or a delete
+   * emits `files`; this refetches Recent Files, Favorites and the Default
+   * Folders strip, and the render-diff above means nothing repaints unless the
+   * rows genuinely differ.
+   */
+  var liveFilesBound = false;
+  function watchLiveFiles() {
+    if (liveFilesBound || !window.TMALive) return;
+    liveFilesBound = true;
+
+    function dashMount() {
+      var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+      return el && el.isConnected ? el : null;
+    }
+
+    window.TMALive.register(window.TMALive.RESOURCES.FILES, function () {
+      var el = dashMount();
+      if (!el) return null;
+      // Force past the freshness window: this is a signal that the data has
+      // actually changed, not a speculative revalidation.
+      homeFilesAt = 0;
+      loadHomeFiles(el);
+      if (!window.TMAPortalHomeLibrary) return null;
+      return window.TMAPortalHomeLibrary.refresh(function () {
+        var live = dashMount();
+        if (live) mount(live, { fromLoad: true });
+      });
+    }, {
+      // Registered for the life of the page, so skip the work whenever the
+      // Dashboard is not the view on screen.
+      active: function () {
+        var view = document.querySelector('.tma-dash__view[data-view="dashboard"]');
+        return !!view && !view.hidden;
+      },
+    });
   }
 
   if (window.TMAPortalViews) window.TMAPortalViews.register('dashboard', mount);
