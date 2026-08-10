@@ -531,24 +531,53 @@ field placement and drawing, and computed CSS only exist in a browser.
   Its second half is the Employees card, and it reads **computed colour**
   rather than class names: the bug was an offline colleague wearing the online
   green because their work plan said "in office", which a class-name assertion
-  would have passed. It also checks the "Last seen 12 minutes ago" phrasing and
-  that the list has a height ceiling and scrolls inside the card.
+  would have passed. It also checks the "Last seen 12 minutes ago" phrasing.
+
+  The card's height ceiling is checked by **measuring the rows**, not by
+  asserting `max-height` and `overflow-y` — both of those passed a build in
+  which the list was visibly broken. A flex column shrinks its children by
+  default, so the moment the list gained a max-height thirteen rows were
+  squeezed into six rows' worth of space, every name sitting on the line
+  beneath it, instead of scrolling. So it asserts no row overlaps the one
+  below, every row keeps its full height, and `scrollHeight` genuinely exceeds
+  `clientHeight`. Seed **more than six** colleagues or that last one is skipped.
+
+  Then the hover actions: message / voice / video appear on hover, are real
+  28px targets, do not change the row's height (this list scrolls — a row that
+  grows under the pointer moves the board out from under it), and your own row
+  has none. Clicking Message opens the direct conversation and rings nobody;
+  clicking Video opens it **and starts a call**, which is the whole chain worth
+  proving — the board knows a person, a call needs a conversation. Headless
+  Chromium has no camera, so the call lands in its error state and its scrim
+  covers the shell; hang up with `TMAMessagingCalls.end()` rather than clicking
+  through it.
 
   The seed needs an Administrator (`presence.view` is admin-only — an employee
-  gets `{staff: false}` and no board at all), one colleague who is **offline**
+  gets `{staff: false}` and no board at all), colleagues who are **offline**
   with an "in office" work plan for today, and some default folders with files
-  in them, or steps 5–7 assert nothing:
+  in them, or steps 9–11 assert nothing:
 
   ```sh
   DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute='
     use App\Models\{Folder, FileItem, User, UserPresence, WorkDay};
     use Illuminate\Support\Str;
     $u = User::where("email", "e2e@example.com")->first();
-    $b = User::where("email", "bea@example.com")->first();
-    UserPresence::create(["user_id" => $b->id, "last_seen_at" => now()->subMinutes(7),
-      "online_until" => now()->subMinutes(6)]);
-    WorkDay::create(["user_id" => $b->id, "work_date" => now()->toDateString(),
-      "status" => "in_office"]);
+    // More than six, so the scroll assertion has something to measure. One of
+    // them must be called Bea Adams — the script addresses her by name.
+    $names = ["Bea Adams", "Cindy Emmanuel-McLean", "Dincel Baptiste",
+              "Dominique Dantes", "Francesca St. Clair", "Krysnna Monrose",
+              "Lea Promesse", "Mayella Dupres"];
+    foreach ($names as $i => $n) {
+      $s = User::create(["name" => $n, "email" => Str::slug($n).".e2e@example.com",
+        "password" => Hash::make("password12345")]);
+      $s->forceFill(["email_verified_at" => now(), "profile_completed_at" => now(),
+        "onboarding_completed_at" => now(), "status" => "approved",
+        "account_type" => "Employee"])->save();
+      UserPresence::create(["user_id" => $s->id, "last_seen_at" => now()->subMinutes(7 + $i),
+        "online_until" => now()->subMinutes(6)]);
+      WorkDay::create(["user_id" => $s->id, "work_date" => now()->toDateString(),
+        "status" => "in_office"]);
+    }
     foreach (["Firm Policies", "Client Intake", "Templates"] as $name) {
       $f = Folder::create(["uuid" => (string) Str::uuid(), "name" => $name,
         "owner_id" => $u->id, "created_by" => $u->id,

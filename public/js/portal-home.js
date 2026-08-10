@@ -296,6 +296,61 @@
     return p.online ? 'Online' : (p.lastSeen || 'Offline');
   }
 
+  /*
+   * Message / voice / video, on hover.
+   *
+   * The board answers "who is around?" and the obvious next thing to do about
+   * an answer is reach them — which previously meant leaving the Dashboard,
+   * opening Messages and searching for the person by name.
+   *
+   * Rendered for every row rather than only the hovered one, and hidden in CSS:
+   * building them on mouseenter would mean a DOM write per pointer move, and
+   * the row would have no keyboard path to them at all. They are real buttons,
+   * so Tab reaches them and :focus-within reveals them.
+   *
+   * Not on your own row — there is nobody to call.
+   */
+  var EMPLOYEE_ACTIONS = [
+    { key: 'message', icon: 'ChatCircle', label: 'Message' },
+    { key: 'audio', icon: 'Phone', label: 'Voice call' },
+    { key: 'video', icon: 'VideoCamera', label: 'Video call' },
+  ];
+
+  function employeeActionsHtml(p) {
+    if (p.self) return '';
+
+    return '<span class="tma-portal-employee__actions">' +
+      EMPLOYEE_ACTIONS.map(function (a) {
+        var title = a.label + ' ' + (p.firstName || p.name || '');
+        return '<button type="button" class="tma-portal-employee__action"' +
+          ' data-home-employee-action="' + a.key + '"' +
+          ' data-home-employee="' + ui().esc(p.id) + '"' +
+          ' title="' + ui().esc(title.trim()) + '"' +
+          ' aria-label="' + ui().esc(title.trim()) + '">' +
+          '<img src="images/icons/phosphor/' + a.icon + '.svg" alt="" width="16" height="16">' +
+          '</button>';
+      }).join('') +
+      '</span>';
+  }
+
+  /**
+   * Reach a colleague from the board.
+   *
+   * All three go through Messages: a call needs a *conversation*, and this
+   * board knows a person. Messages resolves the direct thread and then rings —
+   * see startConversationWith in messages.js.
+   */
+  function openEmployeeAction(userId, action) {
+    navigate({
+      navId: 'so-messages',
+      view: 'messages',
+      title: 'Messages',
+      crumb: 'Messages',
+      openDirectUserId: userId,
+      startCall: action === 'audio' || action === 'video' ? action : null,
+    });
+  }
+
   function employeesSkeleton() {
     return tileShell(
       'employees', 'panel-employees', 'Employees', panelHead('Employees'),
@@ -340,6 +395,7 @@
         '<span class="tma-portal-employee__name">' + ui().esc(p.name) + (p.self ? ' (you)' : '') + '</span>' +
         '<span class="tma-portal-employee__sub">' + ui().esc(sub) + '</span>' +
         '</span>' +
+        employeeActionsHtml(p) +
         '<span class="tma-portal-employee__badge tma-portal-employee__badge--' + badge.tone + '">' +
         ui().esc(badge.label) +
         '</span></div>';
@@ -1883,6 +1939,17 @@
     pick('[data-home-chat-open]').forEach(function (b) {
       b.addEventListener('click', function () {
         navigate({ navId: 'so-messages', view: 'messages', title: 'Messages', crumb: 'Messages' });
+      });
+    });
+
+    pick('[data-home-employee-action]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openEmployeeAction(
+          b.getAttribute('data-home-employee'),
+          b.getAttribute('data-home-employee-action')
+        );
       });
     });
 

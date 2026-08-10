@@ -118,17 +118,155 @@ try {
     check(!/\d{4}-\d{2}-\d{2}|GMT|T\d{2}:/.test(badge.sub), 'and carries no raw timestamp');
   }
 
-  step(4, 'The Employees card scrolls instead of growing');
+  step(4, 'The Employees card scrolls instead of growing — or squashing');
   const scroller = await page.evaluate(() => {
     const el = document.querySelector('[data-tile-id="employees"] .tma-portal-employees');
     if (!el) return null;
     const cs = getComputedStyle(el);
-    return { maxHeight: cs.maxHeight, overflowY: cs.overflowY, height: el.getBoundingClientRect().height };
+    const rows = Array.from(el.querySelectorAll('.tma-portal-employee'));
+    return {
+      maxHeight: cs.maxHeight,
+      overflowY: cs.overflowY,
+      height: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+      count: rows.length,
+      rowHeights: rows.map((r) => Math.round(r.getBoundingClientRect().height)),
+      // Does any row's text overlap the row beneath it? That is what a squashed
+      // list looks like, and it is invisible to a max-height assertion.
+      overlaps: rows.filter((r, i) => {
+        const next = rows[i + 1];
+        if (!next) return false;
+        return r.getBoundingClientRect().bottom > next.getBoundingClientRect().top + 0.5;
+      }).length,
+    };
   });
   check(!!scroller && scroller.maxHeight !== 'none', `the list has a height ceiling (${scroller?.maxHeight})`);
   check(!!scroller && /auto|scroll/.test(scroller.overflowY), 'and scrolls inside the card');
 
-  step(5, 'Stamp the live nodes, then leave the Dashboard');
+  if (scroller) {
+    const shortest = Math.min(...scroller.rowHeights);
+    log(`      ${scroller.count} rows, ${shortest}px shortest, ` +
+      `list ${scroller.height}px tall over ${scroller.scrollHeight}px of content`);
+
+    /*
+     * The bug this exists for: a flex column with a max-height shrinks its
+     * children (flex-shrink defaults to 1), so thirteen rows were squeezed
+     * into six rows' worth of space — every name sitting on the line beneath
+     * it — instead of scrolling. Both assertions below passed the broken
+     * build, which is why the row geometry is measured too.
+     */
+    check(scroller.overlaps === 0, `no row overlaps the one below it (${scroller.overlaps})`);
+    check(shortest >= 44, `every row keeps its full height (shortest ${shortest}px)`);
+    if (scroller.count > 6) {
+      check(scroller.scrollHeight > scroller.height + 4,
+        'with more employees than fit, the list actually scrolls');
+    }
+  }
+
+  step(5, 'Hovering a colleague offers message, voice and video');
+  const rowSel = '[data-tile-id="employees"] .tma-portal-employee';
+  const hoverRow = page.locator(rowSel).filter({ hasText: 'Bea Adams' }).first();
+
+  const hidden = await page.evaluate((sel) => {
+    const row = Array.from(document.querySelectorAll(sel))
+      .find((r) => /Bea Adams/.test(r.textContent || ''));
+    const acts = row?.querySelector('.tma-portal-employee__actions');
+    return acts ? getComputedStyle(acts).visibility : null;
+  }, rowSel);
+  check(hidden === 'hidden', `the buttons are out of the way until hovered (${hidden})`);
+
+  await hoverRow.hover();
+  await page.waitForTimeout(250);
+
+  const onHover = await page.evaluate((sel) => {
+    const row = Array.from(document.querySelectorAll(sel))
+      .find((r) => /Bea Adams/.test(r.textContent || ''));
+    if (!row) return null;
+    const acts = row.querySelector('.tma-portal-employee__actions');
+    const badge = row.querySelector('.tma-portal-employee__badge');
+    return {
+      visibility: getComputedStyle(acts).visibility,
+      keys: Array.from(row.querySelectorAll('[data-home-employee-action]'))
+        .map((b) => b.getAttribute('data-home-employee-action')),
+      // Each must be a real target, not a 0×0 box behind the badge.
+      boxes: Array.from(row.querySelectorAll('[data-home-employee-action]'))
+        .map((b) => Math.round(b.getBoundingClientRect().width)),
+      badgeShown: badge ? getComputedStyle(badge).display !== 'none' : false,
+      rowHeight: Math.round(row.getBoundingClientRect().height),
+    };
+  }, rowSel);
+
+  check(onHover?.visibility === 'visible', 'they appear on hover');
+  check(JSON.stringify(onHover?.keys) === JSON.stringify(['message', 'audio', 'video']),
+    `all three, in order (${(onHover?.keys || []).join(', ')})`);
+  check((onHover?.boxes || []).every((w) => w >= 24), `each is clickable (${(onHover?.boxes || []).join('/')}px)`);
+  check(onHover?.badgeShown === false, 'and the status badge steps aside rather than crowding them');
+
+  // A row that grows under the pointer scrolls the rest of the list away.
+  const restHeight = scroller ? Math.min(...scroller.rowHeights) : 0;
+  check(Math.abs((onHover?.rowHeight || 0) - restHeight) <= 2,
+    `the row does not change height on hover (${restHeight} → ${onHover?.rowHeight})`);
+
+  step(6, 'Your own row has nobody to call');
+  const selfActions = await page.evaluate((sel) => {
+    const row = Array.from(document.querySelectorAll(sel)).find((r) => /\(you\)/.test(r.textContent || ''));
+    return row ? row.querySelectorAll('[data-home-employee-action]').length : -1;
+  }, rowSel);
+  check(selfActions === 0, `no actions on your own row (${selfActions})`);
+
+  step(7, 'Message opens the conversation without ringing anybody');
+  await hoverRow.hover();
+  await page.waitForTimeout(150);
+  await hoverRow.locator('[data-home-employee-action="message"]').click();
+  await page.waitForTimeout(3000);
+  const messaged = await page.evaluate(() => {
+    const view = document.querySelector('.tma-dash__view[data-view="messages"]');
+    return {
+      open: !!view && !view.hidden,
+      thread: !!document.querySelector('[data-messages-compose], .tma-dash__messages-chat'),
+      calling: !!document.querySelector('.tma-call'),
+    };
+  });
+  check(messaged.open && messaged.thread, 'the direct conversation is open');
+  check(!messaged.calling, 'and nothing is ringing — that button only messages');
+
+  await page.click('.tma-dash__nav-item[data-nav="dash-dashboard"]');
+  await page.waitForTimeout(1500);
+  await parkPointer();
+
+  step(8, 'Video call opens Messages with that person and rings');
+  await hoverRow.hover();
+  await page.waitForTimeout(150);
+  await hoverRow.locator('[data-home-employee-action="video"]').click();
+  await page.waitForTimeout(3000);
+
+  const landed = await page.evaluate(() => {
+    const view = document.querySelector('.tma-dash__view[data-view="messages"]');
+    const call = document.querySelector('.tma-call');
+    return {
+      open: !!view && !view.hidden,
+      path: window.location.pathname,
+      // A call needs a *conversation*; the board only knows a person. Reaching
+      // this state proves the whole chain — direct thread resolved, then rung.
+      calling: !!call,
+      video: !!call && call.classList.contains('tma-call--video'),
+    };
+  });
+  check(landed.open, `Messages is on screen (${landed.path})`);
+  check(landed.calling, 'and the call actually started, not just the page opened');
+  check(landed.video, 'as a video call, which is the button that was pressed');
+
+  // Headless Chromium has no camera, so the call lands in its error state and
+  // its scrim covers the whole shell. Hang up through the module rather than
+  // clicking through an overlay whose layout depends on that failure.
+  await page.evaluate(() => window.TMAMessagingCalls && window.TMAMessagingCalls.end());
+  await page.waitForTimeout(600);
+
+  await page.click('.tma-dash__nav-item[data-nav="dash-dashboard"]');
+  await page.waitForTimeout(1500);
+  await parkPointer();
+
+  step(9, 'Stamp the live nodes, then leave the Dashboard');
   const stamped = await page.evaluate(() => {
     const marks = {};
     const stamp = (key, el) => {
@@ -167,7 +305,7 @@ try {
   await page.waitForTimeout(1500);
   await parkPointer();
 
-  step(6, 'Come straight back — nothing blanks, nothing is rebuilt');
+  step(10, 'Come straight back — nothing blanks, nothing is rebuilt');
   await page.click('.tma-dash__nav-item[data-nav="dash-dashboard"]');
   // Deliberately short: the old behaviour blanked the Default Folders within a
   // few hundred milliseconds of arriving, so a long wait would miss it.
@@ -207,7 +345,7 @@ try {
     };
   });
 
-  step(7, 'The very same elements are still there');
+  step(11, 'The very same elements are still there');
   check(after.employees === 'employees', 'the Employees card is the same node, not a rebuild');
   check(after.defaults === 'defaults' || stamped.defaultCards === 0,
     'the Default Folders section is the same node');
@@ -217,12 +355,12 @@ try {
   }
   check(after.defaultCards === stamped.defaultCards, 'and the folder count settled unchanged');
 
-  step(8, 'Coming back inside the freshness window asks the server for nothing');
+  step(12, 'Coming back inside the freshness window asks the server for nothing');
   log(`      ${calls.length} data request(s): ${calls.map((u) => new URL(u).pathname).join(', ') || 'none'}`);
   check(calls.length === 0,
     `a revisit seconds later re-fetches nothing (${calls.length} request(s))`);
 
-  step(9, 'Asking for a refresh explicitly still refetches');
+  step(13, 'Asking for a refresh explicitly still refetches');
   calls.length = 0;
   await page.click('.tma-dash__nav-item[data-nav="dash-dashboard"]');
   await page.waitForTimeout(2500);

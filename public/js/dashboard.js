@@ -1152,6 +1152,10 @@
           window.TMAMessages.mount(messagesMount, {
             openDirectUserId: opts.openDirectUserId || null,
             openConversationId: opts.openConversationId || null,
+            // "Call this colleague" from outside Messages — the caller knows a
+            // person, not a conversation, so Messages resolves the thread and
+            // then rings. See startConversationWith.
+            startCall: opts.startCall || null,
           });
         }
       }

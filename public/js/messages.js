@@ -6564,7 +6564,17 @@
   }
 
   /* Open (or reuse) a direct conversation with someone and select it. */
-  function startConversationWith(root, state, render, userId) {
+  /**
+   * Open (or create) the direct conversation with one person.
+   *
+   * `media` places a call as soon as it is open. A call needs a *conversation*
+   * id, which callers outside Messages never have — the Dashboard's Employees
+   * board knows a user id and nothing else — so "call this colleague" has to
+   * resolve the conversation first and then ring. Doing it here rather than in
+   * each caller keeps the conversation lookup, the subscription and the call in
+   * the order the rest of the page expects.
+   */
+  function startConversationWith(root, state, render, userId, media) {
     state.composeOpen = false;
     state.search = '';
     state.peopleResults = [];
@@ -6581,6 +6591,16 @@
         render();
         openConversation(root, state, render, conversation.id);
         subscribeToConversation(root, state, render, conversation.id);
+
+        if (media && window.TMAMessagingCalls) {
+          var row = findThread(conversation.id) || conversation;
+          window.TMAMessagingCalls.start(
+            conversation.id,
+            media === 'video' ? 'video' : 'audio',
+            row.name || 'Contact',
+            row.photo || null
+          );
+        }
       })
       .catch(function (err) {
         showMessagesToast(
@@ -8936,7 +8956,7 @@
     if (root._messagesMounted) {
       render();
       if (opts.openDirectUserId) {
-        startConversationWith(root, state, render, opts.openDirectUserId);
+        startConversationWith(root, state, render, opts.openDirectUserId, opts.startCall);
         return;
       }
       // Re-entered from a notification link while the page was already up
@@ -9109,7 +9129,7 @@
     render();
     loadConversations(root, state, render).then(function () {
       if (opts.openDirectUserId) {
-        startConversationWith(root, state, render, opts.openDirectUserId);
+        startConversationWith(root, state, render, opts.openDirectUserId, opts.startCall);
         return;
       }
       // Arriving from a message or missed-call notification: open the
@@ -9161,11 +9181,12 @@
     clearMobileHeader: clearMessagesMobileHeader,
     getInboxUnreadCount: getInboxUnreadCount,
     getMissedCallCount: getMissedCallCount,
-    openDirect: function (userId) {
+    /** `opts.startCall` = 'audio' | 'video' rings once the thread is open. */
+    openDirect: function (userId, opts) {
       var mountEl = document.querySelector('[data-messages]');
       if (!mountEl || !mountEl._messagesState) return;
       // Re-enter via mount so wiring/state stay consistent.
-      mount(mountEl, { openDirectUserId: userId });
+      mount(mountEl, { openDirectUserId: userId, startCall: opts && opts.startCall });
     },
   };
 })();
