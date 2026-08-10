@@ -1036,7 +1036,7 @@
       className: 'tma-dash__email-sidebar-menu-btn' + (collapsed ? '' : ' is-active'),
       attrs:
         ' data-email-sidebar-toggle aria-pressed="' + (collapsed ? 'false' : 'true') + '"',
-      innerHtml: '<img src="' + ICONS.Hamburger + '" alt="">',
+      innerHtml: '<img src="' + ICONS.List + '" alt="">',
     });
   }
 
