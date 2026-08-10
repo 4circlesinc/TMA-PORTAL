@@ -337,6 +337,9 @@
 .cbi-people__faces {
   display: inline-flex;
   align-items: center;
+  /* Side by side, never overlapping: a pile hides part of every face but the
+     first, and these are how you recognise a colleague at a glance. */
+  gap: var(--space-4);
   flex: 0 0 auto;
 }
 
@@ -345,18 +348,12 @@
   height: 24px;
   border-radius: 50%;
   object-fit: cover;
-  /* The ring is what keeps two overlapping faces apart; without it the pile
-     reads as one smudged shape. It is drawn in the surface colour so it reads
-     as a gap rather than a border. */
-  box-shadow: 0 0 0 2px var(--color-bg-card, #f9f9fa);
+  /* No ring: it existed only to separate overlapping faces, and a real gap
+     does that better. The backing stays for photos with transparency. */
   background: var(--color-bg-card, #f9f9fa);
 }
 
-.cbi-people__face + .cbi-people__face { margin-left: -8px; }
 
-/* Later faces sit under earlier ones, so the pile reads left to right. */
-.cbi-people__faces:hover .cbi-people__face { margin-left: 0; }
-.cbi-people__faces .cbi-people__face { transition: margin-left 120ms ease; }
 
 .cbi-people__names {
   min-width: 0;
