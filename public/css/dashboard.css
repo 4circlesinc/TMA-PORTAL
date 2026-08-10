@@ -16091,13 +16091,26 @@
   align-items: center;
 }
 
+/*
+ * Back sits above the name, on a line of its own.
+ *
+ * Beside it, "Clients" and the record's name read as one heading — the reader
+ * has to notice the chevron to tell the way out from the thing they are
+ * looking at. Stacked, the name owns its line and the escape hatch is where
+ * the CBI workspace already puts it.
+ */
 .tma-dash__clients-detail-head {
   display: flex;
-  align-items: center;
-  gap: var(--space-16);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-8);
   flex: 1;
   min-width: 0;
   width: 100%;
+}
+
+.tma-dash__clients-detail-head .tma-dash__clients-back-btn {
+  align-self: flex-start;
 }
 
 .tma-dash__clients-detail-head .tma-dash__clients-profile-toolbar {
@@ -17744,11 +17757,18 @@
 a.tma-dash__clients-edit-btn { text-decoration: none; }
 a.tma-dash__clients-edit-btn:visited { color: var(--color-text-primary); }
 
-/* Accent variant: the one action in this toolbar that leaves the page. */
+/*
+ * Accent variant: the one action in this toolbar that leaves the page.
+ *
+ * The dark brand blue explicitly, not `--color-accent` — inside the dashboard
+ * that token is the reader's own theme accent, so the button changed colour
+ * with the theme and came out a pale blue that sat oddly beside the black
+ * Message pill.
+ */
 .tma-dash__clients-edit-btn--accent,
 a.tma-dash__clients-edit-btn--accent,
 a.tma-dash__clients-edit-btn--accent:visited {
-  background: var(--color-accent);
+  background: var(--color-primary-dark);
   color: var(--color-text-white);
 }
 

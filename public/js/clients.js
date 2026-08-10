@@ -2053,12 +2053,14 @@
         ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
         : '') +
-      cbiToolbarBtn(c) +
       inviteToolbarBtn(c, state) +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
       '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
       '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span></button>' +
+      // Last in the row: it is the one action that leaves the page, so it
+      // reads as the way out rather than another thing to do here.
+      cbiToolbarBtn(c) +
       '</div></div>'
     );
   }
@@ -5289,7 +5291,11 @@
       state.profileLoadingFor = null;
       // Deliberately not marked loaded: leaving it unfetched is what lets
       // reopening the client try again.
-      state.profileError = (err && err.message) || 'Could not load this client.';
+      //
+      // Our own sentence rather than err.message, which for a 500 is the
+      // fetch layer's "Request failed" — true, and no use to the person
+      // looking at an empty panel. The real error is in the console.
+      state.profileError = 'Couldn’t load this client.';
       redraw();
     });
   }
