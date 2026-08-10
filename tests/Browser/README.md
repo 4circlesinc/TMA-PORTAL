@@ -1549,6 +1549,15 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
       \$msg->forceFill(['created_at' => now()->subMinutes((\$count - \$n2) * 3 + \$i * 7)])->save();
     }
   }
+  // A CLIENT account with a conversation — calls-recording.mjs needs one,
+  // since only a staff↔client call exercises the recording rule.
+  \$cl = \$mk('Paula Client', 'paula@example.com', 'Client');
+  \$cc = App\Models\Conversation::create(['type' => 'direct', 'created_by' => \$me->id,
+    'last_message_at' => now()->subMinutes(2)]);
+  foreach ([\$me, \$cl] as \$m) {
+    \$cc->participants()->create(['user_id' => \$m->id, 'role' => 'member', 'joined_at' => now()]);
+  }
+  \$cc->messages()->create(['user_id' => \$cl->id, 'type' => 'text', 'body' => 'Hello, checking in about my case.']);
 "
 
 node tests/Browser/messaging.mjs
@@ -1691,4 +1700,31 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log 
 # Two users with one conversation between them — the notifications seed above
 # provides exactly that.
 TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/calls.mjs
+```
+
+Every call now starts through the **"Call &lt;name&gt;?" chooser** — the header
+buttons open it and the kind is picked there — so anything that places a call
+must click `[data-messages-call="…"]` and then `[data-callask-start="…"]`
+(see `startCall()` in `calls.mjs`).
+
+- **`calls-recording.mjs`** — screen sharing and client-call recording against
+  a live call, which is the only place either is true or false. A staff↔client
+  voice call must arrange a recording server-side, show the consent sentence
+  and the REC chip on **both** ends before capture, and — after hangup — land
+  in `/call-recordings` as a ready row whose bytes actually stream back. A
+  screen share mid-call must arrive at the far end as a live video track
+  (replaceTrack on the negotiated sender, no renegotiation), display in the
+  video layout with a "sharing screen" label, and stop cleanly. It closes by
+  proving the negative spaces: the client account cannot reach the area at
+  all, an uninvolved employee sees an empty list, and a staff↔staff call
+  records nothing and shows no chip.
+
+  Needs the `calls.mjs` environment (Reverb + fake devices) **plus a Client
+  account with a conversation to the staff user** — the messaging seed's
+  'Paula Client' — and one extra Chromium flag,
+  `--auto-select-desktop-capture-source=Entire screen`, without which
+  `getDisplayMedia` waits forever for a picker no headless browser can show:
+
+```sh
+TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/calls-recording.mjs
 ```

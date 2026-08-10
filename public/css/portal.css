@@ -1981,7 +1981,11 @@
 .tma-skeleton {
   position: relative;
   overflow: hidden;
-  background: var(--color-bg-tag, rgba(0, 0, 0, 0.06));
+  /* Neutral grey, same as the explicit light-theme rule below. This used to be
+     --color-bg-tag — a blue tint — which only ever showed in the boot window
+     before the theme attribute is stamped, so the sidebar profile chip loaded
+     baby-blue while every other placeholder was grey. */
+  background: rgba(0, 0, 0, 0.06);
   border-radius: 6px;
 }
 .tma-skeleton::after {
@@ -2009,6 +2013,19 @@
 .tma-dash__card--skeleton .tma-dash__card-delta-text { color: transparent; }
 .tma-dash__card-value--skeleton { display: inline-block; width: 84px; height: 26px; }
 .tma-dash__card-delta--skeleton { display: inline-block; width: 52px; height: 14px; }
+
+/* ── first-paint boot skeleton ──────────────────────────────────────
+ * Shipped in the shell HTML inside the Dashboard mount, so the main area has
+ * structure from the very first paint — before any script has run. portal-home
+ * replaces it when it mounts. `--generic` is set by an inline script in the
+ * shell on every entry path other than "/", swapping the dashboard-specific
+ * shapes for anonymous rows so a hard load of, say, /email never flashes a
+ * greeting and KPI cards that belong to a different page. */
+.tma-boot-skel__generic { display: none; }
+.tma-boot-skel--generic .tma-boot-skel__dash { display: none; }
+.tma-boot-skel--generic .tma-boot-skel__generic { display: block; }
+.tma-boot-skel__generic-head { padding: var(--space-8); margin-bottom: var(--space-8); }
+.tma-boot-skel__generic .tma-portal-file-row--skeleton .tma-skeleton--avatar { flex-shrink: 0; }
 
 .tma-portal-file-row__name {
   font-size: var(--text-size-14);

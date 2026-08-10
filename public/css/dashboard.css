@@ -9587,11 +9587,6 @@
   overflow: hidden;
 }
 
-/*
- * Closed rail keeps its unread counts — the whole point of a collapsed inbox
- * is to still see what needs attention. The count detaches from the row flow
- * and rides the top-right of each icon as a small badge.
- */
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder {
   justify-content: center;
   padding-left: var(--space-4);
@@ -9613,41 +9608,10 @@
   padding-right: var(--space-4);
 }
 
-/* In the rail there is no room for a trailing count, so it moves to the
-   icon's corner — still plain text, not a badge. The card-coloured halo is
-   what keeps it legible where it overlaps the glyph. */
+/* Closed rail is icons only — hide folder counts until the sidebar opens. */
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count,
 .tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count--unread {
-  position: absolute;
-  top: 2px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  height: 12px;
-  padding: 0 2px;
-  border-radius: 0;
-  background: none;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  line-height: 1;
-  font-weight: 400;
-  text-shadow:
-    0 0 3px var(--color-bg-card, #fff), 0 0 3px var(--color-bg-card, #fff),
-    0 0 3px var(--color-bg-card, #fff);
-  box-shadow: none;
-  pointer-events: none;
-}
-
-.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count--unread {
-  color: var(--color-text-primary);
-  font-weight: 600;
-}
-
-.tma-dash__email-sidebar--collapsed .tma-dash__email-folder--active .tma-dash__email-folder-count,
-.tma-dash__email-sidebar--collapsed .tma-dash__email-folder--active .tma-dash__email-folder-count--unread {
-  color: var(--color-text-primary);
+  display: none;
 }
 
 /* The blue compose button keeps its white "+" centered with no badge slot. */
@@ -31415,12 +31379,28 @@ span.tma-dash__messages-profile-avatar {
   width: var(--dash-icon-lg);
   height: var(--dash-icon-lg);
   border-radius: 50%;
-  background: var(--color-hover);
 }
 .tma-dash__rb-skel-lines { display: flex; flex-direction: column; gap: 6px; }
-.tma-dash__rb-skel-lines span { height: 8px; border-radius: 4px; background: var(--color-hover); }
+.tma-dash__rb-skel-lines span { height: 8px; border-radius: 4px; }
 .tma-dash__rb-skel-lines span:first-child { width: 80%; }
 .tma-dash__rb-skel-lines span:last-child { width: 50%; }
+/* Same grey and shimmer as .tma-skeleton (portal.css), so the rail's loading
+   rows read as part of one system rather than a second, static placeholder. */
+.tma-dash__rb-skel-avatar,
+.tma-dash__rb-skel-lines span {
+  position: relative;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.06);
+}
+.tma-dash__rb-skel-avatar::after,
+.tma-dash__rb-skel-lines span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: tma-skeleton-shimmer 1.3s ease-in-out infinite;
+}
 
 /* The sidebar notice stays single-line to match the original design; any
    description/CTA a notification carries is shown in the popup, not here. */

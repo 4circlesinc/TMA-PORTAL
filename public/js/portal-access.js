@@ -54,6 +54,13 @@
     email: 'mail.use',
   };
 
+  /* Pieces of the shell's first-paint skeleton that stand in for role-gated
+     content — [data-boot-needs="<capability>"]. The Dashboard's KPI row is
+     staff-only, so its placeholder cards must not flash at a client. Every
+     capability used in the shell markup is listed here so the hold CSS can be
+     written before the DOM exists to prune. */
+  var BOOT_GATED_CAPABILITIES = ['overview.view'];
+
   /* Account settings rail (portal-admin.js): section id => capability.
      Anything absent is personal — profile, theme, time, notifications,
      privacy, account security, payment, plugins, and linking your own storage
@@ -153,6 +160,13 @@
     });
   }
 
+  /* Boot-skeleton pieces standing in for content this account may not have. */
+  function pruneBootGated(scope) {
+    scope.querySelectorAll('[data-boot-needs]').forEach(function (el) {
+      if (!can(el.getAttribute('data-boot-needs'))) remove(el);
+    });
+  }
+
   function apply() {
     var scope = document;
     var sections = navSections(scope);
@@ -160,6 +174,7 @@
     pruneEmptyGroups(scope);
     pruneEmptySections(sections);
     pruneTabs(scope);
+    pruneBootGated(scope);
     document.documentElement.setAttribute('data-tma-access', 'ready');
   }
 
@@ -184,17 +199,21 @@
 
     var navIds = Object.keys(NAV_CAPABILITIES);
     var tabIds = Object.keys(TAB_CAPABILITIES);
+    var bootGated = BOOT_GATED_CAPABILITIES;
 
     if (boot) {
       navIds = navIds.filter(function (id) { return !can(NAV_CAPABILITIES[id]); });
       tabIds = tabIds.filter(function (id) { return !can(TAB_CAPABILITIES[id]); });
-      if (!navIds.length && !tabIds.length) return;
+      bootGated = bootGated.filter(function (capability) { return !can(capability); });
+      if (!navIds.length && !tabIds.length && !bootGated.length) return;
     }
 
     var selectors = navIds.map(function (id) {
       return '[data-nav="' + id + '"]';
     }).concat(tabIds.map(function (id) {
       return '[data-tab="' + id + '"]';
+    })).concat(bootGated.map(function (capability) {
+      return '[data-boot-needs="' + capability + '"]';
     }));
 
     var style = document.createElement('style');

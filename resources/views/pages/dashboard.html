@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/components.css?v=2">
   <link rel="stylesheet" href="css/pagination.css">
-  <link rel="stylesheet" href="css/dashboard.css?v=101">
+  <link rel="stylesheet" href="css/dashboard.css?v=103">
   <link rel="stylesheet" href="css/global-search.css?v=2">
   <link rel="stylesheet" href="css/filter-and-sort.css">
   <link rel="stylesheet" href="css/table-filter-sort.css">
@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="css/table-b-sessions.css">
   <link rel="stylesheet" href="css/table.css">
   <link rel="stylesheet" href="css/table-a.css">
-  <link rel="stylesheet" href="css/portal.css?v=20">
+  <link rel="stylesheet" href="css/portal.css?v=21">
   <link rel="stylesheet" href="css/portal-files.css?v=9">
   <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=11">
   <link rel="stylesheet" href="css/feed.css?v=2">
@@ -48,7 +48,7 @@
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
-  <script src="js/portal-access.js?v=6"></script>
+  <script src="js/portal-access.js?v=7"></script>
   <style>
     html, body { margin: 0; height: 100%; }
     body { background: var(--color-white); }
@@ -279,7 +279,58 @@
       </div>
 
       <div class="tma-dash__view" data-view="dashboard">
-        <div class="tma-dash__dashboard-mount" data-portal-mount></div>
+        <div class="tma-dash__dashboard-mount" data-portal-mount>
+          <!-- First-paint skeleton. On screen from the moment the shell paints
+               until portal-home.js mounts and replaces it, so the main area is
+               never a blank page while the scripts load. Shapes mirror what the
+               Dashboard will draw; on any other entry path the inline script
+               below swaps it for the view-agnostic variant. The KPI row is
+               staff-only, so portal-access.js drops it (data-boot-needs) for
+               accounts without overview.view — same mechanism as the nav. -->
+          <div class="tma-portal-page tma-boot-skel" data-boot-skeleton aria-busy="true" aria-hidden="true">
+            <div class="tma-portal-hello tma-boot-skel__dash">
+              <div class="tma-portal-hello__main">
+                <span class="tma-skeleton tma-skeleton--avatar" style="width:36px;height:36px;flex-shrink:0"></span>
+                <div class="tma-portal-hello__copy">
+                  <span class="tma-skeleton tma-skeleton--text" style="width:150px;height:16px"></span>
+                </div>
+              </div>
+            </div>
+            <div class="tma-dash__cards tma-boot-skel__dash" data-boot-needs="overview.view">
+              <article class="tma-dash__card tma-dash__card--blue"><div class="tma-dash__card-head"><span class="tma-skeleton tma-skeleton--text" style="width:55%"></span></div><div class="tma-dash__card-row"><span class="tma-skeleton tma-dash__card-value--skeleton"></span><span class="tma-skeleton tma-dash__card-delta--skeleton"></span></div></article>
+              <article class="tma-dash__card tma-dash__card--purple"><div class="tma-dash__card-head"><span class="tma-skeleton tma-skeleton--text" style="width:55%"></span></div><div class="tma-dash__card-row"><span class="tma-skeleton tma-dash__card-value--skeleton"></span><span class="tma-skeleton tma-dash__card-delta--skeleton"></span></div></article>
+              <article class="tma-dash__card tma-dash__card--blue"><div class="tma-dash__card-head"><span class="tma-skeleton tma-skeleton--text" style="width:55%"></span></div><div class="tma-dash__card-row"><span class="tma-skeleton tma-dash__card-value--skeleton"></span><span class="tma-skeleton tma-dash__card-delta--skeleton"></span></div></article>
+              <article class="tma-dash__card tma-dash__card--purple"><div class="tma-dash__card-head"><span class="tma-skeleton tma-skeleton--text" style="width:55%"></span></div><div class="tma-dash__card-row"><span class="tma-skeleton tma-dash__card-value--skeleton"></span><span class="tma-skeleton tma-dash__card-delta--skeleton"></span></div></article>
+            </div>
+            <div class="tma-portal-home-grid tma-boot-skel__dash">
+              <section class="tma-portal-panel tma-portal-tile tma-portal-tile--third"><div class="tma-portal-panel__head"><span class="tma-skeleton tma-skeleton--text" style="width:40%;height:14px"></span></div><div class="tma-portal-panel__body"><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div></div></section>
+              <section class="tma-portal-panel tma-portal-tile tma-portal-tile--third"><div class="tma-portal-panel__head"><span class="tma-skeleton tma-skeleton--text" style="width:40%;height:14px"></span></div><div class="tma-portal-panel__body"><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div></div></section>
+              <section class="tma-portal-panel tma-portal-tile tma-portal-tile--third"><div class="tma-portal-panel__head"><span class="tma-skeleton tma-skeleton--text" style="width:40%;height:14px"></span></div><div class="tma-portal-panel__body"><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div><div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--icon"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:58%"></span><span class="tma-skeleton tma-skeleton--text" style="width:34%;margin-top:6px"></span></span></div></div></section>
+            </div>
+            <div class="tma-boot-skel__generic">
+              <div class="tma-boot-skel__generic-head"><span class="tma-skeleton tma-skeleton--text" style="width:220px;height:14px"></span></div>
+              <div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:38%"></span><span class="tma-skeleton tma-skeleton--text" style="width:22%;margin-top:6px"></span></span></div>
+              <div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:44%"></span><span class="tma-skeleton tma-skeleton--text" style="width:26%;margin-top:6px"></span></span></div>
+              <div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:34%"></span><span class="tma-skeleton tma-skeleton--text" style="width:20%;margin-top:6px"></span></span></div>
+              <div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:48%"></span><span class="tma-skeleton tma-skeleton--text" style="width:24%;margin-top:6px"></span></span></div>
+              <div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:40%"></span><span class="tma-skeleton tma-skeleton--text" style="width:23%;margin-top:6px"></span></span></div>
+              <div class="tma-portal-file-row tma-portal-file-row--skeleton"><span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span><span class="tma-portal-file-row__meta" style="flex:1"><span class="tma-skeleton tma-skeleton--text" style="width:36%"></span><span class="tma-skeleton tma-skeleton--text" style="width:21%;margin-top:6px"></span></span></div>
+            </div>
+          </div>
+          <script>
+            /* Runs during parse, before this region paints: only "/" boots into
+               the Dashboard (routeFromPath in dashboard.js), so every other
+               entry path gets the view-agnostic rows instead of a greeting and
+               KPI cards that belong to a different page. */
+            (function () {
+              var p = window.location.pathname.replace(/\/+$/, '') || '/';
+              if (p !== '/') {
+                var skel = document.querySelector('[data-boot-skeleton]');
+                if (skel) skel.className += ' tma-boot-skel--generic';
+              }
+            })();
+          </script>
+        </div>
       </div>
 
       <div class="tma-dash__view" data-view="client-hub" hidden>
@@ -383,17 +434,23 @@
           <div class="tma-dash__rb-title">Notifications</div>
           <div class="tma-dash__rb-body" data-rb-body="notifications">
             <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
           </div>
         </section>
         <section class="tma-dash__rb-section tma-dash__rb-section--activities" data-rb-section="activities">
           <div class="tma-dash__rb-title">Activities</div>
           <div class="tma-dash__rb-body" data-rb-body="activities">
             <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
           </div>
         </section>
         <section class="tma-dash__rb-section" data-rb-section="clients">
           <div class="tma-dash__rb-title">Clients</div>
           <div class="tma-dash__rb-body" data-rb-body="clients">
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
+            <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
             <div class="tma-dash__rb-skel" aria-hidden="true"><span class="tma-dash__rb-skel-avatar"></span><span class="tma-dash__rb-skel-lines"><span></span><span></span></span></div>
           </div>
         </section>
