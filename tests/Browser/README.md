@@ -417,7 +417,7 @@ field placement and drawing, and computed CSS only exist in a browser.
 
   ```sh
   DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= SESSION_DRIVER=database \
-    MAIL_MAILER=log php artisan serve --host=127.0.0.1 --port=8899 &
+    MAIL_MAILER=log php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
 
   TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/security-settings.mjs
   ```
@@ -1048,7 +1048,7 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 "
 
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log \
-  php artisan serve --host=127.0.0.1 --port=8899 &
+  php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
 
 node tests/Browser/signature-editor.mjs
 node tests/Browser/signing-flow.mjs     # expects a fresh database
@@ -1102,6 +1102,14 @@ signatures list — re-seed between runs.
 Use `php artisan serve` rather than a bare `php -S`: the built-in server hands
 every request to `index.php` without Laravel's dev router, so `/js/vendor/*`
 never gets served and pdf.js fails to import.
+
+**`--no-reload` is not optional.** When a `.env` file exists, `artisan serve`
+strips almost the whole environment from its worker processes so they re-read
+`.env` on every change — including the `DB_*` overrides above. Without the
+flag the harness starts, answers 200, logs you in… against whatever database
+`.env` points at, which in this repo is the production Postgres. The tell is a
+user you didn't seed (a greeting for a name that isn't in your throwaway DB)
+or a login failing for an account you just created.
 
 The script prints each step, writes `editor-fields.png` / `editor.png` beside
 itself, and exits non-zero on failure.
@@ -1592,7 +1600,7 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan reverb:start --host=1
 
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log \
   REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http PHP_CLI_SERVER_WORKERS=12 \
-  php artisan serve --host=127.0.0.1 --port=8899 &
+  php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
 
 node tests/Browser/messaging-realtime.mjs
 ```
@@ -1716,7 +1724,7 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= \
 
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log \
   BROADCAST_CONNECTION=reverb REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http \
-  php artisan serve --host=127.0.0.1 --port=8899 &
+  php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
 
 # Two users with one conversation between them — the notifications seed above
 # provides exactly that.
