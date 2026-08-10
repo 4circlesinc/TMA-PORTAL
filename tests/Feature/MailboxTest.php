@@ -88,8 +88,17 @@ class MailboxTest extends TestCase
         $user = $this->user();
         $account = $this->account($user);
 
-        $this->message($user, $account, ['remote_id' => 'old', 'subject' => 'Older', 'sent_at' => now()->subDays(2)]);
-        $this->message($user, $account, ['remote_id' => 'new', 'subject' => 'Newer', 'sent_at' => now()]);
+        // Separate conversations on purpose: this is about ordering, and the
+        // listing groups a thread into one row (see MailConversationListTest),
+        // so two messages sharing the helper's default thread id would be one.
+        $this->message($user, $account, [
+            'remote_id' => 'old', 'thread_id' => 'thread-old',
+            'subject' => 'Older', 'sent_at' => now()->subDays(2),
+        ]);
+        $this->message($user, $account, [
+            'remote_id' => 'new', 'thread_id' => 'thread-new',
+            'subject' => 'Newer', 'sent_at' => now(),
+        ]);
         $this->message($user, $account, ['remote_id' => 'sent-1', 'folder' => 'sent', 'is_read' => true]);
 
         $this->fakeTokenEndpoint();

@@ -96,12 +96,19 @@
     CaretLeft: ICON + 'CaretLeft.svg',
     CaretRight: ICON + 'CaretRight.svg',
     Smiley: ICON + 'Smiley.svg',
+    Printer: ICON + 'Printer.svg',
+    ArrowSquareOut: ICON + 'ArrowSquareOut.svg',
   };
 
   var LAYOUT_STORE_KEY = 'tma.email.layoutStyle';
   var SPLIT_RATIO_STORE_KEY = 'tma.email.splitListRatio';
   // v2: prior key could be stuck "open" from a broken overflowing toggle.
   var SIDEBAR_COLLAPSE_KEY = 'tma.email.sidebarCollapsed.v2';
+  /* What "collapsed" means for this reader: the icon rail, or nothing at all.
+   * Mirrored from the server preference so it follows the account; kept in
+   * localStorage too so the very first paint is already right. */
+  var SIDEBAR_MODE_KEY = 'tma.email.sidebarMode';
+  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories';
   var SPLIT_RATIO_MIN = 0.22;
   var SPLIT_RATIO_MAX = 0.78;
   // Inbox list narrower than the reading pane by default.
@@ -128,6 +135,64 @@
   function saveSidebarCollapsed(collapsed) {
     try {
       localStorage.setItem(SIDEBAR_COLLAPSE_KEY, collapsed ? '1' : '0');
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ── sidebar display mode ────────────────────────────────────────
+   * Three settings, one control. "Full" is the open card; "Icons only" is the
+   * rail; "Hidden" takes the sidebar off screen entirely. The collapse toggle
+   * in the list head switches between Full and whichever of the other two the
+   * reader picked, and it is also the way back from Hidden — otherwise
+   * choosing Hidden would be a one-way door.
+   */
+  var SIDEBAR_MODES = ['full', 'icons', 'hidden'];
+
+  function loadSidebarMode() {
+    try {
+      var saved = localStorage.getItem(SIDEBAR_MODE_KEY);
+      if (SIDEBAR_MODES.indexOf(saved) !== -1) return saved;
+    } catch (e) { /* ignore */ }
+    return 'full';
+  }
+
+  function saveSidebarMode(mode) {
+    try { localStorage.setItem(SIDEBAR_MODE_KEY, mode); } catch (e) { /* ignore */ }
+  }
+
+  /* The sidebar the reader actually sees right now. Mobile always gets the
+   * full drawer — an icon rail in a slide-over is just a smaller drawer. */
+  function effectiveSidebarMode(state) {
+    if (isEmailMobile()) return 'full';
+    if (!state.sidebarCollapsed) return 'full';
+    return state.sidebarMode === 'hidden' ? 'hidden' : 'icons';
+  }
+
+  /* ── inbox categories ────────────────────────────────────────────
+   * Tabs above the list that switch the inbox between the plain folder and the
+   * flag-shaped views beside it. Each one is a real server listing (see
+   * MailController::VIRTUAL_FOLDERS), so the counts and paging are honest
+   * rather than a filter over whatever page happens to be loaded.
+   */
+  var INBOX_CATEGORIES = [
+    { id: 'inbox', label: 'Inbox', icon: 'Tray', fixed: true },
+    { id: 'important', label: 'Important', icon: 'Important' },
+    { id: 'starred', label: 'Starred', icon: 'Star' },
+    { id: 'pinned', label: 'Pinned', icon: 'PushPin' },
+  ];
+
+  var CATEGORY_FOLDERS = ['inbox', 'important', 'starred', 'pinned'];
+
+  function loadInboxCategories() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(INBOX_CATEGORIES_KEY) || 'null');
+      if (Array.isArray(saved)) return saved;
+    } catch (e) { /* ignore */ }
+    return ['important', 'starred', 'pinned'];
+  }
+
+  function saveInboxCategories(ids) {
+    try {
+      localStorage.setItem(INBOX_CATEGORIES_KEY, JSON.stringify(ids || []));
     } catch (e) { /* ignore */ }
   }
 
@@ -345,15 +410,20 @@
     ];
   }
 
+  /* The actions beside the sender, at the top of the open message. Reply all
+   * lives here rather than only at the foot of the thread — replying to
+   * everyone is a decision made while reading the header, not after scrolling
+   * past the whole message. */
   var DETAIL_MESSAGE_ACTIONS = [
     { id: 'star', icon: 'Star', label: 'Star' },
     { id: 'reply', icon: 'ArrowBendUpLeft', label: 'Reply' },
+    { id: 'reply-all', icon: 'ArrowBendDoubleUpLeft', label: 'Reply all' },
     { id: 'forward', icon: 'ArrowBendUpRight', label: 'Forward' },
     { id: 'more', icon: 'DotsThree', label: 'More' },
   ];
 
   var DETAIL_MESSAGE_ACTIONS_MOBILE = [
-    { id: 'react', icon: 'Smiley', label: 'Add reaction' },
+    { id: 'star', icon: 'Star', label: 'Star' },
     { id: 'reply', icon: 'ArrowBendUpLeft', label: 'Reply' },
     { id: 'more', icon: 'DotsThree', label: 'More' },
   ];
@@ -549,7 +619,9 @@
 
   function openInlineCompose(state, mode) {
     if (!state.selectedId) return;
-    var row = findRow(state, state.selectedId);
+    // The open message may be one the thread carries rather than a row on the
+    // page — its cc list is what "reply all" has to answer.
+    var row = threadMessage(state, state.selectedId) || findAnyRow(state, state.selectedId);
     var to = '';
     var cc = '';
     if (row && mode === 'reply-all') {
@@ -562,6 +634,14 @@
       );
     }
     state.inlineCompose = { mode: mode, messageId: state.selectedId, to: to, cc: cc, bodyHtml: '', sending: false };
+  }
+
+  /* The loaded thread's copy of a message — the only one that carries cc, bcc
+   * and a body. List rows never do. */
+  function threadMessage(state, id) {
+    if (!state.thread || !id) return null;
+
+    return state.thread.messages.filter(function (m) { return m.id === id; })[0] || null;
   }
 
   function closeInlineCompose(state) {
@@ -623,7 +703,7 @@
     var ic = state.inlineCompose;
     if (!ic || ic.sending) return;
 
-    var row = findRow(state, ic.messageId);
+    var row = threadMessage(state, ic.messageId) || findAnyRow(state, ic.messageId);
     if (!row) {
       closeInlineCompose(state);
       render();
@@ -843,9 +923,11 @@
   }
 
   /* Menu control lives in the inbox toolbar (not inside the folder rail). */
+  /* The one way back from a hidden sidebar, so choosing "Hidden" in settings
+   * is never a one-way door. */
   function renderEmailSidebarMenuBtn(state) {
     if (isEmailMobile()) return '';
-    var collapsed = !!state.sidebarCollapsed;
+    var collapsed = effectiveSidebarMode(state) !== 'full';
     var label = collapsed ? 'Show mail folders' : 'Hide mail folders';
     return renderEmailIconTooltipBtn({
       tipId: 'email-sidebar-menu-tip',
@@ -1217,8 +1299,345 @@
     });
   }
 
+  /* ── conversations in the list ───────────────────────────────────
+   * A row that stands for several messages carries an arrow. Opening it lists
+   * the rest of the conversation underneath, in place, and deliberately does
+   * *not* open anything in the reading pane — expanding is a look, choosing a
+   * message is a read, and conflating the two made every glance at a thread
+   * mark something as read.
+   *
+   * `threadCount` comes from the server, so the arrow only ever appears where
+   * there is genuinely more than one message. The children themselves are
+   * fetched on first open and kept, since a reader who opened a conversation
+   * usually opens it again.
+   */
+  function conversationCount(row) {
+    return Math.max(1, (row && row.threadCount) || 1);
+  }
+
+  function hasConversation(row) {
+    return conversationCount(row) > 1;
+  }
+
+  function isConversationOpen(state, id) {
+    return !!(state.openConversations && state.openConversations[id]);
+  }
+
+  /* The conversation's other messages, newest first, once they have arrived. */
+  function conversationChildren(state, id) {
+    var loaded = (state.conversationRows && state.conversationRows[id]) || null;
+    if (!loaded) return null;
+
+    return loaded.filter(function (row) { return row.id !== id; });
+  }
+
+  function collapseAllConversations(state) {
+    state.openConversations = {};
+  }
+
+  function loadConversation(state, id) {
+    if (!state.conversationRows) state.conversationRows = {};
+    if (state.conversationRows[id]) return Promise.resolve(state.conversationRows[id]);
+
+    if (!state._conversationLoads) state._conversationLoads = {};
+    if (state._conversationLoads[id]) return state._conversationLoads[id];
+
+    var request = api().conversation(id).then(function (data) {
+      var rows = (data && data.messages) || [];
+      state.conversationRows[id] = rows;
+      delete state._conversationLoads[id];
+
+      return rows;
+    }).catch(function (err) {
+      delete state._conversationLoads[id];
+      throw err;
+    });
+
+    state._conversationLoads[id] = request;
+
+    return request;
+  }
+
+  /* Every id a conversation covers — the row itself plus whatever of its
+   * history has been fetched. Selection and bulk actions work on this, so
+   * ticking a conversation really does tick the replies inside it. */
+  function conversationIds(state, id) {
+    var children = conversationChildren(state, id) || [];
+
+    return [id].concat(children.map(function (row) { return row.id; }));
+  }
+
+  /* Rows drawn in the list right now: the page, plus the children of any
+   * conversation the reader has opened. "Select all" means these. */
+  function visibleRows(state) {
+    var out = [];
+    filteredInbox(state).forEach(function (row) {
+      out.push(row);
+      if (!isConversationOpen(state, row.id)) return;
+      (conversationChildren(state, row.id) || []).forEach(function (child) {
+        out.push(child);
+      });
+    });
+
+    return out;
+  }
+
+  /* A row anywhere on screen, parent or reply. findRow only knows the page. */
+  function findAnyRow(state, id) {
+    return rowCopies(state, id)[0] || null;
+  }
+
+  /*
+   * Every in-memory copy of one message: the page row, whichever conversation
+   * dropdowns it appears in, and the open thread.
+   *
+   * A message can legitimately be on screen three times at once now. Writing a
+   * flag to one copy and not the others gives a row that un-stars itself on
+   * the next repaint, so flag changes go through here.
+   */
+  function rowCopies(state, id) {
+    var found = [];
+    if (!id) return found;
+
+    var row = findRow(state, id);
+    if (row) found.push(row);
+
+    var loaded = state.conversationRows || {};
+    Object.keys(loaded).forEach(function (key) {
+      loaded[key].forEach(function (m) {
+        if (m.id === id && found.indexOf(m) === -1) found.push(m);
+      });
+    });
+
+    if (state.thread) {
+      state.thread.messages.forEach(function (m) {
+        if (m.id === id && found.indexOf(m) === -1) found.push(m);
+      });
+    }
+
+    return found;
+  }
+
+  function eachRowCopy(state, id, apply) {
+    var copies = rowCopies(state, id);
+    copies.forEach(apply);
+
+    return copies.length > 0;
+  }
+
+  /* Drop selections for mail that is no longer on screen. A bulk action fired
+   * against a row from the folder before last is a silent mistake. */
+  function pruneSelection(state) {
+    var live = {};
+    visibleRows(state).forEach(function (row) { live[row.id] = true; });
+
+    Object.keys(state.checkedIds).forEach(function (id) {
+      if (!live[id]) delete state.checkedIds[id];
+    });
+  }
+
+  /* Open or close a conversation in the list. Never opens the reading pane:
+   * looking at what a conversation contains is not reading it. */
+  function toggleConversation(root, state, render, id) {
+    if (!id) return;
+    if (!state.openConversations) state.openConversations = {};
+
+    if (state.openConversations[id]) {
+      delete state.openConversations[id];
+      updateInboxList(root, state, render);
+      return;
+    }
+
+    state.openConversations[id] = true;
+    updateInboxList(root, state, render);
+
+    loadConversation(state, id).then(function (rows) {
+      if (!state.openConversations[id]) return;
+      // Opened while the conversation was ticked: its replies join the
+      // selection, because ticking a conversation means all of it.
+      if (state.checkedIds[id]) {
+        rows.forEach(function (row) { state.checkedIds[row.id] = true; });
+      }
+      updateInboxList(root, state, render);
+    }).catch(function (err) {
+      delete state.openConversations[id];
+      updateInboxList(root, state, render);
+      reportMailError(state, err);
+    });
+  }
+
+  /*
+   * Tick or untick a row — and, for a conversation, everything inside it.
+   *
+   * Selecting the conversation and then archiving it has to archive the
+   * replies too; leaving them behind in the inbox is the kind of half-done
+   * bulk action nobody notices until the folder is wrong.
+   */
+  function setRowSelected(root, state, render, id, checked) {
+    if (!id) return;
+
+    conversationIds(state, id).forEach(function (rowId) {
+      if (checked) state.checkedIds[rowId] = true;
+      else delete state.checkedIds[rowId];
+    });
+
+    applySelectionToDom(root, state);
+    updateEmailListBulk(root, state);
+
+    var row = findAnyRow(state, id);
+    if (!checked || !row || !hasConversation(row) || conversationChildren(state, id)) return;
+
+    // The replies have not been fetched yet, so fetch them: a conversation
+    // ticked before it was ever opened still selects in full.
+    loadConversation(state, id).then(function (rows) {
+      if (!state.checkedIds[id]) return;
+      rows.forEach(function (child) { state.checkedIds[child.id] = true; });
+      applySelectionToDom(root, state);
+      updateEmailListBulk(root, state);
+    }).catch(function () {
+      /* The row itself stays selected; only its history is missing. */
+    });
+  }
+
+  /* Push the selection onto the rows already on screen, rather than
+   * re-rendering the list to change some tick boxes. */
+  function applySelectionToDom(root, state) {
+    Array.prototype.forEach.call(root.querySelectorAll('[data-email-row]'), function (rowEl) {
+      var id = rowEl.getAttribute('data-email-row');
+      var checked = !!state.checkedIds[id];
+      var box = rowEl.querySelector('[data-email-check]');
+      if (box) box.checked = checked;
+      var label = rowEl.querySelector('[data-email-row-select]');
+      if (label) label.classList.toggle('is-checked', checked);
+      rowEl.classList.toggle('tma-dash__email-row--selected', checked);
+    });
+
+    syncSelectAllBox(root, state);
+  }
+
+  /* The conversation, in a window of its own. Server-rendered, so it opens
+   * with the mail already in it — see MailController::window. */
+  function openMailInWindow(root, id, opts) {
+    if (!id || !api().windowUrl) return;
+
+    var url = api().windowUrl(id) + ((opts && opts.print) ? '?print=1' : '');
+    // Named per message, so double-clicking the same conversation twice
+    // raises the window it already has instead of stacking another.
+    var opened = window.open(url, 'tma-mail-' + id, 'width=1000,height=880');
+
+    if (!opened) showEmailToast(root, 'Allow pop-ups to open mail in its own window');
+  }
+
   function api() {
     return window.TMAEmailAPI;
+  }
+
+  /* ── warm start ──────────────────────────────────────────────────
+   * The mailbox is the slowest thing in the portal to fill: a connection
+   * check, folder counts, labels and a page of mail, all behind the network.
+   * Opening Email used to mean watching that happen. Two things now stop it:
+   *
+   *   1. Those requests leave the moment this file parses — before the shell
+   *      has finished building itself, and long before anyone clicks Email.
+   *   2. What came back last time is kept in sessionStorage, so a reload
+   *      paints real mail on the first frame and revalidates behind it.
+   *
+   * Neither ever replaces a fetch. The cache is painted and then overwritten
+   * by the live answer, so nothing here can leave stale mail on screen — it
+   * only decides whether the reader waits on a skeleton to find that out.
+   */
+  var MAIL_CACHE_KEY = 'tma.mail.warm.v1';
+
+  /* Older than this and the cached page stops being "what you were just
+   * looking at" — the skeleton is more honest than an hour-old inbox. */
+  var MAIL_CACHE_TTL = 10 * 60 * 1000;
+
+  /* A prefetch is only worth consuming while it is still the newest thing
+   * anyone asked for; past this, refetch rather than paint a stale answer. */
+  var MAIL_PREFETCH_TTL = 30 * 1000;
+
+  var warmBoot = null;
+
+  function readMailCache() {
+    try {
+      var raw = window.sessionStorage.getItem(MAIL_CACHE_KEY);
+      if (!raw) return null;
+      var cached = JSON.parse(raw);
+      if (!cached || !cached.at) return null;
+      if (Date.now() - cached.at > MAIL_CACHE_TTL) return null;
+      return cached;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeMailCache(state) {
+    // Only the plain first page of a folder is worth keeping: a search, a page
+    // deep into history or a label filter is a place the reader navigated to,
+    // not the one they will land on next time.
+    if (state.search || state.activeLabelId || (state.page || 1) !== 1) return;
+    if (state.folder === 'templates') return;
+
+    try {
+      window.sessionStorage.setItem(MAIL_CACHE_KEY, JSON.stringify({
+        at: Date.now(),
+        folder: state.folder,
+        connected: state.connected,
+        account: state.account,
+        folders: state.folderCounts,
+        labels: state.labels,
+        preferences: state.preferences,
+        // Capped: a 200-per-page inbox is not worth the storage quota, and the
+        // live fetch that follows will fill in the rest within a second.
+        rows: rowsOf(state).slice(0, 50),
+        total: state.total,
+        perPage: state.perPage,
+        lastPage: state.lastPage,
+      }));
+    } catch (e) { /* a full or disabled sessionStorage just means a cold start */ }
+  }
+
+  /* Start the mailbox's two boot requests as early as this file can. */
+  function primeMailbox() {
+    if (warmBoot || !window.TMAEmailAPI) return;
+    if (!document.querySelector('[data-email]')) return;
+
+    // Failures are captured rather than thrown: this runs with nobody waiting
+    // on it, and an unhandled rejection here would surface as a console error
+    // on every portal page.
+    function hold(promise) {
+      return promise.then(
+        function (data) { return { data: data }; },
+        function (err) { return { error: err }; }
+      );
+    }
+
+    warmBoot = {
+      at: Date.now(),
+      bootstrap: hold(window.TMAEmailAPI.bootstrap()),
+      messages: hold(window.TMAEmailAPI.listMessages({
+        folder: 'inbox',
+        page: 1,
+        perPage: loadMailPerPage(),
+      })),
+    };
+  }
+
+  /* Hand a prefetched response to the caller once, if it is still current. */
+  function takeWarmBoot(key) {
+    if (!warmBoot) return null;
+    if (Date.now() - warmBoot.at > MAIL_PREFETCH_TTL) {
+      warmBoot = null;
+      return null;
+    }
+    var pending = warmBoot[key];
+    warmBoot[key] = null;
+    if (!pending) return null;
+
+    return pending.then(function (result) {
+      if (result.error) throw result.error;
+      return result.data;
+    });
   }
 
   /* Surfaces a failed write. A 409 means the OAuth grant is gone or too
@@ -1254,22 +1673,40 @@
     // Changing folder, label or search starts a new listing — page 5 of the
     // inbox says nothing about page 5 of Sent.
     var context = [state.folder, state.activeLabelId || '', state.search || ''].join('|');
-    if (state._listContext !== context) {
+    var switched = state._listContext !== context;
+    if (switched) {
       state._listContext = context;
       state.page = 1;
+      // Another folder's mail under this folder's name would be a lie, so it
+      // goes and the skeleton takes its place.
+      state.rows = [];
+      collapseAllConversations(state);
     }
 
     var token = ++state.loadToken;
-    state.loading = true;
+    // Only ever a skeleton when there is genuinely nothing to show. Reloading
+    // a list that is already on screen is a quiet refresh: blanking mail the
+    // reader is looking at, to put it back a moment later, is the "constantly
+    // loading" feeling this page had.
+    state.loading = !rowsOf(state).length;
+    state.listRefreshing = !state.loading;
     render();
 
-    return api().listMessages({
+    // The prefetch that left when this file parsed asked for exactly this:
+    // the inbox, page one, no search or label. Anything else is a listing
+    // nobody could have predicted, so it goes to the network.
+    var prefetched = !state.search && !state.activeLabelId &&
+      state.folder === 'inbox' && (state.page || 1) === 1
+      ? takeWarmBoot('messages')
+      : null;
+
+    return (prefetched || api().listMessages({
       folder: state.folder,
       search: state.search,
       label: state.activeLabelId,
       page: state.page,
       perPage: state.perPage,
-    }).then(function (data) {
+    })).then(function (data) {
       // A slower earlier request must not overwrite a newer folder's rows.
       if (token !== state.loadToken) return;
 
@@ -1281,7 +1718,11 @@
       state.lastPage = (data && data.lastPage) || 1;
       if (data && data.perPageOptions) state.perPageOptions = data.perPageOptions;
       state.loading = false;
+      state.listRefreshing = false;
       state.loadError = null;
+      // Selections belong to rows that were on screen; carrying them over a
+      // reload would apply a bulk action to mail nobody can see.
+      pruneSelection(state);
 
       // Keep the reading pane pointed at something that still exists.
       if (state.selectedId && !findRow(state, state.selectedId)) {
@@ -1289,10 +1730,12 @@
       }
 
       render();
+      writeMailCache(state);
       hydrateListAttachments(root, state, render, token);
     }).catch(function (err) {
       if (token !== state.loadToken) return;
       state.loading = false;
+      state.listRefreshing = false;
       state.loadError = (err && err.message) || 'Could not load messages';
       state.rows = [];
       reportMailError(state, err);
@@ -1488,12 +1931,15 @@
       state.lastPage = (data && data.lastPage) || 1;
       if (data && data.perPageOptions) state.perPageOptions = data.perPageOptions;
 
-      // Keep the reading pane pointed at something that still exists.
-      if (state.selectedId && !findRow(state, state.selectedId)) {
+      // Keep the reading pane pointed at something that still exists. A
+      // message opened out of a conversation dropdown counts as existing —
+      // it just is not one of the page's own rows.
+      if (state.selectedId && !findAnyRow(state, state.selectedId)) {
         state.selectedId = state.rows.length ? state.rows[0].id : null;
       }
 
       render();
+      writeMailCache(state);
       hydrateListAttachments(root, state, render, token);
     }).catch(function () {
       // Silent — this is a background refresh, not a user action.
@@ -1503,21 +1949,119 @@
     });
   }
 
+  /* The reader's saved mailbox preferences, applied to live state.
+   *
+   * The server is the authority — these follow the account between machines —
+   * but they are mirrored into localStorage on the way through so the *next*
+   * first paint is already in the right shape instead of rearranging itself
+   * once the bootstrap lands. */
+  function applyMailPreferences(state, prefs) {
+    if (!prefs) return;
+    state.preferences = prefs;
+
+    if (SIDEBAR_MODES.indexOf(prefs.sidebarMode) !== -1) {
+      state.sidebarMode = prefs.sidebarMode;
+      state.sidebarCollapsed = prefs.sidebarMode !== 'full';
+      saveSidebarMode(prefs.sidebarMode);
+      saveSidebarCollapsed(state.sidebarCollapsed);
+    }
+
+    if (prefs.layout === 'split' || prefs.layout === 'single') {
+      state.layoutStyle = prefs.layout;
+      saveLayoutStyle(prefs.layout);
+    }
+
+    if (Array.isArray(prefs.inboxCategories)) {
+      state.inboxCategories = prefs.inboxCategories;
+      saveInboxCategories(prefs.inboxCategories);
+    }
+
+    if (typeof prefs.showInboxCategories === 'boolean') {
+      state.showInboxCategories = prefs.showInboxCategories;
+    }
+  }
+
+  /* Write one mail preference through to the account.
+   *
+   * Separate from saveEmailPreference, which assumes the settings panel is
+   * open and holds the whole preference object. These are set from the
+   * mailbox chrome — the collapse toggle, the layout switch — where it is not.
+   */
+  function persistMailPreference(state, key, value) {
+    if (state.preferences) state.preferences[key] = value;
+    if (state.settings && state.settings.preferences) state.settings.preferences[key] = value;
+
+    var payload = {};
+    payload[key] = value;
+
+    api().saveSettings({ preferences: payload }).then(function (data) {
+      if (data) state.settings = data;
+    }).catch(function () {
+      /* The local copy already applied; the preference simply doesn't travel
+       * to the next machine, which is not worth a toast over. */
+    });
+  }
+
+  function setMailSidebarMode(root, state, render, mode) {
+    if (SIDEBAR_MODES.indexOf(mode) === -1) return;
+    state.sidebarMode = mode;
+    state.sidebarCollapsed = mode !== 'full';
+    saveSidebarMode(mode);
+    saveSidebarCollapsed(state.sidebarCollapsed);
+    persistMailPreference(state, 'sidebarMode', mode);
+    render();
+  }
+
+  /* Paint what the last visit ended on, before anything is asked of the
+   * network. Everything set here is replaced by the live bootstrap moments
+   * later — this only decides whether the reader watches that happen. */
+  function hydrateFromCache(state) {
+    var cached = readMailCache();
+    if (!cached) return false;
+    // Cached mail belongs to the folder it was cached from; anything else is
+    // a fresh listing and gets the skeleton.
+    if (cached.folder !== state.folder) return false;
+    if (state.search || state.activeLabelId || (state.page || 1) !== 1) return false;
+
+    state.connected = cached.connected;
+    state.account = cached.account || null;
+    state.folderCounts = cached.folders || {};
+    state.labels = cached.labels || [];
+    state.rows = cached.rows || [];
+    state.total = cached.total || 0;
+    state.lastPage = cached.lastPage || 1;
+    if (cached.perPage) state.perPage = cached.perPage;
+    state._listContext = [state.folder, '', ''].join('|');
+    applyMailPreferences(state, cached.preferences);
+    state.loading = false;
+
+    return !!(state.rows && state.rows.length);
+  }
+
   /* First load: connection state, folder counts, labels, then the inbox. */
   function bootstrapMailbox(root, state, render) {
-    state.loading = true;
+    // A mailbox already showing real mail (from the cache, or from the last
+    // time this view was opened) revalidates quietly. Only a genuinely empty
+    // one waits behind a loading state.
+    var warm = rowsOf(state).length > 0;
+    state.loading = !warm;
+    if (warm) state.listRefreshing = true;
 
-    api().bootstrap().then(function (data) {
+    (takeWarmBoot('bootstrap') || api().bootstrap()).then(function (data) {
+      state.bootstrapFailed = false;
+      state.loadError = null;
       state.connected = !!(data && data.connected);
       state.account = (data && data.account) || null;
       state.folderCounts = (data && data.folders) || {};
       state.labels = ((data && data.labels) || []).filter(function (label) {
         return !!(label && label.localOnly);
       });
+      applyMailPreferences(state, data && data.preferences);
       announceInboxUnread(state);
 
       if (!state.connected) {
         state.loading = false;
+        state.listRefreshing = false;
         state.rows = [];
         render();
         return;
@@ -1533,8 +2077,15 @@
       reloadMessages(root, state, render);
     }).catch(function (err) {
       state.loading = false;
-      state.connected = false;
+      state.listRefreshing = false;
+      // Remembered so re-opening Email retries instead of sitting on a failure
+      // that only a browser refresh could clear — the bootstrap runs once at
+      // app start, so a single blip used to poison the page for the session.
+      state.bootstrapFailed = true;
       state.loadError = (err && err.message) || 'Could not reach the mailbox';
+      // Mail already on screen is real and still readable. Only an empty
+      // mailbox drops to the disconnected state.
+      if (!rowsOf(state).length) state.connected = false;
       reportMailError(state, err);
       render();
     });
@@ -1563,6 +2114,15 @@
         }
         state.reading = true;
         openMailMessage(root, state, render, msg.id);
+
+        // Arrived from the standalone window's Reply / Forward buttons.
+        if (state._pendingCompose) {
+          var mode = state._pendingCompose;
+          state._pendingCompose = null;
+          openInlineCompose(state, mode);
+          render();
+          window.requestAnimationFrame(function () { focusInlineComposeEditor(root); });
+        }
       });
     }).catch(function () {
       // Deep-link is best-effort; fall back to the ordinary inbox load.
@@ -1572,21 +2132,26 @@
 
   /* Opens a message: loads its whole conversation and marks it read.
    *
-   * The reading pane used to fetch just the one message, so a reply arrived
-   * with none of the conversation it belonged to — every earlier message was
-   * simply absent. This pulls the thread instead; the opened message comes
-   * back with its body, the rest carry `bodyLoaded: false` and are fetched by
-   * expandThreadMessage() as the reader opens them. */
+   * The thread is loaded even though the pane shows one message: it is where
+   * the conversation's real subject comes from (the first message's, not the
+   * newest "Re: Re: Fwd:"), and it means moving between messages in the list
+   * dropdown does not refetch. Only the opened message carries a body; the
+   * rest are pulled by ensureMessageBody() as they are chosen. */
   function openMailMessage(root, state, render, id) {
-    var row = findRow(state, id);
+    // findAnyRow, not findRow: a message opened from a conversation dropdown
+    // is not on the page — it belongs to the conversation loaded under it.
+    var row = findAnyRow(state, id);
     if (!row) return;
 
     state.selectedId = id;
     if (row.unread) markRowRead(state, id);
 
-    // A thread already covering this message stays as it is, so re-opening
-    // does not throw away which messages the reader had expanded.
+    // A thread already covering this message is reused rather than refetched —
+    // but the reading pane shows whichever message is selected, and only the
+    // one the thread was opened on arrives with a body, so the rest are pulled
+    // as they are chosen.
     if (threadCoversSelection(state)) {
+      ensureMessageBody(state, render, id);
       render();
       return;
     }
@@ -1610,10 +2175,6 @@
         threadId: data && data.threadId,
         subject: (data && data.subject) || row.subject,
         messages: messages,
-        // Newest expanded, everything before it collapsed — the shape both
-        // Gmail and Outlook use, so a long thread opens on the message that
-        // prompted it rather than on its own history.
-        expanded: defaultThreadExpansion(messages, id),
         showQuoted: {},
       };
 
@@ -1662,71 +2223,22 @@
     openMailMessage(root, state, render, state.selectedId);
   }
 
-  /* Which messages start open: the one that was clicked, plus the newest, plus
-   * anything still unread — a reader should never have to hunt for the message
-   * they came in for. */
-  function defaultThreadExpansion(messages, openedId) {
-    var expanded = {};
-    if (!messages.length) return expanded;
-
-    expanded[openedId] = true;
-    expanded[messages[messages.length - 1].id] = true;
-
-    messages.forEach(function (m) {
-      if (m.unread) expanded[m.id] = true;
-    });
-
-    return expanded;
-  }
-
-  /* Expand or collapse every message in the conversation at once. Expanding
-   * pulls any body that has not been fetched yet, so "Expand all" really does
-   * show the whole conversation rather than a column of empty cards. */
-  function setThreadExpansion(root, state, render, open) {
+  /*
+   * Pull a message's body if the thread it came in did not carry one.
+   *
+   * GET /thread only hydrates the message it was opened on — a long
+   * conversation would otherwise be one provider round trip per message before
+   * anything painted. Picking a different message from the list dropdown is
+   * where the rest get fetched, one at a time and only when actually read.
+   */
+  function ensureMessageBody(state, render, id) {
     var thread = state.thread;
     if (!thread) return;
-
-    thread.messages.forEach(function (message) {
-      thread.expanded[message.id] = open;
-
-      if (!open || message.bodyLoaded || message._loading) return;
-
-      message._loading = true;
-
-      api().getMessage(message.id).then(function (data) {
-        var full = data && data.message;
-        message._loading = false;
-        if (full) {
-          Object.keys(full).forEach(function (key) { message[key] = full[key]; });
-        }
-        render();
-      }).catch(function (err) {
-        message._loading = false;
-        message._error = errorText(err) || 'This message could not be loaded.';
-        render();
-      });
-    });
-
-    render();
-  }
-
-  /* Pulls one thread message's body the first time it is expanded. */
-  function expandThreadMessage(root, state, render, id) {
-    var thread = state.thread;
-    if (!thread) return;
-
-    var open = !thread.expanded[id];
-    thread.expanded[id] = open;
 
     var message = thread.messages.filter(function (m) { return m.id === id; })[0];
-
-    if (!open || !message || message.bodyLoaded || message._loading) {
-      render();
-      return;
-    }
+    if (!message || message.bodyLoaded || message._loading || message._error) return;
 
     message._loading = true;
-    render();
 
     api().getMessage(id).then(function (data) {
       var full = data && data.message;
@@ -1760,9 +2272,9 @@
   }
 
   function setRowRead(state, id, read) {
-    var row = findRow(state, id);
+    var row = findAnyRow(state, id);
     if (!row || !!row.unread === !read) return;
-    row.unread = !read;
+    eachRowCopy(state, id, function (copy) { copy.unread = !read; });
     api().setFlags(id, { read: read }).catch(function (err) {
       row.unread = read;
       reportMailError(state, err);
@@ -1827,7 +2339,7 @@
     var applied = !isLabelCheckedForTargets(labelId, state);
 
     ids.forEach(function (id) {
-      var row = findRow(state, id);
+      var row = findAnyRow(state, id);
       if (!row) return;
       if (!row.labels) row.labels = [];
 
@@ -2062,6 +2574,7 @@
     var filter = root.querySelector('[data-email-filter]');
     if (bulk) bulk.hidden = count === 0 || isEmailMobile();
     if (filter) filter.hidden = count > 0;
+    syncSelectAllBox(root, state);
     if (count === 0) {
       closeEmailBulkMoreMenu(root, state);
       if (state.labelPopupBulk) closeEmailLabelPopup(root, state);
@@ -2151,6 +2664,9 @@
     }
     var menu = root.querySelector('[data-email-label-menu]');
     if (menu && anchor) {
+      // The menu renders hidden and is revealed here, so a caller that opens
+      // it without a re-render (the row's right-click menu) still gets it.
+      menu.hidden = false;
       positionEmailPopupMenu(anchor, menu);
       syncLabelMenuChecks(root, state);
     }
@@ -2291,46 +2807,100 @@
       '</span>';
   }
 
+  /*
+   * Recipients, as the server actually stores them: `to`, `cc` and `bcc` are
+   * arrays of {name, email}.
+   *
+   * This used to read `row.to` as if it were a single address. An empty array
+   * is truthy, so every message fell through to the "me" branch — which is why
+   * the header said "to me" on mail addressed to a dozen people, and why the
+   * details panel never showed a recipient list at all.
+   */
+  function addressList(value) {
+    if (!value) return [];
+    var list = Array.isArray(value) ? value : [value];
+
+    return list.map(function (entry) {
+      if (typeof entry === 'string') return { email: entry, name: '' };
+      if (!entry) return null;
+
+      return { email: entry.email || '', name: entry.name || '' };
+    }).filter(function (entry) {
+      return entry && (entry.email || entry.name);
+    });
+  }
+
+  /* "Jane Doe <jane@firm.com>", or just the address when there is no name. */
+  function addressLabel(entry, full) {
+    if (!entry) return '';
+    if (isSelfAddress(entry)) return 'me';
+    if (!entry.name || entry.name === entry.email) return entry.email;
+
+    return full && entry.email ? entry.name + ' <' + entry.email + '>' : entry.name;
+  }
+
+  function addressListLabel(list, full) {
+    return list.map(function (entry) { return addressLabel(entry, full); })
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  /* The one-line "to …" summary beside the sender. Long recipient lists are
+   * summarised; the full set is one click away in the details panel. */
   function getMessageRecipient(row) {
-    if (row.to) {
-      if (typeof row.to === 'string') {
-        return { label: row.to, email: row.to, isMe: row.to === PROFILE.email };
-      }
-      var isMe = row.to.isMe || row.to.email === PROFILE.email;
-      return {
-        name: row.to.name,
-        email: row.to.email,
-        isMe: isMe,
-        label: isMe ? 'me' : row.to.name || row.to.email || 'me',
-      };
+    var to = addressList(row && row.to);
+
+    if (!to.length) {
+      return { label: 'me', email: PROFILE.email, isMe: true };
     }
+
+    var first = addressLabel(to[0]);
+    var extra = to.length - 1;
+
     return {
-      isMe: true,
-      label: 'me',
-      name: PROFILE.name,
-      email: PROFILE.email,
+      label: extra > 0 ? first + ' and ' + extra + ' other' + (extra === 1 ? '' : 's') : first,
+      email: to[0].email,
+      isMe: isSelfAddress(to[0]),
     };
   }
 
+  /*
+   * Everyone the message went to, not just the first name on the envelope.
+   *
+   * Cc and Bcc rows only appear when there is something in them — an empty
+   * "bcc:" on every message is noise, and on a received message a populated
+   * one is unusual enough to be worth seeing.
+   */
   function renderMessageHeaderDetails(row, metaEmail, metaDate, subject) {
-    var recipient = getMessageRecipient(row);
-    var toValue = recipient.isMe ? PROFILE.email : recipient.email || recipient.label;
+    var to = addressList(row && row.to);
+    var cc = addressList(row && row.cc);
+    var bcc = addressList(row && row.bcc);
+    var replyTo = row && row.replyTo;
+
+    function detailRow(label, value) {
+      if (!value) return '';
+
+      return (
+        '<div class="tma-dash__email-header-details-row">' +
+        '<dt>' + esc(label) + ':</dt><dd>' + esc(value) + '</dd>' +
+        '</div>'
+      );
+    }
+
     return (
       '<div class="tma-dash__email-header-details" data-email-header-details-panel hidden>' +
       '<dl class="tma-dash__email-header-details-list">' +
       '<div class="tma-dash__email-header-details-row">' +
       '<dt>from:</dt>' +
-      '<dd><strong>' + esc(row.sender) + '</strong> &lt;' + esc(metaEmail) + '&gt;</dd>' +
+      '<dd><strong>' + esc(row.sender) + '</strong>' +
+      (metaEmail ? ' &lt;' + esc(metaEmail) + '&gt;' : '') + '</dd>' +
       '</div>' +
-      '<div class="tma-dash__email-header-details-row">' +
-      '<dt>to:</dt><dd>' + esc(toValue) + '</dd>' +
-      '</div>' +
-      '<div class="tma-dash__email-header-details-row">' +
-      '<dt>date:</dt><dd>' + esc(metaDate) + '</dd>' +
-      '</div>' +
-      '<div class="tma-dash__email-header-details-row">' +
-      '<dt>subject:</dt><dd>' + esc(subject) + '</dd>' +
-      '</div>' +
+      detailRow('reply-to', replyTo && replyTo !== metaEmail ? replyTo : '') +
+      detailRow('to', to.length ? addressListLabel(to, true) : PROFILE.email) +
+      detailRow('cc', addressListLabel(cc, true)) +
+      detailRow('bcc', addressListLabel(bcc, true)) +
+      detailRow('date', metaDate) +
+      detailRow('subject', subject) +
       '</dl>' +
       '</div>'
     );
@@ -2367,15 +2937,21 @@
         : '<time class="tma-dash__email-detail-date">' + esc(metaDate) + '</time>') +
       '<div class="tma-dash__email-detail-actions">' +
       messageActions.map(function (action) {
+        // Every button carries the message it belongs to. These used to be
+        // wired only when headKey was 'current', so on a thread card the star,
+        // reply and forward buttons rendered and did nothing at all.
         var attrs = '';
-        if (headKey === 'current') {
-          if (action.id === 'reply') attrs = ' data-email-inline-compose="reply"';
-          if (action.id === 'forward') attrs = ' data-email-inline-compose="forward"';
-          if (action.id === 'star') {
-            var starred = isRowStarred(row, state);
-            attrs =
-              ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"';
-          }
+        if (action.id === 'reply' || action.id === 'reply-all' || action.id === 'forward') {
+          attrs = ' data-email-inline-compose="' + action.id + '"' +
+            ' data-email-message-id="' + esc(row.id) + '"';
+        }
+        if (action.id === 'more') {
+          attrs = ' data-email-message-menu="' + esc(row.id) + '"' +
+            ' aria-haspopup="menu" aria-expanded="false"';
+        }
+        if (action.id === 'star') {
+          attrs = ' data-email-star="' + esc(row.id) + '"' +
+            ' aria-pressed="' + (isRowStarred(row, state) ? 'true' : 'false') + '"';
         }
         var cls = 'tma-dash__email-action';
         if (action.id === 'star') {
@@ -2383,7 +2959,7 @@
         }
         return renderEmailIconTooltipBtn({
           tipId: 'email-detail-tip-' + headKey + '-' + action.id,
-          label: action.label,
+          label: action.id === 'star' && isRowStarred(row, state) ? 'Remove star' : action.label,
           className: cls,
           attrs: attrs,
           innerHtml: '<img src="' + esc(ICONS[action.icon]) + '" alt="">',
@@ -2922,12 +3498,15 @@
   }
 
   function renderEmailSidebar(state) {
-    var collapsed = !isEmailMobile() && !!state.sidebarCollapsed;
+    var mode = effectiveSidebarMode(state);
     var sidebarCls = 'tma-dash__email-sidebar';
     if (state.mobileNavOpen) sidebarCls += ' tma-dash__email-sidebar--open';
-    if (collapsed) sidebarCls += ' tma-dash__email-sidebar--collapsed';
+    if (mode === 'icons') sidebarCls += ' tma-dash__email-sidebar--collapsed';
+    // Hidden still renders (the DOM patch is cheaper than tearing the subtree
+    // out and rebuilding it) but takes up no space and is out of the tab order.
+    if (mode === 'hidden') sidebarCls += ' tma-dash__email-sidebar--hidden';
     return (
-      '<div class="' + sidebarCls + '">' +
+      '<div class="' + sidebarCls + '"' + (mode === 'hidden' ? ' hidden' : '') + '>' +
       (isEmailMobile()
         ? ''
         : '<div class="tma-dash__email-sidebar-chrome">' +
@@ -3065,19 +3644,67 @@
     );
   }
 
+  /*
+   * Category tabs above the inbox.
+   *
+   * Each one is a real server listing (see MailController::VIRTUAL_FOLDERS),
+   * not a filter over the loaded page — so "Starred 42" means forty-two
+   * starred messages in the mailbox, not however many happen to be on page 1.
+   */
+  function inboxCategories(state) {
+    var enabled = state.inboxCategories || [];
+
+    return INBOX_CATEGORIES.filter(function (category) {
+      return category.fixed || enabled.indexOf(category.id) !== -1;
+    });
+  }
+
+  function renderInboxCategories(state) {
+    if (state.showInboxCategories === false) return '';
+    if (CATEGORY_FOLDERS.indexOf(state.folder) === -1 || state.activeLabelId) return '';
+
+    var categories = inboxCategories(state);
+    // One tab is not a choice; drawing a strip for it is just a wasted row.
+    if (categories.length < 2) return '';
+
+    return (
+      '<div class="tma-dash__email-categories" role="tablist" aria-label="Inbox categories">' +
+      categories.map(function (category) {
+        var active = state.folder === category.id;
+        var counts = (state.folderCounts && state.folderCounts[category.id]) || null;
+        var count = counts
+          ? (category.id === 'inbox' || category.id === 'important' ? counts.unread : counts.total)
+          : 0;
+
+        return (
+          '<button type="button" class="tma-dash__email-category' +
+          (active ? ' tma-dash__email-category--active' : '') + '"' +
+          ' role="tab" aria-selected="' + (active ? 'true' : 'false') + '"' +
+          ' data-email-category="' + esc(category.id) + '">' +
+          '<img src="' + esc(ICONS[category.icon]) + '" alt="">' +
+          '<span class="tma-dash__email-category-label">' + esc(category.label) + '</span>' +
+          (count ? '<span class="tma-dash__email-category-count">' + count + '</span>' : '') +
+          '</button>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
   function renderList(state) {
     if (state.folder === 'templates') return renderTemplateList(state);
 
     var rows = filteredInbox(state);
-    var allChecked = rows.length > 0 && rows.every(function (row) { return isRowChecked(row, state); });
-    var bulkCount = selectedEmailCount(state);
+    var selection = selectionSummary(state);
+
     return (
       '<div class="tma-dash__email-list">' +
       renderListMobileHead(state) +
       '<div class="tma-dash__email-list-head">' +
       renderEmailSidebarMenuBtn(state) +
-      '<label class="tma-dash__email-list-check">' +
-      '<input type="checkbox" class="tma-dash__check" data-email-selectall' + (allChecked ? ' checked' : '') + ' aria-label="Select all">' +
+      '<label class="tma-dash__email-list-check" title="Select all">' +
+      '<input type="checkbox" class="tma-dash__check" data-email-selectall' +
+      (selection.all ? ' checked' : '') + ' aria-label="Select all">' +
       '</label>' +
       renderEmailListRefreshBtn(state) +
       renderEmailListBulk(state) +
@@ -3085,6 +3712,7 @@
       renderEmailLabelMenu(state) +
       renderListHeadActions(state, { showFilter: !isEmailMobile() }) +
       '</div>' +
+      renderInboxCategories(state) +
       renderReconnectBanner(state) +
       '<div class="tma-dash__email-list-body">' +
       renderListState(state, rows) +
@@ -3092,6 +3720,28 @@
       renderMailPagination(state) +
       '</div>'
     );
+  }
+
+  /* How much of what is on screen is ticked — drives the toolbar checkbox,
+   * including its indeterminate state. */
+  function selectionSummary(state) {
+    var rows = visibleRows(state);
+    var checked = rows.filter(function (row) { return isRowChecked(row, state); }).length;
+
+    return {
+      total: rows.length,
+      checked: checked,
+      all: rows.length > 0 && checked === rows.length,
+      some: checked > 0 && checked < rows.length,
+    };
+  }
+
+  function syncSelectAllBox(root, state) {
+    var selectAll = root.querySelector('[data-email-selectall]');
+    if (!selectAll) return;
+    var selection = selectionSummary(state);
+    selectAll.checked = selection.all;
+    selectAll.indeterminate = selection.some;
   }
 
   /* Pager for the folder listing. The mailbox mirror can hold tens of
@@ -3152,6 +3802,40 @@
     );
   }
 
+  /*
+   * Placeholder rows shaped like the real thing.
+   *
+   * "Loading emails…" told the reader nothing and made the pane look broken
+   * for as long as it showed. These occupy the same geometry the mail will —
+   * avatar, two lines, a timestamp — so the list fills in rather than jumping.
+   */
+  function renderListSkeleton(count) {
+    var rows = '';
+    var n = Math.max(1, count || 8);
+
+    for (var i = 0; i < n; i++) {
+      rows +=
+        '<div class="tma-dash__email-row tma-dash__email-row--skeleton" aria-hidden="true">' +
+        '<span class="tma-dash__email-row-thread-spacer"></span>' +
+        '<span class="tma-skeleton tma-dash__email-skeleton-avatar"></span>' +
+        '<div class="tma-dash__email-row-content">' +
+        '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-line' +
+        ' tma-dash__email-skeleton-line--sender"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-line' +
+        ' tma-dash__email-skeleton-line--subject"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-line' +
+        ' tma-dash__email-skeleton-line--snippet"></span>' +
+        '</div>' +
+        '<div class="tma-dash__email-row-side">' +
+        '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-time"></span>' +
+        '</div>' +
+        '</div>';
+    }
+
+    return '<div class="tma-dash__email-list-skeleton" role="status" aria-label="Loading messages">' +
+      rows + '</div>';
+  }
+
   /* Loading, disconnected, error and empty all get an honest state — never a
    * placeholder message that could be mistaken for real mail. */
   function renderListState(state, rows) {
@@ -3165,17 +3849,37 @@
       );
     }
 
-    if (state.connected === false) {
-      return notice(
-        'No mailbox connected',
-        'Connect Google or Microsoft to read and send mail here.',
-        '<button type="button" class="tma-dash__email-settings-btn tma-dash__email-settings-btn--primary"' +
-        ' data-email-open-settings>Open email settings</button>'
+    /* The portal's shared empty state (illustration, title, one line, one
+     * action) rather than a bespoke one — see TMANoData. */
+    function empty(title, subtitle, buttonLabel) {
+      if (!window.TMANoData) return notice(title, subtitle);
+
+      return (
+        '<div class="tma-dash__email-list-empty tma-dash__email-list-empty--illustrated">' +
+        window.TMANoData.render({
+          title: title,
+          subtitle: subtitle,
+          illustrationName: 'Illustration07',
+          showButton: !!buttonLabel,
+          buttonLabel: buttonLabel || '',
+        }) +
+        '</div>'
       );
     }
 
-    if (state.loading) {
-      return notice('Loading messages…');
+    // Skeletons are for "we don't know yet". Once the answer is in — no
+    // account, or an account with nothing in this folder — they would be a
+    // lie about mail that is on its way, so the empty state takes over.
+    if (state.connected === false) {
+      return empty(
+        'No emails yet',
+        'Connect your email account to get started.',
+        'Connect email account'
+      );
+    }
+
+    if (state.loading || state.connected === null) {
+      return renderListSkeleton(state.perPage && state.perPage < 8 ? state.perPage : 8);
     }
 
     if (state.loadError) {
@@ -3184,11 +3888,11 @@
 
     if (!rows.length) {
       return state.search
-        ? notice('No results', 'Nothing in this mailbox matches “' + state.search + '”.')
-        : notice('Nothing here', 'This folder is empty.');
+        ? empty('No results', 'Nothing in this mailbox matches “' + state.search + '”.')
+        : empty('Nothing here', 'This folder is empty.');
     }
 
-    return rows.map(function (row) { return buildInboxRowHtml(row, state); }).join('');
+    return buildInboxRowsHtml(rows, state);
   }
 
   /* Plain-text mail, and the fallback whenever no HTML part was sent.
@@ -3824,79 +4528,71 @@
     if (!thread || !thread.messages.length) {
       return (
         '<div class="tma-dash__email-thread">' +
-        '<div class="tma-dash__email-thread-loading">Loading conversation…</div>' +
+        renderMessageSkeleton() +
         '</div>'
       );
     }
 
-    var messages = thread.messages;
-    var lastIndex = messages.length - 1;
-
-    var cards = messages.map(function (message, index) {
-      return renderThreadMessage(message, state, {
-        expanded: !!thread.expanded[message.id],
-        isLast: index === lastIndex,
-        showQuoted: !!thread.showQuoted[message.id],
-      });
-    }).join('');
+    /*
+     * The reading pane shows the message that was opened, in full.
+     *
+     * It used to stack the whole conversation here as collapsed cards with
+     * their own expand-all control — a second, competing way to move between
+     * messages now that the inbox row has a dropdown. Navigating a thread
+     * belongs in one place, and that place is the list.
+     */
+    var message = thread.messages.filter(function (m) {
+      return m.id === state.selectedId;
+    })[0] || thread.messages[thread.messages.length - 1];
 
     return (
       '<div class="tma-dash__email-thread" data-email-thread>' +
-      (messages.length > 1 ? renderThreadSummary(thread, state) : '') +
-      cards +
+      (thread.messages.length > 1
+        ? '<p class="tma-dash__email-thread-note">' + thread.messages.length +
+          ' messages in this conversation — open the arrow in the list to see the rest.</p>'
+        : '') +
+      renderThreadMessage(message, state, {
+        showQuoted: !!thread.showQuoted[message.id],
+      }) +
       (threadActions || '') +
       '</div>'
     );
   }
 
-  /* A count and an expand/collapse-all control, so a long conversation can be
-   * opened out in one action instead of card by card. */
-  function renderThreadSummary(thread, state) {
-    var total = thread.messages.length;
-    var openCount = thread.messages.filter(function (m) {
-      return thread.expanded[m.id];
-    }).length;
-    var allOpen = openCount === total;
-
+  /* A placeholder shaped like the message that is coming, rather than the
+   * words "Loading conversation…" sitting alone in an empty pane. */
+  function renderMessageSkeleton() {
     return (
-      '<div class="tma-dash__email-thread-summary">' +
-      '<span class="tma-dash__email-thread-count">' + total + ' messages in this conversation</span>' +
-      '<button type="button" class="tma-dash__email-thread-expand-all" data-email-thread-toggle-all="' +
-      (allOpen ? 'collapse' : 'expand') + '">' +
-      (allOpen ? 'Collapse all' : 'Expand all') +
-      '</button>' +
+      '<div class="tma-dash__email-message tma-dash__email-message--skeleton" role="status"' +
+      ' aria-label="Loading message">' +
+      '<div class="tma-dash__email-message-head">' +
+      '<span class="tma-skeleton tma-dash__email-skeleton-avatar"></span>' +
+      '<div class="tma-dash__email-message-head-identity">' +
+      '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-line' +
+      ' tma-dash__email-skeleton-line--sender"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text tma-dash__email-skeleton-line' +
+      ' tma-dash__email-skeleton-line--subject"></span>' +
+      '</div>' +
+      '</div>' +
+      '<div class="tma-dash__email-skeleton-body">' +
+      '<span class="tma-skeleton tma-skeleton--text"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text"></span>' +
+      '</div>' +
       '</div>'
     );
   }
 
-  /* One message in the thread. */
+  /* The open message. */
   function renderThreadMessage(message, state, opts) {
     var metaEmail = message.email || '';
     var metaDate = formatMessageDate(message);
     var subject = message.subject || '';
 
-    if (!opts.expanded) {
-      return (
-        '<article class="tma-dash__email-message tma-dash__email-message--collapsed"' +
-        ' data-email-thread-message="' + esc(message.id) + '">' +
-        '<button type="button" class="tma-dash__email-message-collapsed-btn"' +
-        ' data-email-thread-expand="' + esc(message.id) + '"' +
-        ' aria-expanded="false">' +
-        messageHeadIcon(message) +
-        '<span class="tma-dash__email-message-collapsed-name">' + esc(message.sender || metaEmail) + '</span>' +
-        '<span class="tma-dash__email-message-collapsed-snippet">' + esc(message.body || '') + '</span>' +
-        (message.hasAttachments
-          ? '<img class="tma-dash__email-message-collapsed-clip" src="' + ICONS.PaperclipHorizontal + '" alt="Has attachments">'
-          : '') +
-        '<time class="tma-dash__email-message-collapsed-date">' + esc(metaDate) + '</time>' +
-        '</button>' +
-        '</article>'
-      );
-    }
-
     return (
       '<article class="tma-dash__email-message tma-dash__email-message--expanded' +
-      (opts.isLast ? ' tma-dash__email-message--current' : '') + '"' +
+      ' tma-dash__email-message--current"' +
       ' data-email-thread-message="' + esc(message.id) + '">' +
       renderThreadMessageHead(message, metaEmail, metaDate, subject, state) +
       renderThreadMessageBody(message, opts) +
@@ -3905,13 +4601,11 @@
     );
   }
 
-  /* The head of an expanded card. Reuses the existing message head so a thread
-   * card and the old single-message view stay visually identical; the whole
-   * head doubles as the collapse control. */
+  /* The head of the open card. Plain markup now: it used to double as the
+   * collapse control, which is the mechanism the inbox dropdown replaced. */
   function renderThreadMessageHead(message, metaEmail, metaDate, subject, state) {
     return (
-      '<div class="tma-dash__email-message-head-wrap" data-email-thread-collapse="' + esc(message.id) + '"' +
-      ' role="button" tabindex="0" aria-expanded="true">' +
+      '<div class="tma-dash__email-message-head-wrap">' +
       renderMessageHead(message, metaEmail, metaDate, subject, 'thread-' + message.id, state) +
       '</div>'
     );
@@ -3919,7 +4613,14 @@
 
   function renderThreadMessageBody(message, opts) {
     if (message._loading) {
-      return '<div class="tma-dash__email-body"><p class="tma-dash__email-body-loading">Loading message…</p></div>';
+      return (
+        '<div class="tma-dash__email-body tma-dash__email-skeleton-body" role="status"' +
+        ' aria-label="Loading message">' +
+        '<span class="tma-skeleton tma-skeleton--text"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text"></span>' +
+        '<span class="tma-skeleton tma-skeleton--text"></span>' +
+        '</div>'
+      );
     }
 
     if (message._error) {
@@ -4019,7 +4720,9 @@
   function renderDetail(state) {
     if (state.folder === 'templates') return renderTemplateDetail(state);
     syncInlineCompose(state);
-    var row = findRow(state, state.selectedId);
+    // findAnyRow: the open message may be one the reader picked out of a
+    // conversation dropdown, which is not a row on the page.
+    var row = findAnyRow(state, state.selectedId);
     if (!row) {
       return '<div class="tma-dash__email-detail tma-dash__email-detail--empty"><p>Select a message</p></div>';
     }
@@ -4956,6 +5659,41 @@
     );
   }
 
+  /* A small segmented control — the shape settings already use for a short,
+   * mutually exclusive set of options. */
+  function settingsChoice(key, value, options) {
+    return (
+      '<div class="tma-dash__email-settings-choice" role="radiogroup">' +
+      options.map(function (option) {
+        var on = option.id === value;
+
+        return (
+          '<button type="button" class="tma-dash__email-settings-choice-btn' +
+          (on ? ' is-active' : '') + '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '"' +
+          ' data-email-pref-choice="' + esc(key) + '" data-email-pref-value="' + esc(option.id) + '">' +
+          esc(option.label) + '</button>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
+  function renderCategoryChoices(prefs) {
+    var enabled = Array.isArray(prefs.inboxCategories) ? prefs.inboxCategories : [];
+
+    return (
+      '<div class="tma-dash__email-settings-categories">' +
+      INBOX_CATEGORIES.filter(function (category) { return !category.fixed; })
+        .map(function (category) {
+          var on = enabled.indexOf(category.id) !== -1;
+
+          return settingsRow(category.label, '', settingsSwitch(on, category.label,
+            'data-email-pref-category="' + esc(category.id) + '"'));
+        }).join('') +
+      '</div>'
+    );
+  }
+
   function renderMailboxSection(state) {
     var accounts = (state.settings && state.settings.accounts) || [];
 
@@ -5029,6 +5767,25 @@
           '<h3 class="tma-dash__email-settings-section">Mailbox</h3>' +
           renderMailboxSection(state) +
 
+          '<h3 class="tma-dash__email-settings-section">Layout</h3>' +
+          settingsRow('Mailbox layout', 'Split keeps the list and the message side by side.',
+            settingsChoice('layout', prefs.layout || 'split', [
+              { id: 'split', label: 'Split view' },
+              { id: 'single', label: 'Full width' },
+            ])) +
+          settingsRow('Email sidebar', 'How the folder list draws when it is collapsed.',
+            settingsChoice('sidebarMode', prefs.sidebarMode || 'full', [
+              { id: 'full', label: 'Full' },
+              { id: 'icons', label: 'Icons only' },
+              { id: 'hidden', label: 'Hidden' },
+            ])) +
+
+          '<h3 class="tma-dash__email-settings-section">Inbox categories</h3>' +
+          settingsRow('Show category tabs', 'Switch the inbox between these sections.',
+            settingsSwitch(prefs.showInboxCategories !== false, 'Show category tabs',
+              'data-email-pref="showInboxCategories"')) +
+          renderCategoryChoices(prefs) +
+
           '<h3 class="tma-dash__email-settings-section">Reading</h3>' +
           settingsRow('Conversation view', 'Group replies into a single thread.',
             settingsSwitch(prefs.conversationView, 'Conversation view',
@@ -5094,6 +5851,11 @@
   function saveEmailPreference(root, state, key, value) {
     if (!state.settings) return;
     state.settings.preferences[key] = value;
+    if (state.preferences) state.preferences[key] = value;
+    // Preferences that change the mailbox's shape have to reach live state as
+    // well as the settings object, or the panel and the page disagree until
+    // the next bootstrap.
+    if (key === 'showInboxCategories') state.showInboxCategories = value;
 
     var payload = {};
     payload[key] = value;
@@ -5107,6 +5869,14 @@
 
   function wireEmailSettings(root, state, render) {
     MORPH.unwired(root, '[data-email-open-settings]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openEmailSettings(root, state, render);
+      });
+    });
+
+    // The empty state's own call to action. TMANoData names its button
+    // generically, so it is claimed here rather than given a bespoke one.
+    MORPH.unwired(root, '[data-no-data-action]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openEmailSettings(root, state, render);
       });
@@ -5163,7 +5933,65 @@
 
     MORPH.unwired(root, '[data-email-pref]').forEach(function (input) {
       input.addEventListener('change', function () {
-        saveEmailPreference(root, state, input.getAttribute('data-email-pref'), input.checked);
+        var key = input.getAttribute('data-email-pref');
+        saveEmailPreference(root, state, key, input.checked);
+        // Only the ones that change what is on screen; re-rendering on every
+        // switch would close the panel's own scroll position for nothing.
+        if (key === 'showInboxCategories') render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-pref-choice]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-email-pref-choice');
+        var value = btn.getAttribute('data-email-pref-value');
+
+        if (key === 'sidebarMode') {
+          saveEmailPreference(root, state, key, value);
+          setMailSidebarMode(root, state, render, value);
+          return;
+        }
+
+        if (key === 'layout') {
+          state.layoutStyle = value;
+          saveLayoutStyle(value);
+          // Split shows the list and the message together, so nothing is
+          // "being read" to the exclusion of the list any more.
+          if (value === 'split') state.reading = false;
+        }
+
+        saveEmailPreference(root, state, key, value);
+        render();
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-pref-category]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        var id = input.getAttribute('data-email-pref-category');
+        var enabled = (state.inboxCategories || []).slice();
+        var at = enabled.indexOf(id);
+
+        if (input.checked && at === -1) enabled.push(id);
+        else if (!input.checked && at !== -1) enabled.splice(at, 1);
+
+        // Kept in the canonical order rather than the order they were ticked,
+        // so the strip does not rearrange itself as the switches are used.
+        enabled = INBOX_CATEGORIES.filter(function (category) {
+          return !category.fixed && enabled.indexOf(category.id) !== -1;
+        }).map(function (category) { return category.id; });
+
+        state.inboxCategories = enabled;
+        saveInboxCategories(enabled);
+
+        // Turning off the category the reader is standing in would leave them
+        // on a listing with no tab to come back from.
+        if (state.folder === id && enabled.indexOf(id) === -1) {
+          state.folder = 'inbox';
+          reloadMessages(root, state, render);
+        }
+
+        saveEmailPreference(root, state, 'inboxCategories', enabled);
+        render();
       });
     });
 
@@ -5402,31 +6230,68 @@
     return '';
   }
 
+  /*
+   * The sender's picture *is* the row's checkbox.
+   *
+   * A checkbox drawn permanently on all fifty rows made the list read as a
+   * form; a photo tells you who wrote to you. Hovering a row (or having it
+   * selected) swaps the picture for the box, which is the Gmail behaviour and
+   * costs no extra column. The input is real and stays in the DOM the whole
+   * time — the swap is CSS — so the select-all, the bulk bar and keyboard
+   * users all keep working off the same element they always did.
+   */
   function rowListAvatar(row, state) {
-    var inner = rowListAvatarInner(row);
-    if (!isEmailMobile()) return inner;
-
-    var checked = state && isRowChecked(row, state);
-    var btnCls = 'tma-dash__email-row-avatar-btn';
-    if (checked) btnCls += ' tma-dash__email-row-avatar-btn--selected';
+    var checked = !!(state && isRowChecked(row, state));
 
     return (
-      '<button type="button" class="' + btnCls + '" data-email-avatar-select' +
-      ' aria-pressed="' + (checked ? 'true' : 'false') + '"' +
-      ' aria-label="Select ' + esc(row.sender) + '">' +
-      inner +
-      (checked
-        ? '<span class="tma-dash__email-row-avatar-check" aria-hidden="true"><img src="' + ICONS.Check + '" alt=""></span>'
-        : '') +
-      '</button>'
+      '<label class="tma-dash__email-row-select' + (checked ? ' is-checked' : '') + '"' +
+      ' data-email-row-select>' +
+      '<input type="checkbox" class="tma-dash__email-row-select-input" data-email-check' +
+      (checked ? ' checked' : '') +
+      ' aria-label="Select mail from ' + esc(row.sender) + '">' +
+      '<span class="tma-dash__email-row-select-face">' + rowListAvatarInner(row) + '</span>' +
+      '<span class="tma-dash__email-row-select-box" aria-hidden="true">' +
+      '<img src="' + ICONS.Check + '" alt="">' +
+      '</span>' +
+      '</label>'
     );
   }
 
   function isEmailRowSelectTarget(el) {
     return !!(
       el.closest('[data-email-check]') ||
-      el.closest('.tma-dash__email-list-check') ||
-      el.closest('[data-email-avatar-select]')
+      el.closest('[data-email-row-select]') ||
+      el.closest('.tma-dash__email-list-check')
+    );
+  }
+
+  /*
+   * The arrow that opens a conversation in the list.
+   *
+   * Only ever rendered where the server says there are two or more messages —
+   * an arrow on a single message opens onto nothing, which reads as a bug. The
+   * space is still reserved on one-message rows so senders and subjects stay
+   * aligned down the column.
+   */
+  function renderConversationToggle(row, state) {
+    if (!hasConversation(row)) {
+      return '<span class="tma-dash__email-row-thread-spacer" aria-hidden="true"></span>';
+    }
+
+    var open = isConversationOpen(state, row.id);
+    var count = conversationCount(row);
+
+    return (
+      '<button type="button" class="tma-dash__email-row-thread-toggle' +
+      (open ? ' tma-dash__email-row-thread-toggle--open' : '') + '"' +
+      ' data-email-conversation-toggle="' + esc(row.id) + '"' +
+      ' aria-expanded="' + (open ? 'true' : 'false') + '"' +
+      ' title="' + count + ' messages in this conversation"' +
+      ' aria-label="' + (open ? 'Hide' : 'Show') + ' the other ' + (count - 1) +
+      ' message' + (count === 2 ? '' : 's') + ' in this conversation">' +
+      '<img src="' + ICONS.CaretDown + '" alt="">' +
+      '<span class="tma-dash__email-row-thread-count">' + count + '</span>' +
+      '</button>'
     );
   }
 
@@ -5773,6 +6638,251 @@
 
   /* The "Snooze until…" picker: presets plus a date-time field. Calls
    * onPick(isoString, humanLabel) and closes itself. */
+  /* ── pointer menus ───────────────────────────────────────────────
+   * One popup, two callers: a right-click on a message row, and the three-dot
+   * button at the top of the open message. Both offer the same actions the
+   * hover bar and the bulk toolbar already do — this is a second way to reach
+   * them, not a second implementation of them.
+   */
+  var emailPointerMenu = null;
+
+  function closeEmailPointerMenu() {
+    if (!emailPointerMenu) return;
+
+    var menu = emailPointerMenu;
+    emailPointerMenu = null;
+    document.removeEventListener('mousedown', menu._onDoc, true);
+    document.removeEventListener('keydown', menu._onKey, true);
+    window.removeEventListener('resize', menu._onDismiss);
+    window.removeEventListener('scroll', menu._onDismiss, true);
+    if (menu.parentNode) menu.parentNode.removeChild(menu);
+
+    Array.prototype.forEach.call(
+      document.querySelectorAll('[data-email-message-menu][aria-expanded="true"]'),
+      function (btn) { btn.setAttribute('aria-expanded', 'false'); }
+    );
+  }
+
+  /*
+   * @param items  [{id, label, icon, active, danger, separator}] — a `separator`
+   *               entry draws a rule and is not selectable.
+   * @param at     {x, y} for a pointer, or a DOM element to hang under.
+   */
+  function openEmailPointerMenu(items, at, onPick) {
+    closeEmailPointerMenu();
+    if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
+
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__email-context-menu tma-dash__menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = items.map(function (item) {
+      if (item.separator) {
+        return '<div class="tma-dash__email-context-menu-divider" role="separator"></div>';
+      }
+
+      return (
+        '<button type="button" class="tma-dash__email-context-menu-item' +
+        (item.danger ? ' tma-dash__email-context-menu-item--danger' : '') +
+        (item.active ? ' is-active' : '') + '"' +
+        ' role="menuitem" data-email-context-item="' + esc(item.id) + '">' +
+        (item.icon
+          ? '<img class="tma-dash__email-context-menu-icon" src="' + esc(ICONS[item.icon]) + '" alt="">'
+          : '<span class="tma-dash__email-context-menu-icon"></span>') +
+        '<span>' + esc(item.label) + '</span>' +
+        '</button>'
+      );
+    }).join('');
+
+    document.body.appendChild(menu);
+
+    // Kept inside the viewport: a right-click near the bottom edge would
+    // otherwise open a menu that runs off the screen.
+    var rect = menu.getBoundingClientRect();
+    var point = at && at.nodeType
+      ? { x: at.getBoundingClientRect().left, y: at.getBoundingClientRect().bottom + 4 }
+      : { x: (at && at.x) || 0, y: (at && at.y) || 0 };
+    var left = Math.max(8, Math.min(point.x, window.innerWidth - rect.width - 8));
+    var top = Math.max(8, Math.min(point.y, window.innerHeight - rect.height - 8));
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    menu._onDismiss = function () { closeEmailPointerMenu(); };
+    menu._onDoc = function (event) {
+      if (menu.contains(event.target)) return;
+      closeEmailPointerMenu();
+    };
+    menu._onKey = function (event) {
+      if (event.key === 'Escape') closeEmailPointerMenu();
+    };
+
+    menu.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-email-context-item]');
+      if (!btn) return;
+      event.preventDefault();
+      var id = btn.getAttribute('data-email-context-item');
+      closeEmailPointerMenu();
+      onPick(id, btn);
+    });
+
+    document.addEventListener('mousedown', menu._onDoc, true);
+    document.addEventListener('keydown', menu._onKey, true);
+    window.addEventListener('resize', menu._onDismiss);
+    window.addEventListener('scroll', menu._onDismiss, true);
+
+    emailPointerMenu = menu;
+
+    return menu;
+  }
+
+  /* Right-click on a message row. */
+  function openEmailRowMenu(root, state, render, id, at) {
+    var row = findAnyRow(state, id);
+    if (!row) return;
+
+    var unread = isRowUnread(row, state);
+    var starred = isRowStarred(row, state);
+    var important = isRowImportant(row, state);
+    var pinned = !!row.pinned;
+    var inArchive = state.folder === 'archive' || row.folder === 'archive';
+    // Right-clicking inside a selection acts on the selection; right-clicking
+    // elsewhere acts on that one row, which is what every file manager does.
+    var selected = Object.keys(state.checkedIds);
+    var bulk = selected.length > 1 && state.checkedIds[id];
+    var ids = bulk ? selected : conversationIds(state, id);
+
+    var items = [
+      { id: 'open', label: 'Open', icon: 'Eye' },
+      { id: 'window', label: 'Open in new window', icon: 'ArrowSquareOut' },
+      { separator: true },
+      { id: unread ? 'read' : 'unread', label: unread ? 'Mark as read' : 'Mark as unread',
+        icon: unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple' },
+      { id: starred ? 'unstar' : 'star', label: starred ? 'Remove star' : 'Add star',
+        icon: 'Star', active: starred },
+      { id: 'important', label: important ? 'Mark as not important' : 'Mark as important',
+        icon: 'Important', active: important },
+      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned },
+      { id: 'snooze', label: 'Snooze', icon: 'Clock' },
+      { id: 'label', label: 'Label as', icon: 'Tag' },
+      { separator: true },
+      { id: inArchive ? 'inbox' : 'archive', label: inArchive ? 'Move to inbox' : 'Archive',
+        icon: inArchive ? 'ArchiveTray' : 'Archive' },
+      { id: 'spam', label: 'Report spam', icon: 'WarningOctagon' },
+      { id: 'delete', label: 'Delete', icon: 'Trash', danger: true },
+    ];
+
+    if (bulk) {
+      items[0] = { id: 'open', label: selected.length + ' selected', icon: 'CheckCircle' };
+      items.splice(1, 1);
+    }
+
+    openEmailPointerMenu(items, at, function (action, btn) {
+      if (action === 'open') {
+        if (bulk) return;
+        if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
+        openMailMessage(root, state, render, id);
+        return;
+      }
+
+      if (action === 'window') {
+        openMailInWindow(root, id);
+        return;
+      }
+
+      if (action === 'label') {
+        // The label picker hangs off a real element, so re-anchor it to the
+        // row — the menu it was opened from is already gone.
+        var rowEl = root.querySelector('[data-email-row="' + id + '"]');
+        if (rowEl) {
+          state.labelPopupRowId = id;
+          openEmailLabelPopup(root, state, rowEl, { rowId: id });
+        }
+        return;
+      }
+
+      if (action === 'snooze') {
+        var anchor = btn || root.querySelector('[data-email-row="' + id + '"]');
+        openEmailSnoozeMenu(root, anchor, function (iso, label) {
+          applyEmailSnooze(root, state, render, id, iso, label);
+        });
+        return;
+      }
+
+      if (action === 'important') {
+        var nextImportant = !important;
+        eachRowCopy(state, id, function (copy) { copy.important = nextImportant; });
+        api().setFlags(id, { important: nextImportant }).catch(function (err) {
+          eachRowCopy(state, id, function (copy) { copy.important = !nextImportant; });
+          reportMailError(state, err);
+          render();
+        });
+        render();
+        return;
+      }
+
+      if (action === 'pin') {
+        applyBulkAction(root, state, render, ids, pinned ? 'unpin' : 'pin');
+        return;
+      }
+
+      applyBulkAction(root, state, render, ids, action === 'delete' ? 'trash' : action);
+    });
+  }
+
+  /* The three-dot button at the top of the open message. */
+  function openEmailMessageMenu(root, state, render, btn, id) {
+    var row = findAnyRow(state, id) || threadMessage(state, id);
+    if (!row) return;
+
+    btn.setAttribute('aria-expanded', 'true');
+
+    var unread = isRowUnread(row, state);
+    var inArchive = state.folder === 'archive' || row.folder === 'archive';
+
+    openEmailPointerMenu([
+      { id: 'reply', label: 'Reply', icon: 'ArrowBendUpLeft' },
+      { id: 'reply-all', label: 'Reply all', icon: 'ArrowBendDoubleUpLeft' },
+      { id: 'forward', label: 'Forward', icon: 'ArrowBendUpRight' },
+      { separator: true },
+      { id: 'window', label: 'Open in new window', icon: 'ArrowSquareOut' },
+      { id: 'print', label: 'Print', icon: 'Printer' },
+      { id: unread ? 'read' : 'unread', label: unread ? 'Mark as read' : 'Mark as unread',
+        icon: unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple' },
+      { separator: true },
+      { id: inArchive ? 'inbox' : 'archive', label: inArchive ? 'Move to inbox' : 'Archive',
+        icon: inArchive ? 'ArchiveTray' : 'Archive' },
+      { id: 'spam', label: 'Report spam', icon: 'WarningOctagon' },
+      { id: 'delete', label: 'Delete', icon: 'Trash', danger: true },
+    ], btn, function (action) {
+      if (action === 'reply' || action === 'reply-all' || action === 'forward') {
+        if (id !== state.selectedId) openMailMessage(root, state, render, id);
+        openInlineCompose(state, action);
+        render();
+        window.requestAnimationFrame(function () { focusInlineComposeEditor(root); });
+        return;
+      }
+
+      if (action === 'window') {
+        openMailInWindow(root, id);
+        return;
+      }
+
+      if (action === 'print') {
+        // Printing from here would print the whole portal around the message,
+        // so it goes through the standalone window, which is just the mail.
+        openMailInWindow(root, id, { print: true });
+        return;
+      }
+
+      if (action === 'read' || action === 'unread') {
+        setRowRead(state, id, action === 'read');
+        render();
+        return;
+      }
+
+      applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : action, null);
+    });
+  }
+
   function openEmailSnoozeMenu(root, anchor, onPick) {
     closeEmailSnoozeMenu(root);
     if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
@@ -6213,7 +7323,8 @@
     }
   }
 
-  function buildInboxRowHtml(row, state) {
+  function buildInboxRowHtml(row, state, opts) {
+    opts = opts || {};
     var active = state.selectedId === row.id;
     var unread = isRowUnread(row, state);
     var checked = isRowChecked(row, state);
@@ -6223,12 +7334,17 @@
     if (unread) rowCls += ' tma-dash__email-row--unread';
     else rowCls += ' tma-dash__email-row--read';
     if (checked) rowCls += ' tma-dash__email-row--selected';
+    // A message shown inside an opened conversation: indented under its parent
+    // and never carrying an arrow of its own.
+    if (opts.child) rowCls += ' tma-dash__email-row--child';
 
     var rowHtml =
-      '<div class="' + rowCls + '" data-email-row="' + esc(row.id) + '" role="button" tabindex="0">' +
-      '<label class="tma-dash__email-list-check">' +
-      '<input type="checkbox" class="tma-dash__check" data-email-check' + (checked ? ' checked' : '') + ' aria-label="Select ' + esc(row.sender) + '">' +
-      '</label>' +
+      '<div class="' + rowCls + '" data-email-row="' + esc(row.id) + '"' +
+      (opts.child ? ' data-email-row-child="' + esc(opts.parentId) + '"' : '') +
+      ' role="button" tabindex="0">' +
+      (opts.child
+        ? '<span class="tma-dash__email-row-thread-spacer" aria-hidden="true"></span>'
+        : renderConversationToggle(row, state)) +
       renderEmailRowFrontActions(row, state) +
       rowListAvatar(row, state) +
       '<div class="tma-dash__email-row-content">' +
@@ -6259,10 +7375,38 @@
       '</div>' +
       '</div>';
 
-    if (isEmailMobile() && state.folder === 'inbox') {
+    if (isEmailMobile() && state.folder === 'inbox' && !opts.child) {
       return buildEmailRowSwipeWrap(row, state, rowHtml);
     }
     return rowHtml;
+  }
+
+  /* The whole list body: the page, with each opened conversation's other
+   * messages inlined beneath the row they belong to. One function so the full
+   * render and the in-place patch can never disagree about what is on screen. */
+  function buildInboxRowsHtml(rows, state) {
+    return rows.map(function (row) {
+      var html = buildInboxRowHtml(row, state);
+      if (!isConversationOpen(state, row.id)) return html;
+
+      var children = conversationChildren(state, row.id);
+
+      if (!children) {
+        return html +
+          '<div class="tma-dash__email-thread-children" data-email-thread-children="' + esc(row.id) + '">' +
+          renderListSkeleton(Math.min(3, conversationCount(row) - 1)) +
+          '</div>';
+      }
+
+      return html +
+        '<div class="tma-dash__email-thread-children" data-email-thread-children="' + esc(row.id) + '">' +
+        (children.length
+          ? children.map(function (child) {
+            return buildInboxRowHtml(child, state, { child: true, parentId: row.id });
+          }).join('')
+          : '') +
+        '</div>';
+    }).join('');
   }
 
   function updateInboxList(root, state, render) {
@@ -6277,15 +7421,10 @@
     // while only the body patch changes — avoids the header "bulge" on pin /
     // archive updates.
     MORPH.patch(listBody, rows.length
-      ? rows.map(function (row) { return buildInboxRowHtml(row, state); }).join('')
-      : '<div class="tma-dash__email-list-empty">No messages</div>');
+      ? buildInboxRowsHtml(rows, state)
+      : renderListState(state, rows));
 
-    var selectAll = root.querySelector('[data-email-selectall]');
-    if (selectAll) {
-      var allChecked = rows.length > 0 && rows.every(function (row) { return isRowChecked(row, state); });
-      selectAll.checked = allChecked;
-      selectAll.indeterminate = false;
-    }
+    syncSelectAllBox(root, state);
 
     updateEmailListBulk(root, state);
     wireListRows(root, state, render);
@@ -6339,88 +7478,75 @@
         if (state.layoutStyle === 'single' || isEmailMobile()) state.reading = true;
         openMailMessage(root, state, render, id);
       });
+
+      /* Double-click opens the conversation in its own window — the reading
+       * pane keeps the single click, so nothing is taken away. */
+      rowEl.addEventListener('dblclick', function (event) {
+        if (isEmailRowSelectTarget(event.target)) return;
+        if (event.target.closest('.tma-dash__email-row-action')) return;
+        if (event.target.closest('[data-email-conversation-toggle]')) return;
+        event.preventDefault();
+        // Two fast clicks select the row's text; clear it or the new window
+        // opens behind a highlighted line.
+        if (window.getSelection) {
+          var selection = window.getSelection();
+          if (selection && selection.removeAllRanges) selection.removeAllRanges();
+        }
+        openMailInWindow(root, rowEl.getAttribute('data-email-row'));
+      });
+
+      /* Right-click gets the same actions as the hover bar and the bulk menu,
+       * at the pointer. */
+      rowEl.addEventListener('contextmenu', function (event) {
+        if (event.target.closest('a') || String(window.getSelection() || '')) return;
+        event.preventDefault();
+        openEmailRowMenu(root, state, render, rowEl.getAttribute('data-email-row'), {
+          x: event.clientX,
+          y: event.clientY,
+        });
+      });
     });
 
-    var selectAll = root.querySelector('[data-email-selectall]');
-    var rowChecks = Array.prototype.slice.call(root.querySelectorAll('[data-email-check]'));
+    /* The conversation arrow. Opening a conversation lists its other messages
+     * under the row and does nothing else — in particular it must not open the
+     * thread, or a glance at what is inside would mark it read. */
+    MORPH.unwired(root, '[data-email-conversation-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleConversation(root, state, render, btn.getAttribute('data-email-conversation-toggle'));
+      });
+    });
 
-    function syncRowCheck(cb, id) {
-      if (cb.checked) state.checkedIds[id] = true;
-      else delete state.checkedIds[id];
-      var rowEl = cb.closest('[data-email-row]');
-      if (rowEl) {
-        rowEl.classList.toggle('tma-dash__email-row--selected', cb.checked);
-        syncEmailRowAvatarSelect(rowEl, cb.checked);
-      }
-      updateEmailListBulk(root, state);
-    }
-
-    function syncEmailRowAvatarSelect(rowEl, checked) {
-      var avatarBtn = rowEl.querySelector('[data-email-avatar-select]');
-      if (!avatarBtn) return;
-      avatarBtn.classList.toggle('tma-dash__email-row-avatar-btn--selected', checked);
-      avatarBtn.setAttribute('aria-pressed', checked ? 'true' : 'false');
-      var check = avatarBtn.querySelector('.tma-dash__email-row-avatar-check');
-      if (checked && !check) {
-        avatarBtn.insertAdjacentHTML(
-          'beforeend',
-          '<span class="tma-dash__email-row-avatar-check" aria-hidden="true"><img src="' + ICONS.Check + '" alt=""></span>'
-        );
-      } else if (!checked && check) {
-        check.remove();
-      }
-    }
-
-    function syncSelectAll() {
-      if (!selectAll) return;
-      var checked = rowChecks.filter(function (cb) { return cb.checked; }).length;
-      selectAll.checked = checked === rowChecks.length && rowChecks.length > 0;
-      selectAll.indeterminate = checked > 0 && checked < rowChecks.length;
-    }
-
-    rowChecks.forEach(function (cb) {
-      var rowEl = cb.closest('[data-email-row]');
-      var id = rowEl ? rowEl.getAttribute('data-email-row') : '';
-
+    MORPH.unwired(root, '[data-email-check]').forEach(function (cb) {
       MORPH.on(cb, 'click', function (event) {
         event.stopPropagation();
       });
 
       MORPH.on(cb, 'change', function (event) {
         event.stopPropagation();
-        syncRowCheck(cb, id);
-        syncSelectAll();
-      });
-    });
-
-    MORPH.unwired(root, '[data-email-avatar-select]').forEach(function (btn) {
-      if (btn.dataset.bound) return;
-      btn.dataset.bound = '1';
-      MORPH.on(btn, 'click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        var rowEl = btn.closest('[data-email-row]');
+        var rowEl = cb.closest('[data-email-row]');
         if (!rowEl) return;
-        var id = rowEl.getAttribute('data-email-row');
-        var cb = rowEl.querySelector('[data-email-check]');
-        if (!cb) return;
-        cb.checked = !cb.checked;
-        syncRowCheck(cb, id);
-        syncSelectAll();
+        setRowSelected(root, state, render, rowEl.getAttribute('data-email-row'), cb.checked);
       });
     });
 
+    var selectAll = root.querySelector('[data-email-selectall]');
     if (selectAll) {
       MORPH.on(selectAll, 'change', function () {
-        rowChecks.forEach(function (cb) {
-          var rowEl = cb.closest('[data-email-row]');
-          var id = rowEl ? rowEl.getAttribute('data-email-row') : '';
-          cb.checked = selectAll.checked;
-          syncRowCheck(cb, id);
+        var on = selectAll.checked;
+        // Everything drawn, including the messages inside opened
+        // conversations — those are rows the reader can see and expects to be
+        // covered by "select all".
+        visibleRows(state).forEach(function (row) {
+          if (on) state.checkedIds[row.id] = true;
+          else delete state.checkedIds[row.id];
         });
         selectAll.indeterminate = false;
+        applySelectionToDom(root, state);
+        updateEmailListBulk(root, state);
       });
-      syncSelectAll();
+      syncSelectAllBox(root, state);
     }
 
     MORPH.unwired(root, '[data-email-refresh]').forEach(function (btn) {
@@ -6434,12 +7560,12 @@
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var id = btn.getAttribute('data-email-star');
-        var starRow = findRow(state, id);
+        var starRow = findAnyRow(state, id);
         if (!starRow) return;
-        starRow.starred = !starRow.starred;
-        var starred = !!starRow.starred;
+        var starred = !starRow.starred;
+        eachRowCopy(state, id, function (copy) { copy.starred = starred; });
         api().setFlags(id, { starred: starred }).catch(function (err) {
-          starRow.starred = !starred;
+          eachRowCopy(state, id, function (copy) { copy.starred = !starred; });
           reportMailError(state, err);
           render();
         });
@@ -6457,12 +7583,12 @@
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var id = btn.getAttribute('data-email-important');
-        var impRow = findRow(state, id);
+        var impRow = findAnyRow(state, id);
         if (!impRow) return;
-        impRow.important = !impRow.important;
-        var important = !!impRow.important;
+        var important = !impRow.important;
+        eachRowCopy(state, id, function (copy) { copy.important = important; });
         api().setFlags(id, { important: important }).catch(function (err) {
-          impRow.important = !important;
+          eachRowCopy(state, id, function (copy) { copy.important = !important; });
           reportMailError(state, err);
           render();
         });
@@ -6895,28 +8021,16 @@
           return;
         }
 
-        var toggleAll = event.target.closest('[data-email-thread-toggle-all]');
-        if (toggleAll) {
+        // The three-dot menu at the top of the open message.
+        var messageMenuBtn = event.target.closest('[data-email-message-menu]');
+        if (messageMenuBtn) {
           event.preventDefault();
-          setThreadExpansion(root, state, render, toggleAll.getAttribute('data-email-thread-toggle-all') === 'expand');
-          return;
-        }
-
-        var expandBtn = event.target.closest('[data-email-thread-expand]');
-        if (expandBtn) {
-          event.preventDefault();
-          expandThreadMessage(root, state, render, expandBtn.getAttribute('data-email-thread-expand'));
-          return;
-        }
-
-        // Collapsing an open card: the whole head is the control, so clicks on
-        // the actions inside it (star, reply, the recipient disclosure) must
-        // not also fold the message away underneath the reader.
-        var collapseEl = event.target.closest('[data-email-thread-collapse]');
-        if (collapseEl && !event.target.closest('.tma-dash__email-detail-actions') &&
-            !event.target.closest('[data-email-header-details-panel]')) {
-          event.preventDefault();
-          expandThreadMessage(root, state, render, collapseEl.getAttribute('data-email-thread-collapse'));
+          event.stopPropagation();
+          openEmailMessageMenu(
+            root, state, render,
+            messageMenuBtn,
+            messageMenuBtn.getAttribute('data-email-message-menu')
+          );
           return;
         }
 
@@ -6924,6 +8038,12 @@
         if (inlineComposeBtn && !inlineComposeBtn.closest('[data-email-inline-compose-panel]')) {
           var composeMode = inlineComposeBtn.getAttribute('data-email-inline-compose');
           if (composeMode === 'reply' || composeMode === 'reply-all' || composeMode === 'forward') {
+            // A head button names the message it sits on, so replying from a
+            // card that is not the selected one still answers the right mail.
+            var composeTarget = inlineComposeBtn.getAttribute('data-email-message-id');
+            if (composeTarget && composeTarget !== state.selectedId) {
+              openMailMessage(root, state, render, composeTarget);
+            }
             openInlineCompose(state, composeMode);
             render();
             window.requestAnimationFrame(function () {
@@ -7163,7 +8283,28 @@
       btn.addEventListener('click', function () {
         state.sidebarCollapsed = !state.sidebarCollapsed;
         saveSidebarCollapsed(state.sidebarCollapsed);
-        render();
+        // Collapsing means whatever the reader chose in settings — the icon
+        // rail, or nothing at all — so the two stay in step.
+        setMailSidebarMode(
+          root, state, render,
+          state.sidebarCollapsed ? (state.sidebarMode === 'hidden' ? 'hidden' : 'icons') : 'full'
+        );
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-category]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var category = btn.getAttribute('data-email-category');
+        if (!category || state.folder === category) return;
+        state.folder = category;
+        state.activeLabelId = null;
+        state.listFilter = 'all';
+        state.filterMenuOpen = false;
+        state.reading = false;
+        state.selectedId = null;
+        clearEmailSelection(state);
+        if (category === 'inbox') syncEmailUrl('inbox');
+        reloadMessages(root, state, render);
       });
     });
 
@@ -7443,6 +8584,7 @@
         if (state.layoutStyle === layout) return;
         state.layoutStyle = layout;
         saveLayoutStyle(layout);
+        persistMailPreference(state, 'layout', layout);
         if (layout === 'split') {
           state.reading = false;
         } else if (state.selectedId || (state.folder === 'templates' && state.selectedTemplateId)) {
@@ -7656,8 +8798,22 @@
       };
       if (pendingMessageId) {
         openMailById(root, root._emailState, root._emailRender, pendingMessageId);
-      } else {
-        root._emailRender();
+        return;
+      }
+
+      root._emailRender();
+
+      /*
+       * Opening Email is also the moment to retry a boot that failed.
+       *
+       * The mailbox bootstraps once, at app start, alongside everything else
+       * the shell wakes up. One blip there used to leave the page showing
+       * "could not reach the mailbox" for the rest of the session — the only
+       * way out was a browser refresh, which is exactly the complaint. This
+       * re-boots quietly instead, keeping whatever mail is already on screen.
+       */
+      if (root._emailState.bootstrapFailed || root._emailState.connected === null) {
+        bootstrapMailbox(root, root._emailState, root._emailRender);
       }
       return;
     }
@@ -7697,9 +8853,8 @@
       total: 0,
       perPageOptions: [25, 50, 100, 200],
       bodyLoading: false,
-      /* The open conversation: every message in it, which are expanded, and
-       * which have had their quoted history revealed. Null until a message is
-       * opened. */
+      /* The open conversation: every message in it, and which have had their
+       * quoted history revealed. Null until a message is opened. */
       thread: null,
       threadError: null,
       /* Which message the error belongs to, so selecting another one retries
@@ -7721,7 +8876,16 @@
       layoutStyle: loadLayoutStyle(),
       splitListRatio: loadSplitListRatio(),
       sidebarCollapsed: loadSidebarCollapsed(),
+      sidebarMode: loadSidebarMode(),
       sidebarGroups: loadSidebarGroups(),
+      /* Which conversations the reader has opened in the list, and the
+       * messages fetched for them. */
+      openConversations: {},
+      conversationRows: {},
+      inboxCategories: loadInboxCategories(),
+      showInboxCategories: true,
+      preferences: null,
+      listRefreshing: false,
       listFilter: 'all',
       filterMenuOpen: false,
       reading: false,
@@ -7736,6 +8900,9 @@
       if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
       closeEmailBulkMoreMenu(root, state);
       closeEmailLabelPopup(root, state);
+      // A menu anchored to a row that is about to be replaced would be left
+      // floating over nothing.
+      closeEmailPointerMenu();
       syncEmailHeaderSearch(root, state);
       ensureEmailMobileHeader(root, state);
       MORPH.patch(root,
@@ -7812,8 +8979,14 @@
       render();
     };
 
-    // Paint the shell first (sidebar, chrome, loading state), then fill it
-    // from the server — the page should never look blank while it waits.
+    // Paint what the last visit ended on before touching the network, so a
+    // reload comes back to real mail rather than to a skeleton. Nothing here
+    // is trusted: the bootstrap below overwrites all of it either way.
+    hydrateFromCache(state);
+
+    // Paint the shell first (sidebar, chrome, whatever the cache had), then
+    // fill it from the server — the page should never look blank while it
+    // waits.
     bindCurrentUser(render);
     render();
     bootstrapMailbox(root, state, render);
@@ -7829,6 +9002,12 @@
       var mailParams = new URLSearchParams(window.location.search);
       var mailNotice = mailParams.get('notice');
       var mailMessage = mailParams.get('message');
+      // Reply / Reply all / Forward in the standalone conversation window come
+      // back here as ?compose=, since composing belongs in the mailbox.
+      var mailCompose = mailParams.get('compose');
+      if (mailCompose === 'reply' || mailCompose === 'reply-all' || mailCompose === 'forward') {
+        state._pendingCompose = mailCompose;
+      }
       if (mailMessage) state._pendingMessageId = mailMessage;
       else if (pendingMessageId) state._pendingMessageId = pendingMessageId;
       if (mailNotice === 'mail-connected' || mailNotice === 'mail-error' || mailMessage) {
@@ -7836,6 +9015,7 @@
         mailParams.delete('notice');
         mailParams.delete('reason');
         mailParams.delete('message');
+        mailParams.delete('compose');
         var qs = mailParams.toString();
         window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
         if (mailNotice === 'mail-connected' || mailNotice === 'mail-error') {
@@ -7876,6 +9056,18 @@
       });
     }
   }
+
+  /*
+   * Ask for the mailbox now — before the shell finishes building itself, and
+   * long before anyone clicks Email.
+   *
+   * This file is deferred, so the DOM is already parsed here but the portal's
+   * own boot work (a few hundred milliseconds of synchronous rendering across
+   * a dozen modules) has not run yet. Two requests in flight across that gap
+   * is most of the difference between an inbox that is ready when opened and
+   * one that starts loading when opened.
+   */
+  primeMailbox();
 
   window.TMAEmail = {
     mount: mount,

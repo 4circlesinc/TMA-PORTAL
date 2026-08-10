@@ -42,6 +42,21 @@ class MailController extends Controller
     /** Page sizes the inbox's "per page" control offers. */
     public const PER_PAGE_OPTIONS = [25, 50, 100, 200];
 
+    /**
+     * Views that are a flag rather than a place. They read like folders to the
+     * client — same listing endpoint, same paging, same badge — but they select
+     * on a column instead of on `folder`, so a starred message stays in the
+     * inbox while also appearing under Starred.
+     */
+    public const VIRTUAL_FOLDERS = ['important', 'starred', 'pinned', 'snoozed'];
+
+    /** The flag column behind each of the three flag-shaped virtual views. */
+    private const VIRTUAL_FOLDER_COLUMNS = [
+        'important' => 'is_important',
+        'starred' => 'is_starred',
+        'pinned' => 'is_pinned',
+    ];
+
     /** Bootstrap: connection state, folder counts, labels. */
     public function index(Request $request): JsonResponse
     {
@@ -88,6 +103,11 @@ class MailController extends Controller
                 'syncedAt' => $account->mail_synced_at?->toIso8601String(),
             ],
             'folders' => $this->folderCounts($user->id),
+            // The reader's mail preferences travel with the bootstrap so the
+            // sidebar mode, layout and inbox categories are known before the
+            // first paint. Fetching them separately meant the mailbox opened
+            // in the default shape and then rearranged itself a moment later.
+            'preferences' => $this->mailPreferences($user->preferences ?? []),
             // Only user-created portal labels — do not surface provider-synced
             // defaults (Gmail categories, etc.) in the Labels section.
             'labels' => MailLabel::where('user_id', $user->id)
@@ -105,10 +125,14 @@ class MailController extends Controller
     public function messages(Request $request): JsonResponse
     {
         $data = $request->validate([
-            // `important` and `snoozed` are virtual views, not provider
-            // folders: they cut across the real folders by flag instead of
-            // by location.
-            'folder' => ['sometimes', 'string', 'in:'.implode(',', Mailbox::FOLDERS).',important,snoozed'],
+            // `important`, `starred`, `pinned` and `snoozed` are virtual views,
+            // not provider folders: they cut across the real folders by flag
+            // instead of by location. They are what the inbox category strip
+            // switches between, so they page and count like any other folder.
+            'folder' => [
+                'sometimes', 'string',
+                'in:'.implode(',', Mailbox::FOLDERS).','.implode(',', self::VIRTUAL_FOLDERS),
+            ],
             'q' => ['sometimes', 'nullable', 'string', 'max:200'],
             'label' => ['sometimes', 'nullable', 'string', 'uuid'],
             'page' => ['sometimes', 'integer', 'min:1'],
@@ -119,34 +143,31 @@ class MailController extends Controller
         $search = trim((string) ($data['q'] ?? ''));
 
         if ($search !== '') {
-            return response()->json(['messages' => $this->search($request, $search)]);
+            return response()->json([
+                'messages' => $this->withThreadCounts($this->search($request, $search), $user->id),
+            ]);
         }
 
         $folder = $data['folder'] ?? 'inbox';
+        $labelUuid = $data['label'] ?? null;
 
         $query = MailMessage::query()
             ->with(['labels', 'attachments'])
             ->where('user_id', $user->id);
 
-        if ($folder === 'important') {
-            // Spam, trash and drafts are excluded the way Gmail's Important
-            // view excludes them — flagged junk is still junk. Snoozed mail
-            // is resting: it shows up here again when it wakes.
-            $query->where('is_important', true)
-                ->whereNotIn('folder', ['trash', 'spam', 'draft'])
-                ->whereNull('snoozed_until');
-        } elseif ($folder === 'snoozed') {
-            $query->whereNotNull('snoozed_until')
-                ->orderBy('snoozed_until');
-        } else {
-            // A snoozed message hides from its real folder until it wakes —
-            // that is the whole point of snoozing it.
-            $query->where('folder', $folder)
-                ->whereNull('snoozed_until');
+        $this->scopeToFolder($query, $folder, 'mail_messages');
+
+        if ($labelUuid) {
+            $query->whereHas('labels', fn ($q) => $q->where('uuid', $labelUuid));
         }
 
-        if ($labelUuid = $data['label'] ?? null) {
-            $query->whereHas('labels', fn ($q) => $q->where('uuid', $labelUuid));
+        if ($folder === 'snoozed') {
+            $query->orderBy('snoozed_until');
+        }
+
+        // Conversation view: one row per conversation instead of per message.
+        if ($this->mailPreferences($user->preferences ?? [])['conversationView']) {
+            $this->onlyNewestInThread($query, $user->id, $folder, $labelUuid);
         }
 
         $perPage = (int) ($data['perPage'] ?? self::PER_PAGE);
@@ -159,7 +180,10 @@ class MailController extends Controller
             ->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
 
         return response()->json([
-            'messages' => $this->withAvatars(collect($page->items())),
+            'messages' => $this->withThreadCounts(
+                $this->withAvatars(collect($page->items())),
+                $user->id,
+            ),
             'total' => $page->total(),
             'hasMore' => $page->hasMorePages(),
             'page' => $page->currentPage(),
@@ -546,6 +570,163 @@ class MailController extends Controller
     }
 
     /**
+     * The folder predicate, written against a given table or alias.
+     *
+     * Conversation grouping has to apply exactly the same scope to its inner
+     * query as the listing does to its outer one — otherwise a thread whose
+     * newest message happens to sit in Sent would drop out of the Inbox.
+     *
+     * @param  \Illuminate\Contracts\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
+     */
+    private function scopeToFolder($query, string $folder, string $table): void
+    {
+        if (in_array($folder, ['important', 'starred', 'pinned'], true)) {
+            // Spam, trash and drafts are excluded the way Gmail's Important
+            // view excludes them — flagged junk is still junk. Snoozed mail is
+            // resting: it shows up here again when it wakes.
+            $query->where($table.'.'.self::VIRTUAL_FOLDER_COLUMNS[$folder], true)
+                ->whereNotIn($table.'.folder', ['trash', 'spam', 'draft'])
+                ->whereNull($table.'.snoozed_until');
+
+            return;
+        }
+
+        if ($folder === 'snoozed') {
+            $query->whereNotNull($table.'.snoozed_until');
+
+            return;
+        }
+
+        // A snoozed message hides from its real folder until it wakes — that
+        // is the whole point of snoozing it.
+        $query->where($table.'.folder', $folder)
+            ->whereNull($table.'.snoozed_until');
+    }
+
+    /**
+     * Keep only the newest message of each conversation.
+     *
+     * Without this a three-message thread is three rows that look like three
+     * separate emails, each carrying its own expand arrow onto the same two
+     * siblings. The row kept is the newest of the thread *within this folder*;
+     * its arrow then opens the whole conversation, wherever the rest lives.
+     *
+     * Written as an anti-join rather than a group-by so the listing can still
+     * be answered by walking the (user_id, folder, sent_at) index backwards.
+     * A mailbox here holds tens of thousands of messages, and grouping all of
+     * them to return fifty rows does not scale.
+     */
+    private function onlyNewestInThread(
+        \Illuminate\Database\Eloquent\Builder $query,
+        int $userId,
+        string $folder,
+        ?string $labelUuid,
+    ): void {
+        $query->where(function ($outer) use ($userId, $folder, $labelUuid) {
+            // A provider that left the thread id empty gives a thread of one.
+            // Grouping on an empty value would fold every such message into a
+            // single row, which is how a mailbox loses mail.
+            $outer->whereNull('mail_messages.thread_id')
+                ->orWhereNotExists(function ($inner) use ($userId, $folder, $labelUuid) {
+                    $inner->selectRaw('1')
+                        ->from('mail_messages as newer')
+                        ->where('newer.user_id', $userId)
+                        ->whereColumn('newer.thread_id', 'mail_messages.thread_id')
+                        // Ties on sent_at are broken by id so exactly one
+                        // message in a thread survives, never zero or two.
+                        ->where(function ($later) {
+                            $later->whereColumn('newer.sent_at', '>', 'mail_messages.sent_at')
+                                ->orWhere(function ($sameInstant) {
+                                    $sameInstant
+                                        ->whereColumn('newer.sent_at', '=', 'mail_messages.sent_at')
+                                        ->whereColumn('newer.id', '>', 'mail_messages.id');
+                                });
+                        });
+
+                    $this->scopeToFolder($inner, $folder, 'newer');
+
+                    if ($labelUuid) {
+                        $inner->whereExists(function ($tagged) use ($labelUuid) {
+                            $tagged->selectRaw('1')
+                                ->from('mail_label_message')
+                                ->join('mail_labels', 'mail_labels.id', '=', 'mail_label_message.mail_label_id')
+                                ->whereColumn('mail_label_message.mail_message_id', 'newer.id')
+                                ->where('mail_labels.uuid', $labelUuid);
+                        });
+                    }
+                });
+        });
+    }
+
+    /**
+     * How many messages each row's conversation holds.
+     *
+     * The list draws its expand arrow from this, and it must be exact: an arrow
+     * on a one-message conversation opens onto nothing, which reads as broken.
+     * One grouped query for the whole page, over the existing
+     * (user_id, thread_id) index — never a count per row.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function withThreadCounts(array $rows, int $userId): array
+    {
+        $threadIds = collect($rows)
+            ->pluck('threadId')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $counts = $threadIds->isEmpty() ? collect() : MailMessage::query()
+            ->selectRaw('thread_id, count(*) as total')
+            ->where('user_id', $userId)
+            ->whereIn('thread_id', $threadIds->all())
+            // Drafts belong to the compose window, not the transcript, so they
+            // must not inflate the count either.
+            ->where('folder', '!=', 'draft')
+            ->groupBy('thread_id')
+            ->pluck('total', 'thread_id');
+
+        return collect($rows)->map(function (array $row) use ($counts): array {
+            $row['threadCount'] = max(1, (int) $counts->get((string) ($row['threadId'] ?? ''), 1));
+
+            return $row;
+        })->all();
+    }
+
+    /**
+     * The rest of a conversation, as list rows, for the inbox's expand arrow.
+     *
+     * Deliberately not {@see thread}: this never touches the provider and never
+     * hydrates a body. Opening a dropdown in the message list is a glance, not
+     * a read — it must cost one local query, or expanding a few conversations
+     * would stall the inbox behind a queue of provider round trips.
+     */
+    public function conversation(Request $request, string $uuid): JsonResponse
+    {
+        $message = $this->findMessage($request, $uuid);
+
+        $messages = $message->thread_id
+            ? MailMessage::query()
+                ->with(['attachments', 'labels'])
+                ->where('user_id', $request->user()->id)
+                ->where('thread_id', $message->thread_id)
+                ->where('folder', '!=', 'draft')
+                ->orderByDesc('sent_at')
+                ->orderByDesc('id')
+                ->get()
+            : collect([$message->load(['attachments', 'labels'])]);
+
+        return response()->json([
+            'threadId' => $message->thread_id,
+            'messages' => $this->withThreadCounts(
+                $this->withAvatars($messages),
+                $request->user()->id,
+            ),
+        ]);
+    }
+
+    /**
      * The same sender-picture resolution as {@see withAvatars}, but over the
      * full record each thread card needs rather than the list row.
      *
@@ -663,6 +844,42 @@ class MailController extends Controller
             'subject' => $messages->first()?->subject ?? $message->subject,
             'messages' => $this->withThreadAvatars($messages),
         ]);
+    }
+
+    /**
+     * The conversation as its own window — what a double-click, or the row
+     * menu's "Open in new window", opens.
+     *
+     * Server-rendered on purpose. The point of this window is that the mail is
+     * *there* when it appears; booting the portal shell to fetch a thread would
+     * put a loading screen in front of a message the reader has already asked
+     * twice to see. Bodies still render inside a sandboxed frame, exactly as
+     * they do in the reading pane — they are attacker-controlled either way.
+     */
+    public function window(Request $request, string $uuid): SymfonyResponse
+    {
+        $message = $this->findMessage($request, $uuid);
+
+        $this->hydrate($message);
+        $message->load(['labels', 'attachments']);
+
+        $messages = $message->thread_id
+            ? MailMessage::query()
+                ->with(['attachments', 'labels'])
+                ->where('user_id', $request->user()->id)
+                ->where('thread_id', $message->thread_id)
+                ->where('folder', '!=', 'draft')
+                ->orderBy('sent_at')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (MailMessage $m) => $m->id === $message->id ? $message : $m)
+            : collect([$message]);
+
+        return response()->view('mail.window', [
+            'opened' => $message,
+            'messages' => $messages,
+            'subject' => $messages->first()?->subject ?: '(no subject)',
+        ])->header('Cache-Control', 'no-store, private');
     }
 
     /**
@@ -1557,6 +1774,11 @@ class MailController extends Controller
             'preferences.conversationView' => ['sometimes', 'boolean'],
             'preferences.previewPane' => ['sometimes', 'boolean'],
             'preferences.undoSendSeconds' => ['sometimes', 'integer', 'min:0', 'max:30'],
+            'preferences.sidebarMode' => ['sometimes', 'string', 'in:full,icons,hidden'],
+            'preferences.layout' => ['sometimes', 'string', 'in:split,single'],
+            'preferences.inboxCategories' => ['sometimes', 'array'],
+            'preferences.inboxCategories.*' => ['string', 'in:'.implode(',', self::INBOX_CATEGORIES)],
+            'preferences.showInboxCategories' => ['sometimes', 'boolean'],
         ]);
 
         $user = $request->user();
@@ -1583,9 +1805,13 @@ class MailController extends Controller
 
         if (isset($data['preferences'])) {
             $current = $user->preferences ?? [];
-            $current['mail'] = array_merge(
-                $current['mail'] ?? [],
-                $this->mailPreferences($data['preferences'], raw: true),
+
+            // Merge the incoming keys *onto what is stored* before normalising.
+            // Normalising the payload on its own fills every absent key with
+            // its default, so saving one preference silently reset the rest.
+            $current['mail'] = $this->mailPreferences(
+                array_merge($current['mail'] ?? [], $data['preferences']),
+                raw: true,
             );
 
             $user->forceFill(['preferences' => $current])->save();
@@ -1593,6 +1819,9 @@ class MailController extends Controller
 
         return $this->settings($request);
     }
+
+    /** Inbox category strips the reader may switch on, beyond Inbox itself. */
+    public const INBOX_CATEGORIES = ['important', 'starred', 'pinned'];
 
     /** Mail preference defaults, kept alongside the rest in users.preferences. */
     private function mailPreferences(array $stored, bool $raw = false): array
@@ -1603,11 +1832,35 @@ class MailController extends Controller
             'conversationView' => true,
             'previewPane' => true,
             'undoSendSeconds' => 5,
+            // How the mailbox's own sidebar draws: icons and labels, icons
+            // only, or nothing at all while it is collapsed.
+            'sidebarMode' => 'full',
+            // Split keeps folders, list and message on screen together; single
+            // gives the list the full width and opens messages over it.
+            'layout' => 'split',
+            // Which category tabs sit above the inbox, in the order shown.
+            'inboxCategories' => self::INBOX_CATEGORIES,
+            'showInboxCategories' => true,
         ];
 
         $source = $raw ? $stored : ($stored['mail'] ?? []);
+        $merged = array_merge($defaults, array_intersect_key($source, $defaults));
 
-        return array_merge($defaults, array_intersect_key($source, $defaults));
+        // A stored value from an older client (or a hand-edited row) must never
+        // put the UI into a state it has no rendering for.
+        if (! in_array($merged['sidebarMode'], ['full', 'icons', 'hidden'], true)) {
+            $merged['sidebarMode'] = 'full';
+        }
+        if (! in_array($merged['layout'], ['split', 'single'], true)) {
+            $merged['layout'] = 'split';
+        }
+        $merged['inboxCategories'] = collect((array) $merged['inboxCategories'])
+            ->filter(fn ($id) => in_array($id, self::INBOX_CATEGORIES, true))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $merged;
     }
 
     /**
@@ -1639,20 +1892,22 @@ class MailController extends Controller
             ];
         }
 
-        // The Important view is a flag, not a folder, so it needs its own
-        // pass; scope matches the listing (no trash / spam / drafts).
-        $important = MailMessage::query()
-            ->selectRaw('count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
-            ->where('user_id', $userId)
-            ->where('is_important', true)
-            ->whereNotIn('folder', ['trash', 'spam', 'draft'])
-            ->whereNull('snoozed_until')
-            ->first();
+        // Important, Starred and Pinned are flags, not folders, so each needs
+        // its own pass; scope matches the listing (no trash / spam / drafts).
+        foreach (self::VIRTUAL_FOLDER_COLUMNS as $view => $column) {
+            $row = MailMessage::query()
+                ->selectRaw('count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
+                ->where('user_id', $userId)
+                ->where($column, true)
+                ->whereNotIn('folder', ['trash', 'spam', 'draft'])
+                ->whereNull('snoozed_until')
+                ->first();
 
-        $counts['important'] = [
-            'total' => (int) ($important->total ?? 0),
-            'unread' => (int) ($important->unread ?? 0),
-        ];
+            $counts[$view] = [
+                'total' => (int) ($row->total ?? 0),
+                'unread' => (int) ($row->unread ?? 0),
+            ];
+        }
 
         $snoozed = MailMessage::query()
             ->selectRaw('count(*) as total, sum(case when is_read then 0 else 1 end) as unread')

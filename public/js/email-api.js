@@ -102,6 +102,20 @@
       return mailFetch(BASE + '/messages/' + encodeURIComponent(id) + '/thread');
     },
 
+    /* The same conversation as plain list rows, for the inbox's expand arrow.
+     * Deliberately not getThread: this never reaches the provider and never
+     * hydrates a body, because opening a dropdown in the list is a glance —
+     * it must not cost a round trip per message. */
+    conversation: function (id) {
+      return mailFetch(BASE + '/messages/' + encodeURIComponent(id) + '/conversation');
+    },
+
+    /* Where a double-clicked conversation opens. Server-rendered, so the
+     * window has the mail in it the moment it appears. */
+    windowUrl: function (id) {
+      return BASE + '/window/' + encodeURIComponent(id);
+    },
+
     /* Read / starred flags. */
     setFlags: function (id, flags) {
       return mailFetch(BASE + '/messages/' + encodeURIComponent(id), {

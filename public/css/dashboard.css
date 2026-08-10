@@ -9609,34 +9609,41 @@
   padding-right: var(--space-4);
 }
 
-.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count {
+/* In the rail there is no room for a trailing count, so it moves to the
+   icon's corner — still plain text, not a badge. The card-coloured halo is
+   what keeps it legible where it overlaps the glyph. */
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count,
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count--unread {
   position: absolute;
-  top: 3px;
-  right: 10px;
-  /* Overrides the expanded pill's own metrics — in the rail it is a corner
-     badge on the icon, not a trailing count. */
-  line-height: 1;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: 2px;
+  right: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  background: var(--color-primary, #03a5e9);
-  color: #fff;
+  min-width: 0;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: 0;
+  background: none;
+  color: var(--color-text-muted);
   font-size: 10px;
   line-height: 1;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px var(--color-white, #fff);
+  font-weight: 400;
+  text-shadow:
+    0 0 3px var(--color-bg-card, #fff), 0 0 3px var(--color-bg-card, #fff),
+    0 0 3px var(--color-bg-card, #fff);
+  box-shadow: none;
   pointer-events: none;
 }
 
-/* The collapsed count is a filled blue badge, so its number must stay white
- * even on the active folder — otherwise the active-folder colour rule below
- * paints it dark-blue-on-blue and the number vanishes (the "empty pill"). */
-.tma-dash__email-sidebar--collapsed .tma-dash__email-folder--active .tma-dash__email-folder-count {
-  color: #fff;
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder-count--unread {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder--active .tma-dash__email-folder-count,
+.tma-dash__email-sidebar--collapsed .tma-dash__email-folder--active .tma-dash__email-folder-count--unread {
+  color: var(--color-text-primary);
 }
 
 /* The blue compose button keeps its white "+" centered with no badge slot. */
@@ -10353,30 +10360,32 @@
 }
 
 /*
- * Two kinds of count, deliberately different.
+ * One kind of count: a small, plain number beside the folder name.
  *
- * A plain total ("how many drafts") is quiet grey text. Unread gets the Feed's
- * filled pill (.tma-dash__feed-channel-unread), because that is the one that
- * is asking to be dealt with.
+ * Unread used to get a filled blue pill. At sidebar size a coloured circle
+ * around a two-digit number is the loudest thing on the page — it read as an
+ * alert on a folder that is simply doing its job. "Inbox 24" says the same
+ * thing and lets the folder names lead.
  */
-.tma-dash__email-folder-count {
+.tma-dash__email-folder-count,
+.tma-dash__email-folder-count--unread {
   flex-shrink: 0;
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
   font-size: var(--text-size-12);
   line-height: 16px;
+  font-weight: 400;
+  text-align: right;
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
+/* Unread still reads first — as weight and ink, not as a badge. */
 .tma-dash__email-folder-count--unread {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: var(--radius-pill);
-  background: var(--color-primary);
-  color: #fff;
-  font-size: 10px;
-  line-height: 18px;
+  color: var(--color-text-primary);
   font-weight: 600;
-  text-align: center;
 }
 
 .tma-dash__email-folder--active {
@@ -10385,12 +10394,9 @@
   font-weight: 600;
 }
 
-.tma-dash__email-folder--active .tma-dash__email-folder-count {
-  color: var(--color-text-primary);
-}
-
+.tma-dash__email-folder--active .tma-dash__email-folder-count,
 .tma-dash__email-folder--active .tma-dash__email-folder-count--unread {
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .tma-dash__email-folder--active img {
@@ -10424,14 +10430,13 @@
   transition: background 140ms ease, transform 60ms ease;
 }
 
-.tma-dash__email-folder--compose:hover {
-  background: var(--color-primary-dark);
-}
-
+/* No lift on hover: the drop shadow made the button look like it had come
+   away from the sidebar every time the pointer crossed it. The darker fill is
+   feedback enough. */
 .tma-dash__email-folder--compose:hover,
 .tma-dash__email-folder--compose.tma-dash__email-folder--active {
-  background: var(--color-primary, #03a5e9);
-  box-shadow: 0 2px 6px rgba(3, 62, 96, 0.32);
+  background: var(--color-primary-dark, #0288c2);
+  box-shadow: none;
 }
 
 .tma-dash__email-folder--compose:active {
@@ -11390,8 +11395,391 @@
 /* Pull the star/flag in closer to the checkbox specifically — the row's
    general gap (used between the avatar, content and side columns too) left
    this pair looking oddly far from it. */
-.tma-dash__email-list-check + .tma-dash__email-row-front-actions {
+.tma-dash__email-list-check + .tma-dash__email-row-front-actions,
+.tma-dash__email-row-thread-toggle + .tma-dash__email-row-front-actions,
+.tma-dash__email-row-thread-spacer + .tma-dash__email-row-front-actions {
   margin-left: -6px;
+}
+
+/* ── the conversation arrow ────────────────────────────────────────
+ *
+ * Only on rows whose conversation actually holds more than one message; every
+ * other row gets the spacer, so senders and subjects stay on one column down
+ * the list. Opening it lists the rest of the conversation in place — it never
+ * opens the reading pane.
+ */
+.tma-dash__email-row-thread-toggle,
+.tma-dash__email-row-thread-spacer {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.tma-dash__email-row-thread-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-6, 6px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.tma-dash__email-row-thread-toggle:hover {
+  background: var(--color-overlay-8, rgba(0, 0, 0, 0.08));
+}
+
+.tma-dash__email-row-thread-toggle img {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+  transition: transform 140ms ease;
+}
+
+.tma-dash__email-row-thread-toggle--open img {
+  transform: rotate(180deg);
+}
+
+.tma-dash__email-row-thread-count {
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Messages listed under an opened conversation: indented, and on a faintly
+   inset ground so it is obvious where the conversation starts and ends. */
+.tma-dash__email-thread-children {
+  background: var(--color-hover, rgba(0, 0, 0, 0.03));
+  border-bottom: 1px solid var(--color-overlay-4);
+}
+
+/* Indented enough to read as "inside the conversation", not so much that the
+   list pane's already narrow subject column loses another 50px. */
+.tma-dash__email-row--child {
+  padding-left: calc(var(--email-pad) + var(--space-12));
+  border-bottom: 1px solid var(--color-overlay-4);
+  min-height: 48px;
+}
+
+.tma-dash__email-row--child .tma-dash__email-row-thread-spacer {
+  display: none;
+}
+
+.tma-dash__email-thread-children > .tma-dash__email-row--child:last-child {
+  border-bottom: 0;
+}
+
+/* ── row selection: the avatar is the checkbox ─────────────────────
+ *
+ * The picture is what is normally shown; hovering the row (or selecting it)
+ * swaps in the tick box. Both are always in the DOM — only their opacity
+ * changes — so the real <input> keeps driving selection, keyboard focus and
+ * the select-all, and nothing has to be re-rendered to make the swap.
+ */
+.tma-dash__email-row-select {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tma-dash__email-row-select-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tma-dash__email-row-select-face,
+.tma-dash__email-row-select-box {
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.tma-dash__email-row-select-face {
+  display: inline-flex;
+}
+
+.tma-dash__email-row-select-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--color-border-strong, rgba(0, 0, 0, 0.28));
+  border-radius: var(--radius-4, 4px);
+  background: var(--color-white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.tma-dash__email-row-select-box img {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  filter: brightness(0) invert(1);
+}
+
+.tma-dash__email-row:hover .tma-dash__email-row-select-box,
+.tma-dash__email-row-select:focus-within .tma-dash__email-row-select-box,
+.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box {
+  opacity: 1;
+}
+
+.tma-dash__email-row:hover .tma-dash__email-row-select-face,
+.tma-dash__email-row-select:focus-within .tma-dash__email-row-select-face,
+.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-face {
+  opacity: 0;
+}
+
+.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box img {
+  opacity: 1;
+}
+
+.tma-dash__email-row-select:focus-within .tma-dash__email-row-select-box {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── inbox category tabs ───────────────────────────────────────────── */
+.tma-dash__email-categories {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--email-pad);
+  border-bottom: 1px solid var(--color-overlay-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tma-dash__email-categories::-webkit-scrollbar { display: none; }
+
+.tma-dash__email-category {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex: 0 0 auto;
+  padding: var(--space-6) var(--space-10);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tma-dash__email-category img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.tma-dash__email-category:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__email-category--active {
+  background: var(--color-hover-deep);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.tma-dash__email-category--active img { opacity: 1; }
+
+.tma-dash__email-category-count {
+  font-size: var(--text-size-12);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── skeleton rows ─────────────────────────────────────────────────
+ *
+ * Shaped like the mail they stand in for, so the list fills in rather than
+ * jumping. Uses the shared .tma-skeleton shimmer from portal.css.
+ */
+.tma-dash__email-row--skeleton {
+  pointer-events: none;
+  background: transparent;
+}
+
+.tma-dash__email-skeleton-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: block;
+}
+
+.tma-dash__email-skeleton-line {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-4, 4px);
+}
+
+.tma-dash__email-skeleton-line--sender { width: 34%; }
+.tma-dash__email-skeleton-line--subject { width: 62%; }
+.tma-dash__email-skeleton-line--snippet { width: 82%; }
+
+.tma-dash__email-skeleton-time {
+  display: block;
+  width: 34px;
+  height: 10px;
+  border-radius: var(--radius-4, 4px);
+}
+
+.tma-dash__email-message--skeleton {
+  pointer-events: none;
+}
+
+.tma-dash__email-skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-16) var(--space-20);
+}
+
+.tma-dash__email-skeleton-body .tma-skeleton--text {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-4, 4px);
+}
+
+.tma-dash__email-skeleton-body .tma-skeleton--text:nth-child(2) { width: 92%; }
+.tma-dash__email-skeleton-body .tma-skeleton--text:nth-child(3) { width: 78%; }
+.tma-dash__email-skeleton-body .tma-skeleton--text:nth-child(4) { width: 56%; }
+
+/* The shared empty state sits in the middle of the list rather than at the
+   top of it — an illustration hard against the toolbar reads as a broken row. */
+.tma-dash__email-list-empty--illustrated {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: var(--space-32) var(--space-20);
+}
+
+/* A note, not a control: the conversation is navigated from the list now. */
+.tma-dash__email-thread-note {
+  margin: 0 0 var(--space-12);
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+/* ── row / message context menu ────────────────────────────────────── */
+.tma-dash__email-context-menu {
+  position: fixed;
+  z-index: 140;
+  min-width: 220px;
+  padding: var(--space-4);
+  border: 1px solid var(--color-overlay-8);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  box-shadow: var(--shadow-menu, 0 12px 32px rgba(0, 0, 0, 0.16));
+}
+
+.tma-dash__email-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  width: 100%;
+  padding: var(--space-8) var(--space-10);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__email-context-menu-item:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__email-context-menu-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  opacity: 0.72;
+}
+
+.tma-dash__email-context-menu-item.is-active .tma-dash__email-context-menu-icon {
+  opacity: 1;
+}
+
+.tma-dash__email-context-menu-item--danger {
+  color: var(--color-danger, #d92d20);
+}
+
+.tma-dash__email-context-menu-divider {
+  height: 1px;
+  margin: var(--space-4) var(--space-6);
+  background: var(--color-overlay-8);
+}
+
+/* ── settings: segmented choice ────────────────────────────────────── */
+.tma-dash__email-settings-choice {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  border: 1px solid var(--color-overlay-8);
+  border-radius: var(--radius-8);
+  background: var(--color-bg-subtle, rgba(0, 0, 0, 0.03));
+}
+
+.tma-dash__email-settings-choice-btn {
+  padding: var(--space-4) var(--space-10);
+  border: 0;
+  border-radius: var(--radius-6, 6px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-size-12);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tma-dash__email-settings-choice-btn.is-active {
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.tma-dash__email-settings-categories {
+  padding-left: var(--space-12);
+}
+
+/* Collapsed to nothing at all — the third Email sidebar mode. The list head's
+   folder button is what brings it back. */
+.tma-dash__email-sidebar--hidden {
+  display: none !important;
 }
 
 .tma-dash__email-row-side {
@@ -12135,99 +12523,9 @@
   background: var(--color-overlay-8, var(--color-overlay-4));
 }
 
-.tma-dash__email-thread-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-12);
-  padding: var(--space-8) var(--email-pad);
-  border-bottom: 1px solid var(--color-overlay-4);
-}
-
-.tma-dash__email-thread-count {
-  font-size: var(--font-size-12);
-  color: var(--color-text-secondary);
-}
-
-.tma-dash__email-thread-expand-all {
-  padding: var(--space-4) var(--space-8);
-  border: 0;
-  border-radius: var(--radius-8);
-  background: transparent;
-  color: var(--color-text-link, var(--color-text-secondary));
-  font-size: var(--font-size-12);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.tma-dash__email-thread-expand-all:hover {
-  background: var(--color-overlay-4);
-}
-
-/* A divider between messages, never above the first one. */
-.tma-dash__email-message + .tma-dash__email-message {
-  border-top: 1px solid var(--color-overlay-4);
-}
-
-.tma-dash__email-message--collapsed {
-  display: block;
-}
-
-.tma-dash__email-message-collapsed-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  width: 100%;
-  padding: var(--space-10) var(--email-pad);
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.tma-dash__email-message-collapsed-btn:hover {
-  background: var(--color-overlay-2, var(--color-overlay-4));
-}
-
-.tma-dash__email-message-collapsed-name {
-  font-size: var(--font-size-13);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-  flex: none;
-}
-
-/* The snippet takes whatever room is left and truncates — a collapsed message
- * is one line, however long the message under it is. */
-.tma-dash__email-message-collapsed-snippet {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--font-size-13);
-  color: var(--color-text-secondary);
-}
-
-.tma-dash__email-message-collapsed-clip {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  opacity: 0.6;
-}
-
-.tma-dash__email-message-collapsed-date {
-  flex: none;
-  font-size: var(--font-size-12);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
-/* The head of an expanded card doubles as its collapse control. */
-.tma-dash__email-message-head-wrap {
-  cursor: pointer;
-}
+/* The conversation is navigated from the list's dropdown now, so the reading
+ * pane holds exactly one message — the collapsed sibling cards, the
+ * expand-all control and the click-to-collapse head have all gone with it. */
 
 .tma-dash__email-quote-toggle {
   align-self: flex-start;
@@ -12247,7 +12545,6 @@
   background: var(--color-overlay-8, var(--color-overlay-4));
 }
 
-.tma-dash__email-thread-loading,
 .tma-dash__email-thread-error {
   padding: var(--email-pad);
   font-size: var(--font-size-13);
@@ -12258,7 +12555,6 @@
   color: var(--color-danger, #b42318);
 }
 
-.tma-dash__email-body-loading,
 .tma-dash__email-body-error {
   font-size: var(--font-size-13);
   color: var(--color-text-secondary);
@@ -13322,13 +13618,32 @@
   .tma-dash__email-list-check,
   .tma-dash__email-row-front-actions,
   .tma-dash__email-row-actions-bar,
-  .tma-dash__email-row-hover-actions {
+  .tma-dash__email-row-hover-actions,
+  .tma-dash__email-row-thread-spacer {
     display: none !important;
   }
 
-  .tma-dash__email-row-icon,
-  .tma-dash__email-row-avatar,
-  .tma-dash__email-row-avatar-btn {
+  /* The arrow overlays the avatar's bottom corner: the mobile row is a
+     three-column grid with no room for a column of its own. */
+  .tma-dash__email-row-thread-toggle {
+    grid-column: 1;
+    grid-row: 3;
+    align-self: end;
+    justify-self: start;
+    flex-direction: row;
+    gap: 1px;
+    width: auto;
+    height: 16px;
+    padding: 0 3px;
+    background: var(--color-bg-card);
+    border-radius: var(--radius-pill);
+  }
+
+  .tma-dash__email-row--child {
+    padding-left: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px));
+  }
+
+  .tma-dash__email-row-select {
     grid-column: 1;
     grid-row: 1 / span 3;
     width: 40px;
@@ -13337,49 +13652,29 @@
     margin-top: 2px;
   }
 
-  .tma-dash__email-row-avatar-btn {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    cursor: pointer;
-    flex-shrink: 0;
-    overflow: hidden;
+  .tma-dash__email-row-icon,
+  .tma-dash__email-row-avatar {
+    width: 40px;
+    height: 40px;
   }
 
-  .tma-dash__email-row-avatar-btn .tma-dash__email-row-avatar,
-  .tma-dash__email-row-avatar-btn .tma-dash__email-row-icon {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    grid-column: auto;
-    grid-row: auto;
+  /* There is no hover on a touch screen, so the tick box only ever appears
+     once the row is actually selected — tapping the picture is what selects
+     it, and tapping anywhere else opens the mail. */
+  .tma-dash__email-row:hover .tma-dash__email-row-select-box {
+    opacity: 0;
   }
 
-  .tma-dash__email-row-avatar-btn--selected .tma-dash__email-row-avatar,
-  .tma-dash__email-row-avatar-btn--selected .tma-dash__email-row-icon {
-    opacity: 0.35;
+  .tma-dash__email-row:hover .tma-dash__email-row-select-face {
+    opacity: 1;
   }
 
-  .tma-dash__email-row-avatar-check {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.45);
-    pointer-events: none;
+  .tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box {
+    opacity: 1;
   }
 
-  .tma-dash__email-row-avatar-check img {
-    width: 20px;
-    height: 20px;
-    filter: brightness(0) invert(1);
+  .tma-dash__email-row-select.is-checked .tma-dash__email-row-select-face {
+    opacity: 0;
   }
 
   .tma-dash__email-row-content {
