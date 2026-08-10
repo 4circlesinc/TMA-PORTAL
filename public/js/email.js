@@ -109,8 +109,8 @@
    * Mirrored from the server preference so it follows the account; kept in
    * localStorage too so the very first paint is already right. */
   var SIDEBAR_MODE_KEY = 'tma.email.sidebarMode';
-  /* v2: pinned-first daily strip (sent/draft/trash…) — old saves lacked those. */
-  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v2';
+  /* v3: fixed daily strip order (pin → archive). */
+  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v3';
   var SPLIT_RATIO_MIN = 0.22;
   var SPLIT_RATIO_MAX = 0.78;
   // Inbox list narrower than the reading pane by default.
@@ -143,9 +143,8 @@
   /* ── sidebar display mode ────────────────────────────────────────
    * Three settings, one control. "Full" is the open card; "Icons only" is the
    * rail; "Hidden" takes the sidebar off screen entirely. The collapse toggle
-   * in the list head switches between Full and whichever of the other two the
-   * reader picked, and it is also the way back from Hidden — otherwise
-   * choosing Hidden would be a one-way door.
+   * in the list head switches between Full and Hidden by default — closed
+   * means gone, not an icon rail. Icons only stays available from settings.
    */
   var SIDEBAR_MODES = ['full', 'icons', 'hidden'];
 
@@ -162,11 +161,12 @@
   }
 
   /* The sidebar the reader actually sees right now. Mobile always gets the
-   * full drawer — an icon rail in a slide-over is just a smaller drawer. */
+   * full drawer — an icon rail in a slide-over is just a smaller drawer.
+   * Closed on desktop means Hidden unless Icons only was chosen explicitly. */
   function effectiveSidebarMode(state) {
     if (isEmailMobile()) return 'full';
     if (!state.sidebarCollapsed) return 'full';
-    return state.sidebarMode === 'hidden' ? 'hidden' : 'icons';
+    return state.sidebarMode === 'icons' ? 'icons' : 'hidden';
   }
 
   /* ── inbox categories ────────────────────────────────────────────
@@ -179,13 +179,13 @@
   var INBOX_CATEGORIES = [
     { id: 'pinned', label: 'Pinned', icon: 'PushPin', fixed: true },
     { id: 'inbox', label: 'Inbox', icon: 'Tray', fixed: true },
-    { id: 'starred', label: 'Starred', icon: 'Star' },
-    { id: 'important', label: 'Important', icon: 'Important' },
-    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight' },
-    { id: 'draft', label: 'Drafts', icon: 'FileText' },
-    { id: 'snoozed', label: 'Snoozed', icon: 'Clock' },
-    { id: 'archive', label: 'Archive', icon: 'Archive' },
-    { id: 'trash', label: 'Trash', icon: 'Trash' },
+    { id: 'important', label: 'Important', icon: 'Important', fixed: true },
+    { id: 'snoozed', label: 'Snoozed', icon: 'Clock', fixed: true },
+    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight', fixed: true },
+    { id: 'draft', label: 'Drafts', icon: 'FileText', fixed: true },
+    { id: 'spam', label: 'Spam', icon: 'WarningOctagon', fixed: true },
+    { id: 'trash', label: 'Trash', icon: 'Trash', fixed: true },
+    { id: 'archive', label: 'Archive', icon: 'Archive', fixed: true },
   ];
 
   var CATEGORY_FOLDERS = INBOX_CATEGORIES.map(function (category) {
@@ -197,7 +197,9 @@
       var saved = JSON.parse(localStorage.getItem(INBOX_CATEGORIES_KEY) || 'null');
       if (Array.isArray(saved)) return saved;
     } catch (e) { /* ignore */ }
-    return ['starred', 'important', 'sent', 'draft', 'trash'];
+    /* All daily tabs are fixed; this list is only consulted if a later
+       preference makes any of them optional again. */
+    return ['important', 'snoozed', 'sent', 'draft', 'spam', 'trash', 'archive'];
   }
 
   function saveInboxCategories(ids) {
@@ -3874,12 +3876,15 @@
     return (
       '<div class="tma-dash__email-list">' +
       renderListMobileHead(state) +
+      /* Mobile hides the list head, so the pills get their own strip there. */
+      (isEmailMobile() ? renderInboxCategories(state) : '') +
       '<div class="tma-dash__email-list-head">' +
       renderEmailSidebarMenuBtn(state) +
       '<label class="tma-dash__email-list-check" title="Select all">' +
       '<input type="checkbox" class="tma-dash__check" data-email-selectall' +
       (selection.all ? ' checked' : '') + ' aria-label="Select all">' +
       '</label>' +
+      (isEmailMobile() ? '' : renderInboxCategories(state)) +
       (isEmailMobile()
         ? renderEmailListRefreshBtn(state) +
           renderEmailListBulk(state) +
@@ -3888,7 +3893,6 @@
         : '') +
       renderListHeadActions(state, { showFilter: !isEmailMobile() }) +
       '</div>' +
-      renderInboxCategories(state) +
       renderReconnectBanner(state) +
       '<div class="tma-dash__email-list-body">' +
       renderListState(state, rows) +
@@ -5949,11 +5953,11 @@
               { id: 'split', label: 'Split view' },
               { id: 'single', label: 'Full width' },
             ])) +
-          settingsRow('Email sidebar', 'How the folder list draws when it is collapsed.',
+          settingsRow('Email sidebar', 'Closing the folder list hides it completely. Icons only keeps a slim rail.',
             settingsChoice('sidebarMode', prefs.sidebarMode || 'full', [
               { id: 'full', label: 'Full' },
-              { id: 'icons', label: 'Icons only' },
               { id: 'hidden', label: 'Hidden' },
+              { id: 'icons', label: 'Icons only' },
             ])) +
 
           '<h3 class="tma-dash__email-settings-section">Inbox categories</h3>' +
@@ -6466,7 +6470,7 @@
       ' title="' + count + ' messages in this conversation"' +
       ' aria-label="' + (open ? 'Hide' : 'Show') + ' the other ' + (count - 1) +
       ' message' + (count === 2 ? '' : 's') + ' in this conversation">' +
-      '<img src="' + ICONS.CaretDown + '" alt="">' +
+      '<img src="' + ICONS.CaretRight + '" alt="">' +
       '</button>'
     );
   }
@@ -8489,11 +8493,11 @@
       btn.addEventListener('click', function () {
         state.sidebarCollapsed = !state.sidebarCollapsed;
         saveSidebarCollapsed(state.sidebarCollapsed);
-        // Collapsing means whatever the reader chose in settings — the icon
-        // rail, or nothing at all — so the two stay in step.
+        // Closed = gone completely. Icons-only stays a settings choice, not
+        // the default for this toggle.
         setMailSidebarMode(
           root, state, render,
-          state.sidebarCollapsed ? (state.sidebarMode === 'hidden' ? 'hidden' : 'icons') : 'full'
+          state.sidebarCollapsed ? 'hidden' : 'full'
         );
       });
     });
