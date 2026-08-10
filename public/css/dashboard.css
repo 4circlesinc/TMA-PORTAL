@@ -9306,7 +9306,7 @@
 
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-toolbar,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
-  margin-top: 0 !important;
+  margin: 0 !important;
 }
 
 .tma-dash--email .tma-dash__footer {
@@ -9368,16 +9368,18 @@
   justify-content: space-between;
   gap: var(--space-12);
   min-height: 48px;
-  /* Sit flush on the panes — a bottom margin read as "mystery" top spacing
-   * under the toolbar whenever the list chrome reflowed after an action. */
-  margin: 0 var(--email-pad) 0;
-  padding: var(--space-6) var(--space-8);
-  border: 1px solid var(--color-overlay-4);
-  border-radius: var(--radius-16);
+  /* Full-bleed under the blue header — side inset + radius read as a floating
+   * card with a white gap above the mail panes. */
+  margin: 0;
+  padding: var(--space-6) var(--space-12);
+  border: 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+  border-radius: 0;
   background: var(--color-hover, rgba(0, 0, 0, 0.03));
   box-sizing: border-box;
   position: relative;
   z-index: 2;
+  width: 100%;
 }
 
 .tma-dash__email-toolbar .tma-dash__toolbar-actions {

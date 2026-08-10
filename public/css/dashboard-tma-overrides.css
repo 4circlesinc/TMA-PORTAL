@@ -1109,7 +1109,18 @@ a.tma-dash__tab-btn:visited {
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main,
 .tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
-  padding: 0 0 var(--space-12) !important;
+  padding: 0 !important;
+}
+
+/* Mail toolbar: full-bleed under the header (no card inset / radius). */
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-toolbar,
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  width: 100%;
 }
 
 /* Electron shell: mobile header clearance is already handled by body padding. */
