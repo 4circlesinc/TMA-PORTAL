@@ -36,16 +36,26 @@ const RED = '#d21c1c';
 const DRAW_TIMEOUT = 2000;
 
 /**
- * Rasterised icons, keyed by what is drawn on them. There are at most a hundred
- * distinct labels and each is a few KB, so they are worth keeping: the count
- * changes far more often than it takes new values, and every repeat would
- * otherwise be another round trip into the renderer.
+ * Rasterised icons, keyed by what is drawn on them. Each is a few KB, so they
+ * are worth keeping: the count changes far more often than it takes new
+ * values, and every repeat would otherwise be another round trip into the
+ * renderer.
  */
 const cache = new Map();
 
-/** Past 99 the digits stop being legible at 32px, so it caps. */
+/** The real total — no "99+" truncation. */
 function label(count) {
-  return count > 99 ? '99+' : String(count);
+  const n = Math.max(0, Math.round(Number(count) || 0));
+  return String(n);
+}
+
+/** Shrink the face as the digit count grows so the full number still fits. */
+function fontSizeFor(text) {
+  const len = text.length;
+  if (len <= 2) return 18;
+  if (len === 3) return 13;
+  if (len === 4) return 11;
+  return 9;
 }
 
 /**
@@ -59,8 +69,7 @@ async function image(webContents, count) {
   if (cache.has(text)) return cache.get(text);
   if (!webContents || webContents.isDestroyed()) return null;
 
-  // Three characters need a smaller face to fit inside the circle.
-  const font = text.length > 2 ? 13 : 18;
+  const font = fontSizeFor(text);
 
   const source = `(() => {
     const canvas = document.createElement('canvas');
@@ -118,4 +127,4 @@ async function image(webContents, count) {
   }
 }
 
-module.exports = { image, label, SIZE };
+module.exports = { image, label, fontSizeFor, SIZE };

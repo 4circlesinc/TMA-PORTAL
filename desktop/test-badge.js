@@ -48,9 +48,10 @@ app.whenReady().then(async () => {
   await win.loadURL('data:text/html,<html><body></body></html>');
 
   check('label under 100 is the number', badge.label(7), '7');
-  check('label over 99 caps', badge.label(388), '99+');
+  check('label over 99 shows the full total', badge.label(388), '388');
+  check('label over 999 shows the full total', badge.label(28573), '28573');
 
-  for (const count of [1, 12, 388]) {
+  for (const count of [1, 12, 388, 28573]) {
     const icon = await badge.image(win.webContents, count);
 
     check(`count ${count}: an image comes back`, !!icon, true);

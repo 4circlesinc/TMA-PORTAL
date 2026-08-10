@@ -558,7 +558,8 @@ async function taskbarOverlay(count) {
 }
 
 function applyBadge(count) {
-  const n = Number.isFinite(count) && count > 0 ? Math.min(Math.round(count), 999) : 0;
+  // Full total on dock / taskbar — do not clamp to 99 or 999.
+  const n = Number.isFinite(count) && count > 0 ? Math.round(count) : 0;
 
   if (IS_MAC) {
     app.setBadgeCount(n);
