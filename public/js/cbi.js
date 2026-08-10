@@ -293,14 +293,22 @@
 
     if (!people.length) return '';
 
-    return '<div class="cbi-people">' + people.map(function (p, i) {
-      var first = p.name.split(/\s+/)[0];
-      return '<span class="cbi-person" title="' + esc(p.meta.roles.join(' · ') + ' — ' + p.name) + '">' +
-        personAvatar(p.person) +
-        '<span class="cbi-person__name">' + esc(first) + '</span>' +
-        (i < people.length - 1 ? '<span class="cbi-people__sep">,</span>' : '') +
-        '</span>';
-    }).join('') + '</div>';
+    var faces = people.map(function (p) {
+      var src = (p.person && p.person.photo) ||
+        (window.TMACurrentUser && window.TMACurrentUser.initialsFor
+          ? window.TMACurrentUser.initialsFor(p.name, (p.person && p.person.email) || p.name)
+          : '');
+      if (!src) return '';
+      return '<img class="cbi-people__face" src="' + esc(src) + '" alt="" width="24" height="24"' +
+        ' title="' + esc(p.meta.roles.join(' · ') + ' — ' + p.name) + '" loading="lazy">';
+    }).join('');
+
+    var names = people.map(function (p) { return p.name.split(/\s+/)[0]; }).join(', ');
+
+    return '<span class="cbi-people">' +
+      (faces ? '<span class="cbi-people__faces">' + faces + '</span>' : '') +
+      '<span class="cbi-people__names" title="' + esc(people.map(function (p) { return p.name; }).join(', ')) + '">' +
+      esc(names) + '</span></span>';
   }
 
   function statusCell(status) {

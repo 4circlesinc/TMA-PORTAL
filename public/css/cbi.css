@@ -319,25 +319,45 @@
 
 /* ── Who is on this case ─────────────────────────────
  *
- * A face and a first name each, commas between — one line that answers "who
- * has this?" instead of seven labelled rows that were mostly empty and, where
- * filled, usually named the same two people. The full name and every role they
- * hold live on the hover title.
+ * The faces stack into a ring of overlapping circles and every name sits to
+ * the right of them. Repeating face-name, face-name down the line made four
+ * colleagues look like four separate facts; as one pile with one list it reads
+ * as the single answer it is — who has this file.
  */
 .cbi-people {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-4) var(--space-12);
+  gap: var(--space-8);
+  min-width: 0;
 }
 
-.cbi-people .cbi-person { gap: var(--space-8); }
-
-/* The comma belongs to the line, not to the name it follows, so it must not
-   pick up the gap that separates a face from its name. */
-.cbi-people__sep {
-  margin-left: -2px;
-  color: var(--color-text-secondary);
+.cbi-people__faces {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
-.cbi-people .cbi-person:last-child .cbi-people__sep { display: none; }
+.cbi-people__face {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  /* The ring is what keeps two overlapping faces apart; without it the pile
+     reads as one smudged shape. It is drawn in the surface colour so it reads
+     as a gap rather than a border. */
+  box-shadow: 0 0 0 2px var(--color-bg-card, #f9f9fa);
+  background: var(--color-bg-card, #f9f9fa);
+}
+
+.cbi-people__face + .cbi-people__face { margin-left: -8px; }
+
+/* Later faces sit under earlier ones, so the pile reads left to right. */
+.cbi-people__faces:hover .cbi-people__face { margin-left: 0; }
+.cbi-people__faces .cbi-people__face { transition: margin-left 120ms ease; }
+
+.cbi-people__names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
