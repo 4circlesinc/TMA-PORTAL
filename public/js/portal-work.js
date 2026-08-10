@@ -391,10 +391,30 @@
 
     return '<button type="button" class="tma-portal-wf-file" data-wfh-open="' + esc(file.id) + '"' +
       (file.folderId ? ' data-wfh-folder="' + esc(file.folderId) + '"' : '') + '>' +
-      '<img class="tma-portal-wf-file__icon" src="images/icons/phosphor/File.svg" alt="" width="16" height="16">' +
+      wfFileIcon(file) +
       '<span class="tma-portal-wf-file__name">' + esc(file.name) + '</span>' +
       (file.folder ? '<span class="tma-portal-wf-file__path">' + esc(file.folder) + '</span>' : '') +
       '</button>';
+  }
+
+  /*
+   * The file's own type icon, from the shared set the File Library uses.
+   *
+   * This drew one grey sheet of paper for everything, which is the one thing a
+   * small icon beside a filename is for: a PDF, a spreadsheet and a Word
+   * document are told apart at a glance everywhere else in the portal, and had
+   * to be read letter by letter here.
+   *
+   * TMAFileIcons resolves from the name, so nothing extra has to travel in the
+   * payload — and unknown extensions land on its own default rather than on a
+   * broken image.
+   */
+  function wfFileIcon(file) {
+    var src = window.TMAFileIcons
+      ? window.TMAFileIcons.fileIconSrc(null, file.name)
+      : 'images/icons/phosphor/File.svg';
+
+    return '<img class="tma-portal-wf-file__icon" src="' + ui().esc(src) + '" alt="" width="18" height="18">';
   }
 
   /* Real photo if there is one, otherwise the shared initials avatar — the

@@ -192,6 +192,30 @@ try {
   check(/Mentioned you/.test(body), 'and is marked as naming her');
   check(body.includes(NAME), 'the file it is about is named');
 
+  /*
+   * The file's own type icon, not one grey sheet of paper for everything —
+   * telling a PDF from a spreadsheet at a glance is the whole job of a small
+   * icon beside a filename. Also asserted to have actually loaded: a wrong
+   * path renders as nothing and reads as "no icon by design".
+   */
+  const iconSrc = await beaPage.$eval(
+    `.tma-portal-wf-card:has-text("${QUESTION}") .tma-portal-wf-file__icon`,
+    (el) => el.getAttribute('src'),
+  );
+  check(/TxtIcon/.test(iconSrc), `the chip carries the .txt icon (got: ${iconSrc})`);
+
+  /*
+   * Fetched rather than measured. `naturalWidth` is the usual broken-image
+   * test and is wrong here: these are SVGs, and one with only a viewBox
+   * reports zero width in some engines however well it loaded. The real risk
+   * is a path that 404s, so ask for it.
+   */
+  const iconStatus = await beaPage.evaluate(
+    (src) => fetch(src, { credentials: 'same-origin' }).then((r) => r.status).catch(() => 0),
+    iconSrc,
+  );
+  check(iconStatus === 200, `and the icon file is really there (HTTP ${iconStatus})`);
+
   await parkPointer(beaPage);
   await beaPage.click(`.tma-portal-wf-card:has-text("${QUESTION}") [data-wfh-reply]`);
   await beaPage.waitForTimeout(400);

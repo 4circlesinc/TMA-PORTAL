@@ -4094,7 +4094,9 @@ label.tma-portal-check-row:hover {
   outline-offset: 2px;
 }
 
-.tma-portal-wf-file__icon { flex-shrink: 0; opacity: 0.6; }
+/* No opacity: these are the brand-coloured type icons, and fading them is
+   what made a PDF and a spreadsheet the same grey shape. */
+.tma-portal-wf-file__icon { flex-shrink: 0; }
 
 .tma-portal-wf-file__name {
   font-size: var(--text-size-13);
