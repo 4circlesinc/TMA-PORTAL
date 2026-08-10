@@ -86,9 +86,38 @@
   gap: var(--space-12) var(--space-24);
 }
 
-/* Wrapper isolating the tab group from DOM reconciliation — see the note in
-   cbi.js renderList(). Purely structural. */
-.cbi-tabs { min-width: 0; }
+/*
+ * Wrapper isolating the tab group from DOM reconciliation — see the note in
+ * cbi.js renderList(). It also carries the sync controls, which used to have a
+ * band of their own above this one: the tabs never filled the line, so the
+ * actions sit at its right rather than costing a second row.
+ */
+.cbi-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
+/* The tab group takes the slack so the actions are pushed to the right. */
+.cbi-tabs > .tma-tab-group { flex: 1 1 auto; min-width: 0; }
+
+.cbi-tabs__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Only shown when a sheet is erroring or the connection is unconfigured. */
+.cbi-tabs__warning {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
 
 /* Workspace tab panels: room under the underline tab group. The explicit
    display beats the UA's [hidden] rule, so hidden must be restated. */
@@ -320,150 +349,5 @@
 .cbi-card .tma-portal-empty__illustration { width: 72px; height: 72px; }
 
 
-/* ── Who is on this case ─────────────────────────────
- *
- * The faces stack into a ring of overlapping circles and every name sits to
- * the right of them. Repeating face-name, face-name down the line made four
- * colleagues look like four separate facts; as one pile with one list it reads
- * as the single answer it is — who has this file.
- */
-.cbi-people {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-8);
-  min-width: 0;
-}
-
-.cbi-people__faces {
-  display: inline-flex;
-  align-items: center;
-  /* Side by side, never overlapping: a pile hides part of every face but the
-     first, and these are how you recognise a colleague at a glance. */
-  gap: var(--space-4);
-  flex: 0 0 auto;
-}
-
-.cbi-people__face {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-  /* No ring: it existed only to separate overlapping faces, and a real gap
-     does that better. The backing stays for photos with transparency. */
-  background: var(--color-bg-card, #f9f9fa);
-}
-
-
-
-.cbi-people__names {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-
-/* ── The person card ─────────────────────────────────
- *
- * Hovering a face answers "who is this?" in place: the full name, every role
- * they hold on this file, and the three things you would open a colleague's
- * card to do. It lives on the body so a re-render of the table underneath
- * cannot destroy it mid-hover.
- */
-.cbi-person-card {
-  position: fixed;
-  z-index: 300;
-  display: none;
-  flex-direction: column;
-  gap: var(--space-12);
-  width: 260px;
-  padding: var(--space-16);
-  border-radius: var(--radius-16);
-  background: var(--color-white);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
-}
-
-.cbi-person-card[data-open] { display: flex; }
-
-.cbi-person-card__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  min-width: 0;
-}
-
-.cbi-person-card__avatar {
-  flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.cbi-person-card__ident {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.cbi-person-card__name {
-  font-size: var(--text-size-14);
-  line-height: var(--text-lh-14);
-  font-weight: 600;
-  color: var(--color-black);
-}
-
-.cbi-person-card__roles,
-.cbi-person-card__email {
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
-  color: var(--color-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cbi-person-card__actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-8);
-}
-
-.cbi-person-card__action {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-8) var(--space-4);
-  border: 0;
-  border-radius: var(--radius-12);
-  background: var(--color-overlay-4);
-  font: inherit;
-  font-size: var(--text-size-12);
-  line-height: 16px;
-  color: var(--color-text-primary);
-  cursor: pointer;
-}
-
-.cbi-person-card__action:hover:not(:disabled) { background: var(--color-hover); }
-
-/* Disabled rather than hidden: the actions stay in the same place for every
-   colleague, and the note underneath says why these are dark. */
-.cbi-person-card__action:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.cbi-person-card__note {
-  margin: 0;
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
-  color: var(--color-text-secondary);
-}
-
-/* The face is a hover target, so it has to look like one. */
-.cbi-people__face { cursor: pointer; }
-.cbi-people__face:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
+/* The people cell and the person card moved to person-card.css when the
+   File Library wanted the same component; see public/js/person-card.js. */

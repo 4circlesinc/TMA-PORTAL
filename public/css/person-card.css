@@ -1,0 +1,173 @@
+/* TMA — people on a record, and the card that answers "who is this?"
+ *
+ * Pairs with public/js/person-card.js (window.TMAPersonCard). Lifted out of
+ * cbi.css when the File Library's Owner column wanted the same component; the
+ * rules are unchanged apart from the prefix, so CBI looks exactly as it did.
+ */
+
+/* ── Who is on this record ───────────────────────────
+ *
+ * The faces stack into a ring of overlapping circles and every name sits to
+ * the right of them. Repeating face-name, face-name down the line made four
+ * colleagues look like four separate facts; as one pile with one list it reads
+ * as the single answer it is — who has this record.
+ */
+.tma-people {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-people__faces {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.tma-people__face {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  /* The ring is what keeps two overlapping faces apart; without it the pile
+     reads as one smudged shape. It is drawn in the surface colour so it reads
+     as a gap rather than a border. */
+  box-shadow: 0 0 0 2px var(--color-bg-card, #f9f9fa);
+  background: var(--color-bg-card, #f9f9fa);
+}
+
+.tma-people__face + .tma-people__face { margin-left: -8px; }
+
+/* Later faces sit under earlier ones, so the pile reads left to right. */
+.tma-people__faces:hover .tma-people__face { margin-left: 0; }
+.tma-people__faces .tma-people__face { transition: margin-left 120ms ease; }
+
+/* The overflow count is face-shaped and sits in the pile, so a row's width
+   does not depend on how many people are on it. */
+.tma-people__face--more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-size-12);
+  line-height: 1;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.tma-people__names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nobody on the record. A muted word rather than an em dash: "Unassigned" is
+   a state somebody may need to act on, where "—" reads as missing data. */
+.tma-people__empty { color: var(--color-text-secondary); }
+
+/* ── The person card ─────────────────────────────────
+ *
+ * Hovering a face answers "who is this?" in place: the full name, every role
+ * they hold on this record, and the three things you would open a colleague's
+ * card to do. It lives on the body so a re-render of the table underneath
+ * cannot destroy it mid-hover.
+ */
+.tma-person-card {
+  position: fixed;
+  z-index: 300;
+  display: none;
+  flex-direction: column;
+  gap: var(--space-12);
+  width: 260px;
+  padding: var(--space-16);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+}
+
+.tma-person-card[data-open] { display: flex; }
+
+.tma-person-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.tma-person-card__avatar {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tma-person-card__ident {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-person-card__name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-person-card__roles,
+.tma-person-card__email {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-person-card__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.tma-person-card__action {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-overlay-4);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.tma-person-card__action:hover:not(:disabled) { background: var(--color-hover); }
+
+/* Disabled rather than hidden: the actions stay in the same place for every
+   colleague, and the note underneath says why these are dark. */
+.tma-person-card__action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tma-person-card__note {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+/* The face is a hover target, so it has to look like one. */
+.tma-people__face { cursor: pointer; }
+.tma-people__face:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

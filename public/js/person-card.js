@@ -49,10 +49,14 @@
     return '';
   }
 
+  /* TMAPortalUI's toast, the one the pages that render faces already use.
+     window.TMAToast is a different, lower-level renderer — not this. */
   function toast(message, ok) {
-    if (window.TMAToast && window.TMAToast.show) {
-      window.TMAToast.show(message, ok ? 'positive' : 'negative');
+    if (ui() && ui().toast) {
+      ok === false ? ui().toastError(message) : ui().toast(message);
+      return;
     }
+    console[ok === false ? 'error' : 'log']('[person-card]', message);
   }
 
   /*
