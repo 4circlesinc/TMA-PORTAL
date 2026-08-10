@@ -1112,6 +1112,27 @@ a.tma-dash__tab-btn:visited {
   padding: 0 0 var(--space-12) !important;
 }
 
+/* Toolbar card clearance + locked email header (beats older margin-top:0). */
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-fit,
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
+  padding-top: var(--space-12) !important;
+  gap: var(--space-12) !important;
+}
+
+.tma-dash--email:not(.tma-dash--email-mobile):not(.tma-dash--desktop-bar) .tma-dash__header {
+  height: 56px !important;
+  min-height: 56px !important;
+  max-height: 56px !important;
+  padding-top: var(--space-12) !important;
+  padding-bottom: var(--space-12) !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header [hidden] {
+  display: none !important;
+}
+
 /* Electron shell: mobile header clearance is already handled by body padding. */
 @media (max-width: 1024px) {
   .tma-dash--desktop-bar.tma-dash--email .tma-dash__main,

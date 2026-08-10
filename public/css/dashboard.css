@@ -9303,17 +9303,44 @@
 }
 
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-page,
-.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-fit,
-.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-page,
-.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-page {
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
 
+/*
+ * Space the toolbar card off the header and panes with fit padding/gap —
+ * margins on the card were getting zeroed or clipped inside overflow:hidden.
+ * Also lock the shell header height so row actions cannot stretch it.
+ */
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-fit,
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
+  margin-top: 0 !important;
+  padding-top: var(--space-12) !important;
+  gap: var(--space-12);
+}
+
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-toolbar,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
-  margin-top: var(--space-12) !important;
-  margin-bottom: var(--space-12) !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Browser email header — fixed height so row actions cannot stretch it.
+   Electron's .tma-dash--desktop-bar keeps its own 52px bar. */
+.tma-dash--email:not(.tma-dash--email-mobile):not(.tma-dash--desktop-bar) .tma-dash__header {
+  height: 56px;
+  min-height: 56px;
+  max-height: 56px;
+  padding-top: var(--space-12);
+  padding-bottom: var(--space-12);
+  box-sizing: border-box;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__header [hidden] {
+  display: none !important;
 }
 
 .tma-dash--email .tma-dash__footer {
@@ -9375,9 +9402,8 @@
   justify-content: space-between;
   gap: var(--space-12);
   min-height: 48px;
-  /* Outside gap from the blue header above and the mail panes below —
-   * side inset keeps the card look. */
-  margin: var(--space-12) var(--email-pad);
+  /* Horizontal card inset only — vertical gap comes from .tma-dash__email-fit. */
+  margin: 0 var(--email-pad);
   padding: var(--space-6) var(--space-8);
   border: 1px solid var(--color-overlay-4);
   border-radius: var(--radius-16);
