@@ -12364,6 +12364,13 @@
   filter: none;
 }
 
+/* Active pins use the blue filled asset — same idea. */
+.tma-dash__email-row-action--pinned img,
+.tma-dash__email-action.tma-dash__email-row-action--pinned img {
+  opacity: 1;
+  filter: none;
+}
+
 .tma-dash__email-detail-important {
   display: inline-flex;
   align-items: center;
