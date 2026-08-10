@@ -9309,21 +9309,21 @@
 }
 
 /*
- * Space the toolbar card off the header and panes with fit padding/gap —
- * margins on the card were getting zeroed or clipped inside overflow:hidden.
- * Also lock the shell header height so row actions cannot stretch it.
+ * No top pad on the fit — a pad here stacked with other shell spacing and
+ * opened the empty white band above the toolbar after row actions. The card
+ * keeps a small outside margin only.
  */
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-fit,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
   margin-top: 0 !important;
-  padding-top: var(--space-12) !important;
-  gap: var(--space-12);
+  padding-top: 0 !important;
+  gap: var(--space-8);
 }
 
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-toolbar,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  margin-top: var(--space-8) !important;
+  margin-bottom: var(--space-8) !important;
 }
 
 /* Browser email header — fixed height so row actions cannot stretch it.
@@ -9402,8 +9402,8 @@
   justify-content: space-between;
   gap: var(--space-12);
   min-height: 48px;
-  /* Horizontal card inset only — vertical gap comes from .tma-dash__email-fit. */
-  margin: 0 var(--email-pad);
+  /* Small outside inset — never a large empty band above the card. */
+  margin: var(--space-8) var(--email-pad);
   padding: var(--space-6) var(--space-8);
   border: 1px solid var(--color-overlay-4);
   border-radius: var(--radius-16);

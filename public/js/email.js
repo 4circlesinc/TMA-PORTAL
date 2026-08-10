@@ -7775,10 +7775,13 @@
   }
 
   /*
-   * After star/flag/pin/archive the page-title row or mobile header padding
-   * can reappear and shove the mail toolbar down. Force the shell closed
-   * whenever the desktop toolbar is on screen.
+   * After star/flag/pin/archive an empty white band can open above the mail
+   * toolbar (main-head, mobile header pad, or a phantom grid row). Collapse
+   * every top spacer and, if a gap is still measured under the shell header,
+   * pull the toolbar back up so only a small card inset remains.
    */
+  var EMAIL_TOOLBAR_TOP_GAP = 8;
+
   function lockEmailShellSpacing(root) {
     var dash = getEmailDashRoot(root);
     if (!dash || !dash.classList.contains('tma-dash--email')) return;
@@ -7795,13 +7798,65 @@
       head.style.setProperty('overflow', 'hidden', 'important');
     }
 
+    var toolbar = dash.querySelector('.tma-dash__email-toolbar');
+    var desktopBar = dash.classList.contains('tma-dash--desktop-bar');
+    var desktop = !isEmailMobile() || !!toolbar || desktopBar;
+    if (!desktop) return;
+
     var main = dash.querySelector('.tma-dash__main');
-    var hasDesktopToolbar = !!dash.querySelector('.tma-dash__email-toolbar');
-    var desktopShell = dash.classList.contains('tma-dash--desktop-bar');
-    if (main && (hasDesktopToolbar || desktopShell)) {
-      main.style.setProperty('padding-top', '0', 'important');
+    var page = dash.querySelector('.tma-dash__email-page');
+    var fit = dash.querySelector('.tma-dash__email-fit');
+    var view = dash.querySelector('.tma-dash__view[data-view="email"]');
+    var emailRoot = dash.querySelector('.tma-dash__email');
+
+    // Keep the Electron title-bar grid collapse even if the class flickers —
+    // an auto header row is the classic ~50–80px white band under the bar.
+    // Browser email keeps the in-flow header row; only collapse with desktop-bar.
+    if (desktopBar) {
+      dash.style.setProperty('grid-template-rows', '0 minmax(0, 1fr)', 'important');
+      if (main) main.style.setProperty('grid-row', '1 / -1', 'important');
+    }
+
+    [main, view, emailRoot, page, fit].forEach(function (el) {
+      if (!el) return;
+      el.style.setProperty('padding-top', '0', 'important');
+      el.style.setProperty('margin-top', '0', 'important');
+    });
+    if (main) {
       main.style.setProperty('padding-left', '0', 'important');
       main.style.setProperty('padding-right', '0', 'important');
+    }
+    if (toolbar) {
+      toolbar.style.setProperty('margin-top', EMAIL_TOOLBAR_TOP_GAP + 'px', 'important');
+      toolbar.style.setProperty('margin-bottom', EMAIL_TOOLBAR_TOP_GAP + 'px', 'important');
+    }
+
+    if (toolbar) {
+      var header = dash.querySelector('.tma-dash__header');
+      var measureGap = function () {
+        var chromeBottom = header
+          ? header.getBoundingClientRect().bottom
+          : dash.getBoundingClientRect().top;
+        return Math.round(toolbar.getBoundingClientRect().top - chromeBottom);
+      };
+      var gap = measureGap();
+      if (gap > EMAIL_TOOLBAR_TOP_GAP + 2) {
+        var headerFixed = header && getComputedStyle(header).position === 'fixed';
+        // Phantom auto header-row under a fixed bar: collapse it first.
+        // Negative margin alone cannot close space that lives above main.
+        if (desktopBar || headerFixed) {
+          dash.style.setProperty('grid-template-rows', '0 minmax(0, 1fr)', 'important');
+          if (main) main.style.setProperty('grid-row', '1 / -1', 'important');
+          gap = measureGap();
+        }
+        if (gap > EMAIL_TOOLBAR_TOP_GAP + 2) {
+          toolbar.style.setProperty(
+            'margin-top',
+            (EMAIL_TOOLBAR_TOP_GAP - gap) + 'px',
+            'important'
+          );
+        }
+      }
     }
 
     if (window.PortalTooltip) {
@@ -7821,6 +7876,8 @@
     // button that is about to be replaced so it cannot jump to the page top
     // or leave an empty band above the mail toolbar.
     if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
+    if (window.PortalTooltip && window.PortalTooltip.purgeOrphans) window.PortalTooltip.purgeOrphans();
+    lockEmailShellSpacing(root);
 
     var rows = filteredInbox(state);
     // Keep the list-head chrome (checkbox / bulk / filter) at a fixed height
@@ -7832,7 +7889,10 @@
 
     lockEmailShellSpacing(root);
     // Second pass after layout — some morphs reopen padding on the next frame.
-    window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
+    window.requestAnimationFrame(function () {
+      lockEmailShellSpacing(root);
+      window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
+    });
     syncSelectAllBox(root, state);
 
     updateEmailListBulk(root, state);
@@ -9328,8 +9388,10 @@
         '<div class="tma-dash__email-page">' +
         renderEmailMobileChrome(state) +
         renderEmailProfilePopup(state) +
-        '<div class="tma-dash__email-fit">' +
+        /* Toolbar sits above the fit — keeping it inside overflow:hidden fit
+         * let shell padding/morph glitches open a white band over the card. */
         renderEmailToolbar(state) +
+        '<div class="tma-dash__email-fit">' +
         '<div class="tma-dash__email-layout">' +
         renderEmailSidebar(state) +
         renderEmailPanel(state) +
@@ -9340,7 +9402,10 @@
         renderEmailSettings(state) +
         '</div>');
       lockEmailShellSpacing(root);
-      window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
+      window.requestAnimationFrame(function () {
+        lockEmailShellSpacing(root);
+        window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
+      });
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
       wireInlineComposeEvents(root, state, render);

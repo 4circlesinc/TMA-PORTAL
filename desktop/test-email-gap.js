@@ -220,11 +220,13 @@ app.whenReady().then(async () => {
   console.log('after simulated header bulge', JSON.stringify(afterAction, null, 2));
 
   const rows = String(afterAction.gridRows || '');
-  const ok = result.gapHeaderToToolbar <= 2
-    && result.gapDashToToolbar <= 2
-    && afterAction.gap <= 2
+  // Card keeps a small outside inset (≈8px); anything near a header-row height
+  // (≈50–80px) means the phantom band is back.
+  const ok = result.gapHeaderToToolbar <= 12
+    && result.gapDashToToolbar <= 12
+    && afterAction.gap <= 12
     && rows.startsWith('0px');
-  console.log(ok ? '\nPASS — toolbar flush under bar' : '\nFAIL — empty band present');
+  console.log(ok ? '\nPASS — toolbar tight under bar' : '\nFAIL — empty band present');
   server.close();
   app.exit(ok ? 0 : 1);
 });

@@ -1112,11 +1112,23 @@ a.tma-dash__tab-btn:visited {
   padding: 0 0 var(--space-12) !important;
 }
 
-/* Toolbar card clearance + locked email header (beats older margin-top:0). */
+/* Kill top spacers that reopen the white band; card keeps a small inset. */
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-fit,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
-  padding-top: var(--space-12) !important;
-  gap: var(--space-12) !important;
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+  gap: var(--space-8) !important;
+}
+
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-toolbar,
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
+  margin-top: var(--space-8) !important;
+  margin-bottom: var(--space-8) !important;
+}
+
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main {
+  padding-top: 0 !important;
 }
 
 .tma-dash--email:not(.tma-dash--email-mobile):not(.tma-dash--desktop-bar) .tma-dash__header {
@@ -1133,11 +1145,12 @@ a.tma-dash__tab-btn:visited {
   display: none !important;
 }
 
-/* Electron shell: mobile header clearance is already handled by body padding. */
+/* Electron / desktop toolbar: mobile header clearance must not stack a band. */
 @media (max-width: 1024px) {
   .tma-dash--desktop-bar.tma-dash--email .tma-dash__main,
   .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile .tma-dash__main,
-  .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile-reading .tma-dash__main {
+  .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile-reading .tma-dash__main,
+  .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main {
     padding-top: 0 !important;
   }
 }
