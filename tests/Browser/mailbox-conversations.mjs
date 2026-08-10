@@ -106,6 +106,24 @@ try {
   const arrowLabel = await withArrow[0]?.getAttribute('title');
   check(/3 messages/.test(arrowLabel || ''), `the arrow states the size ("${arrowLabel}")`);
 
+  step(2.5, 'Double-click opens the conversation in its own window');
+  await settle();
+  const invoiceRow = rowFor('Invoice #1042');
+  const invoiceId = await invoiceRow.getAttribute('data-email-row');
+  const [popup] = await Promise.all([
+    context.waitForEvent('page', { timeout: 8000 }),
+    invoiceRow.locator('.tma-dash__email-row-content').dblclick(),
+  ]);
+  await popup.waitForLoadState('domcontentloaded');
+  const popupText = await popup.textContent('body');
+  check(popup.url().includes(invoiceId),
+    `the window is the double-clicked conversation (${popup.url().split('/').pop()} vs ${invoiceId})`);
+  check(/Invoice #1042/.test(popupText),
+    `the window opens straight onto the message (saw "${popupText.replace(/\s+/g, ' ').trim().slice(0, 120)}")`);
+  check(/sam@example\.com/.test(popupText), 'it lists the Cc recipients too');
+  check(!/Loading/.test(popupText), 'no loading screen in front of it');
+  await popup.close();
+
   step(3, 'Opening the arrow expands in place and does NOT open the thread');
   const selectedBefore = await page.evaluate(
     () => document.querySelector('[data-email]')._emailState.selectedId
@@ -245,24 +263,6 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
   check(!(await page.$('.tma-dash__email-context-menu')), 'Escape closes it');
-
-  step(12, 'Double-click opens the conversation in its own window');
-  await settle();
-  const invoiceRow = rowFor('Invoice #1042');
-  const invoiceId = await invoiceRow.getAttribute('data-email-row');
-  const [popup] = await Promise.all([
-    context.waitForEvent('page', { timeout: 8000 }),
-    invoiceRow.locator('.tma-dash__email-row-content').dblclick(),
-  ]);
-  await popup.waitForLoadState('domcontentloaded');
-  const popupText = await popup.textContent('body');
-  check(popup.url().includes(invoiceId),
-    `the window is the double-clicked conversation (${popup.url().split('/').pop()} vs ${invoiceId})`);
-  check(/Invoice #1042/.test(popupText),
-    `the window opens straight onto the message (saw "${popupText.replace(/\s+/g, ' ').trim().slice(0, 120)}")`);
-  check(/sam@example\.com/.test(popupText), 'it lists the Cc recipients too');
-  check(!/Loading/.test(popupText), 'no loading screen in front of it');
-  await popup.close();
 
   step(13, 'The inbox category tabs are real listings');
   const tabs = await page.$$eval('[data-email-category]',

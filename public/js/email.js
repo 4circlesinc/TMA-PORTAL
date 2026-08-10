@@ -1648,15 +1648,29 @@
     return (err && err.message) || '';
   }
 
-  function reportMailError(state, err) {
+  /*
+   * @param opts.reconnectBanner  false for a failure that is about one
+   *        message rather than about the mailbox. Opening a message that the
+   *        provider refuses says nothing about whether mail is still
+   *        arriving, and the banner drops in above the list a second later —
+   *        pushing every row down by one row height under the reader's
+   *        pointer. The reading pane reports those failures itself; the
+   *        banner is raised by the sync, which is what it actually describes.
+   */
+  function reportMailError(state, err, opts) {
     if (err && err.reconnect) {
-      // The grant is dead, but the mail already on screen is still real and
-      // still readable. Flag it as a banner instead of replacing the list —
-      // one failed body fetch should not throw away a loaded inbox.
-      state.reconnectNeeded = true;
       state.mailError = err.message;
-      if (!rowsOf(state).length) state.connected = false;
+
+      if (!opts || opts.reconnectBanner !== false) {
+        // The grant is dead, but the mail already on screen is still real and
+        // still readable. Flag it as a banner instead of replacing the list —
+        // one failed fetch should not throw away a loaded inbox.
+        state.reconnectNeeded = true;
+        if (!rowsOf(state).length) state.connected = false;
+      }
+
       if (state.render) state.render();
+
       return;
     }
 
@@ -2191,7 +2205,9 @@
       state.bodyLoading = false;
       state.threadError = errorText(err) || 'This conversation could not be loaded.';
       state.threadErrorId = id;
-      reportMailError(state, err);
+      // The pane says so itself — see reportMailError on why this one must
+      // not raise the mailbox-wide banner.
+      reportMailError(state, err, { reconnectBanner: false });
       render();
     });
   }

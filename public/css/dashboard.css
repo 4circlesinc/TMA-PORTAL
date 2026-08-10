@@ -12932,6 +12932,37 @@
     .tma-dash__email-row-body {
       display: none;
     }
+
+    /*
+     * Give the subject back its room.
+     *
+     * A split-view list is often only ~310px wide, and the row's fixed
+     * furniture — the conversation arrow, the always-on star and flag, the
+     * avatar, the timestamp column and the gutters — was taking all but about
+     * seventy pixels of it, so every sender and subject truncated to three
+     * characters. Star and flag are still one hover (or one right-click)
+     * away; an unreadable subject line is not recoverable at all.
+     */
+    .tma-dash__email-row-front-actions {
+      display: none;
+    }
+
+    /* Set on the rows rather than on the list: a container query cannot
+       restyle its own query container. */
+    .tma-dash__email-row,
+    .tma-dash__email-list-head,
+    .tma-dash__email-categories {
+      --email-pad: var(--space-10);
+    }
+
+    .tma-dash__email-row {
+      gap: var(--space-6);
+    }
+
+    .tma-dash__email-row-side {
+      min-width: 0;
+      margin-left: var(--space-4);
+    }
   }
 
   @container email-list (max-width: 420px) {
