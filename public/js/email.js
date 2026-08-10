@@ -1562,6 +1562,55 @@
     });
   }
 
+  /* The list-row id that owns the conversation drop for a message — the
+   * parent itself, or the parent a child was loaded under. */
+  function conversationParentForMessage(state, id) {
+    if (!id) return null;
+
+    var pageRow = findRow(state, id);
+    if (pageRow && hasConversation(pageRow)) return id;
+
+    var loaded = state.conversationRows || {};
+    var parentId;
+    for (parentId in loaded) {
+      if (!Object.prototype.hasOwnProperty.call(loaded, parentId)) continue;
+      var msgs = loaded[parentId] || [];
+      for (var i = 0; i < msgs.length; i++) {
+        if (msgs[i] && msgs[i].id === id) return parentId;
+      }
+    }
+
+    return null;
+  }
+
+  /* Open a conversation drop in the list (never closes). Used when the reader
+   * opens a message so the other messages show up underneath as well. */
+  function ensureConversationExpanded(root, state, render, parentId) {
+    if (!parentId) return;
+    var parent = findRow(state, parentId);
+    if (!parent || !hasConversation(parent)) return;
+    if (!state.openConversations) state.openConversations = {};
+
+    var alreadyOpen = !!state.openConversations[parentId];
+    state.openConversations[parentId] = true;
+
+    if (alreadyOpen && conversationChildren(state, parentId)) return;
+
+    loadConversation(state, parentId).then(function (rows) {
+      if (!state.openConversations[parentId]) return;
+      // Opened while the conversation was ticked: its replies join the
+      // selection, because ticking a conversation means all of it.
+      if (state.checkedIds[parentId]) {
+        rows.forEach(function (row) { state.checkedIds[row.id] = true; });
+      }
+      updateInboxList(root, state, render);
+    }).catch(function (err) {
+      delete state.openConversations[parentId];
+      updateInboxList(root, state, render);
+      reportMailError(state, err);
+    });
+  }
+
   /* Open or close a conversation in the list. Never opens the reading pane:
    * looking at what a conversation contains is not reading it. */
   function toggleConversation(root, state, render, id) {
@@ -1574,22 +1623,8 @@
       return;
     }
 
-    state.openConversations[id] = true;
+    ensureConversationExpanded(root, state, render, id);
     updateInboxList(root, state, render);
-
-    loadConversation(state, id).then(function (rows) {
-      if (!state.openConversations[id]) return;
-      // Opened while the conversation was ticked: its replies join the
-      // selection, because ticking a conversation means all of it.
-      if (state.checkedIds[id]) {
-        rows.forEach(function (row) { state.checkedIds[row.id] = true; });
-      }
-      updateInboxList(root, state, render);
-    }).catch(function (err) {
-      delete state.openConversations[id];
-      updateInboxList(root, state, render);
-      reportMailError(state, err);
-    });
   }
 
   /*
@@ -2297,6 +2332,10 @@
 
     state.selectedId = id;
     if (row.unread) markRowRead(state, id);
+
+    // Opening a message also expands its conversation drop in the list so the
+    // other messages are visible without a separate caret click.
+    ensureConversationExpanded(root, state, render, conversationParentForMessage(state, id));
 
     // A thread already covering this message is reused rather than refetched —
     // but the reading pane shows whichever message is selected, and only the
