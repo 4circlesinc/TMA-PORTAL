@@ -3932,7 +3932,9 @@
       /* Mobile hides the list head, so the pills get their own strip there. */
       (isEmailMobile() ? renderInboxCategories(state) : '') +
       '<div class="tma-dash__email-list-head">' +
-      renderEmailSelectAll(state) +
+      /* Desktop select-all lives in the page toolbar; keep it here on mobile
+       * where that bar is hidden. */
+      (isEmailMobile() ? renderEmailSelectAll(state) : '') +
       (isEmailMobile() ? '' : renderInboxCategories(state)) +
       (isEmailMobile()
         ? renderEmailListRefreshBtn(state) +
