@@ -532,14 +532,92 @@ class MailSynchronizer
         }
     }
 
-    /** Short sidebar-friendly title for an inbound message. */
+    /**
+     * Short sidebar-friendly title for an inbound message.
+     *
+     * Shared mailboxes deliver colleagues' mail into the same inbox, so
+     * "sent you" / "replied to your email" are reserved for messages that
+     * actually name this person as a recipient, or continue a thread they
+     * themselves sent. Everything else is a neutral "New email from…".
+     */
     private function emailNotificationTitle(MailMessage $m, string $fromName): string
     {
-        if ($this->looksLikeReply($m)) {
+        if ($this->repliedToUsersEmail($m)) {
             return $fromName.' replied to your email';
         }
 
-        return $fromName.' sent you an email';
+        if ($this->messageAddressedToUser($m)) {
+            return $fromName.' sent you an email';
+        }
+
+        return 'New email from '.$fromName;
+    }
+
+    /** Portal login + connected mailbox addresses that count as "me". */
+    private function ownAddresses(): array
+    {
+        $emails = [mb_strtolower(trim((string) $this->account->email))];
+
+        $user = $this->account->relationLoaded('user')
+            ? $this->account->user
+            : $this->account->user()->first();
+
+        if ($user && $user->email) {
+            $emails[] = mb_strtolower(trim((string) $user->email));
+        }
+
+        return array_values(array_unique(array_filter(
+            $emails,
+            fn (string $email): bool => $email !== '' && str_contains($email, '@'),
+        )));
+    }
+
+    /** True when this person is on To, Cc or Bcc. */
+    private function messageAddressedToUser(MailMessage $m): bool
+    {
+        $own = $this->ownAddresses();
+        if ($own === []) {
+            return false;
+        }
+
+        foreach (['to', 'cc', 'bcc'] as $field) {
+            foreach ($m->{$field} ?? [] as $addr) {
+                $email = mb_strtolower(trim((string) (is_array($addr) ? ($addr['email'] ?? '') : $addr)));
+                if ($email !== '' && in_array($email, $own, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A reply in a thread where this person previously sent a message —
+     * not merely any "Re:" that landed in a shared inbox.
+     */
+    private function repliedToUsersEmail(MailMessage $m): bool
+    {
+        if (! $this->looksLikeReply($m)) {
+            return false;
+        }
+
+        $threadId = trim((string) ($m->thread_id ?? ''));
+        $own = $this->ownAddresses();
+        if ($threadId === '' || $own === []) {
+            return false;
+        }
+
+        return MailMessage::query()
+            ->where('connected_account_id', $this->account->id)
+            ->where('thread_id', $threadId)
+            ->where('id', '!=', $m->id)
+            ->where(function ($query) use ($own): void {
+                foreach ($own as $email) {
+                    $query->orWhereRaw('LOWER(from_email) = ?', [$email]);
+                }
+            })
+            ->exists();
     }
 
     /** Reply when the subject says Re:, or the thread already has mail. */

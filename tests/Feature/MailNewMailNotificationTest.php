@@ -71,7 +71,11 @@ class MailNewMailNotificationTest extends TestCase
             'subject' => 'Message '.$id,
             'bodyPreview' => 'preview',
             'from' => ['emailAddress' => ['name' => 'Dana Reed', 'address' => 'dana@example.com']],
-            'toRecipients' => [],
+            // Default: addressed to this mailbox — "sent you an email".
+            'toRecipients' => [
+                ['emailAddress' => ['name' => 'Test User', 'address' => 'user@example.com']],
+            ],
+            'ccRecipients' => [],
             'isRead' => false,
             'hasAttachments' => false,
             'receivedDateTime' => now()->toIso8601ZuluString(),
@@ -173,6 +177,106 @@ class MailNewMailNotificationTest extends TestCase
 
         $this->assertCount(1, $rows, 'Six arrivals must be one summary, not six rows.');
         $this->assertSame('6 new emails', $rows->first()->title);
+    }
+
+    public function test_shared_inbox_mail_not_addressed_to_user_uses_neutral_title(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $this->seedMessage($user, $account);
+
+        $this->fakeGraph([
+            $this->graphMessage('shared-1', [
+                'subject' => 'For a colleague',
+                'toRecipients' => [
+                    ['emailAddress' => ['name' => 'Colleague', 'address' => 'colleague@example.com']],
+                ],
+            ]),
+        ]);
+
+        new MailSynchronizer($account)->quickCheck();
+
+        $notification = Notification::where('user_id', $user->id)->where('type', 'email.received')->first();
+
+        $this->assertNotNull($notification);
+        $this->assertSame('New email from Dana Reed', $notification->title);
+    }
+
+    public function test_reply_in_shared_thread_is_not_called_replied_to_your_email(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $this->seedMessage($user, $account);
+
+        // Prior mail in the thread was from someone else — not this user.
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'thread-root',
+            'thread_id' => 'conv-shared-reply',
+            'folder' => 'inbox',
+            'subject' => 'Background check',
+            'from_email' => 'outsider@example.com',
+            'to' => [['name' => 'Colleague', 'email' => 'colleague@example.com']],
+            'is_read' => true,
+            'sent_at' => now()->subHour(),
+        ]);
+
+        $this->fakeGraph([
+            $this->graphMessage('shared-reply', [
+                'conversationId' => 'conv-shared-reply',
+                'subject' => 'Re: Background check',
+                'toRecipients' => [
+                    ['emailAddress' => ['name' => 'Colleague', 'address' => 'colleague@example.com']],
+                ],
+            ]),
+        ]);
+
+        new MailSynchronizer($account)->quickCheck();
+
+        $notification = Notification::where('user_id', $user->id)->where('type', 'email.received')->first();
+
+        $this->assertNotNull($notification);
+        $this->assertSame('New email from Dana Reed', $notification->title);
+    }
+
+    public function test_reply_after_user_sent_says_replied_to_your_email(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+        $this->seedMessage($user, $account);
+
+        MailMessage::create([
+            'uuid' => (string) Str::uuid(),
+            'user_id' => $user->id,
+            'connected_account_id' => $account->id,
+            'remote_id' => 'my-sent',
+            'thread_id' => 'conv-mine',
+            'folder' => 'sent',
+            'subject' => 'Question',
+            'from_email' => 'user@example.com',
+            'to' => [['name' => 'Dana', 'email' => 'dana@example.com']],
+            'is_read' => true,
+            'sent_at' => now()->subHour(),
+        ]);
+
+        $this->fakeGraph([
+            $this->graphMessage('reply-mine', [
+                'conversationId' => 'conv-mine',
+                'subject' => 'Re: Question',
+                'toRecipients' => [
+                    ['emailAddress' => ['name' => 'Test User', 'address' => 'user@example.com']],
+                ],
+            ]),
+        ]);
+
+        new MailSynchronizer($account)->quickCheck();
+
+        $notification = Notification::where('user_id', $user->id)->where('type', 'email.received')->first();
+
+        $this->assertNotNull($notification);
+        $this->assertSame('Dana Reed replied to your email', $notification->title);
     }
 
     public function test_the_live_sync_endpoint_always_returns_folder_counts(): void

@@ -28,7 +28,7 @@ class GraphProvider implements MailProvider
     private const BASE_USERS = 'https://graph.microsoft.com/v1.0/users';
 
     /** Fields the list rows need — Graph returns the full body otherwise. */
-    private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
+    private const LIST_SELECT = 'id,conversationId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,flag,hasAttachments,receivedDateTime,categories,parentFolderId';
 
     /** Marks a cursor as "everything after this time" rather than a delta link. */
     private const TIME_CURSOR = 'ts:';
@@ -548,6 +548,9 @@ class GraphProvider implements MailProvider
             'from_name' => $from['name'] ?? null,
             'from_email' => $from['address'] ?? null,
             'to' => self::addresses($raw['toRecipients'] ?? []),
+            // CC is needed on the list path too — "sent you an email" checks
+            // recipients, and shared inboxes often land as CC-only.
+            'cc' => self::addresses($raw['ccRecipients'] ?? []),
             'is_read' => (bool) ($raw['isRead'] ?? false),
             'is_starred' => ($raw['flag']['flagStatus'] ?? 'notFlagged') === 'flagged',
             // Outlook has no "important" concept matching Gmail's; the flag
@@ -570,7 +573,6 @@ class GraphProvider implements MailProvider
         return $message + [
             'body_html' => $isHtml ? ($body['content'] ?? null) : null,
             'body_text' => $isHtml ? null : ($body['content'] ?? null),
-            'cc' => self::addresses($raw['ccRecipients'] ?? []),
             'reply_to' => $raw['replyTo'][0]['emailAddress']['address'] ?? null,
         ];
     }

@@ -347,6 +347,8 @@ class GmailProvider implements MailProvider
             'from_name' => $from['name'],
             'from_email' => $from['email'],
             'to' => self::parseAddressList($headers['to'] ?? ''),
+            // Headers are present without the body — keep CC for recipient checks.
+            'cc' => self::parseAddressList($headers['cc'] ?? ''),
             'is_read' => ! in_array('UNREAD', $labels, true),
             'is_starred' => in_array('STARRED', $labels, true),
             'is_important' => in_array('IMPORTANT', $labels, true),
@@ -374,7 +376,6 @@ class GmailProvider implements MailProvider
         return $message + [
             'body_html' => $parts['html'],
             'body_text' => $parts['text'],
-            'cc' => self::parseAddressList($headers['cc'] ?? ''),
             'reply_to' => $headers['reply-to'] ?? null,
             'attachments' => self::resolveInlineAttachments($parts['attachments'], $parts['html']),
             'has_attachments' => $parts['attachments'] !== [],
