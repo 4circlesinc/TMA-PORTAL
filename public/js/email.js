@@ -6843,8 +6843,27 @@
     );
   }
 
+  function getEmailToastEl() {
+    return document.querySelector('[data-email-toast]');
+  }
+
   function ensureEmailToast(dash) {
-    if (!dash || dash.querySelector('[data-email-toast]')) return;
+    // Toast lives on <body> (fixed). Looking only inside .tma-dash recreated
+    // a second host after the first move — the orphan kept --visible with no
+    // hide timer, so "Message pinned" never went away.
+    var existing = getEmailToastEl();
+    if (existing) {
+      if (existing.parentNode !== document.body) {
+        document.body.appendChild(existing);
+      }
+      // Drop any duplicates left from older builds / double ensure.
+      document.querySelectorAll('[data-email-toast]').forEach(function (el, i) {
+        if (i === 0) return;
+        if (el.parentNode) el.parentNode.removeChild(el);
+      });
+      return existing;
+    }
+    if (!dash && !document.body) return null;
     var toast = document.createElement('div');
     toast.className = 'tma-dash__email-toast';
     toast.setAttribute('data-email-toast', '');
@@ -6854,32 +6873,35 @@
     toast.innerHTML =
       '<img src="' + ICONS.CheckCircle + '" alt="">' +
       '<span data-email-toast-text></span>';
-    dash.appendChild(toast);
+    document.body.appendChild(toast);
+    return toast;
+  }
+
+  function hideEmailToast(toast) {
+    toast = toast || getEmailToastEl();
+    if (!toast) return;
+    toast.classList.remove('tma-dash__email-toast--visible');
+    toast.hidden = true;
   }
 
   function showEmailToast(root, message) {
-    var dash = getEmailDashRoot(root) || root.closest('.tma-dash');
-    if (!dash) return;
-    ensureEmailToast(dash);
-    var toast = dash.querySelector('[data-email-toast]');
-    var text = dash.querySelector('[data-email-toast-text]');
-    if (!toast || !text) return;
-    // Never leave the toast as an in-flow grid child — on desktop it had no
-    // position:fixed rules and created an extra grid row under the shell.
-    if (toast.parentNode !== document.body) {
-      document.body.appendChild(toast);
-    }
+    var dash = getEmailDashRoot(root) || (root && root.closest && root.closest('.tma-dash'));
+    var toast = ensureEmailToast(dash);
+    if (!toast) return;
+    var text = toast.querySelector('[data-email-toast-text]');
+    if (!text) return;
+
     text.textContent = message;
     toast.hidden = false;
-    lockEmailShellSpacing(root);
-    window.requestAnimationFrame(function () {
-      toast.classList.add('tma-dash__email-toast--visible');
-      lockEmailShellSpacing(root);
-    });
-    window.clearTimeout(dash._emailToastTimer);
-    dash._emailToastTimer = window.setTimeout(function () {
+    // Force a reflow so re-showing the same toast still animates in.
+    void toast.offsetWidth;
+    toast.classList.add('tma-dash__email-toast--visible');
+
+    window.clearTimeout(showEmailToast._hideTimer);
+    window.clearTimeout(showEmailToast._goneTimer);
+    showEmailToast._hideTimer = window.setTimeout(function () {
       toast.classList.remove('tma-dash__email-toast--visible');
-      window.setTimeout(function () {
+      showEmailToast._goneTimer = window.setTimeout(function () {
         toast.hidden = true;
       }, 240);
     }, 2800);
@@ -9582,7 +9604,11 @@
       }
       if (window.PortalTooltip) window.PortalTooltip.init();
       var dashRoot = getEmailDashRoot(root);
-      if (dashRoot) ensureEmailToast(dashRoot);
+      if (dashRoot) {
+        ensureEmailToast(dashRoot);
+        // A prior bug left orphan body toasts stuck visible with no hide timer.
+        if (!showEmailToast._hideTimer) hideEmailToast();
+      }
       if (dashRoot && typeof dashRoot._syncTabBarBadges === 'function') dashRoot._syncTabBarBadges();
       announceInboxUnread(state);
     }
