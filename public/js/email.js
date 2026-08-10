@@ -7784,7 +7784,8 @@
     }
 
     // Row actions rebuild this body; dismiss any tip still anchored to a
-    // button that is about to be replaced so it cannot jump to the page top.
+    // button that is about to be replaced so it cannot jump to the page top
+    // or leave an empty band above the mail toolbar.
     if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
 
     var rows = filteredInbox(state);
@@ -7794,6 +7795,10 @@
     MORPH.patch(listBody, rows.length
       ? buildInboxRowsHtml(rows, state)
       : renderListState(state, rows));
+
+    if (window.PortalTooltip && window.PortalTooltip.purgeOrphans) {
+      window.PortalTooltip.purgeOrphans();
+    }
 
     syncSelectAllBox(root, state);
 
@@ -9301,6 +9306,9 @@
         renderComposeDock(state) +
         renderEmailSettings(state) +
         '</div>');
+      if (window.PortalTooltip && window.PortalTooltip.purgeOrphans) {
+        window.PortalTooltip.purgeOrphans();
+      }
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
       wireInlineComposeEvents(root, state, render);

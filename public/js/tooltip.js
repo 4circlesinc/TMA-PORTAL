@@ -90,6 +90,31 @@
     tooltip.style.removeProperty('--tooltip-arrow-offset');
   }
 
+  /* Tips portaled onto <body> whose trigger was destroyed by a morph — and any
+   * tip left on <body> after hide — must not linger. A stuck fixed tip at the
+   * top of the viewport is what readers see as "mystery spacing" after a
+   * star/flag/pin click. */
+  function purgeOrphanPortaledTips(keep) {
+    document.querySelectorAll('body > .tma-tooltip').forEach((tip) => {
+      if (keep && tip === keep) return;
+      const home = tip._tooltipHome;
+      if (home && home.isConnected) {
+        if (tip.parentNode !== home) home.appendChild(tip);
+        tip.classList.remove('is-portaled', 'is-visible');
+        tip.setAttribute('aria-hidden', 'true');
+        tip.style.position = '';
+        tip.style.left = '';
+        tip.style.top = '';
+        tip.style.visibility = '';
+        tip.style.removeProperty('--tooltip-arrow-offset');
+        tip._tooltipHome = null;
+        return;
+      }
+      if (tip.parentNode) tip.parentNode.removeChild(tip);
+      tip._tooltipHome = null;
+    });
+  }
+
   function clamp(value, min, max) {
     return Math.max(min, Math.min(value, max));
   }
@@ -177,6 +202,7 @@
     state.activeTrigger = null;
     state.activeTooltip = null;
     state.activeType = null;
+    purgeOrphanPortaledTips(null);
   }
 
   function showTooltip(trigger, tooltip) {
@@ -361,7 +387,11 @@
   window.addEventListener('scroll', onScrollOrResize, true);
   window.addEventListener('resize', onScrollOrResize);
 
-  window.PortalTooltip = { init: initAll, hideAll: hideActive };
+  window.PortalTooltip = {
+    init: initAll,
+    hideAll: hideActive,
+    purgeOrphans: function () { purgeOrphanPortaledTips(null); },
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAll);
