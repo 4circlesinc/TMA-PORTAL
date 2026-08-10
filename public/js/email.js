@@ -90,6 +90,7 @@
     XCircle: 'images/icons/tma/Xcircle.svg',
     Loading16: 'images/icons/tma/Loading-16.svg',
     Plus: ICON + 'Plus.svg',
+    PencilSimple: ICON + 'PencilSimple.svg',
     SidebarSimple: ICON + 'SidebarSimple.svg',
     List: ICON + 'List.svg',
     Hamburger: ICON + 'Hamburger.svg',
@@ -108,7 +109,8 @@
    * Mirrored from the server preference so it follows the account; kept in
    * localStorage too so the very first paint is already right. */
   var SIDEBAR_MODE_KEY = 'tma.email.sidebarMode';
-  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories';
+  /* v2: pinned-first daily strip (sent/draft/trash…) — old saves lacked those. */
+  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v2';
   var SPLIT_RATIO_MIN = 0.22;
   var SPLIT_RATIO_MAX = 0.78;
   // Inbox list narrower than the reading pane by default.
@@ -168,26 +170,34 @@
   }
 
   /* ── inbox categories ────────────────────────────────────────────
-   * Tabs above the list that switch the inbox between the plain folder and the
-   * flag-shaped views beside it. Each one is a real server listing (see
-   * MailController::VIRTUAL_FOLDERS), so paging is honest rather than a
-   * filter over whatever page happens to be loaded.
+   * Tabs above the list for the folders people open every day. Each one is a
+   * real server listing (see MailController::VIRTUAL_FOLDERS), so paging is
+   * honest rather than a filter over whatever page happens to be loaded.
+   * Inactive chips show the icon only; the active chip expands with its label
+   * and its own colour.
    */
   var INBOX_CATEGORIES = [
+    { id: 'pinned', label: 'Pinned', icon: 'PushPin', fixed: true },
     { id: 'inbox', label: 'Inbox', icon: 'Tray', fixed: true },
-    { id: 'important', label: 'Important', icon: 'Important' },
     { id: 'starred', label: 'Starred', icon: 'Star' },
-    { id: 'pinned', label: 'Pinned', icon: 'PushPin' },
+    { id: 'important', label: 'Important', icon: 'Important' },
+    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight' },
+    { id: 'draft', label: 'Drafts', icon: 'FileText' },
+    { id: 'snoozed', label: 'Snoozed', icon: 'Clock' },
+    { id: 'archive', label: 'Archive', icon: 'Archive' },
+    { id: 'trash', label: 'Trash', icon: 'Trash' },
   ];
 
-  var CATEGORY_FOLDERS = ['inbox', 'important', 'starred', 'pinned'];
+  var CATEGORY_FOLDERS = INBOX_CATEGORIES.map(function (category) {
+    return category.id;
+  });
 
   function loadInboxCategories() {
     try {
       var saved = JSON.parse(localStorage.getItem(INBOX_CATEGORIES_KEY) || 'null');
       if (Array.isArray(saved)) return saved;
     } catch (e) { /* ignore */ }
-    return ['important', 'starred', 'pinned'];
+    return ['starred', 'important', 'sent', 'draft', 'trash'];
   }
 
   function saveInboxCategories(ids) {
@@ -814,14 +824,14 @@
 
   function renderDetailTopbar(state) {
     if (isEmailMobile()) return '';
+    // Archive / delete / unread live in the page toolbar above everything —
+    // this strip only keeps back + prev/next for the reading pane.
     var back = renderDetailBack(state, true);
     var nav = renderDetailNav(state);
-    var topbarActions = detailTopbarActions(state);
-    var actions = topbarActions.map(renderDetailTopbarBtn).join('');
-    if (!back && !nav && !actions) return '';
+    if (!back && !nav) return '';
     return (
       '<div class="tma-dash__email-detail-topbar">' +
-      '<div class="tma-dash__email-detail-topbar-start">' + back + actions + '</div>' +
+      '<div class="tma-dash__email-detail-topbar-start">' + back + '</div>' +
       (nav ? '<div class="tma-dash__email-detail-topbar-end">' + nav + '</div>' : '') +
       '</div>'
     );
@@ -844,10 +854,93 @@
       ' data-tooltip-trigger data-tooltip-type="email-action" data-tooltip-position="bottom"' +
       ' data-tooltip-initial-delay="500" data-tooltip-rehover-delay="0" data-tooltip-rehover-window="30000"' +
       (opts.attrs || '') +
+      (opts.disabled ? ' disabled aria-disabled="true"' : '') +
       '>' +
       opts.innerHtml +
       renderEmailTooltipMarkup(opts.tipId, opts.label) +
       '</button>'
+    );
+  }
+
+  /* Ids the top toolbar should act on: ticked rows, or the open message. */
+  function emailToolbarTargetIds(state) {
+    var ids = Object.keys(state.checkedIds || {});
+    if (ids.length) return ids;
+    return state.selectedId ? [state.selectedId] : [];
+  }
+
+  function emailToolbarActions(folder) {
+    var archiveAction = folder === 'archive'
+      ? { id: 'inbox', label: 'Move to inbox', icon: 'ArchiveTray' }
+      : { id: 'archive', label: 'Archive', icon: 'Archive' };
+    return [
+      { id: 'delete', label: 'Delete', icon: 'Trash' },
+      archiveAction,
+      { id: 'move', label: 'Label as', icon: 'Tag' },
+      { id: 'unread', label: 'Mark as unread', icon: 'EnvelopeSimple' },
+      { id: 'spam', label: 'Report spam', icon: 'WarningOctagon' },
+      { id: 'more', label: 'More', icon: 'DotsThree' },
+    ];
+  }
+
+  /*
+   * Page-level mail toolbar — sits above the folder rail, list and reading
+   * pane, same role as the Files toolbar / an Outlook ribbon. New Mail and
+   * Sync are always live; the rest enable once something is ticked or open.
+   */
+  function renderEmailToolbar(state) {
+    if (isEmailMobile()) return '';
+
+    var hasTarget = emailToolbarTargetIds(state).length > 0;
+    var actions = emailToolbarActions(state.folder).map(function (action) {
+      var extraAttrs = '';
+      if (action.id === 'more') {
+        extraAttrs =
+          ' data-email-bulk-more-toggle aria-haspopup="menu" aria-expanded="' +
+          (state.bulkMoreMenuOpen ? 'true' : 'false') +
+          '"';
+      }
+      return renderEmailIconTooltipBtn({
+        tipId: 'email-toolbar-tip-' + action.id,
+        label: action.label,
+        className: 'tma-dash__tool-btn tma-dash__email-toolbar-btn',
+        attrs: ' data-email-bulk-action="' + esc(action.id) + '" data-email-toolbar-action' + extraAttrs,
+        disabled: !hasTarget,
+        innerHtml:
+          '<img src="' + esc(ICONS[action.icon]) + '" alt="">' +
+          '<span class="tma-dash__email-toolbar-btn-label">' + esc(action.label) + '</span>',
+      });
+    }).join('');
+
+    return (
+      '<div class="tma-dash__toolbar tma-dash__email-toolbar' +
+      (hasTarget ? ' tma-dash__email-toolbar--ready' : '') +
+      '" data-email-toolbar>' +
+      '<div class="tma-dash__toolbar-actions">' +
+      '<button type="button" class="tma-dash__email-toolbar-compose" data-email-folder="compose">' +
+      '<img src="' + ICONS.PencilSimple + '" alt="" aria-hidden="true">' +
+      '<span>New Mail</span>' +
+      '</button>' +
+      '<span class="tma-dash__email-toolbar-actions" role="toolbar" aria-label="Mail actions">' +
+      actions +
+      '</span>' +
+      renderEmailIconTooltipBtn({
+        tipId: 'email-toolbar-tip-refresh',
+        label: 'Sync',
+        className: 'tma-dash__tool-btn tma-dash__email-toolbar-btn' +
+          (state.refreshing ? ' tma-dash__email-toolbar-btn--spinning' : ''),
+        attrs: ' data-email-refresh' + (state.refreshing ? ' aria-busy="true"' : ''),
+        innerHtml:
+          '<img src="' + ICONS.ArrowsClockwise + '" alt="">' +
+          '<span class="tma-dash__email-toolbar-btn-label">Sync</span>',
+      }) +
+      renderEmailBulkMoreMenu(state) +
+      renderEmailLabelMenu(state) +
+      '</div>' +
+      '<div class="tma-dash__email-toolbar-end">' +
+      renderLayoutToggle(state) +
+      '</div>' +
+      '</div>'
     );
   }
 
@@ -941,13 +1034,14 @@
 
   function renderListHeadActions(state, opts) {
     opts = opts || {};
-    var bulkCount = selectedEmailCount(state);
+    // Layout toggle lives in the page toolbar on desktop; keep it here on
+    // mobile where that toolbar is hidden.
     var html =
       '<div class="tma-dash__email-list-head-actions">' +
       (opts.templateCount != null
         ? '<span class="tma-dash__email-template-list-count">' + opts.templateCount + '</span>'
         : '') +
-      renderLayoutToggle(state);
+      (isEmailMobile() ? renderLayoutToggle(state) : '');
     if (opts.showFilter !== false) {
       html += renderEmailListFilterBtn(state);
     }
@@ -2353,7 +2447,7 @@
   }
 
   function labelPopupTargetIds(state) {
-    if (state.labelPopupBulk) return Object.keys(state.checkedIds);
+    if (state.labelPopupBulk) return emailToolbarTargetIds(state);
     if (state.labelPopupRowId) return [state.labelPopupRowId];
     return [];
   }
@@ -2637,6 +2731,18 @@
     state.checkedIds = {};
   }
 
+  function updateEmailToolbar(root, state) {
+    var toolbar = root.querySelector('[data-email-toolbar]');
+    if (!toolbar) return;
+    var hasTarget = emailToolbarTargetIds(state).length > 0;
+    toolbar.classList.toggle('tma-dash__email-toolbar--ready', hasTarget);
+    toolbar.querySelectorAll('[data-email-toolbar-action]').forEach(function (btn) {
+      btn.disabled = !hasTarget;
+      if (hasTarget) btn.removeAttribute('aria-disabled');
+      else btn.setAttribute('aria-disabled', 'true');
+    });
+  }
+
   function updateEmailListBulk(root, state) {
     var count = selectedEmailCount(state);
     var bulk = root.querySelector('[data-email-bulk]');
@@ -2644,6 +2750,7 @@
     if (bulk) bulk.hidden = count === 0 || isEmailMobile();
     if (filter) filter.hidden = count > 0;
     syncSelectAllBox(root, state);
+    updateEmailToolbar(root, state);
     if (count === 0) {
       closeEmailBulkMoreMenu(root, state);
       if (state.labelPopupBulk) closeEmailLabelPopup(root, state);
@@ -3737,14 +3844,17 @@
     if (categories.length < 2) return '';
 
     return (
-      '<div class="tma-dash__email-categories" role="tablist" aria-label="Inbox categories">' +
+      '<div class="tma-dash__email-categories" role="tablist" aria-label="Mail folders">' +
       categories.map(function (category) {
         var active = state.folder === category.id;
 
         return (
           '<button type="button" class="tma-dash__email-category' +
+          ' tma-dash__email-category--' + esc(category.id) +
           (active ? ' tma-dash__email-category--active' : '') + '"' +
           ' role="tab" aria-selected="' + (active ? 'true' : 'false') + '"' +
+          ' aria-label="' + esc(category.label) + '"' +
+          ' title="' + esc(category.label) + '"' +
           ' data-email-category="' + esc(category.id) + '">' +
           '<img src="' + esc(ICONS[category.icon]) + '" alt="">' +
           '<span class="tma-dash__email-category-label">' + esc(category.label) + '</span>' +
@@ -3770,10 +3880,12 @@
       '<input type="checkbox" class="tma-dash__check" data-email-selectall' +
       (selection.all ? ' checked' : '') + ' aria-label="Select all">' +
       '</label>' +
-      renderEmailListRefreshBtn(state) +
-      renderEmailListBulk(state) +
-      renderEmailBulkMoreMenu(state) +
-      renderEmailLabelMenu(state) +
+      (isEmailMobile()
+        ? renderEmailListRefreshBtn(state) +
+          renderEmailListBulk(state) +
+          renderEmailBulkMoreMenu(state) +
+          renderEmailLabelMenu(state)
+        : '') +
       renderListHeadActions(state, { showFilter: !isEmailMobile() }) +
       '</div>' +
       renderInboxCategories(state) +
@@ -6335,7 +6447,8 @@
    * Only ever rendered where the server says there are two or more messages —
    * an arrow on a single message opens onto nothing, which reads as a bug. The
    * space is still reserved on one-message rows so senders and subjects stay
-   * aligned down the column.
+   * aligned down the column. The count itself sits beside the sender name as
+   * a badge — not under the caret.
    */
   function renderConversationToggle(row, state) {
     if (!hasConversation(row)) {
@@ -6354,9 +6467,15 @@
       ' aria-label="' + (open ? 'Hide' : 'Show') + ' the other ' + (count - 1) +
       ' message' + (count === 2 ? '' : 's') + ' in this conversation">' +
       '<img src="' + ICONS.CaretDown + '" alt="">' +
-      '<span class="tma-dash__email-row-thread-count">' + count + '</span>' +
       '</button>'
     );
+  }
+
+  function renderConversationCountBadge(row) {
+    if (!hasConversation(row)) return '';
+    var count = conversationCount(row);
+    return '<span class="tma-dash__email-row-thread-count" aria-label="' +
+      count + ' messages">' + count + '</span>';
   }
 
   function renderEmailRowMobileStar(row, state) {
@@ -7402,18 +7521,42 @@
     // and never carrying an arrow of its own.
     if (opts.child) rowCls += ' tma-dash__email-row--child';
 
+    var unreadDot = unread
+      ? '<span class="tma-dash__email-row-unread" aria-hidden="true"></span>'
+      : '<span class="tma-dash__email-row-unread-slot" aria-hidden="true"></span>';
+
+    /* Conversation drop rows stay compact: unread dot, sender, snippet, time.
+       No avatar, subject, or action chrome — those belong on the parent. */
+    if (opts.child) {
+      return (
+        '<div class="' + rowCls + '" data-email-row="' + esc(row.id) + '"' +
+        ' data-email-row-child="' + esc(opts.parentId) + '"' +
+        ' role="button" tabindex="0">' +
+        unreadDot +
+        '<div class="tma-dash__email-row-content">' +
+        '<div class="tma-dash__email-row-head">' +
+        '<span class="tma-dash__email-row-sender">' + esc(row.sender) + '</span>' +
+        '</div>' +
+        '<div class="tma-dash__email-row-snippet">' + esc(lines.body) + '</div>' +
+        '</div>' +
+        '<div class="tma-dash__email-row-side">' +
+        '<span class="tma-dash__email-row-time">' + esc(row.time) + '</span>' +
+        '</div>' +
+        '</div>'
+      );
+    }
+
     var rowHtml =
       '<div class="' + rowCls + '" data-email-row="' + esc(row.id) + '"' +
-      (opts.child ? ' data-email-row-child="' + esc(opts.parentId) + '"' : '') +
       ' role="button" tabindex="0">' +
-      (opts.child
-        ? '<span class="tma-dash__email-row-thread-spacer" aria-hidden="true"></span>'
-        : renderConversationToggle(row, state)) +
+      renderConversationToggle(row, state) +
+      unreadDot +
       renderEmailRowFrontActions(row, state) +
       rowListAvatar(row, state) +
       '<div class="tma-dash__email-row-content">' +
       '<div class="tma-dash__email-row-head">' +
       '<span class="tma-dash__email-row-sender">' + esc(row.sender) + '</span>' +
+      renderConversationCountBadge(row) +
       renderInboxRowLabelChips(row.id, state) +
       '</div>' +
       renderRowSubjectBody(lines) +
@@ -7433,13 +7576,12 @@
           ' title="Snoozed until ' + esc(formatSnoozeInstant(row.snoozedUntil)) + '">'
         : '') +
       '<span class="tma-dash__email-row-time">' + esc(row.time) + '</span>' +
-      (unread ? '<span class="tma-dash__email-row-unread" aria-hidden="true"></span>' : '') +
       '</div>' +
       renderEmailRowMobileStar(row, state) +
       '</div>' +
       '</div>';
 
-    if (isEmailMobile() && state.folder === 'inbox' && !opts.child) {
+    if (isEmailMobile() && state.folder === 'inbox') {
       return buildEmailRowSwipeWrap(row, state, rowHtml);
     }
     return rowHtml;
@@ -8457,7 +8599,7 @@
         event.preventDefault();
         event.stopPropagation();
         var action = bulkBtn.getAttribute('data-email-bulk-action');
-        var ids = Object.keys(state.checkedIds);
+        var ids = emailToolbarTargetIds(state);
         if (!ids.length) return;
 
         if (action === 'more') {
@@ -8482,7 +8624,7 @@
       btn.addEventListener('click', function (event) {
         event.stopPropagation();
         var item = btn.getAttribute('data-email-bulk-more-item');
-        var ids = Object.keys(state.checkedIds);
+        var ids = emailToolbarTargetIds(state);
         if (!ids.length) return;
 
         if (item === 'label') {
@@ -8552,7 +8694,7 @@
         if (!bulkBtn) return;
         event.stopPropagation();
         var action = bulkBtn.getAttribute('data-email-bulk-action');
-        var ids = Object.keys(state.checkedIds);
+        var ids = emailToolbarTargetIds(state);
         if (!ids.length) return;
 
         if (action === 'more') {
@@ -8980,6 +9122,7 @@
         renderEmailMobileChrome(state) +
         renderEmailProfilePopup(state) +
         '<div class="tma-dash__email-fit">' +
+        renderEmailToolbar(state) +
         '<div class="tma-dash__email-layout">' +
         renderEmailSidebar(state) +
         renderEmailPanel(state) +

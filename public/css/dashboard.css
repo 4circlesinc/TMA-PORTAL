@@ -9296,7 +9296,7 @@
   .tma-dash__email-fit > .tma-dash__email-layout {
     flex: 1;
     min-height: 0;
-    height: 100%;
+    height: auto;
   }
 
   .tma-dash__email-panel-fit {
@@ -9313,6 +9313,145 @@
     min-width: 0;
     min-height: 0;
     height: 100%;
+  }
+}
+
+/*
+ * Page-level mail toolbar — above the folder rail, list and reading pane,
+ * same job as the Files toolbar / an Outlook ribbon. New Mail is the solid
+ * pill; action tools carry a short label and grey out until something is
+ * ticked or open.
+ */
+.tma-dash__email-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  min-height: 48px;
+  margin: 0 var(--email-pad) var(--space-8);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-16);
+  background: var(--color-hover, rgba(0, 0, 0, 0.03));
+  box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+}
+
+.tma-dash__email-toolbar .tma-dash__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tma-dash__email-toolbar .tma-dash__toolbar-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.tma-dash__email-toolbar-compose {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-card, #fff);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tma-dash__email-toolbar-compose:hover {
+  background: var(--color-white, #fff);
+}
+
+.tma-dash__email-toolbar-compose img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+}
+
+.tma-dash__email-toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tma-dash__email-toolbar-btn.tma-dash__tool-btn {
+  width: auto;
+  height: 32px;
+  padding: 0 var(--space-8);
+  gap: var(--space-6);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-8);
+  color: var(--color-text-secondary);
+  font: inherit;
+}
+
+.tma-dash__email-toolbar-btn img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  flex: 0 0 auto;
+}
+
+.tma-dash__email-toolbar-btn-label {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.tma-dash__email-toolbar-btn:hover:not(:disabled) {
+  background: var(--color-hover-deep, rgba(0, 0, 0, 0.08));
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-toolbar-btn:disabled,
+.tma-dash__email-toolbar-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tma-dash__email-toolbar-btn--spinning img {
+  animation: tma-dash-spin 0.8s linear infinite;
+  opacity: 1;
+}
+
+.tma-dash__email-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: 0 0 auto;
+}
+
+.tma-dash__email-toolbar .tma-dash__email-bulk-more-menu,
+.tma-dash__email-toolbar .tma-dash__email-label-menu {
+  position: absolute;
+}
+
+@media (max-width: 1100px) {
+  .tma-dash__email-toolbar-btn-label {
+    display: none;
+  }
+
+  .tma-dash__email-toolbar-btn.tma-dash__tool-btn {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
   }
 }
 
@@ -9461,7 +9600,9 @@
   gap: var(--space-12);
   flex: 1;
   min-height: 0;
-  height: 100%;
+  /* flex: 1 fills what's left under the page toolbar — don't force 100% or
+     the bar and the panes fight for the same height. */
+  height: auto;
   overflow: hidden;
   /* Inset on both sides. The sidebar used to sit flush against the main-menu
      rail, which made it read as a second strip of the same rail rather than as
@@ -11236,13 +11377,20 @@
   color: var(--color-text-primary);
 }
 
-.tma-dash__email-row-unread {
-  display: none;
-  flex-shrink: 0;
+/* Unread dot sits left of the avatar (parent) or content (conversation drop).
+   The empty slot keeps read rows aligned with unread ones. */
+.tma-dash__email-row-unread,
+.tma-dash__email-row-unread-slot {
+  flex: 0 0 8px;
   width: 8px;
   height: 8px;
+  margin-top: 16px;
   border-radius: 50%;
-  background: #1a73e8;
+  background: transparent;
+}
+
+.tma-dash__email-row-unread {
+  background: var(--color-primary, #03a5e9);
 }
 
 .tma-dash__email-list-mobile-head {
@@ -11293,12 +11441,17 @@
 }
 
 .tma-dash__email-row--unread .tma-dash__email-row-subject-text {
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-dark, #136da0);
+  font-weight: var(--font-weight-semibold);
 }
 
 .tma-dash__email-row--unread .tma-dash__email-row-sender {
   color: var(--color-text-primary);
+}
+
+.tma-dash__email-row--unread .tma-dash__email-row-time {
+  color: var(--color-primary-dark, #136da0);
+  font-weight: var(--font-weight-medium);
 }
 
 /* The old inline " - preview" span is no longer emitted (see email.js); this
@@ -11365,7 +11518,9 @@
    this pair looking oddly far from it. */
 .tma-dash__email-list-check + .tma-dash__email-row-front-actions,
 .tma-dash__email-row-thread-toggle + .tma-dash__email-row-front-actions,
-.tma-dash__email-row-thread-spacer + .tma-dash__email-row-front-actions {
+.tma-dash__email-row-thread-spacer + .tma-dash__email-row-front-actions,
+.tma-dash__email-row-unread + .tma-dash__email-row-front-actions,
+.tma-dash__email-row-unread-slot + .tma-dash__email-row-front-actions {
   margin-left: -6px;
 }
 
@@ -11385,18 +11540,16 @@
  */
 .tma-dash__email-row-thread-toggle,
 .tma-dash__email-row-thread-spacer {
-  flex: 0 0 26px;
-  width: 26px;
+  flex: 0 0 22px;
+  width: 22px;
   height: 40px;
   box-sizing: border-box;
 }
 
 .tma-dash__email-row-thread-toggle {
   display: inline-flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0;
   padding: 0;
   border: 0;
   border-radius: var(--radius-6, 6px);
@@ -11421,31 +11574,82 @@
   transform: rotate(180deg);
 }
 
+/* Count badge beside the sender name on conversation parents. */
 .tma-dash__email-row-thread-count {
-  font-size: 10px;
-  line-height: 12px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-6, 6px);
+  background: var(--color-hover-deep, rgba(0, 0, 0, 0.08));
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1;
   font-weight: 600;
-  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-/* Messages listed under an opened conversation: indented, and on a faintly
-   inset ground so it is obvious where the conversation starts and ends. */
+/*
+ * Conversation drop — compact replies under an opened thread.
+ * White ground, indented past the caret/avatar column, unread dot + sender +
+ * snippet + time. No avatar or subject on these rows.
+ */
 .tma-dash__email-thread-children {
-  background: var(--color-hover, rgba(0, 0, 0, 0.03));
+  background: var(--color-white, #fff);
   border-bottom: 1px solid var(--color-overlay-4);
 }
 
-/* Indented enough to read as "inside the conversation", not so much that the
-   list pane's already narrow subject column loses another 50px. */
 .tma-dash__email-row--child {
-  padding-left: calc(var(--email-pad) + var(--space-12));
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 44px;
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
+  /* Align under the parent's content: pad + caret + unread slot + avatar + gaps */
+  padding-left: calc(
+    var(--email-pad) + 22px + 8px + 40px + (var(--space-8) * 3)
+  );
   border-bottom: 1px solid var(--color-overlay-4);
-  min-height: 48px;
+  background: var(--color-white, #fff);
 }
 
-.tma-dash__email-row--child .tma-dash__email-row-thread-spacer {
-  display: none;
+.tma-dash__email-row--child:hover,
+.tma-dash__email-row--child.tma-dash__email-row--active,
+.tma-dash__email-row--child.tma-dash__email-row--selected {
+  background: var(--color-hover);
+}
+
+.tma-dash__email-row--child .tma-dash__email-row-unread,
+.tma-dash__email-row--child .tma-dash__email-row-unread-slot {
+  margin-top: 0;
+}
+
+.tma-dash__email-row--child .tma-dash__email-row-content {
+  gap: 2px;
+}
+
+.tma-dash__email-row--child .tma-dash__email-row-sender {
+  font-size: var(--text-size-13, 13px);
+  line-height: 18px;
+}
+
+.tma-dash__email-row--child .tma-dash__email-row-snippet {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-row--child .tma-dash__email-row-side {
+  align-self: center;
+  min-width: 0;
+  margin-left: var(--space-8);
+}
+
+.tma-dash__email-row--child .tma-dash__email-row-time {
+  visibility: visible;
 }
 
 .tma-dash__email-thread-children > .tma-dash__email-row--child:last-child {
@@ -11540,8 +11744,8 @@
 }
 
 /* ── inbox category tabs ─────────────────────────────────────────────
- * Pill strip: quiet grey chips, solid primary fill on the active tab
- * (icon + label invert to white). Counts stay off this row. */
+ * Icon-only grey chips when idle; the active chip expands with its label
+ * and its own solid colour. */
 .tma-dash__email-categories {
   display: flex;
   align-items: center;
@@ -11555,11 +11759,15 @@
 .tma-dash__email-categories::-webkit-scrollbar { display: none; }
 
 .tma-dash__email-category {
+  --email-category-color: var(--color-primary);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-6);
   flex: 0 0 auto;
-  padding: var(--space-6) var(--space-12);
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--space-8);
   border: 0;
   border-radius: var(--radius-pill);
   background: var(--color-hover);
@@ -11569,13 +11777,29 @@
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    padding var(--transition-fast),
+    min-width var(--transition-fast);
 }
 
 .tma-dash__email-category img {
   width: 16px;
   height: 16px;
   opacity: 0.72;
+  flex: 0 0 auto;
+}
+
+/* Idle chips are icon-only — the label returns with the active colour.
+   Name stays on aria-label / title for screen readers and hover. */
+.tma-dash__email-category:not(.tma-dash__email-category--active) {
+  width: 32px;
+  padding: 0;
+}
+
+.tma-dash__email-category:not(.tma-dash__email-category--active) .tma-dash__email-category-label {
+  display: none;
 }
 
 .tma-dash__email-category:hover {
@@ -11584,21 +11808,33 @@
 }
 
 .tma-dash__email-category--active {
-  background: var(--color-primary);
+  gap: var(--space-6);
+  padding: 0 var(--space-12);
+  background: var(--email-category-color);
   color: #fff;
   font-weight: 600;
 }
 
 .tma-dash__email-category--active:hover {
-  background: var(--color-primary-dark, #0288c2);
+  background: color-mix(in srgb, var(--email-category-color) 88%, #000);
   color: #fff;
 }
 
 .tma-dash__email-category--active img {
   opacity: 1;
-  /* Phosphor glyphs ship dark; force white on the primary fill. */
+  /* Phosphor glyphs ship dark; force white on the solid fill. */
   filter: brightness(0) invert(1);
 }
+
+.tma-dash__email-category--pinned { --email-category-color: #c9852a; }
+.tma-dash__email-category--inbox { --email-category-color: var(--color-primary, #03a5e9); }
+.tma-dash__email-category--starred { --email-category-color: #d4a017; }
+.tma-dash__email-category--important { --email-category-color: #d64545; }
+.tma-dash__email-category--sent { --email-category-color: #2a9d8f; }
+.tma-dash__email-category--draft { --email-category-color: #6b7c93; }
+.tma-dash__email-category--snoozed { --email-category-color: #7c6cf0; }
+.tma-dash__email-category--archive { --email-category-color: #5b8a72; }
+.tma-dash__email-category--trash { --email-category-color: #b85c5c; }
 
 /* ── skeleton rows ─────────────────────────────────────────────────
  *
@@ -13640,7 +13876,9 @@
   .tma-dash__email-row-front-actions,
   .tma-dash__email-row-actions-bar,
   .tma-dash__email-row-hover-actions,
-  .tma-dash__email-row-thread-spacer {
+  .tma-dash__email-row-thread-spacer,
+  .tma-dash__email-row:not(.tma-dash__email-row--child) > .tma-dash__email-row-unread,
+  .tma-dash__email-row:not(.tma-dash__email-row--child) > .tma-dash__email-row-unread-slot {
     display: none !important;
   }
 
@@ -13660,8 +13898,39 @@
     border-radius: var(--radius-pill);
   }
 
+  /* Conversation drop stays a compact flex strip under the parent. */
   .tma-dash__email-row--child {
-    padding-left: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px));
+    display: flex;
+    align-items: center;
+    grid-template-columns: none;
+    grid-template-rows: none;
+    gap: var(--space-8);
+    min-height: 48px;
+    padding-top: var(--space-8);
+    padding-bottom: var(--space-8);
+    padding-left: calc(
+      max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px)) + 40px + var(--space-12)
+    );
+  }
+
+  .tma-dash__email-row--child .tma-dash__email-row-content,
+  .tma-dash__email-row--child .tma-dash__email-row-side {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .tma-dash__email-row--child .tma-dash__email-row-side {
+    flex-direction: row;
+    align-items: center;
+    align-self: center;
+    justify-content: flex-end;
+    padding-top: 0;
+  }
+
+  .tma-dash__email-row--child .tma-dash__email-row-unread,
+  .tma-dash__email-row--child .tma-dash__email-row-unread-slot {
+    display: block !important;
+    margin-top: 0;
   }
 
   .tma-dash__email-row-select {
@@ -13770,10 +14039,6 @@
     white-space: nowrap;
   }
 
-  .tma-dash__email-row-unread {
-    display: inline-block;
-  }
-
   .tma-dash__email-row-star-mobile {
     display: inline-flex;
   }
@@ -13781,6 +14046,11 @@
   .tma-dash__email-row--unread .tma-dash__email-row-sender,
   .tma-dash__email-row--unread .tma-dash__email-row-subject-text {
     font-weight: 600;
+  }
+
+  .tma-dash__email-row--unread .tma-dash__email-row-subject-text,
+  .tma-dash__email-row--unread .tma-dash__email-row-time {
+    color: var(--color-primary-dark, #136da0);
   }
 
   .tma-dash__email-detail--mobile .tma-dash__email-detail-topbar,
