@@ -11660,27 +11660,20 @@
   display: inline-flex;
 }
 
+/* Same visual as .tma-dash__check — not a blue primary fill with a Check glyph. */
 .tma-dash__email-row-select-box {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 20px;
-  height: 20px;
-  border: 1.5px solid var(--color-border-strong, rgba(0, 0, 0, 0.28));
-  border-radius: var(--radius-4, 4px);
-  background: var(--color-white);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
   opacity: 0;
-}
-
-.tma-dash__email-row-select-box img {
-  width: 14px;
-  height: 14px;
-  opacity: 0;
-  filter: brightness(0) invert(1);
 }
 
 .tma-dash__email-row:hover .tma-dash__email-row-select-box,
@@ -11696,12 +11689,8 @@
 }
 
 .tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.tma-dash__email-row-select.is-checked .tma-dash__email-row-select-box img {
-  opacity: 1;
+  box-shadow: none;
+  background: url("../images/icons/tma/CheckboxChecked-16.svg") center / 16px 16px no-repeat;
 }
 
 .tma-dash__email-row-select:focus-within .tma-dash__email-row-select-box {
@@ -13162,16 +13151,7 @@
       display: none;
     }
 
-    /*
-     * Give the subject back its room.
-     *
-     * A split-view list is often only ~310px wide, and the row's fixed
-     * furniture — the conversation arrow, the always-on star and flag, the
-     * avatar, the timestamp column and the gutters — was taking all but about
-     * seventy pixels of it, so every sender and subject truncated to three
-     * characters. Star and flag are still one hover (or one right-click)
-     * away; an unreadable subject line is not recoverable at all.
-     */
+    /* Give the subject back its room in a narrow split-view list. */
     /* Set on the rows rather than on the list: a container query cannot
        restyle its own query container. */
     .tma-dash__email-row,
