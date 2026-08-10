@@ -908,8 +908,8 @@
     var cards = [
       factGroup('Applicant', applicant),
       factGroup('Case', caseFacts),
-      contentGroup('Timeline', timeline, '', true),
-      factGroup('Notes', narrative, true),
+      contentGroup('Timeline', timeline),
+      factGroup('Notes', narrative),
     ].filter(Boolean).join('');
 
     if (!cards) {

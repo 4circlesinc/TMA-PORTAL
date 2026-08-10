@@ -288,7 +288,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-16);
-  align-items: start;
+  /* Stretch, not start: two cards beside each other with different amounts in
+     them left one short and one tall, and the ragged bottom edge read as a
+     layout fault rather than as two sections. */
+  align-items: stretch;
 }
 
 /* The same surface the company page uses: fill, no border — grey-on-white is

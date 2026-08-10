@@ -16213,7 +16213,9 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-16);
+  /* Rows pack to the top; the cards within a row match each other's height. */
   align-content: start;
+  align-items: stretch;
   width: 100%;
   min-height: 0;
   overflow-y: auto;
