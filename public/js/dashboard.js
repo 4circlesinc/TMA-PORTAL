@@ -819,6 +819,11 @@
       }
       syncBackButton(name);
       if (todayWrap) todayWrap.style.display = (name === 'dashboard' || name === 'projects') ? '' : 'none';
+      // Dashboard parks Today inside the hello row; put it back when leaving.
+      if (name !== 'dashboard' && window.TMAPortalHome && window.TMAPortalHome.restoreTodayToShell) {
+        window.TMAPortalHome.restoreTodayToShell();
+        todayWrap = root.querySelector('[data-today-dropdown]');
+      }
       var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'projects-hub', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) {
@@ -896,6 +901,14 @@
           mainHead.style.removeProperty('max-height');
           mainHead.style.removeProperty('padding');
           mainHead.style.removeProperty('overflow');
+          // Re-apply chromeless hide. Clearing the email lock above would
+          // otherwise leave only [hidden], and .tma-dash__main-head{display:flex}
+          // beats the UA [hidden] rule — Today then reappears above the
+          // Dashboard hello row and stacks with Edit Dashboard.
+          if (hideMainChrome) {
+            mainHead.style.display = 'none';
+            mainHead.setAttribute('hidden', '');
+          }
         }
       }
       if (name !== 'messages') {

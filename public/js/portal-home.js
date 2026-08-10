@@ -1740,6 +1740,28 @@
     }
   }
 
+  /*
+   * The shell's Today control lives in .tma-dash__main-head, which Dashboard
+   * hides. Park it beside Edit Dashboard so the greeting stays one row.
+   */
+  function parkTodayInHello(el) {
+    var actions = el && el.querySelector('.tma-portal-hello__actions');
+    var today = document.querySelector('.tma-dash [data-today-dropdown]');
+    if (!actions || !today) return;
+    if (today.parentElement !== actions) {
+      actions.insertBefore(today, actions.firstChild);
+    }
+    today.style.display = '';
+    today.hidden = false;
+  }
+
+  function restoreTodayToShell() {
+    var today = document.querySelector('[data-today-dropdown]');
+    var slot = document.querySelector('.tma-dash__main-head-right');
+    if (!today || !slot || today.parentElement === slot) return;
+    slot.insertBefore(today, slot.firstChild);
+  }
+
   function mount(el, opts) {
     opts = opts || {};
     var s = data().state();
@@ -1822,6 +1844,11 @@
       else el.innerHTML = html;
       el._homeHtml = html;
     }
+
+    // Shell hides .tma-dash__main-head on Dashboard, so park the Today control
+    // in the hello actions — Hello / Change picture / Today / Edit Dashboard
+    // stay one row instead of Today stacking above Edit Dashboard.
+    parkTodayInHello(el);
 
     // Wiring runs after every render, but the nodes it walks now survive across
     // renders — so each binding is registered once per element rather than once
@@ -2054,4 +2081,7 @@
   }
 
   if (window.TMAPortalViews) window.TMAPortalViews.register('dashboard', mount);
+
+  window.TMAPortalHome = window.TMAPortalHome || {};
+  window.TMAPortalHome.restoreTodayToShell = restoreTodayToShell;
 })();

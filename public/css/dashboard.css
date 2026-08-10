@@ -1089,6 +1089,12 @@
   flex-shrink: 0;
 }
 
+/* Author display:flex above beats the UA [hidden] rule — chromeless views
+   (Dashboard, Email, …) must stay gone when only the attribute is set. */
+.tma-dash__main-head[hidden] {
+  display: none !important;
+}
+
 .tma-dash__main-head-left {
   display: flex;
   align-items: center;
