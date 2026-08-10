@@ -320,6 +320,10 @@ class CbiController extends Controller
             'ddOfficer' => $a->dd_officer,
             'paAssignment' => $a->pa_assignment,
             'fileOwner' => $a->file_owner,
+            // Never sent before, so the overview's "Submitted by" and
+            // "Verified by" rows were always blank whatever the sheet held.
+            'submittedBy' => $a->submitted_by,
+            'verifiedBy' => $a->verified_by,
             'investmentOption' => $a->investment_option,
             'applicationType' => $a->application_type,
             'clioMatterNumber' => $a->clio_matter_number,

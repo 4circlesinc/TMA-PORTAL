@@ -78,15 +78,12 @@
 
 .cbi-meta__facts { color: var(--color-text-secondary); }
 
-/* Key facts under the header: flat on the page, a hairline to close the
-   band off. No fill — a filled card here is what made the page read as
-   boxes inside boxes. */
+/* Key facts under the tabs, inside their own card. The hairline and the
+   bottom padding belonged to the flat version; the card provides both now. */
 .cbi-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-12) var(--space-24);
-  padding-bottom: var(--space-20);
-  border-bottom: 1px solid var(--color-border-soft);
 }
 
 /* Wrapper isolating the tab group from DOM reconciliation — see the note in
@@ -294,16 +291,20 @@
   align-items: start;
 }
 
+/* The same surface the company page uses: fill, no border — grey-on-white is
+   its own edge, and the hairline only muddied it. */
 .cbi-card {
   min-width: 0;
   margin: 0;
   padding: var(--space-20);
   border-radius: var(--radius-16);
   background: var(--color-bg-card, var(--color-white));
-  border: 1px solid var(--color-overlay-4);
 }
 
 .cbi-card--full { grid-column: 1 / -1; }
+
+/* The facts card sits outside the overview grid, so it spans on its own. */
+.cbi-card--strip { display: block; width: 100%; }
 
 @media (max-width: 1100px) {
   .cbi-cards { grid-template-columns: minmax(0, 1fr); }
@@ -314,3 +315,29 @@
    not a hero. */
 .cbi-card .tma-portal-empty { padding: var(--space-12) 0; }
 .cbi-card .tma-portal-empty__illustration { width: 72px; height: 72px; }
+
+
+/* ── Who is on this case ─────────────────────────────
+ *
+ * A face and a first name each, commas between — one line that answers "who
+ * has this?" instead of seven labelled rows that were mostly empty and, where
+ * filled, usually named the same two people. The full name and every role they
+ * hold live on the hover title.
+ */
+.cbi-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-12);
+}
+
+.cbi-people .cbi-person { gap: var(--space-8); }
+
+/* The comma belongs to the line, not to the name it follows, so it must not
+   pick up the gap that separates a face from its name. */
+.cbi-people__sep {
+  margin-left: -2px;
+  color: var(--color-text-secondary);
+}
+
+.cbi-people .cbi-person:last-child .cbi-people__sep { display: none; }

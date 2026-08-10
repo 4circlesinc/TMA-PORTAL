@@ -257,6 +257,52 @@
     return 'neutral';
   }
 
+  /*
+   * Everyone on the case, as faces and first names.
+   *
+   * These were seven labelled rows — assigned, verification officer, DD
+   * officer, PA, file owner, submitted by, verified by — most of them empty on
+   * most files, and where they were filled they usually named the same two
+   * people. It is a list of who is on this, so it reads as one: a face, a
+   * first name, commas between. The role survives on hover rather than taking
+   * a row of its own.
+   */
+  function peopleOnCase(a) {
+    var roles = [
+      ['Assigned', a.assignee ? a.assignee.name : null, a.assignee],
+      ['Verification officer', a.verificationOfficer, null],
+      ['Due diligence officer', a.ddOfficer, null],
+      ['PA assignment', a.paAssignment, null],
+      ['File owner', a.fileOwner, null],
+      ['Submitted by', a.submittedBy, null],
+      ['Verified by', a.verifiedBy, null],
+    ];
+
+    var seen = {};
+    var people = [];
+    roles.forEach(function (r) {
+      var name = String(r[1] == null ? '' : r[1]).trim();
+      if (!name) return;
+      // The same colleague often fills several of these; show them once, with
+      // every hat they are wearing.
+      var key = name.toLowerCase();
+      if (seen[key]) { seen[key].roles.push(r[0]); return; }
+      seen[key] = { roles: [r[0]] };
+      people.push({ name: name, person: r[2] || { name: name }, meta: seen[key] });
+    });
+
+    if (!people.length) return '';
+
+    return '<div class="cbi-people">' + people.map(function (p, i) {
+      var first = p.name.split(/\s+/)[0];
+      return '<span class="cbi-person" title="' + esc(p.meta.roles.join(' · ') + ' — ' + p.name) + '">' +
+        personAvatar(p.person) +
+        '<span class="cbi-person__name">' + esc(first) + '</span>' +
+        (i < people.length - 1 ? '<span class="cbi-people__sep">,</span>' : '') +
+        '</span>';
+    }).join('') + '</div>';
+  }
+
   function statusCell(status) {
     if (!status) return '<span class="tma-portal-table__muted">—</span>';
     return '<span class="tma-portal-status tma-portal-status--' + statusTone(status) + '">' +
@@ -745,8 +791,9 @@
       (meta.length ? '<span class="cbi-meta__facts">' + meta.join(' &middot; ') + '</span>' : '') + '</p>' +
       '</div><div class="tma-portal-head__actions">' + headActions + '</div></div>';
 
-    // Key facts as flat rows on the page surface — no card. Six values a
-    // case worker reads first, in one quiet band under the name.
+    // Key facts, in a card of their own. They used to sit flat on the page
+    // under the name; on a page that is otherwise all cards the one unbacked
+    // band read as something that had failed to load.
     var strip =
       fact('Received', fmtDate(a.timeline && a.timeline.received)) +
       fact('Submitted', fmtDate(a.timeline && a.timeline.submitted)) +
@@ -760,7 +807,9 @@
         ? '<a class="tma-dash__clients-list-link" href="' + esc((window.__TMA_SITE_ROOT || '') + '/clients/' + encodeURIComponent(a.clientUid)) +
           '">' + esc(a.clientName || 'Open in Client hub') + '</a>'
         : null, true);
-    var stripHtml = strip ? '<div class="cbi-strip">' + strip + '</div>' : '';
+    var stripHtml = strip
+      ? '<section class="cbi-card cbi-card--strip"><div class="cbi-strip">' + strip + '</div></section>'
+      : '';
 
     var tabs = [{ key: 'overview', label: 'Overview' }];
     if (assess.length) tabs.push({ key: 'assessment', label: 'Assessment  ' + num(assess.length) });
@@ -781,8 +830,12 @@
         (key === activeTab ? '' : ' hidden') + '>' + html + '</div>';
     }
 
-    return head + stripHtml +
+    // Tabs above the facts card: the card is the case at a glance and stays
+    // put whichever tab is open, so the tab row belongs between the name and
+    // everything that follows it.
+    return head +
       '<div class="cbi-tabs">' + ui().tabs(tabs, activeTab) + '</div>' +
+      stripHtml +
       tabPanel('overview', renderOverviewTab(a)) +
       (assess.length ? tabPanel('assessment', renderAssessmentTab(assess)) : '') +
       tabPanel('documents', renderDocumentsTab(files)) +
@@ -815,14 +868,7 @@
         : a.clioMatterNumber, !!safeUrl(a.clioMatterLink)) +
       fact('File location', a.fileLocation);
 
-    var team =
-      fact('Assigned', a.assignee ? personCell(a.assignee) : null, true) +
-      fact('Verification officer', a.verificationOfficer) +
-      fact('Due diligence officer', a.ddOfficer) +
-      fact('PA assignment', a.paAssignment) +
-      fact('File owner', a.fileOwner) +
-      fact('Submitted by', a.submittedBy) +
-      fact('Verified by', a.verifiedBy);
+    var team = peopleOnCase(a);
 
     var narrative =
       fact('Notes', a.notes) +
@@ -852,7 +898,7 @@
     var cards = [
       factGroup('Applicant', applicant),
       factGroup('Case', caseFacts),
-      factGroup('Team', team),
+      contentGroup('Assigned', team),   // weight comes from the card list below
       contentGroup('Timeline', timeline, '', true),
       factGroup('Notes', narrative, true),
     ].filter(Boolean).join('');
