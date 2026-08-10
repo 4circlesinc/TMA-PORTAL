@@ -1344,3 +1344,55 @@
 }
 .tma-portal-viewer__review-pick:hover { background: var(--color-hover); }
 .tma-portal-viewer__review-pick img { filter: invert(1) brightness(1.6); }
+
+/* ── File table: fixed columns, clipped names ──────────
+ *
+ * The table sized itself to its content, so one long filename widened the Name
+ * column and shoved Owner, Modified and Sharing to the right — the columns
+ * landed somewhere different in every folder, and on a deep name the last of
+ * them left the viewport entirely.
+ *
+ * Fixed layout instead: each column is the same width wherever you are, and a
+ * name too long for its column ends in an ellipsis with the whole thing on the
+ * element's title. Scoped to this table so the portal's other tables, which
+ * hold short and predictable values, keep sizing themselves.
+ */
+.tma-portal-files-table { table-layout: fixed; }
+
+/* Name takes whatever the named columns leave, and never less than this — at
+   which point the wrapper's overflow-x takes over rather than the name being
+   squeezed to nothing. */
+.tma-portal-files-table { min-width: 720px; }
+
+.tma-portal-files-table .tma-portal-cell--type { width: 88px; }
+.tma-portal-files-table .tma-portal-cell--size { width: 84px; }
+.tma-portal-files-table .tma-portal-cell--owner { width: 220px; }
+.tma-portal-files-table .tma-portal-cell--when { width: 116px; }
+.tma-portal-files-table .tma-portal-cell--sharing { width: 92px; }
+
+/* Every fixed-width cell clips rather than wrapping: a fixed layout would
+   otherwise make a row two lines tall to fit one long owner name. */
+.tma-portal-files-table td,
+.tma-portal-files-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The dots.
+ *
+ * The name sits in a flex row beside its icon and any status chip, so the
+ * ellipsis belongs on the button rather than the cell — a flex item will not
+ * shrink below its content unless it is told it may, which is what min-width
+ * does here. Clipping the cell alone would just cut the chip off instead.
+ */
+.tma-portal-files-table .tma-portal-file-link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The icon and the chip keep their size; only the name gives way. */
+.tma-portal-files-table .tma-portal-avatar-cell > :not(.tma-portal-file-link) { flex-shrink: 0; }

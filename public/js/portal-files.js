@@ -628,7 +628,25 @@
       { html: '<input type="checkbox" class="tma-dash__check" data-files-selectall ' + (allSel ? 'checked' : '') + ' aria-label="Select all">', attrs: ' class="tma-portal-cell--tight"' },
     ];
     if (showStar) headers.push({ html: '', attrs: ' class="tma-portal-cell--tight"' });
-    headers.push('Name', 'Type', 'Size', 'Owner', isRecycle() ? 'Deleted' : 'Modified', 'Sharing');
+    /*
+     * Every column is named, because the table lays out fixed: a filename is
+     * arbitrarily long, and letting the browser size the Name column to fit
+     * one pushed Owner, Modified and Sharing off to the right — the columns
+     * moved about as you browsed from folder to folder. Widths come from the
+     * class on each header now, and a long name is clipped with an ellipsis.
+     *
+     * The row-menu column had no header cell at all, which a fixed layout has
+     * no width to take; it gets one now, empty like the star's.
+     */
+    headers.push(
+      { html: 'Name', attrs: ' class="tma-portal-cell--name"' },
+      { html: 'Type', attrs: ' class="tma-portal-cell--type"' },
+      { html: 'Size', attrs: ' class="tma-portal-cell--size"' },
+      { html: 'Owner', attrs: ' class="tma-portal-cell--owner"' },
+      { html: isRecycle() ? 'Deleted' : 'Modified', attrs: ' class="tma-portal-cell--when"' },
+      { html: 'Sharing', attrs: ' class="tma-portal-cell--sharing"' },
+      { html: '', attrs: ' class="tma-portal-cell--tight"' }
+    );
 
     var rows = all.map(function (it) {
       var busy = isBusy(it.id);
@@ -649,19 +667,20 @@
       return '<tr' + cls + ' data-files-row data-id="' + esc(it.id) + '" data-type="' + esc(it.type) + '">' +
         '<td class="tma-portal-cell--tight"><input type="checkbox" class="tma-dash__check" data-files-check="' + esc(it.id) + '" ' + (state.selected[it.id] ? 'checked' : '') + ' aria-label="Select ' + esc(it.name) + '"></td>' +
         star +
-        '<td><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
-        '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '">' + esc(it.name) + '</button>' +
+        '<td class="tma-portal-cell--name"><span class="tma-portal-avatar-cell">' + thumbOrIcon(it, 24) +
+        // title: the full name is still reachable when the cell clips it.
+        '<button type="button" class="tma-portal-file-link" data-files-open="' + esc(it.id) + '" title="' + esc(it.name) + '">' + esc(it.name) + '</button>' +
         statusChip(it) + busySpin + '</span></td>' +
-        '<td class="tma-portal-table__muted">' + esc(typeLabel) + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(size || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + owner + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(when) + '</td>' +
-        '<td>' + sharing + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '—') + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--owner">' + owner + '</td>' +
+        '<td class="tma-portal-table__muted tma-portal-cell--when">' + esc(when) + '</td>' +
+        '<td class="tma-portal-cell--sharing">' + sharing + '</td>' +
         '<td class="tma-portal-cell--tight"><button type="button" class="tma-portal-row-menu" data-files-menu="' + esc(it.id) + '" aria-label="More actions"><img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
         '</tr>';
     }).join('');
 
-    return ui().table(headers, rows);
+    return ui().table(headers, rows, { cls: 'tma-portal-files-table' });
   }
 
   /* ── grid view ──────────────────────────────────────── */

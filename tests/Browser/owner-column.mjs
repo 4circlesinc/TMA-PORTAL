@@ -72,9 +72,15 @@ try {
       ['role' => 'editor', 'shared_by' => $bea->id, 'uuid' => (string) Str::uuid(),
        'token' => Str::random(32), 'revoked_at' => null]
     );
+    // A name far longer than its column, so the clipping is actually exercised
+    // rather than skipped for want of anything long enough.
+    App\\Models\\Folder::firstOrCreate(
+      ['name' => 'Q3 2026 Citizenship by Investment supporting documentation and correspondence bundle FINAL v7', 'owner_id' => $me->id],
+      ['uuid' => (string) Str::uuid(), 'created_by' => $me->id]
+    );
     echo 'seeded';
   `);
-  log('    seeded a folder with two people on it, and a second owner');
+  log('    seeded a folder with two people on it, a second owner, and a very long name');
 
   step(2, 'Signing in');
   await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
@@ -181,7 +187,45 @@ try {
     check(await page.locator('[data-files-row]').count() > 0, 'the listing still has rows after filtering');
   }
 
-  step(8, 'CBI still works — the same component, not a copy');
+  step(8, 'The columns do not move with the length of a name');
+  /*
+   * The table used to size itself to its content, so one long filename widened
+   * the Name column and shoved Owner, Modified and Sharing rightwards — the
+   * columns landed somewhere different in every folder.
+   */
+  const cols = await page.evaluate(() => {
+    const table = document.querySelector('.tma-portal-files-table');
+    if (!table) return null;
+    const link = [...table.querySelectorAll('.tma-portal-file-link')]
+      .sort((a, b) => b.textContent.length - a.textContent.length)[0];
+    return {
+      layout: getComputedStyle(table).tableLayout,
+      headerCells: table.querySelectorAll('thead th').length,
+      bodyCells: table.querySelector('tbody tr').children.length,
+      longestName: link ? link.textContent.length : 0,
+      clipped: link ? link.scrollWidth > link.clientWidth + 1 : false,
+      ellipsis: link ? getComputedStyle(link).textOverflow : '',
+      titled: link ? !!link.getAttribute('title') : false,
+      bodyScrollsSideways: document.body.scrollWidth > document.body.clientWidth,
+    };
+  });
+
+  check(cols && cols.layout === 'fixed', `the table lays out fixed (${cols && cols.layout})`);
+  check(
+    cols && cols.headerCells === cols.bodyCells,
+    `every body cell has a header cell to take its width from (${cols && cols.headerCells} vs ${cols && cols.bodyCells})`,
+  );
+  check(!cols.bodyScrollsSideways, 'and the page body still does not scroll sideways');
+
+  if (cols.longestName > 40) {
+    check(cols.clipped, `the long name is clipped rather than widening its column (${cols.longestName} chars)`);
+    check(cols.ellipsis === 'ellipsis', 'it ends in dots');
+    check(cols.titled, 'and the whole name is still readable from its title');
+  } else {
+    log(`      (no name long enough to clip — ${cols.longestName} chars)`);
+  }
+
+  step(9, 'CBI still works — the same component, not a copy');
   await page.goto(`${BASE}/cbi`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2500);
 
