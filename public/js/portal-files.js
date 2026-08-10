@@ -643,8 +643,9 @@
       { html: 'Type', attrs: ' class="tma-portal-cell--type"' },
       { html: 'Size', attrs: ' class="tma-portal-cell--size"' },
       { html: 'Shared with', attrs: ' class="tma-portal-cell--owner"' },
+      { html: 'Sharing', attrs: ' class="tma-portal-cell--sharing"' },
       { html: isRecycle() ? 'Deleted' : 'Modified', attrs: ' class="tma-portal-cell--when"' },
-      { html: '', attrs: ' class="tma-portal-cell--tight"' }
+      { html: '', attrs: ' class="tma-portal-cell--menu"' }
     );
 
     var rows = all.map(function (it) {
@@ -670,8 +671,9 @@
         '<td class="tma-portal-table__muted tma-portal-cell--type">' + esc(typeLabel) + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--size">' + esc(size || '—') + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--owner">' + owner + '</td>' +
+        '<td class="tma-portal-cell--sharing">' + sharingCell(it) + '</td>' +
         '<td class="tma-portal-table__muted tma-portal-cell--when">' + esc(when) + '</td>' +
-        '<td class="tma-portal-cell--tight"><button type="button" class="tma-portal-row-menu" data-files-menu="' + esc(it.id) + '" aria-label="More actions"><img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
+        '<td class="tma-portal-cell--menu"><button type="button" class="tma-portal-row-menu" data-files-menu="' + esc(it.id) + '" aria-label="More actions"><img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
         '</tr>';
     }).join('');
 
@@ -4473,7 +4475,6 @@
    * Falls back to the owner's name alone if the component has not loaded. */
   function ownerCell(item) {
     var people = (item && item.people) || [];
-    var audience = item && item.audience;
     var owner = item && item.owner;
 
     if (!window.TMAPersonCard) {
@@ -4483,34 +4484,33 @@
         '</span>';
     }
 
-    /*
-     * Named people first, the owner at the front of them, then the grant that
-     * covers everyone else.
-     *
-     * Most things here are not shared person to person: the firm's libraries
-     * are granted to all staff at once by the folder they sit in, and a
-     * personal drive is granted to nobody. So a group is named rather than
-     * drawn as a row of identical faces, which would repeat the same thirteen
-     * colleagues down thirty thousand rows and misdescribe how the access was
-     * actually given.
-     */
-    // Four is what fits before the faces crowd the Modified column; the rest
+    // Four is what fits before the faces crowd the next column; the rest
     // become one "+n" face, and every name is still listed beside them.
-    var faces = window.TMAPersonCard.faces(people, { max: 4, emptyLabel: '' });
+    return window.TMAPersonCard.faces(people, { max: 4, emptyLabel: '\u2014' });
+  }
 
-    var group = audience && audience.label
-      ? '<span class="tma-portal-audience"' +
-        (audience.role ? ' title="' + esc(audience.role) + ' access"' : '') + '>' +
-        esc(audience.label) + '</span>'
-      : '';
+  /*
+   * Who else can reach it.
+   *
+   * Almost nothing here is shared person to person: the firm's libraries are
+   * granted to all staff at once by the folder they sit in, a client's folder
+   * to the staff assigned to them, a personal drive to nobody. A group is
+   * named rather than drawn as a row of identical faces, which would repeat
+   * the same thirteen colleagues down thirty thousand rows.
+   *
+   * This sat inline beside the names for one commit and read as a mess — two
+   * different kinds of answer crowding one cell. It has its own column.
+   */
+  function sharingCell(item) {
+    var audience = item && item.audience;
 
-    // Nobody but the owner, and no group: say so rather than leaving the cell
-    // blank, which reads as missing data instead of "this is private".
-    if (!group && people.length <= 1) {
-      return faces + '<span class="tma-portal-audience tma-portal-audience--private">Private</span>';
+    if (!audience || !audience.label) {
+      return '<span class="tma-portal-table__muted">Private</span>';
     }
 
-    return faces + group;
+    return '<span class="tma-portal-chip tma-portal-chip--shared"' +
+      (audience.role ? ' title="' + esc(audience.role) + ' access"' : '') + '>' +
+      esc(audience.label) + '</span>';
   }
 
   function personAvatar(person) {

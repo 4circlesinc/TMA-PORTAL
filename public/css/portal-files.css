@@ -1359,23 +1359,54 @@
  */
 .tma-portal-files-table { table-layout: fixed; }
 
-/* Name takes whatever the named columns leave, and never less than this — at
-   which point the wrapper's overflow-x takes over rather than the name being
-   squeezed to nothing. */
-.tma-portal-files-table { min-width: 720px; }
+.tma-portal-files-table { min-width: 860px; }
 
+/*
+ * Name is a fixed share, not "whatever is left".
+ *
+ * With only one unsized column, a fixed layout hands it every spare pixel — on
+ * a wide screen the Name column ran half the table while the rest huddled at
+ * the right. Shared with holds the slack instead: it carries people's names,
+ * which are the part that actually varies.
+ */
+/* A flat width, not a share of the table: a percentage still grows with the
+   window, and this column has no need of the room. max-width does not bind a
+   column under a fixed layout, so the width itself has to be the limit. */
+.tma-portal-files-table .tma-portal-cell--name { width: 340px; }
 .tma-portal-files-table .tma-portal-cell--type { width: 88px; }
 .tma-portal-files-table .tma-portal-cell--size { width: 84px; }
-.tma-portal-files-table .tma-portal-cell--owner { width: 260px; }
+.tma-portal-files-table .tma-portal-cell--sharing { width: 116px; }
 .tma-portal-files-table .tma-portal-cell--when { width: 116px; }
+/*
+ * The row menu.
+ *
+ * The button is 28px, and it sat in a 32px cell carrying the table's 12px side
+ * padding — 20px of room for it, so the dots were sliced off at the right. It
+ * gets a cell of its own width with the padding pulled in.
+ */
+.tma-portal-files-table .tma-portal-cell--menu {
+  width: 48px;
+  padding-left: var(--space-4);
+  padding-right: var(--space-8);
+  text-align: right;
+}
 
 /* Every fixed-width cell clips rather than wrapping: a fixed layout would
-   otherwise make a row two lines tall to fit one long owner name. */
+   otherwise make a row two lines tall to fit one long owner name.
+   The control columns are exempt — they hold a button, not text, and clipping
+   a 32px cell cut the row menu's dots in half. */
 .tma-portal-files-table td,
 .tma-portal-files-table th {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tma-portal-files-table td.tma-portal-cell--tight,
+.tma-portal-files-table th.tma-portal-cell--tight,
+.tma-portal-files-table td.tma-portal-cell--menu,
+.tma-portal-files-table th.tma-portal-cell--menu {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /*
@@ -1396,35 +1427,6 @@
 /* The icon and the chip keep their size; only the name gives way. */
 .tma-portal-files-table .tma-portal-avatar-cell > :not(.tma-portal-file-link) { flex-shrink: 0; }
 
-/*
- * Who something is shared with, when the answer is a group.
- *
- * Most of this library is granted by the folder rather than person to person —
- * the firm's document libraries to all staff, a client's folder to the staff
- * assigned to them — so the cell names the grant instead of drawing the same
- * thirteen faces on every row. It sits beside the faces, reading as one answer
- * with them rather than a separate column of its own.
- */
-.tma-portal-audience {
-  display: inline-flex;
-  align-items: center;
-  /* The chip sits beside the faces, which are a separate element — the gap
-     inside .tma-people does not reach across to it. */
-  margin-left: var(--space-8);
-  padding: 2px var(--space-8);
-  /* 999px, not --radius-full: that token does not exist in this system. */
-  border-radius: 999px;
-  background: var(--color-overlay-4);
-  color: var(--color-text-secondary);
-  font-size: var(--text-size-12);
-  line-height: 16px;
-  white-space: nowrap;
-}
-
-/* Shared with nobody. Stated rather than left blank: an empty cell reads as
-   missing data, where this is a fact worth knowing about a file. */
-.tma-portal-audience--private { background: transparent; padding-left: 0; padding-right: 0; }
-
-/* The faces and the group chip share one line and give way together. */
-.tma-portal-files-table .tma-portal-cell--owner { white-space: nowrap; }
+/* The Sharing column's chip is the documented one the column already used;
+   only what it says has changed. */
 .tma-portal-files-table .tma-portal-cell--owner .tma-people { max-width: 100%; }

@@ -135,12 +135,15 @@ try {
   check(names.includes('Bea'), `and both names are listed beside them ("${names}")`);
   check(names.indexOf('Test User') < names.indexOf('Bea'), 'the owner comes first');
 
-  // The column is about sharing now, so it says so — and the separate
-  // Shared/Private chip that used to sit beside it is gone, because it read
-  // "Private" for everything the folder shared with all staff.
+  // The people are the whole of this column. The grant that covers everyone
+  // else is its own column beside it — crowded into one cell it read as a mess.
   const headers = await page.locator('.tma-portal-files-table thead th').allTextContents();
-  check(headers.some((h) => /Shared with/.test(h)), `the column is headed "Shared with" (${headers.filter(Boolean).join(', ')})`);
-  check(!headers.some((h) => h.trim() === 'Sharing'), 'and the old Sharing column is gone');
+  check(headers.some((h) => /Shared with/.test(h)), `there is a "Shared with" column (${headers.filter(Boolean).join(', ')})`);
+  check(headers.some((h) => h.trim() === 'Sharing'), 'and a separate "Sharing" column');
+  check(
+    !(await sharedRow.locator('.tma-portal-cell--owner .tma-portal-chip').count()),
+    'the grant does not sit inside the names cell',
+  );
 
   step(4.5, 'A group grant is named rather than drawn as a crowd of faces');
   /*
@@ -150,7 +153,7 @@ try {
    */
   const orgRow = page.locator('[data-files-row]', { hasText: 'Citizenship Applications' }).first();
   if (await orgRow.count()) {
-    const chip = orgRow.locator('.tma-portal-audience');
+    const chip = orgRow.locator('.tma-portal-cell--sharing');
     check(await chip.count() > 0, 'an all-staff folder names its audience');
     check((await chip.textContent()).trim() === 'All staff', `it says who ("${(await chip.textContent()).trim()}")`);
     const faceCount = await orgRow.locator('[data-tma-person]').count();
@@ -158,6 +161,13 @@ try {
   } else {
     log('      (no all-staff folder in this database)');
   }
+
+  // A personal folder is shared with nobody, and says so in that column.
+  const privateRow = page.locator('[data-files-row]', { hasText: 'Shared with Bea' }).first();
+  check(
+    (await privateRow.locator('.tma-portal-cell--sharing').textContent()).trim() === 'Private',
+    'and one shared with nobody reads Private',
+  );
 
   step(5, 'Hovering a face opens the person card');
   await restMouse();
@@ -232,6 +242,16 @@ try {
       ellipsis: link ? getComputedStyle(link).textOverflow : '',
       titled: link ? !!link.getAttribute('title') : false,
       bodyScrollsSideways: document.body.scrollWidth > document.body.clientWidth,
+      nameWidth: Math.round(table.querySelector('th.tma-portal-cell--name').getBoundingClientRect().width),
+      // The row menu is a 28px button; it used to sit in a 32px cell carrying
+      // 12px of side padding, so its dots were sliced off at the right.
+      menuFits: (() => {
+        const btn = table.querySelector('.tma-portal-row-menu');
+        if (!btn) return true;
+        const cell = btn.closest('td').getBoundingClientRect();
+        const b = btn.getBoundingClientRect();
+        return b.right <= cell.right + 0.5 && b.left >= cell.left - 0.5;
+      })(),
     };
   });
 
@@ -241,6 +261,8 @@ try {
     `every body cell has a header cell to take its width from (${cols && cols.headerCells} vs ${cols && cols.bodyCells})`,
   );
   check(!cols.bodyScrollsSideways, 'and the page body still does not scroll sideways');
+  check(cols.nameWidth <= 360, `the Name column is a flat width, not the leftovers (${cols.nameWidth}px)`);
+  check(cols.menuFits, 'the row-menu dots are not clipped by their cell');
 
   if (cols.longestName > 40) {
     check(cols.clipped, `the long name is clipped rather than widening its column (${cols.longestName} chars)`);
