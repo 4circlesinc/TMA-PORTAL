@@ -887,12 +887,13 @@
         var emailMenuBtn = root.querySelector('[data-email-mobile-menu]');
         if (emailMenuBtn) emailMenuBtn.hidden = true;
         // Clear inline padding locks from lockEmailShellSpacing so other
-        // pages get their normal main gutters back.
+        // pages get their normal main gutters back. removeProperty is required
+        // — paddingTop='' does not clear setProperty(..., 'important').
         var mainEl = root.querySelector('.tma-dash__main');
         if (mainEl) {
-          mainEl.style.paddingTop = '';
-          mainEl.style.paddingLeft = '';
-          mainEl.style.paddingRight = '';
+          mainEl.style.removeProperty('padding-top');
+          mainEl.style.removeProperty('padding-left');
+          mainEl.style.removeProperty('padding-right');
         }
         if (mainHead) {
           mainHead.style.removeProperty('display');

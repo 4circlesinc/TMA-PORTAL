@@ -92,12 +92,17 @@ function buildCss(platform = process.platform) {
   }
   .tma-dash--desktop-bar .tma-dash__main {
     grid-row: 1 / -1 !important;
-    /* Keep normal top inset under the title bar for Dashboard etc.
-     * Email clears it separately so the mail toolbar stays tight. */
+  }
+  /* Every app page keeps a top inset under the title bar — Email only is flush. */
+  .tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
     padding-top: var(--space-28, 28px) !important;
+    padding-left: var(--space-28, 28px) !important;
+    padding-right: var(--space-28, 28px) !important;
   }
   .tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
     padding-top: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
   .tma-dash--desktop-bar.tma-dash--email .tma-dash__main-head {
     display: none !important;
@@ -442,7 +447,7 @@ function buildCss(platform = process.platform) {
      * already accounts for the bar — so drop the mobile header clearance, but
      * keep a normal content inset for Dashboard (Email stays flush).
      */
-    .tma-dash--desktop-bar .tma-dash__main {
+    .tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
       padding-top: var(--space-16, 16px) !important;
     }
 

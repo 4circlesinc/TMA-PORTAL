@@ -1094,12 +1094,22 @@ a.tma-dash__tab-btn:visited {
 }
 .tma-dash--desktop-bar .tma-dash__main {
   grid-row: 1 / -1 !important;
-  /* Dashboard / other views need normal top inset under the blue bar.
-   * Only Email sits flush (see below) — zeroing every view crushed Hello. */
+}
+
+/*
+ * Desktop app: every page keeps a top inset under the blue title bar.
+ * Email is the only exception — it sits flush for the mail toolbar.
+ * :not(.tma-dash--email) must win over older email padding:0 locks.
+ */
+.tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
   padding-top: var(--space-28) !important;
+  padding-left: var(--space-28) !important;
+  padding-right: var(--space-28) !important;
 }
 .tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
   padding-top: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 .tma-dash--desktop-bar.tma-dash--email .tma-dash__main-head {
   display: none !important;
@@ -1155,7 +1165,7 @@ a.tma-dash__tab-btn:visited {
 
 /* Electron narrow: keep a content inset; only Email sits flush under the bar. */
 @media (max-width: 1024px) {
-  .tma-dash--desktop-bar .tma-dash__main {
+  .tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
     padding-top: var(--space-16) !important;
   }
 
@@ -1182,6 +1192,17 @@ a.tma-dash__tab-btn:visited {
   padding-top: 0 !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
+}
+
+/* Last word for the desktop shell: non-email pages always keep top padding. */
+.tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
+  padding-top: var(--space-28) !important;
+}
+
+@media (max-width: 1024px) {
+  .tma-dash--desktop-bar:not(.tma-dash--email) .tma-dash__main {
+    padding-top: var(--space-16) !important;
+  }
 }
 
 .tma-dash__email-toast {

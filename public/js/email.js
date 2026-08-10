@@ -185,7 +185,7 @@
   var INBOX_CATEGORIES = [
     { id: 'inbox', label: 'Inbox', icon: 'TrayFill', fixed: true },
     { id: 'important', label: 'Important', icon: 'FlagFill', fixed: true },
-    { id: 'starred', label: 'Starred', icon: 'Star', fixed: true },
+    { id: 'starred', label: 'Starred', icon: 'StarFilled', fixed: true },
     { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill', fixed: true },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill', fixed: true },
     { id: 'draft', label: 'Drafts', icon: 'FileTextFill', fixed: true },
@@ -220,6 +220,19 @@
    * the next visit rather than springing back open.
    */
   var SIDEBAR_GROUPS_KEY = 'tma.email.sidebarGroups';
+  var LIST_GROUPS_KEY = 'tma.email.listGroups';
+
+  /* Inbox list sections — open by default; closing sticks until reopened. */
+  var INBOX_LIST_GROUPS = [
+    { id: 'pinned', label: 'Pinned' },
+    { id: 'today', label: 'Today' },
+    { id: 'yesterday', label: 'Yesterday' },
+    { id: 'lastWeek', label: 'Last Week' },
+    { id: 'thisMonth', label: 'This Month' },
+    { id: 'lastMonth', label: 'Last Month' },
+    { id: 'thisYear', label: 'This Year' },
+    { id: 'older', label: 'Older' },
+  ];
 
   function loadSidebarGroups() {
     try {
@@ -238,6 +251,58 @@
   /* A group is open unless it was explicitly closed. */
   function isSidebarGroupOpen(state, key) {
     return !(state.sidebarGroups && state.sidebarGroups[key] === false);
+  }
+
+  function loadListGroups() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(LIST_GROUPS_KEY) || '{}');
+      if (saved && typeof saved === 'object') return saved;
+    } catch (e) { /* ignore */ }
+    return {};
+  }
+
+  function saveListGroups(groups) {
+    try {
+      localStorage.setItem(LIST_GROUPS_KEY, JSON.stringify(groups || {}));
+    } catch (e) { /* ignore */ }
+  }
+
+  function isListGroupOpen(state, key) {
+    return !(state.listGroups && state.listGroups[key] === false);
+  }
+
+  function startOfLocalDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  /* Bucket a row into Pinned / Today / … / Older using local calendar days. */
+  function inboxListGroupId(row, now) {
+    if (row && row.pinned) return 'pinned';
+    var raw = row && row.sentAt;
+    var date = raw ? new Date(raw) : null;
+    if (!date || isNaN(date.getTime())) return 'older';
+
+    now = now || new Date();
+    var today = startOfLocalDay(now);
+    var day = startOfLocalDay(date);
+    var dayDiff = Math.round((today.getTime() - day.getTime()) / 86400000);
+
+    if (dayDiff <= 0) return 'today';
+    if (dayDiff === 1) return 'yesterday';
+    if (dayDiff < 7) return 'lastWeek';
+
+    if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
+      return 'thisMonth';
+    }
+
+    var prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+    var prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    if (date.getFullYear() === prevYear && date.getMonth() === prevMonth) {
+      return 'lastMonth';
+    }
+
+    if (date.getFullYear() === now.getFullYear()) return 'thisYear';
+    return 'older';
   }
 
   /*
@@ -7753,31 +7818,69 @@
     return rowHtml;
   }
 
-  /* The whole list body: the page, with each opened conversation's messages
-   * inlined beneath the row they belong to. One function so the full render
-   * and the in-place patch can never disagree about what is on screen. */
-  function buildInboxRowsHtml(rows, state) {
-    return rows.map(function (row) {
-      var html = buildInboxRowHtml(row, state);
-      if (!isConversationOpen(state, row.id)) return html;
+  /* One list row plus any open conversation drop beneath it. */
+  function renderInboxRowWithThread(row, state) {
+    var html = buildInboxRowHtml(row, state);
+    if (!isConversationOpen(state, row.id)) return html;
 
-      var children = conversationChildren(state, row.id);
+    var children = conversationChildren(state, row.id);
 
-      if (!children) {
-        return html +
-          '<div class="tma-dash__email-thread-children" data-email-thread-children="' + esc(row.id) + '">' +
-          renderThreadSkeleton(Math.min(3, conversationCount(row))) +
-          '</div>';
-      }
-
+    if (!children) {
       return html +
         '<div class="tma-dash__email-thread-children" data-email-thread-children="' + esc(row.id) + '">' +
-        (children.length
-          ? children.map(function (child) {
-            return buildInboxRowHtml(child, state, { child: true, parentId: row.id });
-          }).join('')
-          : '') +
+        renderThreadSkeleton(Math.min(3, conversationCount(row))) +
         '</div>';
+    }
+
+    return html +
+      '<div class="tma-dash__email-thread-children" data-email-thread-children="' + esc(row.id) + '">' +
+      (children.length
+        ? children.map(function (child) {
+          return buildInboxRowHtml(child, state, { child: true, parentId: row.id });
+        }).join('')
+        : '') +
+      '</div>';
+  }
+
+  /* The whole list body: date/pin sections wrapping the page of rows, with
+   * each opened conversation inlined beneath its parent. One function so the
+   * full render and the in-place patch can never disagree about what is on
+   * screen. Empty sections are omitted; closed sections stay closed via
+   * localStorage until the reader opens them again. */
+  function buildInboxRowsHtml(rows, state) {
+    var now = new Date();
+    var buckets = {};
+    INBOX_LIST_GROUPS.forEach(function (group) { buckets[group.id] = []; });
+
+    rows.forEach(function (row) {
+      var id = inboxListGroupId(row, now);
+      if (!buckets[id]) buckets[id] = [];
+      buckets[id].push(row);
+    });
+
+    return INBOX_LIST_GROUPS.map(function (group) {
+      var groupRows = buckets[group.id];
+      if (!groupRows || !groupRows.length) return '';
+
+      var open = isListGroupOpen(state, group.id);
+      var body = groupRows.map(function (row) {
+        return renderInboxRowWithThread(row, state);
+      }).join('');
+
+      return (
+        '<section class="tma-dash__email-list-group" data-email-list-group="' + esc(group.id) + '">' +
+        '<button type="button" class="tma-dash__email-list-group-toggle"' +
+        ' data-email-list-group-toggle="' + esc(group.id) + '"' +
+        ' aria-expanded="' + (open ? 'true' : 'false') + '">' +
+        '<span class="tma-dash__email-list-group-caret' + (open ? ' is-open' : '') + '" aria-hidden="true">' +
+        '<svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor"' +
+        ' stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        '</span>' +
+        '<span class="tma-dash__email-list-group-label">' + esc(group.label) + '</span>' +
+        '</button>' +
+        (open ? '<div class="tma-dash__email-list-group-body">' + body + '</div>' : '') +
+        '</section>'
+      );
     }).join('');
   }
 
@@ -7796,9 +7899,25 @@
     return !!(view && !view.hidden);
   }
 
+  function releaseEmailShellSpacing(root) {
+    var dash = getEmailDashRoot(root);
+    if (!dash) return;
+    var main = dash.querySelector('.tma-dash__main');
+    if (!main) return;
+    // Drop the email-only inline zeros so Dashboard / Messages / etc. can
+    // take the desktop-bar top inset again.
+    main.style.removeProperty('padding-top');
+    main.style.removeProperty('padding-left');
+    main.style.removeProperty('padding-right');
+  }
+
   function lockEmailShellSpacing(root) {
     var dash = getEmailDashRoot(root);
-    if (!dash || !emailViewIsActive(root)) return;
+    if (!dash) return;
+    if (!emailViewIsActive(root)) {
+      releaseEmailShellSpacing(root);
+      return;
+    }
 
     // Spacing CSS is keyed off this class — keep it on while Email is open.
     if (!dash.classList.contains('tma-dash--email')) {
@@ -7848,6 +7967,7 @@
       timer = window.setTimeout(function () {
         timer = null;
         if (emailViewIsActive(root)) lockEmailShellSpacing(root);
+        else releaseEmailShellSpacing(root);
       }, 0);
     }
     var obs = new MutationObserver(kick);
@@ -7897,6 +8017,21 @@
   }
 
   function wireListRows(root, state, render) {
+    MORPH.unwired(root, '[data-email-list-group-toggle]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        var key = btn.getAttribute('data-email-list-group-toggle');
+        if (!key) return;
+        state.listGroups = state.listGroups || {};
+        // Open by default; first click closes and persists false forever
+        // until they open it again.
+        state.listGroups[key] = state.listGroups[key] === false;
+        saveListGroups(state.listGroups);
+        updateInboxList(root, state, render);
+      });
+    });
+
     // A broken sender photo falls back to initials. Bound once on root (rows
     // are re-created every render) via capture, since `error` does not bubble.
     if (!root._avatarFallbackWired) {
@@ -9264,6 +9399,9 @@
       if (!root._emailState.sidebarGroups) {
         root._emailState.sidebarGroups = loadSidebarGroups();
       }
+      if (!root._emailState.listGroups) {
+        root._emailState.listGroups = loadListGroups();
+      }
       if (typeof root._emailState.listFilter !== 'string') {
         root._emailState.listFilter = 'all';
       }
@@ -9364,6 +9502,7 @@
       sidebarCollapsed: loadSidebarCollapsed(),
       sidebarMode: loadSidebarMode(),
       sidebarGroups: loadSidebarGroups(),
+      listGroups: loadListGroups(),
       /* Which conversations the reader has opened in the list, and the
        * messages fetched for them. */
       openConversations: {},

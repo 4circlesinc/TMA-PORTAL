@@ -11355,6 +11355,68 @@
   min-height: 0;
 }
 
+/* Collapsible inbox sections (Pinned / Today / …). Open by default; closed
+   state is persisted in localStorage until the reader opens them again. */
+.tma-dash__email-list-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-dash__email-list-group-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-10) var(--email-pad);
+  border: 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+  background: var(--color-bg-card, #f9f9fa);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+  line-height: 18px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__email-list-group-toggle:hover {
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__email-list-group-caret {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.tma-dash__email-list-group-caret svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tma-dash__email-list-group-caret.is-open {
+  transform: rotate(90deg);
+}
+
+.tma-dash__email-list-group-label {
+  min-width: 0;
+}
+
+.tma-dash__email-list-group-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .tma-dash__email-row {
   display: flex;
   align-items: flex-start;
