@@ -1083,8 +1083,19 @@ a.tma-dash__tab-btn:visited {
 }
 
 /* Last-wins belt: never leave a blank band above the mail toolbar on desktop. */
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main {
   padding: 0 0 var(--space-12) !important;
+}
+
+.tma-dash--email .tma-dash__main-head {
+  display: none !important;
+  margin: 0 !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  padding: 0 !important;
+  position: absolute !important;
+  visibility: hidden !important;
 }
 
 /*

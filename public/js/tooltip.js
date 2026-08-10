@@ -97,21 +97,22 @@
   function purgeOrphanPortaledTips(keep) {
     document.querySelectorAll('body > .tma-tooltip').forEach((tip) => {
       if (keep && tip === keep) return;
+      // Always blank the tip before moving it — a visible fixed tip at 0×0
+      // reads as empty space under the blue header after a row action.
+      tip.classList.remove('is-portaled', 'is-visible');
+      tip.setAttribute('aria-hidden', 'true');
+      tip.style.position = '';
+      tip.style.left = '';
+      tip.style.top = '';
+      tip.style.visibility = '';
+      tip.style.removeProperty('--tooltip-arrow-offset');
       const home = tip._tooltipHome;
+      tip._tooltipHome = null;
       if (home && home.isConnected) {
         if (tip.parentNode !== home) home.appendChild(tip);
-        tip.classList.remove('is-portaled', 'is-visible');
-        tip.setAttribute('aria-hidden', 'true');
-        tip.style.position = '';
-        tip.style.left = '';
-        tip.style.top = '';
-        tip.style.visibility = '';
-        tip.style.removeProperty('--tooltip-arrow-offset');
-        tip._tooltipHome = null;
         return;
       }
       if (tip.parentNode) tip.parentNode.removeChild(tip);
-      tip._tooltipHome = null;
     });
   }
 

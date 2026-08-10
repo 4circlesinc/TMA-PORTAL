@@ -7774,6 +7774,41 @@
     }).join('');
   }
 
+  /*
+   * After star/flag/pin/archive the page-title row or mobile header padding
+   * can reappear and shove the mail toolbar down. Force the shell closed
+   * whenever the desktop toolbar is on screen.
+   */
+  function lockEmailShellSpacing(root) {
+    var dash = getEmailDashRoot(root);
+    if (!dash || !dash.classList.contains('tma-dash--email')) return;
+
+    var head = dash.querySelector('.tma-dash__main-head');
+    if (head) {
+      head.setAttribute('hidden', '');
+      head.hidden = true;
+      head.style.setProperty('display', 'none', 'important');
+      head.style.setProperty('margin', '0', 'important');
+      head.style.setProperty('height', '0', 'important');
+      head.style.setProperty('max-height', '0', 'important');
+      head.style.setProperty('padding', '0', 'important');
+      head.style.setProperty('overflow', 'hidden', 'important');
+    }
+
+    var main = dash.querySelector('.tma-dash__main');
+    var hasDesktopToolbar = !!dash.querySelector('.tma-dash__email-toolbar');
+    if (main && hasDesktopToolbar) {
+      main.style.paddingTop = '0';
+      main.style.paddingLeft = '0';
+      main.style.paddingRight = '0';
+    }
+
+    if (window.PortalTooltip) {
+      if (window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
+      if (window.PortalTooltip.purgeOrphans) window.PortalTooltip.purgeOrphans();
+    }
+  }
+
   function updateInboxList(root, state, render) {
     var listBody = root.querySelector('.tma-dash__email-list-body');
     if (!listBody) {
@@ -7794,10 +7829,9 @@
       ? buildInboxRowsHtml(rows, state)
       : renderListState(state, rows));
 
-    if (window.PortalTooltip && window.PortalTooltip.purgeOrphans) {
-      window.PortalTooltip.purgeOrphans();
-    }
-
+    lockEmailShellSpacing(root);
+    // Second pass after layout — some morphs reopen padding on the next frame.
+    window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
     syncSelectAllBox(root, state);
 
     updateEmailListBulk(root, state);
@@ -9304,9 +9338,8 @@
         renderComposeDock(state) +
         renderEmailSettings(state) +
         '</div>');
-      if (window.PortalTooltip && window.PortalTooltip.purgeOrphans) {
-        window.PortalTooltip.purgeOrphans();
-      }
+      lockEmailShellSpacing(root);
+      window.requestAnimationFrame(function () { lockEmailShellSpacing(root); });
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
       wireInlineComposeEvents(root, state, render);

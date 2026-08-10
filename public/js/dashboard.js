@@ -881,6 +881,22 @@
         );
         var emailMenuBtn = root.querySelector('[data-email-mobile-menu]');
         if (emailMenuBtn) emailMenuBtn.hidden = true;
+        // Clear inline padding locks from lockEmailShellSpacing so other
+        // pages get their normal main gutters back.
+        var mainEl = root.querySelector('.tma-dash__main');
+        if (mainEl) {
+          mainEl.style.paddingTop = '';
+          mainEl.style.paddingLeft = '';
+          mainEl.style.paddingRight = '';
+        }
+        if (mainHead) {
+          mainHead.style.removeProperty('display');
+          mainHead.style.removeProperty('margin');
+          mainHead.style.removeProperty('height');
+          mainHead.style.removeProperty('max-height');
+          mainHead.style.removeProperty('padding');
+          mainHead.style.removeProperty('overflow');
+        }
       }
       if (name !== 'messages') {
         root.classList.remove('tma-dash--messages-mobile', 'tma-dash--messages-mobile-reading');

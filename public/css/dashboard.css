@@ -9216,14 +9216,22 @@
 }
 
 /* Email has its own toolbar — never leave the generic page-title row in flow.
- * Inline display:none from showView can get cleared; CSS must stay definitive. */
+ * Inline display:none from showView can get cleared; CSS must stay definitive.
+ * Taken completely out of flex flow so a stale style cannot reopen the gap. */
 .tma-dash--email .tma-dash__main-head {
   display: none !important;
   margin: 0 !important;
   height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
   overflow: hidden !important;
   padding: 0 !important;
   border: 0 !important;
+  flex: 0 0 0 !important;
+  position: absolute !important;
+  width: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .tma-dash__email-page {
@@ -9273,24 +9281,27 @@
 }
 
 /*
- * Desktop mail must sit flush under the blue header. Tie this to the JS
- * `.tma-dash--email-mobile` flag (not only a media query) so a narrow
- * Electron window cannot keep the desktop split chrome while still
- * inheriting mobile `padding-top: var(--dash-mobile-header-h)` — that
- * combo is what opened the empty white band above the toolbar.
+ * Desktop mail must sit flush under the blue header.
+ * `:has(.tma-dash__email-toolbar)` is the source of truth — that toolbar only
+ * renders on desktop, so mobile header clearance cannot win while Split/List
+ * chrome is on screen (the combo that opened the empty white band).
  */
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main {
   padding: 0 0 var(--space-12) !important;
   overflow: hidden;
   min-height: 0;
 }
 
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-page,
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-fit,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-page,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
 
+.tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-toolbar,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
   margin-top: 0 !important;
 }
