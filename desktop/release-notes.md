@@ -1,3 +1,4 @@
+- Screen sharing in calls works in the desktop app (it silently did nothing before; on a Mac the system may ask for Screen Recording permission the first time)
 - Windows: the search, activity and notification buttons no longer disappear from the title bar in a smaller window
 - Windows: the unread count shows on the taskbar icon again
 - Windows: a new install now says how to pin the app to your taskbar

@@ -309,6 +309,7 @@
       startedAt: null,
       timer: null,
       statsTimer: null,
+      ringTimer: null,
 
       muted: false,
       cameraOff: false,
@@ -356,6 +357,42 @@
     if (!session) return;
     if (session.timer) { clearInterval(session.timer); session.timer = null; }
     if (session.statsTimer) { clearInterval(session.statsTimer); session.statsTimer = null; }
+    if (session.ringTimer) { clearTimeout(session.ringTimer); session.ringTimer = null; }
+  }
+
+  /*
+   * An unanswered call gives up on its own: 15 seconds of ringing, then the
+   * caller's side ends it as a missed call rather than ringing into the
+   * void. The callee runs the same clock at double length as a failsafe —
+   * normally the caller's hangup closes the pop-up, but a caller whose tab
+   * died mid-ring can never send it.
+   */
+  var RING_TIMEOUT_MS = 15000;
+
+  function armRingTimeout() {
+    if (!session) return;
+    clearRingTimeout();
+    var caller = session.role === 'caller';
+    session.ringTimer = setTimeout(function () {
+      if (!session || session.connected || session.accepting || session.answered) return;
+      if (caller) {
+        if (window.TMAToast && window.TMAToast.show) window.TMAToast.show('No answer');
+        announce('No answer');
+        endSession(true); // hangup, answered:false — recorded as missed
+        return;
+      }
+      // The vanished-caller failsafe: close quietly, no signal — there is
+      // nobody left to hear a reject.
+      stopRinging();
+      stopRecording();
+      teardownMedia();
+      session = null;
+      closeOverlay();
+    }, caller ? RING_TIMEOUT_MS : RING_TIMEOUT_MS * 2);
+  }
+
+  function clearRingTimeout() {
+    if (session && session.ringTimer) { clearTimeout(session.ringTimer); session.ringTimer = null; }
   }
 
   function stopStream(stream) {
@@ -1998,8 +2035,19 @@
       render();
       announce('You are sharing your screen');
       if (session.connected) publishState();
-    }).catch(function () {
-      // Cancelling the browser's picker is a decision, not an error.
+    }).catch(function (err) {
+      // Cancelling the picker is a decision, not an error — Chromium reports
+      // it as NotAllowedError and it stays silent. Anything else means
+      // sharing is genuinely unavailable (an outdated desktop shell, OS
+      // screen-recording permission, policy), and swallowing that made the
+      // button read as simply dead.
+      if (err && err.name === 'NotAllowedError') return;
+      if (!session) return;
+      showError({
+        title: 'Screen sharing unavailable',
+        message: 'The screen could not be shared from here. If this is the desktop app, update it and check it has screen-recording permission.',
+        kind: 'unsupported',
+      });
     });
   }
 
@@ -2619,6 +2667,7 @@
     // click, so autoplay policy never blocks this side.
     startRinging();
     beginOutgoing();
+    armRingTimeout();
   }
 
   /*
@@ -2665,6 +2714,7 @@
     if (!session || session.role !== 'callee') return;
 
     stopRinging();
+    clearRingTimeout();
 
     var wantVideo = session.media === 'video' && withVideo !== false;
     session.media = wantVideo ? 'video' : 'audio';
@@ -2829,6 +2879,10 @@
         // Show the callee their own camera before they answer (§2).
         startPreview(media === 'video');
         loadDeviceList();
+        armRingTimeout();
+        // Tell the caller the phone is actually ringing here — until this
+        // lands their side only knows it asked ("Calling…").
+        signal('state', { payload: { ringing: true } });
       } else if (type === 'offer' && body.sdp) {
         session.remoteOffer = body.sdp;
         if (!session.peerAvatar && fromPhoto) session.peerAvatar = fromPhoto;
@@ -2841,8 +2895,10 @@
 
     if (type === 'accept') {
       // Answered. The media connection takes a moment more, but ringing past
-      // the moment somebody picked up is the wrong sound.
+      // the moment somebody picked up is the wrong sound — and an answered
+      // call must never be cut down by the no-answer clock.
       stopRinging();
+      clearRingTimeout();
       if (session.role === 'caller') setStatus('Connecting…');
       return;
     }
@@ -2870,6 +2926,16 @@
     // into their photo (§4). Screen share and recording ride the same signal:
     // both are things a peer cannot see for themselves and must be told.
     if (type === 'state') {
+      // The callee's ring acknowledgement: "Calling…" becomes "Ringing…" the
+      // moment their device actually rings. A pure ack carries no device
+      // state, so it must not clobber the mute/camera defaults.
+      if (body.ringing) {
+        if (session.role === 'caller' && !session.connected) {
+          setStatus('Ringing…');
+          announce('Ringing');
+        }
+        return;
+      }
       session.remoteMuted = !!body.muted;
       session.remoteCameraOff = !!body.cameraOff;
       if (body.screenSharing !== undefined) {

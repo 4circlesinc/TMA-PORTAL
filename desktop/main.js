@@ -1,6 +1,6 @@
 const {
   app, BrowserWindow, Menu, shell, session, dialog, nativeImage,
-  ipcMain, systemPreferences, powerSaveBlocker, net,
+  ipcMain, systemPreferences, powerSaveBlocker, net, desktopCapturer,
 } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -756,6 +756,39 @@ function applyPermissionPolicy() {
     const url = webContents ? webContents.getURL() : '';
     return isPortalUrl(url) && allowed.includes(permission);
   });
+
+  /*
+   * getDisplayMedia — screen sharing in calls. A browser shows its own
+   * picker; Electron shows NOTHING unless the app answers this handler, so
+   * without it Share Screen rejected before any picker existed and the
+   * button read as dead in the desktop app while working fine on the web.
+   * macOS 15+ gets the native system picker; everywhere else the primary
+   * screen is granted directly — the call UI's own Stop control (and the
+   * OS capture indicator) still govern the share.
+   */
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    const deny = () => { try { callback(null); } catch { /* already answered */ } };
+    try {
+      const url = request && request.frame ? request.frame.url : '';
+      if (!isPortalUrl(url)) return deny();
+
+      // macOS gates screen capture behind its Screen Recording permission;
+      // a denied state yields silent black frames, so open the switch the
+      // user has to flip instead of pretending to share.
+      if (process.platform === 'darwin'
+        && systemPreferences.getMediaAccessStatus('screen') === 'denied') {
+        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+        return deny();
+      }
+
+      const sources = await desktopCapturer.getSources({ types: ['screen'] });
+      if (!sources.length) return deny();
+      callback({ video: sources[0] });
+    } catch (err) {
+      console.error('[main] screen share failed:', err && err.message ? err.message : err);
+      deny();
+    }
+  }, { useSystemPicker: true });
 }
 
 /* ------------------------------------------------------------------------- menu */

@@ -295,6 +295,40 @@ try {
     return (await r.json()).recordings || [];
   });
   check(after.length === recordings.length, 'the staff call added no recording row');
+
+  /* ── 6. An unanswered call says "Ringing…" and gives up at 15 seconds ── */
+  step(6, 'an unanswered call shows Ringing… and auto-ends at 15s');
+  const ringStart = Date.now();
+  await startCall(staffPage, 'audio');
+  await colleaguePage.waitForSelector('.tma-call [data-call-action="accept"]', { timeout: 15000 });
+
+  // "Calling…" becomes "Ringing…" once the far end acknowledges the ring.
+  await staffPage.waitForFunction(() => {
+    const el = document.querySelector('[data-call-status]');
+    return !!el && /Ringing/i.test(el.textContent || '');
+  }, { timeout: 10000 }).catch(() => {});
+  const ringStatus = await staffPage.evaluate(() => {
+    const el = document.querySelector('[data-call-status]');
+    return el ? el.textContent.trim() : '';
+  });
+  check(/Ringing/i.test(ringStatus), `the caller sees the far end ringing ("${ringStatus}")`);
+
+  // Nobody answers — the caller must give up on its own, and not early.
+  await staffPage.waitForFunction(
+    () => !window.TMAMessagingCalls._debug().session,
+    { timeout: 22000 }
+  ).catch(() => {});
+  const ringElapsed = Date.now() - ringStart;
+  const callerGaveUp = await staffPage.evaluate(() => !window.TMAMessagingCalls._debug().session);
+  check(callerGaveUp, 'the caller auto-ended the unanswered call');
+  check(ringElapsed >= 14000 && ringElapsed <= 21000,
+    `it rang the full window first (${Math.round(ringElapsed / 1000)}s)`);
+  await colleaguePage.waitForFunction(
+    () => !window.TMAMessagingCalls._debug().session,
+    { timeout: 8000 }
+  ).catch(() => {});
+  const calleeClosed = await colleaguePage.evaluate(() => !window.TMAMessagingCalls._debug().session);
+  check(calleeClosed, "the callee's pop-up closed with it");
 } catch (err) {
   failures.push('threw: ' + err.message);
   console.log('\nERROR: ' + err.message);
