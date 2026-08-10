@@ -6,8 +6,11 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**

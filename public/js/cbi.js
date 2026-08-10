@@ -854,7 +854,15 @@
    */
   function renderDetail() {
     var d = state.detail;
-    var back = ui().btn({ label: 'Back to applications', icon: 'CaretLeft', variant: 'ghost', small: true, attrs: ' data-cbi-action="back"' });
+    // The Clients hub's back button, not a ghost pill: the two record pages
+    // sit next to each other in the sidebar and the way out of them should not
+    // be two different shapes. dashboard.css is loaded on both CBI shells, so
+    // this is the same button rather than a copy of it.
+    var back =
+      '<button type="button" class="tma-dash__clients-back-btn" data-cbi-action="back"' +
+      ' aria-label="Back to applications">' +
+      '<img src="' + PH_ICON + 'CaretLeft.svg" alt="" aria-hidden="true">' +
+      '<span>Applications</span></button>';
     if (d.loading) return '<div class="cbi-backrow">' + back + '</div>' + ui().loading({ count: 6 });
     if (d.error) return '<div class="cbi-backrow">' + back + '</div>' + ui().banner('warning', esc(d.error));
     if (!d.data) return '';
