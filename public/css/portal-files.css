@@ -1437,7 +1437,3 @@
 
 /* The icon and the chip keep their size; only the name gives way. */
 .tma-portal-files-table .tma-portal-avatar-cell > :not(.tma-portal-file-link) { flex-shrink: 0; }
-
-/* The Sharing column's chip is the documented one the column already used;
-   only what it says has changed. */
-.tma-portal-files-table .tma-portal-cell--owner .tma-people { max-width: 100%; }

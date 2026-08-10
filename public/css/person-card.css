@@ -16,6 +16,11 @@
   align-items: center;
   gap: var(--space-8);
   min-width: 0;
+  /* An inline-flex box sizes to its content, so without a cap a long list of
+     names walks straight over whatever sits beside it (the CBI facts strip
+     puts "Client record" next door). Capped to the cell, the names span's
+     ellipsis takes over instead. */
+  max-width: 100%;
 }
 
 .tma-people__faces {
