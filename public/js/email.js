@@ -5039,9 +5039,9 @@
     var metaDate = formatMessageDate(row);
     var mobile = isEmailMobile();
     var threadActions = renderDetailThreadActions(state, row, metaEmail, metaDate, subject, lines.body);
-    var inlineActive = !!(state.inlineCompose && state.inlineCompose.messageId === row.id);
-    var scrollThreadActions = !mobile || inlineActive ? threadActions : null;
-    var body = renderEmailThread(state, scrollThreadActions);
+    // Reply / forward (and the inline composer) sit outside the scroll so they
+    // stay pinned to the bottom of the reading pane.
+    var body = renderEmailThread(state, null);
 
     return (
       '<div class="tma-dash__email-detail' + (mobile ? ' tma-dash__email-detail--mobile' : '') + '">' +
@@ -5050,8 +5050,11 @@
       renderDetailSubject(subject, row, state) +
       '</div>' +
       '<div class="tma-dash__email-detail-scroll">' + body + '</div>' +
-      (mobile && threadActions && !inlineActive
-        ? '<div class="tma-dash__email-detail-mobile-footer">' + threadActions + '</div>'
+      (threadActions
+        ? '<div class="tma-dash__email-detail-footer' +
+          (mobile ? ' tma-dash__email-detail-mobile-footer' : '') + '">' +
+          threadActions +
+          '</div>'
         : '') +
       '</div>'
     );
