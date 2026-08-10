@@ -3,6 +3,7 @@
 namespace App\Support\Files;
 
 use App\Models\FileItem;
+use App\Models\FileLibrarySetting;
 use App\Models\FileWorkflow;
 use App\Models\Folder;
 use App\Models\FolderColourPreference;
@@ -40,6 +41,14 @@ class Presenter
 
     /** id => Folder, all non-trashed folders, lazily loaded once for path-building. */
     private ?array $folderIndex = null;
+
+    /**
+     * The firm-wide default grant, resolved once. `false` means "not looked up
+     * yet" — null is a real answer here (the setting can be off).
+     *
+     * @var array{label: string, role: ?string}|null|false
+     */
+    private array|null|false $orgDefault = false;
 
     public function __construct(private User $viewer) {}
 
@@ -106,6 +115,7 @@ class Presenter
             // Everyone on the file, owner first — what the Owner column draws
             // as faces. `assignedTo` stays the bare names it has always been.
             'people' => $this->peopleOn($file->owner, $sharedWith),
+            'audience' => $this->audienceFor($file->folder),
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFile[$file->id]),
@@ -171,6 +181,9 @@ class Presenter
             'owner' => $this->person($folder->owner),
             'createdBy' => $this->person($folder->creator),
             'people' => $this->peopleOn($folder->owner, $sharedWith),
+            // From the folder itself: a folder granted to all staff is shared
+            // with them, not merely sitting inside something that is.
+            'audience' => $this->audienceFor($folder),
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFolder[$folder->id]),
@@ -207,11 +220,89 @@ class Presenter
         return $trail;
     }
 
+    /**
+     * Who can reach this beyond the people named on it.
+     *
+     * Sharing in this library is mostly not person-to-person. The firm's
+     * document libraries are granted to every member of staff at once by the
+     * folder they sit in; a client's folder is granted to whichever staff are
+     * assigned to them; a personal drive is granted to nobody. There are, in
+     * fact, no individual shares at all — so a column that only listed
+     * `shares` rows would have been empty on all forty thousand files.
+     *
+     * A group grant is reported as a group. Thirteen identical faces repeated
+     * down thirty thousand rows would say less than the words "All staff", and
+     * would be a lie about how the access was given.
+     *
+     * @return array{label: string, role: ?string}|null
+     */
+    private function audienceFor(?Folder $folder): ?array
+    {
+        if (! $folder) {
+            return null;
+        }
+
+        $index = $this->folderIndex();
+        $seen = [];
+        $node = $folder;
+        $top = $folder;
+        $explicit = null;
+
+        while ($node && ! isset($seen[$node->id])) {
+            $seen[$node->id] = true;
+            $top = $node;
+
+            if ($node->folder_type === Folder::TYPE_CLIENT) {
+                // Named people would be the staff assigned to that client, and
+                // the assignment is the grant — so that is what it says.
+                return ['label' => 'Assigned staff', 'role' => null];
+            }
+
+            if ($explicit === null
+                && $node->folder_type === Folder::TYPE_ORGANIZATION
+                && $node->audience === 'all_staff') {
+                $explicit = ['label' => 'All staff', 'role' => ucfirst((string) ($node->audience_role ?: 'viewer'))];
+            }
+
+            $node = $node->parent_id ? ($index[$node->parent_id] ?? null) : null;
+        }
+
+        // A personal drive is nobody else's, whatever the firm-wide default
+        // says — FileAccess stops at the same place, before even the
+        // administrator short-circuit. The drives are the user-typed roots.
+        if ($top && $top->folder_type === Folder::TYPE_USER) {
+            return null;
+        }
+
+        if ($explicit) {
+            return $explicit;
+        }
+
+        // Failing an explicit grant, the firm-wide default is what staff hold
+        // over everything that is not a client's or a person's. It is real
+        // access, so a folder covered by it is not "private".
+        return $this->orgDefault();
+    }
+
+    /** @return array{label: string, role: ?string}|null */
+    private function orgDefault(): ?array
+    {
+        if ($this->orgDefault === false) {
+            $this->orgDefault = FileLibrarySetting::defaultOrgAccess()
+                ? ['label' => 'All staff', 'role' => ucfirst((string) FileLibrarySetting::defaultOrgRole())]
+                : null;
+        }
+
+        return $this->orgDefault;
+    }
+
     private function folderIndex(): array
     {
         if ($this->folderIndex === null) {
             $this->folderIndex = Folder::query()
-                ->select('id', 'uuid', 'name', 'parent_id')
+                // folder_type/audience come along for audienceFor(), which
+                // walks this same chain to work out who a file is shared with.
+                ->select('id', 'uuid', 'name', 'parent_id', 'folder_type', 'audience', 'audience_role')
                 ->get()->keyBy('id')->all();
         }
 

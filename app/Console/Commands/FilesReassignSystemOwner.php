@@ -62,7 +62,14 @@ class FilesReassignSystemOwner extends Command
         }
 
         $files = $this->idsFor($siteConnections, 'file_id');
-        $folders = $this->idsFor($siteConnections, 'folder_id');
+        $folders = $this->idsFor($siteConnections, 'folder_id')
+            // The libraries' own root folders, and the Client Files / Staff
+            // Files roots, are not synced items — the connect flow made them —
+            // so no mapping row names them. They are firm structure by their
+            // type, never a person's, and were left under whoever ran it.
+            ->merge($this->firmStructureFolderIds())
+            ->unique()
+            ->values();
 
         $fileCount = FileItem::withTrashed()->whereIn('id', $files)->where('owner_id', '!=', $ownerId)->count();
         $folderCount = Folder::withTrashed()->whereIn('id', $folders)->where('owner_id', '!=', $ownerId)->count();
@@ -98,6 +105,26 @@ class FilesReassignSystemOwner extends Command
         $this->info(sprintf('Moved %d file(s) and %d folder(s).', $moved['files'], $moved['folders']));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Folders that belong to the firm by what they are.
+     *
+     * TYPE_USER is deliberately absent: that is somebody's own space, and
+     * FileAccess treats a personal tree as private even from administrators.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    private function firmStructureFolderIds()
+    {
+        return Folder::withTrashed()
+            ->whereIn('folder_type', [
+                Folder::TYPE_ROOT,
+                Folder::TYPE_ORGANIZATION,
+                Folder::TYPE_CLIENT,
+                Folder::TYPE_STAFF,
+            ])
+            ->pluck('id');
     }
 
     /**

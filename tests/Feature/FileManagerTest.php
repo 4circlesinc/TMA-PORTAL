@@ -323,6 +323,59 @@ class FileManagerTest extends TestCase
         $this->assertContains('Sharon Shared', $named);
     }
 
+    /*
+     * "Shared with" is mostly not a list of people.
+     *
+     * There are no individual shares in this library at all: the firm's
+     * document libraries are granted to every member of staff at once by the
+     * folder they sit in, a client's folder to the staff assigned to them, and
+     * a personal drive to nobody. A column that only listed `shares` rows
+     * would have been empty on all forty thousand files, so a group grant is
+     * reported as a group.
+     */
+    public function test_a_folder_shared_with_all_staff_says_so(): void
+    {
+        $me = $this->approvedUser(['account_type' => 'Administrator']);
+
+        $folder = \App\Models\Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'Citizenship Applications',
+            'owner_id' => $me->id,
+            'created_by' => $me->id,
+            'folder_type' => \App\Models\Folder::TYPE_ORGANIZATION,
+            'audience' => 'all_staff',
+            'audience_role' => 'editor',
+        ]);
+
+        $row = collect($this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('folders'))
+            ->firstWhere('id', $folder->uuid);
+
+        $this->assertSame('All staff', $row['audience']['label']);
+        // The explicit grant, not the weaker firm-wide default underneath it.
+        $this->assertSame('Editor', $row['audience']['role']);
+    }
+
+    public function test_a_personal_drive_is_shared_with_nobody(): void
+    {
+        $me = $this->approvedUser(['account_type' => 'Administrator']);
+
+        // A user-typed root is somebody's own space; FileAccess stops there
+        // before even the administrator short-circuit, so nothing firm-wide
+        // reaches inside it and the column must not claim otherwise.
+        $drive = \App\Models\Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'OneDrive',
+            'owner_id' => $me->id,
+            'created_by' => $me->id,
+            'folder_type' => \App\Models\Folder::TYPE_USER,
+        ]);
+
+        $row = collect($this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('folders'))
+            ->firstWhere('id', $drive->uuid);
+
+        $this->assertNull($row['audience'], 'a personal drive is shared with nobody');
+    }
+
     public function test_the_owner_facet_only_names_people_whose_items_the_viewer_can_see(): void
     {
         $me = $this->approvedUser(['name' => 'Owen Owner']);
