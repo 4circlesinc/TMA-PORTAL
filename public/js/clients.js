@@ -2318,11 +2318,18 @@
       '<div class="tma-dash__clients-cards">' +
       // The top row is always two columns: Details can always answer for
       // itself, and Access always has at least its form.
-      companyCard('Details', renderCompanyDetails(company), { half: true }) +
+      // Details spans, then two pairs. The wide one first because it is what
+      // identifies the company; the pairs below are the four things you do
+      // with it.
+      companyCard('Details', renderCompanyDetails(company), {}) +
       companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
-      companyCard('Clients referred', renderCompanyReferredBlock(company), { count: company.referredCount || 0 }) +
-      companyCard('People', renderCompanyPeople(company), { count: (company.people || []).length }) +
-      companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {}) +
+      companyCard('Clients referred', renderCompanyReferredBlock(company), {
+        half: true, count: company.referredCount || 0,
+      }) +
+      companyCard('People', renderCompanyPeople(company), {
+        half: true, count: (company.people || []).length,
+      }) +
+      companyCard('Assigned staff', renderCompanyStaffBlock(state, company), { half: true }) +
       '</div></div></div>'
     );
   }

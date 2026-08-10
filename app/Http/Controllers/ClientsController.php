@@ -27,15 +27,46 @@ class ClientsController extends Controller
     /** Staff who may manage clients. Client accounts never reach this data. */
     private const STAFF = ['Administrator', 'Employee'];
 
+    /**
+     * What the directory listing selects. Note the absence of `data`: see
+     * index() for why, and {@see Client::toDirectoryRecord()} for what may be
+     * read here. `deleted_at` is listed because the soft-delete trait reads it.
+     */
+    private const DIRECTORY_COLUMNS = [
+        'id', 'uid', 'user_id', 'folder_id', 'company_id', 'name', 'client_type',
+        'company', 'referral_type', 'referred_by_company_id', 'email', 'phone',
+        'initial', 'initial_color', 'deleted_at',
+    ];
+
+    /** Shortest term worth asking the database about. */
+    private const SEARCH_MIN = 2;
+
+    /**
+     * The directory listing.
+     *
+     * Deliberately lean: `data` is not selected and no profile is returned.
+     * The firm has eleven thousand clients and this endpoint used to hand back
+     * every full contact record on every page load — 9.6 MB of JSON, seven
+     * seconds of query-and-serialise, and a 127 MB memory peak for a page that
+     * shows a hundred rows. Profiles now load one at a time from show(), and
+     * searching the profile happens in the database (see search()).
+     */
     public function index(Request $request): JsonResponse
     {
         $this->authorizeStaff($request);
 
         $clients = ClientScope::query($request->user())
-            ->with(['folder', 'companyRecord', 'referredByCompany'])
+            ->select(self::DIRECTORY_COLUMNS)
+            // Constrained to the columns the record actually reads, so a wide
+            // companies row is not loaded to print one name either.
+            ->with([
+                'folder:id,uuid',
+                'companyRecord:id,uid,name',
+                'referredByCompany:id,uid,name',
+            ])
             ->orderBy('name')
             ->get()
-            ->map->toRecord()
+            ->map->toDirectoryRecord()
             ->values();
 
         // The definitions ride along with the list: the client form has to
@@ -45,6 +76,62 @@ class ClientsController extends Controller
             'clients' => $clients,
             'customFields' => ClientCustomFields::all(),
         ]);
+    }
+
+    /**
+     * Which clients match a search term, as uids.
+     *
+     * The directory searches names, contact details, job titles and company
+     * names — fields that live inside the `data` blob the listing no longer
+     * ships. Rather than send every profile to the browser so it can filter
+     * them, the browser asks here and gets back the set of matching ids.
+     *
+     * Only ids: the caller already holds the directory entries, so the answer
+     * to "who matches" is a few kilobytes however many clients match.
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $this->authorizeStaff($request);
+
+        $term = trim((string) $request->query('q', ''));
+
+        // One character matches most of the directory and answers nothing.
+        // The caller filters by name locally until there are two.
+        if (mb_strlen($term) < self::SEARCH_MIN) {
+            return response()->json(['query' => $term, 'ids' => []]);
+        }
+
+        $like = '%'.addcslashes($term, '\\%_').'%';
+        $op = $this->likeOperator();
+
+        $ids = ClientScope::query($request->user())
+            ->where(function ($q) use ($like, $op) {
+                $q->where('name', $op, $like)
+                    ->orWhere('email', $op, $like)
+                    ->orWhere('phone', $op, $like)
+                    ->orWhere('company', $op, $like)
+                    // The rest of the searchable fields — nickname, job title,
+                    // extra emails and phones — have no column of their own.
+                    ->orWhereRaw($this->blobTextExpression().' '.$op.' ?', [$like]);
+            })
+            ->orderBy('name')
+            ->pluck('uid');
+
+        return response()->json(['query' => $term, 'ids' => $ids]);
+    }
+
+    /** Case-insensitive LIKE: Postgres needs ILIKE, SQLite's LIKE already is. */
+    private function likeOperator(): string
+    {
+        return Client::query()->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+    }
+
+    /** The `data` blob as searchable text, in this connection's dialect. */
+    private function blobTextExpression(): string
+    {
+        return Client::query()->getConnection()->getDriverName() === 'pgsql'
+            ? 'clients.data::text'
+            : 'clients.data';
     }
 
     public function store(Request $request): JsonResponse

@@ -16188,6 +16188,7 @@
   overflow: visible;
 }
 
+
 /*
  * The card grid.
  *
@@ -16215,7 +16216,6 @@
   padding: var(--space-20);
   border-radius: var(--radius-16);
   background: var(--color-bg-card, var(--color-white));
-  border: 1px solid var(--color-overlay-4);
 }
 
 .tma-dash__clients-card--half { grid-column: span 1; }
@@ -16806,6 +16806,21 @@
   background: var(--color-bg-card);
   border-radius: var(--radius-20);
   padding: var(--space-24);
+}
+
+/*
+ * ...except a company, which is made of cards.
+ *
+ * The panel fill above is the same grey as a card, so the page was cards
+ * inside a card: one flat grey block with faint seams. The cards keep the
+ * colour — they are the panels now — and the wrapper gets out of the way.
+ * Declared here rather than beside the card rules because it has the same
+ * specificity as the line above and this file is read top to bottom.
+ */
+.tma-dash__clients-profile--company {
+  background: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .tma-dash__clients-profile {

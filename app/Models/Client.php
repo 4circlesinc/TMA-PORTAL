@@ -143,4 +143,54 @@ class Client extends Model
             'referredByLabel' => $this->referralLabel($referrer),
         ];
     }
+
+    /**
+     * The same record without `profile` — what the directory listing needs.
+     *
+     * `data` is the widest column on the table and the directory draws none of
+     * it: the list shows a name, a type, a referrer and one contact line, all
+     * of which are denormalised columns. Shipping the blob anyway meant the
+     * index endpoint read, hydrated and serialised eleven thousand full contact
+     * records to render a hundred rows — 9.6 MB of JSON and 127 MB of PHP
+     * memory per request, which is what was exhausting the container.
+     *
+     * The profile is fetched per client by {@see ClientsController::show()}
+     * when a record is actually opened. Anything added here must be readable
+     * without `data`, because the listing query no longer selects it.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDirectoryRecord(): array
+    {
+        $company = $this->relationLoaded('companyRecord')
+            ? $this->companyRecord
+            : $this->companyRecord()->first();
+
+        $referrer = $this->referral_type === self::REFERRAL_COMPANY
+            ? ($this->relationLoaded('referredByCompany')
+                ? $this->referredByCompany
+                : $this->referredByCompany()->first())
+            : null;
+
+        return [
+            'id' => $this->uid,
+            'name' => $this->name,
+            'initial' => $this->initial,
+            'initialColor' => $this->initial_color,
+            'folderUuid' => $this->folder?->uuid,
+            'hasLogin' => $this->user_id !== null,
+            'userId' => $this->user_id,
+            'companyId' => $company?->uid,
+            'companyName' => $company?->name ?? $this->company,
+            'clientType' => $this->client_type ?? 'private',
+            'clientTypeLabel' => $this->typeLabel(),
+            'referralType' => $this->referral_type ?? self::REFERRAL_NONE,
+            'referredByCompanyId' => $referrer?->uid,
+            'referredByLabel' => $this->referralLabel($referrer),
+            // The Contact column, from the denormalised copies rather than the
+            // blob. Every write goes through ClientsController::columns(),
+            // which keeps both in step with the profile.
+            'contact' => $this->email ?: ($this->phone ?: null),
+        ];
+    }
 }
