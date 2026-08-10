@@ -6474,9 +6474,7 @@
       (checked ? ' checked' : '') +
       ' aria-label="Select mail from ' + esc(row.sender) + '">' +
       '<span class="tma-dash__email-row-select-face">' + rowListAvatarInner(row) + '</span>' +
-      '<span class="tma-dash__email-row-select-box" aria-hidden="true">' +
-      '<img src="' + ICONS.Check + '" alt="">' +
-      '</span>' +
+      '<span class="tma-dash__email-row-select-box" aria-hidden="true"></span>' +
       '</label>'
     );
   }
