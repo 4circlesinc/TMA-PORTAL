@@ -9363,24 +9363,27 @@
   padding: 0 var(--space-12);
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--color-bg-card, #fff);
-  color: var(--color-text-primary);
+  background: var(--color-primary);
+  color: #fff;
   font: inherit;
   font-size: var(--text-size-13, 13px);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .tma-dash__email-toolbar-compose:hover {
-  background: var(--color-white, #fff);
+  background: var(--color-primary-dark, #0288c2);
+  color: #fff;
 }
 
 .tma-dash__email-toolbar-compose img {
   width: 16px;
   height: 16px;
-  opacity: 0.85;
+  opacity: 1;
+  /* Phosphor glyphs ship dark; force white on the primary fill. */
+  filter: brightness(0) invert(1);
 }
 
 .tma-dash__email-toolbar-actions {
@@ -11813,8 +11816,17 @@
   padding: 0;
 }
 
-.tma-dash__email-category:not(.tma-dash__email-category--active) .tma-dash__email-category-label {
+.tma-dash__email-category:not(.tma-dash__email-category--active) .tma-dash__email-category-label,
+.tma-dash__email-category:not(.tma-dash__email-category--active) .tma-dash__email-category-count {
   display: none;
+}
+
+.tma-dash__email-category-count {
+  font-size: var(--text-size-12);
+  line-height: 1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.95;
 }
 
 .tma-dash__email-category:hover {
@@ -11841,7 +11853,6 @@
   filter: brightness(0) invert(1);
 }
 
-.tma-dash__email-category--pinned { --email-category-color: #c9852a; }
 .tma-dash__email-category--inbox { --email-category-color: var(--color-primary, #03a5e9); }
 .tma-dash__email-category--important { --email-category-color: #d64545; }
 .tma-dash__email-category--snoozed { --email-category-color: #7c6cf0; }
@@ -12080,19 +12091,22 @@
   white-space: nowrap;
 }
 
-/* The always-visible pin marker beside the timestamp on pinned rows. It
- * yields to the hover action bar the same way the timestamp does. */
+/* The always-visible pin marker beside the timestamp on pinned rows —
+ * solid brand-blue pushpin (Outlook-style), not a black glyph. Yields to
+ * the hover action bar the same way the timestamp does. */
 .tma-dash__email-row-pinned {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
-  opacity: 1;
-  filter: brightness(0);
+  background: var(--color-primary, #03a5e9);
+  -webkit-mask: url("../images/icons/phosphor/PushPin.svg") center / contain no-repeat;
+  mask: url("../images/icons/phosphor/PushPin.svg") center / contain no-repeat;
 }
 
 .tma-dash__email-row-action--pinned img {
   opacity: 1;
-  filter: brightness(0);
+  /* Same blue cue when the pin action is active in the hover bar. */
+  filter: invert(52%) sepia(86%) saturate(1800%) hue-rotate(165deg) brightness(98%) contrast(101%);
 }
 
 .tma-dash__email-row:hover .tma-dash__email-row-pinned,

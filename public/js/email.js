@@ -109,8 +109,8 @@
    * Mirrored from the server preference so it follows the account; kept in
    * localStorage too so the very first paint is already right. */
   var SIDEBAR_MODE_KEY = 'tma.email.sidebarMode';
-  /* v3: fixed daily strip order (pin → archive). */
-  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v3';
+  /* v4: no pin; active tab shows count. */
+  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v4';
   var SPLIT_RATIO_MIN = 0.22;
   var SPLIT_RATIO_MAX = 0.78;
   // Inbox list narrower than the reading pane by default.
@@ -122,16 +122,8 @@
       if (saved === '0') return false;
       if (saved === '1') return true;
     } catch (e) { /* ignore */ }
-    /*
-     * Open by default.
-     *
-     * It used to default to the collapsed icon rail to echo the main menu,
-     * but sitting flush beside that rail it read as a second strip of
-     * unlabelled icons. The sidebar is its own card now — the same one the
-     * Feed uses — so it opens showing folder names, and the collapse toggle
-     * is still there for anyone who wants the width back.
-     */
-    return false;
+    /* Closed (hidden) by default — the list-head menu button opens it. */
+    return true;
   }
 
   function saveSidebarCollapsed(collapsed) {
@@ -153,7 +145,7 @@
       var saved = localStorage.getItem(SIDEBAR_MODE_KEY);
       if (SIDEBAR_MODES.indexOf(saved) !== -1) return saved;
     } catch (e) { /* ignore */ }
-    return 'full';
+    return 'hidden';
   }
 
   function saveSidebarMode(mode) {
@@ -177,7 +169,6 @@
    * and its own colour.
    */
   var INBOX_CATEGORIES = [
-    { id: 'pinned', label: 'Pinned', icon: 'PushPin', fixed: true },
     { id: 'inbox', label: 'Inbox', icon: 'Tray', fixed: true },
     { id: 'important', label: 'Important', icon: 'Important', fixed: true },
     { id: 'snoozed', label: 'Snoozed', icon: 'Clock', fixed: true },
@@ -919,6 +910,7 @@
       (hasTarget ? ' tma-dash__email-toolbar--ready' : '') +
       '" data-email-toolbar>' +
       '<div class="tma-dash__toolbar-actions">' +
+      renderEmailSidebarMenuBtn(state) +
       '<button type="button" class="tma-dash__email-toolbar-compose" data-email-folder="compose">' +
       '<img src="' + ICONS.PencilSimple + '" alt="" aria-hidden="true">' +
       '<span>New Mail</span>' +
@@ -1017,9 +1009,8 @@
     });
   }
 
-  /* Menu control lives in the inbox toolbar (not inside the folder rail). */
-  /* The one way back from a hidden sidebar, so choosing "Hidden" in settings
-   * is never a one-way door. */
+  /* Folder-list toggle — lives in the page toolbar beside New Mail so it
+   * stays reachable when the sidebar is hidden. */
   function renderEmailSidebarMenuBtn(state) {
     if (isEmailMobile()) return '';
     var collapsed = effectiveSidebarMode(state) !== 'full';
@@ -1030,7 +1021,7 @@
       className: 'tma-dash__email-sidebar-menu-btn' + (collapsed ? '' : ' is-active'),
       attrs:
         ' data-email-sidebar-toggle aria-pressed="' + (collapsed ? 'false' : 'true') + '"',
-      innerHtml: '<img src="' + ICONS.List + '" alt="">',
+      innerHtml: '<img src="' + ICONS.Hamburger + '" alt="">',
     });
   }
 
@@ -3691,9 +3682,7 @@
           renderEmailProfile(!!state.profileMenuOpen, 'sidebar', state.connected !== false) +
           '</div>') +
       '<div class="tma-dash__email-sidebar-nav">' +
-      // Compose is deliberately outside the group: it is an action, not a
-      // place, and it must stay reachable when Mailboxes is collapsed.
-      renderComposeButton(state) +
+      // New Mail lives in the page toolbar — keep this rail to folders/labels.
       renderEmailSidebarGroup(state, 'folders', 'Mailboxes', renderFolders(state)) +
       renderEmailLabelsSection(state) +
       '</div>' +
@@ -3735,31 +3724,11 @@
     );
   }
 
-  /*
-   * The New Email button. Rendered on its own above the groups so collapsing
-   * Mailboxes never takes composing away with it.
-   */
-  function renderComposeButton(state) {
-    if (isEmailMobile()) return '';
-
-    var folder = FOLDERS.filter(function (f) { return f.compose; })[0];
-    if (!folder) return '';
-
-    return (
-      '<button type="button" class="tma-dash__email-folder tma-dash__email-folder--compose"' +
-      ' data-email-folder="' + esc(folder.id) + '"' +
-      ' title="' + esc(folder.label) + '" aria-label="' + esc(folder.label) + '">' +
-      '<img src="' + esc(ICONS[folder.icon]) + '" alt="">' +
-      '<span class="tma-dash__email-folder-label">' + esc(folder.label) + '</span>' +
-      '</button>'
-    );
-  }
-
   function renderFolders(state) {
     return (
       '<nav class="tma-dash__email-folders" aria-label="Mail folders">' +
       FOLDERS.filter(function (folder) {
-        // Compose has its own button above; see renderComposeButton.
+        // Compose is the page-toolbar New Mail button, not a folder row.
         return !folder.compose;
       }).map(function (folder) {
         var active = !folder.compose && state.folder === folder.id && !state.activeLabelId;
@@ -3797,7 +3766,6 @@
     return (
       '<div class="tma-dash__email-list tma-dash__email-list--templates">' +
       '<div class="tma-dash__email-list-head tma-dash__email-list-head--templates">' +
-      renderEmailSidebarMenuBtn(state) +
       '<span class="tma-dash__email-template-list-title">Templates</span>' +
       renderListHeadActions(state, { templateCount: templates.length, showFilter: false }) +
       '</div>' +
@@ -3849,17 +3817,25 @@
       '<div class="tma-dash__email-categories" role="tablist" aria-label="Mail folders">' +
       categories.map(function (category) {
         var active = state.folder === category.id;
+        var count = active ? folderCount(category, state) : null;
+        var countHtml = active && count
+          ? '<span class="tma-dash__email-category-count">' + count + '</span>'
+          : '';
+        var ariaLabel = count
+          ? category.label + ', ' + count
+          : category.label;
 
         return (
           '<button type="button" class="tma-dash__email-category' +
           ' tma-dash__email-category--' + esc(category.id) +
           (active ? ' tma-dash__email-category--active' : '') + '"' +
           ' role="tab" aria-selected="' + (active ? 'true' : 'false') + '"' +
-          ' aria-label="' + esc(category.label) + '"' +
+          ' aria-label="' + esc(ariaLabel) + '"' +
           ' title="' + esc(category.label) + '"' +
           ' data-email-category="' + esc(category.id) + '">' +
           '<img src="' + esc(ICONS[category.icon]) + '" alt="">' +
           '<span class="tma-dash__email-category-label">' + esc(category.label) + '</span>' +
+          countHtml +
           '</button>'
         );
       }).join('') +
@@ -3879,7 +3855,6 @@
       /* Mobile hides the list head, so the pills get their own strip there. */
       (isEmailMobile() ? renderInboxCategories(state) : '') +
       '<div class="tma-dash__email-list-head">' +
-      renderEmailSidebarMenuBtn(state) +
       '<label class="tma-dash__email-list-check" title="Select all">' +
       '<input type="checkbox" class="tma-dash__check" data-email-selectall' +
       (selection.all ? ' checked' : '') + ' aria-label="Select all">' +
@@ -7573,7 +7548,7 @@
       '</div>' +
       '<div class="tma-dash__email-row-side-top">' +
       (row.pinned
-        ? '<img class="tma-dash__email-row-pinned" src="' + ICONS.PushPin + '" alt="Pinned" title="Pinned">'
+        ? '<span class="tma-dash__email-row-pinned" role="img" aria-label="Pinned" title="Pinned"></span>'
         : '') +
       (row.snoozedUntil
         ? '<img class="tma-dash__email-row-snoozed" src="' + ICONS.Clock + '" alt="Snoozed"' +
