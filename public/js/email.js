@@ -2627,40 +2627,29 @@
     );
   }
 
-  function renderEmailRowFrontActions(row, state) {
-    var starred = isRowStarred(row, state);
-    var important = isRowImportant(row, state);
-    var starLabel = starred ? 'Remove star' : 'Add star';
-    var importantLabel = important ? 'Mark as not important' : 'Mark as important';
-    return (
-      '<div class="tma-dash__email-row-front-actions">' +
-      renderEmailIconTooltipBtn({
-        tipId: 'email-row-tip-star-' + row.id,
-        label: starLabel,
-        className: 'tma-dash__email-row-action' + (starred ? ' tma-dash__email-row-action--active' : ''),
-        attrs:
-          ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"',
-        innerHtml: '<img src="' + ICONS.Star + '" alt="">',
-      }) +
-      renderEmailIconTooltipBtn({
-        tipId: 'email-row-tip-important-' + row.id,
-        label: importantLabel,
-        className: 'tma-dash__email-row-action' + (important ? ' tma-dash__email-row-action--active' : ''),
-        attrs:
-          ' data-email-important="' + esc(row.id) + '" aria-pressed="' + (important ? 'true' : 'false') + '"',
-        innerHtml: '<img src="' + ICONS.Important + '" alt="">',
-      }) +
-      '</div>'
-    );
-  }
-
   function renderEmailRowHoverActions(row, state) {
     var unread = isRowUnread(row, state);
     var pinned = !!(row && row.pinned);
     var snoozed = !!(row && row.snoozedUntil);
     var inArchive = state.folder === 'archive' || (row && row.folder === 'archive');
+    var starred = isRowStarred(row, state);
+    var important = isRowImportant(row, state);
     var actions = [
-      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: pinned ? 'PushPin' : 'PushPin', active: pinned, pin: true },
+      {
+        id: 'star',
+        label: starred ? 'Remove star' : 'Add star',
+        icon: 'Star',
+        active: starred,
+        attr: ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"',
+      },
+      {
+        id: 'important',
+        label: important ? 'Mark as not important' : 'Mark as important',
+        icon: 'Important',
+        active: important,
+        attr: ' data-email-important="' + esc(row.id) + '" aria-pressed="' + (important ? 'true' : 'false') + '"',
+      },
+      { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned, pin: true },
       {
         id: inArchive ? 'inbox' : 'archive',
         label: inArchive ? 'Move to inbox' : 'Archive',
@@ -2671,34 +2660,8 @@
       { id: 'snooze', label: snoozed ? 'Unsnooze' : 'Snooze', icon: 'Clock', active: snoozed },
     ];
 
-    // Star and flag normally sit pinned at the front of the row. A split-view
-    // list is too narrow to spare the width for them, so there they fold into
-    // this bar instead — CSS decides which pair is on screen (see the
-    // email-list container query), never both.
-    var starred = isRowStarred(row, state);
-    var important = isRowImportant(row, state);
-    var folded =
-      renderEmailIconTooltipBtn({
-        tipId: 'email-row-tip-star-folded-' + row.id,
-        label: starred ? 'Remove star' : 'Add star',
-        className: 'tma-dash__email-row-action tma-dash__email-row-action--folded' +
-          (starred ? ' tma-dash__email-row-action--active' : ''),
-        attrs: ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"',
-        innerHtml: '<img src="' + ICONS.Star + '" alt="">',
-      }) +
-      renderEmailIconTooltipBtn({
-        tipId: 'email-row-tip-important-folded-' + row.id,
-        label: important ? 'Mark as not important' : 'Mark as important',
-        className: 'tma-dash__email-row-action tma-dash__email-row-action--folded' +
-          (important ? ' tma-dash__email-row-action--active' : ''),
-        attrs: ' data-email-important="' + esc(row.id) + '"' +
-          ' aria-pressed="' + (important ? 'true' : 'false') + '"',
-        innerHtml: '<img src="' + ICONS.Important + '" alt="">',
-      });
-
     return (
       '<div class="tma-dash__email-row-hover-actions">' +
-      folded +
       actions
         .map(function (action) {
           return renderEmailIconTooltipBtn({
@@ -2709,8 +2672,9 @@
               (action.active ? ' tma-dash__email-row-action--active' : '') +
               (action.pin && action.active ? ' tma-dash__email-row-action--pinned' : ''),
             attrs:
-              ' data-email-row-hover="' + esc(action.id) + '" data-email-row-id="' + esc(row.id) + '"' +
-              (action.active ? ' aria-pressed="true"' : ''),
+              (action.attr ||
+                (' data-email-row-hover="' + esc(action.id) + '" data-email-row-id="' + esc(row.id) + '"')) +
+              (action.active && !action.attr ? ' aria-pressed="true"' : ''),
             innerHtml: '<img src="' + esc(ICONS[action.icon]) + '" alt="">',
           });
         })
@@ -7635,7 +7599,6 @@
       ' role="button" tabindex="0">' +
       renderConversationToggle(row, state) +
       unreadDot +
-      renderEmailRowFrontActions(row, state) +
       rowListAvatar(row, state) +
       '<div class="tma-dash__email-row-content">' +
       '<div class="tma-dash__email-row-head">' +

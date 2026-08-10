@@ -10888,8 +10888,7 @@
 
 .tma-dash__email-list-check {
   flex: 0 0 40px;
-  /* Matches the avatar and front-actions height so the checkbox, star, flag
-     and avatar all sit on the same vertical centre (see front-actions). */
+  /* Matches the avatar height so checkbox and avatar share one centre line. */
   height: 40px;
   box-sizing: border-box;
   display: inline-flex;
@@ -11495,34 +11494,6 @@
 .tma-dash__email-row-labels .tma-dash__email-detail-label-chip-text {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.tma-dash__email-row-front-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-shrink: 0;
-  /* Matches the checkbox and avatar's own box height so all three sit on the
-     same vertical centre instead of pinning to the row's top edge. */
-  height: 40px;
-}
-
-/* Pull the star/flag in closer to the checkbox specifically — the row's
-   general gap (used between the avatar, content and side columns too) left
-   this pair looking oddly far from it. */
-.tma-dash__email-list-check + .tma-dash__email-row-front-actions,
-.tma-dash__email-row-thread-toggle + .tma-dash__email-row-front-actions,
-.tma-dash__email-row-thread-spacer + .tma-dash__email-row-front-actions,
-.tma-dash__email-row-unread + .tma-dash__email-row-front-actions,
-.tma-dash__email-row-unread-slot + .tma-dash__email-row-front-actions {
-  margin-left: -6px;
-}
-
-/* Star and flag folded into the hover bar. Off unless the list is too narrow
-   to keep them pinned at the front of the row — otherwise the row would show
-   each of them twice. */
-.tma-dash__email-row-action--folded {
-  display: none;
 }
 
 /* ── the conversation arrow ────────────────────────────────────────
@@ -12248,11 +12219,7 @@
     transform var(--email-duration-spring) var(--email-ease-spring);
 }
 
-/* Hidden by default (desktop shows the star via .tma-dash__email-row-front-actions
-   instead); the max-width:1024px block below shows this one and hides that
-   instead. Declared after .tma-dash__email-row-action on purpose — same
-   specificity, so source order decides, and this has to win the tie or the
-   row ends up with two stars on desktop. */
+/* Desktop uses the hover action bar for star; mobile keeps a dedicated control. */
 .tma-dash__email-row-star-mobile {
   display: none;
 }
@@ -13205,16 +13172,6 @@
      * characters. Star and flag are still one hover (or one right-click)
      * away; an unreadable subject line is not recoverable at all.
      */
-    .tma-dash__email-row-front-actions {
-      display: none;
-    }
-
-    /* …and reappear inside the hover bar, so starring a message from a narrow
-       list is still one click rather than a trip to the right-click menu. */
-    .tma-dash__email-row-action--folded {
-      display: inline-flex;
-    }
-
     /* Set on the rows rather than on the list: a container query cannot
        restyle its own query container. */
     .tma-dash__email-row,
@@ -13916,7 +13873,6 @@
   }
 
   .tma-dash__email-list-check,
-  .tma-dash__email-row-front-actions,
   .tma-dash__email-row-actions-bar,
   .tma-dash__email-row-hover-actions,
   .tma-dash__email-row-thread-spacer,
