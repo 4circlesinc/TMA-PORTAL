@@ -23,7 +23,14 @@ class CompaniesController extends Controller
         $this->authorizeStaff($request);
 
         $companies = Company::with(['clients' => fn ($q) => $q->orderBy('name')])
-            ->withCount('referredClients')
+            // Every count the record prints, aggregated in the listing query.
+            // toRecord() falls back to a query per count when the figure is
+            // absent, which for member counts meant one round trip per company.
+            ->withCount([
+                'referredClients',
+                'clients',
+                'members as current_members_count' => fn ($q) => $q->current(),
+            ])
             ->orderBy('name')
             ->get()
             ->map->toRecord()

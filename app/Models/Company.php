@@ -129,8 +129,13 @@ class Company extends Model
             'billing' => $this->billing,
             'status' => $this->status,
             'notes' => $this->notes,
-            'memberCount' => $this->members()->current()->count(),
-            'peopleCount' => $people->count(),
+            // Both counts follow the same rule as referredCount below: use the
+            // figure the listing query already aggregated, and only fall back
+            // to a query when a single company was fetched on its own. This one
+            // used to always query, which is one round trip per company —
+            // sixty-four of them, forty seconds, to print sixty-four numbers.
+            'memberCount' => $this->current_members_count ?? $this->members()->current()->count(),
+            'peopleCount' => $this->clients_count ?? $people->count(),
             // withCount() when the list loaded it, a query when a single
             // company was fetched on its own.
             'referredCount' => $this->referred_clients_count ?? $this->referredClients()->count(),

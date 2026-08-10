@@ -268,47 +268,154 @@
    * a row of its own.
    */
   function peopleOnCase(a) {
-    var roles = [
-      ['Assigned', a.assignee ? a.assignee.name : null, a.assignee],
-      ['Verification officer', a.verificationOfficer, null],
-      ['Due diligence officer', a.ddOfficer, null],
-      ['PA assignment', a.paAssignment, null],
-      ['File owner', a.fileOwner, null],
-      ['Submitted by', a.submittedBy, null],
-      ['Verified by', a.verifiedBy, null],
-    ];
+    var people = (a && a.people) || [];
+    if (!people.length) return '<span class="tma-portal-table__muted">Unassigned</span>';
 
-    var seen = {};
-    var people = [];
-    roles.forEach(function (r) {
-      var name = String(r[1] == null ? '' : r[1]).trim();
-      if (!name) return;
-      // The same colleague often fills several of these; show them once, with
-      // every hat they are wearing.
-      var key = name.toLowerCase();
-      if (seen[key]) { seen[key].roles.push(r[0]); return; }
-      seen[key] = { roles: [r[0]] };
-      people.push({ name: name, person: r[2] || { name: name }, meta: seen[key] });
-    });
-
-    if (!people.length) return '';
-
-    var faces = people.map(function (p) {
-      var src = (p.person && p.person.photo) ||
-        (window.TMACurrentUser && window.TMACurrentUser.initialsFor
-          ? window.TMACurrentUser.initialsFor(p.name, (p.person && p.person.email) || p.name)
-          : '');
+    var faces = people.map(function (p, i) {
+      var src = p.photo || (window.TMACurrentUser && window.TMACurrentUser.initialsFor
+        ? window.TMACurrentUser.initialsFor(p.name, p.email || p.name) : '');
       if (!src) return '';
+      // The index is the handle the hover card resolves back to a person, so
+      // the card never has to re-parse what the face already knows.
       return '<img class="cbi-people__face" src="' + esc(src) + '" alt="" width="24" height="24"' +
-        ' title="' + esc(p.meta.roles.join(' · ') + ' — ' + p.name) + '" loading="lazy">';
+        ' data-cbi-person="' + i + '" tabindex="0" loading="lazy">';
     }).join('');
 
-    var names = people.map(function (p) { return p.name.split(/\s+/)[0]; }).join(', ');
+    var names = people.map(function (p) { return p.first || p.name; }).join(', ');
 
-    return '<span class="cbi-people">' +
+    return '<span class="cbi-people" data-cbi-people="' + esc(JSON.stringify(people)) + '">' +
       (faces ? '<span class="cbi-people__faces">' + faces + '</span>' : '') +
-      '<span class="cbi-people__names" title="' + esc(people.map(function (p) { return p.name; }).join(', ')) + '">' +
-      esc(names) + '</span></span>';
+      '<span class="cbi-people__names">' + esc(names) + '</span></span>';
+  }
+
+  /* ── the person card ─────────────────────────────────
+   *
+   * Hovering a face answers "who is this?" without leaving the page: the full
+   * name, every role they hold on this file, and the three things you would
+   * open a colleague's card to do. Message and the calls need a portal
+   * account — ten of the nineteen people in the caseload have none, and a
+   * button that cannot work is worse than one that is not there, so those are
+   * disabled with the reason given.
+   */
+  var personCard = null;
+  var personCardHideTimer = null;
+
+  function ensurePersonCard() {
+    if (personCard && document.body.contains(personCard)) return personCard;
+    personCard = document.createElement('div');
+    personCard.className = 'cbi-person-card';
+    personCard.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(personCard);
+
+    // The card must survive the pointer travelling from the face onto it.
+    personCard.addEventListener('mouseenter', function () { clearTimeout(personCardHideTimer); });
+    personCard.addEventListener('mouseleave', hidePersonCard);
+    personCard.addEventListener('click', onPersonCardClick);
+    return personCard;
+  }
+
+  function hidePersonCard() {
+    clearTimeout(personCardHideTimer);
+    personCardHideTimer = setTimeout(function () {
+      if (!personCard) return;
+      personCard.removeAttribute('data-open');
+      personCard.setAttribute('aria-hidden', 'true');
+    }, 160);
+  }
+
+  function showPersonCard(face) {
+    var wrap = face.closest('[data-cbi-people]');
+    if (!wrap) return;
+    var people;
+    try { people = JSON.parse(wrap.getAttribute('data-cbi-people')); } catch (e) { return; }
+    var person = people[Number(face.getAttribute('data-cbi-person'))];
+    if (!person) return;
+
+    clearTimeout(personCardHideTimer);
+    var card = ensurePersonCard();
+    var src = person.photo || (window.TMACurrentUser && window.TMACurrentUser.initialsFor
+      ? window.TMACurrentUser.initialsFor(person.name, person.email || person.name) : '');
+    var reachable = !!person.userId;
+
+    card.innerHTML =
+      '<div class="cbi-person-card__head">' +
+      (src ? '<img class="cbi-person-card__avatar" src="' + esc(src) + '" alt="" width="48" height="48">' : '') +
+      '<div class="cbi-person-card__ident">' +
+      '<span class="cbi-person-card__name">' + esc(person.name) + '</span>' +
+      '<span class="cbi-person-card__roles">' + esc((person.roles || []).join(' · ')) + '</span>' +
+      (person.email ? '<span class="cbi-person-card__email">' + esc(person.email) + '</span>' : '') +
+      '</div></div>' +
+      '<div class="cbi-person-card__actions">' +
+      personAction('message', 'ChatTeardropDots', 'Message', reachable, person) +
+      personAction('call', 'Phone', 'Call', reachable, person) +
+      personAction('video', 'VideoCamera', 'Video', reachable, person) +
+      '</div>' +
+      (reachable ? '' : '<p class="cbi-person-card__note">No portal account yet.</p>');
+
+    card.setAttribute('data-open', 'true');
+    card.setAttribute('aria-hidden', 'false');
+    positionPersonCard(card, face.getBoundingClientRect());
+  }
+
+  function personAction(action, icon, label, enabled, person) {
+    return '<button type="button" class="cbi-person-card__action" data-cbi-person-action="' + action + '"' +
+      ' data-cbi-person-id="' + esc(String(person.userId || '')) + '"' +
+      ' data-cbi-person-name="' + esc(person.name) + '"' +
+      ' data-cbi-person-photo="' + esc(person.photo || '') + '"' +
+      (enabled ? '' : ' disabled') + '>' +
+      '<img src="' + PH_ICON + icon + '.svg" alt="" width="16" height="16">' +
+      '<span>' + esc(label) + '</span></button>';
+  }
+
+  function positionPersonCard(card, rect) {
+    requestAnimationFrame(function () {
+      var w = card.offsetWidth || 260;
+      var h = card.offsetHeight || 140;
+      var left = Math.min(Math.max(8, rect.left - 8), window.innerWidth - w - 8);
+      // Above the face when there is no room below, the way the filter
+      // popovers flip.
+      var top = rect.bottom + 8;
+      if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 8);
+      card.style.left = Math.round(left) + 'px';
+      card.style.top = Math.round(top) + 'px';
+    });
+  }
+
+  function onPersonCardClick(e) {
+    var btn = e.target.closest('[data-cbi-person-action]');
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+
+    var userId = Number(btn.getAttribute('data-cbi-person-id'));
+    var name = btn.getAttribute('data-cbi-person-name');
+    var photo = btn.getAttribute('data-cbi-person-photo') || null;
+    var action = btn.getAttribute('data-cbi-person-action');
+    if (!userId) return;
+
+    var api = window.TMAMessagingAPI;
+    if (!api || !api.openDirect) { toast('Messaging is not available here.', false); return; }
+
+    btn.disabled = true;
+    api.openDirect(userId).then(function (res) {
+      var id = res && (res.conversation ? (res.conversation.id || res.conversation.uuid) : (res.id || res.uuid));
+      if (!id) throw new Error('no conversation');
+
+      if (action === 'message') {
+        // The thread is the destination; the Messages page opens on it.
+        location.href = (window.__TMA_SITE_ROOT || '') + '/social/messages?conversation=' + encodeURIComponent(id);
+
+        return;
+      }
+
+      var calls = window.TMAMessagingCalls;
+      if (!calls || !calls.start) { toast('Calling is not available here.', false); return; }
+      calls.start(id, action === 'video' ? 'video' : 'audio', name, photo);
+      hidePersonCard();
+    }).catch(function () {
+      toast('Could not reach ' + name + '.', false);
+    }).finally(function () {
+      btn.disabled = false;
+    });
   }
 
   function statusCell(status) {
@@ -334,23 +441,7 @@
    * other are told apart at a glance — which a column of identical grey
    * circles never managed.
    */
-  function personAvatar(person, size) {
-    size = size || 24;
-    var src = person.photo;
-    if (!src && window.TMACurrentUser && window.TMACurrentUser.initialsFor) {
-      src = window.TMACurrentUser.initialsFor(person.name, person.email || person.name);
-    }
-    if (!src) return '';
-    return '<img class="cbi-person__avatar" src="' + esc(src) + '" alt="" width="' + size +
-      '" height="' + size + '" loading="lazy">';
-  }
 
-  function personCell(person) {
-    if (!person || !person.name) return '<span class="tma-portal-table__muted">Unassigned</span>';
-    return '<span class="cbi-person"' + (person.raw ? ' title="' + esc('Smartsheet: ' + person.raw) + '"' : '') + '>' +
-      personAvatar(person) +
-      '<span class="cbi-person__name">' + esc(person.name) + '</span></span>';
-  }
 
   /* ── render: list ── */
 
@@ -480,7 +571,7 @@
         (showStage ? '<td class="tma-portal-table__muted">' + esc(STAGE_LABELS[a.stage] || a.stage || '—') + '</td>' : '') +
         '<td>' + statusCell(a.status) + (a.needsReview ? ' ' + reviewChip() : '') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.referredBy || '—') + '</td>' +
-        '<td>' + personCell(a.assignee) + '</td>' +
+        '<td>' + peopleOnCase(a) + '</td>' +
         '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.receivedAt) || '—') + '</td>' +
         '<td class="tma-portal-table__muted cbi-nowrap">' + esc(fmtDate(a.modifiedAt) || '—') + '</td>' +
         '</tr>';
@@ -1200,7 +1291,33 @@
 
   /* ── mount ── */
 
+  /* Delegated on the document: the faces are rebuilt on every render, and a
+     listener bound to them would be lost with the nodes it was bound to. */
+  function wirePersonCards() {
+    if (window.__cbiPersonCardsWired) return;
+    window.__cbiPersonCardsWired = true;
+
+    document.addEventListener('mouseover', function (e) {
+      var face = e.target.closest && e.target.closest('[data-cbi-person]');
+      if (face) showPersonCard(face);
+    });
+    document.addEventListener('mouseout', function (e) {
+      var face = e.target.closest && e.target.closest('[data-cbi-person]');
+      // Only when the pointer actually leaves the face, not on a child.
+      if (face && !face.contains(e.relatedTarget)) hidePersonCard();
+    });
+    // Keyboard: the faces are focusable, so the card has to answer to focus.
+    document.addEventListener('focusin', function (e) {
+      var face = e.target.closest && e.target.closest('[data-cbi-person]');
+      if (face) showPersonCard(face);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') hidePersonCard();
+    });
+  }
+
   function wire() {
+    wirePersonCards();
     var el = state.el;
     if (!el) return;
     // Named handlers: addEventListener dedupes identical re-registrations.

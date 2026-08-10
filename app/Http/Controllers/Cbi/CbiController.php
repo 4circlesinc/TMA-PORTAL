@@ -10,6 +10,7 @@ use App\Models\SmartsheetAttachment;
 use App\Models\SmartsheetSheet;
 use App\Models\SmartsheetSyncLog;
 use App\Support\Access\Role;
+use App\Support\Cbi\Names;
 use App\Support\Smartsheet\Client;
 use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Http\JsonResponse;
@@ -155,7 +156,7 @@ class CbiController extends Controller
                 'status' => $a->status,
                 'progress' => $a->progress,
                 'referredBy' => $a->referred_by,
-                'assignee' => self::assignee($a),
+                'people' => self::casePeople($a),
                 'investmentOption' => $a->investment_option,
                 'nationality' => $a->nationality,
                 'dependents' => $a->number_of_dependents,
@@ -264,23 +265,92 @@ class CbiController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    private static function assignee(CbiApplication $a): ?array
+    /**
+     * Everyone on a case, deduped, in the order the office reads them.
+     *
+     * A file is rarely one person's: the same colleague is often assigned and
+     * the file owner, while verification and due diligence sit with others.
+     * Both the table and the case page draw from this so a row and the record
+     * it opens cannot disagree about who has it.
+     *
+     * `assigned_to_canonical` is one spelling per person (see
+     * App\Support\Cbi\AssigneeDirectory); the other roles are raw sheet text
+     * and are matched to a portal account by name where one exists — that is
+     * what gives a face and, on the case page, somebody to message.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function casePeople(CbiApplication $a): array
     {
-        $name = $a->assigned_to_canonical ?: null;
-        $user = $a->relationLoaded('assignedUser') ? $a->assignedUser : null;
+        $roles = [
+            ['Assigned', $a->assigned_to_canonical ?: $a->assigned_to],
+            ['Verification officer', $a->verification_officer],
+            ['Due diligence officer', $a->dd_officer],
+            ['PA assignment', $a->pa_assignment],
+            ['File owner', $a->file_owner],
+            ['Submitted by', $a->submitted_by],
+            ['Verified by', $a->verified_by],
+        ];
 
-        if (! $name && ! $user) {
-            return null;
+        $staff = self::staffByName();
+        $people = [];
+
+        foreach ($roles as [$role, $raw]) {
+            $name = trim((string) $raw);
+            if ($name === '' || Names::isEmptyMarker($name)) {
+                continue;
+            }
+
+            $key = Names::normalise($name);
+            if (isset($people[$key])) {
+                // One person wearing several hats is one person.
+                $people[$key]['roles'][] = $role;
+
+                continue;
+            }
+
+            $user = $staff[$key] ?? null;
+            $people[$key] = [
+                'name' => $user?->name ?? Names::tidy($name),
+                'roles' => [$role],
+                'email' => $user?->email,
+                'photo' => $user?->photoUrl(),
+                'userId' => $user?->id,
+            ];
         }
 
-        return [
-            'name' => $user?->name ?? $name,
-            'email' => $user?->email,
-            'photo' => $user?->photoUrl(),
-            'userId' => $user?->id,
-            // What Smartsheet actually holds, shown only when it differs.
-            'raw' => $a->assigned_to !== ($user?->name ?? $name) ? $a->assigned_to : null,
-        ];
+        // The first name is what both surfaces print; send it rather than make
+        // two clients agree on how to split a name.
+        return array_values(array_map(function (array $p) {
+            $p['first'] = explode(' ', $p['name'])[0];
+
+            return $p;
+        }, $people));
+    }
+
+    /**
+     * Staff accounts keyed by normalised name, read once per request.
+     *
+     * Without this the list endpoint would look a name up per row per role —
+     * seven hundred queries to draw a hundred rows.
+     *
+     * @var array<string, \App\Models\User>|null
+     */
+    private static ?array $staffCache = null;
+
+    /** @return array<string, \App\Models\User> */
+    private static function staffByName(): array
+    {
+        if (self::$staffCache !== null) {
+            return self::$staffCache;
+        }
+
+        $byName = [];
+        foreach (\App\Models\User::whereIn('account_type', Role::STAFF)->get() as $user) {
+            $byName[Names::normalise((string) $user->name)] = $user;
+        }
+
+        return self::$staffCache = $byName;
     }
 
     /** @return array<string, mixed> */
@@ -315,7 +385,7 @@ class CbiController extends Controller
             'promoter' => $a->promoter,
             'serviceProvider' => $a->service_provider,
             'mainContact' => $a->main_contact,
-            'assignee' => self::assignee($a),
+            'people' => self::casePeople($a),
             'verificationOfficer' => $a->verification_officer,
             'ddOfficer' => $a->dd_officer,
             'paAssignment' => $a->pa_assignment,
