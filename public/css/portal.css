@@ -1523,19 +1523,37 @@
 }
 
 /*
- * Six rows on the card, the rest behind a scroll.
+ * As many colleagues as the card has room for, the rest behind a scroll.
  *
- * The dashboard is a masonry board whose column heights come from each tile's
- * natural height, so a firm with thirty employees pushed this one tile past
- * everything beside it and left the board lopsided. Capping the list — rather
- * than the panel — is what keeps the measured height constant: a row is 36px
- * of avatar plus 8px of padding either side, plus the 2px gap.
+ * Two competing needs, and the packed/unpacked split is what satisfies both.
+ *
+ * While the board is being *measured* (layoutHomeMasonry drops `is-packed` to
+ * read natural heights), the list is capped: a firm with thirty employees
+ * would otherwise make this one tile decide every column's height and leave
+ * the board lopsided. Six rows is the height it asks for — 36px of avatar plus
+ * 8px of padding either side, plus the 2px gap.
+ *
+ * Once packed, the tile has a definite height, and it is usually taller than it
+ * asked for: the masonry stretches the bottom card in each column so the
+ * columns end level. Keeping the cap there is what left a third of the card
+ * empty under six names. The cap is dropped instead, and the panel body — which
+ * already flexes to the tile and scrolls (see .is-packed above) — shows however
+ * many rows actually fit.
  */
 .tma-portal-employees--scroll {
-  max-height: calc(6 * 52px + 5 * 2px);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+}
+
+.tma-portal-home-grid:not(.is-packed) .tma-portal-employees--scroll {
+  max-height: calc(6 * 52px + 5 * 2px);
+}
+
+/* The list is as tall as the body it sits in; the body owns the scrolling. */
+.tma-portal-home-grid.is-packed .tma-portal-employees--scroll {
+  max-height: none;
+  overflow-y: visible;
 }
 
 /* Recent email — show ~4 rows upfront; scroll for the rest (up to 8). */

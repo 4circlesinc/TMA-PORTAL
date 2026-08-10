@@ -118,19 +118,35 @@ try {
     check(!/\d{4}-\d{2}-\d{2}|GMT|T\d{2}:/.test(badge.sub), 'and carries no raw timestamp');
   }
 
-  step(4, 'The Employees card scrolls instead of growing — or squashing');
+  step(4, 'The Employees card fills its space, then scrolls');
   const scroller = await page.evaluate(() => {
-    const el = document.querySelector('[data-tile-id="employees"] .tma-portal-employees');
-    if (!el) return null;
-    const cs = getComputedStyle(el);
-    const rows = Array.from(el.querySelectorAll('.tma-portal-employee'));
+    const tile = document.querySelector('[data-tile-id="employees"]');
+    const list = tile?.querySelector('.tma-portal-employees');
+    if (!tile || !list) return null;
+
+    // Once the board is packed the panel *body* is the scroll container and
+    // the list is unbounded inside it; before that the list caps itself. Ask
+    // whichever one is actually scrolling.
+    const body = tile.querySelector('.tma-portal-panel__body');
+    const box = body && body.scrollHeight > body.clientHeight ? body : list;
+
+    const rows = Array.from(list.querySelectorAll('.tma-portal-employee'));
+    const boxRect = box.getBoundingClientRect();
+
     return {
-      maxHeight: cs.maxHeight,
-      overflowY: cs.overflowY,
-      height: el.clientHeight,
-      scrollHeight: el.scrollHeight,
+      overflowY: getComputedStyle(box).overflowY,
+      height: box.clientHeight,
+      scrollHeight: box.scrollHeight,
+      tileHeight: Math.round(tile.getBoundingClientRect().height),
       count: rows.length,
       rowHeights: rows.map((r) => Math.round(r.getBoundingClientRect().height)),
+      // How many are readable without scrolling — the thing the card is for.
+      visible: rows.filter((r) => {
+        const rect = r.getBoundingClientRect();
+        return rect.top >= boxRect.top - 1 && rect.bottom <= boxRect.bottom + 1;
+      }).length,
+      // Nothing may spill past the card's own box.
+      spill: Math.round(Math.max(0, boxRect.bottom - tile.getBoundingClientRect().bottom)),
       // Does any row's text overlap the row beneath it? That is what a squashed
       // list looks like, and it is invisible to a max-height assertion.
       overlaps: rows.filter((r, i) => {
@@ -140,26 +156,68 @@ try {
       }).length,
     };
   });
-  check(!!scroller && scroller.maxHeight !== 'none', `the list has a height ceiling (${scroller?.maxHeight})`);
-  check(!!scroller && /auto|scroll/.test(scroller.overflowY), 'and scrolls inside the card');
 
+  check(!!scroller, 'the employees list is on the board');
   if (scroller) {
     const shortest = Math.min(...scroller.rowHeights);
-    log(`      ${scroller.count} rows, ${shortest}px shortest, ` +
-      `list ${scroller.height}px tall over ${scroller.scrollHeight}px of content`);
+    log(`      ${scroller.count} employees, ${scroller.visible} visible without scrolling; ` +
+      `${shortest}px shortest row; box ${scroller.height}px over ${scroller.scrollHeight}px ` +
+      `inside a ${scroller.tileHeight}px tile`);
 
     /*
      * The bug this exists for: a flex column with a max-height shrinks its
      * children (flex-shrink defaults to 1), so thirteen rows were squeezed
      * into six rows' worth of space — every name sitting on the line beneath
-     * it — instead of scrolling. Both assertions below passed the broken
-     * build, which is why the row geometry is measured too.
+     * it — instead of scrolling. Asserting max-height and overflow-y passed
+     * that build, which is why the row geometry is measured instead.
      */
     check(scroller.overlaps === 0, `no row overlaps the one below it (${scroller.overlaps})`);
     check(shortest >= 44, `every row keeps its full height (shortest ${shortest}px)`);
+    check(scroller.spill === 0, `nothing spills past the card (${scroller.spill}px)`);
+
     if (scroller.count > 6) {
+      check(/auto|scroll/.test(scroller.overflowY), 'the overflow scrolls rather than clipping');
       check(scroller.scrollHeight > scroller.height + 4,
-        'with more employees than fit, the list actually scrolls');
+        'with more employees than fit, there is something to scroll to');
+      // The card is stretched to line up with its column, and that space is
+      // meant to hold names — not sit empty under six of them.
+      check(scroller.visible >= 6,
+        `it fills the space it was given (${scroller.visible} shown of ${scroller.count})`);
+      check(scroller.height >= scroller.tileHeight - 120,
+        `the list reaches the bottom of the card (${scroller.height} in ${scroller.tileHeight})`);
+
+      /*
+       * A taller card must show more people, not the same six over a third of
+       * empty space.
+       *
+       * Driven rather than waited for: the masonry stretches the bottom card
+       * in each column so the columns end level, and whether *this* card is
+       * the one stretched depends on what else is on the board. A fixture that
+       * happens not to stretch it would quietly assert nothing, so the height
+       * is set here and put back afterwards.
+       */
+      const stretched = await page.evaluate(() => {
+        const tile = document.querySelector('[data-tile-id="employees"]');
+        const body = tile.querySelector('.tma-portal-panel__body');
+        const before = tile.style.height;
+        tile.style.height = '760px';
+        void tile.offsetHeight;
+
+        const boxRect = body.getBoundingClientRect();
+        const visible = Array.from(tile.querySelectorAll('.tma-portal-employee')).filter((r) => {
+          const rect = r.getBoundingClientRect();
+          return rect.top >= boxRect.top - 1 && rect.bottom <= boxRect.bottom + 1;
+        }).length;
+
+        tile.style.height = before;
+        return { visible, bodyHeight: Math.round(boxRect.height) };
+      });
+
+      log(`      given a 760px card: body ${stretched.bodyHeight}px, ${stretched.visible} visible`);
+      check(stretched.visible > scroller.visible,
+        `a taller card shows more people (${scroller.visible} → ${stretched.visible})`);
+      check(stretched.bodyHeight >= 640,
+        `and the list takes the whole card, not a fixed six rows (${stretched.bodyHeight}px)`);
     }
   }
 

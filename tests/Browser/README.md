@@ -533,14 +533,23 @@ field placement and drawing, and computed CSS only exist in a browser.
   green because their work plan said "in office", which a class-name assertion
   would have passed. It also checks the "Last seen 12 minutes ago" phrasing.
 
-  The card's height ceiling is checked by **measuring the rows**, not by
-  asserting `max-height` and `overflow-y` — both of those passed a build in
+  How much of the card the list uses is checked by **measuring the rows**, not
+  by asserting `max-height` and `overflow-y` — both of those passed a build in
   which the list was visibly broken. A flex column shrinks its children by
   default, so the moment the list gained a max-height thirteen rows were
   squeezed into six rows' worth of space, every name sitting on the line
   beneath it, instead of scrolling. So it asserts no row overlaps the one
-  below, every row keeps its full height, and `scrollHeight` genuinely exceeds
-  `clientHeight`. Seed **more than six** colleagues or that last one is skipped.
+  below, every row keeps its full height, nothing spills past the card, and
+  `scrollHeight` genuinely exceeds `clientHeight`.
+
+  It then **sets the card's height to 760px** and re-counts, rather than
+  waiting for the board to stretch it. The masonry stretches the bottom card in
+  each column so the columns end level, and whether *this* card is the one
+  stretched depends on what else is on the board — a fixture that happens not
+  to stretch it would quietly assert nothing. A taller card has to show more
+  people, not the same six over a third of empty space.
+
+  Seed **more than six** colleagues or the whole overflow half is skipped.
 
   Then the hover actions: message / voice / video appear on hover, are real
   28px targets, do not change the row's height (this list scrolls — a row that
@@ -730,6 +739,36 @@ field placement and drawing, and computed CSS only exist in a browser.
   "Stay signed in?" sits in front of the whole portal, redirecting even the JSON
   APIs until it is answered — an unanswered gate shows up as HTML where JSON was
   expected.
+- **`mailbox-conversations.mjs`** — the message list: one row per
+  conversation, the dropdown arrow that only appears where there really is more
+  than one message, and what expanding it must *not* do (open the reading pane,
+  and so mark something read just for being looked at). Then selection — the
+  sender's picture is the checkbox, appearing on hover, and ticking a
+  conversation ticks its replies — the toolbar's select-all over everything on
+  screen, the right-click menu, the categories strip as real server listings,
+  and the double-click that opens a conversation in its own window.
+
+  It also measures what the words "smaller, plain black text" and "no hover
+  shadow" actually mean once rendered: computed background, radius, font size
+  and weight on the folder counts, and the compose button's `box-shadow` while
+  hovered. And it pins the loading behaviour — a cold load must show skeleton
+  rows and never the sentence "Loading messages…", re-opening Email must not go
+  back to a loading state, and a full page reload must paint real mail on the
+  first frame from the warm cache.
+
+  Three things it was written around. Clicking a row's *content*, not its
+  centre: in a narrow split list the picture-checkbox sits close enough to the
+  middle that a centred click selects instead of opens. The double-click check
+  runs early, before anything else has moved a row — a repaint landing between
+  the two clicks lands the second one on the row above. And the reading pane
+  keeps its scroll position after the composer closes, which tucks the message
+  head under the sticky subject bar, so the pane is scrolled back to the top
+  before its three-dot menu is clicked.
+
+  Needs a conversation to expand, so its fixture is the `mail-thread.mjs` seed
+  below plus a few single-message ones (one unread, one starred, one pinned) to
+  give the categories something to list.
+
 - **`mailbox.mjs`** — the email page is server-backed, not the old hard-coded
   `INBOX` array: the list loads from `/portal/mail`, opening a message marks it
   read, starring round-trips, folder badges come from the server, and Email
