@@ -44,7 +44,8 @@ async function signIn(page) {
   if (page.url().includes('/auth/stay-signed-in')) {
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
-      page.click('button[name="stay"][value="yes"]'),
+      // The choice is a hidden input plus a plain submit, not a named button.
+      page.click('text=Yes, stay signed in'),
     ]);
     await page.waitForTimeout(400);
   }
@@ -99,19 +100,41 @@ try {
   check(await page.locator('.tma-dash__email-sidebar-nav > .tma-dash__email-folder--compose').count() === 1,
     'New Email sits above the groups, so collapsing Mailboxes cannot hide it');
 
-  step(3, 'Unread and totals are badged differently');
+  step(3, 'Counts are small plain numbers, not coloured badges');
   /*
-   * The whole point of the split: a total rendered as the filled unread pill
-   * made "27 templates" read as 27 unread ones.
+   * "Inbox 24", not a filled circle holding 24. A coloured pill was the
+   * loudest thing on the page for a folder that is simply doing its job.
+   * Unread still leads, as weight and ink rather than as a badge.
    */
-  const badges = await page.evaluate(() => ({
-    unread: document.querySelectorAll('.tma-dash__email-folder-count--unread').length,
-    plain: document.querySelectorAll(
+  const badges = await page.evaluate(() => {
+    const unread = document.querySelector('.tma-dash__email-folder-count--unread');
+    const plain = document.querySelector(
       '.tma-dash__email-folder-count:not(.tma-dash__email-folder-count--unread)'
-    ).length,
-  }));
-  check(badges.unread >= 1, 'unread folders carry the filled pill');
-  check(badges.plain >= 1, 'folders that badge a total do not');
+    );
+    const read = (el) => {
+      if (!el) return null;
+      const s = window.getComputedStyle(el);
+      return {
+        background: s.backgroundColor,
+        radius: parseFloat(s.borderRadius),
+        size: parseFloat(s.fontSize),
+        weight: Number(s.fontWeight),
+      };
+    };
+
+    return { unread: read(unread), plain: read(plain) };
+  });
+
+  check(!!badges.unread && !!badges.plain, 'both kinds of count are on screen');
+  if (badges.unread && badges.plain) {
+    const bare = (b) => /rgba\(0, 0, 0, 0\)|transparent/.test(b.background) && b.radius === 0;
+    check(bare(badges.unread), `the unread count has no pill (${badges.unread.background})`);
+    check(bare(badges.plain), `nor does a plain total (${badges.plain.background})`);
+    check(badges.unread.size <= 13 && badges.plain.size <= 13,
+      `both stay small (${badges.unread.size}px / ${badges.plain.size}px)`);
+    check(badges.unread.weight > badges.plain.weight,
+      `unread still reads first, by weight (${badges.unread.weight} vs ${badges.plain.weight})`);
+  }
 
   step(4, 'Groups collapse, and stay collapsed across a reload');
   await page.click('[data-email-group-toggle="labels"]');

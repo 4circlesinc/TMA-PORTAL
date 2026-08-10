@@ -1819,7 +1819,9 @@
    * caret out of whatever the user is mid-typing. The sync still runs; the
    * list just paints once they are done. */
   function mailRepaintShouldWait(state) {
-    return state.composeDrafts.length > 0 || !!state.inlineCompose;
+    // An open menu counts too: a repaint closes it (see render), so a poll
+    // landing mid-decision would take the menu away as it was being read.
+    return state.composeDrafts.length > 0 || !!state.inlineCompose || !!emailPointerMenu;
   }
 
   /* Cheap enough to run every tick: same ids in the same order, with the
@@ -2194,9 +2196,7 @@
 
       // Keep the list row in step with what the thread reported.
       var opened = messages.filter(function (m) { return m.id === id; })[0];
-      if (opened) {
-        Object.keys(opened).forEach(function (key) { row[key] = opened[key]; });
-      }
+      if (opened) mergeMessageInto(row, opened);
 
       state.bodyLoading = false;
       render();
@@ -2210,6 +2210,28 @@
       reportMailError(state, err, { reconnectBanner: false });
       render();
     });
+  }
+
+  /*
+   * Flags the client owns between renders.
+   *
+   * Opening a message writes `read` and fetches the conversation at the same
+   * moment. If the fetch wins the race it answers from a row the write has not
+   * reached yet, and copying it wholesale flips the message back to unread
+   * under the reader — then back again on the next poll. Everything else in
+   * the record is server truth and is taken as it comes.
+   */
+  var OPTIMISTIC_FLAGS = ['unread', 'starred', 'important', 'pinned', 'snoozedUntil'];
+
+  function mergeMessageInto(target, incoming) {
+    if (!target || !incoming) return target;
+
+    Object.keys(incoming).forEach(function (key) {
+      if (OPTIMISTIC_FLAGS.indexOf(key) !== -1) return;
+      target[key] = incoming[key];
+    });
+
+    return target;
   }
 
   /* True when the loaded thread actually covers the selected message.
@@ -2257,13 +2279,8 @@
     message._loading = true;
 
     api().getMessage(id).then(function (data) {
-      var full = data && data.message;
       message._loading = false;
-
-      if (full) {
-        Object.keys(full).forEach(function (key) { message[key] = full[key]; });
-      }
-
+      if (data && data.message) mergeMessageInto(message, data.message);
       render();
     }).catch(function (err) {
       message._loading = false;
@@ -2479,8 +2496,34 @@
       { id: 'snooze', label: snoozed ? 'Unsnooze' : 'Snooze', icon: 'Clock', active: snoozed },
     ];
 
+    // Star and flag normally sit pinned at the front of the row. A split-view
+    // list is too narrow to spare the width for them, so there they fold into
+    // this bar instead — CSS decides which pair is on screen (see the
+    // email-list container query), never both.
+    var starred = isRowStarred(row, state);
+    var important = isRowImportant(row, state);
+    var folded =
+      renderEmailIconTooltipBtn({
+        tipId: 'email-row-tip-star-folded-' + row.id,
+        label: starred ? 'Remove star' : 'Add star',
+        className: 'tma-dash__email-row-action tma-dash__email-row-action--folded' +
+          (starred ? ' tma-dash__email-row-action--active' : ''),
+        attrs: ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"',
+        innerHtml: '<img src="' + ICONS.Star + '" alt="">',
+      }) +
+      renderEmailIconTooltipBtn({
+        tipId: 'email-row-tip-important-folded-' + row.id,
+        label: important ? 'Mark as not important' : 'Mark as important',
+        className: 'tma-dash__email-row-action tma-dash__email-row-action--folded' +
+          (important ? ' tma-dash__email-row-action--active' : ''),
+        attrs: ' data-email-important="' + esc(row.id) + '"' +
+          ' aria-pressed="' + (important ? 'true' : 'false') + '"',
+        innerHtml: '<img src="' + ICONS.Important + '" alt="">',
+      });
+
     return (
       '<div class="tma-dash__email-row-hover-actions">' +
+      folded +
       actions
         .map(function (action) {
           return renderEmailIconTooltipBtn({
@@ -8359,7 +8402,13 @@
       btn.addEventListener('click', function () {
         var action = btn.getAttribute('data-email-detail-topbar');
         var id = state.selectedId;
-        if (!id || !action || action === 'more') return;
+        if (!id || !action) return;
+        if (action === 'more') {
+          // Was a dead button. Same menu the message head's three dots open.
+          openEmailMessageMenu(root, state, render, btn, id);
+
+          return;
+        }
         if (action === 'archive' || action === 'inbox' || action === 'delete') {
           applyEmailRowAction(root, state, render, id, action === 'delete' ? 'trash' : action, null);
           return;

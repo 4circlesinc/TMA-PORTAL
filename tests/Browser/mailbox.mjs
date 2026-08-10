@@ -63,6 +63,15 @@ async function signIn() {
     page.click('button[type="submit"]:visible'),
   ]);
   await page.waitForTimeout(500);
+  // Login lands on "Stay signed in?" — leave it and every later route bounces
+  // straight back to it, and the run passes vacuously.
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+      page.click('text=Yes, stay signed in'),
+    ]);
+    await page.waitForTimeout(500);
+  }
   if (page.url().includes('/auth/login')) throw new Error('login failed');
 }
 
@@ -87,9 +96,25 @@ try {
   check(/2/.test(inboxBadge), `Inbox badges 2 unread (saw "${inboxBadge.trim()}")`);
 
   step(3, 'Opening a message loads it and marks it read');
+  /*
+   * Hold the background poll for this step.
+   *
+   * Marking read is optimistic — the row flips, then the PATCH goes out. That
+   * PATCH is stubbed here, so the server still says unread, and the five-second
+   * poll would legitimately paint the row unread again a moment later. Only in
+   * this harness: in production the write really lands. mailPollShouldWait()
+   * stands the poll down while the tab is hidden, which is the honest lever.
+   */
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { get: () => true, configurable: true });
+  });
+
   const firstRow = await page.$('[data-email-row]');
   const rowId = await firstRow.getAttribute('data-email-row');
-  await firstRow.click();
+  // The subject block, not the row's centre: the sender's picture doubles as
+  // the row's checkbox, and in a narrow split list it sits close enough to the
+  // middle that a centred click selects the row instead of opening it.
+  await page.click(`[data-email-row="${rowId}"] .tma-dash__email-row-content`);
   await page.waitForTimeout(800);
 
   const readState = await page.evaluate((id) => {
@@ -114,7 +139,12 @@ try {
     'did not collapse into the disconnected empty state');
 
   step(4, 'Starring persists through the API');
-  const starBtn = await page.$(`[data-email-star="${rowId}"]`);
+  // A row draws its star more than once — pinned at the front on a wide list,
+  // folded into the hover bar on a narrow one, and again for touch — with only
+  // ever one of them on screen. Hover the row first, then take the visible one.
+  await page.hover(`[data-email-row="${rowId}"]`);
+  await page.waitForTimeout(200);
+  const starBtn = await page.$(`[data-email-star="${rowId}"]:visible`);
   if (starBtn) {
     const before = await page.evaluate((id) => {
       const root = document.querySelector('[data-email]');
@@ -132,6 +162,10 @@ try {
   }
 
   step(5, 'Email settings open over the page, not at /settings');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+  });
+
   const urlBefore = page.url();
   await page.click('[data-email-profile-toggle]');
   await page.waitForTimeout(300);

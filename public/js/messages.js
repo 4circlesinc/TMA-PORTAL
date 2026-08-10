@@ -1539,9 +1539,9 @@
       (mobile ? renderListMobileHead(state) : renderListHead(state)) +
       renderComposePanel(state) +
       renderSettingsPanel(state) +
-      // Only over the chat list: pulling down inside Media or Updates should
+      // Only over the chat list: pulling down inside Media or Calls should
       // not produce a shelf belonging to a list that isn't on screen.
-      (state.searchMode || state.mediaMode || state.updatesMode ||
+      (state.searchMode || state.mediaMode ||
         state.callsMode || state.tab === 'archived'
         ? ''
         : renderArchivedReveal(state)) +
@@ -1551,14 +1551,12 @@
       // saying what you are looking at and how to get back.
       (state.mediaMode
         ? renderMediaPanel(state)
-        : state.updatesMode
-          ? renderUpdatesPanel(state)
-          : state.callsMode
-            ? renderCallsPanel(state)
-            : (state.searchMode
-              ? renderSearchResults(state)
-              : (state.tab === 'archived' ? renderArchivedHead() : '') +
-                (rows.length ? body : (people ? '' : body)) + people)) +
+        : state.callsMode
+          ? renderCallsPanel(state)
+          : (state.searchMode
+            ? renderSearchResults(state)
+            : (state.tab === 'archived' ? renderArchivedHead() : '') +
+              (rows.length ? body : (people ? '' : body)) + people)) +
       '</div>' +
       // Between the scrolling body and the nav bar, so it floats clear of both.
       renderComposeFab() +
@@ -1566,14 +1564,6 @@
       '</div>'
     );
   }
-
-  /* ------------------------------------------------------------------
-   * Updates
-   *
-   * What colleagues are working on right now. Distinct from presence, which
-   * only says whether someone's tab is open — this is what they chose to tell
-   * people, so it is set explicitly and cleared explicitly.
-   * ---------------------------------------------------------------- */
 
   /*
    * Opening a tab clears its badge. Cleared locally first so the number goes
@@ -1606,25 +1596,6 @@
     }).catch(function () { /* a stale badge is not worth surfacing */ });
   }
 
-  function loadMessagesUpdates(root, state, render) {
-    if (state.updatesLoading) return;
-
-    state.updatesLoading = true;
-    state.updatesError = null;
-    render();
-
-    window.TMAMessagingAPI.updates().then(function (data) {
-      state.updates = (data && data.updates) || [];
-      state.myUpdate = (data && data.mine) || null;
-      state.updatesLoading = false;
-      render();
-    }).catch(function (err) {
-      state.updatesLoading = false;
-      state.updatesError = (err && err.message) || 'Updates could not be loaded.';
-      render();
-    });
-  }
-
   function loadMessagesCalls(root, state, render) {
     if (state.callsLoading) return;
 
@@ -1641,130 +1612,6 @@
       state.callsError = (err && err.message) || 'Calls could not be loaded.';
       render();
     });
-  }
-
-  function saveMyUpdate(root, state, render, text) {
-    window.TMAMessagingAPI.setUpdate({ text: text }).then(function (data) {
-      state.myUpdate = (data && data.mine) || null;
-      state.updateDraft = null;
-      render();
-    }).catch(function (err) {
-      state.updatesError = (err && err.message) || 'That status could not be saved.';
-      render();
-    });
-  }
-
-  /* Group conversations, surfaced under Updates as "Team channels" — the
-   * shared/organization threads, separated from one-to-one chats. Sorted so the
-   * organization channel leads, then whatever is unread. */
-  function getTeamChannels() {
-    return getThreads()
-      .filter(function (row) {
-        return row && row.type === 'group' && !row.archived;
-      })
-      .sort(function (a, b) {
-        if (!!b.isDefault !== !!a.isDefault) return b.isDefault ? 1 : -1;
-        return (b.unread || 0) - (a.unread || 0);
-      });
-  }
-
-  /* A channel row reuses the inbox row's inner markup for a consistent look,
-   * but carries data-messages-channel so opening it also returns the column to
-   * the chats list rather than leaving it stranded on Updates. */
-  function buildChannelRowHtml(row, state) {
-    var active = state.selectedId === row.id;
-    var rowCls =
-      'tma-dash__messages-row' +
-      (active ? ' tma-dash__messages-row--active' : '') +
-      (row.muted ? ' tma-dash__messages-row--muted' : '');
-    return (
-      '<div class="' + rowCls + '" data-messages-channel="' + esc(row.id) +
-      '" role="button" tabindex="0">' +
-      buildMessagesRowInner(row, state) +
-      '</div>'
-    );
-  }
-
-  function renderUpdatesPanel(state) {
-    var mine = state.myUpdate;
-
-    // Your own status sits at the top: this is both where you read others' and
-    // where you set your own, the way a status feed usually works.
-    var self =
-      '<div class="tma-dash__messages-update-self">' +
-      '<div class="tma-dash__messages-update-self-label">Your status</div>' +
-      '<div class="tma-dash__messages-update-self-row">' +
-      '<input type="text" class="tma-dash__messages-update-input"' +
-      ' data-messages-update-input maxlength="140"' +
-      ' placeholder="What are you working on?"' +
-      ' value="' + esc(state.updateDraft !== null && state.updateDraft !== undefined
-        ? state.updateDraft
-        : (mine ? mine.text : '')) + '">' +
-      '<button type="button" class="tma-dash__messages-update-save" data-messages-update-save>' +
-      (mine ? 'Update' : 'Set') + '</button>' +
-      '</div>' +
-      (mine
-        ? '<button type="button" class="tma-dash__messages-update-clear" data-messages-update-clear>' +
-          'Clear my status</button>'
-        : '') +
-      '</div>';
-
-    var body;
-
-    if (state.updatesLoading) {
-      body = '<div class="tma-dash__messages-media-note">Loading…</div>';
-    } else if (state.updatesError) {
-      body = '<div class="tma-dash__messages-media-note" role="alert">' + esc(state.updatesError) + '</div>';
-    } else if (!state.updates || !state.updates.length) {
-      body = '<div class="tma-dash__messages-media-note">Nobody has posted a status yet.</div>';
-    } else {
-      body = state.updates.map(function (u) {
-        return (
-          '<div class="tma-dash__messages-update-row">' +
-          '<span class="tma-dash__messages-update-avatar' + (u.online ? ' is-online' : '') + '">' +
-          (u.photo
-            ? '<img src="' + esc(u.photo) + '" alt="">'
-            : '<span class="tma-dash__messages-update-initials">' + esc(initialsOf(u.name)) + '</span>') +
-          '</span>' +
-          '<span class="tma-dash__messages-update-copy">' +
-          '<span class="tma-dash__messages-update-name">' + esc(u.name) + '</span>' +
-          '<span class="tma-dash__messages-update-text">' +
-          (u.emoji ? esc(u.emoji) + ' ' : '') + esc(u.text) +
-          '</span>' +
-          '</span>' +
-          '</div>'
-        );
-      }).join('');
-    }
-
-    // Team channels: the group/organization threads, as their own category.
-    var channels = getTeamChannels();
-    var channelsSection = '';
-    if (channels.length) {
-      channelsSection =
-        '<div class="tma-dash__messages-list-group">Team channels</div>' +
-        '<div class="tma-dash__messages-channel-list">' +
-        channels.map(function (row) { return buildChannelRowHtml(row, state); }).join('') +
-        '</div>';
-    }
-
-    return (
-      '<div class="tma-dash__messages-updates">' + self +
-      channelsSection +
-      '<div class="tma-dash__messages-list-group">Team status</div>' +
-      '<div class="tma-dash__messages-update-list">' + body + '</div>' +
-      '</div>'
-    );
-  }
-
-  /* Initials for someone with no photo — never an invented avatar. */
-  function initialsOf(name) {
-    return String(name || '?')
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map(function (part) { return part.charAt(0).toUpperCase(); })
-      .join('');
   }
 
   /* ------------------------------------------------------------------
@@ -8439,7 +8286,6 @@
     function showListView(view) {
       showMessagesChats(state);
       state.mediaMode = view === 'media';
-      state.updatesMode = view === 'updates';
       state.callsMode = view === 'calls';
       state.tab = view === 'archived' ? 'archived' : 'all';
     }
@@ -8449,50 +8295,6 @@
       btn.addEventListener('click', function () {
         showListView('chats');
         render();
-      });
-    });
-
-    // --- updates ----------------------------------------------------------
-    MORPH.unwired(root, '[data-messages-nav-updates]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var opening = !state.updatesMode;
-        showListView(opening ? 'updates' : 'chats');
-        render();
-        if (opening) {
-          loadMessagesUpdates(root, state, render);
-          markTabSeen(root, state, render, 'updates');
-        }
-      });
-    });
-
-    // Opening a team channel from the Updates category returns the column to
-    // the chats list, so the conversation opens in its normal context.
-    MORPH.unwired(root, '[data-messages-channel]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var id = btn.getAttribute('data-messages-channel');
-        showListView('chats');
-        if (id && id !== state.selectedId) openConversation(root, state, render, id);
-        else render();
-      });
-    });
-
-    MORPH.unwired(root, '[data-messages-update-input]').forEach(function (input) {
-      input.addEventListener('input', function () { state.updateDraft = input.value; });
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); saveMyUpdate(root, state, render, input.value); }
-      });
-    });
-
-    MORPH.unwired(root, '[data-messages-update-save]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var input = root.querySelector('[data-messages-update-input]');
-        saveMyUpdate(root, state, render, input ? input.value : '');
-      });
-    });
-
-    MORPH.unwired(root, '[data-messages-update-clear]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        saveMyUpdate(root, state, render, '');
       });
     });
 
@@ -8891,15 +8693,6 @@
       mediaItems: [],
       mediaLoading: false,
       mediaError: null,
-      /* Updates: what colleagues are working on, and the status the signed-in
-       * user is showing. updateDraft holds unsaved typing so a re-render
-       * cannot discard it. */
-      updatesMode: false,
-      updates: [],
-      myUpdate: null,
-      updateDraft: null,
-      updatesLoading: false,
-      updatesError: null,
       /* Calls: recent call history, fetched from the server when the tab is
        * opened (not scanned from whatever threads happen to be loaded). */
       callsMode: false,
@@ -9100,9 +8893,8 @@
     });
 
     /*
-     * Coming back to the tab re-reads the badges. A colleague's status change
-     * has nothing to broadcast on, so Updates would otherwise only ever be
-     * right at page load; this is the cheapest moment it matters.
+     * Coming back to the tab re-reads the badges, so the Calls count is
+     * right the moment the page is looked at again rather than only at load.
      */
     if (!root._tabCountsFocusBound) {
       root._tabCountsFocusBound = true;
@@ -9169,7 +8961,6 @@
   /* Return the inbox column to the chat list, whatever panel is over it. */
   function showMessagesChats(state) {
     state.mediaMode = false;
-    state.updatesMode = false;
     state.callsMode = false;
     state.tab = 'all';
     state.settingsOpen = false;

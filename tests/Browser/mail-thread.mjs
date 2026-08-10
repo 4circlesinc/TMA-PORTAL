@@ -1,14 +1,18 @@
 import { chromium } from 'playwright';
 
 /*
- * The reading pane as a conversation.
+ * Reading a conversation.
  *
- * The pane used to render only the message that was clicked — a reply arrived
- * with none of the thread it belonged to, and the quoted history it carried
- * was dumped inline underneath it. This drives the real page: opening a
- * message must show every message in the conversation as its own card, older
- * ones collapsed, and the quoted history hidden behind a toggle that still
- * reveals it.
+ * The pane shows the message that is open, in full. Moving between the other
+ * messages in the conversation is the *list's* job — the row carries a
+ * dropdown arrow, and picking a message from it opens that message here. The
+ * pane used to stack the whole thread as collapsed cards with its own
+ * expand-all control, which was a second, competing way to do the same thing;
+ * mailbox-conversations.mjs covers the dropdown that replaced it.
+ *
+ * What is checked here is the reading itself: one card, identified by sender
+ * and time, with quoted history hidden behind a toggle that still reveals it,
+ * and attachments listed under the message they belong to.
  *
  * It also pins the compose window opening blank, which it did not: every new
  * message arrived pre-filled with a stand-in invoice nobody had asked for.
@@ -44,6 +48,15 @@ async function signIn() {
   await page.fill('input[name="password"]', 'password12345');
   await page.click('button[type="submit"]');
   await page.waitForLoadState('networkidle');
+  // Login lands on "Stay signed in?" — leave it and every later route bounces
+  // straight back to it, and the run passes vacuously.
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+      page.click('text=Yes, stay signed in'),
+    ]);
+    await page.waitForLoadState('networkidle');
+  }
 }
 
 step(1, 'Sign in and open the mailbox');
@@ -55,40 +68,50 @@ check(true, 'inbox rendered');
 step(2, 'Open the conversation');
 // Targeted by subject rather than position: the inbox holds other fixtures,
 // and "the first row" is whichever one happens to be newest.
-await page.locator('[data-email-row]', { hasText: 'Quarterly review' }).first().click();
+const conversationRow = page
+  .locator('[data-email-row]:not([data-email-row-child])', { hasText: 'Quarterly review' })
+  .first();
+await conversationRow.locator('.tma-dash__email-row-content').click();
 await page.waitForSelector('[data-email-thread]', { timeout: 15000 });
 await page.waitForTimeout(800);
 
 const cards = await page.locator('[data-email-thread-message]').count();
-check(cards === 3, `all three messages render as cards (got ${cards})`);
+check(cards === 1, `the pane holds only the open message (got ${cards})`);
+check(
+  (await page.locator('.tma-dash__email-message--collapsed').count()) === 0,
+  'no collapsed sibling cards — the list dropdown navigates the thread now'
+);
+check(
+  (await page.locator('[data-email-thread-toggle-all]').count()) === 0,
+  'and no expand-all control competing with it'
+);
 
-const collapsed = await page.locator('.tma-dash__email-message--collapsed').count();
-check(collapsed >= 1, `older messages start collapsed (got ${collapsed})`);
+const note = await page.locator('.tma-dash__email-thread-note').innerText().catch(() => '');
+check(/3 messages/.test(note), `the pane still says how big the conversation is ("${note}")`);
 
-const expanded = await page.locator('.tma-dash__email-message--expanded').count();
-check(expanded >= 1, `the newest message starts expanded (got ${expanded})`);
+step(3, 'The open message is identified by sender and time');
+const names = await page.locator('.tma-dash__email-message-head-name').allTextContents();
+check(names.some((n) => n.includes('Dana')), `the sender is named (got ${JSON.stringify(names)})`);
+check(
+  (await page.locator('.tma-dash__email-detail-date').count()) >= 1,
+  'the message shows its own date'
+);
 
-step(3, 'Every message is identified by sender and time');
-const names = await page.locator(
-  '.tma-dash__email-message-collapsed-name, .tma-dash__email-message-head-name'
-).allTextContents();
-check(names.some((n) => n.includes('Dana')), 'sender names shown per message');
-
-const dates = await page.locator(
-  '.tma-dash__email-message-collapsed-date, .tma-dash__email-detail-date'
-).count();
-check(dates >= 3, `each message shows its own date (got ${dates})`);
-
-step(4, 'Expanding a collapsed message reveals its body');
-await page.locator('[data-email-thread-expand]').first().click();
-await page.waitForTimeout(600);
-const expandedAfter = await page.locator('.tma-dash__email-message--expanded').count();
-check(expandedAfter > expanded, `expanding opens the message (${expanded} -> ${expandedAfter})`);
+step(4, 'The rest of the conversation is reached from the list dropdown');
+await conversationRow.locator('[data-email-conversation-toggle]').click();
+await page.waitForTimeout(1000);
+const siblings = await page.locator('[data-email-row-child]').count();
+check(siblings === 2, `the other two messages are listed under the row (got ${siblings})`);
 
 step(5, 'Quoted history is collapsed but still reachable');
-// The middle message carries an Outlook reply header plus a blockquote.
-await page.locator('[data-email-thread-toggle-all="expand"]').click().catch(() => {});
-await page.waitForTimeout(800);
+// The middle message carries an Outlook reply header plus a blockquote, so it
+// is the one worth opening — its body arrives from the server on demand.
+await page
+  .locator('[data-email-row-child]', { hasText: 'Re: Quarterly review' })
+  .first()
+  .locator('.tma-dash__email-row-content')
+  .click();
+await page.waitForTimeout(1500);
 
 const quoteToggle = page.locator('[data-email-thread-quote]');
 const hasQuoteToggle = await quoteToggle.count();
@@ -117,7 +140,11 @@ step(6, 'Attachments are listed under the message they belong to');
 // A separate fixture message, because attachments hang off one message in the
 // thread rather than the thread as a whole — the section has to be able to say
 // which message's files it is showing.
-await page.locator('[data-email-row]', { hasText: 'With attachments' }).first().click();
+await page
+  .locator('[data-email-row]:not([data-email-row-child])', { hasText: 'With attachments' })
+  .first()
+  .locator('.tma-dash__email-row-content')
+  .click();
 await page.waitForSelector('[data-email-thread]', { timeout: 15000 });
 await page.waitForTimeout(1200);
 

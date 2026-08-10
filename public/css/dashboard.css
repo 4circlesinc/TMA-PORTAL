@@ -11401,6 +11401,13 @@
   margin-left: -6px;
 }
 
+/* Star and flag folded into the hover bar. Off unless the list is too narrow
+   to keep them pinned at the front of the row — otherwise the row would show
+   each of them twice. */
+.tma-dash__email-row-action--folded {
+  display: none;
+}
+
 /* ── the conversation arrow ────────────────────────────────────────
  *
  * Only on rows whose conversation actually holds more than one message; every
@@ -12945,6 +12952,12 @@
      */
     .tma-dash__email-row-front-actions {
       display: none;
+    }
+
+    /* …and reappear inside the hover bar, so starring a message from a narrow
+       list is still one click rather than a trip to the right-click menu. */
+    .tma-dash__email-row-action--folded {
+      display: inline-flex;
     }
 
     /* Set on the rows rather than on the list: a container query cannot

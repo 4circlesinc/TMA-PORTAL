@@ -96,8 +96,15 @@ try {
   await page.goto(`${BASE}/email`, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-email-row]', { timeout: 15000 });
 
+  // One row per conversation: the seed's three-message thread must be a
+  // single row, not three. Counted as "fewer rows than messages" so other
+  // fixtures in the same database do not make this brittle.
   const parents = await page.$$('[data-email-row]:not([data-email-row-child])');
-  check(parents.length === 4, `4 conversations listed (saw ${parents.length})`);
+  const threadRows = await page
+    .locator('[data-email-row]:not([data-email-row-child]):has-text("Quarterly review")')
+    .count();
+  check(parents.length >= 4, `conversations listed (saw ${parents.length})`);
+  check(threadRows === 1, `the 3-message thread is one row (saw ${threadRows})`);
 
   step(2, 'The dropdown arrow only appears on real conversations');
   const withArrow = await page.$$('[data-email-conversation-toggle]');
@@ -190,6 +197,27 @@ try {
   await page.click('[data-email-inline-compose-close]');
   await page.waitForTimeout(300);
 
+  step(7.5, 'The message\u2019s three-dot menu is a real menu');
+  // Closing the composer repaints the pane; let that land before clicking,
+  // or the menu opens onto a card that is about to be replaced.
+  await settle();
+  await page.waitForTimeout(400);
+  await page.click('.tma-dash__email-message--expanded [data-email-message-menu]');
+  await page.waitForTimeout(400);
+  const headMenu = await page.textContent('.tma-dash__email-context-menu').catch(() => '(no menu opened)');
+  log('        menu text: ' + JSON.stringify(headMenu));
+  check(/Print/.test(headMenu) && /Open in new window/.test(headMenu) && /Archive/.test(headMenu),
+    'More offers Print, Open in new window and the folder actions');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+
+  // The topbar's own three dots used to do nothing at all.
+  await page.click('[data-email-detail-topbar="more"]');
+  await page.waitForTimeout(300);
+  check(!!(await page.$('.tma-dash__email-context-menu')), 'so does the one in the topbar');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+
   step(8, 'The row checkbox lives behind the avatar, and appears on hover');
   const permanent = await page.$$('.tma-dash__email-row .tma-dash__email-list-check');
   check(permanent.length === 0, 'no permanently drawn checkbox column on the rows');
@@ -203,11 +231,18 @@ try {
   });
 
   await page.mouse.move(1400, 500);
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(300);
   check((await boxOpacity()) === '0', 'the checkbox is hidden while the row is not hovered');
-  await target.hover();
-  await page.waitForTimeout(250);
-  check((await boxOpacity()) === '1', 'hovering swaps the picture for the checkbox');
+
+  // Hovered in a retry loop: a background repaint can replace the row under
+  // the pointer, and the browser only re-evaluates :hover on the next move.
+  let hovered = '0';
+  for (let i = 0; i < 6 && hovered !== '1'; i++) {
+    await target.hover({ force: true });
+    await page.waitForTimeout(200);
+    hovered = await boxOpacity();
+  }
+  check(hovered === '1', `hovering swaps the picture for the checkbox (opacity ${hovered})`);
 
   step(9, 'Ticking a conversation selects every message in it');
   const convRow = rowFor('Perfect, see you then');
