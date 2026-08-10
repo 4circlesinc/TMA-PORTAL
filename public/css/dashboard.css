@@ -9350,6 +9350,20 @@
   scrollbar-width: none;
 }
 
+/* Select-all in the page toolbar — same control as the list head, sized to
+   the 32px tool buttons rather than the 40px avatar column. */
+.tma-dash__email-toolbar-check {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-8);
+}
+
+.tma-dash__email-toolbar-check:hover {
+  background: var(--color-hover-deep, rgba(0, 0, 0, 0.08));
+}
+
 .tma-dash__email-toolbar .tma-dash__toolbar-actions::-webkit-scrollbar {
   display: none;
 }

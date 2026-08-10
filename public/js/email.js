@@ -890,6 +890,21 @@
    * pane, same role as the Files toolbar / an Outlook ribbon. New Mail and
    * Sync are always live; the rest enable once something is ticked or open.
    */
+  function renderEmailSelectAll(state, opts) {
+    opts = opts || {};
+    var selection = selectionSummary(state);
+    var cls = 'tma-dash__email-list-check';
+    if (opts.className) cls += ' ' + opts.className;
+
+    return (
+      '<label class="' + cls + '" title="Select all">' +
+      '<input type="checkbox" class="tma-dash__check" data-email-selectall' +
+      (selection.all ? ' checked' : '') +
+      ' aria-label="Select all">' +
+      '</label>'
+    );
+  }
+
   function renderEmailToolbar(state) {
     if (isEmailMobile()) return '';
 
@@ -920,6 +935,7 @@
       '" data-email-toolbar>' +
       '<div class="tma-dash__toolbar-actions">' +
       renderEmailSidebarMenuBtn(state) +
+      renderEmailSelectAll(state, { className: 'tma-dash__email-toolbar-check' }) +
       renderEmailIconTooltipBtn({
         tipId: 'email-toolbar-tip-compose',
         label: 'New Mail',
@@ -3878,10 +3894,7 @@
       /* Mobile hides the list head, so the pills get their own strip there. */
       (isEmailMobile() ? renderInboxCategories(state) : '') +
       '<div class="tma-dash__email-list-head">' +
-      '<label class="tma-dash__email-list-check" title="Select all">' +
-      '<input type="checkbox" class="tma-dash__check" data-email-selectall' +
-      (selection.all ? ' checked' : '') + ' aria-label="Select all">' +
-      '</label>' +
+      renderEmailSelectAll(state) +
       (isEmailMobile() ? '' : renderInboxCategories(state)) +
       (isEmailMobile()
         ? renderEmailListRefreshBtn(state) +
@@ -3915,11 +3928,11 @@
   }
 
   function syncSelectAllBox(root, state) {
-    var selectAll = root.querySelector('[data-email-selectall]');
-    if (!selectAll) return;
     var selection = selectionSummary(state);
-    selectAll.checked = selection.all;
-    selectAll.indeterminate = selection.some;
+    root.querySelectorAll('[data-email-selectall]').forEach(function (selectAll) {
+      selectAll.checked = selection.all;
+      selectAll.indeterminate = selection.some;
+    });
   }
 
   /* Pager for the folder listing. The mailbox mirror can hold tens of
@@ -7768,8 +7781,7 @@
       });
     });
 
-    var selectAll = root.querySelector('[data-email-selectall]');
-    if (selectAll) {
+    MORPH.unwired(root, '[data-email-selectall]').forEach(function (selectAll) {
       MORPH.on(selectAll, 'change', function () {
         var on = selectAll.checked;
         // Everything drawn, including the messages inside opened
@@ -7779,12 +7791,11 @@
           if (on) state.checkedIds[row.id] = true;
           else delete state.checkedIds[row.id];
         });
-        selectAll.indeterminate = false;
         applySelectionToDom(root, state);
         updateEmailListBulk(root, state);
       });
-      syncSelectAllBox(root, state);
-    }
+    });
+    syncSelectAllBox(root, state);
 
     MORPH.unwired(root, '[data-email-refresh]').forEach(function (btn) {
       btn.addEventListener('click', function (event) {
