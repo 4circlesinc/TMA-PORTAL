@@ -99,6 +99,7 @@
     Smiley: ICON + 'Smiley.svg',
     Printer: ICON + 'Printer.svg',
     ArrowSquareOut: ICON + 'ArrowSquareOut.svg',
+    GearSix: ICON + 'GearSix.svg',
   };
 
   var LAYOUT_STORE_KEY = 'tma.email.layoutStyle';
@@ -933,6 +934,15 @@
       '</div>' +
       '<div class="tma-dash__email-toolbar-end">' +
       renderLayoutToggle(state) +
+      renderEmailIconTooltipBtn({
+        tipId: 'email-toolbar-tip-settings',
+        label: 'Email settings',
+        className: 'tma-dash__tool-btn tma-dash__email-toolbar-btn tma-dash__email-toolbar-settings',
+        attrs: ' data-email-open-settings',
+        innerHtml:
+          '<img src="' + ICONS.GearSix + '" alt="">' +
+          '<span class="tma-dash__email-toolbar-btn-label">Settings</span>',
+      }) +
       '</div>' +
       '</div>'
     );
