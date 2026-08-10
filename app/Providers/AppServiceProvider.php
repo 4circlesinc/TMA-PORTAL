@@ -159,5 +159,14 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('invitations', function (Request $request) {
             return Limit::perMinute(20)->by($request->ip());
         });
+
+        // Document-request links accept file *writes* from people with no
+        // account, so they are capped harder than either of the above. The
+        // ceiling still clears a real client dropping a folder of scans in one
+        // go — the page posts them one at a time — while a leaked link cannot
+        // be used to fill the vault.
+        RateLimiter::for('uploads', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
     }
 }

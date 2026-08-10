@@ -946,6 +946,186 @@
 
 .tma-portal-modal__body p { margin: 0; font-size: var(--text-size-14); line-height: var(--text-lh-14); color: var(--color-text-secondary); }
 
+/* ── Request Files modal (portal-file-requests.js) ───
+ *
+ * Reuses the documented pieces rather than inventing chrome: the field/label
+ * pair, the toggle switch, the picker list from the File Library's Move
+ * dialog, and the share modal's link row. Only the layout that holds them —
+ * sections, the label/control rows, the type chips — is new.
+ */
+.tma-portal-request {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: min(560px, 78vw);
+}
+
+.tma-portal-request__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tma-portal-request__section + .tma-portal-request__section {
+  padding-top: var(--space-16);
+  border-top: 0.5px solid var(--color-border-light, rgba(0, 0, 0, 0.08));
+}
+
+.tma-portal-request__heading {
+  margin: 0;
+  font-size: var(--text-size-13, 13px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-request__note {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-request__error {
+  margin: 0;
+  font-size: var(--text-size-13, 13px);
+  color: var(--color-text-danger, #b3261e);
+}
+
+/* Two fields side by side, stacking before they get too narrow to read. */
+.tma-portal-request__pair {
+  display: flex;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+}
+
+.tma-portal-request__pair > * {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+/* Label and description on the left, the control on the right. */
+.tma-portal-request__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-16);
+}
+
+.tma-portal-request__row-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-portal-request__row-label {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-black);
+}
+
+.tma-portal-request__row-hint {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-request__row-control {
+  flex: 0 0 auto;
+  max-width: 60%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tma-portal-request__row-control .tma-portal-input,
+.tma-portal-request__row-control .tma-portal-select { max-width: 100%; }
+
+.tma-portal-request__inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-portal-request__inline .tma-portal-input { width: 190px; }
+
+.tma-portal-request__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  justify-content: flex-end;
+}
+
+.tma-portal-request__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: 999px;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tma-portal-request__chip:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft, rgba(19, 109, 160, 0.1));
+  color: var(--color-primary-dark, var(--color-primary));
+}
+
+/* Where uploads land — one line, always visible, always changeable. */
+.tma-portal-request__dest {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-8);
+  background: var(--color-bg-subtle, var(--color-hover));
+}
+
+.tma-portal-request__dest-icon { display: inline-flex; flex-shrink: 0; }
+
+.tma-portal-request__dest-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-size-14);
+  color: var(--color-black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-portal-request__picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tma-portal-request__done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.tma-portal-request__done-title {
+  margin: 0;
+  font-size: var(--text-size-16, 16px);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+@media (max-width: 640px) {
+  .tma-portal-request { min-width: 0; }
+  .tma-portal-request__row { flex-direction: column; align-items: stretch; }
+  .tma-portal-request__row-control { max-width: 100%; justify-content: flex-start; }
+  .tma-portal-request__chips { justify-content: flex-start; }
+  .tma-portal-request__inline .tma-portal-input { width: auto; flex: 1; }
+}
+
 /* ── edit dashboard modal (tile rows) ──────────────── */
 .tma-portal-tilerows {
   display: flex;

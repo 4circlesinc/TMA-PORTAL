@@ -516,6 +516,83 @@ field placement and drawing, and computed CSS only exist in a browser.
   which found nothing when driven from the dashboard, so every item was
   clickable and did absolutely nothing. Needs a few files in Recent Files
   (it deletes one, so re-seed between runs).
+- **`dashboard-stability.mjs`** — the Dashboard staying put. Leaving the board
+  and coming back re-fetched six endpoints, re-rendered on each answer, and
+  force-refreshed the Default Folders strip — which replaced every card's
+  contents with an empty list until the previews came back. PHPUnit cannot see
+  any of that, and neither can a check on the rendered HTML: a re-render that
+  happens to produce identical markup still destroys images and scroll
+  position. So the script **stamps the live DOM nodes** (`el.__stableMark`)
+  before navigating away and looks for the stamps afterwards — a rebuilt tile
+  fails even when it looks the same. It also counts the network calls on the
+  way back (none, inside the freshness window) and confirms that *re-selecting*
+  the page still refetches, so the windows never swallow an explicit refresh.
+
+  Its second half is the Employees card, and it reads **computed colour**
+  rather than class names: the bug was an offline colleague wearing the online
+  green because their work plan said "in office", which a class-name assertion
+  would have passed. It also checks the "Last seen 12 minutes ago" phrasing and
+  that the list has a height ceiling and scrolls inside the card.
+
+  The seed needs an Administrator (`presence.view` is admin-only — an employee
+  gets `{staff: false}` and no board at all), one colleague who is **offline**
+  with an "in office" work plan for today, and some default folders with files
+  in them, or steps 5–7 assert nothing:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute='
+    use App\Models\{Folder, FileItem, User, UserPresence, WorkDay};
+    use Illuminate\Support\Str;
+    $u = User::where("email", "e2e@example.com")->first();
+    $b = User::where("email", "bea@example.com")->first();
+    UserPresence::create(["user_id" => $b->id, "last_seen_at" => now()->subMinutes(7),
+      "online_until" => now()->subMinutes(6)]);
+    WorkDay::create(["user_id" => $b->id, "work_date" => now()->toDateString(),
+      "status" => "in_office"]);
+    foreach (["Firm Policies", "Client Intake", "Templates"] as $name) {
+      $f = Folder::create(["uuid" => (string) Str::uuid(), "name" => $name,
+        "owner_id" => $u->id, "created_by" => $u->id,
+        "folder_type" => Folder::TYPE_ORGANIZATION, "org_wide" => true,
+        "audience" => "all_staff", "audience_role" => "viewer"]);
+      for ($i = 1; $i <= 3; $i++) {
+        FileItem::create(["uuid" => (string) Str::uuid(), "folder_id" => $f->id,
+          "name" => "$name doc $i.pdf", "extension" => "pdf", "size" => 1024,
+          "disk" => "local", "storage_path" => "vault/2026/08/".Str::random(8).".pdf",
+          "owner_id" => $u->id, "uploaded_by" => $u->id]);
+      }
+    }'
+
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/dashboard-stability.mjs
+  ```
+
+  Note `work_date`, not `date` — the column has bitten this seed before.
+- **`file-requests.mjs`** — Request Files, dialog to stranger. `FileRequestTest`
+  covers the rules; what only a browser shows is the half that was missing
+  entirely, because the Dashboard shortcut and the File Box each opened their
+  own one-field dialog that logged a line locally, said "File request sent",
+  and sent nothing — no request, no link, no destination. The script fills in
+  the real dialog (title, instructions, destination picker, allowed types,
+  size, expiry, password), creates the link, then opens it in a **separate
+  browser context with no portal session** and uploads a file. That separate
+  context is the point: it is the only way to prove the recipient needs no
+  account, and that the page leaks neither the destination folder's contents
+  nor any portal navigation.
+
+  Three harness rules it was written around. The documented toggle switch draws
+  its track over the real `<input>`, so every `.check()` here needs
+  `{ force: true }` or Playwright waits forever on an intercepted click.
+  `[data-portal-modal-close]` also matches the modal *backdrop*, which the
+  dialog itself covers — scope it to `.tma-portal-modal__head`. And the File
+  Library's URL is `/folders/all`; a bare `/folders` is not in `SPA_PAGES` and
+  404s on a direct visit.
+
+  Needs the standard `e2e@example.com` account and at least one folder it can
+  upload into. Leaves a request and an uploaded file behind, so re-seed between
+  runs if the counts matter to you.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/file-requests.mjs
+  ```
 - **`library-sync-panel.mjs`** — where the SharePoint sync indicator actually
   lands. It stubs `/sync-status` with a library mid-import, then *measures the
   rendered box*: the panel must sit within 20px of the bottom-right corner, stay

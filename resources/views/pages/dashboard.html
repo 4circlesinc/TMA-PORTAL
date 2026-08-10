@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="css/table-b-sessions.css">
   <link rel="stylesheet" href="css/table.css">
   <link rel="stylesheet" href="css/table-a.css">
-  <link rel="stylesheet" href="css/portal.css?v=17">
+  <link rel="stylesheet" href="css/portal.css?v=18">
   <link rel="stylesheet" href="css/portal-files.css?v=9">
   <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=11">
   <link rel="stylesheet" href="css/feed.css?v=2">
@@ -517,7 +517,7 @@
   <script src="js/folder-colours.js" defer></script>
   <script src="js/folder-icons.js" defer></script>
   <script src="js/overview-files.js?v=11" defer></script>
-  <script src="js/overview-employees.js?v=1" defer></script>
+  <script src="js/overview-employees.js?v=2" defer></script>
   <script src="js/overview-activity.js?v=2" defer></script>
   <script src="js/overview-recycle.js?v=5" defer></script>
   <script src="js/overview-notifications.js?v=2" defer></script>
@@ -539,7 +539,7 @@
   <script src="js/messaging-realtime.js?v=2" defer></script>
   <script src="js/messaging-image-editor.js" defer></script>
   <script src="js/messaging-calls.js?v=3" defer></script>
-  <script src="js/messages.js?v=14" defer></script>
+  <script src="js/messages.js?v=15" defer></script>
   <script src="js/feed-api.js?v=1" defer></script>
   <script src="js/feed.js?v=4" defer></script>
   <script src="js/schedule.js" defer></script>
@@ -579,11 +579,15 @@
        TMAPersonCard.faces() while rendering, and deferred scripts run in
        document order. -->
   <script src="js/person-card.js?v=1" defer></script>
-  <script src="js/portal-files.js?v=6" defer></script>
+  <!-- Request Files: one dialog shared by the Dashboard shortcut, the File
+       Library toolbar/folder menu and a client's Documents tab. Needs
+       TMAFilesNet + TMAPortalUI, and must precede all three callers. -->
+  <script src="js/portal-file-requests.js?v=1" defer></script>
+  <script src="js/portal-files.js?v=7" defer></script>
   <script src="js/cbi.js?v=8" defer></script>
   <script src="js/portal-shortcuts.js" defer></script>
-  <script src="js/portal-home-library.js?v=10" defer></script>
-  <script src="js/portal-home.js?v=22" defer></script>
+  <script src="js/portal-home-library.js?v=11" defer></script>
+  <script src="js/portal-home.js?v=23" defer></script>
   <script src="js/dashboard.js?v=30" defer></script>
   <script src="js/pull-refresh.js?v=1" defer></script>
   <script src="js/phone-input.js" defer></script>

@@ -3103,7 +3103,11 @@
   function renderFoldersPanel(contactId, hidden) {
     var uuid = clientFolderUuid(contactId);
     return (
+      // The client this panel belongs to, on the panel itself. The wiring below
+      // is module-level and has no access to the per-mount `state`, so anything
+      // it needs about the client has to be readable from the DOM.
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="folders" role="tabpanel"' +
+      ' data-clients-panel-client="' + esc(contactId || '') + '"' +
       (hidden ? ' hidden' : '') + '>' +
       '<div class="tma-dash__clients-folders-head">' +
       '<span class="tma-dash__clients-folders-title" data-clients-folder-crumbs>Client documents</span>' +
@@ -3113,6 +3117,11 @@
           '<img src="' + ICONS.Plus + '" alt=""><span>New folder</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-upload>' +
           '<img src="images/icons/phosphor/ArrowLineUp.svg" alt=""><span>Upload</span></button>' +
+          // Collecting documents from the client is the other half of uploading
+          // them on the client's behalf, so it sits beside it and targets the
+          // same folder the panel is currently showing.
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-request>' +
+          '<img src="images/icons/phosphor/DownloadSimple.svg" alt=""><span>Request files</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-open-folder>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open in File Library</span></button>' +
           '<input type="file" multiple hidden data-clients-folder-fileinput>' +
@@ -3426,6 +3435,41 @@
       fileInput.addEventListener('change', function () {
         uploadToClientFolder(fileInput.files, current());
         fileInput.value = '';
+      });
+    }
+
+    /*
+     * Ask the client for documents, into the folder on screen.
+     *
+     * Deliberately the *current* folder rather than the client's root: the
+     * point of drilling into "Approval Documents" and then asking is that the
+     * uploads land there. The shared dialog (portal-file-requests.js) owns
+     * everything else, and the client is tagged on the request so the
+     * documents are attributed even when the destination is a plain folder.
+     */
+    var requestBtn = root.querySelector('[data-clients-folder-request]');
+    if (requestBtn) {
+      requestBtn.addEventListener('click', function () {
+        if (!window.TMAFileRequests) {
+          clientsToast('Request Files isn’t available right now', 'negative');
+          return;
+        }
+        var here = clientFolderNav
+          ? clientFolderNav.path[clientFolderNav.path.length - 1]
+          : { uuid: rootUuid, name: 'Client documents' };
+        var panel = requestBtn.closest('[data-clients-panel-client]');
+        var clientId = panel ? panel.getAttribute('data-clients-panel-client') : null;
+        var contact = clientId ? contactFor(clientId) : null;
+        var name = contact && contact.name;
+
+        window.TMAFileRequests.open({
+          folderId: here.uuid,
+          folderName: here.name,
+          clientId: clientId || null,
+          clientName: name || null,
+          title: name ? 'Documents for ' + name : 'Please upload your documents',
+          onCreated: function () { loadClientFolder(root); },
+        });
       });
     }
 

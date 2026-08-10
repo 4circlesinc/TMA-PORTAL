@@ -45,6 +45,7 @@ use App\Http\Controllers\Files\BulkController;
 use App\Http\Controllers\Files\FavoriteController;
 use App\Http\Controllers\Files\FileCommentController;
 use App\Http\Controllers\Files\FileController;
+use App\Http\Controllers\Files\FileRequestController;
 use App\Http\Controllers\Files\FileReviewController;
 use App\Http\Controllers\Files\FilePresenceController;
 use App\Http\Controllers\Files\FileVersionController;
@@ -52,6 +53,7 @@ use App\Http\Controllers\Files\FileViewerController;
 use App\Http\Controllers\Files\FileWorkflowController;
 use App\Http\Controllers\Files\FolderController;
 use App\Http\Controllers\Files\PublicShareController;
+use App\Http\Controllers\Files\PublicUploadController;
 use App\Http\Controllers\Files\RecycleBinController;
 use App\Http\Controllers\Files\ShareController;
 use App\Http\Controllers\Files\ShortcutController;
@@ -441,6 +443,18 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/recycle-bin/empty', [RecycleBinController::class, 'empty'])->name('recycle.empty');
         Route::post('/bulk', [BulkController::class, 'handle'])->name('bulk');
 
+        /*
+         * Document requests — the issuing half of Request Files. The link
+         * itself is served publicly at /r/{token}; nothing here exposes a
+         * token to anyone but the person who created the request.
+         */
+        Route::get('/requests', [FileRequestController::class, 'index'])->name('requests.index');
+        Route::post('/requests', [FileRequestController::class, 'store'])->name('requests.store');
+        Route::get('/requests/{uuid}', [FileRequestController::class, 'show'])->name('requests.show');
+        Route::patch('/requests/{uuid}', [FileRequestController::class, 'update'])->name('requests.update');
+        Route::delete('/requests/{uuid}', [FileRequestController::class, 'destroy'])->name('requests.destroy');
+        Route::post('/requests/{uuid}/send', [FileRequestController::class, 'send'])->name('requests.send');
+
         Route::get('/shares', [ShareController::class, 'index'])->name('shares.index');
         Route::post('/shares', [ShareController::class, 'store'])->name('shares.store');
         Route::patch('/shares/{uuid}', [ShareController::class, 'update'])->name('shares.update');
@@ -573,9 +587,17 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/hydrate-attachments', [MailController::class, 'hydrateAttachments'])->name('hydrate-attachments');
         Route::get('/attachments/{uuid}', [MailController::class, 'attachment'])->name('attachment');
 
+        // One conversation in its own browser / desktop window, rendered
+        // server-side so a double-clicked message is readable immediately.
+        Route::get('/window/{uuid}', [MailController::class, 'window'])->name('window');
+
         Route::get('/messages', [MailController::class, 'messages'])->name('messages');
         // Every message in the conversation the given message belongs to.
         Route::get('/messages/{uuid}/thread', [MailController::class, 'thread'])->name('messages.thread');
+        // The same conversation as plain list rows: no provider call, no body
+        // hydration. This is what the inbox's expand arrow reads.
+        Route::get('/messages/{uuid}/conversation', [MailController::class, 'conversation'])
+            ->name('messages.conversation');
         Route::get('/messages/{uuid}', [MailController::class, 'show'])->name('messages.show');
         Route::patch('/messages/{uuid}', [MailController::class, 'update'])->name('messages.update');
         Route::post('/messages/{uuid}/move', [MailController::class, 'move'])->name('messages.move');
@@ -1069,6 +1091,23 @@ Route::post('/s/{token}/unlock', [PublicShareController::class, 'unlock'])->name
 Route::get('/s/{token}/preview', [PublicShareController::class, 'preview'])->name('share.preview');
 Route::get('/s/{token}/download', [PublicShareController::class, 'download'])->name('share.download');
 Route::get('/s/{token}/file/{fileUuid}', [PublicShareController::class, 'file'])->name('share.file');
+
+/*
+ * Secure upload links (no login) — the receiving half of Request Files.
+ *
+ * The only route in the portal where somebody without an account writes bytes,
+ * so it is throttled and the token is the only key: the destination, the size
+ * and type rules, and the owner of whatever arrives all come from the stored
+ * request, never from the form. See PublicUploadController.
+ */
+Route::middleware('throttle:uploads')->group(function () {
+    Route::get('/r/{token}', [PublicUploadController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]+')->name('upload.show');
+    Route::post('/r/{token}/unlock', [PublicUploadController::class, 'unlock'])
+        ->where('token', '[A-Za-z0-9]+')->name('upload.unlock');
+    Route::post('/r/{token}/upload', [PublicUploadController::class, 'upload'])
+        ->where('token', '[A-Za-z0-9]+')->name('upload.store');
+});
 
 /*
  * Invitations: the public accept flow from an emailed link. No login (that's

@@ -511,6 +511,59 @@ class Postcards
         ]);
     }
 
+    /**
+     * "Please upload these documents" — the invitation to a secure upload link.
+     *
+     * The recipient has no account and may never have used the portal, so the
+     * copy says what will happen to the files rather than assuming they know:
+     * the link only accepts uploads, and it goes to one place.
+     *
+     * @param  array<int, array{0: string, 1: string}>  $details  label/value rows
+     */
+    public static function fileRequest(
+        string $title,
+        string $requester,
+        ?string $message,
+        string $url,
+        ?string $name = null,
+        array $details = [],
+    ): Postcard {
+        return new Postcard($requester.' asked you for documents', [
+            'preheader' => $title.' — upload securely, no account needed.',
+            'eyebrow' => 'Document request',
+            'greeting' => $name ? "Hi {$name}," : null,
+            'title' => $requester.' asked you for documents',
+            'lead' => $title,
+            'bodyHtml' => '<p>Use the button below to upload your files securely. '
+                .'You don\'t need an account, and the link only lets you add files — '
+                .'nothing else in the workspace is visible.</p>',
+            'quote' => $message ?: null,
+            'details' => $details,
+            'button' => ['label' => 'Upload your files', 'url' => $url],
+        ]);
+    }
+
+    /** The requester's copy: something arrived through one of their links. */
+    public static function fileRequestReceived(
+        string $title,
+        int $count,
+        ?string $from,
+        string $url,
+        ?string $name = null,
+    ): Postcard {
+        $what = $count === 1 ? 'A file' : $count.' files';
+
+        return new Postcard($what.' arrived for “'.$title.'”', [
+            'preheader' => $what.' just came in through your document request.',
+            'eyebrow' => 'Document request',
+            'greeting' => $name ? "Hi {$name}," : null,
+            'title' => $what.' arrived',
+            'lead' => ($from ? $from.' uploaded ' : 'Someone uploaded ')
+                .($count === 1 ? 'a file' : $count.' files').' to “'.$title.'”.',
+            'button' => ['label' => 'Open the folder', 'url' => $url],
+        ]);
+    }
+
     // ----------------------------------------------------------- message reminders
 
     /** $tier: 1 (~1h), 2 (~20h), 3 (~24h, final). */

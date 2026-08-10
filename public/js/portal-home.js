@@ -362,6 +362,7 @@
   var homeEmail = null;
   var homeEmailInflight = null;
   var homeEmailTimer = null;
+  var homeEmailAt = 0;
 
   function emailAvatarSrc(msg) {
     if (msg.avatarUrl) return msg.avatarUrl;
@@ -431,6 +432,7 @@
       var changed = !homeEmailLoaded ||
         emailPayloadSignature(payload) !== emailPayloadSignature(homeEmail);
       homeEmailLoaded = true;
+      homeEmailAt = Date.now();
       homeEmail = payload;
       if (changed && el && el.isConnected) mount(el, { fromLoad: true });
     }
@@ -503,6 +505,7 @@
   var homeChats = null;
   var homeChatsInflight = null;
   var homeChatsTimer = null;
+  var homeChatsAt = 0;
 
   // Real photos only; where a conversation has none the initials tile stands
   // in, exactly as the Messages list does.
@@ -588,6 +591,7 @@
       var changed = !homeChatsLoaded ||
         chatsPayloadSignature(payload) !== chatsPayloadSignature(homeChats);
       homeChatsLoaded = true;
+      homeChatsAt = Date.now();
       homeChats = payload;
       if (changed && el && el.isConnected) mount(el, { fromLoad: true });
     }
@@ -667,6 +671,19 @@
     }).join('');
   }
 
+  /*
+   * The staff answer this listener has already acted on.
+   *
+   * TMACurrentUser fans out to its listeners from paint(), and paint() runs on
+   * every `tma:view-rendered` — so this fired on *every* navigation back to the
+   * Dashboard, not only when identity arrived. Each firing force-refreshed the
+   * Default Folders strip, which is what emptied every card on the way in. What
+   * the listener is actually for is the one-time race where /me answers after
+   * the first mount, so it now compares answers and does nothing when the
+   * answer has not moved.
+   */
+  var staffAnswerActedOn = null;
+
   function bindStaffUserListener() {
     if (homeStaffUserBound) return;
     if (!window.TMACurrentUser || !window.TMACurrentUser.onChange) return;
@@ -674,20 +691,26 @@
     window.TMACurrentUser.onChange(function () {
       var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
       if (!mountEl || !mountEl.isConnected) return;
+
+      var answer = isStaffUser();
+      var settled = answer === staffAnswerActedOn;
+      staffAnswerActedOn = answer;
+
       // /me often arrives after the first dashboard mount. If we previously
       // concluded "not staff" before identity was known, retry.
-      if (homeStaff && homeStaff.staff === false && isStaffUser()) {
+      if (homeStaff && homeStaff.staff === false && answer) {
         homeStaffLoaded = false;
         homeStaff = null;
       }
-      // Re-fetch default folders once identity is known (first load may have
-      // raced ahead of /me and skipped staff-only chrome).
-      if (isStaffUser() && window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.refresh) {
+      // Re-fetch default folders once identity is *newly* known — the first
+      // load may have raced ahead of /me and skipped staff-only chrome. A /me
+      // that says the same thing as last time changes nothing on this board.
+      if (!settled && answer && window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.refresh) {
         window.TMAPortalHomeLibrary.refresh();
       }
-      if (!homeStaffLoaded || (isStaffUser() && (!homeStaff || !homeStaff.staff))) {
+      if (!homeStaffLoaded || (answer && (!homeStaff || !homeStaff.staff))) {
         loadHomeStaff(mountEl);
-      } else {
+      } else if (!settled) {
         mount(mountEl, { fromLoad: true });
       }
     });
@@ -758,33 +781,55 @@
     }
   }
 
-  function shareFilesModal(kind) {
+  /*
+   * Request Files, from the Dashboard shortcut.
+   *
+   * Hands straight over to the shared dialog (portal-file-requests.js) rather
+   * than keeping the Dashboard's own version. That version asked for an email
+   * address, wrote a line to the local activity log, said "File request sent"
+   * and sent nothing — there was no request, no link and no destination behind
+   * it. One implementation now serves all three entry points.
+   */
+  function requestFiles() {
+    if (!window.TMAFileRequests) {
+      ui().toastError('Request Files isn’t available right now.');
+      return;
+    }
+    window.TMAFileRequests.open({
+      onCreated: function () {
+        // A request is not a file, so nothing on the board changes yet — but
+        // the folder it points at is worth revalidating next time round.
+        homeFilesAt = 0;
+      },
+    });
+  }
+
+  /* Share Files only — Request Files went to the real implementation above,
+     which left this branch dead. */
+  function shareFilesModal() {
     var s = data().state();
-    var isShare = kind === 'share';
     ui().openModal({
-      title: isShare ? 'Share Files' : 'Request Files',
+      title: 'Share Files',
       body:
         ui().field('To (email address)', ui().input({ type: 'email', placeholder: 'client@example.com', attrs: 'data-home-share-to' })) +
-        ui().field('Subject', ui().input({ placeholder: isShare ? 'Files shared with you' : 'Please upload your files', attrs: 'data-home-share-subject' })) +
+        ui().field('Subject', ui().input({ placeholder: 'Files shared with you', attrs: 'data-home-share-subject' })) +
         '<div class="tma-portal-field"><span class="tma-portal-field__label">Message</span>' +
         '<textarea class="tma-portal-textarea" data-home-share-msg placeholder="Add a note (optional)"></textarea></div>' +
-        (isShare
-          ? '<div class="tma-portal-field"><span class="tma-portal-field__label">Files</span>' +
-            s.recentFiles.map(function (f) {
-              return '<label class="tma-portal-checkbox"><input type="checkbox" data-home-share-file value="' + ui().esc(f.id) + '"><span>' + ui().esc(f.name) + '</span></label>';
-            }).join('') + '</div>'
-          : '<p>The recipient gets a secure upload link. Uploads land in your File Box and you are notified by email.</p>') +
+        '<div class="tma-portal-field"><span class="tma-portal-field__label">Files</span>' +
+        s.recentFiles.map(function (f) {
+          return '<label class="tma-portal-checkbox"><input type="checkbox" data-home-share-file value="' + ui().esc(f.id) + '"><span>' + ui().esc(f.name) + '</span></label>';
+        }).join('') + '</div>' +
         '<div class="tma-portal-form-actions">' +
-        ui().btn({ label: isShare ? 'Share' : 'Send Request', attrs: 'data-home-share-send' }) +
+        ui().btn({ label: 'Share', attrs: 'data-home-share-send' }) +
         '</div>',
       onMount: function (host) {
         host.querySelector('[data-home-share-send]').addEventListener('click', function () {
           var to = host.querySelector('[data-home-share-to]').value.trim();
           if (!to) { host.querySelector('[data-home-share-to]').focus(); return; }
-          data().logNotification((isShare ? 'Files shared with ' : 'File request sent to ') + to, to);
-          data().logBackgroundOp(isShare ? 'Share files (' + to + ')' : 'Request files (' + to + ')');
+          data().logNotification('Files shared with ' + to, to);
+          data().logBackgroundOp('Share files (' + to + ')');
           ui().closeModal();
-          ui().toast(isShare ? 'Files shared' : 'File request sent');
+          ui().toast('Files shared');
         });
       },
     });
@@ -1713,7 +1758,9 @@
      * The comparison is exact and the string is built from state, so anything
      * that genuinely changed still gets through.
      */
-    var unchanged = el._homeHtml === html && el.firstChild;
+    var rendered = el.firstElementChild;
+    var unchanged = el._homeHtml === html &&
+      !!rendered && rendered.getAttribute('data-node-id') === 'portal-home';
     if (!unchanged) {
       if (window.TMAMorph) window.TMAMorph.patch(el, html);
       else el.innerHTML = html;
@@ -1756,7 +1803,7 @@
         if (!sc) return;
         if (sc.nav) { navigate(sc.nav); return; }
         if (id === 'share-files') shareFilesModal('share');
-        if (id === 'request-files') shareFilesModal('request');
+        if (id === 'request-files') requestFiles();
         if (id === 'new-user-folders') newUserFoldersModal(rerender);
       });
     });
@@ -1874,17 +1921,20 @@
       if (force || !homeMetricsLoaded || stale(homeMetricsAt, METRICS_FRESH_MS)) loadHomeMetrics(el);
       if (force || !homeStaffLoaded || stale(homeStaffAt, PRESENCE_FRESH_MS)) loadHomeStaff(el);
       else bindStaffUserListener();
-      loadHomeEmail(el);
-      loadHomeChats(el);
+      // The mailbox tile costs two round trips (index, then messages), so it
+      // gets the same treatment. Both keep polling on their own timers while
+      // the board is open, and both listen for their live signals.
+      if (force || !homeEmailLoaded || stale(homeEmailAt)) loadHomeEmail(el);
+      if (force || !homeChatsLoaded || stale(homeChatsAt)) loadHomeChats(el);
       if (window.TMAPortalHomeLibrary) {
-        // Not forced any more. A forced load replaced state.defaults with
-        // preview-less folders straight away, so every card on the strip read
-        // "Nothing in this folder yet" until the previews came back — the
-        // Default Folders blanking on every visit. The strip revalidates on its
-        // own schedule and repaints only what changed.
+        // Only forced on an explicit refresh. A forced load replaced
+        // state.defaults with preview-less folders straight away, so every card
+        // on the strip read "Nothing in this folder yet" until the previews came
+        // back — the Default Folders blanking on every visit. Left to itself the
+        // strip revalidates on its own schedule and repaints only what changed.
         window.TMAPortalHomeLibrary.load(function () {
           if (el.isConnected) mount(el, { fromLoad: true });
-        });
+        }, force);
       }
     } else if (!homeStaffInflight && (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
       // Retry when identity arrives after an early "not staff" guess.
