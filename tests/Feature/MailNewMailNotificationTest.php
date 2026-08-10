@@ -179,7 +179,7 @@ class MailNewMailNotificationTest extends TestCase
         $this->assertSame('6 new emails', $rows->first()->title);
     }
 
-    public function test_shared_inbox_mail_not_addressed_to_user_uses_neutral_title(): void
+    public function test_shared_inbox_mail_not_addressed_to_user_stays_silent(): void
     {
         $user = $this->user();
         $account = $this->account($user);
@@ -196,13 +196,13 @@ class MailNewMailNotificationTest extends TestCase
 
         new MailSynchronizer($account)->quickCheck();
 
-        $notification = Notification::where('user_id', $user->id)->where('type', 'email.received')->first();
-
-        $this->assertNotNull($notification);
-        $this->assertSame('New email from Dana Reed', $notification->title);
+        $this->assertSame(
+            0,
+            Notification::where('user_id', $user->id)->where('type', 'email.received')->count()
+        );
     }
 
-    public function test_reply_in_shared_thread_is_not_called_replied_to_your_email(): void
+    public function test_reply_in_shared_thread_stays_silent(): void
     {
         $user = $this->user();
         $account = $this->account($user);
@@ -235,10 +235,10 @@ class MailNewMailNotificationTest extends TestCase
 
         new MailSynchronizer($account)->quickCheck();
 
-        $notification = Notification::where('user_id', $user->id)->where('type', 'email.received')->first();
-
-        $this->assertNotNull($notification);
-        $this->assertSame('New email from Dana Reed', $notification->title);
+        $this->assertSame(
+            0,
+            Notification::where('user_id', $user->id)->where('type', 'email.received')->count()
+        );
     }
 
     public function test_reply_after_user_sent_says_replied_to_your_email(): void

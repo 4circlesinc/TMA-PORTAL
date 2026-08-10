@@ -471,6 +471,9 @@ class MailSynchronizer
             ->orderByDesc('sent_at')
             ->get()
             ->reject(fn (MailMessage $m): bool => mb_strtolower((string) $m->from_email) === $own)
+            // Shared inboxes deliver everyone else's mail too — only ring the
+            // bell when this person is a real recipient or it's a reply to them.
+            ->filter(fn (MailMessage $m): bool => $this->shouldNotifyUser($m))
             ->values();
 
         if ($rows->isEmpty()) {
@@ -532,25 +535,20 @@ class MailSynchronizer
         }
     }
 
-    /**
-     * Short sidebar-friendly title for an inbound message.
-     *
-     * Shared mailboxes deliver colleagues' mail into the same inbox, so
-     * "sent you" / "replied to your email" are reserved for messages that
-     * actually name this person as a recipient, or continue a thread they
-     * themselves sent. Everything else is a neutral "New email from…".
-     */
+    /** Only notify for mail actually to this person, or a reply to their mail. */
+    private function shouldNotifyUser(MailMessage $m): bool
+    {
+        return $this->repliedToUsersEmail($m) || $this->messageAddressedToUser($m);
+    }
+
+    /** Short sidebar-friendly title for an inbound message meant for this person. */
     private function emailNotificationTitle(MailMessage $m, string $fromName): string
     {
         if ($this->repliedToUsersEmail($m)) {
             return $fromName.' replied to your email';
         }
 
-        if ($this->messageAddressedToUser($m)) {
-            return $fromName.' sent you an email';
-        }
-
-        return 'New email from '.$fromName;
+        return $fromName.' sent you an email';
     }
 
     /** Portal login + connected mailbox addresses that count as "me". */
