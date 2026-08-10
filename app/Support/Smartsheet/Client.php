@@ -3,6 +3,7 @@
 namespace App\Support\Smartsheet;
 
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -82,6 +83,53 @@ class Client
         $payload = self::get('/sheets/'.$sheetRemoteId.'/attachments/'.$attachmentRemoteId);
 
         return $payload['url'] ?? null;
+    }
+
+    /**
+     * Fresh download URLs for many attachments at once.
+     *
+     * There is no bulk endpoint, so this is still one request per attachment —
+     * but issued concurrently rather than in a queue. A single call takes
+     * around two and a half seconds against Smartsheet, which for the twenty
+     * thousand documents in the caseload is thirteen hours of waiting on
+     * round trips before a byte is transferred.
+     *
+     * @param  array<int|string, array{0: int|string, 1: int|string}>  $pairs  key => [sheetRemoteId, attachmentRemoteId]
+     * @return array<int|string, string> the same keys, mapped to a URL
+     */
+    public static function attachmentUrls(array $pairs, int $concurrency = 8): array
+    {
+        $urls = [];
+
+        foreach (array_chunk($pairs, max(1, $concurrency), true) as $chunk) {
+            $responses = Http::pool(function (Pool $pool) use ($chunk) {
+                $requests = [];
+                foreach ($chunk as $key => [$sheetId, $attachmentId]) {
+                    $requests[] = $pool->as((string) $key)
+                        ->withToken((string) config('services.smartsheet.token'))
+                        ->acceptJson()
+                        ->connectTimeout(15)
+                        ->timeout(120)
+                        ->get(self::BASE.'/sheets/'.$sheetId.'/attachments/'.$attachmentId);
+                }
+
+                return $requests;
+            });
+
+            foreach ($chunk as $key => $_) {
+                $response = $responses[(string) $key] ?? null;
+                // A throttled or failed one simply has no URL; the caller
+                // leaves it unimported and the next run picks it up.
+                if ($response instanceof Response && $response->successful()) {
+                    $url = $response->json('url');
+                    if ($url) {
+                        $urls[$key] = $url;
+                    }
+                }
+            }
+        }
+
+        return $urls;
     }
 
     /** @return array<string, mixed> */

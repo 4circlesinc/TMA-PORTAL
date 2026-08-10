@@ -177,7 +177,7 @@ class CbiController extends Controller
     {
         $this->gate($request);
 
-        $application = CbiApplication::query()->with(['client', 'assignedUser'])->where('uuid', $uuid)->firstOrFail();
+        $application = CbiApplication::query()->with(['client.folder', 'assignedUser'])->where('uuid', $uuid)->firstOrFail();
 
         $sources = $application->sources()->get();
 
@@ -188,7 +188,7 @@ class CbiController extends Controller
             $sheet = SmartsheetSheet::query()->where('remote_id', $source->sheet_remote_id)->first();
             if ($sheet) {
                 $attachments = $attachments->merge(
-                    SmartsheetAttachment::query()
+                    SmartsheetAttachment::query()->with('file:id,uuid')
                         ->where('sheet_id', $sheet->id)
                         ->where('parent_remote_id', $source->row_remote_id)
                         ->get()
@@ -199,7 +199,7 @@ class CbiController extends Controller
             ->where('cbi_application_id', $application->id)->get();
         foreach ($assessmentSheets as $sheet) {
             $attachments = $attachments->merge(
-                SmartsheetAttachment::query()->where('sheet_id', $sheet->id)->get()
+                SmartsheetAttachment::query()->with('file:id,uuid')->where('sheet_id', $sheet->id)->get()
             );
         }
 
@@ -218,7 +218,14 @@ class CbiController extends Controller
                 'by' => $a->created_by,
                 'at' => $a->created_at_remote?->toIso8601String(),
                 'kind' => $a->attachment_type,
+                // Set once the document has been mirrored into the client's
+                // File Library folder: the page opens it in the portal's
+                // viewer rather than sending the reader to Smartsheet.
+                'fileId' => $a->file?->uuid,
             ]),
+            // Where those files live, so the viewer can be handed the same row
+            // the library would give it.
+            'folderUuid' => $application->client?->folder?->uuid,
             'comments' => $application->comments()
                 ->orderBy('commented_at')->get()
                 ->map(fn (CbiComment $c) => [

@@ -24,4 +24,14 @@ class SmartsheetAttachment extends Model
     {
         return $this->belongsTo(SmartsheetSheet::class, 'sheet_id');
     }
+
+    /**
+     * The File Library copy, once the document has been mirrored across by
+     * App\Support\Cbi\DocumentImporter. Null means the bytes are still only
+     * in Smartsheet, behind a link that expires in minutes.
+     */
+    public function file(): BelongsTo
+    {
+        return $this->belongsTo(FileItem::class, 'file_id');
+    }
 }

@@ -947,7 +947,7 @@
       stripHtml +
       tabPanel('overview', renderOverviewTab(a)) +
       (assess.length ? tabPanel('assessment', renderAssessmentTab(assess)) : '') +
-      tabPanel('documents', renderDocumentsTab(files)) +
+      tabPanel('documents', renderDocumentsTab(files, d.data.folderUuid)) +
       tabPanel('comments', renderCommentsTab(comments, d)) +
       tabPanel('activity', renderActivityTab(events)) +
       tabPanel('fields', renderFieldsTab(a));
@@ -1040,21 +1040,79 @@
       doneCount + ' of ' + assess.length + ' complete');
   }
 
-  function renderDocumentsTab(files) {
+  function renderDocumentsTab(files, folderUuid) {
     if (!files.length) {
       return ui().emptyState({ title: 'No documents yet', subtitle: 'Files attached in Smartsheet appear here after a sync.', illustration: 'Illustration07' });
     }
     var rows = files.map(function (f) {
+      /*
+       * A mirrored document opens in the File Library's viewer — the same
+       * window, with its comments, versions and review controls — because it
+       * is the same file. One still only in Smartsheet keeps the download
+       * link, which fetches a fresh expiring URL on click.
+       */
+      var name = f.fileId
+        ? '<button type="button" class="tma-portal-file-link" data-cbi-file="' + esc(f.fileId) + '">' +
+          esc(f.name) + '</button>'
+        : '<a class="tma-portal-file-link" href="' + BASE + '/attachments/' + f.id +
+          '" target="_blank" rel="noopener">' + esc(f.name) + '</a>';
+
       return '<tr>' +
-        '<td><a class="tma-portal-file-link" href="' + BASE + '/attachments/' + f.id + '" target="_blank" rel="noopener">' + esc(f.name) + '</a></td>' +
+        '<td>' + name + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(fmtSize(f.sizeKb) || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(f.by || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(fmtDate(f.at) || '—') + '</td>' +
         '</tr>';
     }).join('');
+
     return contentGroup('Documents',
-      ui().table(['Name', 'Size', 'Added by', 'Date'], rows),
+      '<div data-cbi-docs' + (folderUuid ? ' data-cbi-folder="' + esc(folderUuid) + '"' : '') + '>' +
+      ui().table(['Name', 'Size', 'Added by', 'Date'], rows) + '</div>',
       files.length === 1 ? '1 file' : files.length + ' files');
+  }
+
+  /*
+   * Opening a document in the viewer.
+   *
+   * The viewer wants the row the File Library itself would hand it, so the
+   * folder listing is fetched once and cached for the tab — the same trick the
+   * client profile's Documents tab uses.
+   */
+  var docRows = { folder: null, rows: null, pending: null };
+
+  function folderRows(folderUuid) {
+    if (docRows.folder === folderUuid && docRows.rows) return Promise.resolve(docRows.rows);
+    if (docRows.pending && docRows.folder === folderUuid) return docRows.pending;
+
+    var net = window.TMAFilesNet;
+    if (!net || !net.fetchJSON) return Promise.reject(new Error('files unavailable'));
+
+    docRows.folder = folderUuid;
+    docRows.pending = net.fetchJSON(net.url('/?folder=' + encodeURIComponent(folderUuid) + '&perPage=500'))
+      .then(function (res) {
+        docRows.rows = (res && (res.items || res.files)) || [];
+        docRows.pending = null;
+
+        return docRows.rows;
+      });
+
+    return docRows.pending;
+  }
+
+  function openDocument(fileUuid, folderUuid) {
+    if (!window.TMAFileActions || !window.TMAFileActions.open || !folderUuid) {
+      toast('The viewer isn’t available here.', false);
+
+      return;
+    }
+
+    folderRows(folderUuid).then(function (rows) {
+      var row = rows.filter(function (r) { return r.id === fileUuid || r.uuid === fileUuid; })[0];
+      if (!row) { toast('That document isn’t in the client’s folder yet.', false); return; }
+      window.TMAFileActions.open(row, function () { docRows.rows = null; });
+    }).catch(function () {
+      toast('Could not open that document.', false);
+    });
   }
 
   function renderCommentsTab(comments, d) {
@@ -1132,6 +1190,14 @@
   /* ── events (delegated named handlers — safe across morphs) ── */
 
   function onClick(e) {
+    var doc = e.target.closest('[data-cbi-file]');
+    if (doc) {
+      e.preventDefault();
+      var host = doc.closest('[data-cbi-docs]');
+      openDocument(doc.getAttribute('data-cbi-file'), host && host.getAttribute('data-cbi-folder'));
+      return;
+    }
+
     var open = e.target.closest('[data-cbi-open]');
     if (open) { location.hash = '#/app/' + open.getAttribute('data-cbi-open'); return; }
 

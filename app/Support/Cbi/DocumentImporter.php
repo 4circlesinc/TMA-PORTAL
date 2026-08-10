@@ -44,6 +44,17 @@ use Throwable;
  */
 class DocumentImporter
 {
+    /*
+     * How many documents are in flight at once.
+     *
+     * A minted Smartsheet URL is good for about two minutes. Minting sixty-four
+     * up front and then downloading them one at a time spent that budget long
+     * before the tail of the batch was reached, and every later file came back
+     * 403. The batch is minted and downloaded inside the same short window
+     * now, so the whole batch is one download's wait rather than the sum.
+     */
+    private const BATCH = 8;
+
     /** @var array<string, int> */
     public array $stats = [
         'imported' => 0,
@@ -127,15 +138,116 @@ class DocumentImporter
             $query->limit($limit);
         }
 
-        foreach ($query->get() as $row) {
-            $this->importOne($row);
+        /*
+         * URLs first, in concurrent batches, then the bytes.
+         *
+         * Minting a download URL costs a round trip to Smartsheet of about two
+         * and a half seconds, and there is no bulk endpoint — done one after
+         * another that is thirteen hours of waiting before a single byte
+         * moves. Fetched eight at a time it is closer to ninety minutes.
+         */
+        foreach ($query->get()->chunk(self::BATCH) as $batch) {
+            $this->importBatch($batch, $progress);
+        }
+    }
+
+    /**
+     * Mint this batch's URLs together, fetch the bytes together, then file
+     * them. Both halves are concurrent because both are round trips to
+     * somebody else's server, and the second must start while the first
+     * half's URLs are still alive.
+     *
+     * @param  \Illuminate\Support\Collection<int, SmartsheetAttachment>  $batch
+     */
+    private function importBatch($batch, ?callable $progress): void
+    {
+        if ($this->dryRun) {
+            foreach ($batch as $row) {
+                $this->importOne($row, null);
+                if ($progress) {
+                    $progress($row);
+                }
+            }
+
+            return;
+        }
+
+        $sheets = SmartsheetSheet::whereIn('id', $batch->pluck('sheet_id')->unique())->get()->keyBy('id');
+
+        $pairs = [];
+        foreach ($batch as $row) {
+            $sheet = $sheets[$row->sheet_id] ?? null;
+            if ($sheet) {
+                $pairs[$row->id] = [$sheet->remote_id, $row->remote_id];
+            }
+        }
+
+        $urls = $pairs === [] ? [] : Smartsheet::attachmentUrls($pairs, self::BATCH);
+        $files = $urls === [] ? [] : $this->downloadMany($urls);
+
+        foreach ($batch as $row) {
+            $this->importOne($row, $urls[$row->id] ?? null, $files[$row->id] ?? null);
             if ($progress) {
                 $progress($row);
             }
         }
     }
 
-    private function importOne(SmartsheetAttachment $attachment): void
+    /**
+     * Fetch many pre-signed URLs at once, each straight to its own temp file.
+     *
+     * @param  array<int, string>  $urls  attachment id => URL
+     * @return array<int, string>  attachment id => temp path
+     */
+    private function downloadMany(array $urls): array
+    {
+        $paths = [];
+        foreach ($urls as $key => $_) {
+            $tmp = tempnam(sys_get_temp_dir(), 'cbi-doc-');
+            if ($tmp !== false) {
+                $paths[$key] = $tmp;
+            }
+        }
+
+        $responses = Http::pool(function (\Illuminate\Http\Client\Pool $pool) use ($urls, $paths) {
+            $requests = [];
+            foreach ($urls as $key => $url) {
+                if (! isset($paths[$key])) {
+                    continue;
+                }
+                // The URL is pre-signed, so it carries its own auth and must
+                // not be sent through the Smartsheet token headers.
+                $requests[] = $pool->as((string) $key)
+                    ->withOptions(['sink' => $paths[$key]])
+                    ->connectTimeout(15)
+                    ->timeout(300)
+                    ->get($url);
+            }
+
+            return $requests;
+        });
+
+        $ok = [];
+        foreach ($paths as $key => $path) {
+            $response = $responses[(string) $key] ?? null;
+            // tempnam reuses paths and PHP caches stat results per path, so a
+            // good file reads as zero bytes without this.
+            clearstatcache(true, $path);
+            $good = $response instanceof \Illuminate\Http\Client\Response
+                && $response->successful()
+                && file_exists($path) && filesize($path) > 0;
+
+            if ($good) {
+                $ok[$key] = $path;
+            } else {
+                @unlink($path);
+            }
+        }
+
+        return $ok;
+    }
+
+    private function importOne(SmartsheetAttachment $attachment, ?string $url = null, ?string $tmpPath = null): void
     {
         $clientId = (int) $attachment->getAttribute('client_id');
         $applicationId = (int) $attachment->getAttribute('application_id');
@@ -161,14 +273,18 @@ class DocumentImporter
                 return;
             }
 
-            $sheet = SmartsheetSheet::find($attachment->sheet_id);
-            if (! $sheet) {
-                $this->stats['orphaned']++;
+            // Minted in the batch above; fall back for the single-item paths
+            // (a throttle retry, or a caller that did not batch).
+            if (! $url) {
+                $sheet = SmartsheetSheet::find($attachment->sheet_id);
+                if (! $sheet) {
+                    $this->stats['orphaned']++;
 
-                return;
+                    return;
+                }
+                $url = Smartsheet::attachmentUrl($sheet->remote_id, $attachment->remote_id);
             }
 
-            $url = Smartsheet::attachmentUrl($sheet->remote_id, $attachment->remote_id);
             if (! $url) {
                 // A LINK-type row, or one Smartsheet no longer serves. Nothing
                 // to mirror, and nothing gained by retrying it every run.
@@ -177,7 +293,11 @@ class DocumentImporter
                 return;
             }
 
-            $stored = $this->download($url, $attachment->name);
+            // Downloaded with the batch where possible; the single-file path
+            // still exists for a throttle retry.
+            $stored = $tmpPath
+                ? $this->store($tmpPath, $attachment->name)
+                : $this->download($url, $attachment->name);
 
             $file = FileItem::create([
                 'uuid' => (string) Str::uuid(),
@@ -259,6 +379,17 @@ class DocumentImporter
             throw new \RuntimeException('download was empty');
         }
 
+        return $this->store($tmp, $name);
+    }
+
+    /**
+     * Hand a downloaded temp file to the Vault, which owns where files live
+     * (R2 in production) and how they are named there.
+     *
+     * @return array<string, mixed>
+     */
+    private function store(string $tmp, string $name): array
+    {
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION) ?: 'bin');
         $mime = mime_content_type($tmp) ?: null;
 
