@@ -1468,8 +1468,8 @@
     return !!(state.openConversations && state.openConversations[id]);
   }
 
-  /* Every message in the conversation, oldest first, once they have arrived.
-   * Includes the parent row's message so the first email is listed too. */
+  /* Every message in the conversation, newest first, once they have arrived.
+   * Includes the parent row's message so every email in the thread is listed. */
   function conversationChildren(state, id) {
     var loaded = (state.conversationRows && state.conversationRows[id]) || null;
     if (!loaded) return null;
@@ -1477,8 +1477,8 @@
     return loaded.slice().sort(function (a, b) {
       var ta = a.sentAt || '';
       var tb = b.sentAt || '';
-      if (ta !== tb) return ta < tb ? -1 : 1;
-      return String(a.id).localeCompare(String(b.id));
+      if (ta !== tb) return ta > tb ? -1 : 1;
+      return String(b.id).localeCompare(String(a.id));
     });
   }
 
