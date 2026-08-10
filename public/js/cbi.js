@@ -800,7 +800,9 @@
       fact('Decision', fmtDate(a.timeline && a.timeline.decisionReceived)) +
       fact('Investment', a.investmentOption) +
       fact('Referred by', a.referredBy) +
-      fact('Assigned', a.assignee ? personCell(a.assignee) : null, true) +
+      // Everyone on the file, as faces and first names, in the one fact the
+      // reader looks for first.
+      fact('Assigned', peopleOnCase(a), true) +
       // The applicant's record in the Client hub. The case is the record of
       // truth for the file; the client is the record of truth for the person.
       fact('Client record', a.clientUid
@@ -868,7 +870,7 @@
         : a.clioMatterNumber, !!safeUrl(a.clioMatterLink)) +
       fact('File location', a.fileLocation);
 
-    var team = peopleOnCase(a);
+
 
     var narrative =
       fact('Notes', a.notes) +
@@ -898,7 +900,6 @@
     var cards = [
       factGroup('Applicant', applicant),
       factGroup('Case', caseFacts),
-      contentGroup('Assigned', team),   // weight comes from the card list below
       contentGroup('Timeline', timeline, '', true),
       factGroup('Notes', narrative, true),
     ].filter(Boolean).join('');
