@@ -2593,10 +2593,10 @@
       // identifies the company; the pairs below are the four things you do
       // with it.
       companyCard('Details', renderCompanyDetails(company), {}) +
-      companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
       companyCard('Clients referred', renderCompanyReferredBlock(company), {
         half: true, count: company.referredCount || 0,
       }) +
+      companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
       companyCard('People', renderCompanyPeople(company), {
         half: true, count: (company.people || []).length,
       }) +
