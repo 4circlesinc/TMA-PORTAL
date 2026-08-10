@@ -29,13 +29,19 @@
   var ICONS = {
     PencilSimpleLine: ICON + 'PencilSimpleLine.svg',
     Tray: ICON + 'Tray.svg',
+    TrayFill: ICON + 'TrayFill.svg',
     PaperPlaneRight: ICON + 'PaperPlaneRight.svg',
+    PaperPlaneRightFill: ICON + 'PaperPlaneRightFill.svg',
     FileText: ICON + 'FileText.svg',
+    FileTextFill: ICON + 'FileTextFill.svg',
     WarningOctagon: ICON + 'WarningOctagon.svg',
+    WarningOctagonFill: ICON + 'WarningOctagonFill.svg',
     Trash: ICON + 'Trash.svg',
+    TrashFill: ICON + 'TrashFill.svg',
     CheckCircle: ICON + 'CheckCircle.svg',
     Check: ICON + 'Check.svg',
     Archive: ICON + 'Archive.svg',
+    ArchiveFill: ICON + 'ArchiveFill.svg',
     SquaresFour: ICON + 'SquaresFour.svg',
     FunnelSimple: ICON + 'FunnelSimple.svg',
     ArrowBendUpLeft: ICON + 'ArrowBendUpLeft.svg',
@@ -68,6 +74,7 @@
     FolderSimple: ICON + 'FolderSimple.svg',
     EnvelopeSimple: ICON + 'EnvelopeSimple.svg',
     Clock: ICON + 'Clock.svg',
+    ClockFill: ICON + 'ClockFill.svg',
     Tag: ICON + 'Tag.svg',
     PushPin: ICON + 'PushPin.svg',
     PushPinSlash: ICON + 'PushPinSlash.svg',
@@ -76,7 +83,8 @@
     // A proper flag, not a price-tag shape — TagChevron's notched silhouette
     // read as "two icons overlapping" at toolbar size, and a tag was never
     // the right shape for "mark as important" to begin with.
-    Important: ICON + 'Flag.svg',
+    Important: ICON + 'FlagFill.svg',
+    FlagFill: ICON + 'FlagFill.svg',
     ArrowLineRight: ICON + 'ArrowLineRight.svg',
     ArrowLineLeft: ICON + 'ArrowLineLeft.svg',
     ArrowLineDown: ICON + 'ArrowLineDown.svg',
@@ -170,14 +178,14 @@
    * and its own colour.
    */
   var INBOX_CATEGORIES = [
-    { id: 'inbox', label: 'Inbox', icon: 'Tray', fixed: true },
-    { id: 'important', label: 'Important', icon: 'Important', fixed: true },
-    { id: 'snoozed', label: 'Snoozed', icon: 'Clock', fixed: true },
-    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight', fixed: true },
-    { id: 'draft', label: 'Drafts', icon: 'FileText', fixed: true },
-    { id: 'spam', label: 'Spam', icon: 'WarningOctagon', fixed: true },
-    { id: 'trash', label: 'Trash', icon: 'Trash', fixed: true },
-    { id: 'archive', label: 'Archive', icon: 'Archive', fixed: true },
+    { id: 'inbox', label: 'Inbox', icon: 'TrayFill', fixed: true },
+    { id: 'important', label: 'Important', icon: 'FlagFill', fixed: true },
+    { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill', fixed: true },
+    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill', fixed: true },
+    { id: 'draft', label: 'Drafts', icon: 'FileTextFill', fixed: true },
+    { id: 'spam', label: 'Spam', icon: 'WarningOctagonFill', fixed: true },
+    { id: 'trash', label: 'Trash', icon: 'TrashFill', fixed: true },
+    { id: 'archive', label: 'Archive', icon: 'ArchiveFill', fixed: true },
   ];
 
   var CATEGORY_FOLDERS = INBOX_CATEGORIES.map(function (category) {
@@ -1355,17 +1363,17 @@
    * rather than being baked in here. */
   var FOLDERS = [
     { id: 'compose', label: 'New Email', icon: 'Plus', compose: true },
-    { id: 'inbox', label: 'Inbox', icon: 'Tray' },
+    { id: 'inbox', label: 'Inbox', icon: 'TrayFill' },
     // A virtual view rather than a real folder: the server filters by the
     // important flag across inbox/sent/archive.
-    { id: 'important', label: 'Important', icon: 'Important' },
+    { id: 'important', label: 'Important', icon: 'FlagFill' },
     // Also virtual: everything with a snooze set, wherever it really lives.
-    { id: 'snoozed', label: 'Snoozed', icon: 'Clock' },
-    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRight' },
-    { id: 'draft', label: 'Draft', icon: 'FileText' },
-    { id: 'spam', label: 'Spam', icon: 'WarningOctagon' },
-    { id: 'trash', label: 'Trash', icon: 'Trash' },
-    { id: 'archive', label: 'Archive', icon: 'Archive' },
+    { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill' },
+    { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill' },
+    { id: 'draft', label: 'Draft', icon: 'FileTextFill' },
+    { id: 'spam', label: 'Spam', icon: 'WarningOctagonFill' },
+    { id: 'trash', label: 'Trash', icon: 'TrashFill' },
+    { id: 'archive', label: 'Archive', icon: 'ArchiveFill' },
     { id: 'templates', label: 'Templates', icon: 'SquaresFour', countKey: 'templates' },
   ];
 
