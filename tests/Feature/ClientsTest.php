@@ -198,4 +198,99 @@ class ClientsTest extends TestCase
             'An administrator reaches every client already; an assignment row would say otherwise.'
         );
     }
+
+    /*
+     * The listing used to hand back every client's full profile. With eleven
+     * thousand of them that was 9.6 MB of JSON and a 127 MB memory peak per
+     * request, which is what was exhausting the container — so the shape of
+     * this response is load-bearing, not a detail.
+     */
+    public function test_the_directory_listing_carries_no_profile_blob(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload())->assertOk();
+
+        $listed = $this->actingAs($staff)->getJson('/portal/clients')
+            ->assertOk()
+            ->assertJsonPath('clients.0.id', 'bruce-wayne')
+            // The Contact column still has something to draw: it comes from the
+            // denormalised column rather than the blob.
+            ->assertJsonPath('clients.0.contact', 'bruce@wayneent.com')
+            ->assertJsonPath('clients.0.clientTypeLabel', 'Private')
+            ->json('clients.0');
+
+        $this->assertArrayNotHasKey('profile', $listed);
+    }
+
+    public function test_one_client_still_answers_with_its_full_profile(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload())->assertOk();
+
+        // This is where the detail view gets what the listing no longer sends.
+        $this->actingAs($staff)->getJson('/portal/clients/bruce-wayne')
+            ->assertOk()
+            ->assertJsonPath('client.profile.work.jobTitle', 'Executive')
+            ->assertJsonPath('client.profile.emails.0.value', 'bruce@wayneent.com');
+    }
+
+    public function test_search_matches_fields_that_live_inside_the_profile(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload())->assertOk();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload([
+            'uid' => 'clark-kent',
+            'name' => 'Clark Kent',
+            'profile' => ['firstName' => 'Clark', 'lastName' => 'Kent'],
+        ]))->assertOk();
+
+        // "Executive" appears in no column — only in the blob the browser no
+        // longer holds, which is the whole reason this endpoint exists.
+        $this->actingAs($staff)->getJson('/portal/clients/search?q=Executive')
+            ->assertOk()
+            ->assertJsonCount(1, 'ids')
+            ->assertJsonPath('ids.0', 'bruce-wayne');
+
+        $this->actingAs($staff)->getJson('/portal/clients/search?q=kent')
+            ->assertOk()
+            ->assertJsonCount(1, 'ids')
+            ->assertJsonPath('ids.0', 'clark-kent');
+    }
+
+    public function test_search_ignores_a_term_too_short_to_narrow_anything(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload())->assertOk();
+
+        $this->actingAs($staff)->getJson('/portal/clients/search?q=b')
+            ->assertOk()
+            ->assertJsonCount(0, 'ids');
+    }
+
+    public function test_search_only_reaches_clients_the_account_may_see(): void
+    {
+        $admin = $this->staff();
+        $this->actingAs($admin)->postJson('/portal/clients', $this->payload())->assertOk();
+
+        // An employee with no assignment sees no clients (see ClientScopeTest);
+        // search must not become the way around that.
+        $employee = $this->staff(['account_type' => 'Employee']);
+        $this->actingAs($employee)->getJson('/portal/clients/search?q=Executive')
+            ->assertOk()
+            ->assertJsonCount(0, 'ids');
+
+        $client = $this->staff(['account_type' => 'Client']);
+        $this->actingAs($client)->getJson('/portal/clients/search?q=Executive')->assertForbidden();
+    }
+
+    public function test_search_treats_wildcards_as_literal_characters(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload())->assertOk();
+
+        // Unescaped, '%' would match every client in the firm.
+        $this->actingAs($staff)->getJson('/portal/clients/search?q=%25')
+            ->assertOk()
+            ->assertJsonCount(0, 'ids');
+    }
 }

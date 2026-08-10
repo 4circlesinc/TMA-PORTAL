@@ -17555,6 +17555,32 @@
   background: var(--color-hover);
 }
 
+/*
+ * Facts across the card rather than down it.
+ *
+ * A full-width Details card stacked four short rows down its left edge and
+ * left the rest of the width empty. They read as a row of figures — a company
+ * has one type and one set of counts, and they belong on one line where they
+ * can be compared at a glance. Auto-fit wraps them onto a second line only
+ * when the card is genuinely too narrow.
+ */
+.tma-dash__clients-list--facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-8) var(--space-16);
+  align-items: start;
+}
+
+/* The row padding exists to give a hover target down a list; across a row it
+   only pushes the first fact away from the card's own edge. */
+.tma-dash__clients-list--facts .tma-dash__clients-list-item {
+  padding-left: 0;
+  padding-right: 0;
+  min-width: 0;
+}
+
+.tma-dash__clients-list--facts .tma-dash__clients-list-main { min-width: 0; }
+
 .tma-dash__clients-list-icon {
   display: inline-flex;
   align-items: center;
@@ -27131,6 +27157,133 @@ button.tma-dash__header-popup-item:focus-visible {
   font-size: 14px;
 }
 .tma-dash__clients-loading-spinner { animation: tma-dash-spin 0.8s linear infinite; opacity: 0.5; }
+
+/* ── Client hub: loading, empty and failed states ──────────────────
+ *
+ * The directory is eleven thousand rows behind a remote database, so the wait
+ * is long enough to be worth furnishing. Skeletons are built from the shared
+ * .tma-skeleton system in portal.css and shaped like the rows they replace, so
+ * the page holds its layout instead of jumping when the data lands.
+ */
+
+/* Announced to screen readers, drawn for nobody. */
+.tma-dash__clients-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tma-dash__ctr--skeleton { pointer-events: none; }
+.tma-dash__ctr--skeleton .tma-skeleton--text { display: block; }
+
+.tma-dash__clients-skeleton-avatar {
+  width: var(--dash-icon-lg, 32px);
+  height: var(--dash-icon-lg, 32px);
+  flex-shrink: 0;
+}
+
+/* The A–Z column. Letter headings are drawn too: without them the list would
+   shift down the moment the first real group arrived. */
+.tma-dash__clients-directory-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 2px);
+  padding: var(--space-4) var(--space-8);
+}
+.tma-dash__clients-letter--skeleton {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+}
+.tma-dash__clients-row--skeleton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-4) var(--space-8);
+  pointer-events: none;
+}
+.tma-dash__clients-row--skeleton .tma-skeleton--text { flex: 0 1 auto; }
+
+/* One client's profile, while it is fetched. */
+.tma-dash__clients-profile-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-24);
+}
+.tma-dash__clients-skeleton-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding-bottom: var(--space-8);
+}
+.tma-dash__clients-skeleton-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+.tma-dash__clients-skeleton-line .tma-skeleton--text { flex: 0 1 auto; }
+
+/* That profile failed. Distinct from a client who simply has nothing
+   recorded, which is most of the imported caseload. */
+.tma-dash__clients-profile-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-32) var(--space-24);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-14);
+  line-height: 20px;
+}
+.tma-dash__clients-profile-error p { margin: 0; }
+
+/* The whole directory failed. This is the state that used to render as
+   "No clients found" — the reason staff were told the firm had no clients
+   whenever the request timed out. */
+.tma-dash__clients-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-32) var(--space-24);
+  text-align: center;
+}
+.tma-dash__clients-load-error-art { margin-bottom: var(--space-4); }
+.tma-dash__clients-load-error-title {
+  margin: 0;
+  font-size: var(--text-size-16);
+  line-height: var(--text-lh-16);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+.tma-dash__clients-load-error-note {
+  margin: 0;
+  max-width: 42ch;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  color: var(--color-text-secondary);
+}
+.tma-dash__clients-load-error .tma-dash__clients-message-btn { margin-top: var(--space-4); }
+
+/* The empty states are full TMANoData sections now, so the cells that hold
+   them stop being one line of centred text. */
+.tma-dash__ctr--empty:has(.tma-no-data),
+.tma-dash__ctr--empty:has(.tma-dash__clients-load-error) { min-height: 320px; }
+.tma-dash__cc--empty .tma-no-data { width: 100%; }
+.tma-dash__clients-directory-empty:has(.tma-no-data) { padding: var(--space-16) var(--space-8); }
+/* The split view's list column is narrow; the full illustration would crowd
+   it, so the art shrinks rather than the copy wrapping to one word a line. */
+.tma-dash__clients-directory-empty .tma-no-data__illustration { width: 72px; height: 72px; }
+.tma-dash__clients-directory-empty .tma-no-data { gap: var(--space-12); }
 
 /* ── Email settings panel ──────────────────────────────────────────
    Opens over the mailbox rather than navigating to /settings, so a

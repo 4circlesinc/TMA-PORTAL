@@ -51,6 +51,7 @@
     User: ICON + 'User.svg',
     XCircle: ICON + 'Xcircle.svg',
     Loading16: 'images/icons/tma/Loading-16.svg',
+    Warning20: 'images/icons/tma/ToastWarning20.svg',
     ArrowLineDown: 'images/icons/tma/ArrowLineDown-16.svg',
     CaretDown: ICON + 'CaretDown.svg',
     ArrowLineLeft: 'images/icons/tma/ArrowLineLeft-16.svg',
@@ -223,6 +224,16 @@
 
   var ClientsAPI = {
     list: function () { return clientsFetch(CLIENTS_BASE); },
+    // One client's full record, profile included. The listing carries no
+    // profiles, so this is how a record being opened gets its detail.
+    show: function (uid) {
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid));
+    },
+    // Which clients match a term, as ids. Searching reaches into the profile
+    // blob, which only the server holds now.
+    search: function (term) {
+      return clientsFetch(CLIENTS_BASE + '/search?q=' + encodeURIComponent(term));
+    },
     create: function (payload) { return clientsFetch(CLIENTS_BASE, { method: 'POST', json: payload }); },
     update: function (uid, payload) {
       return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload });
@@ -371,6 +382,9 @@
       referralType: rec.referralType || 'none',
       referredByCompanyId: rec.referredByCompanyId || null,
       referredByLabel: rec.referredByLabel || null,
+      // The Contact column's value, sent with the listing so the table can
+      // draw a row without the profile behind it.
+      contact: rec.contact || null,
     };
   }
 
@@ -419,19 +433,52 @@
     return !!(me && me.isAdmin);
   }
 
-  // Rebuild the in-memory directory + profile map from server records.
+  /*
+   * Which profiles are actually in hand.
+   *
+   * The listing stopped carrying profiles — eleven thousand of them was nine
+   * megabytes of JSON per page load — so a missing PROFILES entry now means
+   * "not fetched yet" rather than "nothing recorded". Those are different
+   * answers: most imported clients genuinely have an almost empty profile, and
+   * without this flag the detail view would draw one as if it had loaded.
+   */
+  var PROFILES_LOADED = {};
+
+  function profileLoaded(id) {
+    return !!(id && PROFILES_LOADED[id]);
+  }
+
+  function rememberProfile(id, profile) {
+    if (!id) return;
+    PROFILES[id] = profile || {};
+    PROFILES_LOADED[id] = true;
+  }
+
+  // Rebuild the in-memory directory from server records. Profiles already
+  // fetched are kept: a live refresh re-sends the listing, and re-fetching the
+  // open client's profile on every colleague's edit would be a request per
+  // signal for something that has not changed.
   function hydrateClients(records) {
     DIRECTORY.length = 0;
     CLIENT_META = {};
-    Object.keys(PROFILES).forEach(function (k) { delete PROFILES[k]; });
+    var seen = {};
     (records || []).forEach(function (rec) {
       if (!rec || !rec.id) return;
-      PROFILES[rec.id] = rec.profile || {};
+      seen[rec.id] = true;
+      // store(), update() and duplicate() answer with a full record; the
+      // listing does not, and must not overwrite what we hold with nothing.
+      if (rec.profile) rememberProfile(rec.id, rec.profile);
       rememberMeta(rec);
       var item = { id: rec.id, name: rec.name || 'Client' };
       if (rec.initial) item.initial = rec.initial;
       if (rec.initialColor) item.initialColor = rec.initialColor;
       insertContact(item);
+    });
+    // A client somebody else deleted must not survive in the profile cache.
+    Object.keys(PROFILES).forEach(function (id) {
+      if (seen[id]) return;
+      delete PROFILES[id];
+      delete PROFILES_LOADED[id];
     });
     clientsLoaded = true;
   }
@@ -797,11 +844,38 @@
     return '/clients';
   }
 
+  /*
+   * What the server matched for the current term.
+   *
+   * Search used to run over the profiles the browser held. The listing does not
+   * carry them any more, so the database answers instead and this holds the ids
+   * it returned. `null` means no server answer is in play — the term is too
+   * short to ask about, the request is still out, or it failed — and matching
+   * falls back to the names the directory does hold.
+   */
+  var SEARCH_HITS = null;
+
+  var SEARCH_HITS_TERM = '';
+
+  /* Matches ClientsController::SEARCH_MIN. Below it, one keystroke would match
+     most of the directory and the request would answer nothing. */
+  var SEARCH_MIN_LENGTH = 2;
+
+  function clearSearchHits() {
+    SEARCH_HITS = null;
+    SEARCH_HITS_TERM = '';
+  }
+
   function contactMatchesSearch(item, query) {
     var q = String(query || '').trim().toLowerCase();
     if (!q) return true;
+    // Every client's name is in hand, so it matches on the keystroke — the
+    // round trip only adds the fields the browser no longer holds.
     if (item.name.toLowerCase().indexOf(q) !== -1) return true;
-    var profile = PROFILES[item.id];
+    if (SEARCH_HITS && SEARCH_HITS_TERM === q) return !!SEARCH_HITS[item.id];
+    // While the server answer is in flight, a profile that happens to be
+    // loaded — the open client, one just saved — can still match locally.
+    var profile = profileLoaded(item.id) ? PROFILES[item.id] : null;
     if (!profile) return false;
     var parts = [
       profile.firstName,
@@ -950,18 +1024,32 @@
     });
   }
 
+  /* The first entry in an emails/phones list that actually holds a value. */
+  function firstEntryValue(entries) {
+    var list = entries || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].value) return list[i].value;
+    }
+    return '';
+  }
+
+  /*
+   * The Contact column.
+   *
+   * Prefers the value the listing sends, which the server denormalises out of
+   * the profile — the table has to draw eleven thousand rows without eleven
+   * thousand profiles behind them. The profile is still consulted when it
+   * happens to be loaded, so an open client shows an edit before the listing
+   * catches up.
+   */
   function primaryContactValue(id) {
-    var profile = PROFILES[id];
-    if (!profile) return '—';
-    var emails = profile.emails || [];
-    for (var i = 0; i < emails.length; i++) {
-      if (emails[i].value) return emails[i].value;
+    var profile = profileLoaded(id) ? PROFILES[id] : null;
+    if (profile) {
+      var fromProfile = firstEntryValue(profile.emails) || firstEntryValue(profile.phones);
+      if (fromProfile) return fromProfile;
     }
-    var phones = profile.phones || [];
-    for (var j = 0; j < phones.length; j++) {
-      if (phones[j].value) return phones[j].value;
-    }
-    return '—';
+    var meta = CLIENT_META[id];
+    return (meta && meta.contact) || '—';
   }
 
   function clientTableColumns(item) {
@@ -1418,14 +1506,162 @@
     );
   }
 
+  /*
+   * Loading placeholders.
+   *
+   * The shared .tma-skeleton system from portal.css, shaped like the rows it
+   * stands in for. A centred spinner told the reader nothing about what was
+   * coming and then jumped into a full table; these hold the layout still, and
+   * on a directory this size the wait is long enough to be worth furnishing.
+   *
+   * The widths are staggered so the block reads as a list of names rather than
+   * a bar chart — deterministic, because a re-render must not reshuffle them.
+   */
+  var SKELETON_ROW_COUNT = 12;
+
+  var SKELETON_WIDTHS = [68, 52, 80, 44, 62, 74, 50, 86, 58, 70, 46, 64];
+
+  function skeletonWidth(index, spread) {
+    var base = SKELETON_WIDTHS[index % SKELETON_WIDTHS.length];
+    return Math.round(base * (spread || 1));
+  }
+
+  function skeletonBar(width) {
+    return '<span class="tma-skeleton tma-skeleton--text" style="width:' + width + '%"></span>';
+  }
+
+  function renderTableSkeletonRows(count) {
+    var rows = '';
+    for (var i = 0; i < (count || SKELETON_ROW_COUNT); i++) {
+      rows +=
+        '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--skeleton" role="row" aria-hidden="true">' +
+        '<div class="tma-dash__cc tma-dash__cc--check"></div>' +
+        '<div class="tma-dash__cc tma-dash__cc--user">' +
+        '<span class="tma-skeleton tma-skeleton--avatar tma-dash__clients-skeleton-avatar"></span>' +
+        skeletonBar(skeletonWidth(i)) + '</div>' +
+        '<div class="tma-dash__cc tma-dash__cc--type">' + skeletonBar(skeletonWidth(i + 4, 0.7)) + '</div>' +
+        '<div class="tma-dash__cc tma-dash__cc--referral">' + skeletonBar(skeletonWidth(i + 7, 0.9)) + '</div>' +
+        '<div class="tma-dash__cc tma-dash__cc--contact">' + skeletonBar(skeletonWidth(i + 2)) + '</div>' +
+        '</div>';
+    }
+    return rows;
+  }
+
+  /* The A–Z split view's list column, letter headings included: without them
+     the column would shift down the moment the first group arrived. */
+  function renderDirectorySkeleton() {
+    var out = '';
+    for (var g = 0; g < 3; g++) {
+      out += '<div class="tma-dash__clients-letter tma-dash__clients-letter--skeleton" aria-hidden="true">' +
+        '<span class="tma-skeleton" style="width:12px;height:12px"></span></div>';
+      for (var i = 0; i < 4; i++) {
+        out += '<div class="tma-dash__clients-row tma-dash__clients-row--skeleton" aria-hidden="true">' +
+          '<span class="tma-skeleton tma-skeleton--avatar tma-dash__clients-skeleton-avatar"></span>' +
+          skeletonBar(skeletonWidth(g * 4 + i)) + '</div>';
+      }
+    }
+    return (
+      '<div class="tma-dash__clients-directory-skeleton" role="status" aria-live="polite">' +
+      '<span class="tma-dash__clients-sr">Loading clients…</span>' + out + '</div>'
+    );
+  }
+
+  /* The detail panel, while one client's profile is being fetched. */
+  function renderProfileSkeleton() {
+    var rows = '';
+    for (var i = 0; i < 5; i++) {
+      rows += '<div class="tma-dash__clients-skeleton-line" aria-hidden="true">' +
+        '<span class="tma-skeleton" style="width:20px;height:20px;border-radius:6px"></span>' +
+        skeletonBar(skeletonWidth(i + 3)) + '</div>';
+    }
+    return (
+      '<div class="tma-dash__clients-profile-skeleton" role="status" aria-live="polite">' +
+      '<span class="tma-dash__clients-sr">Loading this client…</span>' +
+      '<div class="tma-dash__clients-skeleton-head" aria-hidden="true">' +
+      '<span class="tma-skeleton tma-skeleton--avatar" style="width:64px;height:64px"></span>' +
+      '<span class="tma-skeleton tma-skeleton--text" style="width:140px;height:16px"></span>' +
+      '</div>' + rows + '</div>'
+    );
+  }
+
+  /* One client's profile failed to load. Distinct from an empty record, which
+     is a perfectly ordinary thing for an imported client to be. */
+  function renderProfileError(message) {
+    return (
+      '<div class="tma-dash__clients-profile-error" role="alert">' +
+      '<img src="' + ICONS.Warning20 + '" alt="" width="20" height="20">' +
+      '<p>' + esc(message || 'Could not load this client.') + '</p>' +
+      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-retry-profile>Try again</button>' +
+      '</div>'
+    );
+  }
+
+  /*
+   * The three things "nothing to show" can mean, which the page used to
+   * collapse into one sentence: the firm has no clients, this search or filter
+   * matched none, or the directory never loaded. The last one is why staff were
+   * told "No clients found" while eleven thousand clients sat in the database —
+   * a failed request rendered as an empty one.
+   *
+   * Drawn with TMANoData, the portal's documented empty state, so the
+   * illustration and spacing match every other empty list.
+   */
+  function renderClientsEmptyState(state) {
+    if (state.loadState === 'error') {
+      return (
+        '<div class="tma-dash__clients-load-error" role="alert">' +
+        '<img class="tma-dash__clients-load-error-art" src="images/illustrations/Illustration11.svg"' +
+        ' alt="" width="120" height="120" decoding="async">' +
+        '<p class="tma-dash__clients-load-error-title">Couldn’t load your clients</p>' +
+        '<p class="tma-dash__clients-load-error-note">' +
+        esc(state.loadError || 'The directory did not answer.') + '</p>' +
+        '<button type="button" class="tma-dash__clients-message-btn" data-clients-retry>Try again</button>' +
+        '</div>'
+      );
+    }
+
+    var noData = window.TMANoData;
+    var searching = !!String(state.search || '').trim();
+    var filtered = anyClientFilter(state.filters);
+
+    if (searching || filtered) {
+      // Nothing to add here: the records exist, the query is what is wrong.
+      var what = searching ? 'search' : 'filters';
+      if (!noData) return 'No clients match this ' + what;
+      return noData.render({
+        title: 'No matches',
+        subtitle: searching
+          ? 'No client matches “' + state.search.trim() + '”.'
+          : 'No client matches these filters.',
+        illustrationName: 'Illustration19',
+        showButton: false,
+      });
+    }
+
+    if (!noData) return 'No clients yet';
+    return noData.render({
+      title: 'No clients yet',
+      subtitle: 'Add your first client to get started.',
+      illustrationName: 'Illustration07',
+      buttonLabel: 'Add client',
+      showButton: canManageClients(),
+    });
+  }
+
+  /* Whether this reader may add a client — an empty state offering a button
+     that 403s is worse than an empty state offering nothing. */
+  function canManageClients() {
+    var access = window.TMAPortalAccess;
+    if (access && access.can) return !!access.can('clients.manage');
+    return isClientsAdmin();
+  }
+
   function renderFullTableRows(state) {
+    if (state.loadState === 'loading') return renderTableSkeletonRows();
     var page = getTablePageData(state);
     if (!page.items.length) {
-      var empty = anyClientFilter(state.filters) && !state.search
-        ? 'No clients match these filters'
-        : 'No clients found';
-      return '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row"><div class="tma-dash__cc tma-dash__cc--empty">' +
-        empty + '</div></div>';
+      return '<div class="tma-dash__ctr tma-dash__ctr--empty" role="row">' +
+        '<div class="tma-dash__cc tma-dash__cc--empty">' + renderClientsEmptyState(state) + '</div></div>';
     }
     var start = (state.page - 1) * clientsPageSize(state);
     return page.items.map(function (entry, i) {
@@ -1542,6 +1778,16 @@
    * 11,101" is the honest answer and a bare 8,210 is not.
    */
   function renderClientsCount(state) {
+    // Nothing has been counted yet, and "0 clients" beside a skeleton table is
+    // a claim about the firm rather than a report on the request.
+    if (state.loadState !== 'ready') {
+      return (
+        '<span class="tma-dash__toolbar-count" data-clients-count aria-live="polite">' +
+        '<span class="tma-skeleton tma-skeleton--text" style="width:64px;display:inline-block"></span>' +
+        '</span>'
+      );
+    }
+
     var total = totalClientRecords();
     var filtered = anyClientFilter(state.filters) || !!state.search;
     var shown = filtered ? tableRowEntries(state).length : total;
@@ -1561,9 +1807,11 @@
     return people + COMPANIES.length;
   }
   function renderDirectoryListBody(state) {
-    var groups = filteredDirectoryGroups(state.search);
+    if (state.loadState === 'loading') return renderDirectorySkeleton();
+    var groups = filteredDirectoryGroups(state.search, state.filters);
     if (!groups.length) {
-      return '<div class="tma-dash__clients-directory-empty">No clients found</div>';
+      return '<div class="tma-dash__clients-directory-empty">' +
+        renderClientsEmptyState(state) + '</div>';
     }
     return groups.map(function (group) {
       return (
@@ -2254,6 +2502,22 @@
 
   function renderContactFormPanel(state, opts) {
     opts = opts || {};
+
+    // Editing a client whose profile is still in flight: the form has nothing
+    // truthful to put in its fields yet, and an empty one invites a save that
+    // would erase the record. See applyScreen.
+    if (state.editing && state.selectedId && !profileLoaded(state.selectedId)) {
+      return (
+        '<div class="tma-dash__clients-detail">' +
+        '<div class="tma-dash__clients-profile tma-dash__clients-profile--form' +
+        (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
+        (state.profileError
+          ? renderProfileError(state.profileError)
+          : renderProfileSkeleton()) +
+        '</div></div>'
+      );
+    }
+
     var draft = state.draft || emptyDraft({ companyId: state.prefillCompanyId || '' });
     var toolbar = opts.elevateToolbar ? '' : renderContactFormToolbar(state);
 
@@ -2419,8 +2683,10 @@
       { icon: ICONS.User, label: 'Registration', value: company.registrationNumber },
     ].filter(function (r) { return r && !!r.value; });
 
+    // `--facts`: a full-width card has room for these side by side, and
+    // stacked they were four short lines down the left of an empty acre.
     return '<div class="tma-dash__clients-profile-body">' +
-      '<ul class="tma-dash__clients-list tma-dash__clients-list--profile" role="list">' +
+      '<ul class="tma-dash__clients-list tma-dash__clients-list--profile tma-dash__clients-list--facts" role="list">' +
       rows.map(function (r) { return renderListItem(r); }).join('') +
       '</ul></div>';
   }
@@ -3400,6 +3666,23 @@
 
   function renderProfile(state, opts) {
     opts = opts || {};
+
+    // The profile arrives separately from the directory listing, so the panel
+    // has a name and an avatar before it has phone numbers. Drawing the record
+    // now would show an empty one — indistinguishable from a client who really
+    // has nothing recorded, which most imported clients are.
+    if (state.selectedId && !profileLoaded(state.selectedId)) {
+      return (
+        '<div class="tma-dash__clients-detail">' +
+        '<div class="tma-dash__clients-profile' +
+        (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
+        (state.profileError
+          ? renderProfileError(state.profileError)
+          : renderProfileSkeleton()) +
+        '</div></div>'
+      );
+    }
+
     var c = contactFor(state.selectedId);
     var activeTab = state.profileTab || 'info';
     var listItems = buildProfileListItems(c);
@@ -3575,16 +3858,25 @@
       item.name = name;
     }
 
-    PROFILES[id] = Object.assign({}, cloneDraft(draft), {
+    rememberProfile(id, Object.assign({}, cloneDraft(draft), {
       projects: existing.projects || '0',
       workingGroup: existing.workingGroup || '0',
       likes: existing.likes || '0',
-    });
+      // The importer writes this and nothing in the editor does, so it would
+      // otherwise be dropped the first time somebody saved a CBI client.
+      cbi: existing.cbi,
+    }));
 
     var birthdayEntry = draft.importantDates.filter(function (entry) {
       return entry.type === 'birthday' && entry.date;
     })[0];
     PROFILES[id].birthday = birthdayEntry ? birthdayEntry.date : '';
+
+    // The listing's Contact column is denormalised server-side; keep the copy
+    // we hold in step so an edit shows in the table without a round trip.
+    if (CLIENT_META[id]) {
+      CLIENT_META[id].contact = firstEntryValue(draft.emails) || firstEntryValue(draft.phones) || null;
+    }
   }
 
   function resetClientsScroll(root) {
@@ -4005,7 +4297,7 @@
       var nextSelected = {};
       records.forEach(function (rec) {
         if (!rec || !rec.id) return;
-        PROFILES[rec.id] = rec.profile || {};
+        rememberProfile(rec.id, rec.profile);
         // A copy inherits the original's type and referral; without this the
         // new row would claim to be an unreferred private client.
         rememberMeta(rec);
@@ -4017,6 +4309,38 @@
       clientsToast(keys.length > 1 ? keys.length + ' clients duplicated' : 'Client duplicated', 'positive');
     }).catch(function (err) {
       clientsToast((err && err.message) || 'Could not duplicate the selection', 'negative');
+    });
+  }
+
+  /*
+   * The buttons the empty and failed states offer: retry the directory, retry
+   * one client's profile, and the "Add client" call to action TMANoData draws.
+   *
+   * TMANoData binds its own button when mounted through TMANoData.mount(); the
+   * clients page renders it into a morphed string instead, so the click is
+   * picked up here.
+   */
+  function wireClientsRecovery(root, state, render, navigate) {
+    MORPH.unwired(root, '[data-clients-retry]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var controller = root._clientsController;
+        if (controller && controller.retryLoad) controller.retryLoad();
+      });
+    });
+
+    MORPH.unwired(root, '[data-clients-retry-profile]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        state.profileError = null;
+        state.profileLoadingFor = null;
+        ensureProfileLoaded(state, render);
+        render({ detailOnly: !usesPagedClientsFlow(state) });
+      });
+    });
+
+    MORPH.unwired(root, '[data-no-data-action="add"]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        navigate('add');
+      });
     });
   }
 
@@ -4099,6 +4423,51 @@
     updateTableToolbarSelection(root, state);
   }
 
+  /*
+   * Ask the database who matches.
+   *
+   * Names are matched in the browser as they are typed, so the list responds to
+   * every keystroke; this fills in what the browser cannot see — nicknames, job
+   * titles, addresses, and the second and third email address. The list renders
+   * once on the local answer and again when the server's arrives, which is what
+   * the search spinner in the field is reporting.
+   */
+  var searchSeq = 0;
+
+  function runClientSearch(root, state) {
+    var term = String(state.search || '').trim();
+
+    if (term.length < SEARCH_MIN_LENGTH) {
+      clearSearchHits();
+      searchSeq++;
+      state.searchLoading = false;
+      refreshDirectoryFromSearch(root, state);
+      return;
+    }
+
+    // Show the name matches straight away; the field keeps its spinner until
+    // the fuller answer lands.
+    refreshDirectoryFromSearch(root, state);
+
+    var seq = ++searchSeq;
+    ClientsAPI.search(term).then(function (res) {
+      if (seq !== searchSeq) return; // a later keystroke owns the field now
+      var hits = {};
+      ((res && res.ids) || []).forEach(function (id) { hits[id] = true; });
+      SEARCH_HITS = hits;
+      SEARCH_HITS_TERM = term.toLowerCase();
+      state.searchLoading = false;
+      refreshDirectoryFromSearch(root, state);
+    }).catch(function () {
+      if (seq !== searchSeq) return;
+      // Leave the local name matches standing. Emptying the list because the
+      // search request failed is the mistake this whole change is undoing.
+      clearSearchHits();
+      state.searchLoading = false;
+      refreshDirectoryFromSearch(root, state);
+    });
+  }
+
   function refreshDirectoryFromSearch(root, state) {
     state.page = 1;
     if (root.querySelector('[data-clients-body]') && state.viewMode === 'list') {
@@ -4141,8 +4510,7 @@
       syncSearchWrap(root, state);
       clearTimeout(searchTimer);
       searchTimer = setTimeout(function () {
-        state.searchLoading = false;
-        refreshDirectoryFromSearch(root, state);
+        runClientSearch(root, state);
       }, 180);
     });
 
@@ -4156,6 +4524,8 @@
         state.search = '';
         state.searchLoading = false;
         state.searchFocused = true;
+        clearSearchHits();
+        searchSeq++;
         var searchInput = wrap.querySelector('[data-clients-search]');
         if (searchInput) {
           searchInput.value = '';
@@ -4261,6 +4631,9 @@
     // Rows appear in the directory, table list, and company people lists.
     wireDirectoryRows(root, state, navigate);
     wireSeeAllReferred(root, state, navigate);
+    // Empty and failed states show in every view, so this is wired before the
+    // per-view branches below — several of which return early.
+    wireClientsRecovery(root, state, render, navigate);
 
     if (scope === 'list' || scope === 'split') {
       wireSearchEvents(root, state);
@@ -4875,6 +5248,52 @@
 
   /* Everything the Portal access tab shows. One call: the invitation when
      there is no account, the sign-in log and activity once there is. */
+  /*
+   * Fetch the open client's profile, once.
+   *
+   * The directory listing carries names and columns only, so opening a record
+   * is the moment its profile is actually needed. Everything that draws the
+   * detail view reads PROFILES, and profileLoaded() tells the view whether to
+   * draw the record or a skeleton.
+   */
+  function ensureProfileLoaded(state, render) {
+    var id = state.selectedId;
+    if (!id || profileLoaded(id)) return;
+    if (state.profileLoadingFor === id) return;
+
+    state.profileLoadingFor = id;
+    state.profileError = null;
+
+    var stale = function () { return state.profileLoadingFor !== id; };
+    var redraw = function () {
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    };
+
+    ClientsAPI.show(id).then(function (res) {
+      if (stale()) return;
+      var rec = res && res.client;
+      // An empty profile is a real answer — most imported clients have one —
+      // so this records the fetch even when there is nothing in it.
+      rememberProfile(id, rec ? rec.profile : {});
+      if (rec) rememberMeta(rec);
+      state.profileLoadingFor = null;
+      // An edit screen was waiting on this to build its draft (see
+      // applyScreen); it holds null until the record is actually in hand.
+      if (state.screen === 'edit' && state.selectedId === id && !state.draft) {
+        state.draft = contactToDraft(contactFor(id));
+      }
+      redraw();
+    }).catch(function (err) {
+      if (stale()) return;
+      state.profileLoadingFor = null;
+      // Deliberately not marked loaded: leaving it unfetched is what lets
+      // reopening the client try again.
+      state.profileError = (err && err.message) || 'Could not load this client.';
+      redraw();
+    });
+  }
+
   function ensureAccessLoaded(state, render) {
     if (!state.selectedId) return;
     if (state.accessLoadedFor === state.selectedId) return;
@@ -4984,6 +5403,17 @@
       pageSize: loadPageSize(),
       selected: {},
       removedIds: {},
+      // 'loading' | 'ready' | 'error'. The directory used to have no third
+      // state, so a request that failed was hydrated as an empty list and the
+      // page reported "No clients found" — see startClients below.
+      loadState: clientsLoaded ? 'ready' : 'loading',
+      loadError: null,
+      profileLoadingFor: null,
+      profileError: null,
+      // Ids the server matched for the current term. null means "no server
+      // answer in play", which is what local name matching falls back to.
+      searchIds: null,
+      searchTerm: '',
     };
 
     function pageMetaFor(screen, contactId, companyId) {
@@ -5022,6 +5452,8 @@
       if (contactId) state.selectedId = contactId;
       if (contactId && contactId !== previousId) {
         state.profileTab = 'info';
+        state.profileLoadingFor = null;
+        state.profileError = null;
         state.assignmentsLoadedFor = null;
         state.assignments = [];
         state.assignmentHistory = [];
@@ -5036,6 +5468,7 @@
       // Both flows show the profile: 'contact' in the split view, 'detail'
       // in the paged/mobile one.
       if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
+        ensureProfileLoaded(state, render);
         ensureAccessLoaded(state, render);
       }
 
@@ -5075,7 +5508,11 @@
       }
 
       if (screen === 'edit' && contactId) {
-        state.draft = contactToDraft(contactFor(contactId));
+        // The draft is the record: building one before the profile has landed
+        // would open a blank form over a real client, and saving it would
+        // write that blank back. Wait, and build it in ensureProfileLoaded.
+        ensureProfileLoaded(state, render);
+        state.draft = profileLoaded(contactId) ? contactToDraft(contactFor(contactId)) : null;
         state.companyDraft = null;
         return;
       }
@@ -5361,23 +5798,46 @@
       syncRoute(parseClientsPath(window.location.pathname));
     }
 
-    if (clientsLoaded) {
+    /*
+     * Load the directory.
+     *
+     * The failure path is the point of this. It used to be
+     * `.catch(() => ({ clients: [] }))` — a timed-out or 500ing request became
+     * an empty list, was hydrated as though it were the truth, and rendered as
+     * "No clients found". Staff were told the firm had no clients whenever the
+     * request died, which with eleven thousand of them it regularly did.
+     *
+     * A failure is now its own state, it says so, and it offers a retry.
+     */
+    function loadClients() {
+      state.loadState = 'loading';
+      state.loadError = null;
       startClients();
-    } else {
-      root.innerHTML =
-        '<div class="tma-dash__clients-loading" role="status" aria-live="polite">' +
-        '<img class="tma-dash__clients-loading-spinner" src="' + ICONS.Loading16 + '" alt="" width="20" height="20">' +
-        '<span>Loading clients…</span></div>';
+
       Promise.all([
-        ClientsAPI.list().catch(function () { return { clients: [] }; }),
+        ClientsAPI.list(),
+        // Companies are secondary: the directory is still readable without
+        // them, so a failure here must not take the client list down with it.
         CompaniesAPI.list().catch(function () { return { companies: [] }; }),
       ]).then(function (results) {
-        hydrateClients(results[0] && results[0].clients ? results[0].clients : []);
-        hydrateCompanies(results[1] && results[1].companies ? results[1].companies : []);
-      }).catch(function () {
-        clientsLoaded = true;
-      }).then(startClients);
+        hydrateClients((results[0] && results[0].clients) || []);
+        hydrateCompanies((results[1] && results[1].companies) || []);
+        state.loadState = 'ready';
+        state.loadError = null;
+        startClients();
+      }).catch(function (err) {
+        state.loadState = 'error';
+        state.loadError = (err && err.message) || 'The directory did not answer.';
+        // clientsLoaded stays false: nothing was loaded, and leaving it false
+        // is what lets a later mount try again instead of showing a blank hub.
+        startClients();
+      });
     }
+
+    root._clientsController.retryLoad = loadClients;
+
+    if (clientsLoaded) startClients();
+    else loadClients();
   }
 
   /*
