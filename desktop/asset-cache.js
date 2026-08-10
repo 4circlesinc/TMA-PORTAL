@@ -58,6 +58,62 @@ function bundled() {
   }
 }
 
+/**
+ * WHATWG Headers values must be ByteStrings (code points ≤ 255). Electron's
+ * net.fetch / undici throws an uncaught TypeError otherwise — which surfaces
+ * as "A JavaScript error occurred in the main process" when a Cookie, Referer
+ * or similar header carries a Unicode character (e.g. Turkish "ı").
+ *
+ * Re-encode offending values as UTF-8 bytes viewed as Latin-1 so undici
+ * accepts them and the wire still carries the original UTF-8 octets.
+ */
+function headerValueToByteString(value) {
+  if (typeof value !== 'string') return '';
+  for (let i = 0; i < value.length; i++) {
+    if (value.charCodeAt(i) > 255) {
+      return Buffer.from(value, 'utf8').toString('latin1');
+    }
+  }
+  return value;
+}
+
+function sanitizeRequestHeaders(headers) {
+  const out = new Headers();
+  const entries = headers && typeof headers.entries === 'function'
+    ? headers.entries()
+    : Object.entries(headers || {});
+  for (const [key, value] of entries) {
+    try {
+      // Encode before set — Headers.set itself throws on code points > 255.
+      out.set(key, headerValueToByteString(value));
+    } catch (err) {
+      console.warn('[asset-cache] dropped unsafe header', key, err && err.message);
+    }
+  }
+  return out;
+}
+
+/** Hand a request to the real network without re-entering this handler. */
+function networkFetch(request) {
+  try {
+    const init = {
+      method: request.method,
+      headers: sanitizeRequestHeaders(request.headers),
+      redirect: request.redirect,
+    };
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      init.body = request.body;
+      init.duplex = 'half';
+    }
+    return net.fetch(new Request(request.url, init), {
+      bypassCustomProtocolHandlers: true,
+    });
+  } catch (err) {
+    console.error('[asset-cache] network fetch failed', err);
+    return Promise.resolve(new Response('', { status: 502, statusText: 'Bad Gateway' }));
+  }
+}
+
 /** What this deploy says each of its assets hashes to. Null on any doubt. */
 async function serverManifest(origin) {
   try {
@@ -132,24 +188,29 @@ async function install(origin) {
   }
 
   protocol.handle('https', (request) => {
-    let url;
     try {
-      url = new URL(request.url);
-    } catch {
-      return net.fetch(request, { bypassCustomProtocolHandlers: true });
+      let url;
+      try {
+        url = new URL(request.url);
+      } catch {
+        return networkFetch(request);
+      }
+
+      const file = url.origin === origin ? localFile(url, agreed) : null;
+      if (!file) return networkFetch(request);
+
+      return new Response(fs.createReadStream(file), {
+        headers: {
+          'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
+          'content-length': String(fs.statSync(file).size),
+          // Served from the package, so the renderer need not ask again.
+          'cache-control': 'public, max-age=31536000, immutable',
+        },
+      });
+    } catch (err) {
+      console.error('[asset-cache] protocol handler failed', err);
+      return new Response('', { status: 502, statusText: 'Bad Gateway' });
     }
-
-    const file = url.origin === origin ? localFile(url, agreed) : null;
-    if (!file) return net.fetch(request, { bypassCustomProtocolHandlers: true });
-
-    return new Response(fs.createReadStream(file), {
-      headers: {
-        'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
-        'content-length': String(fs.statSync(file).size),
-        // Served from the package, so the renderer need not ask again.
-        'cache-control': 'public, max-age=31536000, immutable',
-      },
-    });
   });
 
   return {
@@ -161,4 +222,12 @@ async function install(origin) {
   };
 }
 
-module.exports = { install, bundled, localFile, SERVED, ROOT };
+module.exports = {
+  install,
+  bundled,
+  localFile,
+  SERVED,
+  ROOT,
+  headerValueToByteString,
+  sanitizeRequestHeaders,
+};

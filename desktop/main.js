@@ -6,6 +6,22 @@ const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
+/*
+ * Electron/undici rejects HTTP header values with code points > 255
+ * (ByteString). A Cookie or Referer carrying e.g. Turkish "ı" used to throw
+ * an uncaught exception in the main process and show the "A JavaScript error
+ * occurred" dialog. asset-cache sanitises the common path; this is the last
+ * line of defence so one bad header cannot take the shell down.
+ */
+process.on('uncaughtException', (err) => {
+  const message = err && err.message ? String(err.message) : String(err);
+  if (/ByteString/i.test(message) || /greater than 255/i.test(message)) {
+    console.error('[main] ignored non-Latin1 header error:', message);
+    return;
+  }
+  console.error('[main] uncaughtException', err);
+});
+
 const HOST_BRIDGE = require('./host-bridge');
 const updater = require('./updater');
 const { installCloseToBackground } = require('./window-policy');

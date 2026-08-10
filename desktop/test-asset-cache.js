@@ -79,6 +79,26 @@ app.whenReady().then(async () => {
   check('refuses to climb out of the bundle',
     assetCache.localFile(url('/css/../../../../etc/passwd')), null);
 
+  /* ── ByteString-safe headers (Turkish ı etc. must not crash net.fetch) ── */
+
+  const ascii = 'plain-ascii-value';
+  check('leaves ASCII header values alone',
+    assetCache.headerValueToByteString(ascii), ascii);
+  const turkish = 'name=Yıldız; path=/';
+  const encoded = assetCache.headerValueToByteString(turkish);
+  check('encodes Unicode header values to a ByteString',
+    typeof encoded === 'string' && [...encoded].every((ch) => ch.charCodeAt(0) <= 255), true);
+  check('and round-trips the original UTF-8',
+    Buffer.from(encoded, 'latin1').toString('utf8'), turkish);
+  // Headers rejects Unicode at construction time, so feed sanitize a Map the
+  // way a live Request can still surface raw header strings to us.
+  const headers = assetCache.sanitizeRequestHeaders(
+    new Map([['Cookie', turkish], ['Accept', 'text/html']]),
+  );
+  check('sanitize keeps Accept', headers.get('Accept'), 'text/html');
+  check('sanitize keeps Cookie as a ByteString',
+    [...headers.get('Cookie')].every((ch) => ch.charCodeAt(0) <= 255), true);
+
   /* ── the happy path, end to end ────────────────────────────────── */
 
   const matching = http.createServer((req, res) => {
