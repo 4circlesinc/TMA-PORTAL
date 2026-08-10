@@ -11790,11 +11790,13 @@
 }
 
 .tma-dash__email-category-count {
-  font-size: var(--text-size-12);
+  font-size: 10px;
   line-height: 1;
-  font-weight: 600;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  opacity: 0.95;
+  letter-spacing: 0.01em;
+  opacity: 0.78;
+  margin-left: 1px;
 }
 
 .tma-dash__email-category:hover {
