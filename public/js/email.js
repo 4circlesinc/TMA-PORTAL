@@ -364,7 +364,7 @@
   }
 
   function getDetailNavState(state) {
-    if (state.folder !== 'inbox' || !state.selectedId) return null;
+    if (!state.selectedId || state.folder === 'templates') return null;
     var rows = filteredInbox(state);
     if (!rows.length) return null;
     var index = -1;
@@ -826,15 +826,13 @@
 
   function renderDetailTopbar(state) {
     if (isEmailMobile()) return '';
-    // Archive / delete / unread live in the page toolbar above everything —
-    // this strip only keeps back + prev/next for the reading pane.
+    // Archive / delete / unread / prev-next live in the page toolbar —
+    // this strip only keeps the back control for single-pane reading.
     var back = renderDetailBack(state, true);
-    var nav = renderDetailNav(state);
-    if (!back && !nav) return '';
+    if (!back) return '';
     return (
       '<div class="tma-dash__email-detail-topbar">' +
       '<div class="tma-dash__email-detail-topbar-start">' + back + '</div>' +
-      (nav ? '<div class="tma-dash__email-detail-topbar-end">' + nav + '</div>' : '') +
       '</div>'
     );
   }
@@ -972,6 +970,7 @@
           '<img src="' + ICONS.GearSix + '" alt="">' +
           '<span class="tma-dash__email-toolbar-btn-label">Settings</span>',
       }) +
+      renderDetailNav(state) +
       '</div>' +
       '</div>'
     );
