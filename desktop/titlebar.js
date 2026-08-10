@@ -92,6 +92,11 @@ function buildCss(platform = process.platform) {
   }
   .tma-dash--desktop-bar .tma-dash__main {
     grid-row: 1 / -1 !important;
+    /* Keep normal top inset under the title bar for Dashboard etc.
+     * Email clears it separately so the mail toolbar stays tight. */
+    padding-top: var(--space-28, 28px) !important;
+  }
+  .tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
     padding-top: 0 !important;
   }
   .tma-dash--desktop-bar.tma-dash--email .tma-dash__main-head {
@@ -434,12 +439,11 @@ function buildCss(platform = process.platform) {
     /*
      * The phone layout reserves a header's worth of space at the top of the
      * scroller, because there the header floats over it. Here the body padding
-     * already accounts for the bar, so that reserve is a second empty strip
-     * under the first — which is what the gap below the bar was.
-     * (padding-top: 0 is also set unconditionally above for every width.)
+     * already accounts for the bar — so drop the mobile header clearance, but
+     * keep a normal content inset for Dashboard (Email stays flush).
      */
     .tma-dash--desktop-bar .tma-dash__main {
-      padding-top: 0 !important;
+      padding-top: var(--space-16, 16px) !important;
     }
 
     /* Email's mobile clearance must not win inside the desktop shell. */

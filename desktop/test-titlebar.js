@@ -243,9 +243,9 @@ app.whenReady().then(async () => {
         headerTop:     Math.round(header.top),
         headerHeight:  Math.round(header.height),
         rightbarRight: Math.round(rightbar.right),
-        // The phone layout reserves a header's height at the top of the
-        // scroller because there the header floats over it. Here that is a
-        // second empty strip under the bar.
+        // Must not keep the mobile header clearance (~68px) — body padding
+        // already clears the title bar. A small content inset (16px) is fine
+        // for Dashboard; Email zeros it separately.
         mainPadTop:    Math.round(parseFloat(getComputedStyle(document.querySelector('.tma-dash__main')).paddingTop)),
         overflow:      doc.scrollHeight - doc.clientHeight,
       };
@@ -259,7 +259,8 @@ app.whenReady().then(async () => {
   check('narrow: the nav buttons are there', narrow.back, true);
   check('narrow: the header is the bar, not a second row', narrow.headerTop, 0);
   check('narrow: the bar is one bar tall', narrow.headerHeight, titlebar.HEIGHT);
-  check('narrow: no empty strip under the bar', narrow.mainPadTop, 0);
+  check('narrow: no mobile header clearance under the bar', narrow.mainPadTop <= 16, true);
+  check('narrow: keeps a small content inset', narrow.mainPadTop, 16);
   check('narrow: the right-panel toggle still clears the caption buttons',
     narrow.rightbarRight <= NARROW - winMetrics.caption, true);
   check('narrow: page does not scroll', narrow.overflow, 0);

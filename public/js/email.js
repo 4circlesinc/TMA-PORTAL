@@ -185,7 +185,7 @@
   var INBOX_CATEGORIES = [
     { id: 'inbox', label: 'Inbox', icon: 'TrayFill', fixed: true },
     { id: 'important', label: 'Important', icon: 'FlagFill', fixed: true },
-    { id: 'starred', label: 'Starred', icon: 'StarFilled', fixed: true },
+    { id: 'starred', label: 'Starred', icon: 'Star', fixed: true },
     { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill', fixed: true },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill', fixed: true },
     { id: 'draft', label: 'Drafts', icon: 'FileTextFill', fixed: true },

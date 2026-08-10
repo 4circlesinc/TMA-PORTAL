@@ -1094,6 +1094,11 @@ a.tma-dash__tab-btn:visited {
 }
 .tma-dash--desktop-bar .tma-dash__main {
   grid-row: 1 / -1 !important;
+  /* Dashboard / other views need normal top inset under the blue bar.
+   * Only Email sits flush (see below) — zeroing every view crushed Hello. */
+  padding-top: var(--space-28) !important;
+}
+.tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
   padding-top: 0 !important;
 }
 .tma-dash--desktop-bar.tma-dash--email .tma-dash__main-head {
@@ -1148,8 +1153,12 @@ a.tma-dash__tab-btn:visited {
   display: none !important;
 }
 
-/* Electron / desktop toolbar: mobile header clearance must not stack a band. */
+/* Electron narrow: keep a content inset; only Email sits flush under the bar. */
 @media (max-width: 1024px) {
+  .tma-dash--desktop-bar .tma-dash__main {
+    padding-top: var(--space-16) !important;
+  }
+
   .tma-dash--desktop-bar.tma-dash--email .tma-dash__main,
   .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile .tma-dash__main,
   .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile-reading .tma-dash__main,

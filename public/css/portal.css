@@ -1310,6 +1310,12 @@
 
 .tma-portal-hello__actions .tma-dash__head-dropdown-wrap {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tma-portal-hello__actions [data-today-dropdown] {
+  display: inline-flex !important;
 }
 
 .tma-portal-hello__actions .tma-no-data__btn {

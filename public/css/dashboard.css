@@ -11892,6 +11892,12 @@
   flex: 0 0 auto;
 }
 
+/* Idle chips stay monochrome — StarFilled (etc.) must not keep a brand tint. */
+.tma-dash__email-category:not(.tma-dash__email-category--active) img {
+  filter: brightness(0) opacity(0.55);
+  opacity: 1;
+}
+
 /* Idle chips are icon-only — the label returns with the active colour.
    Name stays on aria-label / title for screen readers and hover. */
 .tma-dash__email-category:not(.tma-dash__email-category--active) {

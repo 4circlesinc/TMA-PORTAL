@@ -1743,6 +1743,9 @@
   /*
    * The shell's Today control lives in .tma-dash__main-head, which Dashboard
    * hides. Park it beside Edit Dashboard so the greeting stays one row.
+   *
+   * Morph of the hello actions only knows about Edit Dashboard — so Today must
+   * be moved back to the shell before any patch, or the reconciler deletes it.
    */
   function parkTodayInHello(el) {
     var actions = el && el.querySelector('.tma-portal-hello__actions');
@@ -1753,6 +1756,7 @@
     }
     today.style.display = '';
     today.hidden = false;
+    today.removeAttribute('hidden');
   }
 
   function restoreTodayToShell() {
@@ -1839,6 +1843,9 @@
     var rendered = el.firstElementChild;
     var unchanged = el._homeHtml === html &&
       !!rendered && rendered.getAttribute('data-node-id') === 'portal-home';
+    // Rescue Today before morph — hello actions HTML has no Today node, so a
+    // patch would throw the parked control away and it would never come back.
+    restoreTodayToShell();
     if (!unchanged) {
       if (window.TMAMorph) window.TMAMorph.patch(el, html);
       else el.innerHTML = html;
