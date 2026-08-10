@@ -11539,11 +11539,13 @@
   outline-offset: 2px;
 }
 
-/* ── inbox category tabs ───────────────────────────────────────────── */
+/* ── inbox category tabs ─────────────────────────────────────────────
+ * Pill strip: quiet grey chips, solid primary fill on the active tab
+ * (icon + label invert to white). Counts stay off this row. */
 .tma-dash__email-categories {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-6);
   padding: var(--space-6) var(--email-pad);
   border-bottom: 1px solid var(--color-overlay-4);
   overflow-x: auto;
@@ -11557,39 +11559,45 @@
   align-items: center;
   gap: var(--space-6);
   flex: 0 0 auto;
-  padding: var(--space-6) var(--space-10);
+  padding: var(--space-6) var(--space-12);
   border: 0;
-  border-radius: var(--radius-8);
-  background: transparent;
+  border-radius: var(--radius-pill);
+  background: var(--color-hover);
   color: var(--color-text-secondary);
   font: inherit;
   font-size: var(--text-size-13, 13px);
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .tma-dash__email-category img {
   width: 16px;
   height: 16px;
-  opacity: 0.7;
+  opacity: 0.72;
 }
 
 .tma-dash__email-category:hover {
-  background: var(--color-hover);
+  background: var(--color-hover-deep);
+  color: var(--color-text-primary);
 }
 
 .tma-dash__email-category--active {
-  background: var(--color-hover-deep);
-  color: var(--color-text-primary);
+  background: var(--color-primary);
+  color: #fff;
   font-weight: 600;
 }
 
-.tma-dash__email-category--active img { opacity: 1; }
+.tma-dash__email-category--active:hover {
+  background: var(--color-primary-dark, #0288c2);
+  color: #fff;
+}
 
-.tma-dash__email-category-count {
-  font-size: var(--text-size-12);
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
+.tma-dash__email-category--active img {
+  opacity: 1;
+  /* Phosphor glyphs ship dark; force white on the primary fill. */
+  filter: brightness(0) invert(1);
 }
 
 /* ── skeleton rows ─────────────────────────────────────────────────
@@ -13570,7 +13578,8 @@
     position: fixed;
     left: 50%;
     bottom: calc(var(--dash-tabbar-clearance, 56px) + var(--space-16) + env(safe-area-inset-bottom, 0px));
-    z-index: 130;
+    /* Match floating toasts (600) so confirmations stay above email settings (300). */
+    z-index: 600;
     display: flex;
     align-items: center;
     gap: var(--space-8);
@@ -26281,7 +26290,8 @@ button.tma-dash__header-popup-item:focus-visible {
     inset: 0;
     padding: var(--space-16);
     justify-content: center;
-    z-index: 200;
+    /* Same band as .tma-portal-modal — above the desktop titlebar (201). */
+    z-index: 300;
   }
 
   .tma-dash__settings.is-settings-popup-open .tma-dash__settings-popup--flow:not([hidden]) {
@@ -27676,12 +27686,14 @@ button.tma-dash__header-popup-item:focus-visible {
    Opens over the mailbox rather than navigating to /settings, so a
    change to how mail behaves happens where mail is being read.
 
-   Layered at 125: above the compose windows (120/121) it must cover,
-   below the toast (130) so confirmations stay visible over it. */
+   Layered with portal modals (300): above compose (120/121) and the
+   desktop titlebar (201), below floating/sync toasts (600) so
+   confirmations stay visible over it. At 125 the Electron blue strip
+   painted on top of the dialog and clipped its header. */
 .tma-dash__email-settings {
   position: fixed;
   inset: 0;
-  z-index: 125;
+  z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;

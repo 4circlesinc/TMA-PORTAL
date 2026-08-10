@@ -11038,7 +11038,8 @@
     position: fixed;
     left: 50%;
     bottom: calc(var(--dash-tabbar-clearance, 56px) + var(--space-16) + env(safe-area-inset-bottom, 0px));
-    z-index: 130;
+    /* Match floating toasts (600) so confirmations stay above email settings (300). */
+    z-index: 600;
     display: flex;
     align-items: center;
     gap: var(--space-8);
@@ -21512,7 +21513,8 @@
     inset: 0;
     padding: var(--space-16);
     justify-content: center;
-    z-index: 200;
+    /* Same band as .tma-portal-modal — above the desktop titlebar (201). */
+    z-index: 300;
   }
 
   .tma-dash__settings.is-settings-popup-open .tma-dash__settings-popup--flow:not([hidden]) {

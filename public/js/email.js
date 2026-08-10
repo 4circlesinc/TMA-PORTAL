@@ -170,8 +170,8 @@
   /* ── inbox categories ────────────────────────────────────────────
    * Tabs above the list that switch the inbox between the plain folder and the
    * flag-shaped views beside it. Each one is a real server listing (see
-   * MailController::VIRTUAL_FOLDERS), so the counts and paging are honest
-   * rather than a filter over whatever page happens to be loaded.
+   * MailController::VIRTUAL_FOLDERS), so paging is honest rather than a
+   * filter over whatever page happens to be loaded.
    */
   var INBOX_CATEGORIES = [
     { id: 'inbox', label: 'Inbox', icon: 'Tray', fixed: true },
@@ -3717,8 +3717,8 @@
    * Category tabs above the inbox.
    *
    * Each one is a real server listing (see MailController::VIRTUAL_FOLDERS),
-   * not a filter over the loaded page — so "Starred 42" means forty-two
-   * starred messages in the mailbox, not however many happen to be on page 1.
+   * not a filter over the loaded page. Counts live on the sidebar folders;
+   * these tabs are just the view switcher.
    */
   function inboxCategories(state) {
     var enabled = state.inboxCategories || [];
@@ -3740,10 +3740,6 @@
       '<div class="tma-dash__email-categories" role="tablist" aria-label="Inbox categories">' +
       categories.map(function (category) {
         var active = state.folder === category.id;
-        var counts = (state.folderCounts && state.folderCounts[category.id]) || null;
-        var count = counts
-          ? (category.id === 'inbox' || category.id === 'important' ? counts.unread : counts.total)
-          : 0;
 
         return (
           '<button type="button" class="tma-dash__email-category' +
@@ -3752,7 +3748,6 @@
           ' data-email-category="' + esc(category.id) + '">' +
           '<img src="' + esc(ICONS[category.icon]) + '" alt="">' +
           '<span class="tma-dash__email-category-label">' + esc(category.label) + '</span>' +
-          (count ? '<span class="tma-dash__email-category-count">' + count + '</span>' : '') +
           '</button>'
         );
       }).join('') +

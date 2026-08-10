@@ -124,12 +124,14 @@ function buildCss(platform = process.platform) {
     height: ${HEIGHT}px;
     /*
      * Above ordinary content and scrims, deliberately below the portal's
-     * full-viewport takeovers — the signature wizard is 280 and the layer
-     * scale runs to 2000. Those are position:fixed with inset:0, so they
-     * ignore the body padding above and start at the very top of the window;
-     * a bar sitting over them would clip their headers and close buttons.
-     * Letting them cover the bar instead costs nothing but the blue strip
-     * while they are open, which is what a takeover is meant to do.
+     * full-viewport takeovers — email settings / portal modals are 300, the
+     * signature wizard is 280, and the layer scale runs to 2000. Those are
+     * position:fixed with inset:0, so they ignore the body padding above and
+     * start at the very top of the window; a bar sitting over them would clip
+     * their headers and close buttons. Letting them cover the bar instead
+     * costs nothing but the blue strip while they are open, which is what a
+     * takeover is meant to do. Anything new that is a full-window dialog must
+     * sit above 201 or it will open under this strip in the desktop app.
      */
     z-index: 201;
     background: ${BLUE};
