@@ -7748,9 +7748,9 @@
     return rowHtml;
   }
 
-  /* The whole list body: the page, with each opened conversation's other
-   * messages inlined beneath the row they belong to. One function so the full
-   * render and the in-place patch can never disagree about what is on screen. */
+  /* The whole list body: the page, with each opened conversation's messages
+   * inlined beneath the row they belong to. One function so the full render
+   * and the in-place patch can never disagree about what is on screen. */
   function buildInboxRowsHtml(rows, state) {
     return rows.map(function (row) {
       var html = buildInboxRowHtml(row, state);
@@ -7761,7 +7761,7 @@
       if (!children) {
         return html +
           '<div class="tma-dash__email-thread-children" data-email-thread-children="' + esc(row.id) + '">' +
-          renderThreadSkeleton(Math.min(3, conversationCount(row) - 1)) +
+          renderThreadSkeleton(Math.min(3, conversationCount(row))) +
           '</div>';
       }
 
