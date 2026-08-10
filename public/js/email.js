@@ -1358,7 +1358,7 @@
       items: [
         { id: 'label', label: 'Label as', icon: 'Tag', submenu: true },
         { id: 'add-star', label: 'Add star', icon: 'Star' },
-        { id: 'remove-star', label: 'Remove star', icon: 'Star', filled: true },
+        { id: 'remove-star', label: 'Remove star', icon: 'StarFilled' },
         { id: 'important', label: 'Mark as important', icon: 'Flag' },
         { id: 'not-important', label: 'Mark as not important', icon: 'Flag', filled: true },
         { id: 'forward-attachment', label: 'Forward as attachment', icon: 'PaperclipHorizontal' },
@@ -7076,7 +7076,7 @@
       { id: unread ? 'read' : 'unread', label: unread ? 'Mark as read' : 'Mark as unread',
         icon: unread ? 'EnvelopeSimpleOpen' : 'EnvelopeSimple' },
       { id: starred ? 'unstar' : 'star', label: starred ? 'Remove star' : 'Add star',
-        icon: 'Star', active: starred },
+        icon: starred ? 'StarFilled' : 'Star', active: starred },
       { id: 'important', label: important ? 'Mark as not important' : 'Mark as important',
         icon: 'Important', active: important },
       { id: 'pin', label: pinned ? 'Unpin' : 'Pin', icon: 'PushPin', active: pinned },
