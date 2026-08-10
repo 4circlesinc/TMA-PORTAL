@@ -9312,7 +9312,8 @@
 
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-toolbar,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
-  margin-top: 0 !important;
+  margin-top: var(--space-12) !important;
+  margin-bottom: var(--space-12) !important;
 }
 
 .tma-dash--email .tma-dash__footer {
