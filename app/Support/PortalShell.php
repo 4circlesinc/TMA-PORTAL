@@ -86,6 +86,13 @@ final class PortalShell
             JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR,
         );
 
-        return '<script>window.TMABootCapabilities='.$json.';</script>'."\n  ";
+        // Who the shell was served to, so anything a view caches per-tab can
+        // be discarded the moment a different account is in it. Sign-out does
+        // not clear sessionStorage, so without this the mailbox's warm start
+        // would paint the previous reader's inbox for a frame — see
+        // readMailCache() in email.js. It is the account's own id, which it
+        // can read from /me anyway.
+        return '<script>window.TMABootCapabilities='.$json.';'
+            .'window.TMABootUserId='.(int) $user->id.';</script>'."\n  ";
     }
 }

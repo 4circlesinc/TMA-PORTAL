@@ -1141,12 +1141,47 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
       'connected_account_id' => \$a->id, 'remote_id' => \$rid, 'thread_id' => 'conv-1',
       'folder' => 'inbox', 'subject' => \$sub, 'snippet' => strip_tags(\$html),
       'body_html' => \$html, 'from_name' => \$fn, 'from_email' => \$fe,
-      'to' => [['name' => 'Test User', 'email' => 'e2e@example.com']],
+      'to' => [['name' => 'Test User', 'email' => 'e2e@example.com'],
+               ['name' => 'Rae Fox', 'email' => 'rae@example.com']],
+      'cc' => [['name' => 'Sam Cole', 'email' => 'sam@example.com']],
+      'bcc' => [['name' => 'Quiet One', 'email' => 'quiet@example.com']],
       'is_read' => true, 'sent_at' => \$when]);
   }
 "
 
 node tests/Browser/mail-thread.mjs
+```
+
+The second To, the Cc and the Bcc are there for `mailbox-conversations.mjs`,
+which reads the recipient panel back — a message addressed to one person could
+not tell a working panel from the old one, which only ever printed "me".
+
+`mailbox-conversations.mjs` also wants three single-message conversations
+beside that thread, so the category tabs have something to list:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+  \$a = App\Models\ConnectedAccount::where('user_id', \$u->id)->first();
+  foreach ([
+    ['s1','solo-1','Invoice #1042','Ana Ruiz','ana@example.com', ['is_read' => false]],
+    ['s2','solo-2','Welcome aboard','Sam Lee','sam@example.com', ['is_read' => false, 'is_starred' => true]],
+    ['s3','solo-3','Pinned notice','Ops Bot','ops@example.com', ['is_pinned' => true]],
+  ] as \$i => [\$rid,\$tid,\$sub,\$fn,\$fe,\$flags]) {
+    App\Models\MailMessage::create(array_merge(['uuid' => (string) Str::uuid(),
+      'user_id' => \$u->id, 'connected_account_id' => \$a->id, 'remote_id' => \$rid,
+      'thread_id' => \$tid, 'folder' => 'inbox', 'subject' => \$sub,
+      'snippet' => \$sub, 'body_html' => '<p>'.\$sub.'</p>',
+      'from_name' => \$fn, 'from_email' => \$fe,
+      'to' => [['name' => 'Test User', 'email' => 'e2e@example.com'],
+               ['name' => 'Rae Fox', 'email' => 'rae@example.com']],
+      'cc' => [['name' => 'Sam Cole', 'email' => 'sam@example.com']],
+      'bcc' => [['name' => 'Quiet One', 'email' => 'quiet@example.com']],
+      'is_read' => true, 'sent_at' => now()->subMinutes(10 - \$i * 4)], \$flags));
+  }
+"
+
+TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/mailbox-conversations.mjs
 ```
 
 It also wants one message carrying attachments, including an inline one, since

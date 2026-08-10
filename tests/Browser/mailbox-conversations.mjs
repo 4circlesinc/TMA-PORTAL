@@ -176,7 +176,10 @@ try {
   check(/cc:/.test(details) && /sam@example\.com/.test(details), 'Cc is listed');
   check(/bcc:/.test(details) && /quiet@example\.com/.test(details), 'Bcc is listed');
   check(/subject:/.test(details) && /date:/.test(details), 'Subject and Date are still there');
-  await page.keyboard.press('Escape');
+  // Close it with its own toggle: the panel is absolutely positioned and, left
+  // open, it covers the action buttons the next step needs.
+  await page.click('[data-email-header-details-toggle]');
+  await page.waitForTimeout(200);
 
   step(7, 'The top action bar offers Reply, Reply all and Forward — and they work');
   const topActions = await page.$$eval(
@@ -198,14 +201,16 @@ try {
   await page.waitForTimeout(300);
 
   step(7.5, 'The message\u2019s three-dot menu is a real menu');
-  // Closing the composer repaints the pane; let that land before clicking,
-  // or the menu opens onto a card that is about to be replaced.
-  await settle();
-  await page.waitForTimeout(400);
+  // Opening the composer scrolled the pane down, which leaves the message
+  // head tucked under the sticky subject bar — a click there hits the bar.
+  await page.evaluate(() => {
+    const pane = document.querySelector('.tma-dash__email-detail-scroll');
+    if (pane) pane.scrollTop = 0;
+  });
+  await page.waitForTimeout(300);
   await page.click('.tma-dash__email-message--expanded [data-email-message-menu]');
   await page.waitForTimeout(400);
   const headMenu = await page.textContent('.tma-dash__email-context-menu').catch(() => '(no menu opened)');
-  log('        menu text: ' + JSON.stringify(headMenu));
   check(/Print/.test(headMenu) && /Open in new window/.test(headMenu) && /Archive/.test(headMenu),
     'More offers Print, Open in new window and the folder actions');
   await page.keyboard.press('Escape');

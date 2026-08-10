@@ -1565,6 +1565,15 @@
       var cached = JSON.parse(raw);
       if (!cached || !cached.at) return null;
       if (Date.now() - cached.at > MAIL_CACHE_TTL) return null;
+      // Signing out does not clear sessionStorage, so a second account signing
+      // in on the same tab would be shown the first one's inbox until the
+      // bootstrap answered. The shell stamps who it was served to.
+      if (cached.user !== (window.TMABootUserId || null)) {
+        window.sessionStorage.removeItem(MAIL_CACHE_KEY);
+
+        return null;
+      }
+
       return cached;
     } catch (e) {
       return null;
@@ -1581,6 +1590,7 @@
     try {
       window.sessionStorage.setItem(MAIL_CACHE_KEY, JSON.stringify({
         at: Date.now(),
+        user: window.TMABootUserId || null,
         folder: state.folder,
         connected: state.connected,
         account: state.account,
