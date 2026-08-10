@@ -1124,6 +1124,9 @@ a.tma-dash__tab-btn:visited {
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
   margin-top: var(--space-8) !important;
   margin-bottom: var(--space-8) !important;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,

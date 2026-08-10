@@ -9309,9 +9309,8 @@
 }
 
 /*
- * No top pad on the fit — a pad here stacked with other shell spacing and
- * opened the empty white band above the toolbar after row actions. The card
- * keeps a small outside margin only.
+ * Desktop mail: no stacked top pad on the fit. The toolbar card keeps a
+ * small outside margin — browser and Electron share this path.
  */
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__email-fit,
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
@@ -9324,6 +9323,12 @@
 .tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
   margin-top: var(--space-8) !important;
   margin-bottom: var(--space-8) !important;
+  flex: 0 0 auto;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  transform: none !important;
 }
 
 /* Browser email header — fixed height so row actions cannot stretch it.
