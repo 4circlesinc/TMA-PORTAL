@@ -21,11 +21,29 @@ class CompaniesController extends Controller
 {
     private const STAFF = ['Administrator', 'Employee'];
 
+    /**
+     * The client columns a company record prints for a person, in both the
+     * `people` list and the `referred` preview. Notably not `data`: the blob is
+     * the widest column on the table and neither list draws any of it.
+     *
+     * @see \App\Models\Company::toRecord()
+     */
+    private const PERSON_COLUMNS = [
+        'id', 'company_id', 'uid', 'name', 'initial', 'initial_color', 'email', 'user_id',
+    ];
+
     public function index(Request $request): JsonResponse
     {
         $this->authorizeStaff($request);
 
-        $companies = Company::with(['clients' => fn ($q) => $q->orderBy('name')])
+        $companies = Company::with(['clients' => fn ($q) => $q
+            // Only the columns toRecord() prints for a person. Unconstrained,
+            // this pulls each member's whole `data` blob — harmless while one
+            // client belongs to a company, and a second copy of the clients
+            // problem the moment the firm starts using membership.
+            ->select(self::PERSON_COLUMNS)
+            ->orderBy('name')
+            ->orderBy('id')])
             // Every count the record prints, aggregated in the listing query.
             // toRecord() falls back to a query per count when the figure is
             // absent, which for member counts meant one round trip per company.
@@ -35,11 +53,73 @@ class CompaniesController extends Controller
                 'members as current_members_count' => fn ($q) => $q->current(),
             ])
             ->orderBy('name')
-            ->get()
-            ->map->toRecord()
-            ->values();
+            ->get();
 
-        return response()->json(['companies' => $companies]);
+        $this->attachReferredPreviews($companies);
+
+        return response()->json([
+            'companies' => $companies->map->toRecord()->values(),
+        ]);
+    }
+
+    /**
+     * Give every company its referred-client preview, in one query.
+     *
+     * toRecord() falls back to a `limit 12` query per company when the relation
+     * is not loaded — sixty-four round trips to a remote database to print
+     * sixty-four short lists, which was half of this endpoint's twenty seconds.
+     * Eloquent cannot eager load a per-parent limit, so the ranking is done in
+     * the database and only the first rows of each company come back.
+     *
+     * @param  \Illuminate\Support\Collection<int, Company>  $companies
+     */
+    private function attachReferredPreviews(Collection $companies): void
+    {
+        $ids = $companies->pluck('id')->all();
+
+        $previews = $ids ? $this->referredPreviews($ids) : [];
+
+        foreach ($companies as $company) {
+            $company->setRelation(
+                'referredClients',
+                $previews[$company->id] ?? new EloquentCollection(),
+            );
+        }
+    }
+
+    /**
+     * @param  array<int, int>  $companyIds
+     * @return array<int, \Illuminate\Database\Eloquent\Collection<int, Client>>
+     */
+    private function referredPreviews(array $companyIds): array
+    {
+        // The base builder rather than the model, so the soft-delete scope is
+        // not applied twice once this is wrapped in the outer query.
+        $ranked = DB::table('clients')
+            ->select(self::PERSON_COLUMNS)
+            ->addSelect('referred_by_company_id')
+            // `name, id`, not `name` alone. The caseload is full of repeated
+            // names — one referrer has 188 that appear more than once — and
+            // ordering by name only leaves the tie to the planner, so which of
+            // two "ABBAS DARWICH" rows the preview showed could change between
+            // identical requests. The id settles it the same way every time.
+            ->selectRaw(
+                'row_number() over (partition by referred_by_company_id order by name, id) as preview_rank'
+            )
+            ->whereIn('referred_by_company_id', $companyIds)
+            ->whereNull('deleted_at');
+
+        $rows = DB::query()
+            ->fromSub($ranked, 'ranked')
+            ->where('preview_rank', '<=', Company::REFERRED_PREVIEW)
+            ->get();
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[$row->referred_by_company_id][] = (array) $row;
+        }
+
+        return array_map(fn (array $rows) => Client::hydrate($rows), $grouped);
     }
 
     public function store(Request $request): JsonResponse
@@ -71,7 +151,7 @@ class CompaniesController extends Controller
         ], $this->profileColumns($data)));
 
         return response()->json([
-            'company' => $company->load(['clients' => fn ($q) => $q->orderBy('name')])->toRecord(),
+            'company' => $company->load(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])->toRecord(),
         ], 201);
     }
 
@@ -79,7 +159,7 @@ class CompaniesController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $company = Company::with(['clients' => fn ($q) => $q->orderBy('name')])
+        $company = Company::with(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])
             ->where('uid', $uid)
             ->firstOrFail();
 
@@ -127,7 +207,7 @@ class CompaniesController extends Controller
         }
 
         return response()->json([
-            'company' => $company->fresh()->load(['clients' => fn ($q) => $q->orderBy('name')])->toRecord(),
+            'company' => $company->fresh()->load(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])->toRecord(),
         ]);
     }
 

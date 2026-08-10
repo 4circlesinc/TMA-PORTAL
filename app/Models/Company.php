@@ -109,9 +109,12 @@ class Company extends Model
      */
     public function toRecord(): array
     {
+        // `name, id` throughout: repeated names are common in the caseload, and
+        // ordering by name alone leaves ties to the planner — so a list could
+        // come back in a different order between identical requests.
         $people = $this->relationLoaded('clients')
             ? $this->clients
-            : $this->clients()->orderBy('name')->get();
+            : $this->clients()->orderBy('name')->orderBy('id')->get();
 
         return [
             'id' => $this->uid,
@@ -147,7 +150,9 @@ class Company extends Model
              */
             'referred' => $this->relationLoaded('referredClients')
                 ? $this->referredClientCards($this->referredClients)
-                : $this->referredClientCards($this->referredClients()->orderBy('name')->limit(self::REFERRED_PREVIEW)->get()),
+                : $this->referredClientCards(
+                    $this->referredClients()->orderBy('name')->orderBy('id')->limit(self::REFERRED_PREVIEW)->get()
+                ),
             'people' => $people->map(fn (Client $c) => [
                 'id' => $c->uid,
                 'name' => $c->name,

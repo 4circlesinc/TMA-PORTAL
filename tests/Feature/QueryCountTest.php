@@ -221,4 +221,113 @@ class QueryCountTest extends TestCase
             "Client directory is N+1: $small queries for 3 clients, $large for 28."
         );
     }
+
+    /*
+     * The companies listing cost two queries per company: one for memberCount,
+     * one for the twelve-client `referred` preview that Eloquent cannot eager
+     * load. Sixty-four companies meant a hundred and thirty queries and forty
+     * seconds — on the same page load as the client directory, so the Client
+     * hub waited for it whatever else was fixed.
+     */
+    public function test_company_list_does_not_scale_with_company_count(): void
+    {
+        $me = $this->staff();
+        $this->actingAs($me);
+
+        $addCompanies = function (int $count, string $prefix) use ($me) {
+            for ($i = 0; $i < $count; $i++) {
+                $company = \App\Models\Company::create([
+                    'uid' => "$prefix-co-$i",
+                    'name' => "$prefix Company $i",
+                    'created_by' => $me->id,
+                ]);
+
+                // Members and referrals are what the two per-company queries
+                // were counting, so both have to exist for the guard to bite.
+                \App\Models\CompanyMember::create([
+                    'company_id' => $company->id,
+                    'name' => "$prefix Member $i",
+                    'email' => "$prefix-member-$i@example.com",
+                    'status' => \App\Models\CompanyMember::STATUS_ACTIVE,
+                    'invited_by' => $me->id,
+                ]);
+
+                foreach (range(1, 3) as $n) {
+                    \App\Models\Client::create([
+                        'uid' => "$prefix-ref-$i-$n",
+                        'name' => "$prefix Referred $i $n",
+                        'referral_type' => \App\Models\Client::REFERRAL_COMPANY,
+                        'referred_by_company_id' => $company->id,
+                        'data' => [],
+                        'created_by' => $me->id,
+                    ]);
+                }
+            }
+        };
+
+        $addCompanies(3, 'small');
+        $small = $this->countQueries(function () {
+            $this->get('/portal/companies')->assertOk();
+        });
+
+        $addCompanies(25, 'large');
+        $large = $this->countQueries(function () {
+            $this->get('/portal/companies')->assertOk();
+        });
+
+        $this->assertLessThanOrEqual(
+            $small + 2,
+            $large,
+            "Company list is N+1: $small queries for 3 companies, $large for 28."
+        );
+    }
+
+    /*
+     * The `referred` preview is built by ranking in the database rather than by
+     * a query per company, which means its tie-breaking is this code's problem
+     * rather than the planner's. The caseload is full of repeated names — one
+     * referrer has 188 that appear more than once — so without a stable second
+     * sort key the same company could show a different twelve on each request.
+     */
+    public function test_referred_preview_is_stable_when_names_repeat(): void
+    {
+        $me = $this->staff();
+        $this->actingAs($me);
+
+        $company = \App\Models\Company::create([
+            'uid' => 'ties-co',
+            'name' => 'Ties Company',
+            'created_by' => $me->id,
+        ]);
+
+        // Twenty clients sharing one name: more than the preview holds, so
+        // which of them it keeps is decided entirely by the sort.
+        foreach (range(1, 20) as $n) {
+            \App\Models\Client::create([
+                'uid' => "tie-$n",
+                'name' => 'Same Name',
+                'referral_type' => \App\Models\Client::REFERRAL_COMPANY,
+                'referred_by_company_id' => $company->id,
+                'data' => [],
+                'created_by' => $me->id,
+            ]);
+        }
+
+        $idsFromListing = function () {
+            $body = $this->get('/portal/companies')->assertOk()->json('companies');
+
+            return collect($body)->firstWhere('id', 'ties-co')['referred'];
+        };
+
+        $first = $idsFromListing();
+        $second = $idsFromListing();
+
+        $this->assertCount(\App\Models\Company::REFERRED_PREVIEW, $first);
+        $this->assertSame($first, $second, 'The referred preview changed between identical requests.');
+
+        // And the single-company path has to agree with the listing, or a
+        // company reads one way in the table and another when opened.
+        $shown = $this->get('/portal/companies/ties-co')->assertOk()->json('company.referred');
+        $this->assertSame($first, $shown, 'show() disagrees with index() about the preview.');
+    }
 }
