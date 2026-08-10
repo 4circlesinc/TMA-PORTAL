@@ -3886,7 +3886,6 @@
     if (state.folder === 'templates') return renderTemplateList(state);
 
     var rows = filteredInbox(state);
-    var selection = selectionSummary(state);
 
     return (
       '<div class="tma-dash__email-list">' +
