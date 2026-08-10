@@ -73,8 +73,14 @@
 
   function restoreHome(tooltip) {
     const home = tooltip._tooltipHome;
-    if (home && tooltip.parentNode !== home) {
+    if (home && home.isConnected && tooltip.parentNode !== home) {
       home.appendChild(tooltip);
+    } else if (!home || !home.isConnected) {
+      // Trigger was torn down (list morph / full render). Drop the orphan
+      // rather than leave a portaled tip floating at the top of the page.
+      if (tooltip.parentNode) tooltip.parentNode.removeChild(tooltip);
+      tooltip._tooltipHome = null;
+      return;
     }
     tooltip.classList.remove('is-portaled');
     tooltip.style.position = '';
@@ -88,7 +94,20 @@
     return Math.max(min, Math.min(value, max));
   }
 
+  function isTriggerLive(trigger) {
+    return !!(trigger && trigger.isConnected);
+  }
+
   function positionTooltip(trigger, tooltip) {
+    // A morph/render can destroy the trigger while the tip is still portaled
+    // on <body>. Repositioning a detached node puts it at 0×0 — the top of
+    // the page — which is exactly the stuck "ghost tooltip" users see after
+    // clicking an email row action.
+    if (!isTriggerLive(trigger)) {
+      hideActive();
+      return false;
+    }
+
     rememberHome(tooltip, trigger);
 
     if (tooltip.parentNode !== document.body) {
@@ -97,6 +116,11 @@
 
     const position = getPosition(tooltip, trigger);
     const triggerRect = trigger.getBoundingClientRect();
+
+    if (triggerRect.width === 0 && triggerRect.height === 0) {
+      hideActive();
+      return false;
+    }
 
     tooltip.classList.add('is-portaled');
     tooltip.style.position = 'fixed';
@@ -130,6 +154,7 @@
 
     const triggerCenterX = triggerRect.left + triggerRect.width / 2;
     tooltip.style.setProperty('--tooltip-arrow-offset', `${triggerCenterX - left - 4}px`);
+    return true;
   }
 
   function hideTooltip(tooltip) {
@@ -140,9 +165,15 @@
   }
 
   function hideActive() {
+    if (state.activeTrigger) setPending(state.activeTrigger, false);
+    if (state.hoverTrigger) setPending(state.hoverTrigger, false);
+    clearShowTimer();
+    clearHideTimer();
+    clearPendingTimer();
     if (state.activeTooltip) {
       hideTooltip(state.activeTooltip);
     }
+    state.hoverTrigger = null;
     state.activeTrigger = null;
     state.activeTooltip = null;
     state.activeType = null;
@@ -153,10 +184,12 @@
     setPending(trigger, false);
 
     if (state.activeTooltip && state.activeTooltip !== tooltip) {
+      if (state.activeTrigger) setPending(state.activeTrigger, false);
       hideTooltip(state.activeTooltip);
     }
 
-    positionTooltip(trigger, tooltip);
+    if (!positionTooltip(trigger, tooltip)) return;
+
     tooltip.classList.add('is-visible');
     tooltip.setAttribute('aria-hidden', 'false');
 
@@ -280,7 +313,11 @@
   function onFocusIn(event) {
     const trigger = findTrigger(event.target);
     if (!trigger) return;
-    enterTrigger(trigger);
+    // Mouse/touch clicks focus the button and would open the tip immediately
+    // (email actions use a 0ms rehover delay). Keep focus tips for keyboard.
+    if (event.target && event.target.matches && event.target.matches(':focus-visible')) {
+      enterTrigger(trigger);
+    }
   }
 
   function onFocusOut(event) {
@@ -288,6 +325,14 @@
     if (!trigger) return;
     if (isInsideTrigger(trigger, event.relatedTarget)) return;
     leaveTrigger(trigger);
+  }
+
+  function onPointerDown(event) {
+    const trigger = findTrigger(event.target);
+    if (!trigger) return;
+    // An action click is about to morph the list / move the row — dismiss
+    // any tip first so it cannot be repositioned onto a dead trigger.
+    hideActive();
   }
 
   function onScrollOrResize() {
@@ -312,6 +357,7 @@
   document.addEventListener('mouseout', onMouseOut);
   document.addEventListener('focusin', onFocusIn);
   document.addEventListener('focusout', onFocusOut);
+  document.addEventListener('pointerdown', onPointerDown, true);
   window.addEventListener('scroll', onScrollOrResize, true);
   window.addEventListener('resize', onScrollOrResize);
 

@@ -7665,6 +7665,10 @@
       return;
     }
 
+    // Row actions rebuild this body; dismiss any tip still anchored to a
+    // button that is about to be replaced so it cannot jump to the page top.
+    if (window.PortalTooltip && window.PortalTooltip.hideAll) window.PortalTooltip.hideAll();
+
     var rows = filteredInbox(state);
     // Keep the list-head chrome (checkbox / bulk / filter) at a fixed height
     // while only the body patch changes — avoids the header "bulge" on pin /
