@@ -1818,8 +1818,18 @@
       return '<div class="tma-dash__clients-directory-empty">' +
         renderClientsEmptyState(state) + '</div>';
     }
+    /*
+     * Each letter and its names are one box.
+     *
+     * A sticky heading only sticks within its own containing block, so the
+     * wrapper is what makes B rise up and push A out of the way as you scroll
+     * into it. Flat siblings all pin to the same line instead and pile up
+     * there — the top one still happened to read correctly, but every heading
+     * scrolled past stayed in the layer underneath it.
+     */
     return groups.map(function (group) {
       return (
+        '<div class="tma-dash__clients-group">' +
         '<div class="tma-dash__clients-letter">' + esc(group.letter) + '</div>' +
         group.items.map(function (item) {
           var active = state.selectedId === item.id;
@@ -1830,7 +1840,8 @@
             '<span class="tma-dash__clients-row-name">' + esc(item.name) + '</span>' +
             '</button>'
           );
-        }).join('')
+        }).join('') +
+        '</div>'
       );
     }).join('');
   }
@@ -1888,11 +1899,17 @@
    * useless for "AASHA MORSHED ABDELAZIZ ELATI" — the caseload is full of the
    * latter and they wrapped to four lines. The reader sets the width instead,
    * with the same handle the Messages inbox uses.
+   *
+   * The default is 40% wider than the original 208px. The key is versioned so
+   * that lands for everyone: a stored v1 width was the old default for anybody
+   * who never touched the handle, and reading it back would have kept the
+   * narrow column on every screen it was already wrong on. The floor is
+   * unchanged, so the list can still be dragged well below the new default.
    */
-  var DIR_WIDTH_KEY = 'tma.clientsDirectoryWidth.v1';
-  var DIR_WIDTH_DEFAULT = 208;
+  var DIR_WIDTH_KEY = 'tma.clientsDirectoryWidth.v2';
+  var DIR_WIDTH_DEFAULT = 291;
   var DIR_WIDTH_MIN = 180;
-  var DIR_WIDTH_MAX = 520;
+  var DIR_WIDTH_MAX = 560;
 
   function clampDirWidth(px, layoutWidth) {
     var max = DIR_WIDTH_MAX;
@@ -3008,13 +3025,50 @@
     return listItems;
   }
 
-  function renderProfileTabs(activeTab) {
+  /*
+   * How many documents this client has, keyed by their folder.
+   *
+   * Filled in by the folder panel's own listing (loadClientFolder), which runs
+   * on every profile render whether or not the Documents tab is the one on
+   * show — so the number is there before anybody opens it. Counted from the
+   * root listing only: drilling into a subfolder must not make the tab report
+   * that subfolder's contents as the client's total.
+   */
+  var clientDocCounts = {};
+
+  function documentCountFor(rootUuid) {
+    if (!rootUuid) return null;
+    var n = clientDocCounts[rootUuid];
+    return typeof n === 'number' ? n : null;
+  }
+
+  function profileTabCount(state, tabId) {
+    if (tabId === 'assigned') {
+      if (state.assignmentsLoading) return null;
+      return (state.assignments || []).length;
+    }
+    if (tabId === 'folders') return documentCountFor(clientFolderUuid(state.selectedId));
+    return null;
+  }
+
+  /* Nested inside the label rather than beside it: the underline tab is a
+     column (label above indicator), so a third child would land under the rule
+     and the indicator would stop matching the width of what it underlines.
+     Zero draws nothing, the way every other count in the portal behaves — the
+     panel behind the tab already says it is empty, in a sentence. */
+  function tabCountChip(count) {
+    if (!count) return '';
+    return '<span class="tma-tab__count">' + esc(count > 999 ? '999+' : String(count)) + '</span>';
+  }
+
+  function renderProfileTabs(state, activeTab) {
     return PROFILE_TABS.map(function (tab) {
       var active = tab.id === activeTab;
       return (
         '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab"' +
         ' aria-selected="' + (active ? 'true' : 'false') + '" data-clients-tab="' + esc(tab.id) + '">' +
-        '<span class="tma-tab__label">' + esc(tab.label) + '</span>' +
+        '<span class="tma-tab__label">' + esc(tab.label) +
+        tabCountChip(profileTabCount(state, tab.id)) + '</span>' +
         '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
         '</button>'
       );
@@ -3178,6 +3232,51 @@
     wrap.innerHTML = html;
   }
 
+  /* One tab's count chip, patched in place.
+     Deliberately not a re-render: a render re-wires the folder panel, which
+     reloads the folder, which lands back here — a loop that never settles. */
+  function setTabCount(root, tabId, count) {
+    var label = root.querySelector('[data-clients-tab="' + tabId + '"] .tma-tab__label');
+    if (!label) return;
+    var chip = label.querySelector('.tma-tab__count');
+    if (!count) {
+      if (chip) chip.remove();
+      return;
+    }
+    var text = count > 999 ? '999+' : String(count);
+    if (chip) {
+      if (chip.textContent !== text) chip.textContent = text;
+      return;
+    }
+    label.insertAdjacentHTML('beforeend', '<span class="tma-tab__count">' + esc(text) + '</span>');
+  }
+
+  /*
+   * The client's document total, from the listing the panel just loaded.
+   *
+   * `counts.files` is what sits directly in the folder; every subfolder row
+   * carries its own *recursive* fileCount (FolderTree::aggregate), so the two
+   * together are every document anywhere under the client folder. Only the
+   * root listing counts — drilling into a subfolder must not make the tab
+   * report that subfolder as the client's total.
+   */
+  function captureClientDocCount(root, res) {
+    if (!clientFolderNav) return;
+    var wrap = root.querySelector('[data-clients-folder-drop]');
+    if (!wrap) return;
+    var uuid = wrap.getAttribute('data-folder-uuid');
+    if (!uuid || uuid !== clientFolderNav.rootUuid) return;
+
+    var counts = (res && res.counts) || {};
+    var total = typeof counts.files === 'number' ? counts.files : ((res && res.files) || []).length;
+    ((res && res.folders) || []).forEach(function (f) {
+      if (typeof f.fileCount === 'number') total += f.fileCount;
+    });
+
+    clientDocCounts[uuid] = total;
+    setTabCount(root, 'folders', total);
+  }
+
   // In-place drilling: the panel tracks where inside the client folder tree the
   // user has navigated, so folders open in place instead of leaving the profile.
   // { rootUuid, path: [{ uuid, name }] } — path[0] is always the client folder.
@@ -3256,7 +3355,11 @@
     if (!wrap || !filesNet()) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
     filesNet().fetchJSON(filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200'))
-      .then(function (res) { renderClientFolderList(root, res); bindClientFolderRows(root); })
+      .then(function (res) {
+        renderClientFolderList(root, res);
+        bindClientFolderRows(root);
+        captureClientDocCount(root, res);
+      })
       .catch(function () {
         var list = wrap.querySelector('[data-clients-folder-list]') || wrap;
         list.textContent = 'Could not load this folder.';
@@ -3701,7 +3804,7 @@
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
       toolbar +
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
-      renderProfileTabs(activeTab) +
+      renderProfileTabs(state, activeTab) +
       '</div>' +
       renderContactInfoPanel(c, listItems, activeTab !== 'info') +
       renderFoldersPanel(c.id, activeTab !== 'folders') +
@@ -5335,12 +5438,18 @@
     });
   }
 
-  function ensureAssignmentsLoaded(state, render) {
+  /*
+   * opts.quiet skips the redraw that shows the panel's loading state. Set when
+   * this is called from applyScreen, which is still setting the screen up — the
+   * same reason ensureAccessLoaded does not redraw up front.
+   */
+  function ensureAssignmentsLoaded(state, render, opts) {
     if (!state.selectedId) return;
     if (state.assignmentsLoadedFor === state.selectedId && !state.assignmentsLoading) return;
     state.assignmentsLoading = true;
     state.assignmentsLoadedFor = state.selectedId;
-    if (usesPagedClientsFlow(state)) render();
+    if (opts && opts.quiet) { /* no redraw yet */ }
+    else if (usesPagedClientsFlow(state)) render();
     else render({ detailOnly: true });
     ClientsAPI.assignments(state.selectedId).then(function (data) {
       if (state.assignmentsLoadedFor !== state.selectedId) return;
@@ -5475,12 +5584,15 @@
 
       // Portal access is loaded whenever a client is opened, not only when the
       // Assigned tab is, because the toolbar button needs to know whether this
-      // is a first invitation or a chase-up.
+      // is a first invitation or a chase-up. Assigned staff comes with it now
+      // for the same kind of reason: its tab carries a count, and a count that
+      // only appears once you open the tab is no use to anybody.
       // Both flows show the profile: 'contact' in the split view, 'detail'
       // in the paged/mobile one.
       if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
         ensureProfileLoaded(state, render);
         ensureAccessLoaded(state, render);
+        ensureAssignmentsLoaded(state, render, { quiet: true });
       }
 
       if (state.screen === 'company' && state.companyId) {

@@ -40,6 +40,31 @@
   word-break: break-word;
 }
 
+/*
+ * How many things are behind a tab, beside its name.
+ *
+ * Nested inside the label, not beside it: the underline variant is a column
+ * (label, then rule), so a sibling would land under the rule and the rule
+ * would stop matching the width of what it underlines. Same chip recipe as
+ * the file-count pill on the client folder rows, at tab scale.
+ */
+.tma-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--radius-8, 8px);
+  background: var(--color-overlay-4, rgba(0, 0, 0, 0.04));
+  font-size: var(--text-size-12, 12px);
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary, rgba(0, 0, 0, 0.4));
+  vertical-align: text-bottom;
+}
+
 /* Underline variant */
 .tma-tab-group--underline {
   display: flex;

@@ -821,6 +821,18 @@ node tests/Browser/notify-toasts.mjs
   events) and asserts a short drag does *not* refresh. Finishes in a mobile
   context, because the drawer is a different sidebar and must keep toggling its
   groups. Any signed-in account will do.
+- **`clients-split-view.mjs`** — the Client hub's side-by-side layout, which is
+  the page toggle's *grid* mode (`[data-view-mode="grid"]`), not a separate
+  screen. Measures the gutter between the two panes and the list's default
+  width, drags the handle to prove the list still goes below that default, and
+  checks the drag target is wider than the gutter it draws. Then the letter
+  headings: exactly one pinned at a time, and it must be the group on screen —
+  flat sticky siblings all pin to the same line and stack there, which reads
+  correctly by accident while every heading scrolled past sits in the layer
+  underneath. Finally the Documents / Assigned tab counts, in both layouts,
+  before either tab has been opened, and unchanged by drilling into a
+  subfolder. Needs a client called "Amara Okafor" with 5 documents (3 in the
+  root, 2 in a subfolder) and 2 assigned staff.
 
 `fixtures/contract.pdf` is a hand-built two-page PDF (no library, no
 dependency) with distinct text on each page, so a wrong page or a blank canvas
