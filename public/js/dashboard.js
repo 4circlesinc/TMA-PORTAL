@@ -1034,8 +1034,13 @@
       if (LIVE_BACKED_VIEWS[view] && window.TMALive && window.TMALive.refreshAll) {
         jobs.push(window.TMALive.refreshAll());
       }
+      /* Modules whose mount is only a re-render once the page has been built,
+         so a re-mount would show exactly what is already on screen. */
       if (view === 'overview' && window.TMAOverview && window.TMAOverview.refresh) {
         jobs.push(window.TMAOverview.refresh());
+      }
+      if (view === 'feed' && window.TMAFeed && window.TMAFeed.refresh) {
+        jobs.push(window.TMAFeed.refresh());
       }
       return Promise.all(jobs);
     }
@@ -1056,12 +1061,15 @@
       opts.keepDrawer = true;
       opts.keepMenu = true;
       opts.skipRefresh = true;
+      opts.refresh = true;
       return activate(currentNavId, opts);
     }
 
     function refreshCurrentView() {
       var view = currentViewName || 'dashboard';
-      if (LIVE_BACKED_VIEWS[view] || view === 'overview') return refreshViewData(view);
+      if (LIVE_BACKED_VIEWS[view] || view === 'overview' || view === 'feed') {
+        return refreshViewData(view);
+      }
       // The mailbox owns a heavier refresh than a re-mount: it syncs with the
       // provider first, and it keeps the open message open.
       if (view === 'email' && window.TMAEmail && window.TMAEmail.refresh) {
@@ -1105,6 +1113,10 @@
           navId: navId,
           adminPage: opts.adminPage,
           folderId: opts.folderId,
+          /* A module may hold data back inside a revalidation window — right
+             for idle navigation, wrong for somebody who has just asked for
+             this page again. */
+          refresh: repeatSelection || !!opts.refresh,
         });
       }
       if (viewName === 'email' && window.TMAEmail) {

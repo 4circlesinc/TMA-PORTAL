@@ -26,14 +26,13 @@
   var MIN_SPIN_MS = 450;   // a refresh that lands instantly still reads as one
 
   /*
-   * Views that own the top of their own screen.
-   *
-   * Messages and Feed are already live over the socket, and both carry their
-   * own touch gestures (the swipe-to-reply bubble, the story rail) that a
-   * downward drag would compete with. The signature editor is a canvas: a pull
-   * there would be a stray pen stroke.
+   * Messages owns the top of its own screen: it is live over the socket, and
+   * its bubbles carry a swipe gesture that a drag starting on one would
+   * compete with. The signature editor is excluded too, but by the wizard
+   * class below rather than by view — the requests list behind it is an
+   * ordinary table and refreshes like one.
    */
-  var SKIP_VIEWS = { messages: 1, feed: 1, signatures: 1 };
+  var SKIP_VIEWS = { messages: 1 };
 
   /* Anything full-screen or modal owns the gesture while it is open. */
   var OVERLAY_SELECTOR = [

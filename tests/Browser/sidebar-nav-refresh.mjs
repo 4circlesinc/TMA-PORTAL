@@ -35,25 +35,29 @@ function check(name, ok, detail) {
 }
 
 /* ── sign in ─────────────────────────────────────── */
-await page.goto(`${BASE}/auth/login`, { waitUntil: 'domcontentloaded' });
-await page.click('text=Sign in with Email');
-await page.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
-await page.fill('input[name="email"]', 'e2e@example.com');
-await page.fill('input[name="password"]', 'password12345');
-await Promise.all([
-  page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
-  page.click('button[type="submit"]:visible'),
-]);
-// Login lands on the stay-signed-in interstitial, not the portal.
-if (page.url().includes('/auth/stay-signed-in')) {
+async function signIn(target) {
+  await target.goto(`${BASE}/auth/login`, { waitUntil: 'domcontentloaded' });
+  await target.click('text=Sign in with Email');
+  await target.waitForSelector('input[name="email"]', { state: 'visible', timeout: 8000 });
+  await target.fill('input[name="email"]', 'e2e@example.com');
+  await target.fill('input[name="password"]', 'password12345');
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
-    page.click('text=Yes, stay signed in'),
+    target.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+    target.click('button[type="submit"]:visible'),
   ]);
+  // Login lands on the stay-signed-in interstitial, not the portal.
+  if (target.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      target.waitForNavigation({ waitUntil: 'domcontentloaded' }).catch(() => {}),
+      target.click('text=Yes, stay signed in'),
+    ]);
+  }
+  if (target.url().includes('/auth/login')) throw new Error('login failed');
+  await target.waitForSelector('[data-expand="folders"]', { timeout: 20000 });
+  await target.waitForTimeout(1200);
 }
-if (page.url().includes('/auth/login')) throw new Error('login failed');
-await page.waitForSelector('[data-expand="folders"]', { timeout: 20000 });
-await page.waitForTimeout(1200);
+
+await signIn(page);
 
 // Park the pointer clear of the sidebar: the hover-overlay style expands over
 // the left strip and would answer for the collapsed rail.
@@ -147,6 +151,38 @@ check(
   page.url()
 );
 
+/* ── 2b. the hover rail still toggles, it does not jump ─
+   The overlay is open whenever it can be clicked, so its groups keep the
+   expand behaviour — only the icon-only rail navigates. */
+await page.evaluate(() => {
+  const root = document.querySelector('.tma-dash');
+  root.classList.remove('tma-dash--sidebar-standard');
+  root.classList.add('is-sidebar-collapsed');
+  localStorage.setItem('tma.sidebarStyle', 'hover');
+});
+await page.hover('.tma-dash__sidebar');
+await page.waitForTimeout(450);
+const beforeHoverClick = new URL(page.url()).pathname;
+await page.click('[data-expand="projects"]');
+await page.waitForTimeout(600);
+check(
+  'hover rail expands the group instead of navigating',
+  new URL(page.url()).pathname === beforeHoverClick &&
+    (await page.evaluate(() => document.querySelector('[data-expand="projects"]').getAttribute('aria-expanded') === 'true')),
+  page.url()
+);
+await page.click('[data-expand="projects"]');
+await page.mouse.move(1400, 500);
+await page.waitForTimeout(400);
+await page.evaluate(() => {
+  const root = document.querySelector('.tma-dash');
+  root.classList.add('tma-dash--sidebar-standard');
+  root.classList.remove('is-sidebar-collapsed');
+  localStorage.setItem('tma.sidebarStyle', 'standard');
+  localStorage.setItem('tma.sidebarCollapsed', '0');
+});
+await page.waitForTimeout(300);
+
 /* ── 3. re-selecting the current page refetches ──── */
 const calls = [];
 page.on('request', (r) => calls.push(r.url()));
@@ -181,6 +217,30 @@ check(
   'clicking Users again refetches users',
   since(mark, '/admin/users') > 0,
   `${since(mark, '/admin/users')} requests`
+);
+
+// Overview mounts once and is not live-backed — it has to be asked directly.
+await page.click('[data-nav="dash-project-overview"]');
+await page.waitForTimeout(3000);
+mark = calls.length;
+await page.click('[data-nav="dash-project-overview"]');
+await page.waitForTimeout(3000);
+check(
+  'clicking Overview again refetches it',
+  since(mark, '/portal/dashboard/metrics') > 0,
+  `${since(mark, '/portal/dashboard/metrics')} requests`
+);
+
+// The Dashboard reloads by being re-mounted, the other half of the rule.
+await page.click('[data-nav="dash-dashboard"]');
+await page.waitForTimeout(3000);
+mark = calls.length;
+await page.click('[data-nav="dash-dashboard"]');
+await page.waitForTimeout(3000);
+check(
+  'clicking Dashboard again refetches it',
+  since(mark, '/portal/dashboard/metrics') > 0,
+  `${since(mark, '/portal/dashboard/metrics')} requests`
 );
 
 /* ── 4. pull to refresh ──────────────────────────── */
@@ -249,7 +309,53 @@ check(
   `${since(mark, '/portal/clients')} requests`
 );
 
+// And on a view that reloads by re-mounting rather than through TMALive.
+await page.click('[data-nav="dash-dashboard"]');
+await page.waitForTimeout(3000);
+await page.evaluate(() => { document.querySelector('.tma-dash__main').scrollTop = 0; });
+mark = calls.length;
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x, y: start.y }] });
+for (let i = 1; i <= 12; i++) {
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x, y: start.y + i * 20 }] });
+  await page.waitForTimeout(20);
+}
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+await page.waitForTimeout(3000);
+check(
+  'pull to refresh reloads the Dashboard',
+  since(mark, '/portal/dashboard/metrics') > 0,
+  `${since(mark, '/portal/dashboard/metrics')} requests`
+);
+
 await page.screenshot({ path: 'tests/Browser/sidebar-nav-refresh.png' });
+
+/* ── 5. the mobile drawer still expands its groups ───
+   Its own context: the drawer is a different sidebar from the rail, and the
+   collapsed-rail rule must not follow it there. */
+const mobile = await browser.newContext({ viewport: { width: 420, height: 860 }, hasTouch: true });
+const mpage = await mobile.newPage();
+await signIn(mpage);
+
+await mpage.click('[data-action="toggle-sidebar"]');
+await mpage.waitForTimeout(500);
+await mpage.click('.tma-dash__sidebar [data-expand="folders"]');
+await mpage.waitForTimeout(500);
+check(
+  'mobile drawer expands a group rather than navigating',
+  await mpage.evaluate(() =>
+    document.querySelector('.tma-dash__sidebar [data-expand="folders"]').getAttribute('aria-expanded') === 'true'),
+  mpage.url()
+);
+// Tapping a second group must not close the first — the focusout trap.
+await mpage.click('.tma-dash__sidebar [data-expand="people"]');
+await mpage.waitForTimeout(500);
+check(
+  'a second mobile group opens without closing the first',
+  await mpage.evaluate(() =>
+    document.querySelector('.tma-dash__sidebar [data-expand="folders"]').getAttribute('aria-expanded') === 'true' &&
+    document.querySelector('.tma-dash__sidebar [data-expand="people"]').getAttribute('aria-expanded') === 'true'),
+);
+
 await browser.close();
 
 if (failures.length) {

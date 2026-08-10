@@ -4315,5 +4315,20 @@
     }, 0);
   }
 
-  window.TMAFeed = { mount: mount, getUnreadCount: getUnreadCount };
+  /*
+   * Reload the channel on screen — the shell's refresh gesture.
+   *
+   * mount() cannot do this: after the first visit it is only a re-render of
+   * state already in memory, which is right for switching views and useless
+   * for somebody asking for the latest.
+   */
+  function refresh() {
+    if (!state.el || !API) return Promise.resolve();
+    return loadChannels()
+      .then(function () { return loadPosts(false); })
+      .then(function () { render(); })
+      .catch(function () {});
+  }
+
+  window.TMAFeed = { mount: mount, refresh: refresh, getUnreadCount: getUnreadCount };
 })();

@@ -1861,13 +1861,18 @@
      * that changes in between arrives through TMALive instead.
      */
     if (!opts.fromLoad) {
+      /* An explicit refresh — re-selecting the page you are on, or the
+         pull-to-refresh gesture — is a request for the latest, so it ignores
+         the windows above. They exist to stop idle navigation from polling,
+         not to answer somebody who has just asked. */
+      var force = !!opts.refresh;
       hydrateLayoutFromServer(function (changed) {
         // Re-render once when the account layout differs from local cache.
         if (changed && el.isConnected) mount(el, { fromLoad: true, fromHydrate: true });
       });
-      if (!homeFilesLoaded || stale(homeFilesAt)) loadHomeFiles(el);
-      if (!homeMetricsLoaded || stale(homeMetricsAt, METRICS_FRESH_MS)) loadHomeMetrics(el);
-      if (!homeStaffLoaded || stale(homeStaffAt, PRESENCE_FRESH_MS)) loadHomeStaff(el);
+      if (force || !homeFilesLoaded || stale(homeFilesAt)) loadHomeFiles(el);
+      if (force || !homeMetricsLoaded || stale(homeMetricsAt, METRICS_FRESH_MS)) loadHomeMetrics(el);
+      if (force || !homeStaffLoaded || stale(homeStaffAt, PRESENCE_FRESH_MS)) loadHomeStaff(el);
       else bindStaffUserListener();
       loadHomeEmail(el);
       loadHomeChats(el);
