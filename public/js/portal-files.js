@@ -71,6 +71,10 @@
     dir: 'asc',
     search: '',
     filterType: '',
+    // Whose files to show, and who there is to choose from. The list is
+    // whatever the last listing reported, so it follows the folder.
+    filterOwner: '',
+    owners: [],
     selected: {},        // uuid -> { type, name, perms, favorite }
     data: { folders: [], files: [] },
     loading: false,
@@ -212,6 +216,7 @@
     if (state.folder) params.set('folder', state.folder);
     if (state.search) params.set('search', state.search);
     if (state.filterType) params.set('type', state.filterType);
+    if (state.filterOwner) params.set('owner', state.filterOwner);
     params.set('sort', state.sort);
     params.set('dir', state.dir);
     params.set('perPage', '200');
@@ -222,6 +227,7 @@
       .then(function (res) {
         state.loading = false;
         state.data = { folders: res.folders || [], files: res.files || [] };
+        state.owners = res.owners || [];
         state.breadcrumb = res.breadcrumb || [];
         if (res.folder) state.folderName = res.folder.name;
         pruneSelection();
@@ -510,6 +516,7 @@
     actions += toolBtn('ArrowClockwise', 'refresh', 'Refresh');
     actions += sortFieldSelect();
     actions += filterControl();
+    actions += ownerControl();
 
     // Bulk actions appear inline after a divider + "N Selected", exactly like
     // the Users table, and stay hidden until something is selected.
@@ -585,6 +592,30 @@
     ], state.filterType, 'data-files-filter-menu', 'Filter by type');
   }
 
+  /*
+   * Filter by who owns it — the Owner column's facet.
+   *
+   * The owners and their counts come from the server with each listing, and
+   * are measured before the filter narrows anything, so choosing one does not
+   * empty the menu of everyone else. Drawn as the same head dropdown as the
+   * type filter rather than CBI's cascading popover: one toolbar should not
+   * carry two ways of asking the same kind of question, and the dropdown
+   * already shows what is applied in its own label.
+   *
+   * Hidden entirely when one person owns everything in view — a filter whose
+   * only option is "all of it" is a control that cannot do anything.
+   */
+  function ownerControl() {
+    var owners = state.owners || [];
+    if (owners.length < 2) return '';
+
+    var opts = [{ value: '', label: 'All owners' }].concat(owners.map(function (o) {
+      return { value: String(o.id), label: o.name + ' (' + o.n + ')' };
+    }));
+
+    return menuControl(opts, state.filterOwner, 'data-files-owner-menu', 'Filter by owner');
+  }
+
   /* ── table view ─────────────────────────────────────── */
 
   function renderTable() {
@@ -608,7 +639,7 @@
       var star = showStar ? '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' : '';
       var typeLabel = it.type === 'folder' ? 'Folder' : (it.category ? cap(it.category) : 'File');
       var size = it.type === 'folder' ? (it.sizeLabel || '—') : it.sizeLabel;
-      var owner = ownerCell(it.owner);
+      var owner = ownerCell(it);
       var when = isRecycle() ? fmtDate(it.deletedAt) : fmtDate(it.modifiedAt || it.createdAt);
       var sharing = (it.assignedTo && it.assignedTo.length)
         ? '<span class="tma-portal-chip tma-portal-chip--shared">Shared</span>'
@@ -708,6 +739,7 @@
     });
     ui().wireHeadDropdownAll(el, '[data-files-sort-menu]', function (sel) { state.sort = sel.action; load(); });
     ui().wireHeadDropdownAll(el, '[data-files-filter-menu]', function (sel) { state.filterType = sel.action; load(); });
+    ui().wireHeadDropdownAll(el, '[data-files-owner-menu]', function (sel) { state.filterOwner = sel.action; load(); });
 
     // toolbar + selection-bar + generic actions (delegated)
     el.addEventListener('click', onClick);
@@ -4415,22 +4447,29 @@
 
   // Avatar for a person (user or client): their real photo, else initials.
   // Reuses the shared resolver so it matches the rest of the portal.
-  /* The Owner column: the person's picture beside their name.
+  /* The Owner column: everyone on the row, owner first.
    *
    * A column of identical names is hard to scan; a face is recognised before
-   * it is read. Falls back to initials through TMACurrentUser.avatarSrc, the
-   * same helper the rest of the portal uses — never an invented avatar. */
-  function ownerCell(person) {
-    if (!person) return '\u2014';
+   * it is read. It used to draw the owner alone, which split the answer to
+   * "who has this file" between this column naming one person and the Sharing
+   * column saying the word "Shared". The faces put it in one place.
+   *
+   * Drawn by TMAPersonCard — the same component as CBI's Assigned column — so
+   * hovering a face gives that person's roles here and a way to reach them.
+   * Falls back to the owner's name alone if the component has not loaded. */
+  function ownerCell(item) {
+    var people = (item && item.people) || [];
 
-    var name = person.name || person.email || '\u2014';
-    var src = (window.TMACurrentUser && window.TMACurrentUser.avatarSrc)
-      ? window.TMACurrentUser.avatarSrc(person.avatar, name)
-      : (person.avatar || '');
+    if (window.TMAPersonCard) {
+      // Four is what fits before the faces crowd the Modified column; the rest
+      // become one "+n" face, and every name is still listed beside them.
+      return window.TMAPersonCard.faces(people, { max: 4, emptyLabel: '\u2014' });
+    }
 
+    var owner = item && item.owner;
+    if (!owner) return '\u2014';
     return '<span class="tma-portal-owner-cell">' +
-      (src ? '<img class="tma-portal-owner-avatar" src="' + esc(src) + '" alt="" width="20" height="20">' : '') +
-      '<span class="tma-portal-owner-name">' + esc(name) + '</span>' +
+      '<span class="tma-portal-owner-name">' + esc(owner.name || owner.email || '\u2014') + '</span>' +
       '</span>';
   }
 

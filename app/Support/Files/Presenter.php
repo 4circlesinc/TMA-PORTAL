@@ -21,13 +21,19 @@ class Presenter
 
     private array $favFolder = [];
 
-    /** item_id => array of assignee display names */
-    private array $assignFile = [];
+    /**
+     * item_id => the people it is shared with, as person arrays.
+     *
+     * The names the rest of the payload uses are derived from these rather
+     * than fetched again — the Owner column needs faces, and asking the same
+     * question twice per listing is how the client directory got slow.
+     */
+    private array $sharedFile = [];
+
+    private array $sharedFolder = [];
 
     /** file_id => ['status','label','tone'] for the file's live review state. */
     private array $statusFile = [];
-
-    private array $assignFolder = [];
 
     /** folder_id => viewer's personal ['colour'=>?, 'iconName'=>?] preference (user-type folders only) */
     private array $prefRows = [];
@@ -57,17 +63,19 @@ class Presenter
                 ->pluck('item_id')->flip()->all();
         }
 
-        $this->assignFile = $this->assigneeMap('file', $fileIds);
+        $this->sharedFile = $this->sharedWithMap('file', $fileIds);
         $this->statusFile = $this->statusMap($fileIds);
-        $this->assignFolder = $this->assigneeMap('folder', $folderIds);
+        $this->sharedFolder = $this->sharedWithMap('folder', $folderIds);
         $this->prefRows = FolderColours::preferenceRows($this->viewer, $folderIds);
     }
 
     public function file(FileItem $file): array
     {
         $ext = (string) $file->extension;
-        $assignees = $this->assignFile[$file->id]
-            ?? $this->assigneeNames('file', $file->id);
+        $sharedWith = $this->sharedFile[$file->id]
+            ?? $this->sharedWithMap('file', [$file->id])[$file->id]
+            ?? [];
+        $assignees = array_column($sharedWith, 'name');
         // Computed once: the review block reads from it rather than asking
         // FileAccess the same question a second time per row.
         $perms = $this->filePerms($file);
@@ -95,6 +103,9 @@ class Presenter
             'deletedAt' => optional($file->deleted_at)->toIso8601String(),
             'owner' => $this->person($file->owner),
             'uploadedBy' => $this->person($file->uploader),
+            // Everyone on the file, owner first — what the Owner column draws
+            // as faces. `assignedTo` stays the bare names it has always been.
+            'people' => $this->peopleOn($file->owner, $sharedWith),
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFile[$file->id]),
@@ -134,8 +145,10 @@ class Presenter
 
     public function folder(Folder $folder, bool $withStats = true): array
     {
-        $assignees = $this->assignFolder[$folder->id]
-            ?? $this->assigneeNames('folder', $folder->id);
+        $sharedWith = $this->sharedFolder[$folder->id]
+            ?? $this->sharedWithMap('folder', [$folder->id])[$folder->id]
+            ?? [];
+        $assignees = array_column($sharedWith, 'name');
 
         $stats = $withStats ? FolderTree::aggregate($folder) : ['fileCount' => null, 'folderCount' => null, 'size' => null];
 
@@ -157,6 +170,7 @@ class Presenter
             'deletedAt' => optional($folder->deleted_at)->toIso8601String(),
             'owner' => $this->person($folder->owner),
             'createdBy' => $this->person($folder->creator),
+            'people' => $this->peopleOn($folder->owner, $sharedWith),
             'assignedTo' => $assignees,
             'shared' => count($assignees) > 0,
             'favorite' => isset($this->favFolder[$folder->id]),
@@ -293,13 +307,28 @@ class Presenter
         }
 
         return [
+            // The id is what decides whether the person card's Message and
+            // call buttons work at all — without it they are drawn disabled.
+            'userId' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'avatar' => $user->avatar_url,
         ];
     }
 
-    private function assigneeMap(string $type, array $ids): array
+    /**
+     * Who a set of items is shared with, as people rather than names.
+     *
+     * The Owner column draws faces now, and a face needs more than a name: an
+     * avatar to show, an id to reach the person by, and the role they hold
+     * here to put under their name in the card. `assignedTo` still carries the
+     * bare names it always did — the Sharing column and the details panel read
+     * it — so this is additional rather than a change of shape.
+     *
+     * @param  array<int, int>  $ids
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    private function sharedWithMap(string $type, array $ids): array
     {
         if (! $ids) {
             return [];
@@ -311,21 +340,63 @@ class Presenter
             ->where('item_type', $type)
             ->whereIn('item_id', $ids)
             ->whereNull('revoked_at')
-            ->with('targetUser:id,name')
+            // avatar_url is an accessor over these columns; selecting only
+            // id+name would make every face a silent fallback to initials.
+            ->with('targetUser')
             ->get()
             ->filter(fn (Share $s) => $s->isActive())
             ->each(function (Share $s) use (&$map) {
-                if ($s->targetUser) {
-                    $map[$s->item_id][] = $s->targetUser->name;
+                if (! $s->targetUser) {
+                    return;
                 }
+                $map[$s->item_id][] = $this->person($s->targetUser) + [
+                    'roles' => [ucfirst((string) $s->role)],
+                ];
             });
 
         return $map;
     }
 
-    private function assigneeNames(string $type, int $id): array
+    /**
+     * Everyone on this item, owner first.
+     *
+     * The owner is a person on the record like any other — they are simply the
+     * one who is always there — so the column reads as one answer to "who has
+     * this" rather than an owner plus a separate sharing fact. A person shared
+     * with who also owns it appears once, with both roles.
+     *
+     * @param  array<int, array<string, mixed>>  $sharedWith
+     * @return array<int, array<string, mixed>>
+     */
+    private function peopleOn(?User $owner, array $sharedWith): array
     {
-        return $this->assigneeMap($type, [$id])[$id] ?? [];
+        $people = [];
+
+        if ($owner) {
+            $people[] = $this->person($owner) + ['roles' => ['Owner']];
+        }
+
+        foreach ($sharedWith as $person) {
+            $existing = null;
+            foreach ($people as $i => $already) {
+                if ($already['userId'] === $person['userId']) {
+                    $existing = $i;
+                    break;
+                }
+            }
+
+            if ($existing === null) {
+                $people[] = $person;
+
+                continue;
+            }
+
+            $people[$existing]['roles'] = array_values(array_unique(
+                array_merge($people[$existing]['roles'], $person['roles'])
+            ));
+        }
+
+        return $people;
     }
 
     /**

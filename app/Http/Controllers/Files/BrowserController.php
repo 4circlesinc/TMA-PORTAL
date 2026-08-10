@@ -60,6 +60,18 @@ class BrowserController extends BaseFilesController
             $this->applyFileFilters($fileQuery, $request, $search);
         }
 
+        /*
+         * Who owns things here, with a count each — what the Owner column's
+         * filter offers.
+         *
+         * Measured before the owner constraint is applied, and that ordering is
+         * the whole trick: a facet that narrowed itself would list only the
+         * owner already chosen, leaving no way back to anyone else.
+         */
+        $owners = $this->ownerFacet($folderQuery, $fileQuery);
+
+        $this->applyOwnerFilter($folderQuery, $fileQuery, $request);
+
         [$sort, $dir] = $this->sort($request);
 
         $folderTotal = $folderQuery ? (clone $folderQuery)->count() : 0;
@@ -101,7 +113,80 @@ class BrowserController extends BaseFilesController
             'total' => $total,
             'hasMore' => ($offset + $used + $files->count()) < $total,
             'counts' => ['folders' => $folderTotal, 'files' => $fileTotal],
+            'owners' => $owners,
         ]);
+    }
+
+    /**
+     * The owners of everything in scope, with how much each holds.
+     *
+     * Two grouped counts — one per table — rather than a row per item, so the
+     * facet costs the same whether the folder holds ten files or ten thousand.
+     * Both queries arrive already narrowed to what this account may see, which
+     * is what keeps the facet from naming people whose files the viewer cannot
+     * open.
+     *
+     * @return array<int, array{id: int, name: string, n: int}>
+     */
+    private function ownerFacet(?Builder $folderQuery, ?Builder $fileQuery): array
+    {
+        $counts = [];
+
+        foreach ([$folderQuery, $fileQuery] as $query) {
+            if (! $query) {
+                continue;
+            }
+
+            // reorder(): the listing sorts by columns this GROUP BY does not
+            // name, which Postgres rejects outright.
+            $rows = (clone $query)->reorder()
+                ->selectRaw('owner_id, count(*) as n')
+                ->groupBy('owner_id')
+                ->pluck('n', 'owner_id');
+
+            foreach ($rows as $ownerId => $n) {
+                if (! $ownerId) {
+                    continue;
+                }
+                $counts[$ownerId] = ($counts[$ownerId] ?? 0) + (int) $n;
+            }
+        }
+
+        if (! $counts) {
+            return [];
+        }
+
+        $names = User::query()->whereIn('id', array_keys($counts))->pluck('name', 'id');
+
+        $owners = [];
+        foreach ($counts as $id => $n) {
+            // A deleted account still owns rows; without a name there is
+            // nothing to put in the menu, so it is left out rather than
+            // offered as a blank line that filters to something.
+            if (! isset($names[$id])) {
+                continue;
+            }
+            $owners[] = ['id' => (int) $id, 'name' => $names[$id], 'n' => $n];
+        }
+
+        // Busiest first — the useful end of a list nobody wants to read.
+        usort($owners, fn ($a, $b) => [$b['n'], strtolower($a['name'])] <=> [$a['n'], strtolower($b['name'])]);
+
+        return $owners;
+    }
+
+    private function applyOwnerFilter(?Builder $folderQuery, ?Builder $fileQuery, Request $request): void
+    {
+        $owner = (int) $request->query('owner', 0);
+        if (! $owner) {
+            return;
+        }
+
+        foreach ([$folderQuery, $fileQuery] as $query) {
+            if ($query) {
+                $query->where('owner_id', $owner);
+            }
+        }
     }
 
     /** @return array{0: ?Builder, 1: ?Builder} [folderQuery, fileQuery] */
@@ -285,9 +370,6 @@ class BrowserController extends BaseFilesController
         if ($request->boolean('favorite')) {
             $q->whereIn('id', $request->user()->favorites()->where('item_type', 'folder')->pluck('item_id')->all() ?: [0]);
         }
-        if ($owner = $request->query('owner')) {
-            $q->whereHas('owner', fn ($o) => $o->where('uuid', $owner)->orWhere('id', $owner));
-        }
     }
 
     private function applyFileFilters(Builder $q, Request $request, string $search): void
@@ -312,9 +394,6 @@ class BrowserController extends BaseFilesController
         }
         if ($request->boolean('favorite')) {
             $q->whereIn('id', $request->user()->favorites()->where('item_type', 'file')->pluck('item_id')->all() ?: [0]);
-        }
-        if ($owner = $request->query('owner')) {
-            $q->whereHas('owner', fn ($o) => $o->where('id', $owner));
         }
     }
 

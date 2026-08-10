@@ -109,6 +109,28 @@ field placement and drawing, and computed CSS only exist in a browser.
   Note that `client-referrals.mjs` and `clients.mjs` want the *opposite* — a
   near-empty directory. Run them against a fresh database, or the clients they
   create land on page 300 of the big one and every assertion reads `undefined`.
+- **`owner-column.mjs`** — the File Library's Owner column after it was given
+  CBI's Assigned column's behaviour: a face per person on the row (owner first,
+  then everyone it is shared with), a hover card naming their role here with
+  Message/Call/Video, and a filter by owner with a count each.
+
+  It checks **both** pages, and that is the point. The card was lifted out of
+  `cbi.js` into `public/js/person-card.js` so the two draw the same component
+  instead of two copies; a passing File Library beside a broken CBI is the
+  failure mode, so the last step loads `/cbi` and asserts no missing-symbol
+  errors. The facet is also checked for the thing facets get wrong: the owner
+  list is measured *before* the filter is applied, or picking an owner leaves a
+  menu offering only that owner and no way back.
+
+  Three things it was written around. The page is at **`/folders/all`**, not
+  `/files`. The owner filter deliberately does not render when one person owns
+  everything in view, so the seed has to create a second owner or the check
+  fails on a control that is correctly absent. And a `shares` row needs a
+  `token` even for a user share, which only link shares ever read.
+
+  ```sh
+  TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8901 node tests/Browser/owner-column.mjs
+  ```
 - **`feed.mjs`** — the Feed module. PHPUnit covers the API
   (`tests/Feature/FeedTest.php`); what only a browser can check is §22 — that
   posting, commenting, reacting, voting, bookmarking and pinning all *patch*

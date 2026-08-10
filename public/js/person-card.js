@@ -4,10 +4,10 @@
  *
  * Two halves of one idea:
  *
- *   faces(people)  the cell: overlapping circles with the names beside them.
+ *   faces(people)  the cell: a row of circles with the names beside them.
  *                  Repeating face-name, face-name down a column made four
- *                  colleagues look like four separate facts; one pile with one
- *                  list reads as the single answer it is — who has this record.
+ *                  colleagues look like four separate facts; one group with
+ *                  one list reads as the single answer it is — who has this.
  *
  *   the card       hovering (or focusing) a face gives the full name, the roles
  *                  that person holds here, and the three things you would open
@@ -41,9 +41,13 @@
   }
 
   /* The portal's one avatar resolver: a real photo, else initials on a colour
-     hashed from the name. Never an invented avatar. */
+     hashed from the name. Never an invented avatar.
+     `photo` and `avatar` are both accepted — CBI names the field one way and
+     the File Library's presenter the other, and neither is worth a migration
+     to settle. */
   function faceSrc(person) {
-    if (person.photo) return person.photo;
+    var src = person.photo || person.avatar;
+    if (src) return src;
     var cu = window.TMACurrentUser;
     if (cu && cu.initialsFor) return cu.initialsFor(person.name, person.email || person.name);
     return '';
@@ -84,8 +88,8 @@
         ' data-tma-person="' + i + '" tabindex="0" loading="lazy">';
     }).join('');
 
-    // The overflow count is a face-shaped thing in the pile rather than a note
-    // beside it, so the row's width does not depend on how many people it has.
+    // The overflow count is a face-shaped thing in the row rather than a note
+    // beside it, so the width does not depend on how many people there are.
     if (hidden > 0) {
       art += '<span class="tma-people__face tma-people__face--more" aria-hidden="true">+' + hidden + '</span>';
     }
@@ -166,7 +170,7 @@
     return '<button type="button" class="tma-person-card__action" data-tma-person-action="' + name + '"' +
       ' data-tma-person-id="' + esc(String(person.userId || '')) + '"' +
       ' data-tma-person-name="' + esc(person.name) + '"' +
-      ' data-tma-person-photo="' + esc(person.photo || '') + '"' +
+      ' data-tma-person-photo="' + esc(person.photo || person.avatar || '') + '"' +
       (enabled ? '' : ' disabled') + '>' +
       '<img src="' + PH_ICON + icon + '.svg" alt="" width="16" height="16">' +
       '<span>' + esc(label) + '</span></button>';

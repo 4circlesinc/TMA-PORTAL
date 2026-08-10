@@ -250,4 +250,95 @@ class FileManagerTest extends TestCase
         }
         @rmdir($dir);
     }
+
+    /*
+     * The Owner column draws faces now — the owner plus everyone the item is
+     * shared with — so each row has to carry people, not just a name. A face
+     * needs an id to reach the person by and an avatar to show; without the id
+     * the person card's Message and call buttons are drawn permanently dead.
+     */
+    public function test_rows_carry_the_people_on_them_owner_first(): void
+    {
+        $owner = $this->approvedUser(['name' => 'Owen Owner', 'account_type' => 'Administrator']);
+        $other = $this->approvedUser(['name' => 'Sharon Shared', 'account_type' => 'Employee']);
+
+        $folder = $this->actingAs($owner)
+            ->postJson('/portal/files/folders', ['name' => 'Shared work'])->json('id');
+
+        // Sharing by email with somebody who already has an account resolves to
+        // a 'user' share — the kind the Owner column draws a face for.
+        $this->actingAs($owner)->postJson('/portal/files/shares', [
+            'type' => 'folder', 'id' => $folder, 'mode' => 'invite',
+            'email' => $other->email, 'role' => 'editor',
+        ])->assertSuccessful();
+
+        $row = collect($this->actingAs($owner)->getJson('/portal/files/')->assertOk()->json('folders'))
+            ->firstWhere('id', $folder);
+
+        $this->assertSame(['Owen Owner', 'Sharon Shared'], array_column($row['people'], 'name'));
+        $this->assertSame(['Owner'], $row['people'][0]['roles']);
+        $this->assertSame(['Editor'], $row['people'][1]['roles']);
+        $this->assertSame($owner->id, $row['people'][0]['userId']);
+        $this->assertSame($other->id, $row['people'][1]['userId']);
+
+        // The old shape is untouched: the Sharing column and details panel
+        // still read plain names out of assignedTo.
+        $this->assertSame(['Sharon Shared'], $row['assignedTo']);
+    }
+
+    public function test_the_listing_reports_who_owns_things_with_a_count_each(): void
+    {
+        $me = $this->approvedUser(['name' => 'Owen Owner', 'account_type' => 'Administrator']);
+
+        $this->actingAs($me)->postJson('/portal/files/folders', ['name' => 'One'])->assertCreated();
+        $this->actingAs($me)->postJson('/portal/files/folders', ['name' => 'Two'])->assertCreated();
+
+        $owners = $this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('owners');
+
+        $mine = collect($owners)->firstWhere('id', $me->id);
+        $this->assertNotNull($mine, 'the facet should name the owner of the folders in view');
+        $this->assertSame('Owen Owner', $mine['name']);
+        $this->assertSame(2, $mine['n']);
+    }
+
+    public function test_filtering_by_owner_narrows_the_listing_but_not_the_facet(): void
+    {
+        $me = $this->approvedUser(['name' => 'Owen Owner', 'account_type' => 'Administrator']);
+        $them = $this->approvedUser(['name' => 'Sharon Shared', 'account_type' => 'Administrator']);
+
+        $this->actingAs($me)->postJson('/portal/files/folders', ['name' => 'Mine'])->assertCreated();
+        $this->actingAs($them)->postJson('/portal/files/folders', ['name' => 'Theirs'])->assertCreated();
+
+        $res = $this->actingAs($me)->getJson('/portal/files/?owner='.$me->id)->assertOk();
+
+        $this->assertSame(['Mine'], array_column($res->json('folders'), 'name'));
+
+        /*
+         * The facet is measured before the filter is applied. If it narrowed
+         * with the listing, picking an owner would leave a menu offering only
+         * that owner — a filter you cannot undo from the control that set it.
+         */
+        $named = array_column($res->json('owners'), 'name');
+        $this->assertContains('Owen Owner', $named);
+        $this->assertContains('Sharon Shared', $named);
+    }
+
+    public function test_the_owner_facet_only_names_people_whose_items_the_viewer_can_see(): void
+    {
+        $me = $this->approvedUser(['name' => 'Owen Owner']);
+        $stranger = $this->approvedUser(['name' => 'Never Visible']);
+
+        $this->actingAs($me)->postJson('/portal/files/folders', ['name' => 'Mine'])->assertCreated();
+        $this->actingAs($stranger)->postJson('/portal/files/folders', ['name' => 'Private'])->assertCreated();
+
+        // The facet is built from the same access-scoped queries as the rows,
+        // so it must not leak the existence of somebody else's files.
+        $named = array_column(
+            $this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('owners'),
+            'name'
+        );
+
+        $this->assertContains('Owen Owner', $named);
+        $this->assertNotContains('Never Visible', $named);
+    }
 }

@@ -1,16 +1,15 @@
 /* TMA — people on a record, and the card that answers "who is this?"
  *
  * Pairs with public/js/person-card.js (window.TMAPersonCard). Lifted out of
- * cbi.css when the File Library's Owner column wanted the same component; the
- * rules are unchanged apart from the prefix, so CBI looks exactly as it did.
+ * cbi.css when the File Library's Owner column wanted the same component.
  */
 
 /* ── Who is on this record ───────────────────────────
  *
- * The faces stack into a ring of overlapping circles and every name sits to
- * the right of them. Repeating face-name, face-name down the line made four
- * colleagues look like four separate facts; as one pile with one list it reads
- * as the single answer it is — who has this record.
+ * The faces sit in a row and every name sits to the right of them. Repeating
+ * face-name, face-name down the line made four colleagues look like four
+ * separate facts; as one group with one list it reads as the single answer it
+ * is — who has this record.
  */
 .tma-people {
   display: inline-flex;
@@ -22,6 +21,9 @@
 .tma-people__faces {
   display: inline-flex;
   align-items: center;
+  /* Side by side, never overlapping: a pile hides part of every face but the
+     first, and these are how you recognise a colleague at a glance. */
+  gap: var(--space-4);
   flex: 0 0 auto;
 }
 
@@ -30,20 +32,12 @@
   height: 24px;
   border-radius: 50%;
   object-fit: cover;
-  /* The ring is what keeps two overlapping faces apart; without it the pile
-     reads as one smudged shape. It is drawn in the surface colour so it reads
-     as a gap rather than a border. */
-  box-shadow: 0 0 0 2px var(--color-bg-card, #f9f9fa);
+  /* No ring: it existed only to separate overlapping faces, and a real gap
+     does that better. The backing stays for photos with transparency. */
   background: var(--color-bg-card, #f9f9fa);
 }
 
-.tma-people__face + .tma-people__face { margin-left: -8px; }
-
-/* Later faces sit under earlier ones, so the pile reads left to right. */
-.tma-people__faces:hover .tma-people__face { margin-left: 0; }
-.tma-people__faces .tma-people__face { transition: margin-left 120ms ease; }
-
-/* The overflow count is face-shaped and sits in the pile, so a row's width
+/* The overflow count is face-shaped and sits in the row, so a row's width
    does not depend on how many people are on it. */
 .tma-people__face--more {
   display: inline-flex;
