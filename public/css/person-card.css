@@ -21,9 +21,6 @@
 .tma-people__faces {
   display: inline-flex;
   align-items: center;
-  /* Side by side, never overlapping: a pile hides part of every face but the
-     first, and these are how you recognise a colleague at a glance. */
-  gap: var(--space-4);
   flex: 0 0 auto;
 }
 
@@ -32,10 +29,20 @@
   height: 24px;
   border-radius: 50%;
   object-fit: cover;
-  /* No ring: it existed only to separate overlapping faces, and a real gap
-     does that better. The backing stays for photos with transparency. */
+  /* The ring is what keeps two overlapping faces apart; without it the stack
+     reads as one smudged shape. Drawn in the surface colour so it reads as a
+     gap cut out of the face behind rather than as a border on this one. */
+  box-shadow: 0 0 0 2px var(--color-bg-card, #f9f9fa);
   background: var(--color-bg-card, #f9f9fa);
 }
+
+/* Overlapped into a ring rather than set apart: spaced out, four people took
+   the width of a sentence and read as four separate facts. */
+.tma-people__face + .tma-people__face { margin-left: -8px; }
+
+/* Fan out on hover, so a face hidden behind another can still be pointed at. */
+.tma-people__faces:hover .tma-people__face { margin-left: 0; }
+.tma-people__faces .tma-people__face { transition: margin-left 120ms ease; }
 
 /* The overflow count is face-shaped and sits in the row, so a row's width
    does not depend on how many people are on it. */

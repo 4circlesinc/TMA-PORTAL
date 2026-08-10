@@ -1367,12 +1367,16 @@
 .tma-portal-files-table { min-width: 860px; }
 
 /*
- * Name is a fixed share, not "whatever is left".
+ * Widths.
  *
- * With only one unsized column, a fixed layout hands it every spare pixel — on
- * a wide screen the Name column ran half the table while the rest huddled at
- * the right. Shared with holds the slack instead: it carries people's names,
- * which are the part that actually varies.
+ * A fixed layout hands every spare pixel to whichever column has no width, so
+ * one of them has to volunteer. It was Name, which then ran half the table;
+ * then Shared with, which left its people stranded a screen away from the
+ * Sharing column beside them.
+ *
+ * It is Sharing that holds the slack now. Its text is left-aligned, so it
+ * starts hard against the names whatever the window is doing, and the empty
+ * space lands at the quiet end of the row instead of inside a sentence.
  */
 /* A flat width, not a share of the table: a percentage still grows with the
    window, and this column has no need of the room. max-width does not bind a
@@ -1380,7 +1384,9 @@
 .tma-portal-files-table .tma-portal-cell--name { width: 340px; }
 .tma-portal-files-table .tma-portal-cell--type { width: 88px; }
 .tma-portal-files-table .tma-portal-cell--size { width: 84px; }
-.tma-portal-files-table .tma-portal-cell--sharing { width: 116px; }
+/* Enough for four faces, or one face and a name; a name longer than that
+   ellipsises, and the card gives it back in full on hover. */
+.tma-portal-files-table .tma-portal-cell--owner { width: 210px; }
 .tma-portal-files-table .tma-portal-cell--when { width: 116px; }
 /*
  * The row menu.

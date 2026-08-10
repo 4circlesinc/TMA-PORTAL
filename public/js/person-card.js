@@ -94,11 +94,21 @@
       art += '<span class="tma-people__face tma-people__face--more" aria-hidden="true">+' + hidden + '</span>';
     }
 
-    var names = list.map(function (p) { return p.first || p.name; }).join(', ');
+    /*
+     * `names: 'single'` — write the name out when there is one person, and let
+     * the faces speak for themselves when there are several. A list of five
+     * names is a paragraph in a table cell; five faces is a glance, and the
+     * card names them on hover. Default 'all' keeps CBI as it was.
+     */
+    var showNames = o.names === 'single' ? list.length === 1 : o.names !== 'none';
+    var names = showNames
+      ? list.map(function (p) { return p.first || p.name; }).join(', ')
+      : '';
 
     return '<span class="tma-people" data-tma-people="' + esc(JSON.stringify(list)) + '">' +
       (art ? '<span class="tma-people__faces">' + art + '</span>' : '') +
-      '<span class="tma-people__names">' + esc(names) + '</span></span>';
+      (names ? '<span class="tma-people__names">' + esc(names) + '</span>' : '') +
+      '</span>';
   }
 
   /* ── the card ── */

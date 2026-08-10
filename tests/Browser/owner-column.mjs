@@ -131,9 +131,31 @@ try {
   const faceCount = await sharedRow.locator('[data-tma-person]').count();
   check(faceCount === 2, `both people are drawn as faces (${faceCount})`);
 
-  const names = (await sharedRow.locator('.tma-people__names').textContent()).trim();
-  check(names.includes('Bea'), `and both names are listed beside them ("${names}")`);
-  check(names.indexOf('Test User') < names.indexOf('Bea'), 'the owner comes first');
+  /*
+   * One person is named; several are faces alone. A list of names in a cell is
+   * a paragraph, where the faces are a glance — and hovering any of them says
+   * who it is, so nothing is lost.
+   */
+  check(
+    !(await sharedRow.locator('.tma-people__names').count()),
+    'with two people it is faces alone, no list of names',
+  );
+
+  const soloRow = page.locator('[data-files-row]', { hasText: 'Citizenship Applications' }).first();
+  if (await soloRow.count()) {
+    check(await soloRow.locator('[data-tma-person]').count() === 1, 'a single-person row draws one face');
+    check(
+      (await soloRow.locator('.tma-people__names').textContent()).trim().length > 0,
+      'and names them beside it',
+    );
+  }
+
+  // Owner first: the faces are drawn in the order the server sends them.
+  const order = await sharedRow.locator('[data-tma-person]').evaluateAll((els) =>
+    els.map((e) => JSON.parse(e.closest('[data-tma-people]').getAttribute('data-tma-people'))[
+      Number(e.getAttribute('data-tma-person'))
+    ].roles.join(',')));
+  check(/Owner/.test(order[0] || ''), `the owner comes first (${order.join(' | ')})`);
 
   // The people are the whole of this column. The grant that covers everyone
   // else is its own column beside it — crowded into one cell it read as a mess.
@@ -154,19 +176,27 @@ try {
   const orgRow = page.locator('[data-files-row]', { hasText: 'Citizenship Applications' }).first();
   if (await orgRow.count()) {
     const chip = orgRow.locator('.tma-portal-cell--sharing');
-    check(await chip.count() > 0, 'an all-staff folder names its audience');
-    check((await chip.textContent()).trim() === 'All staff', `it says who ("${(await chip.textContent()).trim()}")`);
+    check(await chip.count() > 0, 'an all-staff folder reports its reach');
+    const said = (await chip.textContent()).trim();
+    check(/^(Only you|\d+ people)$/.test(said), `as a count of people ("${said}")`);
+    check(
+      /Everyone in/.test(await chip.locator('span').getAttribute('title') || ''),
+      'with the grant itself on its title',
+    );
     const faceCount = await orgRow.locator('[data-tma-person]').count();
     check(faceCount <= 2, `and does not draw a face per member of staff (${faceCount})`);
   } else {
     log('      (no all-staff folder in this database)');
   }
 
-  // A personal folder is shared with nobody, and says so in that column.
+  // The Sharing column counts the people who can reach it — the same answer
+  // the file's own access panel gives, in plain text rather than a badge.
   const privateRow = page.locator('[data-files-row]', { hasText: 'Shared with Bea' }).first();
+  const privateText = (await privateRow.locator('.tma-portal-cell--sharing').textContent()).trim();
+  check(/^(Only you|\d+ people)$/.test(privateText), `it counts who can reach it ("${privateText}")`);
   check(
-    (await privateRow.locator('.tma-portal-cell--sharing').textContent()).trim() === 'Private',
-    'and one shared with nobody reads Private',
+    !(await privateRow.locator('.tma-portal-cell--sharing .tma-portal-chip').count()),
+    'and does it as plain text, not a chip',
   );
 
   step(5, 'Hovering a face opens the person card');

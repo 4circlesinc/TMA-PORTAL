@@ -506,6 +506,10 @@
       actions += toolBtn('FolderPlus', 'new-folder', 'New folder');
       actions += toolBtn('CloudUpload', 'upload', 'Upload files');
       actions += toolBtn('FolderNotchPlus', 'upload-folder', 'Upload folder');
+      // Collecting files into this folder is the mirror of uploading into it,
+      // and it belongs to the same permission — if you can put files here you
+      // can ask somebody else to.
+      actions += toolBtn('DownloadSimple', 'request-files', 'Request files');
     }
     if (state.clipboard && create) actions += toolBtn('Clipboard', 'paste', 'Paste (' + state.clipboard.items.length + ')');
     if (isRecycle()) actions += toolBtn('Trash', 'empty-bin', 'Empty recycle bin', { disabled: !items().length });
@@ -3449,17 +3453,37 @@
     function sharedStackHtml(shared) {
       if (!shared || !shared.total) return '';
 
-      var faces = (shared.faces || []).map(function (p) {
+      /*
+       * The same hover card as the table's faces and CBI's Assigned column:
+       * the person's name, the role they hold here, and a way to reach them.
+       * A title attribute said as much in a tooltip you cannot click.
+       *
+       * The card resolves a face through the data-tma-people wrapper below, so
+       * the people are serialised in the shape it reads — `via` already
+       * describes how each of them reaches this file, which is the role.
+       */
+      var cardPeople = (shared.faces || []).map(function (p) {
+        return {
+          name: p.name || p.email || 'Someone',
+          email: p.email,
+          avatar: avatarFor(p),
+          userId: p.userId || p.id,
+          roles: [p.role, p.via].filter(Boolean),
+        };
+      });
+
+      var faces = cardPeople.map(function (p, i) {
         return '<img class="tma-portal-viewer__avatar tma-portal-viewer__avatar--stack" ' +
-          'src="' + esc(avatarFor(p)) + '" alt="" width="30" height="30" ' +
-          'title="' + esc([p.name, p.email, p.role, p.via].filter(Boolean).join(' · ')) + '">';
+          'src="' + esc(p.avatar) + '" alt="" width="30" height="30" ' +
+          'data-tma-person="' + i + '" tabindex="0" title="' + esc(p.name) + '">';
       }).join('');
 
       var extra = shared.extra > 0
         ? '<span class="tma-portal-viewer__avatar-more tma-portal-viewer__avatar-more--lg">+' + shared.extra + '</span>'
         : '';
 
-      return '<div class="tma-portal-viewer__shared">' +
+      return '<div class="tma-portal-viewer__shared" data-tma-people="' +
+          esc(JSON.stringify(cardPeople)) + '">' +
         '<button type="button" class="tma-portal-viewer__shared-stack" data-lb-shared-open ' +
           'aria-label="Shared with ' + shared.total + ' people">' + faces + extra + '</button>' +
         '<div class="tma-portal-viewer__shared-text">' +
@@ -3903,6 +3927,7 @@
       case 'new-folder': return createUntitledFolder();
       case 'upload': return triggerUpload(false);
       case 'upload-folder': return triggerUpload(true);
+      case 'request-files': return requestFilesHere();
       case 'paste': return pasteClipboard();
       case 'refresh': return load();
       case 'sortdir': state.dir = state.dir === 'asc' ? 'desc' : 'asc'; return load();
@@ -3918,6 +3943,28 @@
       case 'bulk-force': return bulkForce();
       case 'bulk-favorite': return bulk('favorite');
     }
+  }
+
+  /**
+   * Ask somebody outside the portal to upload into a folder.
+   *
+   * Defaults to wherever the reader is standing — the toolbar button means
+   * "collect files *here*" — and to the named folder when it comes from that
+   * folder's own menu. The shared dialog owns everything after that
+   * (portal-file-requests.js); this only supplies the destination.
+   */
+  function requestFilesHere(item) {
+    if (!window.TMAFileRequests) { ui().toast('Request Files isn’t available right now.'); return; }
+
+    var folderId = item ? item.id : state.folder;
+    var crumb = state.breadcrumb.length ? state.breadcrumb[state.breadcrumb.length - 1] : null;
+    var folderName = item ? item.name : (crumb ? crumb.name : 'File Box');
+
+    window.TMAFileRequests.open({
+      folderId: folderId || null,
+      folderName: folderName,
+      title: folderId ? 'Documents for ' + folderName : 'Please upload your documents',
+    });
   }
 
   /* upload inputs (created once, reused) */
@@ -4524,9 +4571,9 @@
         '</span>';
     }
 
-    // Four is what fits before the faces crowd the next column; the rest
-    // become one "+n" face, and every name is still listed beside them.
-    return window.TMAPersonCard.faces(people, { max: 4, emptyLabel: '\u2014' });
+    // One person is worth naming; several are quicker to read as faces, and
+    // hovering any of them says who it is. Four fit before the "+n" takes over.
+    return window.TMAPersonCard.faces(people, { max: 4, names: 'single', emptyLabel: '\u2014' });
   }
 
   /*
@@ -4543,14 +4590,21 @@
    */
   function sharingCell(item) {
     var audience = item && item.audience;
+    var people = (item && item.people) || [];
 
-    if (!audience || !audience.label) {
-      return '<span class="tma-portal-table__muted">Private</span>';
-    }
+    // How many can reach it — the same sentence the file's own access panel
+    // gives, so the table and the panel never disagree about one file. Plain
+    // text, not a chip: colour marks an exception, and every firm file carries
+    // the same answer, so a badge on every row is noise.
+    var count = audience && audience.count != null ? audience.count : people.length;
+    var text = count === 1 ? 'Only you' : count + ' people';
+    if (audience && audience.count == null) text = audience.label;
 
-    return '<span class="tma-portal-chip tma-portal-chip--shared"' +
-      (audience.role ? ' title="' + esc(audience.role) + ' access"' : '') + '>' +
-      esc(audience.label) + '</span>';
+    var title = audience
+      ? audience.label + (audience.role ? ' \u00b7 ' + audience.role + ' access' : '')
+      : 'Nobody else has access';
+
+    return '<span class="tma-portal-table__muted" title="' + esc(title) + '">' + esc(text) + '</span>';
   }
 
   function personAvatar(person) {
@@ -4798,6 +4852,11 @@
     if (perm(item, 'share')) list.push({ label: 'Share', icon: 'ShareNetwork', fn: function () { openShareModal(item); } });
     if (perm(item, 'assign')) list.push({ label: 'Assign to people', icon: 'UserPlus', fn: function () { openAssignModal(item); } });
     if (perm(item, 'share')) list.push({ label: 'Copy link', icon: 'LinkSimple', fn: function () { copyShareLink(item); } });
+    // Only for folders, and only where the reader could upload themselves: a
+    // request hands out write access, so it cannot be wider than write access.
+    if (isFolder && perm(item, 'upload')) {
+      list.push({ label: 'Request files into this folder', icon: 'DownloadSimple', fn: function () { requestFilesHere(item); } });
+    }
     list.push({ sep: true });
     if (perm(item, 'move')) list.push({ label: 'Cut', icon: 'Scissors', fn: function () { cutItem(item); } });
     if (perm(item, 'copy')) list.push({ label: 'Copy', icon: 'Copy', fn: function () { copyItem(item); } });

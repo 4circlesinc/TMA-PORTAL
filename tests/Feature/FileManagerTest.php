@@ -350,9 +350,13 @@ class FileManagerTest extends TestCase
         $row = collect($this->actingAs($me)->getJson('/portal/files/')->assertOk()->json('folders'))
             ->firstWhere('id', $folder->uuid);
 
-        $this->assertSame('All staff', $row['audience']['label']);
+        // The same wording the file viewer's access panel uses, so the table
+        // and the panel never describe one file two different ways.
+        $this->assertStringStartsWith('Everyone in ', $row['audience']['label']);
         // The explicit grant, not the weaker firm-wide default underneath it.
         $this->assertSame('Editor', $row['audience']['role']);
+        // How many that actually reaches — what the Sharing column prints.
+        $this->assertSame(1, $row['audience']['count']);
     }
 
     public function test_a_personal_drive_is_shared_with_nobody(): void

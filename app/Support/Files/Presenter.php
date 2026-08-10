@@ -9,6 +9,7 @@ use App\Models\Folder;
 use App\Models\FolderColourPreference;
 use App\Models\Share;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Files\Workflow\Status;
 
 /**
@@ -49,6 +50,9 @@ class Presenter
      * @var array{label: string, role: ?string}|null|false
      */
     private array|null|false $orgDefault = false;
+
+    /** Approved staff, counted once per listing. */
+    private ?int $staffCount = null;
 
     public function __construct(private User $viewer) {}
 
@@ -255,13 +259,17 @@ class Presenter
             if ($node->folder_type === Folder::TYPE_CLIENT) {
                 // Named people would be the staff assigned to that client, and
                 // the assignment is the grant — so that is what it says.
-                return ['label' => 'Assigned staff', 'role' => null];
+                return ['label' => 'The assigned client team', 'role' => null, 'count' => null];
             }
 
             if ($explicit === null
                 && $node->folder_type === Folder::TYPE_ORGANIZATION
                 && $node->audience === 'all_staff') {
-                $explicit = ['label' => 'All staff', 'role' => ucfirst((string) ($node->audience_role ?: 'viewer'))];
+                $explicit = [
+                    'label' => 'Everyone in '.config('app.name', 'the organization'),
+                    'role' => ucfirst((string) ($node->audience_role ?: 'viewer')),
+                    'count' => $this->staffCount(),
+                ];
             }
 
             $node = $node->parent_id ? ($index[$node->parent_id] ?? null) : null;
@@ -284,12 +292,35 @@ class Presenter
         return $this->orgDefault();
     }
 
-    /** @return array{label: string, role: ?string}|null */
+    /**
+     * How many people a firm-wide grant actually reaches.
+     *
+     * Counted once per listing, not per row — it is the same number for every
+     * file in it. The same figure the file viewer's access panel reports, so
+     * the table and the panel do not disagree about one file.
+     */
+    private function staffCount(): int
+    {
+        if ($this->staffCount === null) {
+            $this->staffCount = User::query()
+                ->whereIn('account_type', Role::STAFF)
+                ->where('status', User::STATUS_APPROVED)
+                ->count();
+        }
+
+        return $this->staffCount;
+    }
+
+    /** @return array{label: string, role: ?string, count: ?int}|null */
     private function orgDefault(): ?array
     {
         if ($this->orgDefault === false) {
             $this->orgDefault = FileLibrarySetting::defaultOrgAccess()
-                ? ['label' => 'All staff', 'role' => ucfirst((string) FileLibrarySetting::defaultOrgRole())]
+                ? [
+                    'label' => 'Everyone in '.config('app.name', 'the organization'),
+                    'role' => ucfirst((string) FileLibrarySetting::defaultOrgRole()),
+                    'count' => $this->staffCount(),
+                ]
                 : null;
         }
 
