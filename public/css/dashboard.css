@@ -9272,15 +9272,27 @@
   flex-direction: column;
 }
 
-@media (min-width: 1025px) {
-  .tma-dash--email .tma-dash__main {
-    /* Flush the mail rail to the main-menu edge; keep a light top/bottom pad.
-     * !important so a leftover mobile padding-top (header clearance) cannot
-     * open an empty band above the mail toolbar after a re-render/action. */
-    padding: var(--space-8) 0 var(--space-12) !important;
-    overflow: hidden;
-    min-height: 0;
-  }
+/*
+ * Desktop mail must sit flush under the blue header. Tie this to the JS
+ * `.tma-dash--email-mobile` flag (not only a media query) so a narrow
+ * Electron window cannot keep the desktop split chrome while still
+ * inheriting mobile `padding-top: var(--dash-mobile-header-h)` — that
+ * combo is what opened the empty white band above the toolbar.
+ */
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main {
+  padding: 0 0 var(--space-12) !important;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-page,
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-fit {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__email-toolbar {
+  margin-top: 0 !important;
 }
 
 .tma-dash--email .tma-dash__footer {
@@ -9630,9 +9642,8 @@
   /* Inset on both sides. The sidebar used to sit flush against the main-menu
      rail, which made it read as a second strip of the same rail rather than as
      its own thing; it is a card now, like the Feed's, and a card needs room to
-     be one. Keep top pad tiny so actions cannot open a white band under the
-     toolbar. */
-  padding-top: var(--space-8);
+     be one. No top pad — the page toolbar already separates from the header. */
+  padding-top: 0;
   padding-left: var(--space-12);
   padding-right: var(--space-12);
 }

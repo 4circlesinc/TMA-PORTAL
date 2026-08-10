@@ -1082,6 +1082,11 @@ a.tma-dash__tab-btn:visited {
   gap: var(--space-8);
 }
 
+/* Last-wins belt: never leave a blank band above the mail toolbar on desktop. */
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main {
+  padding: 0 0 var(--space-12) !important;
+}
+
 /*
  * The hard 152px width and the nav padding that used to live here are gone.
  *

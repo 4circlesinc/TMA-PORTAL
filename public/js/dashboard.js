@@ -821,7 +821,13 @@
       if (todayWrap) todayWrap.style.display = (name === 'dashboard' || name === 'projects') ? '' : 'none';
       var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'projects-hub', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
-      if (mainHead) mainHead.style.display = hideMainChrome ? 'none' : '';
+      if (mainHead) {
+        mainHead.style.display = hideMainChrome ? 'none' : '';
+        // Attribute + CSS both hide it — inline display alone was getting
+        // cleared on re-renders and reopening the email top gap.
+        if (hideMainChrome) mainHead.setAttribute('hidden', '');
+        else mainHead.removeAttribute('hidden');
+      }
       if (pageTitleEl) {
         var mainHeadLeft = pageTitleEl.closest('.tma-dash__main-head-left');
         if (mainHeadLeft) mainHeadLeft.style.display = hideMainChrome ? 'none' : '';
