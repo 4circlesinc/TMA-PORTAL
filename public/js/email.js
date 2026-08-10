@@ -1848,34 +1848,106 @@
     if (state.root) showEmailToast(state.root, (err && err.message) || 'Something went wrong');
   }
 
+  function listContextKey(state) {
+    return [state.folder, state.activeLabelId || '', state.search || ''].join('|');
+  }
+
+  /* Remember each folder/label/search listing for this session so switching
+   * away and back does not blank the list and refetch from scratch. */
+  function snapshotFolderListCache(state) {
+    if (!state._folderListCache) state._folderListCache = {};
+    var key = state._listContext;
+    if (!key || state.folder === 'templates') return;
+    // An in-flight empty skeleton is not a real listing — don't overwrite a
+    // good cache entry with one.
+    if (state.loading && !rowsOf(state).length) return;
+
+    state._folderListCache[key] = {
+      rows: rowsOf(state).slice(),
+      hasMore: !!state.hasMore,
+      total: state.total || 0,
+      page: state.page || 1,
+      perPage: state.perPage,
+      lastPage: state.lastPage || 1,
+      perPageOptions: state.perPageOptions,
+      openConversations: Object.assign({}, state.openConversations || {}),
+      at: Date.now(),
+    };
+  }
+
+  function restoreFolderListCache(state, key) {
+    var entry = state._folderListCache && state._folderListCache[key];
+    if (!entry || !entry.rows || !entry.rows.length) return false;
+
+    state.rows = entry.rows.slice();
+    state.hasMore = !!entry.hasMore;
+    state.total = entry.total || 0;
+    state.page = entry.page || 1;
+    if (entry.perPage) state.perPage = entry.perPage;
+    state.lastPage = entry.lastPage || 1;
+    if (entry.perPageOptions) state.perPageOptions = entry.perPageOptions;
+    state.openConversations = Object.assign({}, entry.openConversations || {});
+    state.loading = false;
+    state.listRefreshing = false;
+    state.loadError = null;
+    return true;
+  }
+
+  function applyListPayload(state, data) {
+    state.rows = (data && data.messages) || [];
+    state.hasMore = !!(data && data.hasMore);
+    state.total = (data && data.total) || 0;
+    state.page = (data && data.page) || 1;
+    state.perPage = (data && data.perPage) || state.perPage;
+    state.lastPage = (data && data.lastPage) || 1;
+    if (data && data.perPageOptions) state.perPageOptions = data.perPageOptions;
+    state.loading = false;
+    state.listRefreshing = false;
+    state.loadError = null;
+  }
+
   /* Loads the current folder. Search and label filtering are parameters
    * rather than post-filters, so results cover the whole mailbox instead of
-   * only the page already in memory. */
-  function reloadMessages(root, state, render) {
+   * only the page already in memory.
+   *
+   * opts.force — skip the per-folder cache (Sync button / reconnect). */
+  function reloadMessages(root, state, render, opts) {
+    opts = opts || {};
     // Templates are portal-local and have no server listing.
     if (state.folder === 'templates') return Promise.resolve();
 
     // Changing folder, label or search starts a new listing — page 5 of the
     // inbox says nothing about page 5 of Sent.
-    var context = [state.folder, state.activeLabelId || '', state.search || ''].join('|');
+    var context = listContextKey(state);
     var switched = state._listContext !== context;
+    var restored = false;
+
     if (switched) {
+      snapshotFolderListCache(state);
       state._listContext = context;
-      state.page = 1;
-      // Another folder's mail under this folder's name would be a lie, so it
-      // goes and the skeleton takes its place.
-      state.rows = [];
-      collapseAllConversations(state);
+
+      if (!opts.force && restoreFolderListCache(state, context)) {
+        restored = true;
+        pruneSelection(state);
+        render();
+      } else {
+        state.page = 1;
+        // Another folder's mail under this folder's name would be a lie, so it
+        // goes and the skeleton takes its place — only when we have nothing
+        // remembered for this folder.
+        state.rows = [];
+        collapseAllConversations(state);
+      }
     }
 
     var token = ++state.loadToken;
     // Only ever a skeleton when there is genuinely nothing to show. Reloading
-    // a list that is already on screen is a quiet refresh: blanking mail the
-    // reader is looking at, to put it back a moment later, is the "constantly
-    // loading" feeling this page had.
+    // a list that is already on screen (including a restored cache) is a quiet
+    // refresh: blanking mail the reader is looking at, to put it back a moment
+    // later, is the "constantly loading" feeling this page had.
     state.loading = !rowsOf(state).length;
     state.listRefreshing = !state.loading;
-    render();
+    if (!restored) render();
 
     // The prefetch that left when this file parsed asked for exactly this:
     // the inbox, page one, no search or label. Anything else is a listing
@@ -1894,31 +1966,39 @@
     })).then(function (data) {
       // A slower earlier request must not overwrite a newer folder's rows.
       if (token !== state.loadToken) return;
+      if (state._listContext !== context) return;
 
-      state.rows = (data && data.messages) || [];
-      state.hasMore = !!(data && data.hasMore);
-      state.total = (data && data.total) || 0;
-      state.page = (data && data.page) || 1;
-      state.perPage = (data && data.perPage) || state.perPage;
-      state.lastPage = (data && data.lastPage) || 1;
-      if (data && data.perPageOptions) state.perPageOptions = data.perPageOptions;
-      state.loading = false;
-      state.listRefreshing = false;
-      state.loadError = null;
+      var incoming = (data && data.messages) || [];
+      var unchanged = restored && sameMessageList(state.rows, incoming) &&
+        (state.total || 0) === ((data && data.total) || 0) &&
+        (state.page || 1) === ((data && data.page) || 1);
+
+      applyListPayload(state, data);
       // Selections belong to rows that were on screen; carrying them over a
       // reload would apply a bulk action to mail nobody can see.
       pruneSelection(state);
 
       // Keep the reading pane pointed at something that still exists.
-      if (state.selectedId && !findRow(state, state.selectedId)) {
+      if (state.selectedId && !findAnyRow(state, state.selectedId)) {
         state.selectedId = state.rows.length ? state.rows[0].id : null;
       }
 
-      render();
+      snapshotFolderListCache(state);
+      // Same listing as the cache: leave the DOM alone so scroll position and
+      // open conversation drops do not jump.
+      if (!unchanged) render();
       writeMailCache(state);
       hydrateListAttachments(root, state, render, token);
     }).catch(function (err) {
       if (token !== state.loadToken) return;
+      // A restored folder stays on screen if the quiet revalidate fails —
+      // better old mail than a flash of empty.
+      if (restored && rowsOf(state).length) {
+        state.loading = false;
+        state.listRefreshing = false;
+        render();
+        return;
+      }
       state.loading = false;
       state.listRefreshing = false;
       state.loadError = (err && err.message) || 'Could not load messages';
@@ -3246,7 +3326,7 @@
       reportMailError(state, err);
     }).then(function () {
       state.refreshing = false;
-      return reloadMessages(root, state, render);
+      return reloadMessages(root, state, render, { force: true });
     });
   }
 
