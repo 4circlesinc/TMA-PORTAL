@@ -47,9 +47,10 @@ async function signIn(page, email) {
   ]);
   await wait(500);
   if (page.url().includes('/auth/stay-signed-in')) {
+    // The answer rides on which form is submitted now, not a named button.
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
-      page.click('button[name="stay"][value="yes"]'),
+      page.click('text=Yes, stay signed in'),
     ]);
     await wait(400);
   }
@@ -129,11 +130,19 @@ console.log('both users on Messages with a live socket');
 /* ── 1. An incoming video call opens as a pop-up with a self-preview ── */
 step(1, 'incoming video call: large pop-up, not a screen takeover');
 
+// Either header button opens the "Call <name>?" chooser; the kind of call is
+// picked there. Kept as a helper because every call in this file starts so.
+async function startCall(kind) {
+  await callerPage.click('[data-messages-call="' + kind + '"]');
+  await callerPage.waitForSelector('[data-messages-callask]', { timeout: 5000 });
+  await callerPage.click('[data-callask-start="' + kind + '"]');
+}
+
 // The callee deliberately stays on the chat list with no conversation open —
 // this is the case that used to receive nothing at all.
 await callerPage.click('[data-messages-row]');
 await callerPage.waitForSelector('[data-messages-call="video"]', { timeout: 10000 });
-await callerPage.click('[data-messages-call="video"]');
+await startCall('video');
 
 await calleePage.waitForSelector('.tma-call__dialog--incoming', { timeout: 20000 });
 // The pop-up renders before getUserMedia resolves — deliberately, so the call
@@ -470,7 +479,7 @@ check(!callerEnded.session, 'the other end hung up too');
 
 /* ── 11. Incoming voice call, declined ── */
 step(11, 'incoming voice call');
-await callerPage.click('[data-messages-call="audio"]');
+await startCall('audio');
 await calleePage.waitForSelector('.tma-call__dialog--incoming', { timeout: 20000 });
 const voiceIn = await calleePage.evaluate(() => ({
   kind: document.querySelector('.tma-call__incoming-kind')?.textContent.trim(),
@@ -516,7 +525,7 @@ const badgeBefore = await navCount(calleePage, 'Calls');
 // The seed gives this account its own missed calls, so the caller's badge is
 // checked for *movement*, not for being empty.
 const callerBefore = await navCount(callerPage, 'Calls');
-await callerPage.click('[data-messages-call="audio"]');
+await startCall('audio');
 await calleePage.waitForSelector('.tma-call__dialog--incoming', { timeout: 20000 });
 await wait(1200);
 await callerPage.click('.tma-call__controls [data-call-action="hangup"]');   // gave up

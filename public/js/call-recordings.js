@@ -312,13 +312,13 @@
 
     var actions =
       (r.status === 'ready'
-        ? '<a class="tma-portal-btn" href="' + esc(mediaUrl) + '?download=1">Download</a>'
+        ? '<a class="tma-no-data__btn" href="' + esc(mediaUrl) + '?download=1">Download</a>'
         : '') +
       (r.clientUid
-        ? '<a class="tma-portal-btn tma-portal-btn--ghost" href="' + esc(ROOT + '/clients/' + r.clientUid) + '">Open client</a>'
+        ? '<a class="tma-no-data__btn tma-portal-btn--ghost" href="' + esc(ROOT + '/clients/' + r.clientUid) + '">Open client</a>'
         : '') +
       (r.conversationId
-        ? '<a class="tma-portal-btn tma-portal-btn--ghost" href="' + esc(ROOT + '/social/messages?conversation=' + r.conversationId) + '">Open conversation</a>'
+        ? '<a class="tma-no-data__btn tma-portal-btn--ghost" href="' + esc(ROOT + '/social/messages?conversation=' + r.conversationId) + '">Open conversation</a>'
         : '');
 
     ui().openModal({
@@ -363,8 +363,8 @@
         '<label class="tma-portal-field"><span class="tma-portal-field__label">To</span>' +
         '<input type="date" class="tma-portal-input" data-filter-to value="' + esc(state.to) + '"></label>' +
         '<div class="call-recordings__actions">' +
-        '<button type="button" class="tma-portal-btn" data-filter-apply>Apply</button>' +
-        '<button type="button" class="tma-portal-btn tma-portal-btn--ghost" data-filter-clear>Clear</button>' +
+        '<button type="button" class="tma-no-data__btn" data-filter-apply>Apply</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-filter-clear>Clear</button>' +
         '</div></div>',
       onMount: function (host) {
         var apply = host.querySelector('[data-filter-apply]');

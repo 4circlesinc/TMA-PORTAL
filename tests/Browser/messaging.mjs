@@ -36,6 +36,14 @@ async function signIn(page, email) {
     page.click('button[type="submit"]:visible'),
   ]);
   await page.waitForTimeout(500);
+  // "Stay signed in?" fronts the whole portal on a fresh browser profile —
+  // same handling as account-reporting.mjs.
+  if (page.url().includes('/auth/stay-signed-in')) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      page.click('text=Yes, stay signed in'),
+    ]);
+  }
   if (page.url().includes('/auth/login')) throw new Error('login failed for ' + email);
 }
 
@@ -304,15 +312,29 @@ try {
   check(!!badgeColour, 'an unread badge is rendered');
   if (badgeColour) {
     check(/tma-badge--blue/.test(badgeColour.cls), 'badge carries the blue modifier');
+    // Deliberately the darker brand blue, not the shared badge default — the
+    // light #7dbbff washed out against the row (see dashboard.css, the
+    // .tma-dash__messages-row-meta scope).
     check(
-      badgeColour.bg === 'rgb(125, 187, 255)',
-      `badge background is --color-blue #7dbbff (got ${badgeColour.bg})`,
+      badgeColour.bg === 'rgb(19, 109, 160)',
+      `badge background is --color-primary-dark #136da0 (got ${badgeColour.bg})`,
     );
   }
 
-  step(10, 'Calling is cleanly unavailable, not silently dead');
-  const disabledCalls = await page.locator('.tma-dash__messages-chat-actions button[disabled]').count();
-  check(disabledCalls === 2, `voice and video call buttons are disabled (${disabledCalls} found)`);
+  step(10, 'Calling goes through the Voice / Video chooser');
+  // Either header call button opens the same "Call <name>?" prompt — the kind
+  // of call is a chosen second step, never inferred from which icon was hit.
+  await page.click('.tma-dash__messages-chat-actions [data-messages-call="audio"]');
+  await page.waitForSelector('[data-messages-callask]', { timeout: 4000 }).catch(() => {});
+  const chooser = page.locator('[data-messages-callask]');
+  check(await chooser.count() === 1, 'call chooser opened from the voice button');
+  const chooserActions = await chooser.locator('[data-callask-start]').allTextContents();
+  check(
+    chooserActions.join('|').includes('Voice Call') && chooserActions.join('|').includes('Video Call'),
+    `chooser offers Voice Call and Video Call (got ${JSON.stringify(chooserActions)})`,
+  );
+  await chooser.locator('[data-callask-cancel]:visible').last().click();
+  check(await page.locator('[data-messages-callask]').count() === 0, 'Cancel closes the chooser without calling');
 
   step(11, 'Authorization: a conversation you are not in is not readable');
   const forbidden = await page.evaluate(async (base) => {
