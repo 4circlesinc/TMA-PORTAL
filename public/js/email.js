@@ -51,6 +51,7 @@
     DotsThree: ICON + 'DotsThree.svg',
     Prohibit: ICON + 'Prohibit.svg',
     Star: ICON + 'Star.svg',
+    StarFilled: ICON + 'StarFilled.svg',
     ArrowUUpLeft: ICON + 'ArrowUUpLeft.svg',
     ArrowUUpRight: ICON + 'ArrowUUpRight.svg',
     TextT: ICON + 'TextT.svg',
@@ -1212,6 +1213,10 @@
     return chips.join('');
   }
 
+  function starIconSrc(starred) {
+    return starred ? ICONS.StarFilled : ICONS.Star;
+  }
+
   function renderDetailSubjectStar(row, state) {
     var starred = isRowStarred(row, state);
     return renderEmailIconTooltipBtn({
@@ -1219,7 +1224,7 @@
       label: starred ? 'Remove star' : 'Add star',
       className: 'tma-dash__email-detail-star' + (starred ? ' tma-dash__email-detail-star--active' : ''),
       attrs: ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"',
-      innerHtml: '<img src="' + ICONS.Star + '" alt="">',
+      innerHtml: '<img src="' + starIconSrc(starred) + '" alt="">',
     });
   }
 
@@ -2717,8 +2722,9 @@
       {
         id: 'star',
         label: starred ? 'Remove star' : 'Add star',
-        icon: 'Star',
+        icon: starred ? 'StarFilled' : 'Star',
         active: starred,
+        star: true,
         attr: ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"',
       },
       {
@@ -2749,6 +2755,7 @@
             className:
               'tma-dash__email-row-action' +
               (action.active ? ' tma-dash__email-row-action--active' : '') +
+              (action.star && action.active ? ' tma-dash__email-row-action--starred' : '') +
               (action.pin && action.active ? ' tma-dash__email-row-action--pinned' : ''),
             attrs:
               (action.attr ||
@@ -3244,15 +3251,16 @@
             ' aria-pressed="' + (isRowStarred(row, state) ? 'true' : 'false') + '"';
         }
         var cls = 'tma-dash__email-action';
-        if (action.id === 'star') {
-          cls += isRowStarred(row, state) ? ' tma-dash__email-row-action--active' : '';
+        var starred = action.id === 'star' && isRowStarred(row, state);
+        if (starred) {
+          cls += ' tma-dash__email-row-action--active tma-dash__email-row-action--starred';
         }
         return renderEmailIconTooltipBtn({
           tipId: 'email-detail-tip-' + headKey + '-' + action.id,
-          label: action.id === 'star' && isRowStarred(row, state) ? 'Remove star' : action.label,
+          label: starred ? 'Remove star' : action.label,
           className: cls,
           attrs: attrs,
-          innerHtml: '<img src="' + esc(ICONS[action.icon]) + '" alt="">',
+          innerHtml: '<img src="' + esc(starred ? ICONS.StarFilled : ICONS[action.icon]) + '" alt="">',
         });
       }).join('') +
       '</div>' +
@@ -6613,9 +6621,9 @@
       label: starred ? 'Remove star' : 'Add star',
       className:
         'tma-dash__email-row-action tma-dash__email-row-star-mobile' +
-        (starred ? ' tma-dash__email-row-action--active' : ''),
+        (starred ? ' tma-dash__email-row-action--active tma-dash__email-row-action--starred' : ''),
       attrs: ' data-email-star="' + esc(row.id) + '" aria-pressed="' + (starred ? 'true' : 'false') + '"',
-      innerHtml: '<img src="' + ICONS.Star + '" alt="">',
+      innerHtml: '<img src="' + starIconSrc(starred) + '" alt="">',
     });
   }
 
@@ -7906,9 +7914,12 @@
         });
         MORPH.unwired(root, '[data-email-star="' + id + '"]').forEach(function (el) {
           el.classList.toggle('tma-dash__email-row-action--active', starred);
+          el.classList.toggle('tma-dash__email-row-action--starred', starred);
           el.classList.toggle('tma-dash__email-detail-star--active', starred);
           el.setAttribute('aria-pressed', starred ? 'true' : 'false');
           el.setAttribute('aria-label', starred ? 'Remove star' : 'Add star');
+          var img = el.querySelector('img');
+          if (img) img.src = starIconSrc(starred);
         });
         pulseEmailActionBtn(btn);
       });

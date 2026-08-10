@@ -12347,6 +12347,14 @@
   filter: brightness(0);
 }
 
+/* Active stars use the yellow filled asset — do not force them black. */
+.tma-dash__email-row-action--starred img,
+.tma-dash__email-detail-star--active img,
+.tma-dash__email-action.tma-dash__email-row-action--starred img {
+  opacity: 1;
+  filter: none;
+}
+
 .tma-dash__email-detail-important {
   display: inline-flex;
   align-items: center;
@@ -14146,7 +14154,7 @@
   }
 
   .tma-dash__email-detail-star--active img {
-    filter: brightness(0);
+    filter: none;
   }
 
   .tma-dash__email-message-head--mobile {
