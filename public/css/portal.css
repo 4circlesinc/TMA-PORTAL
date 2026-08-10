@@ -4515,3 +4515,66 @@ label.tma-portal-check-row:hover {
     flex-wrap: wrap;
   }
 }
+
+/* ── Client Call Recordings (/call-recordings) ──────────────────────
+ * Page-layout glue only; every component on the page is documented
+ * elsewhere (toolbar, table, tones, pagination, modal). */
+
+.call-recordings {
+  padding: var(--space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.call-recordings__row { cursor: pointer; }
+
+.call-recordings__row:hover td { background: var(--color-hover); }
+
+.call-recordings__name { font-weight: 600; }
+
+.call-recordings__player {
+  width: 100%;
+  border-radius: var(--radius-8);
+  background: #101828;
+}
+
+audio.call-recordings__player { background: transparent; }
+
+.call-recordings__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.call-recordings__meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.call-recordings__meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+  font-size: var(--font-size-13);
+}
+
+.call-recordings__meta-row:last-child { border-bottom: none; }
+
+.call-recordings__meta-label { color: var(--color-text-secondary); flex: none; }
+
+.call-recordings__meta-value { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+
+.call-recordings__actions {
+  display: flex;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.call-recordings__filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}

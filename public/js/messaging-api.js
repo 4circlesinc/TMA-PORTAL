@@ -146,6 +146,35 @@
       });
     },
 
+    /* ── Client-call recording (§ CallRecordingController) ──
+     * Start is a question, not an order: the server alone decides whether
+     * this call records (a staff member talking to a client). Both sides ask
+     * at connect; only the eligible one gets a recording id back. */
+    callRecordingStart: function (conversationId, payload) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/recordings', {
+        method: 'POST',
+        json: payload || {},
+      });
+    },
+
+    /* One sequenced slice of the WebM stream, appended server-side. */
+    callRecordingChunk: function (recordingId, blob, seq) {
+      var form = new FormData();
+      form.append('seq', String(seq));
+      form.append('chunk', blob, 'chunk-' + seq + '.webm');
+      return api(BASE + '/recordings/' + encodeURIComponent(recordingId) + '/chunks', {
+        method: 'POST',
+        body: form,
+      });
+    },
+
+    callRecordingFinish: function (recordingId, payload) {
+      return api(BASE + '/recordings/' + encodeURIComponent(recordingId) + '/finish', {
+        method: 'POST',
+        json: payload || {},
+      });
+    },
+
     /*
      * Upload one file and stage it against a conversation.
      *
@@ -310,12 +339,7 @@
       return api(BASE + '/calls');
     },
 
-    /* What colleagues are working on, plus the viewer's own status. */
-    updates: function () {
-      return api(BASE + '/updates');
-    },
-
-    /* Badges for the nav bar's Calls and Updates tabs. */
+    /* Badge for the nav bar's Calls tab. */
     tabCounts: function () {
       return api(BASE + '/tab-counts');
     },
@@ -323,11 +347,6 @@
     /* Opening a tab clears its badge, server-side, from server truth. */
     markTabSeen: function (tab) {
       return api(BASE + '/tab-counts/seen', { method: 'POST', json: { tab: tab } });
-    },
-
-    /* Set the viewer's own status. An empty text clears it. */
-    setUpdate: function (payload) {
-      return api(BASE + '/updates', { method: 'PUT', json: payload });
     },
 
     /* The messaging profile panel for one conversation. */

@@ -130,6 +130,11 @@ class Role
         // The Workflows section: requests waiting on you or sent by you, and
         // the comment threads you are part of, across every file.
         'workflows.view' => [self::EMPLOYEE],
+        // The Client Call Recordings area. Employees hold it but see only the
+        // calls they recorded — the wider view is the administrator's
+        // (§ CallRecordingController::index). Clients never hold it: their
+        // calls are recorded FOR the firm, not shared back as media.
+        'callRecordings.view' => [self::EMPLOYEE],
         // The Overview page. Staff-wide: what it opens with — the metrics,
         // the week planner, recent files, the firm's sign-ins — was built for
         // employees too (see SignInActivityController). The administration it
@@ -188,6 +193,7 @@ class Role
      * permission errors.
      */
     private const PAGE_CAPABILITIES = [
+        'call-recordings' => 'callRecordings.view',
         'cbi' => 'cbi.view',
         'clients' => 'clients.view',
         'email' => 'mail.use',

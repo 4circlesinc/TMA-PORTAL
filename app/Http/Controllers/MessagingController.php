@@ -21,8 +21,6 @@ use App\Models\MessageStar;
 use App\Models\User;
 use App\Models\WorkDay;
 use App\Models\UserBlock;
-use App\Models\UserPresence;
-use App\Models\UserWorkStatus;
 use App\Support\Access\ContactScope;
 use App\Support\Access\Role;
 use App\Support\Messaging\AttachmentIntake;
@@ -705,98 +703,6 @@ class MessagingController extends Controller
             ->all();
     }
 
-    // ------------------------------------------------------------- updates
-
-    /**
-     * What colleagues are working on right now — the Updates tab.
-     *
-     * Scoped exactly as {@see contacts} is: approved accounts, minus anyone
-     * blocked in either direction. Reusing that rule rather than inventing a
-     * second one means Updates can never show someone the directory would not.
-     *
-     * The viewer's own status comes back separately under `mine`, because the
-     * tab both shows other people's and is where you set your own.
-     */
-    public function updates(Request $request): JsonResponse
-    {
-        $user = $request->user();
-
-        $blocked = UserBlock::query()
-            ->where('user_id', $user->id)->pluck('blocked_user_id')
-            ->merge(UserBlock::where('blocked_user_id', $user->id)->pluck('user_id'));
-
-        $statuses = UserWorkStatus::query()
-            ->current()
-            ->whereHas('user', fn ($q) => $q
-                ->where('id', '!=', $user->id)
-                ->whereNotIn('id', $blocked)
-                ->where('status', User::STATUS_APPROVED))
-            ->with('user')
-            ->latest('updated_at')
-            ->limit(100)
-            ->get();
-
-        // Presence in one query rather than one per row: this list is short but
-        // it is polled, and a lookup per person adds up.
-        $presence = UserPresence::query()
-            ->whereIn('user_id', $statuses->pluck('user_id'))
-            ->get()
-            ->keyBy('user_id');
-
-        $mine = UserWorkStatus::where('user_id', $user->id)->first();
-
-        return response()->json([
-            'mine' => $mine && ! $mine->hasExpired() ? $mine->toRecord() : null,
-            'updates' => $statuses->map(fn (UserWorkStatus $s) => array_merge(
-                $s->toRecord(),
-                [
-                    'userId' => $s->user_id,
-                    'name' => $s->user?->name ?? 'Unknown',
-                    'photo' => $s->user?->avatar_url,
-                    'online' => (bool) $presence->get($s->user_id)?->isOnline(),
-                ]
-            ))->values(),
-        ]);
-    }
-
-    /**
-     * Set or clear the signed-in user's own status.
-     *
-     * An empty text clears it outright rather than storing a blank, so the
-     * Updates list never has to filter empties out.
-     */
-    public function setUpdate(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'text' => ['present', 'nullable', 'string', 'max:140'],
-            'emoji' => ['sometimes', 'nullable', 'string', 'max:16'],
-            // Minutes from now. Null/absent means "until I clear it".
-            'expiresInMinutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:20160'],
-        ]);
-
-        $user = $request->user();
-        $text = trim((string) ($data['text'] ?? ''));
-
-        if ($text === '') {
-            UserWorkStatus::where('user_id', $user->id)->delete();
-
-            return response()->json(['mine' => null]);
-        }
-
-        $status = UserWorkStatus::updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'text' => $text,
-                'emoji' => $data['emoji'] ?? null,
-                'expires_at' => isset($data['expiresInMinutes']) && $data['expiresInMinutes']
-                    ? now()->addMinutes((int) $data['expiresInMinutes'])
-                    : null,
-            ]
-        );
-
-        return response()->json(['mine' => $status->toRecord()]);
-    }
-
     /** Every URL shared in the conversation, newest first. */
     private function galleryLinks(Conversation $conversation, User $user, int $cleared): array
     {
@@ -1237,7 +1143,7 @@ class MessagingController extends Controller
     public function markTabSeen(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'tab' => ['required', 'string', 'in:calls,updates'],
+            'tab' => ['required', 'string', 'in:calls'],
         ]);
 
         return response()->json([

@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-07-24-menu-v3';
+  var NAV_SHELL_VERSION = '2026-08-10-menu-v4';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -36,6 +36,7 @@
     'templates',
     'projects',
     'workflows',
+    'call-recordings',
     'people',
     'account-settings',
   ];
@@ -47,6 +48,7 @@
     'templates',
     'projects-all',
     'workflows-automated',
+    'call-recordings',
     'people-home',
     'account-settings',
   ];
@@ -817,7 +819,7 @@
       }
       syncBackButton(name);
       if (todayWrap) todayWrap.style.display = (name === 'dashboard' || name === 'projects') ? '' : 'none';
-      var portalChromeless = ['cbi', 'client-hub', 'folders', 'projects-hub', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard'];
+      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'projects-hub', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) mainHead.style.display = hideMainChrome ? 'none' : '';
       if (pageTitleEl) {

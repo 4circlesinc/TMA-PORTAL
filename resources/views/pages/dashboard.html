@@ -171,6 +171,12 @@
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/workflows/feedback" data-nav="workflows-feedback" data-title="Feedback and Comments" data-crumb="Workflows / Feedback and Comments" data-view="workflows">Feedback and Comments</a>
         </div>
 
+        <a class="tma-dash__nav-item" href="/call-recordings" data-nav="call-recordings" data-title="Call Recordings" data-crumb="Call Recordings" data-view="call-recordings">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--phonecall" aria-hidden="true"></span>
+          <span>Call Recordings</span>
+        </a>
+
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="people" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--userlist" aria-hidden="true"></span>
@@ -293,6 +299,10 @@
       </div>
 
       <div class="tma-dash__view" data-view="workflows" hidden>
+        <div data-portal-mount></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="call-recordings" hidden>
         <div data-portal-mount></div>
       </div>
 
@@ -467,6 +477,9 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="workflows-automated" data-title="Requests" data-crumb="Workflows / Requests" data-view="workflows">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ArrowsClockwise.svg" alt=""><span>Workflows</span>
         </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="call-recordings" data-title="Call Recordings" data-crumb="Call Recordings" data-view="call-recordings">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/PhoneCall.svg" alt=""><span>Call Recordings</span>
+        </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="people-home" data-title="Manage users" data-crumb="People / Manage users" data-view="people">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>People</span>
         </button>
@@ -585,6 +598,7 @@
   <script src="js/portal-file-requests.js?v=1" defer></script>
   <script src="js/portal-files.js?v=7" defer></script>
   <script src="js/cbi.js?v=8" defer></script>
+  <script src="js/call-recordings.js?v=1" defer></script>
   <script src="js/portal-shortcuts.js" defer></script>
   <script src="js/portal-home-library.js?v=11" defer></script>
   <script src="js/portal-home.js?v=24" defer></script>

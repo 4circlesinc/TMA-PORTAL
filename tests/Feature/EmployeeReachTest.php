@@ -88,7 +88,8 @@ class EmployeeReachTest extends TestCase
 
         $this->assertSame([
             'account', 'account-info', 'account-settings', 'billing-details',
-            'billing-details/card', 'calendar', 'choose-account-type',
+            'billing-details/card', 'calendar', 'call-recordings',
+            'choose-account-type',
             'classic', 'clients', 'email', 'email/templates', 'folders/all',
             'folders/favorites', 'folders/filebox', 'folders/personal',
             'folders/recent', 'folders/recycle', 'folders/shared',

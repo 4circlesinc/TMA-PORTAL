@@ -11,6 +11,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
+use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientCustomFieldsController;
@@ -866,10 +867,6 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/media', [MessagingController::class, 'media'])->name('media');
         // Recent call history across all the user's conversations — the Calls tab.
         Route::get('/calls', [MessagingController::class, 'calls'])->name('calls');
-        // What colleagues are working on — the Updates tab, and where the
-        // signed-in user sets their own.
-        Route::get('/updates', [MessagingController::class, 'updates'])->name('updates');
-        Route::put('/updates', [MessagingController::class, 'setUpdate'])->name('updates.set');
         // Badges on the Messages nav bar, and the act of clearing one.
         Route::get('/tab-counts', [MessagingController::class, 'tabCounts'])->name('tab-counts');
         Route::post('/tab-counts/seen', [MessagingController::class, 'markTabSeen'])->name('tab-counts.seen');
@@ -914,6 +911,25 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
 
         Route::get('/attachments/{uuid}', [MessagingAttachmentController::class, 'show'])->name('attachments.show');
         Route::get('/attachments/{uuid}/thumb', [MessagingAttachmentController::class, 'thumb'])->name('attachments.thumb');
+
+        /*
+         * Client-call recording capture. `start` decides — server-side, never
+         * in the browser — whether this call records at all; chunks stream in
+         * while the call runs; finish assembles them into the Vault.
+         */
+        Route::post('/conversations/{uuid}/recordings', [CallRecordingController::class, 'start'])->name('recordings.start');
+        Route::post('/recordings/{uuid}/chunks', [CallRecordingController::class, 'chunk'])->name('recordings.chunk');
+        Route::post('/recordings/{uuid}/finish', [CallRecordingController::class, 'finish'])->name('recordings.finish');
+    });
+
+    /*
+     * The Client Call Recordings area (/call-recordings). Staff tooling:
+     * gated by callRecordings.view and 404 to everyone else, the same
+     * absent-not-forbidden rule the CBI module set.
+     */
+    Route::prefix('portal/call-recordings')->name('call-recordings.')->group(function () {
+        Route::get('/', [CallRecordingController::class, 'index'])->name('index');
+        Route::get('/{uuid}/media', [CallRecordingController::class, 'media'])->name('media');
     });
 
     /*

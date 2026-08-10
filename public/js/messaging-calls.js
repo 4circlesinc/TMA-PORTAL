@@ -317,6 +317,20 @@
       remoteMuted: false,
       remoteCameraOff: false,
 
+      // Screen sharing, ours and theirs. The screen stream is kept apart from
+      // localStream so stopping a share can never take the camera with it.
+      screenSharing: false,
+      screenStream: null,
+      remoteScreenSharing: false,
+
+      // Client-call recording (§ maybeStartRecording): `recording` is the live
+      // recorder bundle on the side that records; `remoteRecording` means the
+      // far end said it is recording. The notice shows for either; dismissing
+      // it hides the sentence, never the REC chip.
+      recording: null,
+      remoteRecording: false,
+      recordingNoticeDismissed: false,
+
       mode: MODES.INCOMING,
       prevMode: null,
       swapped: false,
@@ -357,6 +371,7 @@
     // The preview may share tracks with the local stream once answered; stop()
     // twice is harmless, and missing one leaves the camera light on.
     stopStream(session.previewStream);
+    stopStream(session.screenStream);
     if (session.pc) {
       try { session.pc.close(); } catch (e) { /* ignore */ }
     }
@@ -408,6 +423,9 @@
   function endSession(sendHangup) {
     stopMeter();
     if (!session) { closeOverlay(); return; }
+    // The recorder must be told to stop before pc.close() kills the remote
+    // tracks, or the final chunk of the recording is lost with them.
+    stopRecording();
     if (sendHangup) signal('hangup', {
       media: session.media,
       initiatorId: session.initiatorId || null,
@@ -427,13 +445,16 @@
     return api().callSignal(session.conversationId, body).catch(function () {});
   }
 
-  /* Tell the other end what our microphone and camera are doing (§4). */
+  /* Tell the other end what our microphone and camera are doing (§4) — and
+   * whether we are sharing a screen or recording, which they cannot see. */
   function publishState() {
     signal('state', {
       payload: {
         muted: !!session.muted,
         cameraOff: !!session.cameraOff,
         media: session.media,
+        screenSharing: !!session.screenSharing,
+        recording: !!session.recording,
       },
     });
   }
@@ -768,6 +789,10 @@
 
     publishState();
     announce(callKindLabel(session.media) + ' connected');
+
+    // Both streams are live from here — the one moment a client-call
+    // recording can begin. The server decides whether this call is one.
+    maybeStartRecording();
   }
 
   function tickDuration() {
@@ -890,10 +915,24 @@
   }
 
   function localPicture() {
-    // Order matters: an in-progress video upgrade is showing the user the
-    // camera they are about to share, which must win over the live call
-    // stream that does not carry video yet.
-    return session.upgradePreview || session.localStream || session.previewStream || null;
+    // Order matters: a shared screen is what the far end is being shown, so
+    // the self-view mirrors it; behind that, an in-progress video upgrade is
+    // showing the user the camera they are about to share, which must win
+    // over the live call stream that does not carry video yet.
+    return session.screenStream || session.upgradePreview ||
+      session.localStream || session.previewStream || null;
+  }
+
+  /*
+   * Whether anything on this call is showing moving pictures — a camera call,
+   * our shared screen, or theirs. Screen share deliberately never flips
+   * session.media (that word means what the camera flow negotiated, and the
+   * far end still expects camera semantics from it), so every layout decision
+   * asks this instead.
+   */
+  function hasAnyVideo() {
+    return !!session && (session.media === 'video' ||
+      !!session.screenSharing || !!session.remoteScreenSharing);
   }
 
   function attachStreams() {
@@ -924,17 +963,30 @@
   function syncMediaLayer() {
     if (!mediaLayer || !session) return;
 
-    var remoteHasVideo = session.media === 'video' && !session.remoteCameraOff &&
-      !!(session.remoteStream && session.remoteStream.getVideoTracks().some(function (t) {
-        return t.readyState === 'live';
-      }));
+    // A remote screen share is a live video track like any other, but it must
+    // not be hidden by remoteCameraOff — the camera being off is exactly the
+    // state a sharer is usually in.
+    var remoteLive = !!(session.remoteStream && session.remoteStream.getVideoTracks().some(function (t) {
+      return t.readyState === 'live';
+    }));
+    var remoteHasVideo = remoteLive && (session.remoteScreenSharing ||
+      (session.media === 'video' && !session.remoteCameraOff));
     var picture = localPicture();
-    var localHasVideo = !session.cameraOff && !!(picture && picture.getVideoTracks().length) &&
-      (session.media === 'video' || !!session.upgradePreview);
+    var localHasVideo = session.screenSharing
+      ? !!(picture && picture.getVideoTracks().length)
+      : !session.cameraOff && !!(picture && picture.getVideoTracks().length) &&
+        (session.media === 'video' || !!session.upgradePreview);
 
     mediaLayer.classList.toggle('is-swapped', !!session.swapped);
     mediaLayer.classList.toggle('has-remote-video', remoteHasVideo);
     mediaLayer.classList.toggle('has-local-video', localHasVideo);
+
+    // A mirrored self-view is right for a face and wrong for a screen: text
+    // in a mirrored share is backwards.
+    var localVideo = mediaLayer.querySelector('[data-call-local]');
+    if (localVideo) {
+      localVideo.classList.toggle('tma-call__video--mirror', !session.screenSharing);
+    }
 
     var big = session.swapped ? 'local' : 'remote';
     mediaLayer.querySelectorAll('[data-call-frame]').forEach(function (f) {
@@ -953,7 +1005,10 @@
     var nameEl = mediaLayer.querySelector('[data-call-remote-name]');
     if (nameEl) nameEl.textContent = session.peerName;
     var tag = mediaLayer.querySelector('[data-call-remote-tag]');
-    if (tag) tag.textContent = session.peerName;
+    if (tag) {
+      tag.textContent = session.peerName +
+        (session.remoteScreenSharing ? ' — sharing screen' : '');
+    }
 
     // The pip keeps its dragged position; clear it when it becomes the big one.
     var pip = mediaLayer.querySelector('.is-pip');
@@ -1056,8 +1111,10 @@
     buildMediaLayer();
 
     var mode = session.mode;
+    // hasAnyVideo, not session.media: a screen share in a voice call needs
+    // the video layout (big frame, floating controls) without being one.
     overlay.className = 'tma-call tma-call--' + mode +
-      ' tma-call--' + (session.media === 'video' ? 'video' : 'audio') +
+      ' tma-call--' + (hasAnyVideo() ? 'video' : 'audio') +
       (session.connected ? ' is-connected' : '') +
       (session.error ? ' has-error' : '');
 
@@ -1162,6 +1219,7 @@
   /* ── Large modal: most of the screen, not all of it (§3) ── */
   function renderModal() {
     var isVideo = session.media === 'video';
+    var showsVideo = hasAnyVideo();
     return '<div class="tma-call__scrim" data-call-action="minimize"></div>' +
       '<div class="tma-call__dialog tma-call__dialog--stage" role="dialog" aria-modal="true" ' +
       'aria-label="' + esc(callKindLabel(session.media)) + ' with ' + esc(session.peerName) + '">' +
@@ -1172,6 +1230,7 @@
       '<span class="tma-call__stage-sub">' +
       '<span data-call-status>' + esc(session.statusText || '') + '</span>' +
       '<span class="tma-call__duration" data-call-duration></span>' +
+      recordingChip() +
       qualityBadge() +
       '</span></div>' +
       '<div class="tma-call__stage-head-actions">' +
@@ -1185,9 +1244,10 @@
 
       '<div class="tma-call__stage-body">' +
       '<div class="tma-call__media-slot" data-call-media-slot></div>' +
-      (isVideo ? '' : '<div class="tma-call__audio-face">' + avatarBlock('tma-call__avatar-big') +
+      (showsVideo ? '' : '<div class="tma-call__audio-face">' + avatarBlock('tma-call__avatar-big') +
         '<div class="tma-call__audio-name">' + esc(session.peerName) + '</div></div>') +
       renderUpgradePrompt() +
+      renderRecordingNotice() +
       '</div>' +
 
       '<div class="tma-call__controls">' +
@@ -1199,8 +1259,9 @@
       (isVideo
         ? ctrl('switch-voice', iconPhone(), false, 'Switch to voice only')
         : '') +
+      shareScreenBtn() +
       (supportsSinkId() ? ctrl('devices', iconSpeaker(), false, 'Audio and device settings') : '') +
-      ctrl('swap', iconSwap(), false, 'Swap the large and small video', !isVideo) +
+      ctrl('swap', iconSwap(), false, 'Swap the large and small video', !showsVideo) +
       // Not `is-off`: on every other control that white, inverted state means
       // "this is switched off", and "More" is never off — it is open.
       '<button type="button" class="tma-call__ctrl' + (session.sheet ? ' is-active' : '') +
@@ -1224,6 +1285,41 @@
       '" aria-label="' + esc(label) + '" title="' + esc(label) + '">' + icon + '</button>';
   }
 
+  /* Not ctrl(): sharing is `is-active` (a thing you are doing), never
+   * `is-off` — that inverted state reads as "switched off" everywhere else. */
+  function shareScreenBtn(small) {
+    var label = session.screenSharing ? 'Stop sharing your screen' : 'Share your screen';
+    return '<button type="button" class="tma-call__ctrl' +
+      (small ? ' tma-call__ctrl--sm' : '') +
+      (session.screenSharing ? ' is-active' : '') +
+      '" data-call-action="share-screen" aria-pressed="' + (session.screenSharing ? 'true' : 'false') +
+      '" aria-label="' + label + '" title="' + label + '">' + iconScreen() + '</button>';
+  }
+
+  /* The red dot beside the clock — recording is never only a colour, the
+   * word rides with it (§ the quality badge follows the same rule). */
+  function recordingChip() {
+    if (!session.recording && !session.remoteRecording) return '';
+    return '<span class="tma-call__rec" title="This call is being recorded">' +
+      '<span class="tma-call__rec-dot" aria-hidden="true"></span>REC</span>';
+  }
+
+  /*
+   * The consent line. Shown to BOTH sides the moment recording is arranged —
+   * the recorder starts on a delay behind it (§ maybeStartRecording), so
+   * nobody is captured before they have been told. Dismissing hides the
+   * sentence once it has been read; the REC chip stays for the whole call.
+   */
+  function renderRecordingNotice() {
+    if (!session.recording && !session.remoteRecording) return '';
+    if (session.recordingNoticeDismissed) return '';
+    return '<div class="tma-call__prompt tma-call__prompt--recording" role="status">' +
+      '<span class="tma-call__rec-dot" aria-hidden="true"></span>' +
+      '<span>This call is being recorded for client service and record-keeping purposes.</span>' +
+      '<button type="button" class="tma-call__btn tma-call__btn--ghost" data-call-action="dismiss-recording">OK</button>' +
+      '</div>';
+  }
+
   function qualityBadge() {
     if (!session.quality || !session.connected) return '';
     var label = { good: 'Good connection', fair: 'Fair connection', poor: 'Weak connection' }[session.quality];
@@ -1234,6 +1330,7 @@
   /* ── Bottom-left compact window (§7, §8) ── */
   function renderCompact() {
     var isVideo = session.media === 'video';
+    var showsVideo = hasAnyVideo();
     return '<div class="tma-call__compact" role="dialog" aria-label="' +
       esc(callKindLabel(session.media)) + ' with ' + esc(session.peerName) + '">' +
 
@@ -1250,7 +1347,7 @@
       '</div>' +
 
       '<div class="tma-call__compact-body">' +
-      (isVideo
+      (showsVideo
         ? '<div class="tma-call__media-slot" data-call-media-slot></div>'
         // A voice call has no picture, but the media layer still has to live
         // somewhere: it carries the remote *audio* element, and a layout that
@@ -1262,6 +1359,7 @@
       '<div class="tma-call__compact-foot">' +
       '<span class="tma-call__compact-name">' + esc(session.peerName) + '</span>' +
       '<span class="tma-call__compact-meta">' +
+      recordingChip() +
       '<span class="tma-call__compact-kind">' + esc(callKindLabel(session.media)) + '</span>' +
       '<span class="tma-call__duration" data-call-duration></span>' +
       '</span>' +
@@ -1273,9 +1371,11 @@
       ctrl('camera', isVideo && !session.cameraOff ? iconVideo() : iconCameraOff(),
         isVideo && session.cameraOff,
         isVideo ? (session.cameraOff ? 'Turn camera on' : 'Turn camera off') : 'Switch to video') +
+      shareScreenBtn(true) +
       '</div>' +
 
       renderUpgradePrompt() +
+      renderRecordingNotice() +
       renderErrorPanel() +
       '</div>';
   }
@@ -1291,6 +1391,7 @@
       '<span class="tma-call__pill-meta">' +
       '<span class="tma-call__pill-name">' + esc(session.peerName) + '</span>' +
       '<span class="tma-call__pill-status">' +
+      recordingChip() +
       '<span data-call-status>' + esc(session.statusText || '') + '</span>' +
       '<span class="tma-call__duration" data-call-duration></span>' +
       '</span></span></button>' +
@@ -1315,6 +1416,7 @@
       // remote audio element would be detached and the call would go silent.
       '<div class="tma-call__media-park" data-call-media-slot aria-hidden="true"></div>' +
       renderUpgradePrompt() +
+      renderRecordingNotice() +
       renderErrorPanel();
   }
 
@@ -1498,6 +1600,9 @@
   function iconMove() {
     return svg(path('M12 2l3 3h-2v6h6V9l3 3-3 3v-2h-6v6h2l-3 3-3-3h2v-6H5v2l-3-3 3-3v2h6V5H9l3-3z'));
   }
+  function iconScreen() {
+    return svg(path('M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6v2h3v2H7v-2h3v-2H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 2v9h14V6H5z'));
+  }
 
   /* ------------------------------------------------------------------ *
    * Modes
@@ -1598,6 +1703,8 @@
     camera: function () { toggleCamera(); },
     'switch-voice': function () { switchToVoice(); },
     swap: function () { swapVideos(); },
+    'share-screen': function () { toggleScreenShare(); },
+    'dismiss-recording': function () { session.recordingNoticeDismissed = true; render(); },
 
     minimize: function () { minimize(); },
     restore: function () { minimize(); },
@@ -1833,12 +1940,278 @@
   }
 
   function swapVideos() {
-    if (!session || session.media !== 'video') return;
+    if (!session || !hasAnyVideo()) return;
     session.swapped = !session.swapped;
     // The dragged position belongs to the corner, not to whichever frame is
     // currently in it, so it carries over to the new small video.
     syncMediaLayer();
     announce(session.swapped ? 'Your video is now the large one' : session.peerName + ' is now the large video');
+  }
+
+  /* ── Screen sharing ──
+   *
+   * A pure replaceTrack() on the video sender that has existed since the call
+   * was negotiated — the same trick voice↔video switching uses, so sharing
+   * never renegotiates either. session.media is left alone: the camera flow
+   * keeps its meaning, and the far end learns about the share through the
+   * `state` signal instead.
+   */
+
+  function toggleScreenShare() {
+    if (!session) return;
+    if (session.screenSharing) stopScreenShare();
+    else startScreenShare();
+  }
+
+  function startScreenShare() {
+    if (!session || session.screenSharing) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      showError({
+        title: 'Screen sharing unavailable',
+        message: 'This browser cannot share a screen.',
+        kind: 'unsupported',
+      });
+      return;
+    }
+    navigator.mediaDevices.getDisplayMedia({ video: true, audio: false }).then(function (stream) {
+      if (!session) { stopStream(stream); return; }
+      var track = stream.getVideoTracks()[0];
+      if (!track) { stopStream(stream); return; }
+      session.screenStream = stream;
+      session.screenSharing = true;
+      // The browser's own "Stop sharing" pill ends the track without telling
+      // us first — treat that exactly like our Stop button.
+      track.onended = function () { stopScreenShare(); };
+      if (session.videoSender) session.videoSender.replaceTrack(track).catch(function () {});
+      // The self-view now shows the screen, so it must re-attach.
+      resetLocalPreviewElement();
+      render();
+      announce('You are sharing your screen');
+      if (session.connected) publishState();
+    }).catch(function () {
+      // Cancelling the browser's picker is a decision, not an error.
+    });
+  }
+
+  function stopScreenShare() {
+    if (!session || !session.screenSharing) return;
+    stopStream(session.screenStream);
+    session.screenStream = null;
+    session.screenSharing = false;
+    // Back to whatever the camera flow was doing: the live camera track on a
+    // video call, nothing on a voice call.
+    var camera = session.media === 'video' && session.localStream
+      ? session.localStream.getVideoTracks()[0] || null
+      : null;
+    if (session.videoSender) session.videoSender.replaceTrack(camera).catch(function () {});
+    resetLocalPreviewElement();
+    render();
+    announce('Screen sharing stopped');
+    if (session.connected) publishState();
+  }
+
+  /* attachStreams() only swaps srcObject when the stream changed; clearing it
+   * first is what makes it notice the share starting or ending. */
+  function resetLocalPreviewElement() {
+    if (!mediaLayer) return;
+    var local = mediaLayer.querySelector('[data-call-local]');
+    if (local) local.srcObject = null;
+    attachStreams();
+  }
+
+  /* ── Client-call recording ──
+   *
+   * Calls between a staff member and a client are recorded for the client's
+   * file (§ CallRecordingController). The server is the single authority on
+   * WHETHER a call is such a call: both sides ask at connect, and only the
+   * staff side of a staff↔client call is handed a recording id — so this
+   * code never needs to know who is a client, and nobody can talk a browser
+   * into recording a colleague.
+   *
+   * Consent before capture: the banner renders and the `state` signal goes
+   * out the moment the id arrives, and the recorder starts on a delay behind
+   * them, so no frame exists that predates the notice. Never record silently.
+   *
+   * What is captured: both voices, mixed into one track — a recording with
+   * one side of a conversation is not a record of it — plus the client's
+   * video when the call has one. Chunks upload every few seconds while the
+   * call runs, so a crash mid-call costs seconds, not the recording.
+   */
+
+  var REC_CHUNK_MS = 10000;
+  var REC_NOTICE_LEAD_MS = 1500;
+
+  function maybeStartRecording() {
+    if (!session || session.recording) return;
+    if (typeof MediaRecorder === 'undefined') return;
+    if (!api() || !api().callRecordingStart) return;
+
+    var conversationId = session.conversationId;
+    api().callRecordingStart(conversationId, { media: session.media }).then(function (data) {
+      var rec = data && data.recording;
+      if (!rec || !rec.id) return;
+      if (!session || session.conversationId !== conversationId || session.recording) return;
+
+      session.recording = {
+        id: rec.id,
+        seq: 0,
+        queue: Promise.resolve(),
+        recorder: null,
+        ctx: null,
+        mime: '',
+        hasVideo: false,
+        startedAt: null,
+        stopped: false,
+      };
+      session.recordingNoticeDismissed = false;
+      render();
+      announce('This call is being recorded');
+      publishState();
+
+      // The notice leads, the recorder follows.
+      setTimeout(function () {
+        if (session && session.recording && session.recording.id === rec.id &&
+          !session.recording.stopped) beginRecorder();
+      }, REC_NOTICE_LEAD_MS);
+    }).catch(function () {
+      // Not a recorded call — silence is the whole answer.
+    });
+  }
+
+  function pickRecorderMime(candidates) {
+    if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
+    for (var i = 0; i < candidates.length; i++) {
+      if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+    }
+    return '';
+  }
+
+  function beginRecorder() {
+    var rec = session && session.recording;
+    if (!rec || rec.recorder) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var tracks = [];
+      var ctx = null;
+
+      if (Ctx) {
+        ctx = new Ctx();
+        var dest = ctx.createMediaStreamDestination();
+        [session.localStream, session.remoteStream].forEach(function (stream) {
+          var track = stream && stream.getAudioTracks()[0];
+          if (track) ctx.createMediaStreamSource(new MediaStream([track])).connect(dest);
+        });
+        tracks = dest.stream.getAudioTracks();
+      } else {
+        // No AudioContext: the client's voice alone beats nothing at all.
+        var fallback = (session.remoteStream && session.remoteStream.getAudioTracks()[0]) ||
+          (session.localStream && session.localStream.getAudioTracks()[0]);
+        if (fallback) tracks = [fallback];
+      }
+
+      // The client's picture, when the call has one. A MediaRecorder keeps
+      // the track list it was born with, so a voice call that upgrades later
+      // stays an audio recording — the metadata says which it was.
+      var video = session.media === 'video' && session.remoteStream
+        ? session.remoteStream.getVideoTracks()[0] || null
+        : null;
+      if (video) tracks = tracks.concat([video]);
+      if (!tracks.length) { abandonRecording(); return; }
+
+      var mime = video
+        ? pickRecorderMime(['video/webm;codecs=vp8,opus', 'video/webm'])
+        : pickRecorderMime(['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']);
+
+      var recorder = new MediaRecorder(new MediaStream(tracks), {
+        mimeType: mime || undefined,
+        audioBitsPerSecond: 48000,
+        // Modest on purpose: this is a record of a conversation, not a film,
+        // and an hour at this rate stays comfortably uploadable.
+        videoBitsPerSecond: video ? 650000 : undefined,
+      });
+
+      rec.ctx = ctx;
+      rec.recorder = recorder;
+      rec.mime = mime || (video ? 'video/webm' : 'audio/webm');
+      rec.hasVideo = !!video;
+      rec.startedAt = Date.now();
+
+      recorder.ondataavailable = function (ev) {
+        if (!ev.data || !ev.data.size) return;
+        pushRecordingChunk(rec, ev.data);
+      };
+      recorder.onerror = function () { stopRecording(); };
+      recorder.start(REC_CHUNK_MS);
+    } catch (e) {
+      abandonRecording();
+      if (window.console) console.warn('[call] recording unavailable —', e && e.message);
+    }
+  }
+
+  /*
+   * Chunks ride a promise chain, one at a time, so they land on the server in
+   * order — the file is a single WebM stream and order IS the file. One retry
+   * per chunk; the server treats a repeated seq as already-written, so a
+   * retry whose first attempt actually landed cannot double-append.
+   */
+  function pushRecordingChunk(rec, blob) {
+    var seq = rec.seq++;
+    rec.queue = rec.queue.then(function () {
+      return api().callRecordingChunk(rec.id, blob, seq).catch(function () {
+        return api().callRecordingChunk(rec.id, blob, seq);
+      });
+    }).catch(function () {
+      // A lost chunk is a gap in the recording; a rejected chain would lose
+      // everything after it, which is worse.
+    });
+  }
+
+  /* Callable mid-teardown: detaches the bundle from the session first, so the
+   * final chunk and the finish call outlive the call that made them. */
+  function stopRecording() {
+    var rec = session && session.recording;
+    if (!rec) return;
+    session.recording = null;
+    finishRecording(rec);
+  }
+
+  function finishRecording(rec) {
+    if (rec.stopped) return;
+    rec.stopped = true;
+    var durationMs = rec.startedAt ? Date.now() - rec.startedAt : 0;
+
+    var flushed = new Promise(function (resolve) {
+      if (!rec.recorder || rec.recorder.state === 'inactive') { resolve(); return; }
+      rec.recorder.onstop = resolve;
+      try { rec.recorder.stop(); } catch (e) { resolve(); }
+    });
+
+    flushed.then(function () {
+      if (rec.ctx) { try { rec.ctx.close().catch(function () {}); } catch (e) { /* ignore */ } }
+      // stop() fires its final dataavailable before onstop, so the last chunk
+      // is already on the queue; finish rides in behind it.
+      rec.queue = rec.queue.then(function () {
+        return api().callRecordingFinish(rec.id, {
+          durationMs: durationMs,
+          media: rec.hasVideo ? 'video' : 'audio',
+          mime: rec.mime,
+        });
+      }).catch(function () {
+        // The row stays 'recording'; the listing shows it as interrupted.
+      });
+    });
+  }
+
+  /* The recorder never produced anything — tell the server so the row does
+   * not linger as a phantom "recording in progress". */
+  function abandonRecording() {
+    var rec = session && session.recording;
+    if (!rec) return;
+    session.recording = null;
+    rec.stopped = true;
+    api().callRecordingFinish(rec.id, { durationMs: 0, failed: true }).catch(function () {});
+    render();
+    if (session.connected) publishState();
   }
 
   /* ── Voice ⇄ video (§12, §13) ── */
@@ -1939,7 +2312,11 @@
     });
     session.localStream.addTrack(track);
     track.enabled = true;
-    if (session.videoSender) session.videoSender.replaceTrack(track).catch(function () {});
+    // While a screen is being shared the sender belongs to the share; the
+    // camera waits in localStream and takes the wire back when it stops.
+    if (session.videoSender && !session.screenSharing) {
+      session.videoSender.replaceTrack(track).catch(function () {});
+    }
     attachStreams();
   }
 
@@ -1955,7 +2332,10 @@
   function switchToVoice() {
     if (!session || session.media !== 'video') return;
     // Stop sending pictures, keep the audio call exactly as it is (§13).
-    if (session.videoSender) session.videoSender.replaceTrack(null).catch(function () {});
+    // A live screen share owns the sender and stays — only the camera stops.
+    if (session.videoSender && !session.screenSharing) {
+      session.videoSender.replaceTrack(null).catch(function () {});
+    }
     if (session.localStream) {
       session.localStream.getVideoTracks().forEach(function (t) {
         session.localStream.removeTrack(t);
@@ -2430,10 +2810,21 @@
     }
 
     // The far end's microphone/camera state — what turns a black rectangle
-    // into their photo (§4).
+    // into their photo (§4). Screen share and recording ride the same signal:
+    // both are things a peer cannot see for themselves and must be told.
     if (type === 'state') {
       session.remoteMuted = !!body.muted;
       session.remoteCameraOff = !!body.cameraOff;
+      if (body.screenSharing !== undefined) {
+        var startedSharing = !!body.screenSharing && !session.remoteScreenSharing;
+        session.remoteScreenSharing = !!body.screenSharing;
+        if (startedSharing) announce(session.peerName + ' is sharing their screen');
+      }
+      if (body.recording !== undefined) {
+        var startedRecording = !!body.recording && !session.remoteRecording;
+        session.remoteRecording = !!body.recording;
+        if (startedRecording) announce('This call is being recorded');
+      }
       if (body.media && body.media !== session.media && body.media === 'audio') {
         session.media = 'audio';
       }
@@ -2492,6 +2883,9 @@
     if (type === 'hangup' || type === 'reject') {
       var wasConnected = session.connected;
       stopMeter();
+      // Before teardownMedia: pc.close() ends the remote tracks, and the
+      // recorder's final chunk has to be cut before they die.
+      stopRecording();
       stopTimer();
       teardownMedia();
       session = null;

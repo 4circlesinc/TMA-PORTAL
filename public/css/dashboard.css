@@ -544,6 +544,10 @@
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M232,168H63.86c2.66-5.24,5.33-10.63,8-16.11,15,1.65,32.58-8.78,52.66-31.14,5,13.46,14.45,30.93,30.58,31.25,9.06.18,18.11-5.2,27.42-16.37C189.31,143.75,203.3,152,232,152a8,8,0,0,0,0-16c-30.43,0-39.43-10.45-40-16.11a7.67,7.67,0,0,0-5.46-7.75,8.14,8.14,0,0,0-9.25,3.49c-12.07,18.54-19.38,20.43-21.92,20.37-8.26-.16-16.66-19.52-19.54-33.42a8,8,0,0,0-14.09-3.37C101.54,124.55,88,133.08,79.57,135.29,88.06,116.42,94.4,99.85,98.46,85.9c6.82-23.44,7.32-39.83,1.51-50.1-3-5.38-9.34-11.8-22.06-11.8C61.85,24,49.18,39.18,43.14,65.65c-3.59,15.71-4.18,33.21-1.62,48s7.87,25.55,15.59,31.94c-3.73,7.72-7.53,15.26-11.23,22.41H24a8,8,0,0,0,0,16H37.41c-11.32,21-20.12,35.64-20.26,35.88a8,8,0,1,0,13.71,8.24c.15-.26,11.27-18.79,24.7-44.12H232a8,8,0,0,0,0-16ZM58.74,69.21C62.72,51.74,70.43,40,77.91,40c5.33,0,7.1,1.86,8.13,3.67,3,5.33,6.52,24.19-21.66,86.39C56.12,118.78,53.31,93,58.74,69.21Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Signature.svg */
   mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M232,168H63.86c2.66-5.24,5.33-10.63,8-16.11,15,1.65,32.58-8.78,52.66-31.14,5,13.46,14.45,30.93,30.58,31.25,9.06.18,18.11-5.2,27.42-16.37C189.31,143.75,203.3,152,232,152a8,8,0,0,0,0-16c-30.43,0-39.43-10.45-40-16.11a7.67,7.67,0,0,0-5.46-7.75,8.14,8.14,0,0,0-9.25,3.49c-12.07,18.54-19.38,20.43-21.92,20.37-8.26-.16-16.66-19.52-19.54-33.42a8,8,0,0,0-14.09-3.37C101.54,124.55,88,133.08,79.57,135.29,88.06,116.42,94.4,99.85,98.46,85.9c6.82-23.44,7.32-39.83,1.51-50.1-3-5.38-9.34-11.8-22.06-11.8C61.85,24,49.18,39.18,43.14,65.65c-3.59,15.71-4.18,33.21-1.62,48s7.87,25.55,15.59,31.94c-3.73,7.72-7.53,15.26-11.23,22.41H24a8,8,0,0,0,0,16H37.41c-11.32,21-20.12,35.64-20.26,35.88a8,8,0,1,0,13.71,8.24c.15-.26,11.27-18.79,24.7-44.12H232a8,8,0,0,0,0-16ZM58.74,69.21C62.72,51.74,70.43,40,77.91,40c5.33,0,7.1,1.86,8.13,3.67,3,5.33,6.52,24.19-21.66,86.39C56.12,118.78,53.31,93,58.74,69.21Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/Signature.svg */
 }
+.tma-dash__nav-icon--phonecall {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20256%20256%22%20fill=%22currentColor%22%3E%3Cpath%20d=%22M144.27,45.93a8,8,0,0,1,9.8-5.66,86.22,86.22,0,0,1,61.66,61.66,8,8,0,0,1-5.66,9.8A8.23,8.23,0,0,1,208,112a8,8,0,0,1-7.73-5.94,70.35,70.35,0,0,0-50.33-50.33A8,8,0,0,1,144.27,45.93Zm-2.33,41.8c13.79,3.68,22.65,12.54,26.33,26.33A8,8,0,0,0,176,120a8.23,8.23,0,0,0,2.07-.27,8,8,0,0,0,5.66-9.8c-5.12-19.16-18.5-32.54-37.66-37.66a8,8,0,1,0-4.13,15.46Zm81.94,95.35A56.26,56.26,0,0,1,168,232C88.6,232,24,167.4,24,88A56.26,56.26,0,0,1,72.92,32.12a16,16,0,0,1,16.62,9.52l21.12,47.15,0,.12A16,16,0,0,1,109.39,104c-.18.27-.37.52-.57.77L88,129.45c7.49,15.22,23.41,31,38.83,38.51l24.34-20.71a8.12,8.12,0,0,1,.75-.56,16,16,0,0,1,15.17-1.4l.13.06,47.11,21.11A16,16,0,0,1,223.88,183.08Zm-15.88-2s-.07,0-.11,0h0l-47-21.05-24.35,20.71a8.44,8.44,0,0,1-.74.56,16,16,0,0,1-15.75,1.14c-18.73-9.05-37.4-27.58-46.46-46.11a16,16,0,0,1,1-15.7,6.13,6.13,0,0,1,.57-.77L96,95.15l-21-47a.61.61,0,0,1,0-.12A40.2,40.2,0,0,0,40,88,128.14,128.14,0,0,0,168,216,40.21,40.21,0,0,0,208,181.07Z%22/%3E%3C/svg%3E"); /* ../images/icons/phosphor/PhoneCall.svg */
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20256%20256%22%20fill=%22currentColor%22%3E%3Cpath%20d=%22M144.27,45.93a8,8,0,0,1,9.8-5.66,86.22,86.22,0,0,1,61.66,61.66,8,8,0,0,1-5.66,9.8A8.23,8.23,0,0,1,208,112a8,8,0,0,1-7.73-5.94,70.35,70.35,0,0,0-50.33-50.33A8,8,0,0,1,144.27,45.93Zm-2.33,41.8c13.79,3.68,22.65,12.54,26.33,26.33A8,8,0,0,0,176,120a8.23,8.23,0,0,0,2.07-.27,8,8,0,0,0,5.66-9.8c-5.12-19.16-18.5-32.54-37.66-37.66a8,8,0,1,0-4.13,15.46Zm81.94,95.35A56.26,56.26,0,0,1,168,232C88.6,232,24,167.4,24,88A56.26,56.26,0,0,1,72.92,32.12a16,16,0,0,1,16.62,9.52l21.12,47.15,0,.12A16,16,0,0,1,109.39,104c-.18.27-.37.52-.57.77L88,129.45c7.49,15.22,23.41,31,38.83,38.51l24.34-20.71a8.12,8.12,0,0,1,.75-.56,16,16,0,0,1,15.17-1.4l.13.06,47.11,21.11A16,16,0,0,1,223.88,183.08Zm-15.88-2s-.07,0-.11,0h0l-47-21.05-24.35,20.71a8.44,8.44,0,0,1-.74.56,16,16,0,0,1-15.75,1.14c-18.73-9.05-37.4-27.58-46.46-46.11a16,16,0,0,1,1-15.7,6.13,6.13,0,0,1,.57-.77L96,95.15l-21-47a.61.61,0,0,1,0-.12A40.2,40.2,0,0,0,40,88,128.14,128.14,0,0,0,168,216,40.21,40.21,0,0,0,208,181.07Z%22/%3E%3C/svg%3E"); /* ../images/icons/phosphor/PhoneCall.svg */
+}
 .tma-dash__nav-icon--gearsix {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/GearSix.svg */
   mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/GearSix.svg */
@@ -15370,6 +15374,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
+  /* The default surface: near-white rather than stark white, with a faint
+   * brand wash fading out at the top so it never reads as a flat block.
+   * Both layers are tokens, so the dark theme re-points them on its own.
+   * The optional --bg-* variants further down override this wholesale. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 4%, transparent), transparent 240px),
+    var(--color-bg-card);
 }
 
 .tma-dash__messages-divider {
@@ -29246,18 +29257,26 @@ button.tma-dash__header-popup-item:focus-visible {
   border: none;
   border-radius: 50%;
   background: var(--color-bg-card);
-  box-shadow: 0 2px 10px rgb(16 24 40 / 16%), 0 0 0 1px var(--color-overlay-4);
+  /* Hover is a tint change only — no shadow growth, no lift. A floating
+   * effect made the button feel detached from the quiet list under it.
+   * The hairline ring stays put in every state; it is what separates the
+   * button from the rows it sits over. */
+  box-shadow: 0 0 0 1px var(--color-overlay-4);
   cursor: pointer;
-  transition: box-shadow 120ms ease, transform 120ms ease;
+  transition: background-color 120ms ease;
 }
 
 .tma-dash__messages-fab:hover {
-  box-shadow: 0 4px 16px rgb(16 24 40 / 22%), 0 0 0 1px var(--color-overlay-8, var(--color-overlay-4));
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--color-bg-card) 94%, var(--color-text-primary));
 }
 
 .tma-dash__messages-fab:active {
-  transform: translateY(0);
+  background: color-mix(in srgb, var(--color-bg-card) 89%, var(--color-text-primary));
+}
+
+.tma-dash__messages-fab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .tma-dash__messages-fab img {
@@ -29269,10 +29288,6 @@ button.tma-dash__header-popup-item:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .tma-dash__messages-fab {
     transition: none;
-  }
-
-  .tma-dash__messages-fab:hover {
-    transform: none;
   }
 }
 
@@ -29348,150 +29363,6 @@ button.tma-dash__header-popup-item:focus-visible {
   line-height: 15px;
   font-variant-numeric: tabular-nums;
   text-align: center;
-}
-
-/* ── updates ──────────────────────────────────────────────────────
- * What colleagues are working on. The viewer's own status sits on top, since
- * this is where it is set as well as read. */
-.tma-dash__messages-updates {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.tma-dash__messages-update-self {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-12);
-  border-bottom: 1px solid var(--color-overlay-4);
-}
-
-.tma-dash__messages-update-self-label {
-  font-size: var(--font-size-12);
-  color: var(--color-text-secondary);
-}
-
-.tma-dash__messages-update-self-row {
-  display: flex;
-  gap: var(--space-6);
-}
-
-.tma-dash__messages-update-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: var(--space-6) var(--space-8);
-  border: 1px solid var(--color-overlay-8, var(--color-overlay-4));
-  border-radius: var(--radius-8);
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-13);
-}
-
-.tma-dash__messages-update-save {
-  flex: none;
-  padding: var(--space-6) var(--space-12);
-  border: none;
-  border-radius: var(--radius-8);
-  background: var(--color-hover);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-12);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.tma-dash__messages-update-clear {
-  align-self: flex-start;
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-12);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.tma-dash__messages-update-list {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-4) var(--space-8) var(--space-12);
-}
-
-/* Team channels category — reuses the inbox row, so only the container needs
- * placing. */
-.tma-dash__messages-channel-list {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-4) var(--space-8) var(--space-8);
-}
-
-.tma-dash__messages-update-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-8);
-  border-radius: var(--radius-8);
-}
-
-/* Not overflow:hidden — the online dot sits on the rim and would be clipped
- * away by it. The photo is rounded on its own instead. */
-.tma-dash__messages-update-avatar {
-  position: relative;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-hover);
-}
-
-.tma-dash__messages-update-avatar img {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-/* Initials, never an invented avatar, when someone has no photo. */
-.tma-dash__messages-update-initials {
-  font-size: var(--font-size-12);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-/* The online dot rides the avatar, outside its clipped circle. */
-.tma-dash__messages-update-avatar.is-online::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #12b76a;
-  box-shadow: 0 0 0 2px var(--color-bg-card);
-}
-
-.tma-dash__messages-update-copy {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.tma-dash__messages-update-name {
-  font-size: var(--font-size-13);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.tma-dash__messages-update-text {
-  font-size: var(--font-size-12);
-  color: var(--color-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ── archived pull-down shelf ─────────────────────────────────────
@@ -30615,6 +30486,88 @@ button.tma-dash__header-popup-item:focus-visible {
   height: 20px;
   flex-shrink: 0;
   filter: brightness(0) invert(1);
+}
+
+/* ---------------------------------------------------------------------------
+ * Messages — the "Call Sarah?" chooser.
+ *
+ * Opened by either call button in the chat header; the kind of call is picked
+ * here rather than read off which icon was pressed. z-index sits under the
+ * live-call band (1240+) so an already-ringing call always paints over it.
+ * ------------------------------------------------------------------------- */
+.tma-dash__messages-callask {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-24);
+}
+
+.tma-dash__messages-callask-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(16 24 40 / 0.32);
+}
+
+.tma-dash__messages-callask-card {
+  position: relative;
+  width: min(300px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-20);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 12px 40px rgb(16 24 40 / 0.22);
+  text-align: center;
+}
+
+.tma-dash__messages-callask-title {
+  font-size: var(--font-size-15, 15px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-callask-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.tma-dash__messages-callask-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: none;
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tma-dash__messages-callask-btn:hover {
+  background: var(--color-hover-deep);
+}
+
+.tma-dash__messages-callask-btn img {
+  width: 18px;
+  height: 18px;
+}
+
+.tma-dash__messages-callask-btn--cancel {
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.tma-dash__messages-callask-btn--cancel:hover {
+  background: var(--color-hover);
 }
 
 /* ---------------------------------------------------------------------------
@@ -31866,38 +31819,12 @@ span.tma-dash__messages-profile-avatar {
 /* ── Messages: chat backgrounds ───────────────────────────────────── */
 
 /*
- * The default wallpaper: the TMA pattern (leaf mark, columns, scales, gavel)
- * on an off-white surface.
- *
- * One image scaled to cover the pane, not a repeating tile — tiling put
- * visible seams and an obvious grid rhythm behind the thread. `cover` means
- * the artwork is cropped rather than duplicated at any pane size.
- *
- * The wash is baked into the PNG's alpha (~40%) rather than applied here: the
- * ink is one fixed colour the CSS cannot recolour, so lightening it in the
- * asset is what lets it sit under a near-white surface at any strength.
- *
- * `background-attachment` is left at its default, so the wallpaper stays put
- * while the thread scrolls over it.
+ * The default thread surface is plain and lives on the base chat-body rule
+ * (see .tma-dash__messages-chat-body): a quiet near-white with a whisper of
+ * brand at the top, built on tokens so dark mode follows for free. The old
+ * TMA pattern wallpaper was retired — an image behind the thread fought the
+ * bubbles for attention. The variants below remain as optional choices.
  */
-.tma-dash__messages-chat-body--bg-tma {
-  background-color: #f9fbfc;
-  background-image: url("../images/brand/tma/chat-wallpaper-pattern.png");
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center;
-}
-
-/* The baked-in wash is calibrated against a near-white surface; the same ink
- * on a dark thread lands much brighter, so a veil takes it back down. */
-.tma-dash[data-theme="dark"] .tma-dash__messages-chat-body--bg-tma {
-  background-color: #1a1d20;
-  background-image:
-    linear-gradient(rgb(26 29 32 / 0.55), rgb(26 29 32 / 0.55)),
-    url("../images/brand/tma/chat-wallpaper-pattern.png");
-  background-size: auto, cover;
-}
-
 .tma-dash__messages-chat-body--bg-soft {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 6%, transparent), transparent 40%),
@@ -32837,6 +32764,44 @@ span.tma-dash__messages-profile-avatar {
   position: fixed;
   bottom: var(--space-24);
   z-index: 1310;
+}
+
+/* ── Recording ──
+ * The consent line (§ renderRecordingNotice) reuses the prompt shell; the
+ * REC chip beside the clock stays for the whole call. Red agrees with the
+ * words, it never replaces them — same rule as the quality badge. */
+.tma-call__prompt--recording {
+  /* Above the floating video-call controls (z-index 3), whose row it shares
+   * the bottom of the stage with. */
+  bottom: 156px;
+}
+
+.tma-call__rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-size-12);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fda29b;
+}
+
+.tma-call__rec-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: #f04438;
+  animation: tma-call-rec-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tma-call-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-call__rec-dot { animation: none; }
 }
 
 .tma-call__error {

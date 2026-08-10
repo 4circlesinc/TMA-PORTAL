@@ -5,17 +5,13 @@ namespace App\Support\Messaging;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
-use App\Models\UserBlock;
-use App\Models\UserWorkStatus;
-use Illuminate\Support\Carbon;
 
 /**
- * The badges on the Messages nav bar: Calls and Updates.
+ * The badge on the Messages nav bar's Calls tab.
  *
- * Both answer the same question — "what has happened here that I have not
- * looked at?" — and both need a *seen* marker to answer it, because neither
- * has a per-item read state of its own. A missed call is not unread, and a
- * colleague's status is not addressed to anyone.
+ * It answers "what has happened here that I have not looked at?", and needs a
+ * *seen* marker to answer it, because a missed call has no per-item read state
+ * of its own — it is not unread mail.
  *
  * Two rules shape this:
  *
@@ -38,35 +34,31 @@ final class TabCounts
      * @param  ?array<int, int>  $conversationIds  the caller's conversations,
      *   when they have already been loaded — the chat list has them in hand,
      *   and this runs on every one of its loads.
-     * @return array{calls:int, updates:int}
+     * @return array{calls:int}
      */
     public static function for(User $user, ?array $conversationIds = null): array
     {
         return [
             'calls' => self::missedCalls($user, $conversationIds),
-            'updates' => self::newUpdates($user),
         ];
     }
 
     /**
      * Mark one tab seen and return the counts as they now stand.
      *
-     * @return array{calls:int, updates:int}
+     * @return array{calls:int}
      */
     public static function markSeen(User $user, string $tab): array
     {
-        $seen = self::markers($user);
-
-        if ($tab === 'calls') {
-            $seen['callId'] = (int) Message::query()
-                ->whereIn('conversation_id', self::conversationIds($user))
-                ->where('type', Message::TYPE_SYSTEM)
-                ->max('id');
-        } elseif ($tab === 'updates') {
-            $seen['updatesAt'] = now()->toIso8601String();
-        } else {
+        if ($tab !== 'calls') {
             return self::for($user);
         }
+
+        $seen = self::markers($user);
+        $seen['callId'] = (int) Message::query()
+            ->whereIn('conversation_id', self::conversationIds($user))
+            ->where('type', Message::TYPE_SYSTEM)
+            ->max('id');
 
         $preferences = $user->preferences ?? [];
         $preferences[self::KEY] = $seen;
@@ -109,34 +101,6 @@ final class TabCounts
                 return $initiator === null || (int) $initiator !== $user->id;
             })
             ->count();
-    }
-
-    /** Colleagues who have posted or changed a status since the last look. */
-    private static function newUpdates(User $user): int
-    {
-        $blocked = UserBlock::query()
-            ->where('user_id', $user->id)->pluck('blocked_user_id')
-            ->merge(UserBlock::where('blocked_user_id', $user->id)->pluck('user_id'));
-
-        $query = UserWorkStatus::query()
-            ->current()
-            ->whereHas('user', fn ($q) => $q
-                ->where('id', '!=', $user->id)
-                ->whereNotIn('id', $blocked)
-                ->where('status', User::STATUS_APPROVED));
-
-        // Parsed, not passed through as a string: the marker is stored ISO8601
-        // ("…T15:04:05+00:00") while the column is "…15:04:05", and a string
-        // comparison of the two is decided by the 'T' rather than by the time.
-        if ($since = self::markers($user)['updatesAt'] ?? null) {
-            try {
-                $query->where('updated_at', '>', Carbon::parse($since));
-            } catch (\Throwable $e) {
-                // An unparseable marker means "never looked", not "no updates".
-            }
-        }
-
-        return min($query->count(), self::CAP);
     }
 
     /** @return array<string, mixed> */

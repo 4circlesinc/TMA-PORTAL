@@ -34,6 +34,7 @@
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',
     'workflows-feedback': 'workflows.view',
+    'call-recordings': 'callRecordings.view',
     'people-home': 'directory.view',
     'people-employees': 'directory.view',
     /* The client and group screens live inside People, so reaching People at

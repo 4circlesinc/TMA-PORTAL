@@ -31,6 +31,8 @@ class LegacyPageController extends Controller
         'account',
         'account-settings',
         'calendar',
+        // Staff-only (Role::PAGE_CAPABILITIES): recordings of client calls.
+        'call-recordings',
         // Admin-only while in development (Role::PAGE_CAPABILITIES gates it,
         // and the whole module vanishes when FEATURE_CBI is off).
         'cbi',

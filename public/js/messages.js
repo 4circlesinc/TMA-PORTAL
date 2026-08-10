@@ -57,7 +57,6 @@
     Images: ICON + 'Images.svg',
     ArrowLineDown: ICON + 'ArrowLineDown.svg',
     ChatCircleDots: ICON + 'ChatCircleDots.svg',
-    Broadcast: ICON + 'Broadcast.svg',
     PencilSimple: ICON + 'PencilSimple.svg',
     ShareNetwork: ICON + 'ShareNetwork.svg',
     Copy: ICON + 'Copy.svg',
@@ -760,9 +759,8 @@
    * The inbox column's navigation: which view the column is showing, plus the
    * two actions that are not views (New message, Settings).
    *
-   * Each entry carries its name under the icon — six unlabelled glyphs are a
-   * guessing game, and Updates in particular is not something anyone would
-   * infer from a picture.
+   * Each entry carries its name under the icon — a bar of unlabelled glyphs
+   * is a guessing game.
    */
   /*
    * Badge text for a nav tab. Capped, because past a point the number stops
@@ -782,18 +780,16 @@
     state = state || {};
 
     // Chats is summed from the visible rows — the same rule the sidebar badge
-    // uses, so archived threads are excluded from both. Calls and Updates come
-    // from the server, which is the only place that knows what this user has
-    // already looked at (see App\Support\Messaging\TabCounts).
+    // uses, so archived threads are excluded from both. Calls comes from the
+    // server, which is the only place that knows what this user has already
+    // looked at (see App\Support\Messaging\TabCounts).
     var counts = STORE.tabCounts || {};
     var unreadChats = getInboxUnreadCount(state);
     var missedCalls = counts.calls || 0;
-    var newUpdates = counts.updates || 0;
 
     // Exactly one of these is the current view; "chats" is the default when no
     // takeover is active.
     var view = state.mediaMode ? 'media'
-      : state.updatesMode ? 'updates'
       : state.callsMode ? 'calls'
       : state.tab === 'archived' ? 'archived'
       : 'chats';
@@ -802,9 +798,6 @@
       { key: 'chats', icon: 'ChatCircleDots', label: 'Chats', attr: 'data-messages-nav-chats',
         count: navCount(unreadChats),
         countLabel: navCountLabel(unreadChats, 'unread message', 'unread messages') },
-      { key: 'updates', icon: 'Broadcast', label: 'Updates', attr: 'data-messages-nav-updates',
-        count: navCount(newUpdates),
-        countLabel: navCountLabel(newUpdates, 'new update', 'new updates') },
       { key: 'calls', icon: 'Phone', label: 'Calls', attr: 'data-messages-nav-calls',
         count: navCount(missedCalls),
         countLabel: navCountLabel(missedCalls, 'missed call', 'missed calls') },
@@ -844,8 +837,8 @@
     }).join('');
 
     // New message is not in here: it is an action, not a destination, and it
-    // floats over the list instead (see renderComposeFab). That also leaves the
-    // six real destinations room for their labels.
+    // floats over the list instead (see renderComposeFab). That also leaves
+    // the real destinations room for their labels.
     return (
       '<div class="tma-dash__messages-list-foot" role="tablist" aria-label="Messages sections">' +
       nav +
@@ -2890,12 +2883,14 @@
     );
   }
 
-  /* The stored key, with the branded wallpaper standing in for "not chosen
-   * yet" — which is every existing reader, since the setting predates it. */
+  /* The stored key. The branded wallpaper ('tma') used to be the default;
+   * it was retired for a plain light surface, so both "not chosen yet" and
+   * any stored choice of it resolve to plain rather than resurrecting the
+   * pattern. */
   function chatBackgroundKey() {
     var key = '';
     try { key = localStorage.getItem('tma.messages.chatBg') || ''; } catch (e) { /* ignore */ }
-    return key || 'tma';
+    return !key || key === 'tma' ? 'plain' : key;
   }
 
   function chatBackgroundClass() {
@@ -4004,7 +3999,6 @@
       '<span class="tma-dash__messages-setting-label">Chat background</span></span>' +
       '<select class="tma-dash__messages-setting-input" data-messages-chat-bg>' +
       [
-        { value: 'tma', label: 'TMA pattern' },
         { value: 'plain', label: 'Plain' },
         { value: 'soft', label: 'Soft wash' },
         { value: 'grid', label: 'Light grid' },
@@ -4310,6 +4304,10 @@
       var dragging = false;
       var moved = false;
       var wheelEndTimer = null;
+      // When a trackpad swipe fires the reply, its momentum keeps emitting
+      // wheel events; without a cooldown those re-open the gesture and fire
+      // the same reply again before the fingers have even lifted.
+      var wheelFiredAt = 0;
 
       function getCurrentOffset() {
         var match = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(track.style.transform || '');
@@ -4450,16 +4448,23 @@
 
         if (prevent) prevent();
 
-        // Past the trigger the bubble resists further travel, so the gesture
-        // has a felt end point rather than sliding on to the clamp.
         var raw = startOffset + dx;
         var trigger = getReplySwipeTrigger();
-        if (Math.abs(raw) > trigger) {
-          var overshoot = Math.abs(raw) - trigger;
-          raw = (raw < 0 ? -1 : 1) * (trigger + overshoot * 0.35);
-        }
+        var offset = setOffset(raw);
 
-        setOffset(raw);
+        // Reaching the trigger IS the gesture: fire there and then, mid-drag,
+        // rather than making the finger also let go — the wait for pointerup
+        // was read as lag. The pointer is handed back so nothing else of this
+        // drag is swallowed; dragging=false makes the trailing pointerup a
+        // no-op instead of a second trigger.
+        if (side === 'in' ? offset >= trigger : offset <= -trigger) {
+          dragging = false;
+          if (pointerId !== undefined && track.hasPointerCapture(pointerId)) {
+            track.releasePointerCapture(pointerId);
+          }
+          if (chatBody) chatBody.classList.remove('is-swipe-dragging');
+          triggerReply();
+        }
       }
 
       function endDrag() {
@@ -4521,6 +4526,13 @@
           var dy = e.deltaY;
           if (Math.abs(dx) < 0.5) return;
 
+          // Momentum tail of a swipe that already fired: swallow it whole, or
+          // it re-opens the gesture and replies to the same bubble twice.
+          if (Date.now() - wheelFiredAt < 500) {
+            if (Math.abs(dx) > Math.abs(dy)) e.preventDefault();
+            return;
+          }
+
           var current = getCurrentOffset();
           var movement = -dx;
           var forward = side === 'in' ? movement > 0 : movement < 0;
@@ -4536,7 +4548,20 @@
           e.preventDefault();
           track.classList.add('is-dragging');
           if (chatBody) chatBody.classList.add('is-swipe-dragging');
-          setOffset(current + movement);
+          var offsetNow = setOffset(current + movement);
+
+          // Same rule as the pointer path: crossing the trigger fires the
+          // reply immediately. The end-of-scroll timer only remains to snap
+          // back a swipe that never made it that far — it is no longer what
+          // decides the reply, so the 160 ms wait it imposed is gone.
+          var wheelTrigger = getReplySwipeTrigger();
+          if (side === 'in' ? offsetNow >= wheelTrigger : offsetNow <= -wheelTrigger) {
+            wheelFiredAt = Date.now();
+            if (chatBody) chatBody.classList.remove('is-swipe-dragging');
+            triggerReply();
+            return;
+          }
+
           scheduleWheelEnd();
         },
         { passive: false }
@@ -4577,6 +4602,72 @@
         toast.hidden = true;
       }, 240);
     }, linger);
+  }
+
+  /*
+   * "Call Sarah?" — the chooser between a voice and a video call.
+   *
+   * Both header buttons open it: pressing a small glyph is a slight target
+   * for an action that immediately rings another person, so the kind of call
+   * is confirmed as an explicit step rather than inferred from which icon the
+   * pointer happened to land on. Imperative like the toast, not part of
+   * render() — a call is a moment, not state worth re-rendering the page for.
+   */
+  function closeCallChooser() {
+    var open = document.querySelector('[data-messages-callask]');
+    if (open) {
+      if (open._onKey) document.removeEventListener('keydown', open._onKey, true);
+      open.remove();
+    }
+  }
+
+  function openCallChooser(root, row) {
+    if (!row || !window.TMAMessagingCalls) return;
+    closeCallChooser();
+
+    var dash = root.closest('.tma-dash') || document.body;
+    var name = row.name || 'Contact';
+
+    var wrap = document.createElement('div');
+    wrap.className = 'tma-dash__messages-callask';
+    wrap.setAttribute('data-messages-callask', '');
+    wrap.innerHTML =
+      '<div class="tma-dash__messages-callask-scrim" data-callask-cancel></div>' +
+      '<div class="tma-dash__messages-callask-card" role="dialog" aria-modal="true"' +
+      ' aria-label="' + esc('Call ' + name) + '">' +
+      '<div class="tma-dash__messages-callask-title">' + esc('Call ' + name + '?') + '</div>' +
+      '<div class="tma-dash__messages-callask-actions">' +
+      '<button type="button" class="tma-dash__messages-callask-btn" data-callask-start="audio">' +
+      '<img src="' + esc(ICONS.Phone) + '" alt="">Voice Call</button>' +
+      '<button type="button" class="tma-dash__messages-callask-btn" data-callask-start="video">' +
+      '<img src="' + esc(ICONS.VideoCamera) + '" alt="">Video Call</button>' +
+      '<button type="button" class="tma-dash__messages-callask-btn tma-dash__messages-callask-btn--cancel"' +
+      ' data-callask-cancel>Cancel</button>' +
+      '</div></div>';
+
+    wrap.addEventListener('click', function (e) {
+      var start = e.target.closest('[data-callask-start]');
+      if (start) {
+        var kind = start.getAttribute('data-callask-start') || 'audio';
+        closeCallChooser();
+        window.TMAMessagingCalls.start(row.id, kind, name, row.photo || null);
+        return;
+      }
+      if (e.target.closest('[data-callask-cancel]')) closeCallChooser();
+    });
+
+    // Capture phase, so the chat's own Escape handling never sees the press
+    // that was meant for this dialog.
+    wrap._onKey = function (e) {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeCallChooser();
+    };
+    document.addEventListener('keydown', wrap._onKey, true);
+
+    dash.appendChild(wrap);
+    var first = wrap.querySelector('[data-callask-start="audio"]');
+    if (first) first.focus();
   }
 
   function closeMessagesRowSwipes(root, except) {
@@ -7759,12 +7850,9 @@
         e.stopPropagation();
         var row = findThread(state.selectedId);
         if (!row || !window.TMAMessagingCalls) return;
-        window.TMAMessagingCalls.start(
-          state.selectedId,
-          btn.getAttribute('data-messages-call') || 'audio',
-          row.name || 'Contact',
-          row.photo || null
-        );
+        // Whichever icon was pressed, the kind is chosen in the dialog — one
+        // prompt owns the decision (§ openCallChooser).
+        openCallChooser(root, row);
       });
     });
 

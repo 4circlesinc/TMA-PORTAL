@@ -6,16 +6,14 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
-use App\Models\UserWorkStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * The badges on the Messages nav bar.
+ * The badge on the Messages nav bar's Calls tab.
  *
- * Neither Calls nor Updates has a per-item read state — a missed call is not
- * "unread", and a colleague's status is not addressed to anyone — so both
- * counts are defined against a *seen* marker. These tests are mostly about
+ * A missed call has no per-item read state — it is not "unread" — so the
+ * count is defined against a *seen* marker. These tests are mostly about
  * that marker: what advances it, and what it does and does not swallow.
  */
 class MessagingTabCountsTest extends TestCase
@@ -141,64 +139,16 @@ class MessagingTabCountsTest extends TestCase
         $this->assertSame(0, $this->counts($me)['calls']);
     }
 
-    public function test_updates_counts_colleagues_statuses_but_never_my_own(): void
-    {
-        $me = $this->user('me@example.com');
-        $them = $this->user('them@example.com');
-
-        UserWorkStatus::create(['user_id' => $them->id, 'emoji' => '📊', 'text' => 'On the Acme audit']);
-        UserWorkStatus::create(['user_id' => $me->id, 'emoji' => '☕', 'text' => 'Back at two']);
-
-        $this->assertSame(1, $this->counts($me)['updates']);
-    }
-
-    public function test_opening_updates_clears_it_and_a_later_status_counts_again(): void
-    {
-        $me = $this->user('me@example.com');
-        $them = $this->user('them@example.com');
-        $other = $this->user('other@example.com');
-
-        UserWorkStatus::create(['user_id' => $them->id, 'emoji' => '📊', 'text' => 'On the Acme audit']);
-        $this->assertSame(1, $this->counts($me)['updates']);
-
-        $this->actingAs($me)
-            ->postJson('/portal/messaging/tab-counts/seen', ['tab' => 'updates'])
-            ->assertOk()
-            ->assertJsonPath('tabCounts.updates', 0);
-
-        $this->travel(2)->minutes();
-        UserWorkStatus::create(['user_id' => $other->id, 'emoji' => '🚗', 'text' => 'Travelling']);
-
-        $this->assertSame(1, $this->counts($me)['updates']);
-    }
-
-    public function test_an_expired_status_is_not_new(): void
-    {
-        $me = $this->user('me@example.com');
-        $them = $this->user('them@example.com');
-
-        UserWorkStatus::create([
-            'user_id' => $them->id,
-            'emoji' => '📊',
-            'text' => 'Gone already',
-            'expires_at' => now()->subMinute(),
-        ]);
-
-        $this->assertSame(0, $this->counts($me)['updates']);
-    }
-
     public function test_the_conversation_list_carries_the_counts_so_the_bar_has_them_on_load(): void
     {
         $me = $this->user('me@example.com');
         $them = $this->user('them@example.com');
         $c = $this->conversation([$me, $them]);
         $this->callLine($c, 'call_missed', $them->id);
-        UserWorkStatus::create(['user_id' => $them->id, 'emoji' => '📊', 'text' => 'On the audit']);
 
         $this->actingAs($me)->getJson('/portal/messaging/conversations')
             ->assertOk()
-            ->assertJsonPath('tabCounts.calls', 1)
-            ->assertJsonPath('tabCounts.updates', 1);
+            ->assertJsonPath('tabCounts.calls', 1);
     }
 
     public function test_seen_refuses_a_tab_it_does_not_own(): void
