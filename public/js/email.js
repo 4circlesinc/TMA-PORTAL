@@ -912,10 +912,15 @@
       '" data-email-toolbar>' +
       '<div class="tma-dash__toolbar-actions">' +
       renderEmailSidebarMenuBtn(state) +
-      '<button type="button" class="tma-dash__email-toolbar-compose" data-email-folder="compose">' +
-      '<img src="' + ICONS.PencilSimple + '" alt="" aria-hidden="true">' +
-      '<span>New Mail</span>' +
-      '</button>' +
+      renderEmailIconTooltipBtn({
+        tipId: 'email-toolbar-tip-compose',
+        label: 'New Mail',
+        className: 'tma-dash__tool-btn tma-dash__email-toolbar-btn',
+        attrs: ' data-email-folder="compose"',
+        innerHtml:
+          '<img src="' + ICONS.PencilSimple + '" alt="">' +
+          '<span class="tma-dash__email-toolbar-btn-label">New Mail</span>',
+      }) +
       '<span class="tma-dash__email-toolbar-actions" role="toolbar" aria-label="Mail actions">' +
       actions +
       '</span>' +

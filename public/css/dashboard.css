@@ -9354,38 +9354,6 @@
   display: none;
 }
 
-.tma-dash__email-toolbar-compose {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  flex: 0 0 auto;
-  height: 32px;
-  padding: 0 var(--space-12);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--color-primary);
-  color: #fff;
-  font: inherit;
-  font-size: var(--text-size-13, 13px);
-  font-weight: 600;
-  box-shadow: none;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.tma-dash__email-toolbar-compose:hover {
-  background: var(--color-primary-dark, #0288c2);
-  color: #fff;
-}
-
-.tma-dash__email-toolbar-compose img {
-  width: 16px;
-  height: 16px;
-  opacity: 1;
-  /* Phosphor glyphs ship dark; force white on the primary fill. */
-  filter: brightness(0) invert(1);
-}
-
 .tma-dash__email-toolbar-actions {
   display: inline-flex;
   align-items: center;
