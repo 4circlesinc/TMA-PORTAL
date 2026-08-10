@@ -1490,7 +1490,10 @@
       }
     } else if (e.kind === 'connection') {
       actions += '<button type="button" class="tma-call__btn tma-call__btn--ghost" data-call-action="retry-connection">Retry</button>';
-    } else if (e.kind === 'declined') {
+    } else {
+      // Everything that is not the connection itself — a declined upgrade, a
+      // failed screen share — leaves a perfectly good call running. There
+      // must always be a way past the panel that is not hanging up.
       actions += '<button type="button" class="tma-call__btn tma-call__btn--ghost" data-call-action="dismiss-error">Continue</button>';
     }
     actions += '<button type="button" class="tma-call__btn tma-call__btn--decline" data-call-action="hangup">End call</button>';

@@ -765,6 +765,12 @@ function applyPermissionPolicy() {
    * macOS 15+ gets the native system picker; everywhere else the primary
    * screen is granted directly — the call UI's own Stop control (and the
    * OS capture indicator) still govern the share.
+   *
+   * On a Mac the first capture attempt makes the OS itself ask for Screen
+   * Recording permission ("would like to record this computer's screen").
+   * A previously-denied state never re-prompts, so that case gets an
+   * explanation and the exact System Settings pane instead of a share that
+   * silently fails or records black frames.
    */
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
     const deny = () => { try { callback(null); } catch { /* already answered */ } };
@@ -772,13 +778,14 @@ function applyPermissionPolicy() {
       const url = request && request.frame ? request.frame.url : '';
       if (!isPortalUrl(url)) return deny();
 
-      // macOS gates screen capture behind its Screen Recording permission;
-      // a denied state yields silent black frames, so open the switch the
-      // user has to flip instead of pretending to share.
-      if (process.platform === 'darwin'
-        && systemPreferences.getMediaAccessStatus('screen') === 'denied') {
-        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-        return deny();
+      if (process.platform === 'darwin') {
+        const status = systemPreferences.getMediaAccessStatus('screen');
+        if (status === 'denied' || status === 'restricted') {
+          explainScreenPermission();
+          return deny();
+        }
+        // 'not-determined': carry on — getSources below is what makes the
+        // OS show its permission prompt, which is the ask the user expects.
       }
 
       const sources = await desktopCapturer.getSources({ types: ['screen'] });
@@ -789,6 +796,28 @@ function applyPermissionPolicy() {
       deny();
     }
   }, { useSystemPicker: true });
+}
+
+/* One dialog at a time — mashing Share Screen must not stack alerts. */
+let screenPermissionDialogOpen = false;
+
+function explainScreenPermission() {
+  if (screenPermissionDialogOpen) return;
+  screenPermissionDialogOpen = true;
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    message: 'Allow screen recording to share your screen',
+    detail: 'macOS is blocking screen sharing for this app. In System Settings, '
+      + 'turn on Screen Recording for TM ANTOINE Portal, then quit and reopen '
+      + 'the app — macOS only applies the change on a fresh start.',
+    buttons: ['Open System Settings', 'Not now'],
+    defaultId: 0,
+    cancelId: 1,
+  }).then(({ response }) => {
+    if (response === 0) {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    }
+  }).finally(() => { screenPermissionDialogOpen = false; });
 }
 
 /* ------------------------------------------------------------------------- menu */
