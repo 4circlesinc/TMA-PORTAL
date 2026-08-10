@@ -11822,6 +11822,7 @@
 
 .tma-dash__email-category--inbox { --email-category-color: var(--color-primary, #03a5e9); }
 .tma-dash__email-category--important { --email-category-color: #d64545; }
+.tma-dash__email-category--starred { --email-category-color: #e6a800; }
 .tma-dash__email-category--snoozed { --email-category-color: #7c6cf0; }
 .tma-dash__email-category--sent { --email-category-color: #2a9d8f; }
 .tma-dash__email-category--draft { --email-category-color: #6b7c93; }

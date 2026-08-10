@@ -119,8 +119,8 @@
    * Mirrored from the server preference so it follows the account; kept in
    * localStorage too so the very first paint is already right. */
   var SIDEBAR_MODE_KEY = 'tma.email.sidebarMode';
-  /* v4: no pin; active tab shows count. */
-  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v4';
+  /* v5: starred tab beside important. */
+  var INBOX_CATEGORIES_KEY = 'tma.email.inboxCategories.v5';
   var SPLIT_RATIO_MIN = 0.22;
   var SPLIT_RATIO_MAX = 0.78;
   // Inbox list narrower than the reading pane by default.
@@ -181,6 +181,7 @@
   var INBOX_CATEGORIES = [
     { id: 'inbox', label: 'Inbox', icon: 'TrayFill', fixed: true },
     { id: 'important', label: 'Important', icon: 'FlagFill', fixed: true },
+    { id: 'starred', label: 'Starred', icon: 'StarFilled', fixed: true },
     { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill', fixed: true },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill', fixed: true },
     { id: 'draft', label: 'Drafts', icon: 'FileTextFill', fixed: true },
@@ -200,7 +201,7 @@
     } catch (e) { /* ignore */ }
     /* All daily tabs are fixed; this list is only consulted if a later
        preference makes any of them optional again. */
-    return ['important', 'snoozed', 'sent', 'draft', 'spam', 'trash', 'archive'];
+    return ['important', 'starred', 'snoozed', 'sent', 'draft', 'spam', 'trash', 'archive'];
   }
 
   function saveInboxCategories(ids) {
@@ -1387,6 +1388,8 @@
     // A virtual view rather than a real folder: the server filters by the
     // important flag across inbox/sent/archive.
     { id: 'important', label: 'Important', icon: 'FlagFill' },
+    // Same idea: everything starred, wherever it really lives.
+    { id: 'starred', label: 'Starred', icon: 'StarFilled' },
     // Also virtual: everything with a snooze set, wherever it really lives.
     { id: 'snoozed', label: 'Snoozed', icon: 'ClockFill' },
     { id: 'sent', label: 'Sent', icon: 'PaperPlaneRightFill' },
