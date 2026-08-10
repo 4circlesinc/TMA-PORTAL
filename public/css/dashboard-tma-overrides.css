@@ -1082,10 +1082,43 @@ a.tma-dash__tab-btn:visited {
   gap: var(--space-8);
 }
 
+/*
+ * Electron desktop shell (.tma-dash--desktop-bar): the portal header is the
+ * fixed blue title bar, so it must not keep an auto grid row. That row sized
+ * to the old header padding (~80px) and showed up as a blank band on Email,
+ * which has no page-title to fill it. Shipped in the portal CSS so a deploy
+ * fixes running desktop apps without waiting on a new Electron build.
+ */
+.tma-dash--desktop-bar {
+  grid-template-rows: 0 minmax(0, 1fr) !important;
+}
+.tma-dash--desktop-bar .tma-dash__main {
+  grid-row: 1 / -1 !important;
+  padding-top: 0 !important;
+}
+.tma-dash--desktop-bar.tma-dash--email .tma-dash__main-head {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+}
+
 /* Last-wins belt: never leave a blank band above the mail toolbar on desktop. */
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,
-.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main {
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main,
+.tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
   padding: 0 0 var(--space-12) !important;
+}
+
+/* Electron shell: mobile header clearance is already handled by body padding. */
+@media (max-width: 1024px) {
+  .tma-dash--desktop-bar.tma-dash--email .tma-dash__main,
+  .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile .tma-dash__main,
+  .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile-reading .tma-dash__main {
+    padding-top: 0 !important;
+  }
 }
 
 .tma-dash--email .tma-dash__main-head {

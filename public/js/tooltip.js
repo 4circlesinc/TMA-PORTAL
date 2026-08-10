@@ -101,17 +101,10 @@
       // reads as empty space under the blue header after a row action.
       tip.classList.remove('is-portaled', 'is-visible');
       tip.setAttribute('aria-hidden', 'true');
-      tip.style.position = '';
-      tip.style.left = '';
-      tip.style.top = '';
-      tip.style.visibility = '';
-      tip.style.removeProperty('--tooltip-arrow-offset');
-      const home = tip._tooltipHome;
+      tip.style.cssText = '';
       tip._tooltipHome = null;
-      if (home && home.isConnected) {
-        if (tip.parentNode !== home) home.appendChild(tip);
-        return;
-      }
+      // Prefer remove over re-homing: a tip left as position:absolute on <body>
+      // after a morph can still paint a band under the title bar.
       if (tip.parentNode) tip.parentNode.removeChild(tip);
     });
   }

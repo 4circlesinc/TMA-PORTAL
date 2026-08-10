@@ -7797,10 +7797,11 @@
 
     var main = dash.querySelector('.tma-dash__main');
     var hasDesktopToolbar = !!dash.querySelector('.tma-dash__email-toolbar');
-    if (main && hasDesktopToolbar) {
-      main.style.paddingTop = '0';
-      main.style.paddingLeft = '0';
-      main.style.paddingRight = '0';
+    var desktopShell = dash.classList.contains('tma-dash--desktop-bar');
+    if (main && (hasDesktopToolbar || desktopShell)) {
+      main.style.setProperty('padding-top', '0', 'important');
+      main.style.setProperty('padding-left', '0', 'important');
+      main.style.setProperty('padding-right', '0', 'important');
     }
 
     if (window.PortalTooltip) {

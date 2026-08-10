@@ -81,6 +81,29 @@ function buildCss(platform = process.platform) {
   }
 
   /*
+   * The portal header is restyled into the fixed blue bar, so it must not keep
+   * a grid row of its own. An auto row sized to the header's old padding
+   * (space-20 × 2 + search ≈ 80px) is exactly the empty white band that opened
+   * under the bar on Email after row actions — Mail has no page-title to fill
+   * that slot, so the hole read as blank chrome.
+   */
+  .tma-dash--desktop-bar {
+    grid-template-rows: 0 minmax(0, 1fr) !important;
+  }
+  .tma-dash--desktop-bar .tma-dash__main {
+    grid-row: 1 / -1 !important;
+    padding-top: 0 !important;
+  }
+  .tma-dash--desktop-bar.tma-dash--email .tma-dash__main-head {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+  }
+
+  /*
    * Body padding moves everything in normal flow, but position:fixed anchors to
    * the viewport and ignores it. Parts of the shell become fixed at top:0 — and
    * then sit *under* the bar. The sidebar was the visible one: its logo is the
@@ -118,10 +141,13 @@ function buildCss(platform = process.platform) {
    * white page is not a title bar.
    */
   #tma-desktop-titlebar {
-    position: fixed;
+    position: fixed !important;
     top: 0; left: 0;
     width: 100%;
     height: ${HEIGHT}px;
+    /* Never participate in .tma-dash's grid if a host puts us there. */
+    grid-area: unset !important;
+    margin: 0 !important;
     /*
      * Above ordinary content and scrims, deliberately below the portal's
      * full-viewport takeovers — email settings / portal modals are 300, the
@@ -410,8 +436,16 @@ function buildCss(platform = process.platform) {
      * scroller, because there the header floats over it. Here the body padding
      * already accounts for the bar, so that reserve is a second empty strip
      * under the first — which is what the gap below the bar was.
+     * (padding-top: 0 is also set unconditionally above for every width.)
      */
     .tma-dash--desktop-bar .tma-dash__main {
+      padding-top: 0 !important;
+    }
+
+    /* Email's mobile clearance must not win inside the desktop shell. */
+    .tma-dash--desktop-bar.tma-dash--email .tma-dash__main,
+    .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile .tma-dash__main,
+    .tma-dash--desktop-bar.tma-dash--email.tma-dash--email-mobile-reading .tma-dash__main {
       padding-top: 0 !important;
     }
   }
@@ -458,14 +492,14 @@ function script({ canGoBack, canGoForward }) {
     }
 
     /*
-     * Mounted inside .tma-dash, not on <body>. dashboard.js binds its handlers
-     * with root.querySelector(...) where root is .tma-dash — so chrome moved
-     * out of that subtree would keep its listeners but stop being found by
-     * anything that re-queries. Falls back to body on pages that have no shell,
-     * such as the "can't reach the portal" screen.
+     * Mounted on <body>, not inside .tma-dash. The shell is a CSS grid; a child
+     * without an explicit grid area is auto-placed into a fresh track. Even a
+     * position:fixed node has been observed to leave an empty row after morph
+     * fights — and that row was the white band under the bar on Email. The bar
+     * owns its own click handlers, so it does not need to live under the dash
+     * root that dashboard.js queries.
      */
-    const host = document.querySelector('.tma-dash') || document.body;
-    if (bar.parentElement !== host) host.appendChild(bar);
+    if (bar.parentElement !== document.body) document.body.appendChild(bar);
 
     bar.innerHTML = ${JSON.stringify(
     '<div class="tma-tb-nav">'
@@ -484,10 +518,46 @@ function script({ canGoBack, canGoForward }) {
      * Nothing is moved out of the portal's header — see the CSS note. The class
      * is all this needs to do: the header restyles itself into the blue strip,
      * and morph can rebuild its contents as often as it likes.
+     *
+     * Re-asserted on a MutationObserver too: a full shell morph can replace
+     * .tma-dash and drop the class, and in-page view switches do not fire a
+     * navigation for refresh() to run again.
      */
-    const dash = document.querySelector('.tma-dash');
-    if (dash) dash.classList.add('tma-dash--desktop-bar');
-    document.documentElement.classList.toggle('tma-desktop-has-shell', !!dash);
+    const markDesktopBar = () => {
+      const dash = document.querySelector('.tma-dash');
+      if (dash && !dash.classList.contains('tma-dash--desktop-bar')) {
+        dash.classList.add('tma-dash--desktop-bar');
+      }
+      document.documentElement.classList.toggle('tma-desktop-has-shell', !!dash);
+      return dash;
+    };
+    let dashWatch = markDesktopBar();
+    let dashClassWatch = null;
+    const watchDashClass = (dash) => {
+      if (dashClassWatch) {
+        dashClassWatch.disconnect();
+        dashClassWatch = null;
+      }
+      if (!dash) return;
+      dashClassWatch = new MutationObserver(() => {
+        if (!dash.classList.contains('tma-dash--desktop-bar')) {
+          dash.classList.add('tma-dash--desktop-bar');
+        }
+      });
+      dashClassWatch.observe(dash, { attributes: true, attributeFilter: ['class'] });
+    };
+    if (!document.documentElement.dataset.tmaTbClassWatch) {
+      document.documentElement.dataset.tmaTbClassWatch = '1';
+      watchDashClass(dashWatch);
+      // .tma-dash is a direct child of body — only watch those replacements.
+      new MutationObserver(() => {
+        const dash = document.querySelector('.tma-dash');
+        if (dash !== dashWatch) {
+          dashWatch = markDesktopBar();
+          watchDashClass(dashWatch);
+        }
+      }).observe(document.body, { childList: true });
+    }
 
     /*
      * The page's own heading, not document.title — that one is prefixed with

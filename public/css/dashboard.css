@@ -9285,9 +9285,12 @@
  * `:has(.tma-dash__email-toolbar)` is the source of truth — that toolbar only
  * renders on desktop, so mobile header clearance cannot win while Split/List
  * chrome is on screen (the combo that opened the empty white band).
+ * `.tma-dash--desktop-bar` is injected by the Electron shell; when present the
+ * body already clears the title bar, so mobile header padding is a second gap.
  */
 .tma-dash--email:has(.tma-dash__email-toolbar) .tma-dash__main,
-.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main {
+.tma-dash--email:not(.tma-dash--email-mobile) .tma-dash__main,
+.tma-dash--desktop-bar.tma-dash--email .tma-dash__main {
   padding: 0 0 var(--space-12) !important;
   overflow: hidden;
   min-height: 0;
