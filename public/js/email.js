@@ -1446,10 +1446,10 @@
 
   /* ── conversations in the list ───────────────────────────────────
    * A row that stands for several messages carries an arrow. Opening it lists
-   * the rest of the conversation underneath, in place, and deliberately does
-   * *not* open anything in the reading pane — expanding is a look, choosing a
-   * message is a read, and conflating the two made every glance at a thread
-   * mark something as read.
+   * every message in the conversation underneath (including the first), in
+   * place, and deliberately does *not* open anything in the reading pane —
+   * expanding is a look, choosing a message is a read, and conflating the two
+   * made every glance at a thread mark something as read.
    *
    * `threadCount` comes from the server, so the arrow only ever appears where
    * there is genuinely more than one message. The children themselves are
@@ -1468,12 +1468,18 @@
     return !!(state.openConversations && state.openConversations[id]);
   }
 
-  /* The conversation's other messages, newest first, once they have arrived. */
+  /* Every message in the conversation, oldest first, once they have arrived.
+   * Includes the parent row's message so the first email is listed too. */
   function conversationChildren(state, id) {
     var loaded = (state.conversationRows && state.conversationRows[id]) || null;
     if (!loaded) return null;
 
-    return loaded.filter(function (row) { return row.id !== id; });
+    return loaded.slice().sort(function (a, b) {
+      var ta = a.sentAt || '';
+      var tb = b.sentAt || '';
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      return String(a.id).localeCompare(String(b.id));
+    });
   }
 
   function collapseAllConversations(state) {
@@ -1503,13 +1509,16 @@
     return request;
   }
 
-  /* Every id a conversation covers — the row itself plus whatever of its
-   * history has been fetched. Selection and bulk actions work on this, so
-   * ticking a conversation really does tick the replies inside it. */
+  /* Every id a conversation covers. Once the drop is loaded that is every
+   * message in it; before then it is just the parent row. Selection and bulk
+   * actions work on this, so ticking a conversation really does tick all of it. */
   function conversationIds(state, id) {
-    var children = conversationChildren(state, id) || [];
+    var children = conversationChildren(state, id);
+    if (children && children.length) {
+      return children.map(function (row) { return row.id; });
+    }
 
-    return [id].concat(children.map(function (row) { return row.id; }));
+    return [id];
   }
 
   /* Rows drawn in the list right now: the page, plus the children of any
