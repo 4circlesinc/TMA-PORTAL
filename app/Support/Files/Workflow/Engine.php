@@ -8,6 +8,7 @@ use App\Models\FileWorkflow;
 use App\Models\FileWorkflowEvent;
 use App\Models\FileWorkflowStep;
 use App\Models\User;
+use App\Support\Files\AccessGrants;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Versions;
@@ -241,7 +242,10 @@ class Engine
         abort_if(Status::isTerminal($workflow->status), 422, 'This request is already closed.');
         abort_unless($step->isOpen(), 422, 'That step has already been answered.');
         abort_if($to->id === $step->user_id, 422, 'That is already the assignee.');
-        abort_if(FileAccess::fileRole($to, $workflow->file) === null, 422, 'That person cannot open this file.');
+        // Handing your step to somebody outside the file is allowed when you
+        // could have shared it with them — the access follows the handover.
+        abort_if(AccessGrants::ensure($actor, $to, $workflow->file, 'delegation') === null, 422,
+            'That person cannot open this file, and you can’t share it with them.');
 
         $step->update([
             'delegated_from_id' => $step->user_id,

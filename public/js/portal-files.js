@@ -1844,7 +1844,9 @@
       var chips = [
         { tab: 'comments', n: counts.comments, one: 'comment', many: 'comments' },
         { tab: 'versions', n: counts.versions, one: 'version', many: 'versions' },
-        { tab: 'approvals', n: counts.approvals, one: 'approval', many: 'approvals' },
+        // "1 approval" counted requests still waiting, but reads as one having
+        // been given — the opposite of what the number means.
+        { tab: 'approvals', n: counts.approvals, one: 'open request', many: 'open requests' },
       ].filter(function (c) { return c.n > 0; });
 
       if (!chips.length) return '';
@@ -2404,6 +2406,20 @@
 
     /* ── @mention autocomplete ───────────────────────── */
 
+    /**
+     * "Will be given access", against anyone the file hasn't reached yet.
+     *
+     * Whoever may share a file may add anyone to it, and that person is granted
+     * access as they are added. Saying so on the row is what keeps that from
+     * being a surprise: the sender learns it while choosing, not afterwards
+     * from the Access panel.
+     */
+    function grantNoteHtml(p) {
+      if (p.hasAccess !== false) return '';
+
+      return '<span class="tma-portal-viewer__member-role">Will be given access</span>';
+    }
+
     function onComposerInput(input) {
       var f = current();
       var e = entry(f);
@@ -2425,6 +2441,7 @@
               ' data-name="' + esc(p.name) + '">' +
               '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(p)) + '" alt="" width="22" height="22">' +
               '<span><strong>' + esc(p.name) + '</strong><span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span></span>' +
+              grantNoteHtml(p) +
             '</button>';
           }).join('');
           pop.hidden = false;
@@ -2798,12 +2815,34 @@
             var slot = lb.querySelector('[data-lb-approvals]');
             if (slot) slot.innerHTML = approvalsHtml(data);
           }
+          refreshApprovalCount(data);
           // The header badge belongs to the file, not to this tab.
           f.workflowBadge = data.badge;
           var head = lb.querySelector('.tma-portal-viewer__head');
           if (head) head.outerHTML = viewerHead(f);
         })
         .catch(function (err) { panelError('[data-lb-approvals]', err, 'requests'); });
+    }
+
+    /**
+     * The Approvals tab label, on the same terms as Comments.
+     *
+     * The count came only from /details, which is fetched once when the viewer
+     * opens — so sending a request left the tab unnumbered, and answering the
+     * last one left it claiming work that was finished. Both are read as the
+     * request having failed. The count is written back into the cached details
+     * as well as onto the label, because the tab row is rebuilt from that cache
+     * on every panel repaint and would otherwise revert on the next tab switch.
+     */
+    function refreshApprovalCount(data) {
+      var n = (data && data.openCount) || 0;
+
+      var e = entry(current());
+      if (e.details && e.details.counts) e.details.counts.approvals = n;
+
+      var label = lb.querySelector('[data-lb-tab="approvals"] .tma-tab__label');
+      if (!label) return;
+      label.textContent = n ? 'Approvals (' + n + ')' : 'Approvals';
     }
 
     function approvalsHtml(data) {
@@ -3118,7 +3157,7 @@
         body: '<div class="tma-portal-wf-form">' +
           '<label class="tma-portal-modal__label">Who should respond?</label>' +
           '<input type="text" class="tma-portal-viewer__input tma-portal-modal__input" data-wf-search ' +
-            'placeholder="Search people who can open this file">' +
+            'placeholder="Search people">' +
           '<div class="tma-portal-viewer__mention-pop" data-wf-results hidden></div>' +
           '<div class="tma-portal-wf-chosen" data-wf-chosen></div>' +
 
@@ -3157,9 +3196,9 @@
 
           search.addEventListener('input', function () {
             var q = search.value.trim();
-            // Reuses the mention endpoint: the same "people who can open this
-            // file" rule, so a request can never be sent to someone who would
-            // be unable to act on it.
+            // Reuses the mention endpoint, which answers the same question:
+            // who may this person add to this file. Anyone the file has not
+            // reached yet is offered too, and told so on the row.
             net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/mentionable?q=' + encodeURIComponent(q)))
               .then(function (data) {
                 var people = (data && data.people) || [];
@@ -3169,7 +3208,8 @@
                     '" data-name="' + esc(p.name) + '">' +
                     '<img class="tma-portal-viewer__avatar" src="' + esc(avatarFor(p)) + '" alt="" width="22" height="22">' +
                     '<span><strong>' + esc(p.name) + '</strong>' +
-                    '<span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span></span></button>';
+                    '<span class="tma-portal-viewer__member-email">' + esc(p.email) + '</span></span>' +
+                    grantNoteHtml(p) + '</button>';
                 }).join('');
                 results.hidden = false;
               })

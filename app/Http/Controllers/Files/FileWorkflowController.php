@@ -6,6 +6,7 @@ use App\Models\FileItem;
 use App\Models\FileWorkflow;
 use App\Models\FileWorkflowStep;
 use App\Models\User;
+use App\Support\Files\AccessGrants;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Workflow\Engine;
 use App\Support\Files\Workflow\Status;
@@ -60,10 +61,22 @@ class FileWorkflowController extends BaseFilesController
         foreach ($data['recipients'] as $r) {
             $person = User::where('id', $r['userId'])->where('status', User::STATUS_APPROVED)->first();
             abort_unless($person, 422, 'One of the people chosen is not an active account.');
-            // Asking somebody to approve a file they cannot open would send
-            // them a request they can never act on.
-            abort_if(FileAccess::fileRole($person, $file) === null, 422,
-                $person->name.' can’t open this file. Share it with them first.');
+
+            /*
+             * Anyone can be asked, whether or not the file has reached them.
+             *
+             * This used to refuse with "share it with them first", which sent
+             * the sender off to the Access panel mid-thought to arrange
+             * something they had just asked for in plainer words. Somebody who
+             * may share the file may add anyone to it and access follows the
+             * request — the person opens it and answers, and the grant is
+             * recorded in Access and in the file's activity like any other.
+             *
+             * The refusal remains for a sender who cannot share: they would be
+             * sending a request nobody could act on.
+             */
+            abort_if(AccessGrants::ensure($user, $person, $file, 'review') === null, 422,
+                $person->name.' can’t open this file, and you can’t share it with them.');
 
             $recipients[] = [
                 'user_id' => $person->id,

@@ -120,10 +120,11 @@ class FileCommentTest extends TestCase
     }
 
     /**
-     * The security property that matters most here: mentioning someone must
-     * never become a way to push a private file's name at them.
+     * Somebody who may share the file may name anyone in a comment, and the
+     * access follows the mention — the whole point of naming a person is that
+     * they have not seen the thing yet.
      */
-    public function test_a_mention_of_someone_without_access_is_dropped_silently(): void
+    public function test_mentioning_someone_without_access_gives_them_access(): void
     {
         $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
         $file = $this->file($owner);
@@ -136,8 +137,46 @@ class FileCommentTest extends TestCase
             'mentions' => [$stranger->id],
         ])->assertCreated();
 
+        $this->assertSame(1, FileComment::first()->mentions()->count());
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $stranger->id, 'type' => 'file.mention',
+        ]);
+        // Not just notified — the file actually opens for them now, through a
+        // share that says who granted it.
+        $this->assertDatabaseHas('shares', [
+            'item_type' => 'file', 'item_id' => $file->id, 'kind' => 'user',
+            'target_user_id' => $stranger->id, 'role' => 'viewer', 'shared_by' => $owner->id,
+        ]);
+        $this->actingAs($stranger)->getJson("/portal/files/files/{$file->uuid}/comments")->assertOk();
+    }
+
+    /**
+     * The security property that matters most here: a mention must never become
+     * a way for someone who cannot share the file to push its name at a
+     * stranger. The author's own permission is what decides it.
+     */
+    public function test_a_mention_by_someone_who_cannot_share_is_dropped_silently(): void
+    {
+        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $file = $this->file($owner);
+        $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
+
+        // Invited to comment, nothing more: no right to hand the file on.
+        $guest = $this->user('Client', 'guest@example.com', 'Gale Guest');
+        Share::create([
+            'uuid' => (string) Str::uuid(), 'token' => Str::random(48),
+            'item_type' => 'file', 'item_id' => $file->id, 'shared_by' => $owner->id,
+            'kind' => 'user', 'target_user_id' => $guest->id, 'role' => 'viewer',
+        ]);
+
+        $this->actingAs($guest)->postJson("/portal/files/files/{$file->uuid}/comments", [
+            'body' => 'Sam Stranger take a look',
+            'mentions' => [$stranger->id],
+        ])->assertCreated();
+
         $this->assertDatabaseMissing('portal_notifications', ['user_id' => $stranger->id]);
         $this->assertSame(0, FileComment::first()->mentions()->count());
+        $this->assertDatabaseMissing('shares', ['target_user_id' => $stranger->id]);
     }
 
     public function test_a_suspended_user_cannot_be_mentioned(): void
@@ -358,18 +397,47 @@ class FileCommentTest extends TestCase
         });
     }
 
-    public function test_mentionable_people_are_limited_to_those_who_can_open_the_file(): void
+    /**
+     * Whoever may share the file may add anyone to it, so the picker offers
+     * everyone — and says which of them the file has not reached yet.
+     */
+    public function test_someone_who_can_share_may_mention_anyone(): void
+    {
+        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $file = $this->file($owner);
+        $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
+        $admin = $this->user('Administrator', 'admin@example.com', 'Ada Admin');
+
+        $people = $this->actingAs($owner)
+            ->getJson("/portal/files/files/{$file->uuid}/mentionable")->assertOk()->json('people');
+
+        $byEmail = array_column($people, 'hasAccess', 'email');
+
+        // Administrators can reach every file; the client cannot — but both are
+        // offered, because the owner can bring either of them in.
+        $this->assertTrue($byEmail[$admin->email] ?? null);
+        $this->assertFalse($byEmail[$stranger->email] ?? null);
+    }
+
+    /** Everyone else sees only the people already on the file. */
+    public function test_mentionable_people_are_limited_for_someone_who_cannot_share(): void
     {
         $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
         $file = $this->file($owner);
         $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $admin = $this->user('Administrator', 'admin@example.com', 'Ada Admin');
 
-        $res = $this->actingAs($owner)
+        $guest = $this->user('Client', 'guest@example.com', 'Gale Guest');
+        Share::create([
+            'uuid' => (string) Str::uuid(), 'token' => Str::random(48),
+            'item_type' => 'file', 'item_id' => $file->id, 'shared_by' => $owner->id,
+            'kind' => 'user', 'target_user_id' => $guest->id, 'role' => 'viewer',
+        ]);
+
+        $res = $this->actingAs($guest)
             ->getJson("/portal/files/files/{$file->uuid}/mentionable")->assertOk();
 
         $emails = array_column($res->json('people'), 'email');
-        // Administrators can reach every file; the unrelated employee cannot.
         $this->assertContains($admin->email, $emails);
         $this->assertNotContains('stranger@example.com', $emails);
     }

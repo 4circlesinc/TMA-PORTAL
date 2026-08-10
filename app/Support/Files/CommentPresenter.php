@@ -136,15 +136,33 @@ class CommentPresenter
     }
 
     /**
-     * People the author may mention: those who can already open this file.
+     * People the author may add to this file — by mentioning them in a comment,
+     * or by asking them to review it.
      *
-     * Filtered server-side so the composer cannot become a directory of names
-     * the viewer has no other way to see.
+     * Two lists, decided by what the viewer may do:
+     *
+     *  - **Somebody who may share the file sees everyone**, whether or not the
+     *    file has reached them yet, because they can bring anyone in: naming a
+     *    person grants them access (AccessGrants). Restricting this list to
+     *    people who already hold the file would hide precisely the colleague
+     *    the sender opened the composer to find.
+     *  - **Everybody else sees only people who can already open it**, so the
+     *    composer never becomes a directory of names the viewer has no other
+     *    way to see.
+     *
+     * `hasAccess` travels with each person so the composer can say, before the
+     * sender commits, that picking them will give them access.
+     *
+     * The wide list is staff-only. A client can hold `full` over their own
+     * upload, and the answer to "who else exists in this portal?" is not theirs
+     * to browse — the firm's other clients are on that list.
      *
      * @return list<array>
      */
     public static function mentionable(FileItem $file, User $viewer, string $query = ''): array
     {
+        $mayAddAnyone = FileAccess::isStaff($viewer) && FileAccess::can($viewer, 'share', $file);
+
         $candidates = User::query()
             ->where('status', User::STATUS_APPROVED)
             ->where('id', '!=', $viewer->id)
@@ -159,16 +177,21 @@ class CommentPresenter
             })
             ->orderBy('name')
             ->limit(60)
-            ->get();
+            ->get()
+            ->map(fn (User $u) => ['user' => $u, 'access' => FileAccess::fileRole($u, $file)]);
 
         return $candidates
-            ->filter(fn (User $u) => FileAccess::fileRole($u, $file) !== null)
+            ->filter(fn (array $c) => $mayAddAnyone || $c['access'] !== null)
+            // People already on the file first: the everyday case is unchanged
+            // by the wider search, rather than buried in it.
+            ->sortBy(fn (array $c) => [$c['access'] === null ? 1 : 0, $c['user']->name])
             ->take(8)
-            ->map(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'avatar' => $u->photoUrl(),
+            ->map(fn (array $c) => [
+                'id' => $c['user']->id,
+                'name' => $c['user']->name,
+                'email' => $c['user']->email,
+                'avatar' => $c['user']->photoUrl(),
+                'hasAccess' => $c['access'] !== null,
             ])
             ->values()
             ->all();

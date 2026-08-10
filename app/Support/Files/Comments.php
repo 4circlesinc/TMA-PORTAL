@@ -19,12 +19,13 @@ use Illuminate\Support\Str;
  *
  * Two rules here are load-bearing and easy to get wrong:
  *
- *  - **A mention can never reach someone who cannot open the file.** Mentions
- *    arrive as user ids from the composer, and the composer's suggestion list
- *    is itself filtered — but the list is a courtesy, not the control. Every
- *    mention is re-checked against FileAccess before it is stored, so a
- *    hand-crafted request cannot notify a stranger (and, through the
- *    notification's own text, leak the file's name to them).
+ *  - **A mention never reaches someone the author could not have shared with.**
+ *    Mentions arrive as user ids from the composer, and the composer's
+ *    suggestion list is itself filtered — but the list is a courtesy, not the
+ *    control. Every mention runs through AccessGrants before it is stored: an
+ *    author who may share the file brings the named person in and access
+ *    follows, while one who may not cannot notify a stranger at all (and so
+ *    cannot, through the notification's own text, leak the file's name).
  *
  *  - **Bodies are stored and returned as plain text, never markup.** The client
  *    escapes and then decorates the mentioned names. Nothing a user types is
@@ -146,11 +147,17 @@ class Comments
     }
 
     /**
-     * Replace a comment's mentions, dropping any user who cannot open the file.
+     * Replace a comment's mentions.
      *
-     * Silently dropping rather than erroring is deliberate: the author should
-     * not learn, from an error message, that a particular colleague lacks
-     * access to this file.
+     * Somebody who cannot open the file is given access — see AccessGrants —
+     * provided the author is allowed to share it. Naming a colleague is how
+     * people ask for a second pair of eyes, and refusing to deliver that
+     * because the file had not been shared with them yet made the author go and
+     * arrange access in another panel before they could ask their question.
+     *
+     * When the author cannot share, the mention is dropped silently rather than
+     * erroring: they should not learn, from an error message, that a particular
+     * colleague lacks access to this file.
      */
     private static function syncMentions(FileComment $comment, FileItem $file, array $mentionIds): void
     {
@@ -167,11 +174,13 @@ class Comments
             ->where('status', User::STATUS_APPROVED)
             ->get();
 
+        $author = $comment->author ?? User::find($comment->author_id);
+
         foreach ($users as $user) {
             if ($user->id === $comment->author_id) {
                 continue;
             }
-            if (FileAccess::fileRole($user, $file) === null) {
+            if (! $author || AccessGrants::ensure($author, $user, $file, 'mention') === null) {
                 continue;
             }
 

@@ -39,6 +39,25 @@ class WorkflowPresenter
             'badge' => self::badge($file),
             'lockReason' => Versions::lockReason($file),
             'workflows' => $workflows->map(fn (FileWorkflow $w) => self::workflow($w, $viewer))->values(),
+            /*
+             * Counted, not measured off the list above.
+             *
+             * That list is capped at the twenty most recent and shaped for
+             * reading; the tab label is a claim about the whole file. They are
+             * the same numbers the details payload reports, so the tab keeps
+             * saying the same thing after a request is sent, answered or
+             * cancelled — which it did not when only /details knew the count.
+             */
+            'openCount' => FileWorkflow::where('file_id', $file->id)
+                ->whereNotIn('status', Status::TERMINAL)->count(),
+            'total' => FileWorkflow::where('file_id', $file->id)->count(),
+            // Waiting on this reader specifically — the one number that means
+            // "you have something to do".
+            'mineCount' => FileWorkflowStep::query()
+                ->whereIn('workflow_id', FileWorkflow::where('file_id', $file->id)->select('id'))
+                ->where('user_id', $viewer->id)
+                ->where('status', 'invited')
+                ->count(),
         ];
     }
 

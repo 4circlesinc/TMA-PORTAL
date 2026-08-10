@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\FileItem;
 use App\Models\FileVersion;
 use App\Models\FileWorkflow;
+use App\Models\FileWorkflowStep;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Files\Workflow\Status;
@@ -112,6 +113,40 @@ class FileWorkflowTest extends TestCase
         $this->assertDatabaseHas('portal_notifications', [
             'user_id' => $ben->id, 'type' => 'file.approval_requested',
         ]);
+    }
+
+    /**
+     * The Approvals tab is labelled from these, so they have to move as the
+     * requests do — a tab still claiming an open request after the last one was
+     * answered reads as the response having failed.
+     */
+    public function test_the_panel_counts_open_requests_and_what_is_waiting_on_you(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $file = $this->sharedFile($admin);
+
+        $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
+
+        $this->actingAs($ben)->getJson("/portal/files/files/{$file->uuid}/workflows")
+            ->assertOk()
+            ->assertJsonPath('openCount', 1)
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('mineCount', 1);
+
+        // The sender has nothing to answer, even though the request is open.
+        $this->actingAs($admin)->getJson("/portal/files/files/{$file->uuid}/workflows")
+            ->assertJsonPath('openCount', 1)
+            ->assertJsonPath('mineCount', 0);
+
+        $this->actingAs($ben)
+            ->postJson("/portal/files/files/{$file->uuid}/workflows/{$wf['id']}/respond", ['action' => 'approve'])
+            ->assertOk();
+
+        $this->actingAs($ben)->getJson("/portal/files/files/{$file->uuid}/workflows")
+            ->assertJsonPath('openCount', 0)
+            ->assertJsonPath('total', 1, 'the request still happened')
+            ->assertJsonPath('mineCount', 0);
     }
 
     public function test_approving_completes_the_request_and_stamps_the_version(): void
@@ -335,10 +370,14 @@ class FileWorkflowTest extends TestCase
         ])->assertCreated();
     }
 
-    public function test_a_request_cannot_be_sent_to_someone_who_cannot_open_the_file(): void
+    /**
+     * Asking somebody who has never seen the file is the ordinary case, not an
+     * error: the sender may share it, so the access arrives with the request.
+     */
+    public function test_a_request_may_be_sent_to_someone_who_cannot_open_the_file_yet(): void
     {
         $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
-        // A client cannot open an internal file, so cannot be asked to approve.
+        // A client cannot open an internal file until this brings them in.
         $stranger = $this->user('Client', 'sam@example.com', 'Sam Stranger');
 
         // A private file, not the org-shared one.
@@ -351,7 +390,36 @@ class FileWorkflowTest extends TestCase
             ->postJson("/portal/files/files/{$file->uuid}/workflows", [
                 'type' => 'approval',
                 'recipients' => [['userId' => $stranger->id]],
+            ])->assertCreated();
+
+        $this->assertDatabaseHas('shares', [
+            'item_type' => 'file', 'item_id' => $file->id, 'kind' => 'user',
+            'target_user_id' => $stranger->id, 'role' => 'viewer', 'shared_by' => $owner->id,
+        ]);
+
+        // And it is a request they can actually answer.
+        $this->actingAs($stranger)
+            ->getJson("/portal/files/files/{$file->uuid}/workflows")->assertOk();
+    }
+
+    /** A sender who cannot share the file still cannot pull anybody into it. */
+    public function test_a_sender_who_cannot_share_cannot_add_someone_without_access(): void
+    {
+        $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
+        $stranger = $this->user('Client', 'sam@example.com', 'Sam Stranger');
+        $file = $this->sharedFile($owner);
+
+        // The org folder is editor-for-all-staff: enough to send a request,
+        // never enough to hand the file to somebody new.
+        $editor = $this->user('Employee', 'eddie@example.com', 'Eddie Editor');
+
+        $this->actingAs($editor)
+            ->postJson("/portal/files/files/{$file->uuid}/workflows", [
+                'type' => 'approval',
+                'recipients' => [['userId' => $stranger->id]],
             ])->assertStatus(422);
+
+        $this->assertDatabaseMissing('shares', ['target_user_id' => $stranger->id]);
     }
 
     public function test_only_the_sender_can_cancel(): void
@@ -465,7 +533,7 @@ class FileWorkflowTest extends TestCase
 
         // Move both past their thresholds.
         FileWorkflow::where('uuid', $a['id'])->update(['due_at' => now()->subDay()]);
-        \App\Models\FileWorkflowStep::whereHas('workflow', fn ($q) => $q->where('uuid', $b['id']))
+        FileWorkflowStep::whereHas('workflow', fn ($q) => $q->where('uuid', $b['id']))
             ->update(['invited_at' => now()->subDays(5)]);
 
         $this->artisan('files:workflow-maintenance')->assertSuccessful();
@@ -474,7 +542,7 @@ class FileWorkflowTest extends TestCase
         $this->assertDatabaseHas('portal_notifications', [
             'user_id' => $cara->id, 'type' => 'file.approval_reminder',
         ]);
-        $this->assertSame(1, (int) \App\Models\FileWorkflowStep::whereHas('workflow',
+        $this->assertSame(1, (int) FileWorkflowStep::whereHas('workflow',
             fn ($q) => $q->where('uuid', $b['id']))->value('reminder_count'));
     }
 
