@@ -16300,6 +16300,18 @@
 
 .tma-dash__clients-see-all:hover { background: var(--color-accent-bg); }
 
+/*
+ * The pagination bar spans the table.
+ *
+ * `.tma-pagination-bar` defaults to a fixed `--pagination-width: 892px`, which
+ * is narrower than this table at any usable window size — the footer stopped
+ * 200px short of the rows above it. The Users table already opts out this way.
+ */
+.tma-dash__clients .tma-pagination-bar {
+  --pagination-width: 100%;
+  width: 100%;
+}
+
 /* The window of page buttons skips a range; the gap marks where. */
 .tma-pagination__gap {
   display: inline-flex;
@@ -17593,6 +17605,11 @@
 }
 
 .tma-dash__clients-list--facts .tma-dash__clients-list-main { min-width: 0; }
+
+/* No icon on a stats row. It bought nothing — four glyphs nobody reads — and
+   it indented every label 28px so the card's heading hung out to the left of
+   everything beneath it. Without it the title and the facts share one edge. */
+.tma-dash__clients-list--facts .tma-dash__clients-list-icon { display: none; }
 
 .tma-dash__clients-list-icon {
   display: inline-flex;
