@@ -75,6 +75,40 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/clients-table.mjs
   ```
+- **`clients-loading.mjs`** — what the hub does while it loads, when it has
+  nothing to show, and when the request fails. These were one state before, and
+  that is the bug it was written for: the directory shipped every client's full
+  contact profile on every page load (9.6 MB of JSON and a 127 MB PHP memory
+  peak at eleven thousand clients, which was exhausting the container), and when
+  that request timed out the page caught the error, hydrated an empty list from
+  it, and rendered **"No clients found"** — telling staff the firm had no
+  clients whenever the directory failed.
+
+  So it asserts the listing carries no `profile` key and stays under 400 bytes a
+  record; that a skeleton holds the table's layout while waiting (the header must
+  not move when the data lands) and that neither the count nor the pager claims a
+  total it has not been told; that a 500 renders a *failure* with a retry that
+  actually recovers; that searching a nickname — held only in the blob the
+  browser no longer has — still finds the client; and that "no matches", "no
+  clients yet" and "couldn't load" are three different screens, only the middle
+  one offering to add anything.
+
+  It fakes its failures with `page.route`, so the three 500s in the console at
+  the end are the point rather than a problem. Two things it was written around:
+  click the **name cell** (`.tma-dash__cc--user`), because the Referral column is
+  a link to the referring company and sits under the middle of the row; and a
+  delayed route handler still sleeping when its route is lifted throws, so its
+  `continue()` is guarded.
+
+  Wants the same large directory as `clients-table.mjs`:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/clients-loading.mjs
+  ```
+
+  Note that `client-referrals.mjs` and `clients.mjs` want the *opposite* — a
+  near-empty directory. Run them against a fresh database, or the clients they
+  create land on page 300 of the big one and every assertion reads `undefined`.
 - **`feed.mjs`** — the Feed module. PHPUnit covers the API
   (`tests/Feature/FeedTest.php`); what only a browser can check is §22 — that
   posting, commenting, reacting, voting, bookmarking and pinning all *patch*

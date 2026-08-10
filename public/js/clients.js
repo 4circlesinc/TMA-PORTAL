@@ -1717,8 +1717,13 @@
 
     var prevDisabled = state.page <= 1 ? ' disabled' : '';
     var nextDisabled = state.page >= totalPages ? ' disabled' : '';
-    var resultsText = totalRows.toLocaleString() + (totalRows === 1 ? ' result' : ' results') +
-      ' · page ' + state.page.toLocaleString() + ' of ' + totalPages.toLocaleString();
+    // Nothing has been counted yet, so "0 results · page 1 of 1" beside a
+    // skeleton table is a claim about the directory rather than a report on
+    // the request — the same mistake the count above the table used to make.
+    var resultsText = state.loadState === 'ready'
+      ? totalRows.toLocaleString() + (totalRows === 1 ? ' result' : ' results') +
+        ' · page ' + state.page.toLocaleString() + ' of ' + totalPages.toLocaleString()
+      : '';
 
     return (
       '<div class="tma-pagination-bar tma-pagination-bar--footer" data-clients-pagination>' +
@@ -5831,9 +5836,12 @@
         state.loadState = 'ready';
         state.loadError = null;
         startClients();
-      }).catch(function (err) {
+      }).catch(function () {
         state.loadState = 'error';
-        state.loadError = (err && err.message) || 'The directory did not answer.';
+        // Our own sentence, not err.message: for a 500 the fetch layer says
+        // "Request failed", which is true and tells the reader nothing they
+        // can act on. The real error is in the console.
+        state.loadError = 'The directory didn’t answer. It may just be busy.';
         // clientsLoaded stays false: nothing was loaded, and leaving it false
         // is what lets a later mount try again instead of showing a blank hub.
         startClients();

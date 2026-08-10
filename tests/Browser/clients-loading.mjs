@@ -226,6 +226,13 @@ try {
       contentType: 'application/json',
       body: JSON.stringify({ clients: [], customFields: [] }),
     }));
+  // Companies are rows in this table too, so an empty directory means both.
+  await page.route('**/portal/companies', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ companies: [] }),
+    }));
   await page.goto(`${BASE}/clients`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.tma-dash__ctable--clients .tma-no-data', { timeout: 25000 });
 
@@ -256,6 +263,7 @@ try {
     'the new-client form opens',
   );
   await page.unroute('**/portal/clients');
+  await page.unroute('**/portal/companies');
 
   await page.screenshot({ path: 'tests/Browser/clients-loading.png', fullPage: false });
 } catch (e) {
