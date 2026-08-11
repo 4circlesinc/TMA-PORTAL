@@ -773,6 +773,7 @@
     var editor = panel.querySelector('[data-email-inline-compose-editor]');
     if (editor) {
       prepareEditableImages(editor);
+      wireComposeMention(editor);
       MORPH.on(editor, 'input', function () {
         if (!state.inlineCompose) return;
         state.inlineCompose.bodyHtml = editor.innerHTML;
@@ -5344,6 +5345,7 @@
 
   function openRecipientSuggest(input, items) {
     closeRecipientSuggest();
+    closeComposeMention();
     if (!items || !items.length) return;
 
     var menu = document.createElement('div');
@@ -5455,6 +5457,283 @@
       setTimeout(function () {
         if (suggestActive && suggestActive.input === input) closeRecipientSuggest();
       }, 150);
+    });
+  }
+
+
+  /* ── Body @mentions (compose / reply / forward) ──────────────────
+   * Type @ in the contenteditable body to pick someone from the same
+   * suggest API as To/Cc/Bcc. The menu is a body-level popup (no re-render)
+   * so the caret stays put. Picking inserts a mailto mention and, when a
+   * To field is editable, also adds them as a recipient. */
+
+  var MENTION_DEBOUNCE_MS = 200;
+  var mentionActive = null;
+
+  function closeComposeMention() {
+    var menu = document.querySelector('[data-email-mention-menu]');
+    if (menu) menu.remove();
+    if (mentionActive && mentionActive.cleanup) mentionActive.cleanup();
+    mentionActive = null;
+  }
+
+  function composeMentionMatch(textBeforeCaret) {
+    return String(textBeforeCaret || '').match(/(^|\s)@([\w.'\-]*)$/);
+  }
+
+  function caretClientRect() {
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return null;
+    var range = selection.getRangeAt(0).cloneRange();
+    range.collapse(true);
+    var rects = range.getClientRects();
+    if (rects && rects.length) return rects[0];
+    var rect = range.getBoundingClientRect();
+    if (rect && (rect.width || rect.height || rect.top || rect.left)) return rect;
+    // Empty editors often report a zero rect — fall back to the editor box.
+    return null;
+  }
+
+  function findEditableToInput(editor) {
+    var compose = editor.closest('.tma-dash__email-compose');
+    if (compose) {
+      return compose.querySelector('[data-email-compose-field="to"]');
+    }
+    var panel = editor.closest('[data-email-inline-compose-panel]');
+    if (panel) {
+      return panel.querySelector('[data-email-inline-compose-field="to"]');
+    }
+    return null;
+  }
+
+  function addMentionToRecipients(editor, suggestion) {
+    var toInput = findEditableToInput(editor);
+    if (!toInput) return;
+
+    var pieces = (suggestion.source === 'group' && suggestion.emails && suggestion.emails.length)
+      ? suggestion.emails
+      : [{ name: suggestion.name, email: suggestion.email }];
+
+    var value = toInput.value || '';
+    var added = [];
+    pieces.forEach(function (piece) {
+      if (!piece || !piece.email) return;
+      if (alreadyAddressed(value, piece.email)) return;
+      added.push(piece);
+    });
+    if (!added.length) return;
+
+    var insert = formatAddressList(added);
+    var next = value.replace(/\s*$/, '');
+    if (next && !/,\s*$/.test(next)) next += ', ';
+    else if (/,$/.test(next)) next += ' ';
+    toInput.value = (next + insert).replace(/^\s*,\s*/, '');
+    toInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function applyComposeMention(editor, suggestion) {
+    if (!editor || !suggestion) return;
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+
+    var range = selection.getRangeAt(0);
+    var node = range.startContainer;
+    if (!node || node.nodeType !== 3 || !editor.contains(node)) return;
+
+    var before = node.textContent.slice(0, range.startOffset);
+    var match = composeMentionMatch(before);
+    if (!match) return;
+
+    var triggerLen = 1 + (match[2] || '').length; // "@" + query
+    var start = before.length - triggerLen;
+    range.setStart(node, start);
+    range.setEnd(node, range.startOffset + triggerLen);
+    range.deleteContents();
+
+    var label = suggestion.source === 'group'
+      ? (suggestion.name || 'Group')
+      : (suggestion.name || suggestion.email || 'Someone');
+    var email = suggestion.email || '';
+    if (suggestion.source === 'group' && suggestion.emails && suggestion.emails[0]) {
+      email = suggestion.emails[0].email || '';
+    }
+
+    var mention = document.createElement('a');
+    mention.className = 'tma-dash__email-mention';
+    mention.setAttribute('data-email-mention', email || label);
+    if (email) mention.setAttribute('href', 'mailto:' + email);
+    mention.setAttribute('contenteditable', 'false');
+    mention.textContent = '@' + label;
+
+    range.insertNode(mention);
+    var spacer = document.createTextNode('\u00a0');
+    mention.parentNode.insertBefore(spacer, mention.nextSibling);
+
+    range.setStartAfter(spacer);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    addMentionToRecipients(editor, suggestion);
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    closeComposeMention();
+    editor.focus();
+  }
+
+  function openComposeMentionMenu(editor, items) {
+    closeComposeMention();
+    closeRecipientSuggest();
+    if (!items || !items.length) return;
+
+    var menu = document.createElement('div');
+    menu.className = 'tma-dash__email-suggest-menu tma-dash__email-mention-menu';
+    menu.setAttribute('data-email-mention-menu', '');
+    menu.setAttribute('role', 'listbox');
+    var activeIndex = 0;
+    menu.innerHTML = renderSuggestMenu(items, activeIndex);
+    document.body.appendChild(menu);
+
+    var caret = caretClientRect();
+    var anchorRect = caret || editor.getBoundingClientRect();
+    menu.style.minWidth = '280px';
+    // positionEmailPopupMenu expects an element; use a temporary anchor at the caret.
+    var anchor = document.createElement('span');
+    anchor.style.position = 'fixed';
+    anchor.style.top = Math.round(anchorRect.bottom || anchorRect.top || 0) + 'px';
+    anchor.style.left = Math.round(anchorRect.left || 0) + 'px';
+    anchor.style.width = '1px';
+    anchor.style.height = '1px';
+    anchor.style.pointerEvents = 'none';
+    document.body.appendChild(anchor);
+    positionEmailPopupMenu(anchor, menu);
+    anchor.remove();
+
+    function setActive(next) {
+      activeIndex = Math.max(0, Math.min(items.length - 1, next));
+      menu.innerHTML = renderSuggestMenu(items, activeIndex);
+      bindItemClicks();
+      var active = menu.querySelector('.tma-dash__email-suggest-item--active');
+      if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    function bindItemClicks() {
+      menu.querySelectorAll('[data-email-suggest-index]').forEach(function (btn) {
+        btn.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          var idx = parseInt(btn.getAttribute('data-email-suggest-index'), 10);
+          if (!isNaN(idx) && items[idx]) applyComposeMention(editor, items[idx]);
+        });
+      });
+    }
+    bindItemClicks();
+
+    function onKey(e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIndex + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIndex - 1); }
+      else if ((e.key === 'Enter' || e.key === 'Tab') && items[activeIndex]) {
+        e.preventDefault();
+        applyComposeMention(editor, items[activeIndex]);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeComposeMention();
+      }
+    }
+
+    function onDoc(e) {
+      if (editor.contains(e.target) || menu.contains(e.target)) return;
+      closeComposeMention();
+    }
+
+    editor.addEventListener('keydown', onKey);
+    setTimeout(function () { document.addEventListener('mousedown', onDoc, true); }, 0);
+
+    mentionActive = {
+      editor: editor,
+      cleanup: function () {
+        editor.removeEventListener('keydown', onKey);
+        document.removeEventListener('mousedown', onDoc, true);
+      },
+    };
+  }
+
+  function requestComposeMention(editor) {
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !editor.contains(selection.anchorNode)) {
+      closeComposeMention();
+      return;
+    }
+
+    var node = selection.anchorNode;
+    if (!node || node.nodeType !== 3) {
+      closeComposeMention();
+      return;
+    }
+
+    var before = node.textContent.slice(0, selection.anchorOffset);
+    var match = composeMentionMatch(before);
+    if (!match) {
+      closeComposeMention();
+      return;
+    }
+
+    var q = match[2] || '';
+    var cacheKey = q.toLowerCase();
+    if (suggestCache[cacheKey]) {
+      openComposeMentionMenu(editor, suggestCache[cacheKey]);
+      return;
+    }
+
+    var seq = (editor._mentionSeq = (editor._mentionSeq || 0) + 1);
+    api().suggest(q).then(function (data) {
+      if (seq !== editor._mentionSeq) return;
+      var items = (data && data.suggestions) || [];
+      suggestCache[cacheKey] = items;
+      if (!editor.isConnected || document.activeElement !== editor) return;
+      // Re-check the caret still sits on an @ trigger.
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode) || sel.anchorNode.nodeType !== 3) {
+        closeComposeMention();
+        return;
+      }
+      var still = composeMentionMatch(sel.anchorNode.textContent.slice(0, sel.anchorOffset));
+      if (!still || (still[2] || '') !== q) {
+        closeComposeMention();
+        return;
+      }
+      if (!items.length) { closeComposeMention(); return; }
+      openComposeMentionMenu(editor, items);
+    }).catch(function () {
+      /* Mentions are best-effort. */
+    });
+  }
+
+  function wireComposeMention(editor) {
+    if (!editor || editor._mentionWired) return;
+    editor._mentionWired = true;
+
+    var timer = null;
+    editor.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { requestComposeMention(editor); }, MENTION_DEBOUNCE_MS);
+    });
+    editor.addEventListener('keyup', function (e) {
+      if (e.key === 'Escape') return;
+      // Catch @ typed via shift combinations that may not always fire input
+      // the same way across engines after composition.
+      if (e.key === '@' || e.key === '2') {
+        clearTimeout(timer);
+        timer = setTimeout(function () { requestComposeMention(editor); }, MENTION_DEBOUNCE_MS);
+      }
+    });
+    editor.addEventListener('blur', function () {
+      setTimeout(function () {
+        if (mentionActive && mentionActive.editor === editor) closeComposeMention();
+      }, 150);
+    });
+    // Don't navigate mailto mentions while editing.
+    editor.addEventListener('click', function (e) {
+      var mention = e.target.closest && e.target.closest('a.tma-dash__email-mention');
+      if (mention && editor.contains(mention)) e.preventDefault();
     });
   }
 
@@ -5755,6 +6034,7 @@
 
     MORPH.unwired(root, '[data-email-compose-body]').forEach(function (body) {
       prepareEditableImages(body);
+      wireComposeMention(body);
       body.addEventListener('input', function () {
         var draft = findComposeDraft(state, body.getAttribute('data-email-compose-body'));
         if (!draft) return;

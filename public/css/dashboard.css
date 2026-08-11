@@ -14826,6 +14826,24 @@
   color: var(--color-text-secondary, #5b616b);
 }
 
+/* Body @mentions in compose / reply / forward. */
+.tma-dash__email-mention-menu {
+  z-index: 530;
+}
+
+.tma-dash__email-compose-body .tma-dash__email-mention,
+.tma-dash__email-inline-compose-editor .tma-dash__email-mention {
+  color: var(--color-brand-primary, #136da0);
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  cursor: default;
+}
+
+.tma-dash__email-compose-body .tma-dash__email-mention:hover,
+.tma-dash__email-inline-compose-editor .tma-dash__email-mention:hover {
+  text-decoration: underline;
+}
+
 .tma-dash__email-compose-body:focus {
   outline: none;
 }
