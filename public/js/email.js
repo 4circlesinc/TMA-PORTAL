@@ -4579,9 +4579,21 @@
    */
   var state_active = null;
 
-  /* One of the user's mail preferences, or a fallback before settings load. */
+  /* One of the user's mail preferences, or a fallback before settings load.
+   *
+   * Bootstrap already ships preferences on state.preferences; the settings
+   * panel mirrors them onto state.settings once opened. Compose must see the
+   * signature from either place — otherwise a fresh page opens compose with
+   * no signature until Email settings has been visited once. */
   function mailPreference(key, fallback) {
-    var prefs = (state_active && state_active.settings && state_active.settings.preferences) || {};
+    var prefs = {};
+    if (state_active) {
+      if (state_active.settings && state_active.settings.preferences) {
+        prefs = state_active.settings.preferences;
+      } else if (state_active.preferences) {
+        prefs = state_active.preferences;
+      }
+    }
     return prefs[key] === undefined || prefs[key] === null ? fallback : prefs[key];
   }
 
@@ -6207,10 +6219,25 @@
             ' data-email-pref-number="undoSendSeconds" aria-label="Undo send window in seconds">') +
 
           '<div class="tma-dash__email-settings-field">' +
+          '<div class="tma-dash__email-settings-signature-head">' +
           '<label class="tma-dash__settings-row-label" for="tma-mail-signature">Signature</label>' +
-          '<textarea id="tma-mail-signature" class="tma-dash__email-settings-textarea" rows="4"' +
+          '<button type="button" class="tma-dash__email-settings-btn"' +
+          ' data-email-settings-import-signature' +
+          (state.connected ? '' : ' disabled') +
+          '>Import from mailbox</button>' +
+          '</div>' +
+          '<p class="tma-dash__email-settings-hint">Pulls the signature from your connected inbox' +
+          ' (or recent sent mail). Edit freely — changes stay in the portal.</p>' +
+          '<textarea id="tma-mail-signature" class="tma-dash__email-settings-textarea" rows="6"' +
           ' data-email-pref-text="signature"' +
           ' placeholder="Appended to messages you send">' + esc(prefs.signature || '') + '</textarea>' +
+          (prefs.signature
+            ? '<div class="tma-dash__email-settings-signature-preview" aria-label="Signature preview">' +
+              '<div class="tma-dash__email-settings-signature-preview-label">Preview</div>' +
+              '<div class="tma-dash__email-settings-signature-preview-body">' +
+              prefs.signature +
+              '</div></div>'
+            : '') +
           '</div>' +
           '</div>') +
 
@@ -6412,6 +6439,29 @@
       // Signatures are long; save on blur rather than per keystroke.
       input.addEventListener('blur', function () {
         saveEmailPreference(root, state, input.getAttribute('data-email-pref-text'), input.value);
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-settings-import-signature]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        var previous = btn.textContent;
+        btn.textContent = 'Importing…';
+
+        api().importSignature().then(function (data) {
+          if (!state.settings) state.settings = {};
+          state.settings.preferences = data.preferences || state.settings.preferences;
+          if (state.preferences && data.preferences) {
+            state.preferences.signature = data.preferences.signature;
+          }
+          showEmailToast(root, 'Signature imported — review and edit below');
+          render();
+        }).catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = previous;
+          reportMailError(state, err);
+        });
       });
     });
   }

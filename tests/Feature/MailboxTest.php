@@ -313,4 +313,54 @@ class MailboxTest extends TestCase
             // Untouched preferences keep their defaults.
             ->assertJsonPath('preferences.conversationView', true);
     }
+
+    public function test_import_signature_copies_the_mailbox_signature_into_preferences(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user);
+
+        $this->message($user, $account, [
+            'remote_id' => 'sent-sig',
+            'folder' => 'sent',
+            'from_email' => 'user@example.com',
+            'from_name' => 'Test User',
+            'is_read' => true,
+            'body_html' => '<div>Hi</div><div class="gmail_signature" data-smartmail="gmail_signature">'
+                .'<div><b>Test User</b></div><div>TMA</div></div>',
+        ]);
+
+        $signature = $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk()
+            ->json('preferences.signature');
+
+        $this->assertIsString($signature);
+        $this->assertStringContainsString('Test User', $signature);
+        $this->assertStringContainsString('TMA', $signature);
+        $this->assertStringNotContainsString('Hi', $signature);
+        $this->assertStringContainsString(
+            'Test User',
+            data_get($user->fresh()->preferences, 'mail.signature')
+        );
+    }
+
+    public function test_import_signature_explains_when_nothing_is_found(): void
+    {
+        $user = $this->user();
+        $this->account($user);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertStatus(422)
+            ->assertJsonPath('signature', null)
+            ->assertJsonStructure(['message']);
+    }
+
+    public function test_import_signature_requires_a_connected_mailbox(): void
+    {
+        $this->actingAs($this->user())
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertStatus(422)
+            ->assertJsonStructure(['message']);
+    }
 }

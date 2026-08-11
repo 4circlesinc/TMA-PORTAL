@@ -28318,6 +28318,20 @@ button.tma-dash__header-popup-item:focus-visible {
   padding: var(--space-12) 0;
 }
 
+.tma-dash__email-settings-signature-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.tma-dash__email-settings-hint {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__email-settings-textarea,
 .tma-dash__email-settings-number {
   width: 100%;
@@ -28329,6 +28343,34 @@ button.tma-dash__header-popup-item:focus-visible {
   color: var(--color-text-primary);
   font: inherit;
   resize: vertical;
+}
+
+.tma-dash__email-settings-signature-preview {
+  margin-top: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-surface-muted, rgba(0, 0, 0, 0.02));
+}
+
+.tma-dash__email-settings-signature-preview-label {
+  margin-bottom: var(--space-8);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__email-settings-signature-preview-body {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+  overflow: auto;
+}
+
+.tma-dash__email-settings-signature-preview-body img {
+  max-width: 100%;
+  height: auto;
 }
 
 .tma-dash__email-settings-number {

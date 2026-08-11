@@ -574,6 +574,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
 
         Route::get('/settings', [MailController::class, 'settings'])->name('settings');
         Route::put('/settings', [MailController::class, 'updateSettings'])->name('settings.update');
+        Route::post('/settings/import-signature', [MailController::class, 'importSignature'])
+            ->name('settings.import-signature');
 
         // Literal paths before /{uuid} so the wildcard doesn't swallow them.
         Route::get('/drafts', [MailController::class, 'drafts'])->name('drafts');

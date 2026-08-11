@@ -18,6 +18,7 @@ use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailSynchronizer;
 use App\Support\Mail\RecipientSuggester;
+use App\Support\Mail\SignatureImporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -1818,6 +1819,47 @@ class MailController extends Controller
         }
 
         return $this->settings($request);
+    }
+
+    /**
+     * Copy the mailbox's outbound signature into the portal preference so it
+     * can be reviewed and edited under Email settings.
+     *
+     * The provider signature is preferred when the account can read it; otherwise
+     * recent Sent mail is scanned for the repeating trailer. Nothing is written
+     * back to Gmail/Outlook — the portal copy is independent after import.
+     */
+    public function importSignature(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        try {
+            $account = Mailbox::requireAccountFor($user);
+        } catch (MailAuthException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $signature = SignatureImporter::for($account)->import();
+
+        if ($signature === null) {
+            return response()->json([
+                'message' => 'No signature was found in this mailbox yet. Send a few messages with your signature, sync mail, then try again.',
+                'signature' => null,
+                'preferences' => $this->mailPreferences($user->preferences ?? []),
+            ], 422);
+        }
+
+        $current = $user->preferences ?? [];
+        $current['mail'] = $this->mailPreferences(
+            array_merge($current['mail'] ?? [], ['signature' => $signature]),
+            raw: true,
+        );
+        $user->forceFill(['preferences' => $current])->save();
+
+        return response()->json([
+            'signature' => $signature,
+            'preferences' => $this->mailPreferences($user->fresh()->preferences ?? []),
+        ]);
     }
 
     /** Inbox category strips the reader may switch on, beyond Inbox itself. */

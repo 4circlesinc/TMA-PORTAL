@@ -203,6 +203,11 @@
       return mailFetch(BASE + '/settings', { method: 'PUT', json: payload });
     },
 
+    /* Pull the connected mailbox's signature into the portal preference. */
+    importSignature: function () {
+      return mailFetch(BASE + '/settings/import-signature', { method: 'POST' });
+    },
+
     /* Re-dispatch a stalled or failed sync. Resumes from the stored page
      * tokens server-side — never a from-scratch re-import. */
     retrySync: function () {
