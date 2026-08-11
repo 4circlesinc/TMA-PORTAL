@@ -28382,29 +28382,50 @@ button.tma-dash__header-popup-item:focus-visible {
   background: var(--color-overlay-4);
 }
 
-.tma-dash__email-settings-signature-select {
+.tma-dash__email-settings-signature-name-input {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
   min-width: 0;
-  padding: var(--space-10) var(--space-12);
-  border: none;
+  margin: var(--space-6) 0 var(--space-6) var(--space-10);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid transparent;
+  border-radius: var(--radius-6);
   background: transparent;
   color: inherit;
   font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.tma-dash__email-settings-signature-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
   font-weight: var(--font-weight-medium, 500);
+  outline: none;
+}
+
+.tma-dash__email-settings-signature-name-input:hover {
+  border-color: var(--color-border-soft);
+  background: var(--color-bg-primary, #fff);
+}
+
+.tma-dash__email-settings-signature-name-input:focus {
+  border-color: var(--color-text-primary);
+  background: var(--color-bg-primary, #fff);
+}
+
+.tma-dash__email-settings-signature-select {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.5rem;
+  padding: var(--space-8) var(--space-10);
+  border: none;
+  border-radius: var(--radius-6);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.tma-dash__email-settings-signature-select:hover {
+  background: var(--color-overlay-4);
 }
 
 .tma-dash__email-settings-signature-badge {
@@ -28412,6 +28433,11 @@ button.tma-dash__header-popup-item:focus-visible {
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
+}
+
+.tma-dash__email-settings-signature-badge--use {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium, 500);
 }
 
 .tma-dash__email-settings-signature-icon-btn {

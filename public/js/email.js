@@ -6238,17 +6238,25 @@
       '<button type="button" class="tma-dash__email-settings-btn" data-email-signature-add>' +
       '<img src="' + ICONS.Plus + '" alt=""> New</button>' +
       '</div>' +
-      '<div class="tma-dash__email-settings-signature-list" role="listbox" aria-label="Signatures">' +
+      '<div class="tma-dash__email-settings-signature-list" role="list" aria-label="Signatures">' +
       lib.signatures.map(function (entry) {
         var on = entry.id === lib.activeSignatureId;
+        var nameId = 'tma-mail-signature-name-' + String(entry.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
         return (
           '<div class="tma-dash__email-settings-signature-item' + (on ? ' is-active' : '') + '"' +
-          ' role="option" aria-selected="' + (on ? 'true' : 'false') + '"' +
           ' data-email-signature-id="' + esc(entry.id) + '">' +
+          '<input id="' + esc(nameId) + '" type="text"' +
+          ' class="tma-dash__email-settings-signature-name-input"' +
+          ' data-email-signature-rename="' + esc(entry.id) + '"' +
+          ' maxlength="80" value="' + esc(entry.name || 'Signature') + '"' +
+          ' aria-label="Rename signature" placeholder="Signature name">' +
           '<button type="button" class="tma-dash__email-settings-signature-select"' +
-          ' data-email-signature-select="' + esc(entry.id) + '">' +
-          '<span class="tma-dash__email-settings-signature-name">' + esc(entry.name || 'Signature') + '</span>' +
-          (on ? '<span class="tma-dash__email-settings-signature-badge">Active</span>' : '') +
+          ' data-email-signature-select="' + esc(entry.id) + '"' +
+          ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+          ' title="' + (on ? 'Active signature' : 'Use this signature') + '">' +
+          (on
+            ? '<span class="tma-dash__email-settings-signature-badge">Active</span>'
+            : '<span class="tma-dash__email-settings-signature-badge tma-dash__email-settings-signature-badge--use">Use</span>') +
           '</button>' +
           '<button type="button" class="tma-dash__email-settings-signature-icon-btn"' +
           ' data-email-signature-delete="' + esc(entry.id) + '"' +
@@ -6272,19 +6280,15 @@
       '<div class="tma-dash__email-settings-field tma-dash__email-settings-field--signature">' +
       renderSignatureLibrary(prefs) +
       '<div class="tma-dash__email-settings-signature-head">' +
-      '<label class="tma-dash__settings-row-label" for="tma-mail-signature-name">Edit signature</label>' +
+      '<span class="tma-dash__settings-row-label">Edit "' + esc((active && active.name) || 'Signature') + '"</span>' +
       '<div class="tma-dash__email-settings-signature-actions">' +
       '<button type="button" class="tma-dash__email-settings-btn"' +
       ' data-email-settings-import-signature' +
       (state.connected ? '' : ' disabled') +
       '>Import from mailbox</button>' +
       '</div></div>' +
-      '<p class="tma-dash__email-settings-hint">Select a signature above to use when composing.' +
+      '<p class="tma-dash__email-settings-hint">Click a name above to rename it. Use selects which signature is inserted when you compose.' +
       ' Upload a PNG, JPEG or WebP logo, then use the transform handles to resize or rotate it.</p>' +
-      '<input id="tma-mail-signature-name" type="text" class="tma-dash__email-settings-textarea"' +
-      ' data-email-signature-name maxlength="80"' +
-      ' value="' + esc((active && active.name) || 'Signature') + '"' +
-      ' aria-label="Signature name" placeholder="Signature name">' +
       '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
       renderComposeToolbar({ expand: false, image: true }) +
       '<div class="tma-dash__email-settings-signature-stage">' +
@@ -7337,16 +7341,29 @@
       });
     });
 
-    MORPH.unwired(root, '[data-email-signature-name]').forEach(function (input) {
+    MORPH.unwired(root, '[data-email-signature-rename]').forEach(function (input) {
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          input.blur();
+        }
+      });
       input.addEventListener('change', function () {
         if (!state.settings) return;
+        var id = input.getAttribute('data-email-signature-rename');
+        if (!id) return;
         var lib = ensureSignatureLibrary(state.settings.preferences);
         var name = (input.value || '').trim() || 'Signature';
         input.value = name;
+        var changed = false;
         lib.signatures = lib.signatures.map(function (entry) {
-          if (entry.id !== lib.activeSignatureId) return entry;
+          if (entry.id !== id) return entry;
+          if (entry.name === name) return entry;
+          changed = true;
           return { id: entry.id, name: name, html: entry.html };
         });
+        if (!changed) return;
+        // Re-render so the edit heading picks up the new name.
         persistSignatureLibrary(root, state, render, lib);
       });
     });
