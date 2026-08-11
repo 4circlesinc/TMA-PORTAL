@@ -1862,12 +1862,26 @@ class MailController extends Controller
         $current = $user->preferences ?? [];
         $mail = $this->mailPreferences($current['mail'] ?? [], raw: true);
         $signatures = $mail['signatures'];
+        $importedName = match ($account->provider) {
+            'microsoft' => 'Default From Outlook',
+            'google' => 'Default From Gmail',
+            default => 'Default From Mailbox',
+        };
+        // Reuse the prior import slot whether it still has the old "Imported"
+        // label or an earlier provider-specific default name.
+        $importedNames = [
+            'Imported',
+            'Default From Outlook',
+            'Default From Gmail',
+            'Default From Mailbox',
+        ];
         $importedId = null;
 
         foreach ($signatures as $index => $entry) {
-            if (($entry['name'] ?? '') === 'Imported') {
+            if (in_array($entry['name'] ?? '', $importedNames, true)) {
                 $importedId = $entry['id'];
                 $signatures[$index]['html'] = $signature;
+                $signatures[$index]['name'] = $importedName;
                 break;
             }
         }
@@ -1876,7 +1890,7 @@ class MailController extends Controller
             $importedId = (string) Str::uuid();
             $signatures[] = [
                 'id' => $importedId,
-                'name' => 'Imported',
+                'name' => $importedName,
                 'html' => $signature,
             ];
         }

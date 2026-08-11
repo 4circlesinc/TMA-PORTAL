@@ -371,11 +371,11 @@ class MailboxTest extends TestCase
                 .'<div><b>Test User</b></div><div>TMA</div></div>',
         ]);
 
-        $signature = $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->postJson('/portal/mail/settings/import-signature')
-            ->assertOk()
-            ->json('preferences.signature');
+            ->assertOk();
 
+        $signature = $response->json('preferences.signature');
         $this->assertIsString($signature);
         $this->assertStringContainsString('Test User', $signature);
         $this->assertStringContainsString('TMA', $signature);
@@ -384,6 +384,34 @@ class MailboxTest extends TestCase
             'Test User',
             data_get($user->fresh()->preferences, 'mail.signature')
         );
+        $this->assertSame(
+            'Default From Gmail',
+            data_get($response->json('preferences.signatures'), '0.name')
+        );
+    }
+
+    public function test_import_signature_names_outlook_defaults(): void
+    {
+        $user = $this->user();
+        $account = $this->account($user, [
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$user->id,
+            'scopes' => ['Mail.ReadWrite'],
+        ]);
+
+        $this->message($user, $account, [
+            'remote_id' => 'sent-outlook-sig',
+            'folder' => 'sent',
+            'from_email' => 'user@example.com',
+            'from_name' => 'Test User',
+            'is_read' => true,
+            'body_html' => '<div>Hi</div><div id="Signature"><div><b>Outlook User</b></div></div>',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/settings/import-signature')
+            ->assertOk()
+            ->assertJsonPath('preferences.signatures.0.name', 'Default From Outlook');
     }
 
     public function test_import_signature_explains_when_nothing_is_found(): void
