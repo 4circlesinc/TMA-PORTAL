@@ -654,13 +654,16 @@
       '</div>' +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-editor-wrap">' +
+      '<div class="tma-dash__email-image-stage tma-dash__email-inline-compose-stage" data-email-image-stage>' +
       '<div class="tma-dash__email-inline-compose-editor" contenteditable="true" data-email-inline-compose-editor data-placeholder="Compose your ' + (isForward ? 'message' : 'reply') + '" aria-label="Message body" role="textbox">' + (ic.bodyHtml || '') + '</div>' +
+      renderImageTransformOverlay() +
+      '</div>' +
       (isForward
         ? renderForwardQuote(row, metaEmail, metaDate, subject, bodyText)
         : renderReplyQuote(row, metaEmail, metaDate, bodyText)) +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-bar">' +
-      renderComposeToolbar() +
+      renderComposeToolbar({ expand: false, image: true }) +
       '</div>' +
       '<div class="tma-dash__email-inline-compose-actions">' +
       '<button type="button" class="tma-dash__email-inline-compose-send" data-email-inline-compose-send' + (ic.sending ? ' disabled' : '') + '>' +
@@ -769,11 +772,23 @@
 
     var editor = panel.querySelector('[data-email-inline-compose-editor]');
     if (editor) {
+      prepareEditableImages(editor);
       MORPH.on(editor, 'input', function () {
         if (!state.inlineCompose) return;
         state.inlineCompose.bodyHtml = editor.innerHTML;
       });
     }
+
+    MORPH.unwired(panel, '[data-email-insert-image]').forEach(function (btn) {
+      btn.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+      });
+      btn.addEventListener('click', function () {
+        var target = resolveImageEditor(btn, root);
+        if (!target) return;
+        openInsertImagePicker(root, state, target);
+      });
+    });
 
     var sendBtn = panel.querySelector('[data-email-inline-compose-send]');
     if (sendBtn) {
@@ -5739,11 +5754,25 @@
     });
 
     MORPH.unwired(root, '[data-email-compose-body]').forEach(function (body) {
+      prepareEditableImages(body);
       body.addEventListener('input', function () {
         var draft = findComposeDraft(state, body.getAttribute('data-email-compose-body'));
         if (!draft) return;
         draft.bodyHtml = body.innerHTML;
         scheduleDraftSave(state, draft);
+      });
+    });
+
+    // Compose footer/toolbar Insert image — also wired from settings path, but
+    // compose windows need it even when settings is closed.
+    MORPH.unwired(root, '[data-email-insert-image]').forEach(function (btn) {
+      btn.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+      });
+      btn.addEventListener('click', function () {
+        var editor = resolveImageEditor(btn, root);
+        if (!editor) return;
+        openInsertImagePicker(root, state, editor);
       });
     });
 
@@ -5883,8 +5912,8 @@
   ];
 
   /* opts.expand: compose windows get the expand control; the signature editor
-   * in settings does not — there is nowhere for it to expand into.
-   * opts.image: signature editor gets an Insert image control. */
+   * and inline reply/forward do not — there is nowhere for them to expand into.
+   * opts.image: show Insert image (compose, reply/forward, and signatures). */
   function renderComposeToolbar(opts) {
     opts = opts || {};
     var showExpand = opts.expand !== false;
@@ -5927,7 +5956,7 @@
                   '<button type="button" class="tma-dash__email-compose-tool' + (item.caret ? ' tma-dash__email-compose-tool--caret' : '') + '"' +
                   (item.cmd ? ' data-email-compose-tool-cmd="' + esc(item.cmd) + '"' : '') +
                   (item.menu ? ' data-email-compose-tool-menu="' + esc(item.menu) + '"' : '') +
-                  (item.image ? ' data-email-signature-insert-image' : '') +
+                  (item.image ? ' data-email-insert-image' : '') +
                   // Marks the buttons whose pressed state tracks the cursor,
                   // so the toolbar shows what the text under it actually is.
                   (item.state ? ' data-email-compose-tool-state="' + esc(item.state) + '" aria-pressed="false"' : '') +
@@ -6027,21 +6056,24 @@
       '</div>' +
       '</div>' +
       '<div class="tma-dash__email-compose-editor">' +
-      renderComposeToolbar() +
+      renderComposeToolbar({ image: true }) +
+      '<div class="tma-dash__email-image-stage tma-dash__email-compose-stage" data-email-image-stage>' +
       '<div class="tma-dash__email-compose-body" contenteditable="true" role="textbox"' +
       ' aria-multiline="true" aria-label="Message body"' +
       ' data-email-compose-body="' + esc(draft.id) + '">' + bodyHtml + '</div>' +
+      renderImageTransformOverlay() +
+      '</div>' +
       '<div class="tma-dash__email-compose-footer">' +
       '<div class="tma-dash__email-compose-attach">' +
       [
         { icon: 'Trash', label: 'Discard draft', discard: true },
-        { icon: 'Image', label: 'Insert image' },
+        { icon: 'Image', label: 'Insert image', image: true },
         { icon: 'Paperclip', label: 'Attach file' },
       ]
         .map(function (item) {
           var attrs = item.discard
             ? ' data-email-compose-discard="' + esc(draft.id) + '"'
-            : '';
+            : (item.image ? ' data-email-insert-image' : '');
           return (
             '<button type="button" class="tma-dash__email-compose-attach-btn"' + attrs + ' aria-label="' + esc(item.label) + '">' +
             '<img src="' + esc(ICONS[item.icon]) + '" alt="">' +
@@ -6291,7 +6323,7 @@
       ' Upload a PNG, JPEG or WebP logo, then use the transform handles to resize or rotate it.</p>' +
       '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
       renderComposeToolbar({ expand: false, image: true }) +
-      '<div class="tma-dash__email-settings-signature-stage">' +
+      '<div class="tma-dash__email-settings-signature-stage tma-dash__email-image-stage" data-email-image-stage>' +
       '<div id="tma-mail-signature" class="tma-dash__email-settings-signature-body"' +
       ' contenteditable="true" role="textbox" aria-multiline="true"' +
       ' aria-label="Signature content"' +
@@ -6299,18 +6331,18 @@
       ' data-placeholder="Appended to messages you send">' +
       signature +
       '</div>' +
-      renderSignatureTransformOverlay() +
+      renderImageTransformOverlay() +
       '</div>' +
       '</div>' +
       '</div>'
     );
   }
 
-  function renderSignatureTransformOverlay() {
+  function renderImageTransformOverlay() {
     var handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
     return (
-      '<div class="tma-dash__email-sig-transform" data-email-signature-transform hidden>' +
+      '<div class="tma-dash__email-sig-transform" data-email-image-transform hidden>' +
       '<div class="tma-dash__email-sig-transform-box" data-sig-transform-box>' +
       handles.map(function (dir) {
         return '<button type="button" class="tma-dash__email-sig-transform-handle' +
@@ -6423,7 +6455,7 @@
       var overlay = document.createElement('div');
       overlay.className = 'tma-dash__email-sig-image-dialog';
       overlay.innerHTML =
-        '<div class="tma-dash__email-sig-image-dialog-card" role="dialog" aria-modal="true" aria-label="Transform signature image">' +
+        '<div class="tma-dash__email-sig-image-dialog-card" role="dialog" aria-modal="true" aria-label="Transform image">' +
         '<h3 class="tma-dash__email-sig-image-dialog-title">Transform image</h3>' +
         '<div class="tma-dash__email-sig-image-dialog-preview" data-sig-preview-stage>' +
         '<div class="tma-dash__email-sig-image-dialog-frame" data-sig-preview-frame>' +
@@ -6612,33 +6644,99 @@
     img.style.maxWidth = 'none';
   }
 
-  function clearSignatureImageSelection(root, state) {
-    var editor = root.querySelector('[data-email-signature-editor]');
-    if (editor) {
-      editor.querySelectorAll('img.is-selected').forEach(function (node) {
-        node.classList.remove('is-selected');
-      });
-    }
-    state._signatureSelectedImg = null;
-    var layer = root.querySelector('[data-email-signature-transform]');
-    if (layer) {
-      layer.hidden = true;
-      layer.setAttribute('aria-hidden', 'true');
-    }
+  function imageEditorSelector() {
+    return '[data-email-signature-editor], [data-email-compose-body], [data-email-inline-compose-editor]';
   }
 
-  function updateSignatureTransformFrame(root, state) {
-    var img = state._signatureSelectedImg;
-    var layer = root.querySelector('[data-email-signature-transform]');
-    var stage = root.querySelector('.tma-dash__email-settings-signature-stage');
-    var box = root.querySelector('[data-sig-transform-box]');
-    if (!img || !img.isConnected || !layer || !stage || !box) {
-      if (layer) {
-        layer.hidden = true;
-        layer.setAttribute('aria-hidden', 'true');
+  function imageTransformHostFor(node) {
+    if (!node || !node.closest) return null;
+    var stage = node.closest('[data-email-image-stage]');
+    if (!stage) return null;
+    var editor = stage.querySelector(imageEditorSelector());
+    var layer = stage.querySelector('[data-email-image-transform]');
+    if (!editor || !layer) return null;
+    var kind = 'compose';
+    if (editor.hasAttribute('data-email-signature-editor')) kind = 'signature';
+    else if (editor.hasAttribute('data-email-inline-compose-editor')) kind = 'inline';
+    return { stage: stage, editor: editor, layer: layer, kind: kind };
+  }
+
+  function resolveImageEditor(fromEl, root) {
+    var host = fromEl && imageTransformHostFor(fromEl);
+    if (host) return host.editor;
+
+    if (fromEl && fromEl.closest) {
+      var compose = fromEl.closest('.tma-dash__email-compose');
+      if (compose) {
+        var composeBody = compose.querySelector('[data-email-compose-body]');
+        if (composeBody) return composeBody;
       }
+      var panel = fromEl.closest('[data-email-inline-compose-panel]');
+      if (panel) {
+        var inlineEditor = panel.querySelector('[data-email-inline-compose-editor]');
+        if (inlineEditor) return inlineEditor;
+      }
+      var shell = fromEl.closest('[data-email-signature-shell]');
+      if (shell) {
+        var signatureEditor = shell.querySelector('[data-email-signature-editor]');
+        if (signatureEditor) return signatureEditor;
+      }
+    }
+
+    var focused = root.querySelector('.tma-dash__email-compose-window--focused [data-email-compose-body]');
+    if (focused) return focused;
+    var openCompose = root.querySelector('[data-email-compose-body]');
+    if (openCompose) return openCompose;
+    var inline = root.querySelector('[data-email-inline-compose-editor]');
+    if (inline) return inline;
+    return root.querySelector('[data-email-signature-editor]');
+  }
+
+  function prepareEditableImages(editor) {
+    if (!editor) return;
+    editor.querySelectorAll('img').forEach(function (img) {
+      img.setAttribute('contenteditable', 'false');
+      img.setAttribute('draggable', 'false');
+    });
+  }
+
+  function clearEditableImageSelection(root, state) {
+    root.querySelectorAll('[data-email-image-stage] img.is-selected').forEach(function (node) {
+      node.classList.remove('is-selected');
+    });
+    state._editableSelectedImg = null;
+    state._signatureSelectedImg = null;
+    root.querySelectorAll('[data-email-image-transform]').forEach(function (layer) {
+      layer.hidden = true;
+      layer.setAttribute('aria-hidden', 'true');
+    });
+  }
+
+  function updateEditableImageTransformFrame(root, state) {
+    var img = state._editableSelectedImg;
+    if (!img || !img.isConnected) {
+      clearEditableImageSelection(root, state);
       return;
     }
+
+    var host = imageTransformHostFor(img);
+    if (!host) {
+      clearEditableImageSelection(root, state);
+      return;
+    }
+
+    var stage = host.stage;
+    var layer = host.layer;
+    var box = layer.querySelector('[data-sig-transform-box]');
+    if (!box) return;
+
+    // Hide overlays in other stages so only one transform UI is visible.
+    root.querySelectorAll('[data-email-image-transform]').forEach(function (other) {
+      if (other !== layer) {
+        other.hidden = true;
+        other.setAttribute('aria-hidden', 'true');
+      }
+    });
 
     var stageRect = stage.getBoundingClientRect();
     var imgRect = img.getBoundingClientRect();
@@ -6656,7 +6754,6 @@
 
     var toolbar = layer.querySelector('[data-sig-transform-toolbar]');
     if (toolbar) {
-      // Keep the toolbar on-screen above the image when possible.
       var toolbarTop = top - 44;
       if (toolbarTop < stage.scrollTop + 8) {
         toolbarTop = top + height + 10;
@@ -6672,37 +6769,49 @@
     if (hInput && document.activeElement !== hInput) hInput.value = String(size.height);
   }
 
-  function selectSignatureImage(root, state, img) {
-    var editor = root.querySelector('[data-email-signature-editor]');
-    if (!editor || !img || !editor.contains(img)) return;
+  function selectEditableImage(root, state, img) {
+    var host = imageTransformHostFor(img);
+    if (!host || !img || !host.editor.contains(img)) return;
 
-    editor.querySelectorAll('img.is-selected').forEach(function (node) {
-      node.classList.remove('is-selected');
-    });
+    clearEditableImageSelection(root, state);
     img.classList.add('is-selected');
     img.setAttribute('contenteditable', 'false');
     img.setAttribute('draggable', 'false');
 
-    // Lock the current on-screen size into explicit px before the user drags,
-    // so the first handle move is relative to what they actually see.
     var displayed = signatureImageSize(img);
     applySignatureImageSize(img, displayed.width, displayed.height);
 
+    state._editableSelectedImg = img;
     state._signatureSelectedImg = img;
-    updateSignatureTransformFrame(root, state);
+    updateEditableImageTransformFrame(root, state);
   }
 
-  function persistSelectedSignatureImage(root, state) {
-    var editor = root.querySelector('[data-email-signature-editor]');
-    if (!editor || !state.settings) return;
-    var value = signatureEditorValue(editor);
-    syncActiveSignatureHtml(root, state, value);
-    persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
-    updateSignatureTransformFrame(root, state);
+  function persistEditableImage(root, state) {
+    var img = state._editableSelectedImg;
+    if (!img || !img.isConnected) return;
+    var host = imageTransformHostFor(img);
+    if (!host) return;
+
+    if (host.kind === 'signature') {
+      if (!state.settings) return;
+      var value = signatureEditorValue(host.editor);
+      syncActiveSignatureHtml(root, state, value);
+      persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+    } else if (host.kind === 'compose') {
+      var draft = findComposeDraft(state, host.editor.getAttribute('data-email-compose-body'));
+      if (draft) {
+        draft.bodyHtml = host.editor.innerHTML;
+        scheduleDraftSave(state, draft);
+      }
+    } else if (host.kind === 'inline' && state.inlineCompose) {
+      state.inlineCompose.bodyHtml = host.editor.innerHTML;
+    }
+
+    updateEditableImageTransformFrame(root, state);
   }
 
-  function rotateSelectedSignatureImage(root, state, degrees) {
-    var img = state._signatureSelectedImg;
+  function rotateEditableImage(root, state, degrees) {
+    var img = state._editableSelectedImg;
     if (!img || !img.isConnected) return;
 
     var source = new Image();
@@ -6727,9 +6836,88 @@
 
       img.setAttribute('src', dataUrl);
       applySignatureImageSize(img, canvas.width, canvas.height);
-      persistSelectedSignatureImage(root, state);
+      persistEditableImage(root, state);
     };
     source.src = img.getAttribute('src') || '';
+  }
+
+  // Back-compat aliases used by older call sites in this file.
+  function clearSignatureImageSelection(root, state) {
+    clearEditableImageSelection(root, state);
+  }
+  function updateSignatureTransformFrame(root, state) {
+    updateEditableImageTransformFrame(root, state);
+  }
+  function selectSignatureImage(root, state, img) {
+    selectEditableImage(root, state, img);
+  }
+  function persistSelectedSignatureImage(root, state) {
+    persistEditableImage(root, state);
+  }
+  function rotateSelectedSignatureImage(root, state, degrees) {
+    rotateEditableImage(root, state, degrees);
+  }
+
+  function openInsertImagePicker(root, state, editor) {
+    if (!editor) return;
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,.jpg,.jpeg,.png,.webp,image/webp';
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      if (!isAllowedSignatureImage(file)) {
+        showEmailToast(root, 'Only PNG, JPEG, JPG and WebP images are allowed');
+        return;
+      }
+      if (file.size > 2.5 * 1024 * 1024) {
+        showEmailToast(root, 'Choose an image under 2.5 MB');
+        return;
+      }
+      openSignatureImageDialog(file, function (dataUrl, width, height) {
+        insertSignatureImage(editor, dataUrl, width, height);
+        prepareEditableImages(editor);
+        persistEditableImageSelectionAfterInsert(root, state, editor, dataUrl);
+        showEmailToast(root, 'Image added — drag the handles to transform it');
+      });
+    });
+    input.click();
+  }
+
+  function persistEditableImageSelectionAfterInsert(root, state, editor, dataUrl) {
+    var host = imageTransformHostFor(editor);
+    if (!host) host = imageTransformHostFor(editor.parentElement);
+    if (host && host.kind === 'signature' && state.settings) {
+      var value = signatureEditorValue(editor);
+      syncActiveSignatureHtml(root, state, value);
+      persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+    } else if (host && host.kind === 'compose') {
+      var draft = findComposeDraft(state, editor.getAttribute('data-email-compose-body'));
+      if (draft) {
+        draft.bodyHtml = editor.innerHTML;
+        scheduleDraftSave(state, draft);
+      }
+    } else if (host && host.kind === 'inline' && state.inlineCompose) {
+      state.inlineCompose.bodyHtml = editor.innerHTML;
+    } else if (editor.hasAttribute('data-email-compose-body')) {
+      var d = findComposeDraft(state, editor.getAttribute('data-email-compose-body'));
+      if (d) {
+        d.bodyHtml = editor.innerHTML;
+        scheduleDraftSave(state, d);
+      }
+    } else if (editor.hasAttribute('data-email-inline-compose-editor') && state.inlineCompose) {
+      state.inlineCompose.bodyHtml = editor.innerHTML;
+    } else if (editor.hasAttribute('data-email-signature-editor') && state.settings) {
+      var sigValue = signatureEditorValue(editor);
+      syncActiveSignatureHtml(root, state, sigValue);
+      persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+    }
+
+    var inserted = null;
+    editor.querySelectorAll('img').forEach(function (node) {
+      if (node.getAttribute('src') === dataUrl) inserted = node;
+    });
+    if (inserted) selectEditableImage(root, state, inserted);
   }
 
   function renderEmailSettingsPanel(state, tab, prefs) {
@@ -6878,6 +7066,172 @@
       state.settings = data;
     }).catch(function (err) {
       reportMailError(state, err);
+    });
+  }
+
+  function wireEditableImageTransforms(root, state) {
+    // One binding for image selection + transform handles for the life of the
+    // mount. Morph replaces editor nodes; root-level listeners survive that.
+    if (root._emailImageTransformBound) return;
+    root._emailImageTransformBound = true;
+
+    root.addEventListener('click', function (event) {
+      var rotate = event.target.closest('[data-sig-transform-rotate]');
+      if (rotate) {
+        event.preventDefault();
+        rotateEditableImage(
+          root,
+          state,
+          parseInt(rotate.getAttribute('data-sig-transform-rotate'), 10) || 90
+        );
+        return;
+      }
+
+      var remove = event.target.closest('[data-sig-transform-delete]');
+      if (remove) {
+        event.preventDefault();
+        var selected = state._editableSelectedImg;
+        if (selected && selected.isConnected) {
+          var host = imageTransformHostFor(selected);
+          selected.remove();
+          clearEditableImageSelection(root, state);
+          if (host) {
+            if (host.kind === 'signature' && state.settings) {
+              var value = signatureEditorValue(host.editor);
+              syncActiveSignatureHtml(root, state, value);
+              persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+            } else if (host.kind === 'compose') {
+              var draft = findComposeDraft(state, host.editor.getAttribute('data-email-compose-body'));
+              if (draft) {
+                draft.bodyHtml = host.editor.innerHTML;
+                scheduleDraftSave(state, draft);
+              }
+            } else if (host.kind === 'inline' && state.inlineCompose) {
+              state.inlineCompose.bodyHtml = host.editor.innerHTML;
+            }
+          }
+        }
+        return;
+      }
+
+      if (event.target.closest('[data-email-image-transform]')) return;
+
+      var stage = event.target.closest('[data-email-image-stage]');
+      if (!stage) {
+        if (!event.target.closest('[data-email-signature-shell], .tma-dash__email-compose, [data-email-inline-compose-panel]')) {
+          clearEditableImageSelection(root, state);
+        }
+        return;
+      }
+
+      var host = imageTransformHostFor(stage);
+      if (!host) return;
+      var editor = host.editor;
+
+      var link = event.target.closest('a');
+      if (link && editor.contains(link)) event.preventDefault();
+
+      var img = event.target.closest('img');
+      if (!img && link && editor.contains(link)) img = link.querySelector('img');
+
+      if (!img || !editor.contains(img)) {
+        clearEditableImageSelection(root, state);
+        return;
+      }
+
+      event.preventDefault();
+      selectEditableImage(root, state, img);
+    });
+
+    root.addEventListener('pointerdown', function (event) {
+      var handle = event.target.closest('[data-sig-handle]');
+      if (!handle) return;
+      var img = state._editableSelectedImg;
+      if (!img || !img.isConnected) return;
+      if (!imageTransformHostFor(img)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      var dir = handle.getAttribute('data-sig-handle');
+      var startX = event.clientX;
+      var startY = event.clientY;
+      var start = signatureImageSize(img);
+      var ratio = start.width / Math.max(1, start.height);
+      state._signatureTransformDragging = true;
+
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch (e) { /* older engines */ }
+
+      function onMove(moveEvent) {
+        var dx = moveEvent.clientX - startX;
+        var dy = moveEvent.clientY - startY;
+        var nextW = start.width;
+        var nextH = start.height;
+
+        if (dir.indexOf('e') !== -1) nextW = start.width + dx;
+        if (dir.indexOf('w') !== -1) nextW = start.width - dx;
+        if (dir.indexOf('s') !== -1) nextH = start.height + dy;
+        if (dir.indexOf('n') !== -1) nextH = start.height - dy;
+
+        if (dir.length === 2) {
+          nextW = Math.max(40, Math.min(720, nextW));
+          nextH = Math.max(20, Math.min(720, Math.round(nextW / ratio)));
+        } else if (dir === 'e' || dir === 'w') {
+          nextW = Math.max(40, Math.min(720, nextW));
+          nextH = start.height;
+        } else {
+          nextH = Math.max(20, Math.min(720, nextH));
+          nextW = start.width;
+        }
+
+        applySignatureImageSize(img, nextW, nextH);
+        updateEditableImageTransformFrame(root, state);
+      }
+
+      function onUp() {
+        state._signatureTransformDragging = false;
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        persistEditableImage(root, state);
+      }
+
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
+    });
+
+    root.addEventListener('change', function (event) {
+      var input = event.target.closest('[data-sig-transform-width], [data-sig-transform-height]');
+      if (!input) return;
+      var img = state._editableSelectedImg;
+      if (!img || !img.isConnected) return;
+
+      var size = signatureImageSize(img);
+      var nextW = size.width;
+      var nextH = size.height;
+      if (input.hasAttribute('data-sig-transform-width')) {
+        nextW = parseInt(input.value, 10) || size.width;
+        nextH = Math.round(nextW * (size.height / Math.max(1, size.width)));
+      } else {
+        nextH = parseInt(input.value, 10) || size.height;
+        nextW = Math.round(nextH * (size.width / Math.max(1, size.height)));
+      }
+      applySignatureImageSize(img, nextW, nextH);
+      persistEditableImage(root, state);
+    });
+
+    root.addEventListener('scroll', function (event) {
+      if (!event.target || !event.target.closest) return;
+      if (event.target.closest('[data-email-image-stage]')) {
+        updateEditableImageTransformFrame(root, state);
+      }
+    }, true);
+
+    window.addEventListener('resize', function () {
+      updateEditableImageTransformFrame(root, state);
     });
   }
 
@@ -7079,7 +7433,7 @@
       editor.addEventListener('blur', function (event) {
         // Moving focus to transform controls is still "editing".
         var next = event.relatedTarget;
-        if (next && next.closest && next.closest('[data-email-signature-transform]')) {
+        if (next && next.closest && next.closest('[data-email-image-transform]')) {
           return;
         }
         var key = editor.getAttribute('data-email-pref-html');
@@ -7125,161 +7479,8 @@
       }
     });
 
-    // One binding for image selection + transform handles for the life of the
-    // mount. Do not bind these on the editor node itself — Morph replaces that
-    // node and would drop the listeners after the first settings re-render.
-    if (!root._emailSignatureTransformBound) {
-      root._emailSignatureTransformBound = true;
-
-      root.addEventListener('click', function (event) {
-        if (!state.settingsOpen) return;
-
-        var rotate = event.target.closest('[data-sig-transform-rotate]');
-        if (rotate) {
-          event.preventDefault();
-          rotateSelectedSignatureImage(
-            root,
-            state,
-            parseInt(rotate.getAttribute('data-sig-transform-rotate'), 10) || 90
-          );
-          return;
-        }
-
-        var remove = event.target.closest('[data-sig-transform-delete]');
-        if (remove) {
-          event.preventDefault();
-          var selected = state._signatureSelectedImg;
-          if (selected && selected.isConnected) {
-            var ed = root.querySelector('[data-email-signature-editor]');
-            selected.remove();
-            clearSignatureImageSelection(root, state);
-            if (ed) {
-              var value = signatureEditorValue(ed);
-              syncActiveSignatureHtml(root, state, value);
-              persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
-            }
-          }
-          return;
-        }
-
-        if (event.target.closest('[data-email-signature-transform]')) return;
-
-        var editor = root.querySelector('[data-email-signature-editor]');
-        if (!editor || !editor.contains(event.target)) {
-          if (!event.target.closest('[data-email-signature-shell]')) {
-            clearSignatureImageSelection(root, state);
-          }
-          return;
-        }
-
-        var link = event.target.closest('a');
-        if (link && editor.contains(link)) event.preventDefault();
-
-        var img = event.target.closest('img');
-        if (!img && link && editor.contains(link)) img = link.querySelector('img');
-
-        if (!img || !editor.contains(img)) {
-          clearSignatureImageSelection(root, state);
-          return;
-        }
-
-        event.preventDefault();
-        selectSignatureImage(root, state, img);
-      });
-
-      root.addEventListener('pointerdown', function (event) {
-        var handle = event.target.closest('[data-sig-handle]');
-        if (!handle || !state.settingsOpen) return;
-        var img = state._signatureSelectedImg;
-        if (!img || !img.isConnected) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        var dir = handle.getAttribute('data-sig-handle');
-        var startX = event.clientX;
-        var startY = event.clientY;
-        var start = signatureImageSize(img);
-        var ratio = start.width / Math.max(1, start.height);
-        state._signatureTransformDragging = true;
-
-        try {
-          handle.setPointerCapture(event.pointerId);
-        } catch (e) { /* older engines */ }
-
-        function onMove(moveEvent) {
-          var dx = moveEvent.clientX - startX;
-          var dy = moveEvent.clientY - startY;
-          var nextW = start.width;
-          var nextH = start.height;
-
-          if (dir.indexOf('e') !== -1) nextW = start.width + dx;
-          if (dir.indexOf('w') !== -1) nextW = start.width - dx;
-          if (dir.indexOf('s') !== -1) nextH = start.height + dy;
-          if (dir.indexOf('n') !== -1) nextH = start.height - dy;
-
-          // Corner handles keep aspect ratio; edge handles are free.
-          if (dir.length === 2) {
-            nextW = Math.max(40, Math.min(720, nextW));
-            nextH = Math.max(20, Math.min(720, Math.round(nextW / ratio)));
-          } else if (dir === 'e' || dir === 'w') {
-            nextW = Math.max(40, Math.min(720, nextW));
-            nextH = start.height;
-          } else {
-            nextH = Math.max(20, Math.min(720, nextH));
-            nextW = start.width;
-          }
-
-          applySignatureImageSize(img, nextW, nextH);
-          updateSignatureTransformFrame(root, state);
-        }
-
-        function onUp() {
-          state._signatureTransformDragging = false;
-          handle.removeEventListener('pointermove', onMove);
-          handle.removeEventListener('pointerup', onUp);
-          handle.removeEventListener('pointercancel', onUp);
-          persistSelectedSignatureImage(root, state);
-        }
-
-        handle.addEventListener('pointermove', onMove);
-        handle.addEventListener('pointerup', onUp);
-        handle.addEventListener('pointercancel', onUp);
-      });
-
-      root.addEventListener('change', function (event) {
-        if (!state.settingsOpen) return;
-        var input = event.target.closest('[data-sig-transform-width], [data-sig-transform-height]');
-        if (!input) return;
-        var img = state._signatureSelectedImg;
-        if (!img || !img.isConnected) return;
-
-        var size = signatureImageSize(img);
-        var nextW = size.width;
-        var nextH = size.height;
-        if (input.hasAttribute('data-sig-transform-width')) {
-          nextW = parseInt(input.value, 10) || size.width;
-          nextH = Math.round(nextW * (size.height / Math.max(1, size.width)));
-        } else {
-          nextH = parseInt(input.value, 10) || size.height;
-          nextW = Math.round(nextH * (size.width / Math.max(1, size.height)));
-        }
-        applySignatureImageSize(img, nextW, nextH);
-        persistSelectedSignatureImage(root, state);
-      });
-
-      root.addEventListener('scroll', function (event) {
-        if (!state.settingsOpen) return;
-        if (event.target && event.target.closest &&
-            event.target.closest('.tma-dash__email-settings-signature-stage')) {
-          updateSignatureTransformFrame(root, state);
-        }
-      }, true);
-
-      window.addEventListener('resize', function () {
-        if (state.settingsOpen) updateSignatureTransformFrame(root, state);
-      });
-    }
+    // Transform binding lives in wireEditableImageTransforms — called once
+    // from the main render path so compose/reply/forward share it.
 
     MORPH.unwired(root, '[data-email-signature-select]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -7368,42 +7569,15 @@
       });
     });
 
-    MORPH.unwired(root, '[data-email-signature-insert-image]').forEach(function (btn) {
+    MORPH.unwired(root, '[data-email-insert-image]').forEach(function (btn) {
       btn.addEventListener('mousedown', function (event) {
         // Same timing as the rest of the compose toolbar: keep the caret.
         event.preventDefault();
       });
       btn.addEventListener('click', function () {
-        var editor = root.querySelector('[data-email-signature-editor]');
+        var editor = resolveImageEditor(btn, root);
         if (!editor) return;
-        var input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/png,image/jpeg,.jpg,.jpeg,.png,.webp,image/webp';
-        input.addEventListener('change', function () {
-          var file = input.files && input.files[0];
-          if (!file) return;
-          if (!isAllowedSignatureImage(file)) {
-            showEmailToast(root, 'Only PNG, JPEG, JPG and WebP images are allowed');
-            return;
-          }
-          if (file.size > 2.5 * 1024 * 1024) {
-            showEmailToast(root, 'Choose an image under 2.5 MB');
-            return;
-          }
-          openSignatureImageDialog(file, function (dataUrl, width, height) {
-            insertSignatureImage(editor, dataUrl, width, height);
-            var value = signatureEditorValue(editor);
-            syncActiveSignatureHtml(root, state, value);
-            persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
-            var inserted = null;
-            editor.querySelectorAll('img').forEach(function (node) {
-              if (node.getAttribute('src') === dataUrl) inserted = node;
-            });
-            if (inserted) selectSignatureImage(root, state, inserted);
-            showEmailToast(root, 'Image added — drag the handles to transform it');
-          });
-        });
-        input.click();
+        openInsertImagePicker(root, state, editor);
       });
     });
 
@@ -10595,6 +10769,7 @@
       wireEvents(root, state, render);
       wireComposeEvents(root, state, render);
       wireInlineComposeEvents(root, state, render);
+      wireEditableImageTransforms(root, state);
       wireEmailSettings(root, state, render);
       if (state.inlineCompose) {
         window.requestAnimationFrame(function () {
