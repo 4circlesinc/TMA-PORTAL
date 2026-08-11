@@ -1078,8 +1078,17 @@
     cbiFolderFiles = files;
 
     if (!folders.length && !files.length) {
-      wrap.innerHTML = '<div class="tma-dash__clients-assigned-empty" data-cbi-folder-list>' +
-        'No files yet. They appear here after a sync copies Smartsheet attachments into this folder.</div>';
+      var ui = window.TMAPortalUI;
+      wrap.innerHTML = '<div data-cbi-folder-list>' +
+        (ui && ui.emptyState
+          ? ui.emptyState({
+              illustration: 'Illustration03',
+              title: 'No files yet',
+              subtitle: 'They appear here after a sync copies Smartsheet attachments into this folder.',
+            })
+          : '<div class="tma-dash__clients-assigned-empty">' +
+            'No files yet. They appear here after a sync copies Smartsheet attachments into this folder.</div>') +
+        '</div>';
       return;
     }
 

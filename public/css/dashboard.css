@@ -17885,6 +17885,17 @@
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
+/* Empty folder panel: compact illustration, not a full-page hero. */
+.tma-dash__clients-folders .tma-portal-empty {
+  padding: var(--space-24) var(--space-16);
+  flex: 1;
+  justify-content: center;
+}
+.tma-dash__clients-folders .tma-portal-empty__illustration {
+  width: 100px;
+  height: 100px;
+}
+
 /* Drag-and-drop target highlight while files are dragged over the folder. */
 .tma-dash__clients-folders.is-drop-into {
   background: var(--color-hover);

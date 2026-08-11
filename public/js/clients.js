@@ -3239,8 +3239,19 @@
     var files = (res && res.files) || [];
     clientFolderFiles = files;
     if (!folders.length && !files.length) {
-      wrap.innerHTML = '<div class="tma-dash__clients-assigned-empty" data-clients-folder-list>' +
-        'No files yet. Use “Upload”, “New folder”, or drag files here.</div>';
+      // Same illustrated empty state as File Library folders — plain grey copy
+      // read as a broken list rather than an intentional empty folder.
+      var ui = window.TMAPortalUI;
+      wrap.innerHTML = '<div data-clients-folder-list>' +
+        (ui && ui.emptyState
+          ? ui.emptyState({
+              illustration: 'Illustration03',
+              title: 'No files yet',
+              subtitle: 'Use “Upload”, “New folder”, or drag files here.',
+            })
+          : '<div class="tma-dash__clients-assigned-empty">' +
+            'No files yet. Use “Upload”, “New folder”, or drag files here.</div>') +
+        '</div>';
       return;
     }
     var html = '';
