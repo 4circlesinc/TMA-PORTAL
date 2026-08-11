@@ -5880,7 +5880,12 @@
     { label: 'Clear formatting', cmd: 'removeFormat' },
   ];
 
-  function renderComposeToolbar() {
+  /* opts.expand: compose windows get the expand control; the signature editor
+   * in settings does not — there is nowhere for it to expand into. */
+  function renderComposeToolbar(opts) {
+    opts = opts || {};
+    var showExpand = opts.expand !== false;
+
     var groups = [
       [
         { icon: 'ArrowUUpLeft', label: 'Undo', cmd: 'undo' },
@@ -5934,9 +5939,11 @@
         })
         .join('') +
       '</div>' +
-      '<button type="button" class="tma-dash__email-compose-tool tma-dash__email-compose-tool--expand" aria-label="Expand editor">' +
-      '<img src="' + ICONS.ArrowsOutSimple + '" alt="">' +
-      '</button>' +
+      (showExpand
+        ? '<button type="button" class="tma-dash__email-compose-tool tma-dash__email-compose-tool--expand" aria-label="Expand editor">' +
+          '<img src="' + ICONS.ArrowsOutSimple + '" alt="">' +
+          '</button>'
+        : '') +
       '</div>'
     );
   }
@@ -6161,11 +6168,131 @@
     }).join('');
   }
 
+  var EMAIL_SETTINGS_TABS = [
+    { key: 'mailbox', label: 'Mailbox' },
+    { key: 'layout', label: 'Layout' },
+    { key: 'inbox', label: 'Inbox' },
+    { key: 'reading', label: 'Reading' },
+    { key: 'sending', label: 'Sending' },
+  ];
+
+  function renderEmailSettingsTabs(activeKey) {
+    var ui = window.TMAPortalUI;
+    if (ui && typeof ui.tabs === 'function') {
+      return (
+        '<div class="tma-dash__email-settings-tabs" data-email-settings-tabs>' +
+        ui.tabs(EMAIL_SETTINGS_TABS, activeKey) +
+        '</div>'
+      );
+    }
+
+    return (
+      '<div class="tma-dash__email-settings-tabs" data-email-settings-tabs>' +
+      '<div class="tma-tab-group tma-tab-group--underline" role="tablist" aria-label="Email settings sections">' +
+      EMAIL_SETTINGS_TABS.map(function (tab, i) {
+        var on = tab.key === activeKey;
+        return (
+          '<button type="button" class="tma-tab' + (on ? ' is-active' : '') + '" role="tab"' +
+          ' data-tab-index="' + i + '" data-tab-key="' + esc(tab.key) + '"' +
+          ' aria-selected="' + (on ? 'true' : 'false') + '" tabindex="' + (on ? 0 : -1) + '">' +
+          '<span class="tma-tab__label">' + esc(tab.label) + '</span>' +
+          '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
+          '</button>'
+        );
+      }).join('') +
+      '</div></div>'
+    );
+  }
+
+  function renderSignatureEditor(state, prefs) {
+    var signature = prefs.signature || '';
+
+    return (
+      '<div class="tma-dash__email-settings-field tma-dash__email-settings-field--signature">' +
+      '<div class="tma-dash__email-settings-signature-head">' +
+      '<label class="tma-dash__settings-row-label" id="tma-mail-signature-label">Signature</label>' +
+      '<button type="button" class="tma-dash__email-settings-btn"' +
+      ' data-email-settings-import-signature' +
+      (state.connected ? '' : ' disabled') +
+      '>Import from mailbox</button>' +
+      '</div>' +
+      '<p class="tma-dash__email-settings-hint">Pulls the signature from your connected inbox' +
+      ' (or recent sent mail). Format it with the tools below — changes stay in the portal.</p>' +
+      '<div class="tma-dash__email-settings-signature-editor">' +
+      renderComposeToolbar({ expand: false }) +
+      '<div id="tma-mail-signature" class="tma-dash__email-settings-signature-body"' +
+      ' contenteditable="true" role="textbox" aria-multiline="true"' +
+      ' aria-labelledby="tma-mail-signature-label"' +
+      ' data-email-signature-editor data-email-pref-html="signature"' +
+      ' data-placeholder="Appended to messages you send">' +
+      signature +
+      '</div>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderEmailSettingsPanel(state, tab, prefs) {
+    if (tab === 'mailbox') {
+      return renderMailboxSection(state);
+    }
+
+    if (tab === 'layout') {
+      return (
+        settingsRow('Mailbox layout', 'Split keeps the list and the message side by side.',
+          settingsChoice('layout', prefs.layout || 'split', [
+            { id: 'split', label: 'Split view' },
+            { id: 'single', label: 'Full width' },
+          ])) +
+        settingsRow('Email sidebar', 'Closing the folder list hides it completely. Icons only keeps a slim rail.',
+          settingsChoice('sidebarMode', prefs.sidebarMode || 'full', [
+            { id: 'full', label: 'Full' },
+            { id: 'hidden', label: 'Hidden' },
+            { id: 'icons', label: 'Icons only' },
+          ]))
+      );
+    }
+
+    if (tab === 'inbox') {
+      return (
+        settingsRow('Show category tabs', 'Switch the inbox between these sections.',
+          settingsSwitch(prefs.showInboxCategories !== false, 'Show category tabs',
+            'data-email-pref="showInboxCategories"')) +
+        renderCategoryChoices(prefs)
+      );
+    }
+
+    if (tab === 'reading') {
+      return (
+        settingsRow('Conversation view', 'Group replies into a single thread.',
+          settingsSwitch(prefs.conversationView, 'Conversation view',
+            'data-email-pref="conversationView"')) +
+        settingsRow('Preview pane', 'Show the message beside the list.',
+          settingsSwitch(prefs.previewPane, 'Preview pane', 'data-email-pref="previewPane"')) +
+        settingsRow('Read receipts', 'Ask senders to confirm you opened their mail.',
+          settingsSwitch(prefs.readReceipts, 'Read receipts', 'data-email-pref="readReceipts"'))
+      );
+    }
+
+    // Sending
+    return (
+      settingsRow('Undo send window', 'Seconds to cancel a message after sending.',
+        '<input type="number" class="tma-dash__email-settings-number" min="0" max="30"' +
+        ' value="' + esc(prefs.undoSendSeconds == null ? 5 : prefs.undoSendSeconds) + '"' +
+        ' data-email-pref-number="undoSendSeconds" aria-label="Undo send window in seconds">') +
+      renderSignatureEditor(state, prefs)
+    );
+  }
+
   function renderEmailSettings(state) {
     if (!state.settingsOpen) return '';
 
     var prefs = (state.settings && state.settings.preferences) || {};
     var loading = !state.settings;
+    var tab = state.settingsTab || 'mailbox';
+    if (!EMAIL_SETTINGS_TABS.some(function (item) { return item.key === tab; })) {
+      tab = 'mailbox';
+    }
 
     return (
       '<div class="tma-dash__email-settings" data-email-settings role="dialog" aria-modal="true"' +
@@ -6180,73 +6307,28 @@
 
       (loading
         ? '<div class="tma-dash__email-settings-body"><p>Loading…</p></div>'
-        : '<div class="tma-dash__email-settings-body">' +
-          '<h3 class="tma-dash__email-settings-section">Mailbox</h3>' +
-          renderMailboxSection(state) +
-
-          '<h3 class="tma-dash__email-settings-section">Layout</h3>' +
-          settingsRow('Mailbox layout', 'Split keeps the list and the message side by side.',
-            settingsChoice('layout', prefs.layout || 'split', [
-              { id: 'split', label: 'Split view' },
-              { id: 'single', label: 'Full width' },
-            ])) +
-          settingsRow('Email sidebar', 'Closing the folder list hides it completely. Icons only keeps a slim rail.',
-            settingsChoice('sidebarMode', prefs.sidebarMode || 'full', [
-              { id: 'full', label: 'Full' },
-              { id: 'hidden', label: 'Hidden' },
-              { id: 'icons', label: 'Icons only' },
-            ])) +
-
-          '<h3 class="tma-dash__email-settings-section">Inbox categories</h3>' +
-          settingsRow('Show category tabs', 'Switch the inbox between these sections.',
-            settingsSwitch(prefs.showInboxCategories !== false, 'Show category tabs',
-              'data-email-pref="showInboxCategories"')) +
-          renderCategoryChoices(prefs) +
-
-          '<h3 class="tma-dash__email-settings-section">Reading</h3>' +
-          settingsRow('Conversation view', 'Group replies into a single thread.',
-            settingsSwitch(prefs.conversationView, 'Conversation view',
-              'data-email-pref="conversationView"')) +
-          settingsRow('Preview pane', 'Show the message beside the list.',
-            settingsSwitch(prefs.previewPane, 'Preview pane', 'data-email-pref="previewPane"')) +
-          settingsRow('Read receipts', 'Ask senders to confirm you opened their mail.',
-            settingsSwitch(prefs.readReceipts, 'Read receipts', 'data-email-pref="readReceipts"')) +
-
-          '<h3 class="tma-dash__email-settings-section">Sending</h3>' +
-          settingsRow('Undo send window', 'Seconds to cancel a message after sending.',
-            '<input type="number" class="tma-dash__email-settings-number" min="0" max="30"' +
-            ' value="' + esc(prefs.undoSendSeconds == null ? 5 : prefs.undoSendSeconds) + '"' +
-            ' data-email-pref-number="undoSendSeconds" aria-label="Undo send window in seconds">') +
-
-          '<div class="tma-dash__email-settings-field">' +
-          '<div class="tma-dash__email-settings-signature-head">' +
-          '<label class="tma-dash__settings-row-label" for="tma-mail-signature">Signature</label>' +
-          '<button type="button" class="tma-dash__email-settings-btn"' +
-          ' data-email-settings-import-signature' +
-          (state.connected ? '' : ' disabled') +
-          '>Import from mailbox</button>' +
+        : '<div class="tma-dash__email-settings-nav">' +
+          renderEmailSettingsTabs(tab) +
           '</div>' +
-          '<p class="tma-dash__email-settings-hint">Pulls the signature from your connected inbox' +
-          ' (or recent sent mail). Edit freely — changes stay in the portal.</p>' +
-          '<textarea id="tma-mail-signature" class="tma-dash__email-settings-textarea" rows="6"' +
-          ' data-email-pref-text="signature"' +
-          ' placeholder="Appended to messages you send">' + esc(prefs.signature || '') + '</textarea>' +
-          (prefs.signature
-            ? '<div class="tma-dash__email-settings-signature-preview" aria-label="Signature preview">' +
-              '<div class="tma-dash__email-settings-signature-preview-label">Preview</div>' +
-              '<div class="tma-dash__email-settings-signature-preview-body">' +
-              prefs.signature +
-              '</div></div>'
-            : '') +
-          '</div>' +
+          '<div class="tma-dash__email-settings-body" role="tabpanel" data-email-settings-panel="' + esc(tab) + '">' +
+          renderEmailSettingsPanel(state, tab, prefs) +
           '</div>') +
 
       '</div></div>'
     );
   }
 
+  function signatureEditorValue(editor) {
+    if (!editor) return '';
+    var text = (editor.textContent || '').replace(/\u00a0/g, ' ').trim();
+    var hasMedia = !!editor.querySelector('img, table');
+    if (!text && !hasMedia) return '';
+    return editor.innerHTML;
+  }
+
   function openEmailSettings(root, state, render) {
     state.settingsOpen = true;
+    if (!state.settingsTab) state.settingsTab = 'mailbox';
     render();
 
     // The panel is modal, so Escape has to work wherever focus happens to be.
@@ -6320,6 +6402,28 @@
         render();
       });
     });
+
+    // System underline tabs. PortalTabGroup owns keyboard/active chrome;
+    // the change event drives which panel we render.
+    MORPH.unwired(root, '[data-email-settings-tabs]').forEach(function (wrap) {
+      var group = wrap.querySelector('.tma-tab-group') || wrap;
+      // Morph can reuse the group node with a stale init flag after a tab
+      // switch rebuilds the buttons — clear it so keyboard wiring returns.
+      if (group && group.dataset) delete group.dataset.tabGroupInit;
+      if (window.PortalTabGroup) window.PortalTabGroup.init(group);
+    });
+
+    if (!root._emailSettingsTabsBound) {
+      root._emailSettingsTabsBound = true;
+      root.addEventListener('tma-tab-change', function (event) {
+        if (!state.settingsOpen) return;
+        if (!event.target.closest || !event.target.closest('[data-email-settings-tabs]')) return;
+        var key = event.detail && event.detail.key;
+        if (!key || key === state.settingsTab) return;
+        state.settingsTab = key;
+        render();
+      });
+    }
 
     MORPH.unwired(root, '[data-email-settings-sync]').forEach(function (input) {
       input.addEventListener('change', function () {
@@ -6436,9 +6540,42 @@
     });
 
     MORPH.unwired(root, '[data-email-pref-text]').forEach(function (input) {
-      // Signatures are long; save on blur rather than per keystroke.
+      // Plain text prefs (if any remain); save on blur rather than per keystroke.
       input.addEventListener('blur', function () {
         saveEmailPreference(root, state, input.getAttribute('data-email-pref-text'), input.value);
+      });
+    });
+
+    MORPH.unwired(root, '[data-email-pref-html]').forEach(function (editor) {
+      // Rich signature HTML — persist when the editor loses focus, not while
+      // the toolbar is being used (mousedown on tools must not steal focus).
+      editor.addEventListener('blur', function () {
+        var key = editor.getAttribute('data-email-pref-html');
+        var value = signatureEditorValue(editor);
+        var current = state.settings && state.settings.preferences
+          ? state.settings.preferences[key]
+          : undefined;
+        if (current === value) return;
+        saveEmailPreference(root, state, key, value);
+      });
+
+      editor.addEventListener('paste', function (event) {
+        // Keep pasted signature markup, but drop scripts by taking text/html
+        // through the browser's own paste into contenteditable after we strip
+        // dangerous tags via a temporary sanitising pass on plain fallback.
+        var html = event.clipboardData && event.clipboardData.getData('text/html');
+        var text = event.clipboardData && event.clipboardData.getData('text/plain');
+        if (!html && !text) return;
+        event.preventDefault();
+        if (html) {
+          var clean = html
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/\son\w+="[^"]*"/gi, '')
+            .replace(/\son\w+='[^']*'/gi, '');
+          document.execCommand('insertHTML', false, clean);
+        } else {
+          document.execCommand('insertText', false, text);
+        }
       });
     });
 
@@ -6455,6 +6592,7 @@
           if (state.preferences && data.preferences) {
             state.preferences.signature = data.preferences.signature;
           }
+          state.settingsTab = 'sending';
           showEmailToast(root, 'Signature imported — review and edit below');
           render();
         }).catch(function (err) {
@@ -8671,14 +8809,16 @@
 
       // Keep the pressed states honest as the caret moves or the user types.
       document.addEventListener('selectionchange', function () {
-        if (!root.querySelector('[data-email-compose-body]')) return;
+        if (!root.querySelector('[data-email-compose-body], [data-email-signature-editor]')) return;
         syncComposeToolbarState(root);
       });
 
       // Keyboard shortcuts fire the browser's own commands, which the toolbar
       // then has to catch up with.
       root.addEventListener('keyup', function (event) {
-        if (event.target.closest('[data-email-compose-body]')) syncComposeToolbarState(root);
+        if (event.target.closest('[data-email-compose-body], [data-email-signature-editor]')) {
+          syncComposeToolbarState(root);
+        }
       });
     }
 
@@ -9559,6 +9699,7 @@
       threadToken: 0,
       refreshing: false,
       settingsOpen: false,
+      settingsTab: 'mailbox',
       settings: null,
 
       hiddenDetailChips: {},

@@ -180,7 +180,9 @@ try {
     const panelText = await page.textContent('[data-email-settings]');
     check(panelText.includes('Email settings'), 'panel is titled Email settings');
     check(panelText.includes('e2e@example.com'), 'panel names the connected mailbox');
-    check(panelText.includes('Signature'), 'panel exposes the signature preference');
+    check(panelText.includes('Mailbox'), 'panel exposes the Mailbox tab');
+    check(!!(await page.$('[data-email-settings-tabs] [data-tab-key="sending"]')),
+      'panel exposes the Sending tab for the signature');
 
     // It must sit above the mail UI to be usable.
     const z = await page.evaluate(() => {
@@ -191,9 +193,21 @@ try {
   }
 
   step(6, 'A preference saves without leaving the page');
-  const sigBox = await page.$('[data-email-pref-text="signature"]');
+  const sendingTab = await page.$('[data-email-settings-tabs] [data-tab-key="sending"]');
+  if (sendingTab) {
+    await sendingTab.click();
+    await page.waitForTimeout(300);
+  }
+  check(!!(await page.$('[data-email-settings-tabs]')), 'settings are categorised in tabs');
+  check(!!(await page.$('[data-email-signature-editor]')), 'signature editor is present on Sending');
+  check(!!(await page.$('[data-email-settings-panel="sending"] .tma-dash__email-compose-toolbar')),
+    'signature editor exposes text tools');
+
+  const sigBox = await page.$('[data-email-signature-editor]');
   if (sigBox) {
-    await sigBox.fill('Regards, Test User');
+    await sigBox.click();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+    await page.keyboard.type('Regards, Test User');
     await page.click('.tma-dash__email-settings-title');
     await page.waitForTimeout(700);
 
@@ -204,7 +218,8 @@ try {
       }).then((res) => res.json());
       return r.preferences && r.preferences.signature;
     }, BASE);
-    check(saved === 'Regards, Test User', `signature persisted server-side (got "${saved}")`);
+    const savedText = String(saved || '').replace(/<[^>]+>/g, '').trim();
+    check(savedText === 'Regards, Test User', `signature persisted server-side (got "${saved}")`);
   } else {
     check(false, 'found the signature field');
   }
