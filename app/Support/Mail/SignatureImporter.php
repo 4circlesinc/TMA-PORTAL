@@ -671,7 +671,8 @@ class SignatureImporter
         }
 
         // Remote logos and cid: images from the original send are both common.
-        if (preg_match('/^(https?:|cid:|data:image\/(?:png|jpe?g|gif|webp);base64,)/i', $url)) {
+        // GIF is not accepted for portal signature uploads.
+        if (preg_match('/^(https?:|cid:|data:image\/(?:png|jpe?g|webp);base64,)/i', $url)) {
             return ! preg_match('/^(javascript:|vbscript:|data:text)/i', $url);
         }
 
