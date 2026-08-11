@@ -6577,30 +6577,35 @@
   }
 
   function signatureImageSize(img) {
-    var width = parseInt(img.getAttribute('width'), 10)
+    // Always prefer the on-screen box. Imported logos often keep a huge natural
+    // width attribute while CSS max-width shrinks them — resizing the attribute
+    // then looks like a no-op until it dips under the container width.
+    var width = img.clientWidth
       || parseInt(img.style.width, 10)
-      || img.clientWidth
+      || parseInt(img.getAttribute('width'), 10)
       || img.naturalWidth
       || 160;
-    var height = parseInt(img.getAttribute('height'), 10)
+    var height = img.clientHeight
       || parseInt(img.style.height, 10)
-      || img.clientHeight
+      || parseInt(img.getAttribute('height'), 10)
       || img.naturalHeight
       || Math.round(width * 0.6);
     return {
-      width: Math.max(40, Math.min(480, width || 160)),
-      height: Math.max(20, Math.min(480, height || 160)),
+      width: Math.max(40, Math.min(720, width || 160)),
+      height: Math.max(20, Math.min(720, height || 160)),
     };
   }
 
   function applySignatureImageSize(img, width, height) {
-    width = Math.max(40, Math.min(480, Math.round(width)));
-    height = Math.max(20, Math.min(480, Math.round(height)));
+    width = Math.max(40, Math.min(720, Math.round(width)));
+    height = Math.max(20, Math.min(720, Math.round(height)));
     img.setAttribute('width', String(width));
     img.setAttribute('height', String(height));
     img.style.width = width + 'px';
     img.style.height = height + 'px';
-    img.style.maxWidth = '100%';
+    // Drop the stylesheet max-width clamp while transforming, otherwise drag
+    // changes never become visible for wide imported signature cards.
+    img.style.maxWidth = 'none';
   }
 
   function clearSignatureImageSelection(root, state) {
@@ -6612,7 +6617,10 @@
     }
     state._signatureSelectedImg = null;
     var layer = root.querySelector('[data-email-signature-transform]');
-    if (layer) layer.hidden = true;
+    if (layer) {
+      layer.hidden = true;
+      layer.setAttribute('aria-hidden', 'true');
+    }
   }
 
   function updateSignatureTransformFrame(root, state) {
@@ -6621,7 +6629,10 @@
     var stage = root.querySelector('.tma-dash__email-settings-signature-stage');
     var box = root.querySelector('[data-sig-transform-box]');
     if (!img || !img.isConnected || !layer || !stage || !box) {
-      if (layer) layer.hidden = true;
+      if (layer) {
+        layer.hidden = true;
+        layer.setAttribute('aria-hidden', 'true');
+      }
       return;
     }
 
@@ -6629,17 +6640,25 @@
     var imgRect = img.getBoundingClientRect();
     var top = imgRect.top - stageRect.top + stage.scrollTop;
     var left = imgRect.left - stageRect.left + stage.scrollLeft;
+    var width = imgRect.width;
+    var height = imgRect.height;
 
     layer.hidden = false;
+    layer.setAttribute('aria-hidden', 'false');
     box.style.top = Math.round(top) + 'px';
     box.style.left = Math.round(left) + 'px';
-    box.style.width = Math.round(imgRect.width) + 'px';
-    box.style.height = Math.round(imgRect.height) + 'px';
+    box.style.width = Math.round(width) + 'px';
+    box.style.height = Math.round(height) + 'px';
 
     var toolbar = layer.querySelector('[data-sig-transform-toolbar]');
     if (toolbar) {
-      toolbar.style.top = Math.round(top + imgRect.height + 10) + 'px';
-      toolbar.style.left = Math.round(left + imgRect.width / 2) + 'px';
+      // Keep the toolbar on-screen above the image when possible.
+      var toolbarTop = top - 44;
+      if (toolbarTop < stage.scrollTop + 8) {
+        toolbarTop = top + height + 10;
+      }
+      toolbar.style.top = Math.round(toolbarTop) + 'px';
+      toolbar.style.left = Math.round(left + width / 2) + 'px';
     }
 
     var size = signatureImageSize(img);
@@ -6659,6 +6678,12 @@
     img.classList.add('is-selected');
     img.setAttribute('contenteditable', 'false');
     img.setAttribute('draggable', 'false');
+
+    // Lock the current on-screen size into explicit px before the user drags,
+    // so the first handle move is relative to what they actually see.
+    var displayed = signatureImageSize(img);
+    applySignatureImageSize(img, displayed.width, displayed.height);
+
     state._signatureSelectedImg = img;
     updateSignatureTransformFrame(root, state);
   }
@@ -7083,30 +7108,6 @@
         }
       });
 
-      // Logos from Outlook/Gmail are often wrapped in links; stop the browser
-      // navigating away when the user is trying to select the image to transform.
-      editor.addEventListener('click', function (event) {
-        if (event.target.closest('[data-email-signature-transform]')) return;
-
-        var link = event.target.closest('a');
-        if (link && editor.contains(link)) event.preventDefault();
-
-        var img = event.target.closest('img');
-        if (!img && link && editor.contains(link)) img = link.querySelector('img');
-
-        if (!img || !editor.contains(img)) {
-          clearSignatureImageSelection(root, state);
-          return;
-        }
-
-        event.preventDefault();
-        selectSignatureImage(root, state, img);
-      });
-
-      editor.addEventListener('scroll', function () {
-        updateSignatureTransformFrame(root, state);
-      });
-
       // Make every image a single selectable object (not editable text).
       editor.querySelectorAll('img').forEach(function (img) {
         img.setAttribute('contenteditable', 'false');
@@ -7120,61 +7121,11 @@
       }
     });
 
-    // One binding for transform handles / toolbar for the life of the mount.
+    // One binding for image selection + transform handles for the life of the
+    // mount. Do not bind these on the editor node itself — Morph replaces that
+    // node and would drop the listeners after the first settings re-render.
     if (!root._emailSignatureTransformBound) {
       root._emailSignatureTransformBound = true;
-
-      root.addEventListener('mousedown', function (event) {
-        var handle = event.target.closest('[data-sig-handle]');
-        if (!handle || !state.settingsOpen) return;
-        var img = state._signatureSelectedImg;
-        if (!img || !img.isConnected) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        var dir = handle.getAttribute('data-sig-handle');
-        var startX = event.clientX;
-        var startY = event.clientY;
-        var start = signatureImageSize(img);
-        var ratio = start.width / Math.max(1, start.height);
-
-        function onMove(moveEvent) {
-          var dx = moveEvent.clientX - startX;
-          var dy = moveEvent.clientY - startY;
-          var nextW = start.width;
-          var nextH = start.height;
-
-          if (dir.indexOf('e') !== -1) nextW = start.width + dx;
-          if (dir.indexOf('w') !== -1) nextW = start.width - dx;
-          if (dir.indexOf('s') !== -1) nextH = start.height + dy;
-          if (dir.indexOf('n') !== -1) nextH = start.height - dy;
-
-          // Corner handles keep aspect ratio; edge handles are free.
-          if (dir.length === 2) {
-            nextW = Math.max(40, Math.min(480, nextW));
-            nextH = Math.max(20, Math.min(480, Math.round(nextW / ratio)));
-          } else if (dir === 'e' || dir === 'w') {
-            nextW = Math.max(40, Math.min(480, nextW));
-            nextH = start.height;
-          } else {
-            nextH = Math.max(20, Math.min(480, nextH));
-            nextW = start.width;
-          }
-
-          applySignatureImageSize(img, nextW, nextH);
-          updateSignatureTransformFrame(root, state);
-        }
-
-        function onUp() {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          persistSelectedSignatureImage(root, state);
-        }
-
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-      });
 
       root.addEventListener('click', function (event) {
         if (!state.settingsOpen) return;
@@ -7193,18 +7144,103 @@
         var remove = event.target.closest('[data-sig-transform-delete]');
         if (remove) {
           event.preventDefault();
-          var img = state._signatureSelectedImg;
-          if (img && img.isConnected) {
-            var editor = root.querySelector('[data-email-signature-editor]');
-            img.remove();
+          var selected = state._signatureSelectedImg;
+          if (selected && selected.isConnected) {
+            var ed = root.querySelector('[data-email-signature-editor]');
+            selected.remove();
             clearSignatureImageSelection(root, state);
-            if (editor) {
-              var value = signatureEditorValue(editor);
+            if (ed) {
+              var value = signatureEditorValue(ed);
               syncActiveSignatureHtml(root, state, value);
               persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
             }
           }
+          return;
         }
+
+        if (event.target.closest('[data-email-signature-transform]')) return;
+
+        var editor = root.querySelector('[data-email-signature-editor]');
+        if (!editor || !editor.contains(event.target)) {
+          if (!event.target.closest('[data-email-signature-shell]')) {
+            clearSignatureImageSelection(root, state);
+          }
+          return;
+        }
+
+        var link = event.target.closest('a');
+        if (link && editor.contains(link)) event.preventDefault();
+
+        var img = event.target.closest('img');
+        if (!img && link && editor.contains(link)) img = link.querySelector('img');
+
+        if (!img || !editor.contains(img)) {
+          clearSignatureImageSelection(root, state);
+          return;
+        }
+
+        event.preventDefault();
+        selectSignatureImage(root, state, img);
+      });
+
+      root.addEventListener('pointerdown', function (event) {
+        var handle = event.target.closest('[data-sig-handle]');
+        if (!handle || !state.settingsOpen) return;
+        var img = state._signatureSelectedImg;
+        if (!img || !img.isConnected) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        var dir = handle.getAttribute('data-sig-handle');
+        var startX = event.clientX;
+        var startY = event.clientY;
+        var start = signatureImageSize(img);
+        var ratio = start.width / Math.max(1, start.height);
+        state._signatureTransformDragging = true;
+
+        try {
+          handle.setPointerCapture(event.pointerId);
+        } catch (e) { /* older engines */ }
+
+        function onMove(moveEvent) {
+          var dx = moveEvent.clientX - startX;
+          var dy = moveEvent.clientY - startY;
+          var nextW = start.width;
+          var nextH = start.height;
+
+          if (dir.indexOf('e') !== -1) nextW = start.width + dx;
+          if (dir.indexOf('w') !== -1) nextW = start.width - dx;
+          if (dir.indexOf('s') !== -1) nextH = start.height + dy;
+          if (dir.indexOf('n') !== -1) nextH = start.height - dy;
+
+          // Corner handles keep aspect ratio; edge handles are free.
+          if (dir.length === 2) {
+            nextW = Math.max(40, Math.min(720, nextW));
+            nextH = Math.max(20, Math.min(720, Math.round(nextW / ratio)));
+          } else if (dir === 'e' || dir === 'w') {
+            nextW = Math.max(40, Math.min(720, nextW));
+            nextH = start.height;
+          } else {
+            nextH = Math.max(20, Math.min(720, nextH));
+            nextW = start.width;
+          }
+
+          applySignatureImageSize(img, nextW, nextH);
+          updateSignatureTransformFrame(root, state);
+        }
+
+        function onUp() {
+          state._signatureTransformDragging = false;
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onUp);
+          handle.removeEventListener('pointercancel', onUp);
+          persistSelectedSignatureImage(root, state);
+        }
+
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
       });
 
       root.addEventListener('change', function (event) {
@@ -7227,6 +7263,14 @@
         applySignatureImageSize(img, nextW, nextH);
         persistSelectedSignatureImage(root, state);
       });
+
+      root.addEventListener('scroll', function (event) {
+        if (!state.settingsOpen) return;
+        if (event.target && event.target.closest &&
+            event.target.closest('.tma-dash__email-settings-signature-stage')) {
+          updateSignatureTransformFrame(root, state);
+        }
+      }, true);
 
       window.addEventListener('resize', function () {
         if (state.settingsOpen) updateSignatureTransformFrame(root, state);

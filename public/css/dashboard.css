@@ -28529,6 +28529,11 @@ button.tma-dash__header-popup-item:focus-visible {
   vertical-align: middle;
 }
 
+.tma-dash__email-settings-signature-body img.is-selected {
+  max-width: none;
+  height: auto;
+}
+
 .tma-dash__email-settings-signature-body a {
   cursor: default;
   pointer-events: auto;
@@ -28542,7 +28547,7 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__email-sig-transform[hidden] {
-  display: none;
+  display: none !important;
 }
 
 .tma-dash__email-sig-transform-box {
@@ -28554,23 +28559,31 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash__email-sig-transform-handle {
   position: absolute;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   padding: 0;
   border: 1px solid rgba(16, 24, 40, 0.85);
   border-radius: 1px;
   background: #fff;
   pointer-events: auto;
+  touch-action: none;
 }
 
-.tma-dash__email-sig-transform-handle--nw { top: -3.5px; left: -3.5px; cursor: nwse-resize; }
-.tma-dash__email-sig-transform-handle--n  { top: -3.5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
-.tma-dash__email-sig-transform-handle--ne { top: -3.5px; right: -3.5px; cursor: nesw-resize; }
-.tma-dash__email-sig-transform-handle--e  { top: 50%; right: -3.5px; transform: translateY(-50%); cursor: ew-resize; }
-.tma-dash__email-sig-transform-handle--se { bottom: -3.5px; right: -3.5px; cursor: nwse-resize; }
-.tma-dash__email-sig-transform-handle--s  { bottom: -3.5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
-.tma-dash__email-sig-transform-handle--sw { bottom: -3.5px; left: -3.5px; cursor: nesw-resize; }
-.tma-dash__email-sig-transform-handle--w  { top: 50%; left: -3.5px; transform: translateY(-50%); cursor: ew-resize; }
+/* Invisible expanded hit target — the visible nub stays small. */
+.tma-dash__email-sig-transform-handle::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.tma-dash__email-sig-transform-handle--nw { top: -4px; left: -4px; cursor: nwse-resize; }
+.tma-dash__email-sig-transform-handle--n  { top: -4px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.tma-dash__email-sig-transform-handle--ne { top: -4px; right: -4px; cursor: nesw-resize; }
+.tma-dash__email-sig-transform-handle--e  { top: 50%; right: -4px; transform: translateY(-50%); cursor: ew-resize; }
+.tma-dash__email-sig-transform-handle--se { bottom: -4px; right: -4px; cursor: nwse-resize; }
+.tma-dash__email-sig-transform-handle--s  { bottom: -4px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.tma-dash__email-sig-transform-handle--sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
+.tma-dash__email-sig-transform-handle--w  { top: 50%; left: -4px; transform: translateY(-50%); cursor: ew-resize; }
 
 .tma-dash__email-sig-transform-toolbar {
   position: absolute;
