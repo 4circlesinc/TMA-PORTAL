@@ -6403,25 +6403,52 @@
       });
     });
 
-    // System underline tabs. PortalTabGroup owns keyboard/active chrome;
-    // the change event drives which panel we render.
-    MORPH.unwired(root, '[data-email-settings-tabs]').forEach(function (wrap) {
-      var group = wrap.querySelector('.tma-tab-group') || wrap;
-      // Morph can reuse the group node with a stale init flag after a tab
-      // switch rebuilds the buttons — clear it so keyboard wiring returns.
-      if (group && group.dataset) delete group.dataset.tabGroupInit;
-      if (window.PortalTabGroup) window.PortalTabGroup.init(group);
-    });
-
+    // Settings tabs are re-morphed on every switch, so per-button PortalTabGroup
+    // listeners die after the first click. Delegate from the email root instead
+    // — one binding for the life of the mount, active chrome comes from render.
     if (!root._emailSettingsTabsBound) {
       root._emailSettingsTabsBound = true;
-      root.addEventListener('tma-tab-change', function (event) {
+
+      root.addEventListener('click', function (event) {
         if (!state.settingsOpen) return;
-        if (!event.target.closest || !event.target.closest('[data-email-settings-tabs]')) return;
-        var key = event.detail && event.detail.key;
+        var tab = event.target.closest('[data-email-settings-tabs] [data-tab-key]');
+        if (!tab || !root.contains(tab)) return;
+        var key = tab.getAttribute('data-tab-key');
         if (!key || key === state.settingsTab) return;
         state.settingsTab = key;
         render();
+      });
+
+      root.addEventListener('keydown', function (event) {
+        if (!state.settingsOpen) return;
+        var tab = event.target.closest('[data-email-settings-tabs] .tma-tab');
+        if (!tab || !root.contains(tab)) return;
+
+        var group = tab.closest('.tma-tab-group');
+        if (!group) return;
+
+        var tabs = Array.prototype.slice.call(group.querySelectorAll('.tma-tab'));
+        var index = tabs.indexOf(tab);
+        if (index < 0) return;
+
+        var next = -1;
+        if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = tabs.length - 1;
+        else return;
+
+        event.preventDefault();
+        var key = tabs[next].getAttribute('data-tab-key');
+        if (!key) return;
+        state.settingsTab = key;
+        render();
+        window.requestAnimationFrame(function () {
+          var el = root.querySelector(
+            '[data-email-settings-tabs] [data-tab-key="' + key + '"]'
+          );
+          if (el) el.focus();
+        });
       });
     }
 
