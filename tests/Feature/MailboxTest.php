@@ -311,7 +311,49 @@ class MailboxTest extends TestCase
             ->assertJsonPath('preferences.signature', 'Sent from the portal')
             ->assertJsonPath('preferences.undoSendSeconds', 12)
             // Untouched preferences keep their defaults.
-            ->assertJsonPath('preferences.conversationView', true);
+            ->assertJsonPath('preferences.conversationView', true)
+            // A legacy single signature becomes a selectable library entry.
+            ->assertJsonPath('preferences.signatures.0.html', 'Sent from the portal');
+
+        $activeId = $this->actingAs($user)
+            ->getJson('/portal/mail/settings')
+            ->assertOk()
+            ->json('preferences.activeSignatureId');
+        $this->assertIsString($activeId);
+        $this->assertNotSame('', $activeId);
+    }
+
+    public function test_signature_library_can_be_selected_and_updated(): void
+    {
+        $user = $this->user();
+        $this->account($user);
+
+        $this->actingAs($user)
+            ->putJson('/portal/mail/settings', [
+                'preferences' => [
+                    'signatures' => [
+                        ['id' => 'sig-a', 'name' => 'Work', 'html' => '<div>Work</div>'],
+                        ['id' => 'sig-b', 'name' => 'Personal', 'html' => '<div>Personal</div>'],
+                    ],
+                    'activeSignatureId' => 'sig-b',
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('preferences.activeSignatureId', 'sig-b')
+            ->assertJsonPath('preferences.signature', '<div>Personal</div>')
+            ->assertJsonPath('preferences.signatures.0.name', 'Work')
+            ->assertJsonPath('preferences.signatures.1.name', 'Personal');
+
+        // Editing only the active HTML keeps the selected entry in sync.
+        $this->actingAs($user)
+            ->putJson('/portal/mail/settings', [
+                'preferences' => ['signature' => '<div>Personal updated</div>'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('preferences.activeSignatureId', 'sig-b')
+            ->assertJsonPath('preferences.signature', '<div>Personal updated</div>')
+            ->assertJsonPath('preferences.signatures.1.html', '<div>Personal updated</div>')
+            ->assertJsonPath('preferences.signatures.0.html', '<div>Work</div>');
     }
 
     public function test_import_signature_copies_the_mailbox_signature_into_preferences(): void

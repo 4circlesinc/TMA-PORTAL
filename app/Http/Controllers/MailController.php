@@ -1770,7 +1770,13 @@ class MailController extends Controller
             'provider' => ['sometimes', 'string', 'in:google,microsoft'],
             'syncEnabled' => ['sometimes', 'boolean'],
             'preferences' => ['sometimes', 'array'],
-            'preferences.signature' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            // Room for a few logo data-URIs inside HTML signatures.
+            'preferences.signature' => ['sometimes', 'nullable', 'string', 'max:100000'],
+            'preferences.activeSignatureId' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'preferences.signatures' => ['sometimes', 'array', 'max:10'],
+            'preferences.signatures.*.id' => ['required', 'string', 'max:64'],
+            'preferences.signatures.*.name' => ['required', 'string', 'max:80'],
+            'preferences.signatures.*.html' => ['nullable', 'string', 'max:100000'],
             'preferences.readReceipts' => ['sometimes', 'boolean'],
             'preferences.conversationView' => ['sometimes', 'boolean'],
             'preferences.previewPane' => ['sometimes', 'boolean'],
@@ -1810,9 +1816,13 @@ class MailController extends Controller
             // Merge the incoming keys *onto what is stored* before normalising.
             // Normalising the payload on its own fills every absent key with
             // its default, so saving one preference silently reset the rest.
+            // Pass the request keys separately so a blur-save of `signature`
+            // alone can update the active library entry without looking like
+            // a full library rewrite.
             $current['mail'] = $this->mailPreferences(
                 array_merge($current['mail'] ?? [], $data['preferences']),
                 raw: true,
+                incoming: $data['preferences'],
             );
 
             $user->forceFill(['preferences' => $current])->save();
@@ -1850,9 +1860,36 @@ class MailController extends Controller
         }
 
         $current = $user->preferences ?? [];
+        $mail = $this->mailPreferences($current['mail'] ?? [], raw: true);
+        $signatures = $mail['signatures'];
+        $importedId = null;
+
+        foreach ($signatures as $index => $entry) {
+            if (($entry['name'] ?? '') === 'Imported') {
+                $importedId = $entry['id'];
+                $signatures[$index]['html'] = $signature;
+                break;
+            }
+        }
+
+        if ($importedId === null) {
+            $importedId = (string) Str::uuid();
+            $signatures[] = [
+                'id' => $importedId,
+                'name' => 'Imported',
+                'html' => $signature,
+            ];
+        }
+
+        $payload = [
+            'signatures' => $signatures,
+            'activeSignatureId' => $importedId,
+            'signature' => $signature,
+        ];
         $current['mail'] = $this->mailPreferences(
-            array_merge($current['mail'] ?? [], ['signature' => $signature]),
+            array_merge($mail, $payload),
             raw: true,
+            incoming: $payload,
         );
         $user->forceFill(['preferences' => $current])->save();
 
@@ -1866,10 +1903,14 @@ class MailController extends Controller
     public const INBOX_CATEGORIES = ['important', 'starred', 'pinned'];
 
     /** Mail preference defaults, kept alongside the rest in users.preferences. */
-    private function mailPreferences(array $stored, bool $raw = false): array
+    private function mailPreferences(array $stored, bool $raw = false, ?array $incoming = null): array
     {
         $defaults = [
             'signature' => '',
+            // Named signatures the user can switch between. `signature` stays
+            // the active HTML so compose and older clients keep working.
+            'signatures' => [],
+            'activeSignatureId' => null,
             'readReceipts' => false,
             'conversationView' => true,
             'previewPane' => true,
@@ -1901,6 +1942,83 @@ class MailController extends Controller
             ->unique()
             ->values()
             ->all();
+
+        return $this->normalizeSignatureLibrary($merged, $incoming);
+    }
+
+    /**
+     * Keep the signature library coherent with the active HTML field.
+     *
+     * Older clients only knew `signature`. Newer ones manage `signatures[]`
+     * and `activeSignatureId`. Either shape can arrive on a save; this makes
+     * both views agree before anything is stored.
+     *
+     * @param  array<string, mixed>  $merged
+     * @param  array<string, mixed>|null  $incoming  Keys actually sent on this request
+     * @return array<string, mixed>
+     */
+    private function normalizeSignatureLibrary(array $merged, ?array $incoming = null): array
+    {
+        // On reads, never treat the mirrored `signature` string as an edit of
+        // the active library entry — only real request payloads should do that.
+        $hadLibrary = $incoming === null ? true : array_key_exists('signatures', $incoming);
+        $hadActiveHtml = $incoming !== null && array_key_exists('signature', $incoming);
+
+        $signatures = collect($merged['signatures'] ?? [])
+            ->filter(fn ($entry) => is_array($entry) && is_string($entry['id'] ?? null) && $entry['id'] !== '')
+            ->map(function (array $entry): array {
+                $name = trim((string) ($entry['name'] ?? 'Signature'));
+
+                return [
+                    'id' => (string) $entry['id'],
+                    'name' => $name !== '' ? mb_substr($name, 0, 80) : 'Signature',
+                    'html' => mb_substr((string) ($entry['html'] ?? ''), 0, 100000),
+                ];
+            })
+            ->take(10)
+            ->values()
+            ->all();
+
+        // A legacy single-string signature becomes the first library entry.
+        if ($signatures === [] && trim((string) ($merged['signature'] ?? '')) !== '') {
+            $signatures[] = [
+                'id' => (string) Str::uuid(),
+                'name' => 'Signature',
+                'html' => mb_substr((string) $merged['signature'], 0, 100000),
+            ];
+        }
+
+        $activeId = is_string($merged['activeSignatureId'] ?? null)
+            ? $merged['activeSignatureId']
+            : null;
+
+        $ids = collect($signatures)->pluck('id');
+        if (! $activeId || ! $ids->contains($activeId)) {
+            $activeId = $signatures[0]['id'] ?? null;
+        }
+
+        // Editor blur saves only `signature`. Mirror that into the active entry
+        // unless the request already supplied a full library.
+        if (! $hadLibrary && $hadActiveHtml && $activeId !== null) {
+            foreach ($signatures as $index => $entry) {
+                if ($entry['id'] === $activeId) {
+                    $signatures[$index]['html'] = mb_substr((string) ($merged['signature'] ?? ''), 0, 100000);
+                    break;
+                }
+            }
+        }
+
+        $activeHtml = '';
+        foreach ($signatures as $entry) {
+            if ($entry['id'] === $activeId) {
+                $activeHtml = $entry['html'];
+                break;
+            }
+        }
+
+        $merged['signatures'] = $signatures;
+        $merged['activeSignatureId'] = $activeId;
+        $merged['signature'] = $activeHtml;
 
         return $merged;
     }

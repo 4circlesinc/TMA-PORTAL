@@ -22,7 +22,7 @@ use Throwable;
  */
 class SignatureImporter
 {
-    public const MAX_LENGTH = 5000;
+    public const MAX_LENGTH = 100000;
 
     private const ALLOWED_TAGS = [
         'a', 'b', 'br', 'div', 'em', 'font', 'h1', 'h2', 'h3', 'h4', 'hr',
