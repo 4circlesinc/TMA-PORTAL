@@ -6582,6 +6582,13 @@
     );
   }
 
+  function importSignatureButtonLabel(state) {
+    var provider = state && state.account && state.account.provider;
+    if (provider === 'microsoft') return 'Import from Outlook';
+    if (provider === 'google') return 'Import from Gmail';
+    return 'Import from mailbox';
+  }
+
   function renderSignatureEditor(state, prefs) {
     var lib = ensureSignatureLibrary(prefs);
     var active = lib.signatures.find(function (entry) { return entry.id === lib.activeSignatureId; })
@@ -6597,7 +6604,7 @@
       '<button type="button" class="tma-dash__email-settings-btn"' +
       ' data-email-settings-import-signature' +
       (state.connected ? '' : ' disabled') +
-      '>Import from mailbox</button>' +
+      '>' + esc(importSignatureButtonLabel(state)) + '</button>' +
       '</div></div>' +
       '<p class="tma-dash__email-settings-hint">Click a name above to rename it. Use selects which signature is inserted when you compose.' +
       ' Upload a PNG, JPEG or WebP logo, then use the transform handles to resize or rotate it.</p>' +
@@ -7755,7 +7762,7 @@
       // Stale imports still carrying cid: logos cannot be sized until re-imported.
       if (/cid:/i.test(editor.innerHTML) && !state._signatureCidWarned) {
         state._signatureCidWarned = true;
-        showEmailToast(root, 'This signature has mailbox images — use Import from mailbox again to make them editable');
+        showEmailToast(root, 'This signature has mailbox images — use ' + importSignatureButtonLabel(state) + ' again to make them editable');
       }
     });
 
