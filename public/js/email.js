@@ -7276,6 +7276,26 @@
     );
   }
 
+  function renderEmailSettingsSkeleton() {
+    var S = window.TMASkeleton;
+    if (!S) {
+      return '<div class="tma-dash__email-settings-body"><p>Loading…</p></div>';
+    }
+
+    // Mirror the loaded chrome: tab strip + settings rows (label + description).
+    return (
+      '<div class="tma-dash__email-settings-nav" aria-hidden="true">' +
+      '<div class="tma-dash__email-settings-tabs tma-dash__email-settings-tabs--skeleton">' +
+      [64, 56, 48, 64, 64].map(function (w) {
+        return S.block({ width: w + 'px', height: '14px', radius: '6px' });
+      }).join('') +
+      '</div></div>' +
+      '<div class="tma-dash__email-settings-body" role="status" aria-live="polite" aria-label="Loading">' +
+      S.rows(5, { leading: false, width1: '36%', width2: '62%' }) +
+      '</div>'
+    );
+  }
+
   function renderEmailSettings(state) {
     if (!state.settingsOpen) return '';
 
@@ -7298,7 +7318,7 @@
       '</div>' +
 
       (loading
-        ? '<div class="tma-dash__email-settings-body"><p>Loading…</p></div>'
+        ? renderEmailSettingsSkeleton()
         : '<div class="tma-dash__email-settings-nav">' +
           renderEmailSettingsTabs(tab) +
           '</div>' +

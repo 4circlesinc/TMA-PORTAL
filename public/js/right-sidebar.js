@@ -183,7 +183,10 @@
       if (clients.loaded || clients.loading) return;
       clients.loading = true;
       renderClients();
-      window.TMANotifyAPI.api(ROOT + '/portal/clients').then(function (data) {
+      // Preview only — the sidebar paints ≤10 rows. Pulling /portal/clients
+      // here used to download the entire firm directory on every page.
+      var limit = Math.max(CLIENTS_MAX, previewLimits().clients);
+      window.TMANotifyAPI.api(ROOT + '/portal/clients/preview?limit=' + encodeURIComponent(limit)).then(function (data) {
         clients.items = (data && data.clients) || [];
         clients.loaded = true;
         clients.loading = false;

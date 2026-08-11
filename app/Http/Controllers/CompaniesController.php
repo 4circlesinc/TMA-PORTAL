@@ -6,10 +6,12 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
+use App\Support\Clients\ClientDirectory;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -32,34 +34,42 @@ class CompaniesController extends Controller
         'id', 'company_id', 'uid', 'name', 'initial', 'initial_color', 'email', 'user_id',
     ];
 
+    /** Warm the company list briefly — it rides next to the client directory
+     *  on hub mount and is identical for every staff reader. */
+    private const INDEX_TTL_SECONDS = 60;
+
     public function index(Request $request): JsonResponse
     {
         $this->authorizeStaff($request);
 
-        $companies = Company::with(['clients' => fn ($q) => $q
-            // Only the columns toRecord() prints for a person. Unconstrained,
-            // this pulls each member's whole `data` blob — harmless while one
-            // client belongs to a company, and a second copy of the clients
-            // problem the moment the firm starts using membership.
-            ->select(self::PERSON_COLUMNS)
-            ->orderBy('name')
-            ->orderBy('id')])
-            // Every count the record prints, aggregated in the listing query.
-            // toRecord() falls back to a query per count when the figure is
-            // absent, which for member counts meant one round trip per company.
-            ->withCount([
-                'referredClients',
-                'clients',
-                'members as current_members_count' => fn ($q) => $q->current(),
-            ])
-            ->orderBy('name')
-            ->get();
+        $payload = Cache::remember('companies.directory', self::INDEX_TTL_SECONDS, function () {
+            $companies = Company::with(['clients' => fn ($q) => $q
+                // Only the columns toRecord() prints for a person. Unconstrained,
+                // this pulls each member's whole `data` blob — harmless while one
+                // client belongs to a company, and a second copy of the clients
+                // problem the moment the firm starts using membership.
+                ->select(self::PERSON_COLUMNS)
+                ->orderBy('name')
+                ->orderBy('id')])
+                // Every count the record prints, aggregated in the listing query.
+                // toRecord() falls back to a query per count when the figure is
+                // absent, which for member counts meant one round trip per company.
+                ->withCount([
+                    'referredClients',
+                    'clients',
+                    'members as current_members_count' => fn ($q) => $q->current(),
+                ])
+                ->orderBy('name')
+                ->get();
 
-        $this->attachReferredPreviews($companies);
+            $this->attachReferredPreviews($companies);
 
-        return response()->json([
-            'companies' => $companies->map->toRecord()->values(),
-        ]);
+            return [
+                'companies' => $companies->map->toRecord()->values()->all(),
+            ];
+        });
+
+        return response()->json($payload);
     }
 
     /**
@@ -150,6 +160,8 @@ class CompaniesController extends Controller
             'created_by' => $request->user()->id,
         ], $this->profileColumns($data)));
 
+        Cache::forget('companies.directory');
+
         return response()->json([
             'company' => $company->load(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])->toRecord(),
         ], 201);
@@ -204,7 +216,10 @@ class CompaniesController extends Controller
                 $client->data = $profile;
                 $client->save();
             }
+            ClientDirectory::flush();
         }
+
+        Cache::forget('companies.directory');
 
         return response()->json([
             'company' => $company->fresh()->load(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])->toRecord(),
@@ -227,6 +242,9 @@ class CompaniesController extends Controller
             'referral_type' => Client::REFERRAL_NONE,
         ]);
         $company->delete();
+
+        Cache::forget('companies.directory');
+        ClientDirectory::flush();
 
         return response()->json(['status' => 'ok']);
     }

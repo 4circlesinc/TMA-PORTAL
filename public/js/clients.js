@@ -222,8 +222,36 @@
     });
   }
 
+  /* In-flight / warm directory share: live refresh, remount and any other
+   * consumer hitting list() in the same burst reuse one network round trip. */
+  var directoryPromise = null;
+  var directoryCache = null;
+  var directoryCacheAt = 0;
+  var DIRECTORY_TTL_MS = 30000;
+
   var ClientsAPI = {
-    list: function () { return clientsFetch(CLIENTS_BASE); },
+    list: function (opts) {
+      var force = !!(opts && opts.force);
+      if (!force && directoryCache && (Date.now() - directoryCacheAt) < DIRECTORY_TTL_MS) {
+        return Promise.resolve(directoryCache);
+      }
+      if (!force && directoryPromise) return directoryPromise;
+      directoryPromise = clientsFetch(CLIENTS_BASE).then(function (data) {
+        directoryCache = data;
+        directoryCacheAt = Date.now();
+        directoryPromise = null;
+        return data;
+      }).catch(function (err) {
+        directoryPromise = null;
+        throw err;
+      });
+      return directoryPromise;
+    },
+    invalidateList: function () {
+      directoryCache = null;
+      directoryCacheAt = 0;
+      directoryPromise = null;
+    },
     // One client's full record, profile included. The listing carries no
     // profiles, so this is how a record being opened gets its detail.
     show: function (uid) {
@@ -234,18 +262,39 @@
     search: function (term) {
       return clientsFetch(CLIENTS_BASE + '/search?q=' + encodeURIComponent(term));
     },
-    create: function (payload) { return clientsFetch(CLIENTS_BASE, { method: 'POST', json: payload }); },
+    create: function (payload) {
+      return clientsFetch(CLIENTS_BASE, { method: 'POST', json: payload }).then(function (data) {
+        ClientsAPI.invalidateList();
+        return data;
+      });
+    },
     update: function (uid, payload) {
-      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload });
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload })
+        .then(function (data) {
+          ClientsAPI.invalidateList();
+          return data;
+        });
     },
     remove: function (uid) {
-      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid), { method: 'DELETE' });
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid), { method: 'DELETE' })
+        .then(function (data) {
+          ClientsAPI.invalidateList();
+          return data;
+        });
     },
     bulkRemove: function (uids) {
-      return clientsFetch(CLIENTS_BASE + '/bulk-delete', { method: 'POST', json: { uids: uids } });
+      return clientsFetch(CLIENTS_BASE + '/bulk-delete', { method: 'POST', json: { uids: uids } })
+        .then(function (data) {
+          ClientsAPI.invalidateList();
+          return data;
+        });
     },
     duplicate: function (uid) {
-      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/duplicate', { method: 'POST' });
+      return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/duplicate', { method: 'POST' })
+        .then(function (data) {
+          ClientsAPI.invalidateList();
+          return data;
+        });
     },
     assignments: function (uid) {
       return clientsFetch(CLIENTS_BASE + '/' + encodeURIComponent(uid) + '/assignments');
@@ -5981,17 +6030,24 @@
       state.loadError = null;
       startClients();
 
-      Promise.all([
-        ClientsAPI.list(),
-        // Companies are secondary: the directory is still readable without
-        // them, so a failure here must not take the client list down with it.
-        CompaniesAPI.list().catch(function () { return { companies: [] }; }),
-      ]).then(function (results) {
-        hydrateClients((results[0] && results[0].clients) || []);
-        hydrateCompanies((results[1] && results[1].companies) || []);
+      // Paint the directory as soon as clients arrive. Companies are secondary
+      // (company column / company view) and used to hold the whole hub hostage.
+      ClientsAPI.list().then(function (data) {
+        hydrateClients((data && data.clients) || []);
         state.loadState = 'ready';
         state.loadError = null;
         startClients();
+
+        CompaniesAPI.list().then(function (companies) {
+          hydrateCompanies((companies && companies.companies) || []);
+          if (clientsMountRoot && clientsMountRoot._clientsController) {
+            clientsMountRoot._clientsController.syncRoute(
+              parseClientsPath(window.location.pathname)
+            );
+          }
+        }).catch(function () {
+          hydrateCompanies([]);
+        });
       }).catch(function () {
         state.loadState = 'error';
         // Our own sentence, not err.message: for a 500 the fetch layer says
@@ -6022,8 +6078,9 @@
    */
   if (window.TMALive) {
     window.TMALive.register(window.TMALive.RESOURCES.CLIENTS, function () {
+      ClientsAPI.invalidateList();
       return Promise.all([
-        ClientsAPI.list().catch(function () { return null; }),
+        ClientsAPI.list({ force: true }).catch(function () { return null; }),
         CompaniesAPI.list().catch(function () { return null; }),
       ]).then(function (results) {
         var clients = results[0];
@@ -6060,5 +6117,6 @@
       clientsMountRoot._clientsController.syncRoute(parsed);
     },
     routeFromPath: parseClientsPath,
+    listDirectory: function (opts) { return ClientsAPI.list(opts); },
   };
 })();

@@ -11,6 +11,7 @@ use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Clients\Assignments;
 use App\Support\Clients\ClientCustomFields;
+use App\Support\Clients\ClientDirectory;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
@@ -27,17 +28,6 @@ class ClientsController extends Controller
     /** Staff who may manage clients. Client accounts never reach this data. */
     private const STAFF = ['Administrator', 'Employee'];
 
-    /**
-     * What the directory listing selects. Note the absence of `data`: see
-     * index() for why, and {@see Client::toDirectoryRecord()} for what may be
-     * read here. `deleted_at` is listed because the soft-delete trait reads it.
-     */
-    private const DIRECTORY_COLUMNS = [
-        'id', 'uid', 'user_id', 'folder_id', 'company_id', 'name', 'client_type',
-        'company', 'referral_type', 'referred_by_company_id', 'email', 'phone',
-        'initial', 'initial_color', 'deleted_at',
-    ];
-
     /** Shortest term worth asking the database about. */
     private const SEARCH_MIN = 2;
 
@@ -50,55 +40,65 @@ class ClientsController extends Controller
      * seconds of query-and-serialise, and a 127 MB memory peak for a page that
      * shows a hundred rows. Profiles now load one at a time from show(), and
      * searching the profile happens in the database (see search()).
+     *
+     * The payload is kept warm briefly ({@see ClientDirectory}) so the hub,
+     * live refresh and any other full-list consumer share one rebuild.
      */
     public function index(Request $request): JsonResponse
     {
         $this->authorizeStaff($request);
 
-        $clients = ClientScope::query($request->user())
-            ->select(self::DIRECTORY_COLUMNS)
-            // Constrained to the columns the record actually reads, so a wide
-            // companies row is not loaded to print one name either.
-            ->with([
-                'folder:id,uuid',
-                'companyRecord:id,uid,name',
-                'referredByCompany:id,uid,name',
-            ])
-            ->orderBy('name')
-            ->get()
-            ->map->toDirectoryRecord()
-            ->values();
+        return response()->json(ClientDirectory::for($request->user()));
+    }
 
-        // The definitions ride along with the list: the client form has to
-        // render whatever the firm defined, and a field list nothing can draw
-        // is the mock this replaced.
+    /**
+     * A short named slice for the right sidebar.
+     *
+     * The sidebar only ever paints six-to-ten rows. It used to pull the entire
+     * directory on every portal page to do that — the same eleven-thousand-row
+     * payload the hub needs — so opening Overview felt like opening Clients.
+     */
+    public function preview(Request $request): JsonResponse
+    {
+        $this->authorizeStaff($request);
+
+        $limit = (int) $request->query('limit', 10);
+
         return response()->json([
-            'clients' => $clients,
-            'customFields' => ClientCustomFields::all(),
+            'clients' => ClientDirectory::preview($request->user(), $limit),
         ]);
     }
 
     /**
-     * Which clients match a search term, as uids.
+     * Which clients match a search term.
      *
-     * The directory searches names, contact details, job titles and company
-     * names — fields that live inside the `data` blob the listing no longer
-     * ships. Rather than send every profile to the browser so it can filter
-     * them, the browser asks here and gets back the set of matching ids.
-     *
-     * Only ids: the caller already holds the directory entries, so the answer
-     * to "who matches" is a few kilobytes however many clients match.
+     * The hub asks for ids (it already holds the directory entries). Global
+     * search asks for a capped set of lean records via `limit`, so it never
+     * has to download the full directory just to filter twelve names.
      */
     public function search(Request $request): JsonResponse
     {
         $this->authorizeStaff($request);
 
         $term = trim((string) $request->query('q', ''));
+        $limit = (int) $request->query('limit', 0);
 
         // One character matches most of the directory and answers nothing.
         // The caller filters by name locally until there are two.
         if (mb_strlen($term) < self::SEARCH_MIN) {
-            return response()->json(['query' => $term, 'ids' => []]);
+            return response()->json([
+                'query' => $term,
+                'ids' => [],
+                'clients' => [],
+            ]);
+        }
+
+        // Global search: records only, capped. Skip the full id list.
+        if ($limit > 0) {
+            return response()->json([
+                'query' => $term,
+                'clients' => ClientDirectory::searchRecords($request->user(), $term, $limit),
+            ]);
         }
 
         $like = '%'.addcslashes($term, '\\%_').'%';
@@ -184,6 +184,8 @@ class ClientsController extends Controller
             'action_url' => '/clients?client='.$client->uid,
         ]);
 
+        ClientDirectory::flushFor($request->user());
+
         return response()->json(['client' => $client->fresh(['folder', 'companyRecord', 'referredByCompany'])->toRecord()]);
     }
 
@@ -222,6 +224,8 @@ class ClientsController extends Controller
             'client' => $client,
         ]);
 
+        ClientDirectory::flushFor($request->user());
+
         return response()->json(['client' => $client->fresh(['folder', 'companyRecord', 'referredByCompany'])->toRecord()]);
     }
 
@@ -241,6 +245,7 @@ class ClientsController extends Controller
         // not leave live assignments or an invitation somebody could accept.
         AccessSync::clientArchived($client, $request->user());
         $client->delete();
+        ClientDirectory::flushFor($request->user());
 
         return response()->json(['status' => 'ok']);
     }
@@ -258,6 +263,8 @@ class ClientsController extends Controller
             ->whereIn('uid', $data['uids'])
             ->delete();
 
+        ClientDirectory::flushFor($request->user());
+
         return response()->json(['deleted' => $deleted]);
     }
 
@@ -272,6 +279,8 @@ class ClientsController extends Controller
         $copy->name = $source->name.' (copy)';
         $copy->created_by = $request->user()->id;
         $copy->save();
+
+        ClientDirectory::flushFor($request->user());
 
         return response()->json(['client' => $copy->toRecord()]);
     }

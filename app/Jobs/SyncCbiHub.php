@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\User;
 use App\Support\Cbi\ClientHubImporter;
+use App\Support\Clients\ClientDirectory;
+use Illuminate\Support\Facades\Cache;
 use App\Support\Cbi\SyncActor;
 use App\Support\Imports\ImportPause;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -64,6 +66,10 @@ class SyncCbiHub implements ShouldQueue
         $importer->importClients();
         // Already-linked clients from earlier imports still need folders.
         $importer->provisionMissingFolders();
+
+        ClientDirectory::flush();
+        Cache::forget('companies.directory');
+        Cache::forget('cbi.summary.core');
 
         ImportCbiDocuments::dispatch($actor->id);
     }

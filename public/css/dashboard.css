@@ -28267,6 +28267,13 @@ button.tma-dash__header-popup-item:focus-visible {
   min-width: max-content;
 }
 
+.tma-dash__email-settings-tabs--skeleton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding-bottom: var(--space-12);
+}
+
 .tma-dash__email-settings-title {
   margin: 0;
   font-size: var(--text-size-16);

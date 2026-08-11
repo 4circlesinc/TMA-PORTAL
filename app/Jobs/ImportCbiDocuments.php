@@ -68,6 +68,7 @@ class ImportCbiDocuments implements ShouldQueue
         $importer = new DocumentImporter($actor);
         $importer->import($limit);
 
+        DocumentImporter::flushSurvey();
         $survey = (new DocumentImporter($actor))->survey();
         $pending = max(0, $survey['files'] - $survey['orphaned']);
 

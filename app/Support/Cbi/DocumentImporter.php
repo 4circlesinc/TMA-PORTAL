@@ -12,6 +12,7 @@ use App\Support\Files\FolderProvisioner;
 use App\Support\Files\Vault;
 use App\Support\Smartsheet\Client as Smartsheet;
 use App\Support\Smartsheet\SmartsheetThrottledException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Throwable;
@@ -77,6 +78,12 @@ class DocumentImporter
         private bool $dryRun = false,
     ) {}
 
+    /** Survey counts change slowly; keep them warm across CBI summary polls
+     *  and the global sync-toast endpoint that asks the same question. */
+    private const SURVEY_TTL_SECONDS = 15;
+
+    private const SURVEY_CACHE_KEY = 'cbi.document-survey';
+
     /**
      * How much there is to do, without doing any of it.
      *
@@ -84,17 +91,34 @@ class DocumentImporter
      */
     public function survey(): array
     {
+        return Cache::remember(self::SURVEY_CACHE_KEY, self::SURVEY_TTL_SECONDS, fn () => $this->surveyFresh());
+    }
+
+    /** Drop the warm survey so the next poll reflects a just-finished batch. */
+    public static function flushSurvey(): void
+    {
+        Cache::forget(self::SURVEY_CACHE_KEY);
+    }
+
+    /**
+     * @return array{files: int, sizeKb: int, done: int, orphaned: int, clients: int}
+     */
+    private function surveyFresh(): array
+    {
         $pending = SmartsheetAttachment::query()
             ->whereNull('file_id')
             ->where('attachment_type', 'FILE');
 
         $reachable = $this->reachableQuery()->whereNull('smartsheet_attachments.file_id');
 
+        $pendingFiles = (clone $pending)->count();
+        $reachableFiles = (clone $reachable)->count();
+
         return [
-            'files' => (clone $pending)->count(),
+            'files' => $pendingFiles,
             'sizeKb' => (int) (clone $pending)->sum('size_kb'),
             'done' => SmartsheetAttachment::whereNotNull('file_id')->count(),
-            'orphaned' => (clone $pending)->count() - (clone $reachable)->count(),
+            'orphaned' => max(0, $pendingFiles - $reachableFiles),
             'clients' => (clone $reachable)->distinct('cbi_applications.client_id')->count('cbi_applications.client_id'),
         ];
     }

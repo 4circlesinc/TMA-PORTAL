@@ -160,8 +160,6 @@
     return index;
   }
 
-  var contactsCache = null;
-  var contactsPromise = null;
   var usersCache = null;
   var usersPromise = null;
   var usersCacheUrl = null;
@@ -187,20 +185,19 @@
     });
   }
 
-  function fetchContacts() {
-    if (contactsCache) return Promise.resolve(contactsCache);
-    if (contactsPromise) return contactsPromise;
+  function fetchContacts(q) {
     var a = api();
     if (!a || typeof a.api !== 'function') return Promise.resolve([]);
-    contactsPromise = a.api(root() + '/portal/clients').then(function (data) {
-      contactsCache = mapClients(data);
-      contactsPromise = null;
-      return contactsCache;
-    }).catch(function () {
-      contactsPromise = null;
-      return [];
-    });
-    return contactsPromise;
+    var term = String(q || '').trim();
+    if (term.length < 2) return Promise.resolve([]);
+    // Server-side search with a capped record set — never the full directory.
+    return a.api(root() + '/portal/clients/search?q=' + encodeURIComponent(term) + '&limit=12')
+      .then(function (data) {
+        return mapClients(data);
+      })
+      .catch(function () {
+        return [];
+      });
   }
 
   function fetchFiles(q) {
@@ -413,13 +410,7 @@
 
     return Promise.all([
       settle(fetchFiles(q)),
-      settle(fetchContacts().then(function (items) {
-        var needle = q.toLowerCase();
-        return items.filter(function (item) {
-          var hay = [item.label, item.subtitle].concat(item.keywords || []).join(' ').toLowerCase();
-          return hay.indexOf(needle) !== -1;
-        });
-      })),
+      settle(fetchContacts(q)),
       settle(fetchUsers(q)),
       settle(fetchSignatures(q)),
       settle(fetchMail(q)),

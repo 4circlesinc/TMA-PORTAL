@@ -498,6 +498,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/bulk-delete', [ClientsController::class, 'bulkDestroy'])->name('bulk-delete');
         // Literal paths before /{uid} so they aren't swallowed by the wildcard.
         Route::get('/assigned-to-me', [ClientAssignmentController::class, 'mine'])->name('assigned-to-me');
+        // Short slice for the right sidebar — never the full directory.
+        Route::get('/preview', [ClientsController::class, 'preview'])->name('preview');
         // Searching reaches into the profile blob the listing no longer sends.
         Route::get('/search', [ClientsController::class, 'search'])->name('search');
         Route::get('/{uid}/assignments', [ClientAssignmentController::class, 'index'])->name('assignments.index');

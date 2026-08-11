@@ -3,6 +3,7 @@
 namespace App\Support\Access;
 
 use App\Models\Client;
+use App\Models\ClientAssignment;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -38,9 +39,15 @@ class ClientScope
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereHas(
-            'assignments',
-            fn (Builder $q) => $q->live()->where('user_id', $user->id)
+        // whereIn + subquery rather than whereHas: the planner can use the
+        // assignment index directly, and eleven-thousand-row directories stop
+        // paying for a correlated EXISTS per candidate row.
+        return $query->whereIn(
+            $query->getModel()->getQualifiedKeyName(),
+            ClientAssignment::query()
+                ->select('client_id')
+                ->live()
+                ->where('user_id', $user->id)
         );
     }
 

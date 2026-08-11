@@ -293,4 +293,30 @@ class ClientsTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'ids');
     }
+
+    public function test_preview_returns_a_capped_directory_slice(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload(['uid' => 'a-one', 'name' => 'Alice']))->assertOk();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload(['uid' => 'b-two', 'name' => 'Bob']))->assertOk();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload(['uid' => 'c-three', 'name' => 'Carol']))->assertOk();
+
+        $this->actingAs($staff)->getJson('/portal/clients/preview?limit=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'clients')
+            ->assertJsonMissingPath('clients.0.profile');
+    }
+
+    public function test_search_with_limit_returns_lean_records_not_the_full_id_list(): void
+    {
+        $staff = $this->staff();
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload())->assertOk();
+
+        $this->actingAs($staff)->getJson('/portal/clients/search?q=Wayne&limit=12')
+            ->assertOk()
+            ->assertJsonCount(1, 'clients')
+            ->assertJsonPath('clients.0.id', 'bruce-wayne')
+            ->assertJsonMissingPath('ids')
+            ->assertJsonMissingPath('clients.0.profile');
+    }
 }

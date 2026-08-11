@@ -20,6 +20,7 @@ use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -57,45 +58,76 @@ class CbiController extends Controller
         ]);
     }
 
+    /** Warm summary aggregates briefly — mount + 15s doc polls share them. */
+    private const SUMMARY_TTL_SECONDS = 20;
+
     /** GET /portal/cbi/summary — stage counts, filter facets, sync health. */
     public function summary(Request $request): JsonResponse
     {
         $this->gate($request);
 
-        $base = CbiApplication::query();
+        // Documents ride outside the cache: their survey is already short-lived
+        // and "active" must flip as soon as a batch lands.
+        $core = Cache::remember('cbi.summary.core', self::SUMMARY_TTL_SECONDS, function () {
+            // One GROUP BY instead of a count() per stage.
+            $stageCounts = CbiApplication::query()
+                ->selectRaw('stage, count(*) as n')
+                ->groupBy('stage')
+                ->pluck('n', 'stage');
 
-        $stages = [];
-        foreach (CbiApplication::STAGES as $stage) {
-            $stages[$stage] = (clone $base)->where('stage', $stage)->count();
-        }
+            $stages = [];
+            foreach (CbiApplication::STAGES as $stage) {
+                $stages[$stage] = (int) ($stageCounts[$stage] ?? 0);
+            }
 
-        $facet = fn (string $column) => (clone $base)
-            ->whereNotNull($column)->where($column, '!=', '')
-            ->groupBy($column)->orderByRaw('count(*) desc')
-            ->selectRaw($column.' as value, count(*) as n')
-            ->limit(40)->get();
+            $facet = fn (string $column) => CbiApplication::query()
+                ->whereNotNull($column)->where($column, '!=', '')
+                ->groupBy($column)->orderByRaw('count(*) desc')
+                ->selectRaw($column.' as value, count(*) as n')
+                ->limit(40)->get()
+                ->map(fn ($row) => ['value' => $row->value, 'n' => (int) $row->n])
+                ->values()
+                ->all();
 
-        return response()->json([
-            'stages' => $stages,
-            'total' => (clone $base)->count(),
-            'needsReview' => (clone $base)->where('needs_review', true)->count(),
-            'facets' => [
-                'statuses' => $facet('status'),
-                'referredBy' => $facet('referred_by'),
-                'investmentOptions' => $facet('investment_option'),
-                'assigned' => $facet('assigned_to_canonical'),
-                'nationalities' => $facet('nationality'),
-            ],
-            'sync' => [
-                'configured' => Client::configured(),
-                // max() bypasses the model's datetime cast and returns the
-                // raw UTC string, which a browser would parse as local time.
-                'lastSuccessAt' => ($last = SmartsheetSheet::query()->max('last_success_at'))
-                    ? \Illuminate\Support\Carbon::parse($last)->toIso8601String() : null,
-                'sheets' => SmartsheetSheet::query()->where('status', '!=', SmartsheetSheet::STATUS_GONE)->count(),
-                'sheetsWithErrors' => SmartsheetSheet::query()->where('status', SmartsheetSheet::STATUS_ERROR)->count(),
-                'syncing' => SmartsheetSheet::query()->where('status', SmartsheetSheet::STATUS_SYNCING)->count(),
-            ],
+            // Conditional aggregates in one pass — CASE works on Postgres and SQLite.
+            $sheetStats = SmartsheetSheet::query()
+                ->selectRaw(
+                    'sum(case when status != ? then 1 else 0 end) as sheets,'.
+                    'sum(case when status = ? then 1 else 0 end) as sheets_with_errors,'.
+                    'sum(case when status = ? then 1 else 0 end) as syncing,'.
+                    'max(last_success_at) as last_success_at',
+                    [
+                        SmartsheetSheet::STATUS_GONE,
+                        SmartsheetSheet::STATUS_ERROR,
+                        SmartsheetSheet::STATUS_SYNCING,
+                    ]
+                )
+                ->first();
+
+            return [
+                'stages' => $stages,
+                'total' => CbiApplication::query()->count(),
+                'needsReview' => CbiApplication::query()->where('needs_review', true)->count(),
+                'facets' => [
+                    'statuses' => $facet('status'),
+                    'referredBy' => $facet('referred_by'),
+                    'investmentOptions' => $facet('investment_option'),
+                    'assigned' => $facet('assigned_to_canonical'),
+                    'nationalities' => $facet('nationality'),
+                ],
+                'sync' => [
+                    'configured' => Client::configured(),
+                    'lastSuccessAt' => ! empty($sheetStats?->last_success_at)
+                        ? \Illuminate\Support\Carbon::parse($sheetStats->last_success_at)->toIso8601String()
+                        : null,
+                    'sheets' => (int) ($sheetStats->sheets ?? 0),
+                    'sheetsWithErrors' => (int) ($sheetStats->sheets_with_errors ?? 0),
+                    'syncing' => (int) ($sheetStats->syncing ?? 0),
+                ],
+            ];
+        });
+
+        return response()->json($core + [
             // Smartsheet → File Library copy. Shown on the page so the office
             // can see how much paperwork is still landing in client folders.
             'documents' => $this->documentImportProgress($request),
@@ -107,7 +139,9 @@ class CbiController extends Controller
     {
         $this->gate($request);
 
-        $query = CbiApplication::query()->with('assignedUser');
+        // assignedUser is unused in the list payload (casePeople resolves staff
+        // by name); skipping the eager load saves a join on every page.
+        $query = CbiApplication::query();
 
         if (($stage = (string) $request->query('stage')) !== ''
             && in_array($stage, CbiApplication::STAGES, true)) {
@@ -187,28 +221,7 @@ class CbiController extends Controller
         $application = CbiApplication::query()->with(['client.folder', 'assignedUser'])->where('uuid', $uuid)->firstOrFail();
 
         $sources = $application->sources()->get();
-
-        // Attachments hang off the tracker rows that feed this application,
-        // plus the linked assessment sheet (row + sheet level).
-        $attachments = collect();
-        foreach ($sources as $source) {
-            $sheet = SmartsheetSheet::query()->where('remote_id', $source->sheet_remote_id)->first();
-            if ($sheet) {
-                $attachments = $attachments->merge(
-                    SmartsheetAttachment::query()->with('file:id,uuid')
-                        ->where('sheet_id', $sheet->id)
-                        ->where('parent_remote_id', $source->row_remote_id)
-                        ->get()
-                );
-            }
-        }
-        $assessmentSheets = SmartsheetSheet::query()
-            ->where('cbi_application_id', $application->id)->get();
-        foreach ($assessmentSheets as $sheet) {
-            $attachments = $attachments->merge(
-                SmartsheetAttachment::query()->with('file:id,uuid')->where('sheet_id', $sheet->id)->get()
-            );
-        }
+        $attachments = $this->attachmentsFor($application, $sources);
 
         return response()->json([
             'application' => $this->detailPayload($application),
@@ -217,7 +230,7 @@ class CbiController extends Controller
                 'category' => $s->sheet_category,
                 'modifiedAt' => $s->row_modified_at?->toIso8601String(),
             ]),
-            'attachments' => $attachments->unique('id')->values()->map(fn (SmartsheetAttachment $a) => [
+            'attachments' => $attachments->values()->map(fn (SmartsheetAttachment $a) => [
                 'id' => $a->id,
                 'name' => $a->name,
                 'mime' => $a->mime_type,
@@ -231,13 +244,14 @@ class CbiController extends Controller
                 'fileId' => $a->file?->uuid,
             ]),
             // Pending FILE attachments still waiting to land in the client folder.
-            'pendingDocuments' => $attachments->unique('id')
+            'pendingDocuments' => $attachments
                 ->filter(fn (SmartsheetAttachment $a) => $a->attachment_type === 'FILE' && $a->file_id === null)
                 ->count(),
             // Where those files live, so the Documents tab browses the same
             // folder the Client hub shows — one library, two doors.
             'folderUuid' => $application->client?->folder?->uuid,
             'comments' => $application->comments()
+                ->with('user:id,name')
                 ->orderBy('commented_at')->get()
                 ->map(fn (CbiComment $c) => [
                     'id' => $c->id,
@@ -247,6 +261,7 @@ class CbiController extends Controller
                     'at' => ($c->commented_at ?? $c->created_at)?->toIso8601String(),
                 ]),
             'events' => $application->events()
+                ->with('actor:id,name')
                 ->orderByDesc('occurred_at')->limit(150)->get()
                 ->map(fn ($e) => [
                     'type' => $e->type,
@@ -363,8 +378,14 @@ class CbiController extends Controller
             return self::$staffCache;
         }
 
+        // Warm across list pages for a few minutes — staff names rarely change
+        // mid-session, and rebuilding this map used to accompany every page.
+        $users = Cache::remember('cbi.staff-users', 300, function () {
+            return \App\Models\User::whereIn('account_type', Role::STAFF)->get();
+        });
+
         $byName = [];
-        foreach (\App\Models\User::whereIn('account_type', Role::STAFF)->get() as $user) {
+        foreach ($users as $user) {
             $byName[Names::normalise((string) $user->name)] = $user;
         }
 
@@ -555,6 +576,58 @@ class CbiController extends Controller
                     'at' => $l->created_at?->toIso8601String(),
                 ]),
         ]);
+    }
+
+    /**
+     * Attachments for one application, loaded in two queries rather than one
+     * per source row (the previous path was a classic N+1 on open).
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\CbiApplicationSource>  $sources
+     * @return \Illuminate\Support\Collection<int, SmartsheetAttachment>
+     */
+    private function attachmentsFor(CbiApplication $application, $sources)
+    {
+        $remoteIds = $sources->pluck('sheet_remote_id')->filter()->unique()->values();
+        $sheetsByRemote = $remoteIds->isEmpty()
+            ? collect()
+            : SmartsheetSheet::query()->whereIn('remote_id', $remoteIds)->get()->keyBy('remote_id');
+
+        $assessmentSheets = SmartsheetSheet::query()
+            ->where('cbi_application_id', $application->id)
+            ->get();
+
+        $sheetIds = $sheetsByRemote->pluck('id')
+            ->merge($assessmentSheets->pluck('id'))
+            ->unique()
+            ->values();
+
+        if ($sheetIds->isEmpty()) {
+            return collect();
+        }
+
+        $allowedPairs = [];
+        foreach ($sources as $source) {
+            $sheet = $sheetsByRemote->get($source->sheet_remote_id);
+            if ($sheet) {
+                $allowedPairs[$sheet->id.':'.$source->row_remote_id] = true;
+            }
+        }
+
+        $assessmentIds = $assessmentSheets->pluck('id')->flip()->all();
+
+        return SmartsheetAttachment::query()
+            ->with('file:id,uuid')
+            ->whereIn('sheet_id', $sheetIds)
+            ->get()
+            ->filter(function (SmartsheetAttachment $a) use ($allowedPairs, $assessmentIds) {
+                if (isset($assessmentIds[$a->sheet_id])) {
+                    return true;
+                }
+
+                return isset($allowedPairs[$a->sheet_id.':'.$a->parent_remote_id]);
+            })
+            ->unique('id')
+            ->values();
     }
 
     /**
