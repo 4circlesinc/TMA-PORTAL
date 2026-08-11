@@ -177,28 +177,32 @@
         return '<p class="tma-portal-note" style="text-align:center;padding:var(--space-16) 0">' + text + '</p>';
       }
 
+      function importsSection(d) {
+        var targets = (d.imports && d.imports.targets) || [];
+        if (!targets.length) {
+          return empty('No import sources are connected yet.');
+        }
+        return targets.map(function (t) {
+          return '<div class="tma-portal-toggle-row">' +
+            '<span class="tma-portal-toggle-row__label">' +
+            '<strong>' + esc(t.name) + '</strong>' +
+            (t.paused ? ' <span class="tma-portal-status tma-portal-status--pending">Paused</span>' : '') +
+            '<br><span class="tma-portal-note">' + esc(t.detail || '') + '</span></span>' +
+            ui().toggle(!!t.paused, 'data-ops-import-pause="' + esc(t.id) + '"', 'Pause ' + t.name) +
+            '</div>';
+        }).join('') +
+          '<p class="tma-portal-note" style="margin:var(--space-8) 0 0">Pause one source at a time. Mailbox and calendar sync stay on each person\'s Connectors settings.</p>';
+      }
+
       function load() {
         secApi('GET', '/admin/background-ops').then(function (r) { return r.json(); }).then(function (d) {
-          var paused = !!d.importsPaused;
-          var pauseRow =
-            '<div class="tma-portal-toggle-row">' +
-            '<span class="tma-portal-toggle-row__label">' +
-            '<strong>Pause imports</strong><br>' +
-            '<span class="tma-portal-note">Stops SharePoint libraries, OneDrive and Smartsheet document ' +
-            'import for the whole firm. Mailbox and calendar sync keep running.</span></span>' +
-            ui().toggle(paused, 'data-ops-imports-pause', 'Pause imports') +
-            '</div>' +
-            (paused
-              ? '<p class="tma-portal-note" style="margin:0 0 var(--space-12)">Imports are paused' +
-                (d.importsPausedAt ? ' since ' + esc(when(d.importsPausedAt)) : '') +
-                '. Turn the switch off to resume.</p>'
-              : '');
+          var pauseBlock = importsSection(d);
 
           if (!d.inspectable) {
             root.innerHTML =
               '<p class="tma-portal-subtitle">Long-running work runs on the <strong>' +
               esc(d.driver || 'unknown') + '</strong> queue, which can\'t be inspected from here.</p>' +
-              ui().section('Imports', pauseRow);
+              ui().section('Imports', pauseBlock);
             wirePause();
             return;
           }
@@ -246,7 +250,7 @@
           root.innerHTML =
             '<p class="tma-portal-subtitle">Work the portal does in the background — importing mail and files, ' +
             'syncing calendars, sending email. You can keep working while these run.</p>' +
-            ui().section('Imports', pauseRow) +
+            ui().section('Imports', pauseBlock) +
             health +
             ui().section('Queued', pending) +
             ui().section('Failed', failed +
@@ -285,27 +289,28 @@
       }
 
       function wirePause() {
-        var sw = root.querySelector('[data-ops-imports-pause]');
-        if (!sw) return;
-        sw.addEventListener('change', function () {
-          var next = !!sw.checked;
-          sw.disabled = true;
-          secApi('PUT', '/admin/background-ops/imports-pause', { paused: next })
-            .then(function (res) {
-              if (!res.ok) {
+        root.querySelectorAll('[data-ops-import-pause]').forEach(function (sw) {
+          sw.addEventListener('change', function () {
+            var target = sw.getAttribute('data-ops-import-pause');
+            var next = !!sw.checked;
+            sw.disabled = true;
+            secApi('PUT', '/admin/background-ops/imports-pause', { target: target, paused: next })
+              .then(function (res) {
+                if (!res.ok) {
+                  sw.checked = !next;
+                  ui().toast('Could not update that import');
+                  sw.disabled = false;
+                  return;
+                }
+                ui().toast(next ? 'Import paused' : 'Import resumed');
+                load();
+              })
+              .catch(function () {
                 sw.checked = !next;
-                ui().toast('Could not update imports');
+                ui().toast('Could not update that import');
                 sw.disabled = false;
-                return;
-              }
-              ui().toast(next ? 'Imports paused for the whole portal' : 'Imports resumed');
-              load();
-            })
-            .catch(function () {
-              sw.checked = !next;
-              ui().toast('Could not update imports');
-              sw.disabled = false;
-            });
+              });
+          });
         });
       }
 

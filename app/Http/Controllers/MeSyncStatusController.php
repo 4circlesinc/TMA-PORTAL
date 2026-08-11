@@ -31,27 +31,19 @@ class MeSyncStatusController extends Controller
     {
         $user = $request->user();
 
-        $paused = ImportPause::active();
-
         return response()->json([
-            'importsPaused' => $paused,
+            'importsPaused' => ImportPause::any(),
             'email' => $this->guard(fn () => $this->email($user)),
             'calendar' => $this->guard(fn () => $this->calendar($user)),
-            // Firm import pause covers SharePoint / OneDrive / Smartsheet docs —
-            // report them as paused so toasts stop claiming work is moving.
-            'onedrive' => $this->guard(fn () => $this->withImportPause($this->onedrive($user), $paused)),
-            'smartsheet' => $this->guard(fn () => $this->withImportPause($this->smartsheet($user), $paused)),
+            'onedrive' => $this->guard(fn () => $this->withImportPause($this->onedrive($user), ImportPause::onedrive())),
+            'smartsheet' => $this->guard(fn () => $this->withImportPause($this->smartsheet($user), ImportPause::smartsheet())),
         ]);
     }
 
-    /** Overlay the firm-wide pause onto a service status payload. */
+    /** Overlay a per-service pause onto a status payload. */
     private function withImportPause(array $status, bool $paused): array
     {
         if (! $paused) {
-            return $status;
-        }
-
-        if (($status['state'] ?? null) === 'off') {
             return $status;
         }
 

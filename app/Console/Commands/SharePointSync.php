@@ -16,12 +16,6 @@ class SharePointSync extends Command
 
     public function handle(): int
     {
-        if (ImportPause::active()) {
-            $this->warn('Imports are paused (Settings → Background Operations).');
-
-            return self::SUCCESS;
-        }
-
         $connections = SharePointConnection::query()
             ->where('sync_enabled', true)
             ->when($this->option('connection'), fn ($q) => $q->where('uuid', $this->option('connection')))
@@ -34,6 +28,12 @@ class SharePointSync extends Command
         }
 
         foreach ($connections as $connection) {
+            if (ImportPause::connection($connection)) {
+                $this->line('Paused '.$connection->drive_name.' (Settings → Background Operations)');
+
+                continue;
+            }
+
             if ($this->option('queue')) {
                 SyncSharePointLibrary::dispatch($connection->id);
                 $this->line('Queued '.$connection->drive_name);

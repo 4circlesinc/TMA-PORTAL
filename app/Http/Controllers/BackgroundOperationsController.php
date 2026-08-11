@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * Settings → Background Operations: what the portal is doing when nobody is
@@ -30,7 +31,11 @@ class BackgroundOperationsController extends Controller
         abort_unless(Role::can($request->user(), 'settings.operations'), 403);
 
         $driver = config('queue.default');
-        $imports = ImportPause::all();
+        $imports = [
+            'anyPaused' => ImportPause::any(),
+            'updatedAt' => ImportPause::all()['updatedAt'] ?? null,
+            'targets' => ImportPause::catalogue(),
+        ];
 
         // Only the database queue can be inspected from here; anything else
         // (redis, sqs) keeps its state where we cannot read it cheaply.
@@ -39,8 +44,7 @@ class BackgroundOperationsController extends Controller
                 'driver' => $driver,
                 'inspectable' => false,
                 'pending' => [], 'failed' => [], 'health' => null,
-                'importsPaused' => $imports['paused'],
-                'importsPausedAt' => $imports['updatedAt'],
+                'imports' => $imports,
             ]);
         }
 
@@ -84,8 +88,7 @@ class BackgroundOperationsController extends Controller
             'inspectable' => true,
             'pending' => $pending,
             'failed' => $failed,
-            'importsPaused' => $imports['paused'],
-            'importsPausedAt' => $imports['updatedAt'],
+            'imports' => $imports,
             'health' => [
                 'pending' => $total,
                 'failed' => DB::table('failed_jobs')->count(),
@@ -99,23 +102,42 @@ class BackgroundOperationsController extends Controller
     }
 
     /**
-     * Pause or resume firm-wide file / document imports (SharePoint libraries,
-     * OneDrive, Smartsheet → client folders). Mailbox and calendar sync are
-     * untouched — those stay on each person's Connectors toggles.
+     * Pause or resume one import source — Smartsheet documents, OneDrive, or
+     * a single SharePoint library. Mailbox and calendar sync stay on each
+     * person's Connectors toggles.
      */
     public function pauseImports(Request $request): JsonResponse
     {
         abort_unless(Role::isAdmin($request->user()), 403);
 
+        $libraryIds = collect(ImportPause::catalogue())
+            ->where('kind', 'library')
+            ->pluck('id')
+            ->all();
+
         $data = $request->validate([
+            'target' => [
+                'required',
+                'string',
+                'max:80',
+                Rule::in(array_merge(
+                    [ImportPause::TARGET_SMARTSHEET, ImportPause::TARGET_ONEDRIVE],
+                    $libraryIds,
+                )),
+            ],
             'paused' => ['required', 'boolean'],
         ]);
 
-        ImportPause::put((bool) $data['paused'], $request->user()?->id);
+        ImportPause::putTarget($data['target'], (bool) $data['paused'], $request->user()?->id);
 
         return response()->json([
             'status' => 'ok',
-            'importsPaused' => ImportPause::active(),
+            'target' => $data['target'],
+            'paused' => (bool) $data['paused'],
+            'imports' => [
+                'anyPaused' => ImportPause::any(),
+                'targets' => ImportPause::catalogue(),
+            ],
         ]);
     }
 

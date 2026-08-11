@@ -428,8 +428,8 @@ Artisan::command('smartsheet:sync
 
         return;
     }
-    if (\App\Support\Imports\ImportPause::active()) {
-        $this->warn('Imports are paused (Settings → Background Operations).');
+    if (\App\Support\Imports\ImportPause::smartsheet()) {
+        $this->warn('Smartsheet imports are paused (Settings → Background Operations).');
 
         return;
     }
@@ -506,7 +506,7 @@ Schedule::call(function () {
     if (! config('services.smartsheet.cbi_enabled')) {
         return;
     }
-    if (\App\Support\Imports\ImportPause::active()) {
+    if (\App\Support\Imports\ImportPause::smartsheet()) {
         return;
     }
     \App\Jobs\SyncCbiHub::dispatch();

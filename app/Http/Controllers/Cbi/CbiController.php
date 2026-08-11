@@ -528,7 +528,7 @@ class CbiController extends Controller
     {
         $this->gate($request);
         abort_unless(Client::configured(), 422, 'Smartsheet is not configured.');
-        abort_unless(! ImportPause::active(), 422, 'Imports are paused. Resume them in Settings → Background Operations.');
+        abort_unless(! ImportPause::smartsheet(), 422, 'Smartsheet imports are paused. Resume them in Settings → Background Operations.');
 
         $due = Synchroniser::refreshWorkspace((string) Str::uuid());
         foreach ($due as $sheet) {

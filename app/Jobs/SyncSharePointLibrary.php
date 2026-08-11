@@ -37,13 +37,13 @@ class SyncSharePointLibrary implements ShouldQueue
 
     public function handle(): void
     {
-        if (ImportPause::active()) {
-            return;
-        }
-
         $connection = SharePointConnection::find($this->connectionId);
 
         if (! $connection || ! $connection->sync_enabled) {
+            return;
+        }
+
+        if (ImportPause::connection($connection)) {
             return;
         }
 

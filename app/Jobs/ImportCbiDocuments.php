@@ -51,7 +51,7 @@ class ImportCbiDocuments implements ShouldQueue
 
         // Do not re-queue while paused — resume happens from SyncCbiHub /
         // Sync now once an administrator turns imports back on.
-        if (ImportPause::active()) {
+        if (ImportPause::smartsheet()) {
             return;
         }
 
@@ -72,7 +72,7 @@ class ImportCbiDocuments implements ShouldQueue
         $survey = (new DocumentImporter($actor))->survey();
         $pending = max(0, $survey['files'] - $survey['orphaned']);
 
-        if ($pending > 0 && ! ImportPause::active()) {
+        if ($pending > 0 && ! ImportPause::smartsheet()) {
             self::dispatch($actor->id, $limit)->delay(now()->addSeconds(15));
         }
     }

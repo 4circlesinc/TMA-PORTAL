@@ -51,6 +51,7 @@ class SyncStatusController extends BaseFilesController
                 'folder' => $c->folder ? ['id' => $c->folder->uuid, 'name' => $c->folder->name] : null,
                 'status' => $c->status,
                 'enabled' => (bool) $c->sync_enabled,
+                'importsPaused' => ImportPause::connection($c),
                 'items' => SharePointItem::where('connection_id', $c->id)->count(),
                 /*
                  * How many items the library holds in total.
@@ -74,12 +75,12 @@ class SyncStatusController extends BaseFilesController
             ];
         });
 
-        $paused = ImportPause::active();
+        $anySyncing = $rows->contains(fn ($r) => $r['status'] === 'syncing' && empty($r['importsPaused']));
 
         return response()->json([
             'connections' => $rows->values(),
-            'syncing' => ! $paused && $rows->contains(fn ($r) => $r['status'] === 'syncing'),
-            'importsPaused' => $paused,
+            'syncing' => $anySyncing,
+            'importsPaused' => $rows->contains(fn ($r) => ! empty($r['importsPaused'])),
             'hasError' => $rows->contains(fn ($r) => $r['status'] === 'error' || $r['failedItems'] > 0),
             'conflicts' => (int) $rows->sum('conflicts'),
         ]);
@@ -90,15 +91,19 @@ class SyncStatusController extends BaseFilesController
     {
         $user = $this->user($request);
         abort_unless(Role::isAdmin($user), 403, 'Only administrators can start a sync.');
-        abort_unless(! ImportPause::active(), 422, 'Imports are paused. Resume them in Settings → Background Operations.');
 
         $data = $request->validate(['connection' => ['nullable', 'string', 'max:64']]);
 
-        SharePointConnection::query()
+        $targets = SharePointConnection::query()
             ->where('sync_enabled', true)
             ->when($data['connection'] ?? null, fn ($q, $uuid) => $q->where('uuid', $uuid))
-            ->get()
-            ->each(fn (SharePointConnection $c) => \App\Jobs\SyncSharePointLibrary::dispatch($c->id));
+            ->get();
+
+        $runnable = $targets->reject(fn (SharePointConnection $c) => ImportPause::connection($c));
+
+        abort_unless($runnable->isNotEmpty(), 422, 'That import is paused. Resume it in Settings → Background Operations.');
+
+        $runnable->each(fn (SharePointConnection $c) => \App\Jobs\SyncSharePointLibrary::dispatch($c->id));
 
         return response()->json(['status' => 'queued']);
     }

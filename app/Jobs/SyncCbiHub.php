@@ -48,7 +48,7 @@ class SyncCbiHub implements ShouldQueue
             return;
         }
 
-        if (ImportPause::active()) {
+        if (ImportPause::smartsheet()) {
             return;
         }
 

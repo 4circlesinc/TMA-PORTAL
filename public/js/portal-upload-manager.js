@@ -135,22 +135,24 @@
 
     syncLastBusy = busy.length > 0;
 
-    if (data.importsPaused) {
-      ensureSyncPanel();
-      delete syncPanel.dataset.done;
-      paintSyncPanel(
-        'Imports paused',
-        'Resume in Settings → Background Operations.',
-        false,
-        false,
-        null,
-        true
-      );
-      return;
-    }
+    var pausedLibs = (data.connections || []).filter(function (c) { return c.importsPaused; });
 
     // Finished since last time: say so briefly, then get out of the way.
     if (!busy.length && !failed.length) {
+      if (pausedLibs.length && !syncDismissed) {
+        ensureSyncPanel();
+        delete syncPanel.dataset.done;
+        var p = pausedLibs[0];
+        paintSyncPanel(
+          (pausedLibs.length === 1 ? p.name : 'Libraries') + ' paused',
+          'Resume in Settings → Background Operations.',
+          false,
+          false,
+          null,
+          true
+        );
+        return;
+      }
       if (syncPanel && !syncPanel.dataset.done) {
         syncPanel.dataset.done = '1';
         paintSyncPanel('Library up to date', '', false, true, 100);

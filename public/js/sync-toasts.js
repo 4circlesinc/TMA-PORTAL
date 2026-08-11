@@ -288,10 +288,6 @@
         if (!data[key]) return;
         var status = data[key];
         // Firm-wide pause applies to file imports, not mailbox/calendar.
-        if (data.importsPaused && (key === 'onedrive' || key === 'smartsheet')) {
-          status = Object.assign({}, status, { importsPaused: true });
-          if (status.state === 'syncing') status.state = 'paused';
-        }
         update(key, status);
       });
 

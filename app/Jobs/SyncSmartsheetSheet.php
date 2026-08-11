@@ -57,7 +57,7 @@ class SyncSmartsheetSheet implements ShouldBeUniqueUntilProcessing, ShouldQueue
             return;
         }
 
-        if (ImportPause::active()) {
+        if (ImportPause::smartsheet()) {
             return;
         }
 
