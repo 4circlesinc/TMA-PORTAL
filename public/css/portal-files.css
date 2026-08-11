@@ -991,54 +991,21 @@
   background: color-mix(in srgb, #f59e0b 22%, transparent); color: #b45309; font-size: 11px;
 }
 
-/* The sync panel is the persistent one, so it takes the bottom slot and the
-   upload panel stacks above it. `order` rather than DOM order: either panel can
-   be created first, and the layout must not depend on which. */
+/* Library sync panel — same naked white toast chrome as sync-toasts.js
+   (Outlook “Syncing email…”), with the OneDrive mark. Lives in the dock so
+   it stacks with uploads; order rather than DOM order so either can appear first. */
 .tma-portal-sync-panel {
   order: 3;
-  width: auto; min-width: 260px; max-width: 340px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  /* toast.css owns the card look; strip any upload-panel inheritance. */
+  overflow: visible;
 }
 .tma-portal-dock > .tma-portal-upload:not(.tma-portal-sync-panel) { order: 1; }
-.tma-portal-sync-panel .tma-portal-upload__title {
-  display: inline-flex; align-items: center; gap: var(--space-6);
-  font-size: var(--text-size-13);
-}
-.tma-portal-sync-panel__body {
-  padding: var(--space-6) var(--space-12) var(--space-10);
-  font-size: var(--text-size-12); color: var(--color-text-secondary);
-}
-
-/* Minimised: keep the header, which is the line that answers "is it still
-   running?". Hiding the panel outright is what the close button is for. */
-.tma-portal-sync-panel.is-collapsed .tma-portal-sync-panel__body { display: none; }
-.tma-portal-sync-panel.is-collapsed .tma-portal-upload__head { border-bottom: 0; }
-/* One line when minimised. A long library name wrapping to two defeats the
-   point of collapsing it. */
-.tma-portal-sync-panel.is-collapsed .tma-portal-upload__title { min-width: 0; }
-/* The ellipsis has to live on the text element itself. Putting it on the title
-   row clipped the name mid-word instead, because text-overflow does not reach
-   inside a flex container. */
-.tma-portal-sync-panel.is-collapsed .tma-portal-sync-panel__label {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-}
-.tma-portal-sync-panel.is-collapsed .tma-portal-upload__head-actions { flex: 0 0 auto; }
-/* Truncating the title makes it fill the header, so the ellipsis ends up
-   against the caret without this. */
-.tma-portal-sync-panel.is-collapsed .tma-portal-upload__head { gap: var(--space-8); }
-/* The minimise caret. Masked rather than an <img> so it takes the button's
-   colour and sits at the same weight as the ✕ beside it. */
-.tma-portal-sync-panel__toggle { display: inline-flex; align-items: center; justify-content: center; }
-.tma-portal-sync-panel__caret {
-  display: block; width: 12px; height: 12px; background: currentColor;
-  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CaretDown.svg */
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); /* ../images/icons/phosphor/CaretDown.svg */
-  mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
-  mask-position: center; -webkit-mask-position: center;
-  mask-size: contain; -webkit-mask-size: contain;
-  transition: transform 0.15s ease;
-}
-.tma-portal-sync-panel.is-collapsed .tma-portal-sync-panel__caret {
-  transform: rotate(180deg);
+.tma-portal-sync-panel .tma-sync-toast__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── full-window drag-and-drop upload overlay ──────── */
@@ -1078,30 +1045,17 @@
   .tma-portal-lightbox__frame { width: 96vw; height: 78vh; }
 }
 
-/* Mailbox history download — same chrome as the upload panel, but it sits
-   above it so a running upload and a running mail sync do not overlap. */
+/* Mailbox sync — same naked white toast chrome as sync-toasts.js / OneDrive. */
 .tma-mail-sync {
-  /* Docked like the others. It used to pin itself to the corner and then be
-     pushed up 108px by a :has() rule when an upload panel appeared — which
-     also fired for the LIBRARY sync panel, since that carries
-     .tma-portal-upload too, jumping the mailbox card for no reason. */
   order: 2;
-  /* A status card, not a file list: narrower and quieter than the uploader. */
-  width: 300px;
-  font-size: var(--text-size-12);
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  overflow: visible;
 }
-.tma-mail-sync .tma-portal-upload__title { font-size: var(--text-size-14); }
-.tma-mail-sync .tma-portal-upload__list { padding: var(--space-8) var(--space-12) var(--space-10); }
-.tma-mail-sync .tma-portal-upload__item { padding: 0; }
-.tma-mail-sync .tma-portal-upload__name { font-size: var(--text-size-12); color: var(--color-text-secondary); }
-.tma-mail-sync__icon img { width: 12px; height: 12px; opacity: 0.55; display: block; margin: auto; }
-.tma-mail-sync__bar--indeterminate .tma-portal-upload__fill {
-  width: 40% !important;
-  animation: tma-mail-sync-slide 1.4s ease-in-out infinite;
-}
-@keyframes tma-mail-sync-slide {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
+.tma-mail-sync .tma-sync-toast__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* "Step 4 of 10", right-aligned beside the message counts. */
@@ -1122,6 +1076,10 @@
 
 /* Stall / failure notice with its Retry action — the panel's answer to the
    endless spinner: it says what is wrong and offers a way out. */
+.tma-mail-sync__problem,
+.tma-mail-sync__hint {
+  margin-top: 10px;
+}
 .tma-mail-sync__problem {
   display: flex;
   align-items: flex-start;

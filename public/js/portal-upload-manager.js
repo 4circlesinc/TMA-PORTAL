@@ -139,7 +139,7 @@
     if (!busy.length && !failed.length) {
       if (syncPanel && !syncPanel.dataset.done) {
         syncPanel.dataset.done = '1';
-        syncPanel.innerHTML = syncPanelHtml('Library up to date', '', false, true);
+        paintSyncPanel('Library up to date', '', false, true, 100);
         setTimeout(hideSyncPanel, 4000);
       } else if (!syncPanel) {
         hideSyncPanel();
@@ -150,7 +150,7 @@
 
     if (syncDismissed && !failed.length) return;
 
-    var title, detail, isError = false;
+    var title, detail, isError = false, pct = null;
 
     if (busy.length) {
       var c = busy[0];
@@ -169,58 +169,67 @@
         ? num(done) + ' of ' + num(total) + ' items'
         : num(done) + ' items so far';
       detail += (busy.length > 1 ? ' · ' + (busy.length - 1) + ' more queued' : '');
+      if (total) pct = Math.max(2, Math.min(100, Math.round((done / total) * 100)));
     } else {
       isError = true;
       var f = failed[0];
       title = f.name + ' — sync problem';
       detail = f.lastError ? String(f.lastError).slice(0, 110)
         : f.failedItems + ' item(s) could not sync';
+      pct = 100;
     }
 
     ensureSyncPanel();
     delete syncPanel.dataset.done;
-    // The poll repaints every few seconds; without this the panel would pop
-    // back open on its own the moment someone minimised it.
-    syncPanel.classList.toggle('is-collapsed', syncCollapsed());
-    syncPanel.innerHTML = syncPanelHtml(title, detail, isError, false);
+    paintSyncPanel(title, detail, isError, false, pct);
   }
 
   function num(value) {
     try { return Number(value).toLocaleString(); } catch (e) { return String(value); }
   }
 
-  function syncPanelHtml(title, detail, isError, done) {
+  /*
+   * Same chrome as the Outlook “Syncing email…” toast (sync-toasts.js) —
+   * OneDrive mark in a pale circle, title + detail, progress track, – / ×.
+   * Naked white card; no watermark collage behind the copy.
+   */
+  function paintSyncPanel(title, detail, isError, done, pct) {
     var collapsed = syncCollapsed();
+    var fillClass = 'tma-sync-toast__fill';
+    var fillStyle = '';
+    if (done || isError) {
+      fillStyle = ' style="width:100%"';
+    } else if (pct != null) {
+      fillStyle = ' style="width:' + pct + '%"';
+    } else {
+      fillClass += ' tma-sync-toast__fill--indeterminate';
+    }
 
-    return '<div class="tma-portal-upload__head">' +
-        '<span class="tma-portal-upload__title">' +
-          (done ? '' : (isError
-            ? '<img src="images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14"> '
-            : '<span class="tma-portal-sync__spinner"></span> ')) +
-          // The text needs its own element to truncate in. The title is a flex
-          // row (spinner + words), and text-overflow does nothing to a flex
-          // container's children — the name was being chopped mid-word with no
-          // ellipsis at all.
-          '<span class="tma-portal-sync-panel__label">' + esc(title) + '</span>' +
-        '</span>' +
-        '<div class="tma-portal-upload__head-actions">' +
-          (isError ? '<button type="button" class="tma-portal-upload__act" data-sync-retry>Retry</button>' : '') +
-          // Minimise leaves the one line that answers "is it still going?".
-          // Close is a different promise, so the two stay separate controls.
-          (done ? '' :
-            '<button type="button" class="tma-portal-upload__icon tma-portal-sync-panel__toggle"' +
-              ' data-sync-collapse aria-expanded="' + (collapsed ? 'false' : 'true') + '"' +
-              ' aria-label="' + (collapsed ? 'Expand' : 'Minimise') + '">' +
-              // A masked span, not an <img>: an <img> paints the SVG's own
-              // colour, which put a hard black caret next to a soft grey ✕.
-              // Masking makes it inherit the button's colour like every other
-              // tinted icon in the portal.
-              '<span class="tma-portal-sync-panel__caret" aria-hidden="true"></span>' +
-            '</button>') +
-          '<button type="button" class="tma-portal-upload__icon" data-sync-close aria-label="Hide">✕</button>' +
-        '</div>' +
+    syncPanel.className = 'tma-sync-toast tma-sync-toast--visible tma-portal-sync-panel' +
+      (collapsed ? ' tma-sync-toast--min is-collapsed' : '') +
+      (done ? ' tma-sync-toast--done' : '') +
+      (isError ? ' tma-sync-toast--error' : '');
+
+    syncPanel.innerHTML =
+      '<span class="tma-sync-toast__icon tma-sync-toast__icon--onedrive">' +
+        '<img src="' + ROOT + '/images/icons/brands/OneDrive40.svg" alt="">' +
+      '</span>' +
+      '<div class="tma-sync-toast__body">' +
+        '<span class="tma-sync-toast__title">' + esc(title) + '</span>' +
+        (detail ? '<span class="tma-sync-toast__detail">' + esc(detail) + '</span>' : '') +
+        '<div class="tma-sync-toast__track"><div class="' + fillClass + '"' + fillStyle + '></div></div>' +
       '</div>' +
-      (detail ? '<div class="tma-portal-sync-panel__body">' + esc(detail) + '</div>' : '');
+      '<div class="tma-sync-toast__actions">' +
+        (isError
+          ? '<button type="button" class="tma-sync-toast__btn" data-sync-retry ' +
+            'aria-label="Retry" title="Retry">↻</button>'
+          : '') +
+        (done ? '' :
+          '<button type="button" class="tma-sync-toast__btn" data-sync-collapse ' +
+            'aria-expanded="' + (collapsed ? 'false' : 'true') + '" ' +
+            'aria-label="' + (collapsed ? 'Expand' : 'Minimise') + '">–</button>') +
+        '<button type="button" class="tma-sync-toast__btn" data-sync-close aria-label="Hide">×</button>' +
+      '</div>';
   }
 
   /**
@@ -244,7 +253,7 @@
     if (syncPanel) return syncPanel;
 
     syncPanel = document.createElement('div');
-    syncPanel.className = 'tma-portal-upload tma-portal-sync-panel';
+    syncPanel.className = 'tma-sync-toast tma-sync-toast--visible tma-portal-sync-panel';
     syncPanel.setAttribute('role', 'status');
     syncPanel.setAttribute('aria-live', 'polite');
     dock().appendChild(syncPanel);
@@ -255,12 +264,24 @@
         // Repaint from what is already on screen; waiting for the next poll
         // would leave the button feeling dead for up to five seconds.
         syncPanel.classList.toggle('is-collapsed', syncCollapsed());
+        syncPanel.classList.toggle('tma-sync-toast--min', syncCollapsed());
         var toggle = syncPanel.querySelector('[data-sync-collapse]');
         if (toggle) {
           toggle.setAttribute('aria-expanded', syncCollapsed() ? 'false' : 'true');
           toggle.setAttribute('aria-label', syncCollapsed() ? 'Expand' : 'Minimise');
         }
 
+        return;
+      }
+      // Clicking a minimised chip expands it again — same as sync-toasts.js.
+      if (syncCollapsed() && !e.target.closest('[data-sync-close]') && !e.target.closest('[data-sync-retry]')) {
+        setSyncCollapsed(false);
+        syncPanel.classList.remove('is-collapsed', 'tma-sync-toast--min');
+        var expandBtn = syncPanel.querySelector('[data-sync-collapse]');
+        if (expandBtn) {
+          expandBtn.setAttribute('aria-expanded', 'true');
+          expandBtn.setAttribute('aria-label', 'Minimise');
+        }
         return;
       }
       if (e.target.closest('[data-sync-close]')) {

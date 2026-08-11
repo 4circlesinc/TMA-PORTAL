@@ -11,7 +11,9 @@ use App\Models\SmartsheetAttachment;
 use App\Models\SmartsheetSheet;
 use App\Models\SmartsheetSyncLog;
 use App\Support\Access\Role;
+use App\Support\Cbi\DocumentImporter;
 use App\Support\Cbi\Names;
+use App\Support\Cbi\SyncActor;
 use App\Support\Smartsheet\Client;
 use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Http\JsonResponse;
@@ -93,6 +95,9 @@ class CbiController extends Controller
                 'sheetsWithErrors' => SmartsheetSheet::query()->where('status', SmartsheetSheet::STATUS_ERROR)->count(),
                 'syncing' => SmartsheetSheet::query()->where('status', SmartsheetSheet::STATUS_SYNCING)->count(),
             ],
+            // Smartsheet → File Library copy. Shown on the page so the office
+            // can see how much paperwork is still landing in client folders.
+            'documents' => $this->documentImportProgress($request),
         ]);
     }
 
@@ -524,6 +529,7 @@ class CbiController extends Controller
         $this->gate($request);
 
         return response()->json([
+            'documents' => $this->documentImportProgress($request),
             'sheets' => SmartsheetSheet::query()
                 ->orderByDesc('modified_at_remote')
                 ->get()
@@ -547,5 +553,42 @@ class CbiController extends Controller
                     'at' => $l->created_at?->toIso8601String(),
                 ]),
         ]);
+    }
+
+    /**
+     * How far Smartsheet attachments have been filed into client folders.
+     *
+     * @return array{done: int, pending: int, orphaned: int, clients: int, total: int, percent: int, active: bool, sizeKb: int}
+     */
+    private function documentImportProgress(Request $request): array
+    {
+        $actor = SyncActor::resolve($request->user());
+        if (! $actor) {
+            return [
+                'done' => 0,
+                'pending' => 0,
+                'orphaned' => 0,
+                'clients' => 0,
+                'total' => 0,
+                'percent' => 0,
+                'active' => false,
+                'sizeKb' => 0,
+            ];
+        }
+
+        $survey = (new DocumentImporter($actor))->survey();
+        $pending = max(0, $survey['files'] - $survey['orphaned']);
+        $total = $pending + $survey['done'];
+
+        return [
+            'done' => $survey['done'],
+            'pending' => $pending,
+            'orphaned' => $survey['orphaned'],
+            'clients' => $survey['clients'],
+            'total' => $total,
+            'percent' => $total > 0 ? (int) round(($survey['done'] / $total) * 100) : 100,
+            'active' => $pending > 0,
+            'sizeKb' => $survey['sizeKb'],
+        ];
     }
 }

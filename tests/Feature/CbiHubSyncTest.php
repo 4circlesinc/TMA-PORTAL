@@ -131,4 +131,14 @@ class CbiHubSyncTest extends TestCase
             ->assertJsonPath('folderUuid', $client->fresh()->folder->uuid)
             ->assertJsonPath('pendingDocuments', 0);
     }
+
+    public function test_summary_includes_document_import_progress(): void
+    {
+        $this->actingAs($this->admin)
+            ->getJson('/portal/cbi/summary')
+            ->assertOk()
+            ->assertJsonStructure([
+                'documents' => ['done', 'pending', 'orphaned', 'clients', 'total', 'percent', 'active', 'sizeKb'],
+            ]);
+    }
 }

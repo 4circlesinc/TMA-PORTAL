@@ -118,9 +118,46 @@
 
   /* ── data ── */
 
+  function pushSmartsheetToast(docs) {
+    if (!window.TMASyncToasts) return;
+    if (!docs || !docs.active) {
+      if (state._smartsheetToastWatching && docs && docs.done > 0 && window.TMASyncToasts.update) {
+        window.TMASyncToasts.update('smartsheet', {
+          state: 'done',
+          synced: docs.done,
+          total: docs.total || docs.done,
+          clients: docs.clients,
+        });
+      }
+      state._smartsheetToastWatching = false;
+      return;
+    }
+    // Same bottom-right card Outlook uses while mail is uploading/syncing.
+    // watch() once so minimise/dismiss state isn't reset every poll tick.
+    if (!state._smartsheetToastWatching) {
+      state._smartsheetToastWatching = true;
+      if (window.TMASyncToasts.watch) window.TMASyncToasts.watch('smartsheet');
+    }
+    if (window.TMASyncToasts.update) {
+      window.TMASyncToasts.update('smartsheet', {
+        state: 'syncing',
+        synced: docs.done || 0,
+        total: docs.total || 0,
+        pending: docs.pending || 0,
+        clients: docs.clients || 0,
+      });
+    }
+  }
+
   function loadSummary() {
-    return cbiFetch(BASE + '/summary').then(function (d) { state.summary = d; render(); })
-      .catch(function () { /* summary is decoration; the list is the load-bearing call */ });
+    return cbiFetch(BASE + '/summary').then(function (d) {
+      state.summary = d;
+      if (d && d.documents) {
+        pushSmartsheetToast(d.documents);
+        if (d.documents.active) scheduleDocsPoll();
+      }
+      render();
+    }).catch(function () { /* summary is decoration; the list is the load-bearing call */ });
   }
 
   function listQuery() {
@@ -158,14 +195,27 @@
       });
   }
 
-  function loadDetail(uuid) {
+  function loadDetail(uuid, opts) {
     // Identity check on the request's own detail object: a response only
     // applies while this object is still the live one, which also covers
     // re-opening the same uuid.
-    var req = { data: null, loading: true, error: null, uuid: uuid, posting: false, commentDraft: '', tab: 'overview' };
+    var opts = opts || {};
+    var keepTab = opts.keepTab && state.detail && state.detail.uuid === uuid
+      ? (state.detail.tab || 'overview')
+      : 'overview';
+    var quiet = !!opts.quiet;
+    var req = {
+      data: quiet && state.detail && state.detail.uuid === uuid ? state.detail.data : null,
+      loading: !quiet,
+      error: null,
+      uuid: uuid,
+      posting: false,
+      commentDraft: (state.detail && state.detail.uuid === uuid) ? (state.detail.commentDraft || '') : '',
+      tab: keepTab,
+    };
     state.detail = req;
-    render();
-    cbiFetch(BASE + '/applications/' + encodeURIComponent(uuid))
+    if (!quiet) render();
+    return cbiFetch(BASE + '/applications/' + encodeURIComponent(uuid))
       .then(function (d) {
         if (state.detail !== req) return;
         req.data = d; req.loading = false; render();
@@ -309,8 +359,21 @@
 
   /* ── render: list ── */
 
+  function docsProgress() {
+    return (state.summary && state.summary.documents) || null;
+  }
+
+  function docsProgressLine() {
+    var d = docsProgress();
+    if (!d || !d.active) return '';
+    return 'Importing documents: ' + num(d.done) + ' of ' + num(d.total) +
+      ' filed (' + num(d.pending) + ' left · ' + d.percent + '%)';
+  }
+
   function syncLine() {
     var s = state.summary;
+    var docs = docsProgressLine();
+    if (docs) return docs;
     var line = 'Synchronised from Smartsheet.';
     if (s && s.sync) {
       if (!s.sync.configured) line = 'Smartsheet is not configured in this environment.';
@@ -336,15 +399,20 @@
   function renderHeadActions() {
     var s = state.summary;
     var unhealthy = !!(s && s.sync && (s.sync.sheetsWithErrors > 0 || !s.sync.configured));
+    var docs = docsProgress();
+    var statusLine = docs && docs.active ? docsProgressLine() : (unhealthy ? syncLine() : '');
 
     return '<div class="cbi-tabs__actions">' +
-      (unhealthy ? '<span class="tma-portal-subtitle cbi-tabs__warning">' + esc(syncLine()) + '</span>' : '') +
+      (statusLine
+        ? '<span class="tma-portal-subtitle' + (unhealthy && !(docs && docs.active) ? ' cbi-tabs__warning' : '') +
+          '" data-cbi-docs-progress>' + esc(statusLine) + '</span>'
+        : '') +
       ui().btn({
-        label: 'Sync now', icon: 'ArrowsClockwise', variant: 'ghost', small: true,
+        label: 'Sync now', icon: 'Smart_sheet', variant: 'ghost', small: true,
         attrs: ' data-cbi-action="sync-now" title="Check Smartsheet for changes now"',
       }) +
       ui().btn({
-        label: 'Sync status', icon: 'Info', variant: 'ghost', small: true,
+        label: 'Sync status', icon: 'Smart_sheet', variant: 'ghost', small: true,
         attrs: ' data-cbi-action="sync-status" title="' + esc(syncLine()) + '"',
       }) +
       '</div>';
@@ -938,12 +1006,20 @@
       });
     }
 
-    var pendingNote = pending
-      ? '<p class="tma-portal-subtitle cbi-docs-pending">' +
-        esc(pending === 1
-          ? '1 Smartsheet file is still copying into this folder.'
-          : pending + ' Smartsheet files are still copying into this folder.') +
-        '</p>'
+    var global = docsProgress();
+    var pendingBits = [];
+    if (pending) {
+      pendingBits.push(pending === 1
+        ? '1 Smartsheet file for this client is still copying into this folder'
+        : pending + ' Smartsheet files for this client are still copying into this folder');
+    }
+    if (global && global.active) {
+      pendingBits.push('Overall: ' + num(global.done) + ' of ' + num(global.total) +
+        ' filed (' + global.percent + '% · ' + num(global.pending) + ' left across the caseload)');
+    }
+    var pendingNote = pendingBits.length
+      ? '<p class="tma-portal-subtitle cbi-docs-pending" data-cbi-docs-progress>' +
+        esc(pendingBits.join('. ') + '.') + '</p>'
       : '';
 
     return contentGroup('Documents',
@@ -1420,6 +1496,9 @@
         loadList();
         break;
       case 'sync-now':
+        if (window.TMASyncToasts && window.TMASyncToasts.watch) {
+          window.TMASyncToasts.watch('smartsheet');
+        }
         cbiFetch(BASE + '/sync', { method: 'POST' })
           .then(function (d) {
             var parts = [];
@@ -1476,6 +1555,7 @@
   function openSyncStatus() {
     cbiFetch(BASE + '/sync').then(function (d) {
       var sheets = d.sheets || [];
+      var docs = d.documents || {};
       var withIssues = sheets.filter(function (s) { return s.lastError || s.status === 'error'; });
       var rows = sheets.slice(0, 80).map(function (s) {
         return '<tr><td>' + esc(s.name) +
@@ -1484,12 +1564,53 @@
           (s.lastSuccessAt ? '<div class="tma-portal-table__muted">' + esc(fmtDateTime(s.lastSuccessAt)) + '</div>' : '') +
           (s.lastError ? '<div class="tma-portal-field__error">' + esc(s.lastError) + '</div>' : '') + '</td></tr>';
       }).join('');
-      var body = '<div class="cbi-sync-scroll">' +
+
+      var docsBlock = '<div class="cbi-sync-docs">' +
+        '<h3 class="tma-portal-section__title">' +
+          '<img class="cbi-sync-docs__logo" src="' + PH_ICON + 'Smart_sheet.svg" alt="" width="18" height="18">' +
+          'Document import</h3>' +
+        (docs.active
+          ? '<p class="tma-portal-subtitle">' + esc(num(docs.done) + ' of ' + num(docs.total) +
+            ' Smartsheet files filed into client folders (' + docs.percent + '%). ' +
+            num(docs.pending) + ' still copying · ' + num(docs.clients) + ' clients receiving files.') + '</p>' +
+            '<div class="cbi-sync-docs__bar" role="progressbar" aria-valuenow="' + docs.percent +
+            '" aria-valuemin="0" aria-valuemax="100">' +
+            '<span style="width:' + docs.percent + '%"></span></div>'
+          : '<p class="tma-portal-subtitle">' +
+            (docs.done
+              ? esc(num(docs.done) + ' Smartsheet files are in client folders. Import is up to date.')
+              : 'No documents have been filed into client folders yet.') +
+            '</p>') +
+        '</div>';
+
+      var body = '<div class="cbi-sync-scroll">' + docsBlock +
         '<p class="tma-portal-subtitle">' + sheets.length + ' sheet(s) mirrored' +
         (withIssues.length ? ' · ' + withIssues.length + ' with errors' : ' · all healthy') + '</p>' +
         ui().table(['Sheet', 'Status'], rows) + '</div>';
       ui().openModal({ title: 'Smartsheet sync', body: body });
     }).catch(function (e) { toast((e && e.message) || 'Couldn’t load sync status', false); });
+  }
+
+  /* Poll while Smartsheet files are still landing in client folders, so the
+     toolbar and Documents tab show live counts without a manual refresh. */
+  var docsPollTimer = null;
+  function scheduleDocsPoll() {
+    if (docsPollTimer) return;
+    docsPollTimer = setInterval(function () {
+      if (!live()) return;
+      var wasActive = !!(docsProgress() && docsProgress().active);
+      loadSummary().then(function () {
+        var active = !!(docsProgress() && docsProgress().active);
+        if (!active && docsPollTimer) {
+          clearInterval(docsPollTimer);
+          docsPollTimer = null;
+        }
+        // Refresh the open application so its Documents tab picks up new files.
+        if (state.route.view === 'detail' && state.detail.uuid && (active || wasActive)) {
+          loadDetail(state.detail.uuid, { keepTab: true, quiet: true });
+        }
+      });
+    }, 15000);
   }
 
   /* ── mount ── */

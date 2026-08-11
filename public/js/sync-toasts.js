@@ -1,5 +1,5 @@
-/* Sync progress toasts — bottom-right cards that appear while email, calendar
-   and OneDrive import in the background after a Microsoft connect. Always
+/* Sync progress toasts — bottom-right cards that appear while email, calendar,
+   OneDrive and Smartsheet document import run in the background. Always
    pinned bottom-right (independent of the notification-toast position
    preference), each card can be minimised to a chip or dismissed. Polls
    /me/sync-status while anything is running and goes quiet once done. */
@@ -23,6 +23,11 @@
     email: { label: 'Email', syncing: 'Syncing email…', icon: '/images/icons/brands/Outlook.svg' },
     calendar: { label: 'Calendar', syncing: 'Syncing calendar…', icon: '/images/icons/brands/outlook_calendar.svg' },
     onedrive: { label: 'OneDrive', syncing: 'Syncing OneDrive…', icon: '/images/icons/brands/OneDrive40.svg' },
+    smartsheet: {
+      label: 'Smartsheet',
+      syncing: 'Importing documents…',
+      icon: '/images/icons/phosphor/Smart_sheet.svg',
+    },
   };
 
   var host = null;
@@ -47,7 +52,9 @@
 
   function title(key, s) {
     var svc = SERVICES[key];
-    if (s.state === 'done') return svc.label + ' synced';
+    if (s.state === 'done') {
+      return key === 'smartsheet' ? 'Documents imported' : (svc.label + ' synced');
+    }
     if (s.state === 'error') return svc.label + ' sync problem';
     return svc.syncing;
   }
@@ -71,6 +78,14 @@
         ? fmt(s.synced) + ' of ' + fmt(s.count) + ' calendars'
         : fmt(s.count) + ' calendar' + (s.count === 1 ? '' : 's');
     }
+    if (key === 'smartsheet') {
+      if (!s.total && !s.synced) return 'Copying into client folders…';
+      var line = s.total
+        ? fmt(s.synced) + ' of ' + fmt(s.total) + ' documents'
+        : fmt(s.synced) + ' documents';
+      if (s.clients) line += ' · ' + fmt(s.clients) + ' clients';
+      return line;
+    }
     return s.total
       ? fmt(s.synced) + ' of ' + fmt(s.total) + ' items'
       : fmt(s.synced) + ' items';
@@ -78,7 +93,7 @@
 
   function pct(key, s) {
     var total = key === 'calendar' ? s.count : s.total;
-    if (!total || !s.synced) return null;
+    if (!total || s.synced == null) return null;
     return Math.max(2, Math.min(100, Math.round((s.synced / total) * 100)));
   }
 
@@ -87,7 +102,7 @@
     el.className = 'tma-sync-toast';
     el.setAttribute('data-sync-key', key);
     el.innerHTML =
-      '<span class="tma-sync-toast__icon"><img src="' + SERVICES[key].icon + '" alt=""></span>' +
+      '<span class="tma-sync-toast__icon tma-sync-toast__icon--' + key + '"><img src="' + SERVICES[key].icon + '" alt=""></span>' +
       '<div class="tma-sync-toast__body">' +
       '<span class="tma-sync-toast__title"></span>' +
       '<span class="tma-sync-toast__detail"></span>' +
@@ -148,6 +163,7 @@
   }
 
   function update(key, s) {
+    if (!SERVICES[key] || !s) return;
     var card = cardFor(key);
     if (card.dismissed) return;
 
@@ -167,6 +183,7 @@
           synced: s.synced,
           total: s.total,
           count: s.count,
+          clients: s.clients,
           // No total means there is no first-import measurement to show — the
           // run we are waiting on is an incremental one.
           mode: s.mode || (s.total == null ? 'incremental' : null),
@@ -224,7 +241,7 @@
   }
 
   function anySyncing(data) {
-    return ['email', 'calendar', 'onedrive'].some(function (key) {
+    return Object.keys(SERVICES).some(function (key) {
       return data[key] && data[key].state === 'syncing';
     });
   }
@@ -233,6 +250,14 @@
     return Object.keys(cards).some(function (key) {
       return cards[key].pendingUntil && Date.now() < cards[key].pendingUntil;
     });
+  }
+
+  /* Smartsheet document import can run for hours; the short lifetime that
+     covers mailbox/calendar first-connect must not kill that card mid-run. */
+  function shouldKeepPolling(data) {
+    if (data.smartsheet && data.smartsheet.state === 'syncing') return true;
+    if (anyPending()) return true;
+    return anySyncing(data) && Date.now() - startedAt < MAX_LIFETIME_MS;
   }
 
   function poll() {
@@ -249,7 +274,7 @@
 
       var pending = anyPending();
 
-      if ((anySyncing(data) || pending) && Date.now() - startedAt < MAX_LIFETIME_MS) {
+      if (shouldKeepPolling(data)) {
         timer = setTimeout(poll, pending ? PENDING_POLL_MS : POLL_MS);
       } else {
         timer = null;
@@ -299,5 +324,12 @@
     boot();
   }
 
-  window.TMASyncToasts = { poll: poll, watch: watch, dismiss: dismiss };
+  window.TMASyncToasts = {
+    poll: poll,
+    watch: watch,
+    dismiss: dismiss,
+    // Push a status without waiting for /me/sync-status — CBI uses this so
+    // the card tracks the same counts the Documents tab already fetched.
+    update: update,
+  };
 })();

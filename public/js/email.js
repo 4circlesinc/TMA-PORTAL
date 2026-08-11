@@ -3411,6 +3411,7 @@
   var syncTimer = null;
   var syncDismissed = false;
   var syncCollapsed = false;
+  var syncLastData = null;
 
   /* A full sync is queued, not run inline, so the button coming back to life
    * is not evidence of anything. Hand it to the shared bottom-right sync
@@ -3457,13 +3458,23 @@
   function ensureSyncPanel() {
     if (syncPanel) return syncPanel;
     syncPanel = document.createElement('section');
-    syncPanel.className = 'tma-portal-upload tma-mail-sync';
+    syncPanel.className = 'tma-sync-toast tma-sync-toast--visible tma-mail-sync';
     syncPanel.setAttribute('aria-label', 'Mailbox sync');
     syncPanel.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-mail-sync-action]');
-      if (!btn) return;
+      if (!btn) {
+        // Minimised chip expands on click — same as sync-toasts.js.
+        if (syncCollapsed) {
+          syncCollapsed = false;
+          if (syncLastData) renderSyncPanel(syncLastData);
+        }
+        return;
+      }
       var action = btn.getAttribute('data-mail-sync-action');
-      if (action === 'collapse') { syncCollapsed = !syncCollapsed; }
+      if (action === 'collapse') {
+        syncCollapsed = !syncCollapsed;
+        if (syncLastData) renderSyncPanel(syncLastData);
+      }
       if (action === 'close') { syncDismissed = true; stopSyncPolling(); hideSyncPanel(); }
       if (action === 'retry') { retryMailSync(btn); }
     });
@@ -3604,38 +3615,43 @@
     var hintHtml = (finished || failed) ? '' :
       '<div class="tma-mail-sync__hint">Syncing continues in the background — you can keep using the portal.</div>';
 
+    var fillClass = 'tma-sync-toast__fill';
+    var fillAttr = '';
+    var indeterminate = !finished && !failed && !stalled && pct === null;
+    if (indeterminate) {
+      fillClass += ' tma-sync-toast__fill--indeterminate';
+    } else {
+      fillAttr = ' style="width:' + (finished || failed ? 100 : pct) + '%"';
+    }
+
+    var detailLine = meta;
+    if (stageLine) detailLine += ' · ' + stageLine;
+    if (statBits.length) detailLine += ' · ' + statBits.join(' · ');
+    if (timingBits.length) detailLine += ' · ' + timingBits.join(' · ');
+
+    syncLastData = data;
     var panel = ensureSyncPanel();
+    panel.className = 'tma-sync-toast tma-sync-toast--visible tma-mail-sync' +
+      (syncCollapsed ? ' tma-sync-toast--min' : '') +
+      (finished ? ' tma-sync-toast--done' : '') +
+      (failed ? ' tma-sync-toast--error' : '');
+
+    // Same chrome as the global sync toasts — Outlook mark, naked white card.
     panel.innerHTML =
-      '<header class="tma-portal-upload__head">' +
-      '<span class="tma-portal-upload__title">' + esc(title) + '</span>' +
-      '<span class="tma-portal-upload__head-actions">' +
-      '<button type="button" class="tma-portal-upload__icon tma-mail-sync__icon" data-mail-sync-action="collapse" aria-label="' +
-      (syncCollapsed ? 'Expand' : 'Collapse') + '">' +
-      '<img src="' + (syncCollapsed ? ICONS.CaretUp : ICONS.CaretDown) + '" alt="" aria-hidden="true"></button>' +
-      '<button type="button" class="tma-portal-upload__icon tma-mail-sync__icon" data-mail-sync-action="close" aria-label="Close">' +
-      '<img src="' + ICONS.X + '" alt="" aria-hidden="true"></button>' +
-      '</span></header>' +
-      (syncCollapsed ? '' :
-        '<ul class="tma-portal-upload__list">' +
-        '<li class="tma-portal-upload__item' + (finished ? ' tma-portal-upload__item--completed' : '') + '">' +
-        '<div class="tma-portal-upload__row">' +
-        '<span class="tma-portal-upload__name">' + esc(meta) + '</span>' +
-        '</div>' +
-        // A div, not a span: the bar needs a block box or its height collapses.
-        // With no total yet we still show motion, via an indeterminate bar —
-        // but only while fresh progress is actually arriving.
-        '<div class="tma-portal-upload__bar' + (pct === null && !finished && !stalled && !failed ? ' tma-mail-sync__bar--indeterminate' : '') + '">' +
-        '<span class="tma-portal-upload__fill" style="width:' + (finished ? 100 : (pct === null ? 0 : pct)) + '%"></span>' +
-        '</div>' +
-        '<div class="tma-portal-upload__meta">' +
-        '<span>' + (pct === null ? (finished ? 'Complete' : 'Working…') : pct + '%') + '</span>' +
-        (stageLine ? '<span class="tma-mail-sync__stage">' + esc(stageLine) + '</span>' : '') +
-        '</div>' +
-        (statBits.length ? '<div class="tma-mail-sync__stats">' + esc(statBits.join(' · ')) + '</div>' : '') +
-        (timingBits.length ? '<div class="tma-mail-sync__stats">' + esc(timingBits.join(' · ')) + '</div>' : '') +
-        problemHtml +
-        hintHtml +
-        '</li></ul>');
+      '<span class="tma-sync-toast__icon tma-sync-toast__icon--email">' +
+        '<img src="' + BRAND + 'Outlook.svg" alt="">' +
+      '</span>' +
+      '<div class="tma-sync-toast__body">' +
+        '<span class="tma-sync-toast__title">' + esc(title) + '</span>' +
+        '<span class="tma-sync-toast__detail">' + esc(detailLine) + '</span>' +
+        '<div class="tma-sync-toast__track"><div class="' + fillClass + '"' + fillAttr + '></div></div>' +
+        (syncCollapsed ? '' : (problemHtml + hintHtml)) +
+      '</div>' +
+      '<div class="tma-sync-toast__actions">' +
+        '<button type="button" class="tma-sync-toast__btn" data-mail-sync-action="collapse" aria-label="' +
+          (syncCollapsed ? 'Expand' : 'Minimise') + '">–</button>' +
+        '<button type="button" class="tma-sync-toast__btn" data-mail-sync-action="close" aria-label="Close">×</button>' +
+      '</div>';
   }
 
   function pollSyncStatus() {

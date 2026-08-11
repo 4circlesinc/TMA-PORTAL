@@ -352,6 +352,28 @@
    Smartsheet attachments are still copying into the client folder. */
 .cbi-docs-pending { margin: 0 0 var(--space-12); }
 
+.cbi-sync-docs { margin: 0 0 var(--space-20); }
+.cbi-sync-docs .tma-portal-section__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+.cbi-sync-docs__logo { flex: 0 0 auto; }
+.cbi-sync-docs__bar {
+  height: 6px;
+  margin-top: var(--space-8);
+  border-radius: var(--radius-999, 999px);
+  background: var(--color-border-soft);
+  overflow: hidden;
+}
+.cbi-sync-docs__bar > span {
+  display: block;
+  height: 100%;
+  background: var(--color-text-primary);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
 
 /* The people cell and the person card moved to person-card.css when the
    File Library wanted the same component; see public/js/person-card.js. */
