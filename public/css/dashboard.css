@@ -28518,7 +28518,21 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-dash__email-settings-signature-body img {
   max-width: 100%;
   height: auto;
+  min-width: 24px;
+  min-height: 24px;
   cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  vertical-align: middle;
+}
+
+.tma-dash__email-settings-signature-body img.is-selected {
+  outline-color: var(--color-text-primary, #101828);
+}
+
+.tma-dash__email-settings-signature-body a {
+  cursor: default;
+  pointer-events: auto;
 }
 
 .tma-dash__email-settings-signature-size {

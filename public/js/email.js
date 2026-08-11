@@ -6816,24 +6816,56 @@
         }
       });
 
+      // Logos from Outlook/Gmail are often wrapped in links; stop the browser
+      // navigating away when the user is trying to select the image to resize.
       editor.addEventListener('click', function (event) {
+        var link = event.target.closest('a');
+        if (link && editor.contains(link)) event.preventDefault();
+
         var img = event.target.closest('img');
+        if (!img && link && editor.contains(link)) img = link.querySelector('img');
+
         var rail = root.querySelector('[data-email-signature-img-size]');
         if (!rail) return;
+
+        editor.querySelectorAll('img.is-selected').forEach(function (node) {
+          node.classList.remove('is-selected');
+        });
+
         if (!img || !editor.contains(img)) {
           rail.hidden = true;
           state._signatureSelectedImg = null;
           return;
         }
+
+        event.preventDefault();
+        img.classList.add('is-selected');
         state._signatureSelectedImg = img;
-        var width = parseInt(img.getAttribute('width') || img.style.width || img.clientWidth, 10) || 160;
-        width = Math.max(40, Math.min(480, width));
+
+        var width = parseInt(img.getAttribute('width'), 10)
+          || parseInt(img.style.width, 10)
+          || img.clientWidth
+          || img.naturalWidth
+          || 160;
+        width = Math.max(40, Math.min(480, width || 160));
         var range = rail.querySelector('[data-email-signature-img-width]');
         var label = rail.querySelector('[data-email-signature-img-width-label]');
         if (range) range.value = String(width);
         if (label) label.textContent = width + 'px';
         rail.hidden = false;
       });
+
+      // Make every image a single selectable object (not editable text).
+      editor.querySelectorAll('img').forEach(function (img) {
+        img.setAttribute('contenteditable', 'false');
+        img.setAttribute('draggable', 'false');
+      });
+
+      // Stale imports still carrying cid: logos cannot be sized until re-imported.
+      if (/cid:/i.test(editor.innerHTML) && !state._signatureCidWarned) {
+        state._signatureCidWarned = true;
+        showEmailToast(root, 'This signature has mailbox images — use Import from mailbox again to make them editable');
+      }
     });
 
     MORPH.unwired(root, '[data-email-signature-img-width]').forEach(function (range) {
@@ -6981,7 +7013,8 @@
             state.preferences.activeSignatureId = data.preferences.activeSignatureId;
           }
           state.settingsTab = 'sending';
-          showEmailToast(root, 'Signature imported — review and edit below');
+          state._signatureCidWarned = false;
+          showEmailToast(root, 'Signature imported — click an image to resize it');
           render();
         }).catch(function (err) {
           btn.disabled = false;

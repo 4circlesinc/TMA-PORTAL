@@ -3,10 +3,12 @@
 namespace Tests\Unit;
 
 use App\Models\ConnectedAccount;
+use App\Models\MailAttachment;
 use App\Models\MailMessage;
 use App\Models\User;
 use App\Support\Mail\SignatureImporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -130,5 +132,48 @@ class SignatureImporterTest extends TestCase
         $account = $this->account();
 
         $this->assertNull(SignatureImporter::for($account)->import());
+    }
+
+    public function test_it_embeds_cid_signature_images_as_data_uris(): void
+    {
+        $account = $this->account();
+        $message = $this->sent(
+            $account,
+            '<div class="gmail_signature" data-smartmail="gmail_signature">'
+            .'<div>Jane Doe</div>'
+            .'<img src="cid:logo001" width="120" height="40" alt="Logo">'
+            .'</div>'
+        );
+
+        MailAttachment::create([
+            'uuid' => (string) Str::uuid(),
+            'mail_message_id' => $message->id,
+            'remote_id' => 'att-logo',
+            'filename' => 'logo.png',
+            'mime_type' => 'image/png',
+            'size' => 68,
+            'is_inline' => true,
+            'content_id' => 'logo001',
+        ]);
+
+        // Minimal valid 1x1 PNG.
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+            'gmail.googleapis.com/*/messages/sent-1/attachments/att-logo*' => Http::response([
+                'data' => rtrim(strtr(base64_encode($png), '+/', '-_'), '='),
+            ]),
+        ]);
+
+        $signature = SignatureImporter::for($account)->import();
+
+        $this->assertNotNull($signature);
+        $this->assertStringContainsString('Jane Doe', $signature);
+        $this->assertStringContainsString('data:image/png;base64,', $signature);
+        $this->assertStringNotContainsString('cid:logo001', $signature);
     }
 }

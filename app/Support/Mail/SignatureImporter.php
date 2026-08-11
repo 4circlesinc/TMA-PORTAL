@@ -3,6 +3,7 @@
 namespace App\Support\Mail;
 
 use App\Models\ConnectedAccount;
+use App\Models\MailAttachment;
 use App\Models\MailMessage;
 use DOMDocument;
 use DOMElement;
@@ -138,6 +139,10 @@ class SignatureImporter
      * (Gmail / Outlook). Across several messages the most common candidate
      * wins, so a one-off footer on a single send does not become the
      * account signature.
+     *
+     * Inline logos are rewritten to data-URIs before the HTML is stored —
+     * raw `cid:` references (and portal attachment URLs that only work while
+     * signed in) are useless inside the signature editor and when composing.
      */
     private function fromSentMail(): ?string
     {
@@ -151,21 +156,23 @@ class SignatureImporter
             ->when($email !== '', function ($query) use ($email) {
                 $query->whereRaw('LOWER(from_email) = ?', [$email]);
             })
+            ->with('attachments')
             ->orderByDesc('sent_at')
             ->limit(12)
-            ->get(['body_html']);
+            ->get();
 
         if ($messages->isEmpty()) {
             return null;
         }
 
+        /** @var list<array{html: string, message: MailMessage}> $candidates */
         $candidates = [];
 
         foreach ($messages as $message) {
             $candidate = $this->extractFromBody((string) $message->body_html);
 
             if (is_string($candidate) && trim($candidate) !== '') {
-                $candidates[] = $candidate;
+                $candidates[] = ['html' => $candidate, 'message' => $message];
             }
         }
 
@@ -176,7 +183,7 @@ class SignatureImporter
         $counts = [];
 
         foreach ($candidates as $candidate) {
-            $key = $this->fingerprint($candidate);
+            $key = $this->fingerprint($candidate['html']);
             $counts[$key] = ($counts[$key] ?? 0) + 1;
         }
 
@@ -184,12 +191,177 @@ class SignatureImporter
         $bestKey = array_key_first($counts);
 
         foreach ($candidates as $candidate) {
-            if ($this->fingerprint($candidate) === $bestKey) {
-                return $candidate;
+            if ($this->fingerprint($candidate['html']) === $bestKey) {
+                return $this->resolveInlineImages($candidate['html'], $candidate['message']);
             }
         }
 
-        return $candidates[0];
+        return $this->resolveInlineImages($candidates[0]['html'], $candidates[0]['message']);
+    }
+
+    /**
+     * Turn signature logos into self-contained data-URIs.
+     *
+     * Sent mail stores logos as `cid:` parts (or, after the reading pane has
+     * opened the message, as authenticated `/portal/mail/attachments/…`
+     * URLs). Neither form is selectable or resizable in the signature editor,
+     * and neither survives being sent from the portal to someone else.
+     */
+    private function resolveInlineImages(string $html, MailMessage $message): string
+    {
+        if (! preg_match_all('/\bsrc=("|\')([^"\']+)\1/i', $html, $matches)) {
+            return $html;
+        }
+
+        $sources = array_values(array_unique($matches[2]));
+        $provider = null;
+
+        foreach ($sources as $src) {
+            $src = html_entity_decode($src, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $resolved = $this->bytesForImageSrc($src, $message, $provider);
+
+            if ($resolved === null) {
+                continue;
+            }
+
+            [$bytes, $mime] = $resolved;
+            $dataUri = $this->toDataUri($bytes, $mime);
+
+            if ($dataUri === null) {
+                continue;
+            }
+
+            // Prefer exact src replacement; also catch HTML-entity variants.
+            $html = str_replace($src, $dataUri, $html);
+            $html = str_replace(htmlspecialchars($src, ENT_QUOTES), $dataUri, $html);
+        }
+
+        return $html;
+    }
+
+    /**
+     * @param  MailProvider|null  $provider
+     * @return array{0: string, 1: string}|null
+     */
+    private function bytesForImageSrc(string $src, MailMessage $message, ?MailProvider &$provider): ?array
+    {
+        if (str_starts_with(strtolower($src), 'data:image/')) {
+            return null;
+        }
+
+        $attachment = null;
+
+        if (str_starts_with(strtolower($src), 'cid:')) {
+            $cid = rawurldecode(substr($src, 4));
+            $cid = trim($cid, '<>');
+            $attachment = $this->attachmentForCid($message, $cid);
+        } elseif (preg_match('#/portal/mail/attachments/([0-9a-f-]{36})#i', $src, $match)) {
+            $attachment = $message->attachments->firstWhere('uuid', $match[1])
+                ?? MailAttachment::query()->where('uuid', $match[1])->first();
+        } else {
+            return null;
+        }
+
+        if (! $attachment || ! $attachment->remote_id || ! $message->remote_id) {
+            return null;
+        }
+
+        try {
+            $provider ??= Mailbox::provider($this->account);
+            $bytes = $provider->getAttachment($message->remote_id, $attachment->remote_id);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if ($bytes === '') {
+            return null;
+        }
+
+        $mime = strtolower((string) ($attachment->mime_type ?: 'image/png'));
+        if (! str_starts_with($mime, 'image/')) {
+            $mime = 'image/png';
+        }
+
+        return [$bytes, $mime];
+    }
+
+    private function attachmentForCid(MailMessage $message, string $cid): ?MailAttachment
+    {
+        if ($cid === '') {
+            return null;
+        }
+
+        return $message->attachments->first(function (MailAttachment $attachment) use ($cid) {
+            $value = trim((string) $attachment->content_id, '<>');
+
+            return $value !== '' && strcasecmp($value, $cid) === 0;
+        });
+    }
+
+    private function toDataUri(string $bytes, string $mime): ?string
+    {
+        // Keep signature prefs bounded: downscale large logos before embedding.
+        if (strlen($bytes) > 80_000) {
+            $compressed = $this->compressImage($bytes, $mime);
+            if ($compressed !== null) {
+                [$bytes, $mime] = $compressed;
+            }
+        }
+
+        if (strlen($bytes) > 220_000) {
+            return null;
+        }
+
+        return 'data:'.$mime.';base64,'.base64_encode($bytes);
+    }
+
+    /**
+     * @return array{0: string, 1: string}|null
+     */
+    private function compressImage(string $bytes, string $mime): ?array
+    {
+        if (! function_exists('imagecreatefromstring')) {
+            return null;
+        }
+
+        $image = @imagecreatefromstring($bytes);
+        if ($image === false) {
+            return null;
+        }
+
+        $width = imagesx($image);
+        $height = imagesy($image);
+        if ($width < 1 || $height < 1) {
+            imagedestroy($image);
+
+            return null;
+        }
+
+        $max = 320;
+        $scale = min(1, $max / max($width, $height));
+        $targetW = max(1, (int) round($width * $scale));
+        $targetH = max(1, (int) round($height * $scale));
+
+        $canvas = imagecreatetruecolor($targetW, $targetH);
+        imagealphablending($canvas, false);
+        imagesavealpha($canvas, true);
+        $transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+        imagefilledrectangle($canvas, 0, 0, $targetW, $targetH, $transparent);
+        imagecopyresampled($canvas, $image, 0, 0, 0, 0, $targetW, $targetH, $width, $height);
+
+        ob_start();
+        if ($mime === 'image/png' || $mime === 'image/gif' || $mime === 'image/webp') {
+            imagepng($canvas, null, 6);
+            $outMime = 'image/png';
+        } else {
+            imagejpeg($canvas, null, 82);
+            $outMime = 'image/jpeg';
+        }
+        $out = ob_get_clean() ?: '';
+        imagedestroy($image);
+        imagedestroy($canvas);
+
+        return $out !== '' ? [$out, $outMime] : null;
     }
 
     private function extractFromBody(string $html): ?string
