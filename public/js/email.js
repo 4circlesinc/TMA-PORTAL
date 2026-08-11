@@ -3478,11 +3478,12 @@
       if (action === 'close') { syncDismissed = true; stopSyncPolling(); hideSyncPanel(); }
       if (action === 'retry') { retryMailSync(btn); }
     });
-    // The shared bottom-right stack. Falls back to the body if the upload
-    // manager has not loaded, so the panel still shows rather than vanishing.
-    (window.TMAUpload && window.TMAUpload.dock
-      ? window.TMAUpload.dock()
-      : document.body).appendChild(syncPanel);
+    // Same column as OneDrive / Smartsheet / calendar sync toasts — a second
+    // fixed corner host is what made cards sit on top of each other sideways.
+    var stack = (window.TMASyncToasts && window.TMASyncToasts.host)
+      ? window.TMASyncToasts.host()
+      : (document.querySelector('[data-sync-toast-host]') || document.body);
+    stack.appendChild(syncPanel);
     return syncPanel;
   }
 

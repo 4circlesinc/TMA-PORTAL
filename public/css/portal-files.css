@@ -991,17 +991,13 @@
   background: color-mix(in srgb, #f59e0b 22%, transparent); color: #b45309; font-size: 11px;
 }
 
-/* Library sync panel — same naked white toast chrome as sync-toasts.js
-   (Outlook “Syncing email…”), with the OneDrive mark. Lives in the dock so
-   it stacks with uploads; order rather than DOM order so either can appear first. */
+/* Library sync panel — mounts into .tma-sync-toast-host with the other sync
+   cards so everything stacks as one vertical list. */
 .tma-portal-sync-panel {
-  order: 3;
-  width: 420px;
-  max-width: calc(100vw - 32px);
-  /* toast.css owns the card look; strip any upload-panel inheritance. */
+  width: 100%;
+  max-width: none;
   overflow: visible;
 }
-.tma-portal-dock > .tma-portal-upload:not(.tma-portal-sync-panel) { order: 1; }
 .tma-portal-sync-panel .tma-sync-toast__title {
   white-space: nowrap;
   overflow: hidden;
@@ -1045,11 +1041,10 @@
   .tma-portal-lightbox__frame { width: 96vw; height: 78vh; }
 }
 
-/* Mailbox sync — same naked white toast chrome as sync-toasts.js / OneDrive. */
+/* Mailbox sync — same host/stack as OneDrive / Smartsheet sync toasts. */
 .tma-mail-sync {
-  order: 2;
-  width: 420px;
-  max-width: calc(100vw - 32px);
+  width: 100%;
+  max-width: none;
   overflow: visible;
 }
 .tma-mail-sync .tma-sync-toast__title {

@@ -36,11 +36,11 @@
   var startedAt = Date.now();
 
   function ensureHost() {
-    if (!host) {
-      host = document.createElement('div');
+    if (!host || !host.isConnected) {
+      host = document.querySelector('[data-sync-toast-host]') || document.createElement('div');
       host.className = 'tma-sync-toast-host';
       host.setAttribute('data-sync-toast-host', '');
-      document.body.appendChild(host);
+      if (!host.parentNode) document.body.appendChild(host);
     }
     return host;
   }
@@ -331,5 +331,8 @@
     // Push a status without waiting for /me/sync-status — CBI uses this so
     // the card tracks the same counts the Documents tab already fetched.
     update: update,
+    // One bottom-right column for every sync card (library, mail, Smartsheet…).
+    // Other scripts mount into this so toasts stack instead of overlapping.
+    host: ensureHost,
   };
 })();

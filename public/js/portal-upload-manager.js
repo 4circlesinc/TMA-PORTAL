@@ -233,17 +233,29 @@
   }
 
   /**
-   * The shared bottom-right stack both panels live in.
-   *
-   * Created lazily and never removed: it holds no space of its own, and
-   * re-anchoring it on every panel open/close is how the two ended up
-   * overlapping in the first place.
+   * Upload panel stack (files only). Sync cards live in the shared
+   * sync-toast host so library + Smartsheet + mail stack as one column.
    */
   function dock() {
     var el = document.querySelector('.tma-portal-dock');
     if (!el) {
       el = document.createElement('div');
       el.className = 'tma-portal-dock';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  /* Same column as sync-toasts.js — never a second fixed corner host. */
+  function syncStack() {
+    if (window.TMASyncToasts && window.TMASyncToasts.host) {
+      return window.TMASyncToasts.host();
+    }
+    var el = document.querySelector('[data-sync-toast-host]');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'tma-sync-toast-host';
+      el.setAttribute('data-sync-toast-host', '');
       document.body.appendChild(el);
     }
     return el;
@@ -256,7 +268,7 @@
     syncPanel.className = 'tma-sync-toast tma-sync-toast--visible tma-portal-sync-panel';
     syncPanel.setAttribute('role', 'status');
     syncPanel.setAttribute('aria-live', 'polite');
-    dock().appendChild(syncPanel);
+    syncStack().appendChild(syncPanel);
 
     syncPanel.addEventListener('click', function (e) {
       if (e.target.closest('[data-sync-collapse]')) {

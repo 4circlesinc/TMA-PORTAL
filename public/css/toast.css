@@ -545,14 +545,20 @@
   position: fixed;
   z-index: 600;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: column; /* vertical list: one card per row */
+  align-items: stretch;   /* full-width rows — never side-by-side chips */
   gap: 12px;
   width: 420px;
   max-width: calc(100vw - 32px);
   pointer-events: none;
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   right: 20px;
+}
+
+.tma-sync-toast-host > * {
+  pointer-events: auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tma-sync-toast {
@@ -693,9 +699,9 @@
   color: #1a1d21;
 }
 
-/* Minimised: a compact chip — icon, short title, live progress bar. */
+/* Minimised: same list width, shorter row — icon, title, live progress bar. */
 .tma-sync-toast--min {
-  width: auto;
+  width: 100%;
   align-items: center;
   padding: 10px 14px;
   cursor: pointer;
