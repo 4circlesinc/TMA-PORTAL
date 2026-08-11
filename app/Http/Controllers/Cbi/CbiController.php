@@ -14,6 +14,7 @@ use App\Support\Access\Role;
 use App\Support\Cbi\DocumentImporter;
 use App\Support\Cbi\Names;
 use App\Support\Cbi\SyncActor;
+use App\Support\Imports\ImportPause;
 use App\Support\Smartsheet\Client;
 use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Http\JsonResponse;
@@ -506,6 +507,7 @@ class CbiController extends Controller
     {
         $this->gate($request);
         abort_unless(Client::configured(), 422, 'Smartsheet is not configured.');
+        abort_unless(! ImportPause::active(), 422, 'Imports are paused. Resume them in Settings → Background Operations.');
 
         $due = Synchroniser::refreshWorkspace((string) Str::uuid());
         foreach ($due as $sheet) {

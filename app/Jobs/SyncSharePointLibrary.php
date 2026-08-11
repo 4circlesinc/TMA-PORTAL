@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\SharePointConnection;
+use App\Support\Imports\ImportPause;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -36,6 +37,10 @@ class SyncSharePointLibrary implements ShouldQueue
 
     public function handle(): void
     {
+        if (ImportPause::active()) {
+            return;
+        }
+
         $connection = SharePointConnection::find($this->connectionId);
 
         if (! $connection || ! $connection->sync_enabled) {

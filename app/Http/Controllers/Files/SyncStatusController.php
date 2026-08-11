@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Files;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Support\Access\Role;
+use App\Support\Imports\ImportPause;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -73,9 +74,12 @@ class SyncStatusController extends BaseFilesController
             ];
         });
 
+        $paused = ImportPause::active();
+
         return response()->json([
             'connections' => $rows->values(),
-            'syncing' => $rows->contains(fn ($r) => $r['status'] === 'syncing'),
+            'syncing' => ! $paused && $rows->contains(fn ($r) => $r['status'] === 'syncing'),
+            'importsPaused' => $paused,
             'hasError' => $rows->contains(fn ($r) => $r['status'] === 'error' || $r['failedItems'] > 0),
             'conflicts' => (int) $rows->sum('conflicts'),
         ]);
@@ -86,6 +90,7 @@ class SyncStatusController extends BaseFilesController
     {
         $user = $this->user($request);
         abort_unless(Role::isAdmin($user), 403, 'Only administrators can start a sync.');
+        abort_unless(! ImportPause::active(), 422, 'Imports are paused. Resume them in Settings → Background Operations.');
 
         $data = $request->validate(['connection' => ['nullable', 'string', 'max:64']]);
 

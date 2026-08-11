@@ -163,10 +163,31 @@
 
   function applyNotifyHostPosition(host) {
     if (!host) return;
+    // Shared sync stack owns bottom-right — don't restyle that host as notify.
+    if (host.hasAttribute('data-sync-toast-host')) return;
     host.className = 'tma-notify-toast-host tma-notify-toast-host--' + toastPrefs.position;
   }
 
-  function getNotifyHost() {
+  /*
+   * Bottom-right is the same corner as sync progress cards. Mounting notify
+   * toasts into that shared column keeps arrivals in one vertical list instead
+   * of a second fixed host overlapping the sync stack sideways.
+   */
+  function sharedCornerStack() {
+    if (window.TMASyncToasts && typeof window.TMASyncToasts.host === 'function') {
+      return window.TMASyncToasts.host();
+    }
+    let el = document.querySelector('[data-sync-toast-host]');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'tma-sync-toast-host';
+      el.setAttribute('data-sync-toast-host', '');
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function dedicatedNotifyHost() {
     let host = document.querySelector('[data-notify-toast-host]');
     if (!host) {
       host = document.createElement('div');
@@ -177,10 +198,38 @@
     return host;
   }
 
+  function getNotifyHost() {
+    if (toastPrefs.position === 'bottom-right') {
+      return sharedCornerStack();
+    }
+    return dedicatedNotifyHost();
+  }
+
+  function relocateNotifyCards(from, to) {
+    if (!from || !to || from === to) return;
+    Array.prototype.slice.call(from.querySelectorAll('.tma-notify-toast')).forEach(function (card) {
+      to.appendChild(card);
+    });
+  }
+
   function applyToastPrefs(raw) {
+    const prev = toastPrefs.position;
     toastPrefs = clampPrefs(raw);
-    const host = document.querySelector('[data-notify-toast-host]');
-    if (host) applyNotifyHostPosition(host);
+    const next = toastPrefs.position;
+
+    if (prev !== next) {
+      if (next === 'bottom-right') {
+        const old = document.querySelector('[data-notify-toast-host]');
+        relocateNotifyCards(old, sharedCornerStack());
+      } else if (prev === 'bottom-right') {
+        relocateNotifyCards(sharedCornerStack(), dedicatedNotifyHost());
+      } else {
+        applyNotifyHostPosition(document.querySelector('[data-notify-toast-host]'));
+      }
+    } else if (next !== 'bottom-right') {
+      applyNotifyHostPosition(document.querySelector('[data-notify-toast-host]'));
+    }
+
     return getToastPrefs();
   }
 
@@ -219,11 +268,11 @@
         ? src
         : fallback;
       const safeFallback = String(fallback || '').replace(/'/g, '%27');
-      const wrapStyle = 'width:36px;height:36px;min-width:36px;min-height:36px;max-width:36px;max-height:36px;' +
-        'flex:0 0 36px;border-radius:50%;overflow:hidden;display:block;line-height:0;';
+      const wrapStyle = 'width:44px;height:44px;min-width:44px;min-height:44px;max-width:44px;max-height:44px;' +
+        'flex:0 0 44px;border-radius:50%;overflow:hidden;display:block;line-height:0;';
       const imgStyle = 'width:100%;height:100%;object-fit:cover;object-position:center;display:block;border-radius:0;';
       return '<span class="tma-notify-toast__avatar-wrap" style="' + wrapStyle + '">' +
-        '<img class="tma-notify-toast__avatar" src="' + esc(url || fallback) + '" alt="" width="36" height="36" decoding="async" style="' + imgStyle + '"' +
+        '<img class="tma-notify-toast__avatar" src="' + esc(url || fallback) + '" alt="" width="44" height="44" decoding="async" style="' + imgStyle + '"' +
         (fallback ? " onerror=\"this.onerror=null;this.src='" + safeFallback + "'\"" : '') + '>' +
         '</span>';
     }
@@ -325,8 +374,12 @@
 
     const host = getNotifyHost();
 
-    while (host.children.length >= NOTIFY_MAX_STACK) {
-      host.removeChild(host.firstChild);
+    // Only count notification cards — the shared bottom-right stack also holds
+    // sync progress toasts, which must not be trimmed by this limit.
+    while (host.querySelectorAll('.tma-notify-toast').length >= NOTIFY_MAX_STACK) {
+      const oldest = host.querySelector('.tma-notify-toast');
+      if (!oldest) break;
+      host.removeChild(oldest);
     }
 
     const showPreview = toastPrefs.previewText !== false;

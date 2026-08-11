@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\User;
 use App\Support\Cbi\ClientHubImporter;
 use App\Support\Cbi\SyncActor;
+use App\Support\Imports\ImportPause;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -42,6 +43,10 @@ class SyncCbiHub implements ShouldQueue
     public function handle(): void
     {
         if (! config('services.smartsheet.cbi_enabled')) {
+            return;
+        }
+
+        if (ImportPause::active()) {
             return;
         }
 

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\SmartsheetSheet;
 use App\Support\Cbi\Mapper;
+use App\Support\Imports\ImportPause;
 use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -53,6 +54,10 @@ class SyncSmartsheetSheet implements ShouldBeUniqueUntilProcessing, ShouldQueue
     public function handle(): void
     {
         if (! config('services.smartsheet.cbi_enabled')) {
+            return;
+        }
+
+        if (ImportPause::active()) {
             return;
         }
 

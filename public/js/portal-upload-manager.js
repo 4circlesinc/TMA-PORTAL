@@ -135,6 +135,20 @@
 
     syncLastBusy = busy.length > 0;
 
+    if (data.importsPaused) {
+      ensureSyncPanel();
+      delete syncPanel.dataset.done;
+      paintSyncPanel(
+        'Imports paused',
+        'Resume in Settings → Background Operations.',
+        false,
+        false,
+        null,
+        true
+      );
+      return;
+    }
+
     // Finished since last time: say so briefly, then get out of the way.
     if (!busy.length && !failed.length) {
       if (syncPanel && !syncPanel.dataset.done) {
@@ -181,7 +195,7 @@
 
     ensureSyncPanel();
     delete syncPanel.dataset.done;
-    paintSyncPanel(title, detail, isError, false, pct);
+    paintSyncPanel(title, detail, isError, false, pct, false);
   }
 
   function num(value) {
@@ -193,7 +207,7 @@
    * OneDrive mark in a pale circle, title + detail, progress track, – / ×.
    * Naked white card; no watermark collage behind the copy.
    */
-  function paintSyncPanel(title, detail, isError, done, pct) {
+  function paintSyncPanel(title, detail, isError, done, pct, paused) {
     var collapsed = syncCollapsed();
     var fillClass = 'tma-sync-toast__fill';
     var fillStyle = '';
@@ -201,6 +215,8 @@
       fillStyle = ' style="width:100%"';
     } else if (pct != null) {
       fillStyle = ' style="width:' + pct + '%"';
+    } else if (paused) {
+      fillStyle = ' style="width:0%"';
     } else {
       fillClass += ' tma-sync-toast__fill--indeterminate';
     }
@@ -208,7 +224,8 @@
     syncPanel.className = 'tma-sync-toast tma-sync-toast--visible tma-portal-sync-panel' +
       (collapsed ? ' tma-sync-toast--min is-collapsed' : '') +
       (done ? ' tma-sync-toast--done' : '') +
-      (isError ? ' tma-sync-toast--error' : '');
+      (isError ? ' tma-sync-toast--error' : '') +
+      (paused ? ' tma-sync-toast--paused' : '');
 
     syncPanel.innerHTML =
       '<span class="tma-sync-toast__icon tma-sync-toast__icon--onedrive">' +

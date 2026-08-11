@@ -52,6 +52,7 @@
 
   function title(key, s) {
     var svc = SERVICES[key];
+    if (s.state === 'paused' || s.importsPaused) return svc.label + ' paused';
     if (s.state === 'done') {
       return key === 'smartsheet' ? 'Documents imported' : (svc.label + ' synced');
     }
@@ -61,6 +62,9 @@
 
   // Every card reads the same way: "synced of total <unit>".
   function detail(key, s) {
+    if (s.state === 'paused' || s.importsPaused) {
+      return 'Resume in Settings → Background Operations.';
+    }
     if (s.state === 'error') return 'Check Settings → Connectors.';
     // A run we started locally has no counts yet — say so rather than "0".
     if (s.synced == null && s.total == null && s.count == null) return 'Starting…';
@@ -193,9 +197,9 @@
       }
     }
 
-    // Only surface done/error for a service we watched syncing — a mailbox
-    // that finished importing last week doesn't need a toast on every load.
-    if (!card.el && s.state !== 'syncing') return;
+    // Only surface done/error/paused for a service we watched syncing — a
+    // mailbox that finished importing last week doesn't need a toast on every load.
+    if (!card.el && s.state !== 'syncing' && s.state !== 'paused') return;
 
     if (!card.el) card.el = buildCard(key);
     var el = card.el;
@@ -207,6 +211,7 @@
     var p = pct(key, s);
     el.classList.toggle('tma-sync-toast--error', s.state === 'error');
     el.classList.toggle('tma-sync-toast--done', s.state === 'done');
+    el.classList.toggle('tma-sync-toast--paused', s.state === 'paused' || !!s.importsPaused);
 
     if (s.state === 'done') {
       fill.classList.remove('tma-sync-toast__fill--indeterminate');
@@ -215,6 +220,9 @@
     } else if (s.state === 'error') {
       fill.classList.remove('tma-sync-toast__fill--indeterminate');
       fill.style.width = '100%';
+    } else if (s.state === 'paused' || s.importsPaused) {
+      fill.classList.remove('tma-sync-toast__fill--indeterminate');
+      fill.style.width = p !== null ? p + '%' : '0%';
     } else if (p !== null) {
       fill.classList.remove('tma-sync-toast__fill--indeterminate');
       fill.style.width = p + '%';
@@ -246,6 +254,13 @@
     });
   }
 
+  function anyPaused(data) {
+    if (data.importsPaused) return true;
+    return Object.keys(SERVICES).some(function (key) {
+      return data[key] && (data[key].state === 'paused' || data[key].importsPaused);
+    });
+  }
+
   function anyPending() {
     return Object.keys(cards).some(function (key) {
       return cards[key].pendingUntil && Date.now() < cards[key].pendingUntil;
@@ -256,6 +271,7 @@
      covers mailbox/calendar first-connect must not kill that card mid-run. */
   function shouldKeepPolling(data) {
     if (data.smartsheet && data.smartsheet.state === 'syncing') return true;
+    if (anyPaused(data)) return true;
     if (anyPending()) return true;
     return anySyncing(data) && Date.now() - startedAt < MAX_LIFETIME_MS;
   }
@@ -269,7 +285,14 @@
       return r.json();
     }).then(function (data) {
       Object.keys(SERVICES).forEach(function (key) {
-        if (data[key]) update(key, data[key]);
+        if (!data[key]) return;
+        var status = data[key];
+        // Firm-wide pause applies to file imports, not mailbox/calendar.
+        if (data.importsPaused && (key === 'onedrive' || key === 'smartsheet')) {
+          status = Object.assign({}, status, { importsPaused: true });
+          if (status.state === 'syncing') status.state = 'paused';
+        }
+        update(key, status);
       });
 
       var pending = anyPending();

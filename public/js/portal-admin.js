@@ -179,9 +179,27 @@
 
       function load() {
         secApi('GET', '/admin/background-ops').then(function (r) { return r.json(); }).then(function (d) {
+          var paused = !!d.importsPaused;
+          var pauseRow =
+            '<div class="tma-portal-toggle-row">' +
+            '<span class="tma-portal-toggle-row__label">' +
+            '<strong>Pause imports</strong><br>' +
+            '<span class="tma-portal-note">Stops SharePoint libraries, OneDrive and Smartsheet document ' +
+            'import for the whole firm. Mailbox and calendar sync keep running.</span></span>' +
+            ui().toggle(paused, 'data-ops-imports-pause', 'Pause imports') +
+            '</div>' +
+            (paused
+              ? '<p class="tma-portal-note" style="margin:0 0 var(--space-12)">Imports are paused' +
+                (d.importsPausedAt ? ' since ' + esc(when(d.importsPausedAt)) : '') +
+                '. Turn the switch off to resume.</p>'
+              : '');
+
           if (!d.inspectable) {
-            root.innerHTML = '<p class="tma-portal-subtitle">Long-running work runs on the <strong>' +
-              esc(d.driver || 'unknown') + '</strong> queue, which can\'t be inspected from here.</p>';
+            root.innerHTML =
+              '<p class="tma-portal-subtitle">Long-running work runs on the <strong>' +
+              esc(d.driver || 'unknown') + '</strong> queue, which can\'t be inspected from here.</p>' +
+              ui().section('Imports', pauseRow);
+            wirePause();
             return;
           }
 
@@ -228,12 +246,15 @@
           root.innerHTML =
             '<p class="tma-portal-subtitle">Work the portal does in the background — importing mail and files, ' +
             'syncing calendars, sending email. You can keep working while these run.</p>' +
+            ui().section('Imports', pauseRow) +
             health +
             ui().section('Queued', pending) +
             ui().section('Failed', failed +
               ((d.failed || []).length
                 ? '<div style="margin-top:8px">' + ui().btn({ label: 'Clear all failed', variant: 'ghost', small: true, attrs: 'data-ops-flush' }) + '</div>'
                 : ''));
+
+          wirePause();
 
           root.querySelectorAll('[data-ops-retry], [data-ops-forget]').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -260,6 +281,31 @@
           }
         }).catch(function () {
           root.innerHTML = '<p class="tma-portal-note">Couldn\'t load background operations. Refresh to try again.</p>';
+        });
+      }
+
+      function wirePause() {
+        var sw = root.querySelector('[data-ops-imports-pause]');
+        if (!sw) return;
+        sw.addEventListener('change', function () {
+          var next = !!sw.checked;
+          sw.disabled = true;
+          secApi('PUT', '/admin/background-ops/imports-pause', { paused: next })
+            .then(function (res) {
+              if (!res.ok) {
+                sw.checked = !next;
+                ui().toast('Could not update imports');
+                sw.disabled = false;
+                return;
+              }
+              ui().toast(next ? 'Imports paused for the whole portal' : 'Imports resumed');
+              load();
+            })
+            .catch(function () {
+              sw.checked = !next;
+              ui().toast('Could not update imports');
+              sw.disabled = false;
+            });
         });
       }
 

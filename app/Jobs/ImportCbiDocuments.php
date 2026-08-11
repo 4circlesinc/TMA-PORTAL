@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\User;
 use App\Support\Cbi\DocumentImporter;
 use App\Support\Cbi\SyncActor;
+use App\Support\Imports\ImportPause;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -48,6 +49,12 @@ class ImportCbiDocuments implements ShouldQueue
             return;
         }
 
+        // Do not re-queue while paused — resume happens from SyncCbiHub /
+        // Sync now once an administrator turns imports back on.
+        if (ImportPause::active()) {
+            return;
+        }
+
         $actor = $this->actorId
             ? User::find($this->actorId)
             : SyncActor::resolve();
@@ -64,7 +71,7 @@ class ImportCbiDocuments implements ShouldQueue
         $survey = (new DocumentImporter($actor))->survey();
         $pending = max(0, $survey['files'] - $survey['orphaned']);
 
-        if ($pending > 0) {
+        if ($pending > 0 && ! ImportPause::active()) {
             self::dispatch($actor->id, $limit)->delay(now()->addSeconds(15));
         }
     }

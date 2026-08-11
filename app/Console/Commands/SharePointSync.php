@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Jobs\SyncSharePointLibrary;
 use App\Models\SharePointConnection;
+use App\Support\Imports\ImportPause;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Console\Command;
 
@@ -15,6 +16,12 @@ class SharePointSync extends Command
 
     public function handle(): int
     {
+        if (ImportPause::active()) {
+            $this->warn('Imports are paused (Settings → Background Operations).');
+
+            return self::SUCCESS;
+        }
+
         $connections = SharePointConnection::query()
             ->where('sync_enabled', true)
             ->when($this->option('connection'), fn ($q) => $q->where('uuid', $this->option('connection')))

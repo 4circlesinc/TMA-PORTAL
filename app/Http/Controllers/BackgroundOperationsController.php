@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Access\Role;
+use App\Support\Imports\ImportPause;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -29,6 +30,7 @@ class BackgroundOperationsController extends Controller
         abort_unless(Role::can($request->user(), 'settings.operations'), 403);
 
         $driver = config('queue.default');
+        $imports = ImportPause::all();
 
         // Only the database queue can be inspected from here; anything else
         // (redis, sqs) keeps its state where we cannot read it cheaply.
@@ -37,6 +39,8 @@ class BackgroundOperationsController extends Controller
                 'driver' => $driver,
                 'inspectable' => false,
                 'pending' => [], 'failed' => [], 'health' => null,
+                'importsPaused' => $imports['paused'],
+                'importsPausedAt' => $imports['updatedAt'],
             ]);
         }
 
@@ -80,6 +84,8 @@ class BackgroundOperationsController extends Controller
             'inspectable' => true,
             'pending' => $pending,
             'failed' => $failed,
+            'importsPaused' => $imports['paused'],
+            'importsPausedAt' => $imports['updatedAt'],
             'health' => [
                 'pending' => $total,
                 'failed' => DB::table('failed_jobs')->count(),
@@ -89,6 +95,27 @@ class BackgroundOperationsController extends Controller
                 // useful fact on the page.
                 'stalled' => $total > 0 && $oldestWait > self::STALL_SECONDS,
             ],
+        ]);
+    }
+
+    /**
+     * Pause or resume firm-wide file / document imports (SharePoint libraries,
+     * OneDrive, Smartsheet → client folders). Mailbox and calendar sync are
+     * untouched — those stay on each person's Connectors toggles.
+     */
+    public function pauseImports(Request $request): JsonResponse
+    {
+        abort_unless(Role::isAdmin($request->user()), 403);
+
+        $data = $request->validate([
+            'paused' => ['required', 'boolean'],
+        ]);
+
+        ImportPause::put((bool) $data['paused'], $request->user()?->id);
+
+        return response()->json([
+            'status' => 'ok',
+            'importsPaused' => ImportPause::active(),
         ]);
     }
 

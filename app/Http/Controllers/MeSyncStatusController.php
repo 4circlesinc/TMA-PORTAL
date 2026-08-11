@@ -9,6 +9,7 @@ use App\Models\SmartsheetAttachment;
 use App\Support\Access\Role;
 use App\Support\Cbi\DocumentImporter;
 use App\Support\Cbi\SyncActor;
+use App\Support\Imports\ImportPause;
 use App\Support\Mail\Mailbox;
 use App\Support\SharePoint\Synchroniser;
 use Illuminate\Http\JsonResponse;
@@ -30,12 +31,36 @@ class MeSyncStatusController extends Controller
     {
         $user = $request->user();
 
+        $paused = ImportPause::active();
+
         return response()->json([
+            'importsPaused' => $paused,
             'email' => $this->guard(fn () => $this->email($user)),
             'calendar' => $this->guard(fn () => $this->calendar($user)),
-            'onedrive' => $this->guard(fn () => $this->onedrive($user)),
-            'smartsheet' => $this->guard(fn () => $this->smartsheet($user)),
+            // Firm import pause covers SharePoint / OneDrive / Smartsheet docs —
+            // report them as paused so toasts stop claiming work is moving.
+            'onedrive' => $this->guard(fn () => $this->withImportPause($this->onedrive($user), $paused)),
+            'smartsheet' => $this->guard(fn () => $this->withImportPause($this->smartsheet($user), $paused)),
         ]);
+    }
+
+    /** Overlay the firm-wide pause onto a service status payload. */
+    private function withImportPause(array $status, bool $paused): array
+    {
+        if (! $paused) {
+            return $status;
+        }
+
+        if (($status['state'] ?? null) === 'off') {
+            return $status;
+        }
+
+        $status['importsPaused'] = true;
+        if (($status['state'] ?? null) === 'syncing') {
+            $status['state'] = 'paused';
+        }
+
+        return $status;
     }
 
     /*

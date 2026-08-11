@@ -428,6 +428,11 @@ Artisan::command('smartsheet:sync
 
         return;
     }
+    if (\App\Support\Imports\ImportPause::active()) {
+        $this->warn('Imports are paused (Settings → Background Operations).');
+
+        return;
+    }
     if (! \App\Support\Smartsheet\Client::configured()) {
         $this->warn('Smartsheet token or workspace id missing.');
 
@@ -499,6 +504,9 @@ Schedule::command('smartsheet:sync --queue')
  */
 Schedule::call(function () {
     if (! config('services.smartsheet.cbi_enabled')) {
+        return;
+    }
+    if (\App\Support\Imports\ImportPause::active()) {
         return;
     }
     \App\Jobs\SyncCbiHub::dispatch();
