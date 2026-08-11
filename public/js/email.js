@@ -54,6 +54,8 @@
     StarFilled: ICON + 'StarFilled.svg',
     ArrowUUpLeft: ICON + 'ArrowUUpLeft.svg',
     ArrowUUpRight: ICON + 'ArrowUUpRight.svg',
+    ArrowClockwise: ICON + 'ArrowClockwise.svg',
+    ArrowCounterClockwise: ICON + 'ArrowCounterClockwise.svg',
     TextT: ICON + 'TextT.svg',
     TextAa: ICON + 'TextAa.svg',
     TextB: ICON + 'TextB.svg',
@@ -6278,13 +6280,14 @@
       '>Import from mailbox</button>' +
       '</div></div>' +
       '<p class="tma-dash__email-settings-hint">Select a signature above to use when composing.' +
-      ' Upload a logo with the image tool, then drag the width slider to size it.</p>' +
+      ' Upload a PNG, JPEG or WebP logo, then use the transform handles to resize or rotate it.</p>' +
       '<input id="tma-mail-signature-name" type="text" class="tma-dash__email-settings-textarea"' +
       ' data-email-signature-name maxlength="80"' +
       ' value="' + esc((active && active.name) || 'Signature') + '"' +
       ' aria-label="Signature name" placeholder="Signature name">' +
-      '<div class="tma-dash__email-settings-signature-editor">' +
+      '<div class="tma-dash__email-settings-signature-editor" data-email-signature-shell>' +
       renderComposeToolbar({ expand: false, image: true }) +
+      '<div class="tma-dash__email-settings-signature-stage">' +
       '<div id="tma-mail-signature" class="tma-dash__email-settings-signature-body"' +
       ' contenteditable="true" role="textbox" aria-multiline="true"' +
       ' aria-label="Signature content"' +
@@ -6292,14 +6295,42 @@
       ' data-placeholder="Appended to messages you send">' +
       signature +
       '</div>' +
-      '<div class="tma-dash__email-settings-signature-size" data-email-signature-img-size hidden>' +
-      '<label class="tma-dash__email-settings-signature-size-label">' +
-      'Image width <span data-email-signature-img-width-label>160px</span></label>' +
-      '<input type="range" min="40" max="480" step="4" value="160"' +
-      ' data-email-signature-img-width aria-label="Image width in pixels">' +
+      renderSignatureTransformOverlay() +
       '</div>' +
       '</div>' +
       '</div>'
+    );
+  }
+
+  function renderSignatureTransformOverlay() {
+    var handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
+    return (
+      '<div class="tma-dash__email-sig-transform" data-email-signature-transform hidden>' +
+      '<div class="tma-dash__email-sig-transform-box" data-sig-transform-box>' +
+      handles.map(function (dir) {
+        return '<button type="button" class="tma-dash__email-sig-transform-handle' +
+          ' tma-dash__email-sig-transform-handle--' + dir + '"' +
+          ' data-sig-handle="' + dir + '" aria-label="Resize ' + dir.toUpperCase() + '"></button>';
+      }).join('') +
+      '</div>' +
+      '<div class="tma-dash__email-sig-transform-toolbar" data-sig-transform-toolbar>' +
+      '<button type="button" class="tma-dash__email-sig-transform-tool" data-sig-transform-rotate="-90" aria-label="Rotate left">' +
+      '<img src="' + ICONS.ArrowCounterClockwise + '" alt=""></button>' +
+      '<button type="button" class="tma-dash__email-sig-transform-tool" data-sig-transform-rotate="90" aria-label="Rotate right">' +
+      '<img src="' + ICONS.ArrowClockwise + '" alt=""></button>' +
+      '<label class="tma-dash__email-sig-transform-size">' +
+      '<span>W</span>' +
+      '<input type="number" min="40" max="480" step="1" value="160" data-sig-transform-width aria-label="Image width">' +
+      '<span>px</span></label>' +
+      '<label class="tma-dash__email-sig-transform-size">' +
+      '<span>H</span>' +
+      '<input type="number" min="20" max="480" step="1" value="160" data-sig-transform-height aria-label="Image height">' +
+      '<span>px</span></label>' +
+      '<button type="button" class="tma-dash__email-sig-transform-tool tma-dash__email-sig-transform-tool--danger"' +
+      ' data-sig-transform-delete aria-label="Remove image">' +
+      '<img src="' + ICONS.Trash + '" alt=""></button>' +
+      '</div></div>'
     );
   }
 
@@ -6352,42 +6383,145 @@
     }
   }
 
+  var SIGNATURE_IMAGE_TYPES = {
+    'image/png': true,
+    'image/jpeg': true,
+    'image/jpg': true,
+    'image/webp': true,
+  };
+
+  function isAllowedSignatureImage(file) {
+    if (!file) return false;
+    var type = String(file.type || '').toLowerCase();
+    if (SIGNATURE_IMAGE_TYPES[type]) return true;
+    var name = String(file.name || '').toLowerCase();
+    return /\.(png|jpe?g|webp)$/.test(name);
+  }
+
+  function signatureImageMime(file) {
+    var type = String((file && file.type) || '').toLowerCase();
+    if (type === 'image/png' || type === 'image/webp') return type;
+    return 'image/jpeg';
+  }
+
   function openSignatureImageDialog(file, onInsert) {
+    if (!isAllowedSignatureImage(file)) return;
+
     var url = URL.createObjectURL(file);
     var img = new Image();
     img.onload = function () {
       var naturalW = img.naturalWidth || 160;
       var naturalH = img.naturalHeight || 160;
       var width = Math.min(240, Math.max(40, naturalW > 480 ? 240 : naturalW));
+      var height = Math.max(1, Math.round(naturalH * (width / naturalW)));
+      var rotation = 0;
 
       var overlay = document.createElement('div');
       overlay.className = 'tma-dash__email-sig-image-dialog';
       overlay.innerHTML =
-        '<div class="tma-dash__email-sig-image-dialog-card" role="dialog" aria-modal="true" aria-label="Size signature image">' +
-        '<h3 class="tma-dash__email-sig-image-dialog-title">Insert image</h3>' +
-        '<div class="tma-dash__email-sig-image-dialog-preview"><img alt=""></div>' +
-        '<label class="tma-dash__email-sig-image-dialog-label">Width <span data-sig-w>' + width + 'px</span></label>' +
-        '<input type="range" min="40" max="480" step="4" value="' + width + '" data-sig-range>' +
+        '<div class="tma-dash__email-sig-image-dialog-card" role="dialog" aria-modal="true" aria-label="Transform signature image">' +
+        '<h3 class="tma-dash__email-sig-image-dialog-title">Transform image</h3>' +
+        '<div class="tma-dash__email-sig-image-dialog-preview" data-sig-preview-stage>' +
+        '<div class="tma-dash__email-sig-image-dialog-frame" data-sig-preview-frame>' +
+        '<img alt="" data-sig-preview-img>' +
+        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--nw" data-sig-preview-handle="nw" aria-label="Resize"></button>' +
+        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--ne" data-sig-preview-handle="ne" aria-label="Resize"></button>' +
+        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--se" data-sig-preview-handle="se" aria-label="Resize"></button>' +
+        '<button type="button" class="tma-dash__email-sig-transform-handle tma-dash__email-sig-transform-handle--sw" data-sig-preview-handle="sw" aria-label="Resize"></button>' +
+        '</div></div>' +
+        '<div class="tma-dash__email-sig-image-dialog-tools">' +
+        '<button type="button" class="tma-dash__email-settings-btn" data-sig-rotate="-90" aria-label="Rotate left">' +
+        '<img src="' + ICONS.ArrowCounterClockwise + '" alt=""> Rotate left</button>' +
+        '<button type="button" class="tma-dash__email-settings-btn" data-sig-rotate="90" aria-label="Rotate right">' +
+        '<img src="' + ICONS.ArrowClockwise + '" alt=""> Rotate right</button>' +
+        '</div>' +
+        '<div class="tma-dash__email-sig-image-dialog-dims">' +
+        '<label>W <input type="number" min="40" max="480" value="' + width + '" data-sig-w-input> px</label>' +
+        '<label>H <input type="number" min="20" max="480" value="' + height + '" data-sig-h-input> px</label>' +
+        '</div>' +
         '<div class="tma-dash__email-sig-image-dialog-actions">' +
         '<button type="button" class="tma-dash__email-settings-btn" data-sig-cancel>Cancel</button>' +
         '<button type="button" class="tma-dash__email-settings-btn tma-dash__email-settings-btn--primary" data-sig-insert>Insert</button>' +
         '</div></div>';
 
       document.body.appendChild(overlay);
-      var preview = overlay.querySelector('.tma-dash__email-sig-image-dialog-preview img');
-      var range = overlay.querySelector('[data-sig-range]');
-      var label = overlay.querySelector('[data-sig-w]');
+      var preview = overlay.querySelector('[data-sig-preview-img]');
+      var frame = overlay.querySelector('[data-sig-preview-frame]');
+      var wInput = overlay.querySelector('[data-sig-w-input]');
+      var hInput = overlay.querySelector('[data-sig-h-input]');
       preview.src = url;
-      preview.style.width = width + 'px';
 
-      function setWidth(next) {
-        width = next;
+      function paint() {
         preview.style.width = width + 'px';
-        label.textContent = width + 'px';
+        preview.style.height = height + 'px';
+        preview.style.transform = 'rotate(' + rotation + 'deg)';
+        frame.style.width = width + 'px';
+        frame.style.height = height + 'px';
+        wInput.value = String(width);
+        hInput.value = String(height);
       }
 
-      range.addEventListener('input', function () {
-        setWidth(parseInt(range.value, 10) || 160);
+      function setSize(nextW, nextH, lockRatio) {
+        nextW = Math.max(40, Math.min(480, Math.round(nextW)));
+        if (lockRatio) {
+          var ratio = naturalH / naturalW;
+          if (rotation % 180 !== 0) ratio = naturalW / naturalH;
+          nextH = Math.max(20, Math.min(480, Math.round(nextW * ratio)));
+        } else {
+          nextH = Math.max(20, Math.min(480, Math.round(nextH)));
+        }
+        width = nextW;
+        height = nextH;
+        paint();
+      }
+
+      paint();
+
+      wInput.addEventListener('change', function () {
+        setSize(parseInt(wInput.value, 10) || width, height, true);
+      });
+      hInput.addEventListener('change', function () {
+        var nextH = parseInt(hInput.value, 10) || height;
+        var ratio = width / height;
+        setSize(Math.round(nextH * ratio), nextH, false);
+      });
+
+      overlay.querySelectorAll('[data-sig-rotate]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          rotation = (rotation + parseInt(btn.getAttribute('data-sig-rotate'), 10)) % 360;
+          if (rotation < 0) rotation += 360;
+          var swap = Math.abs(parseInt(btn.getAttribute('data-sig-rotate'), 10)) % 180 !== 0;
+          if (swap) {
+            var tmp = width;
+            width = height;
+            height = tmp;
+          }
+          paint();
+        });
+      });
+
+      // Corner drag on the insert preview.
+      overlay.querySelectorAll('[data-sig-preview-handle]').forEach(function (handle) {
+        handle.addEventListener('mousedown', function (event) {
+          event.preventDefault();
+          var startX = event.clientX;
+          var startW = width;
+          var dir = handle.getAttribute('data-sig-preview-handle');
+
+          function onMove(moveEvent) {
+            var dx = moveEvent.clientX - startX;
+            if (dir === 'nw' || dir === 'sw') dx = -dx;
+            setSize(startW + dx, height, true);
+          }
+
+          function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+          }
+
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
       });
 
       function close() {
@@ -6402,19 +6536,24 @@
 
       overlay.querySelector('[data-sig-insert]').addEventListener('click', function () {
         var canvas = document.createElement('canvas');
-        var height = Math.max(1, Math.round(naturalH * (width / naturalW)));
-        canvas.width = width;
-        canvas.height = height;
+        var drawW = width;
+        var drawH = height;
+        canvas.width = drawW;
+        canvas.height = drawH;
         var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        var mime = (file.type === 'image/png' || file.type === 'image/gif' || file.type === 'image/webp')
-          ? file.type
-          : 'image/jpeg';
+        ctx.translate(drawW / 2, drawH / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        if (rotation % 180 !== 0) {
+          ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
+        } else {
+          ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        }
+        var mime = signatureImageMime(file);
         var dataUrl = mime === 'image/jpeg'
           ? canvas.toDataURL('image/jpeg', 0.88)
           : canvas.toDataURL(mime);
         close();
-        onInsert(dataUrl, width, height);
+        onInsert(dataUrl, drawW, drawH);
       });
     };
     img.onerror = function () {
@@ -6428,12 +6567,140 @@
     editor.focus();
     var html =
       '<img src="' + dataUrl + '" width="' + width + '" height="' + height + '"' +
-      ' style="width:' + width + 'px;height:auto;max-width:100%;" alt="">';
+      ' style="width:' + width + 'px;height:' + height + 'px;max-width:100%;" alt=""' +
+      ' contenteditable="false" draggable="false">';
     try {
       document.execCommand('insertHTML', false, html);
     } catch (e) {
       editor.insertAdjacentHTML('beforeend', html);
     }
+  }
+
+  function signatureImageSize(img) {
+    var width = parseInt(img.getAttribute('width'), 10)
+      || parseInt(img.style.width, 10)
+      || img.clientWidth
+      || img.naturalWidth
+      || 160;
+    var height = parseInt(img.getAttribute('height'), 10)
+      || parseInt(img.style.height, 10)
+      || img.clientHeight
+      || img.naturalHeight
+      || Math.round(width * 0.6);
+    return {
+      width: Math.max(40, Math.min(480, width || 160)),
+      height: Math.max(20, Math.min(480, height || 160)),
+    };
+  }
+
+  function applySignatureImageSize(img, width, height) {
+    width = Math.max(40, Math.min(480, Math.round(width)));
+    height = Math.max(20, Math.min(480, Math.round(height)));
+    img.setAttribute('width', String(width));
+    img.setAttribute('height', String(height));
+    img.style.width = width + 'px';
+    img.style.height = height + 'px';
+    img.style.maxWidth = '100%';
+  }
+
+  function clearSignatureImageSelection(root, state) {
+    var editor = root.querySelector('[data-email-signature-editor]');
+    if (editor) {
+      editor.querySelectorAll('img.is-selected').forEach(function (node) {
+        node.classList.remove('is-selected');
+      });
+    }
+    state._signatureSelectedImg = null;
+    var layer = root.querySelector('[data-email-signature-transform]');
+    if (layer) layer.hidden = true;
+  }
+
+  function updateSignatureTransformFrame(root, state) {
+    var img = state._signatureSelectedImg;
+    var layer = root.querySelector('[data-email-signature-transform]');
+    var stage = root.querySelector('.tma-dash__email-settings-signature-stage');
+    var box = root.querySelector('[data-sig-transform-box]');
+    if (!img || !img.isConnected || !layer || !stage || !box) {
+      if (layer) layer.hidden = true;
+      return;
+    }
+
+    var stageRect = stage.getBoundingClientRect();
+    var imgRect = img.getBoundingClientRect();
+    var top = imgRect.top - stageRect.top + stage.scrollTop;
+    var left = imgRect.left - stageRect.left + stage.scrollLeft;
+
+    layer.hidden = false;
+    box.style.top = Math.round(top) + 'px';
+    box.style.left = Math.round(left) + 'px';
+    box.style.width = Math.round(imgRect.width) + 'px';
+    box.style.height = Math.round(imgRect.height) + 'px';
+
+    var toolbar = layer.querySelector('[data-sig-transform-toolbar]');
+    if (toolbar) {
+      toolbar.style.top = Math.round(top + imgRect.height + 10) + 'px';
+      toolbar.style.left = Math.round(left + imgRect.width / 2) + 'px';
+    }
+
+    var size = signatureImageSize(img);
+    var wInput = layer.querySelector('[data-sig-transform-width]');
+    var hInput = layer.querySelector('[data-sig-transform-height]');
+    if (wInput && document.activeElement !== wInput) wInput.value = String(size.width);
+    if (hInput && document.activeElement !== hInput) hInput.value = String(size.height);
+  }
+
+  function selectSignatureImage(root, state, img) {
+    var editor = root.querySelector('[data-email-signature-editor]');
+    if (!editor || !img || !editor.contains(img)) return;
+
+    editor.querySelectorAll('img.is-selected').forEach(function (node) {
+      node.classList.remove('is-selected');
+    });
+    img.classList.add('is-selected');
+    img.setAttribute('contenteditable', 'false');
+    img.setAttribute('draggable', 'false');
+    state._signatureSelectedImg = img;
+    updateSignatureTransformFrame(root, state);
+  }
+
+  function persistSelectedSignatureImage(root, state) {
+    var editor = root.querySelector('[data-email-signature-editor]');
+    if (!editor || !state.settings) return;
+    var value = signatureEditorValue(editor);
+    syncActiveSignatureHtml(root, state, value);
+    persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+    updateSignatureTransformFrame(root, state);
+  }
+
+  function rotateSelectedSignatureImage(root, state, degrees) {
+    var img = state._signatureSelectedImg;
+    if (!img || !img.isConnected) return;
+
+    var source = new Image();
+    source.onload = function () {
+      var size = signatureImageSize(img);
+      var swap = Math.abs(degrees) % 180 !== 0;
+      var canvas = document.createElement('canvas');
+      canvas.width = swap ? size.height : size.width;
+      canvas.height = swap ? size.width : size.height;
+      var ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((degrees * Math.PI) / 180);
+      ctx.drawImage(source, -size.width / 2, -size.height / 2, size.width, size.height);
+
+      var src = String(img.getAttribute('src') || '');
+      var mime = src.indexOf('data:image/png') === 0
+        ? 'image/png'
+        : (src.indexOf('data:image/webp') === 0 ? 'image/webp' : 'image/jpeg');
+      var dataUrl = mime === 'image/jpeg'
+        ? canvas.toDataURL('image/jpeg', 0.9)
+        : canvas.toDataURL(mime);
+
+      img.setAttribute('src', dataUrl);
+      applySignatureImageSize(img, canvas.width, canvas.height);
+      persistSelectedSignatureImage(root, state);
+    };
+    source.src = img.getAttribute('src') || '';
   }
 
   function renderEmailSettingsPanel(state, tab, prefs) {
@@ -6781,9 +7048,9 @@
       // Rich signature HTML — persist when the editor loses focus, not while
       // the toolbar is being used (mousedown on tools must not steal focus).
       editor.addEventListener('blur', function (event) {
-        // Moving focus to the image-size slider is still "editing".
+        // Moving focus to transform controls is still "editing".
         var next = event.relatedTarget;
-        if (next && next.closest && next.closest('[data-email-signature-img-size]')) {
+        if (next && next.closest && next.closest('[data-email-signature-transform]')) {
           return;
         }
         var key = editor.getAttribute('data-email-pref-html');
@@ -6817,42 +7084,27 @@
       });
 
       // Logos from Outlook/Gmail are often wrapped in links; stop the browser
-      // navigating away when the user is trying to select the image to resize.
+      // navigating away when the user is trying to select the image to transform.
       editor.addEventListener('click', function (event) {
+        if (event.target.closest('[data-email-signature-transform]')) return;
+
         var link = event.target.closest('a');
         if (link && editor.contains(link)) event.preventDefault();
 
         var img = event.target.closest('img');
         if (!img && link && editor.contains(link)) img = link.querySelector('img');
 
-        var rail = root.querySelector('[data-email-signature-img-size]');
-        if (!rail) return;
-
-        editor.querySelectorAll('img.is-selected').forEach(function (node) {
-          node.classList.remove('is-selected');
-        });
-
         if (!img || !editor.contains(img)) {
-          rail.hidden = true;
-          state._signatureSelectedImg = null;
+          clearSignatureImageSelection(root, state);
           return;
         }
 
         event.preventDefault();
-        img.classList.add('is-selected');
-        state._signatureSelectedImg = img;
+        selectSignatureImage(root, state, img);
+      });
 
-        var width = parseInt(img.getAttribute('width'), 10)
-          || parseInt(img.style.width, 10)
-          || img.clientWidth
-          || img.naturalWidth
-          || 160;
-        width = Math.max(40, Math.min(480, width || 160));
-        var range = rail.querySelector('[data-email-signature-img-width]');
-        var label = rail.querySelector('[data-email-signature-img-width-label]');
-        if (range) range.value = String(width);
-        if (label) label.textContent = width + 'px';
-        rail.hidden = false;
+      editor.addEventListener('scroll', function () {
+        updateSignatureTransformFrame(root, state);
       });
 
       // Make every image a single selectable object (not editable text).
@@ -6868,30 +7120,118 @@
       }
     });
 
-    MORPH.unwired(root, '[data-email-signature-img-width]').forEach(function (range) {
-      range.addEventListener('input', function () {
+    // One binding for transform handles / toolbar for the life of the mount.
+    if (!root._emailSignatureTransformBound) {
+      root._emailSignatureTransformBound = true;
+
+      root.addEventListener('mousedown', function (event) {
+        var handle = event.target.closest('[data-sig-handle]');
+        if (!handle || !state.settingsOpen) return;
         var img = state._signatureSelectedImg;
         if (!img || !img.isConnected) return;
-        var width = Math.max(40, Math.min(480, parseInt(range.value, 10) || 160));
-        var naturalW = img.naturalWidth || width;
-        var naturalH = img.naturalHeight || width;
-        var height = Math.max(1, Math.round(naturalH * (width / naturalW)));
-        img.setAttribute('width', String(width));
-        img.setAttribute('height', String(height));
-        img.style.width = width + 'px';
-        img.style.height = 'auto';
-        var label = root.querySelector('[data-email-signature-img-width-label]');
-        if (label) label.textContent = width + 'px';
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        var dir = handle.getAttribute('data-sig-handle');
+        var startX = event.clientX;
+        var startY = event.clientY;
+        var start = signatureImageSize(img);
+        var ratio = start.width / Math.max(1, start.height);
+
+        function onMove(moveEvent) {
+          var dx = moveEvent.clientX - startX;
+          var dy = moveEvent.clientY - startY;
+          var nextW = start.width;
+          var nextH = start.height;
+
+          if (dir.indexOf('e') !== -1) nextW = start.width + dx;
+          if (dir.indexOf('w') !== -1) nextW = start.width - dx;
+          if (dir.indexOf('s') !== -1) nextH = start.height + dy;
+          if (dir.indexOf('n') !== -1) nextH = start.height - dy;
+
+          // Corner handles keep aspect ratio; edge handles are free.
+          if (dir.length === 2) {
+            nextW = Math.max(40, Math.min(480, nextW));
+            nextH = Math.max(20, Math.min(480, Math.round(nextW / ratio)));
+          } else if (dir === 'e' || dir === 'w') {
+            nextW = Math.max(40, Math.min(480, nextW));
+            nextH = start.height;
+          } else {
+            nextH = Math.max(20, Math.min(480, nextH));
+            nextW = start.width;
+          }
+
+          applySignatureImageSize(img, nextW, nextH);
+          updateSignatureTransformFrame(root, state);
+        }
+
+        function onUp() {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          persistSelectedSignatureImage(root, state);
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
       });
 
-      range.addEventListener('change', function () {
-        var editor = root.querySelector('[data-email-signature-editor]');
-        if (!editor) return;
-        var value = signatureEditorValue(editor);
-        syncActiveSignatureHtml(root, state, value);
-        persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+      root.addEventListener('click', function (event) {
+        if (!state.settingsOpen) return;
+
+        var rotate = event.target.closest('[data-sig-transform-rotate]');
+        if (rotate) {
+          event.preventDefault();
+          rotateSelectedSignatureImage(
+            root,
+            state,
+            parseInt(rotate.getAttribute('data-sig-transform-rotate'), 10) || 90
+          );
+          return;
+        }
+
+        var remove = event.target.closest('[data-sig-transform-delete]');
+        if (remove) {
+          event.preventDefault();
+          var img = state._signatureSelectedImg;
+          if (img && img.isConnected) {
+            var editor = root.querySelector('[data-email-signature-editor]');
+            img.remove();
+            clearSignatureImageSelection(root, state);
+            if (editor) {
+              var value = signatureEditorValue(editor);
+              syncActiveSignatureHtml(root, state, value);
+              persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
+            }
+          }
+        }
       });
-    });
+
+      root.addEventListener('change', function (event) {
+        if (!state.settingsOpen) return;
+        var input = event.target.closest('[data-sig-transform-width], [data-sig-transform-height]');
+        if (!input) return;
+        var img = state._signatureSelectedImg;
+        if (!img || !img.isConnected) return;
+
+        var size = signatureImageSize(img);
+        var nextW = size.width;
+        var nextH = size.height;
+        if (input.hasAttribute('data-sig-transform-width')) {
+          nextW = parseInt(input.value, 10) || size.width;
+          nextH = Math.round(nextW * (size.height / Math.max(1, size.width)));
+        } else {
+          nextH = parseInt(input.value, 10) || size.height;
+          nextW = Math.round(nextH * (size.width / Math.max(1, size.height)));
+        }
+        applySignatureImageSize(img, nextW, nextH);
+        persistSelectedSignatureImage(root, state);
+      });
+
+      window.addEventListener('resize', function () {
+        if (state.settingsOpen) updateSignatureTransformFrame(root, state);
+      });
+    }
 
     MORPH.unwired(root, '[data-email-signature-select]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -6977,10 +7317,14 @@
         if (!editor) return;
         var input = document.createElement('input');
         input.type = 'file';
-        input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+        input.accept = 'image/png,image/jpeg,.jpg,.jpeg,.png,.webp,image/webp';
         input.addEventListener('change', function () {
           var file = input.files && input.files[0];
           if (!file) return;
+          if (!isAllowedSignatureImage(file)) {
+            showEmailToast(root, 'Only PNG, JPEG, JPG and WebP images are allowed');
+            return;
+          }
           if (file.size > 2.5 * 1024 * 1024) {
             showEmailToast(root, 'Choose an image under 2.5 MB');
             return;
@@ -6990,7 +7334,12 @@
             var value = signatureEditorValue(editor);
             syncActiveSignatureHtml(root, state, value);
             persistSignatureLibrary(root, state, null, ensureSignatureLibrary(state.settings.preferences));
-            showEmailToast(root, 'Image added — click it to resize');
+            var inserted = null;
+            editor.querySelectorAll('img').forEach(function (node) {
+              if (node.getAttribute('src') === dataUrl) inserted = node;
+            });
+            if (inserted) selectSignatureImage(root, state, inserted);
+            showEmailToast(root, 'Image added — drag the handles to transform it');
           });
         });
         input.click();

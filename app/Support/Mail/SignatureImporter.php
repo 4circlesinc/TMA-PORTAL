@@ -350,7 +350,7 @@ class SignatureImporter
         imagecopyresampled($canvas, $image, 0, 0, 0, 0, $targetW, $targetH, $width, $height);
 
         ob_start();
-        if ($mime === 'image/png' || $mime === 'image/gif' || $mime === 'image/webp') {
+        if ($mime === 'image/png' || $mime === 'image/webp') {
             imagepng($canvas, null, 6);
             $outMime = 'image/png';
         } else {

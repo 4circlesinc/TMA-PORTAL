@@ -28497,10 +28497,14 @@ button.tma-dash__header-popup-item:focus-visible {
   border-radius: 0;
 }
 
-.tma-dash__email-settings-signature-body {
-  min-height: 220px;
+.tma-dash__email-settings-signature-stage {
+  position: relative;
   max-height: min(420px, 46vh);
   overflow: auto;
+}
+
+.tma-dash__email-settings-signature-body {
+  min-height: 220px;
   padding: var(--space-16) var(--space-20);
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
@@ -28535,30 +28539,105 @@ button.tma-dash__header-popup-item:focus-visible {
   pointer-events: auto;
 }
 
-.tma-dash__email-settings-signature-size {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-10) var(--space-16);
-  border-top: 1px solid var(--color-border-soft);
-  background: var(--color-bg-card, var(--color-overlay-4));
+.tma-dash__email-sig-transform {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
 }
 
-.tma-dash__email-settings-signature-size[hidden] {
+.tma-dash__email-sig-transform[hidden] {
   display: none;
 }
 
-.tma-dash__email-settings-signature-size-label {
-  flex-shrink: 0;
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
+.tma-dash__email-sig-transform-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid var(--color-text-primary, #101828);
+  pointer-events: none;
+}
+
+.tma-dash__email-sig-transform-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1.5px solid var(--color-text-primary, #101828);
+  border-radius: 2px;
+  background: #fff;
+  pointer-events: auto;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
+.tma-dash__email-sig-transform-handle--nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.tma-dash__email-sig-transform-handle--n  { top: -5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.tma-dash__email-sig-transform-handle--ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.tma-dash__email-sig-transform-handle--e  { top: 50%; right: -5px; transform: translateY(-50%); cursor: ew-resize; }
+.tma-dash__email-sig-transform-handle--se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.tma-dash__email-sig-transform-handle--s  { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.tma-dash__email-sig-transform-handle--sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.tma-dash__email-sig-transform-handle--w  { top: 50%; left: -5px; transform: translateY(-50%); cursor: ew-resize; }
+
+.tma-dash__email-sig-transform-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: var(--color-bg-elevated, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
+  z-index: 6;
+}
+
+.tma-dash__email-sig-transform-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__email-sig-transform-tool:hover {
+  background: var(--color-overlay-4);
+}
+
+.tma-dash__email-sig-transform-tool img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.75;
+}
+
+.tma-dash__email-sig-transform-tool--danger:hover {
+  background: rgba(180, 35, 24, 0.08);
+}
+
+.tma-dash__email-sig-transform-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
   color: var(--color-text-secondary);
 }
 
-.tma-dash__email-settings-signature-size input[type="range"] {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--color-text-primary);
+.tma-dash__email-sig-transform-size input {
+  width: 56px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
 }
 
 .tma-dash__email-sig-image-dialog {
@@ -28573,7 +28652,7 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 .tma-dash__email-sig-image-dialog-card {
-  width: min(420px, 100%);
+  width: min(520px, 100%);
   padding: var(--space-20);
   border-radius: var(--radius-16);
   background: var(--color-bg-elevated, var(--color-white));
@@ -28594,29 +28673,63 @@ button.tma-dash__header-popup-item:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 140px;
-  padding: var(--space-16);
+  min-height: 180px;
+  padding: var(--space-24);
   border-radius: var(--radius-12);
   background: var(--color-overlay-4);
   overflow: auto;
 }
 
-.tma-dash__email-sig-image-dialog-preview img {
-  max-width: 100%;
-  height: auto;
-  display: block;
+.tma-dash__email-sig-image-dialog-frame {
+  position: relative;
+  box-sizing: border-box;
+  border: 1.5px solid var(--color-text-primary, #101828);
 }
 
-.tma-dash__email-sig-image-dialog-label {
+.tma-dash__email-sig-image-dialog-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.tma-dash__email-sig-image-dialog-tools,
+.tma-dash__email-sig-image-dialog-dims,
+.tma-dash__email-sig-image-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-dash__email-sig-image-dialog-tools .tma-dash__email-settings-btn img {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  opacity: 0.7;
+  vertical-align: middle;
+}
+
+.tma-dash__email-sig-image-dialog-dims label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
 }
 
+.tma-dash__email-sig-image-dialog-dims input {
+  width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
 .tma-dash__email-sig-image-dialog-actions {
-  display: flex;
   justify-content: flex-end;
-  gap: var(--space-8);
 }
 
 .tma-dash__email-settings-number {
