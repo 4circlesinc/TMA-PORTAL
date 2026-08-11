@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Cbi;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncCbiHub;
 use App\Jobs\SyncSmartsheetSheet;
 use App\Models\CbiApplication;
 use App\Models\CbiComment;
@@ -223,8 +224,12 @@ class CbiController extends Controller
                 // viewer rather than sending the reader to Smartsheet.
                 'fileId' => $a->file?->uuid,
             ]),
-            // Where those files live, so the viewer can be handed the same row
-            // the library would give it.
+            // Pending FILE attachments still waiting to land in the client folder.
+            'pendingDocuments' => $attachments->unique('id')
+                ->filter(fn (SmartsheetAttachment $a) => $a->attachment_type === 'FILE' && $a->file_id === null)
+                ->count(),
+            // Where those files live, so the Documents tab browses the same
+            // folder the Client hub shows — one library, two doors.
             'folderUuid' => $application->client?->folder?->uuid,
             'comments' => $application->comments()
                 ->orderBy('commented_at')->get()
@@ -502,7 +507,15 @@ class CbiController extends Controller
             SyncSmartsheetSheet::dispatch($sheet);
         }
 
-        return response()->json(['queued' => count($due)]);
+        // After the mirror updates, file each applicant under Clients and copy
+        // Smartsheet attachments into that person's folder — the same bytes the
+        // Documents tab and the File Library lightbox open.
+        SyncCbiHub::dispatch($request->user()?->id)->delay(now()->addSeconds(30));
+
+        return response()->json([
+            'queued' => count($due),
+            'hubQueued' => true,
+        ]);
     }
 
     /** GET /portal/cbi/sync — sheet-by-sheet sync health + recent log lines. */

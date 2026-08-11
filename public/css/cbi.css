@@ -348,6 +348,10 @@
 .cbi-card .tma-portal-empty { padding: var(--space-12) 0; }
 .cbi-card .tma-portal-empty__illustration { width: 72px; height: 72px; }
 
+/* Documents tab reuses the Clients folder list; this note sits above it when
+   Smartsheet attachments are still copying into the client folder. */
+.cbi-docs-pending { margin: 0 0 var(--space-12); }
+
 
 /* The people cell and the person card moved to person-card.css when the
    File Library wanted the same component; see public/js/person-card.js. */

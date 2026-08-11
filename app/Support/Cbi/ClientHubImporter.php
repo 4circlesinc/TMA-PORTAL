@@ -5,8 +5,11 @@ namespace App\Support\Cbi;
 use App\Models\CbiApplication;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\FileLibrarySetting;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Files\Naming;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -119,6 +122,173 @@ class ClientHubImporter
         }
 
         return $report;
+    }
+
+    /**
+     * Give every CBI-linked client a File Library folder if they do not have one.
+     *
+     * importClients() only provisions folders for applicants it creates. The
+     * caseload was imported earlier without --folders, so thousands of linked
+     * people have a Client hub record and nowhere for their paperwork to land.
+     *
+     * Batched the same way as importClients(): the remote DB is ~400ms away, so
+     * calling FolderProvisioner once per client would take hours. One name-set
+     * load, batch inserts, and a CASE update finish the same work in minutes.
+     */
+    public function provisionMissingFolders(?callable $progress = null, int $batchSize = 500): int
+    {
+        if (! $this->actor && ! $this->dryRun) {
+            return 0;
+        }
+
+        if ($this->dryRun) {
+            $n = Client::query()
+                ->whereNull('folder_id')
+                ->whereIn('id', CbiApplication::query()->whereNotNull('client_id')->select('client_id'))
+                ->count();
+            $this->stats['foldersCreated'] += $n;
+            if ($progress) {
+                for ($i = 0; $i < $n; $i++) {
+                    $progress();
+                }
+            }
+
+            return $n;
+        }
+
+        $root = FolderProvisioner::clientsRoot();
+        $ownerId = $this->actor->id;
+        $now = now();
+        $subfolders = FileLibrarySetting::clientSubfolders();
+
+        // Sibling names under Client Files — lowercased — so uniqueness is
+        // settled in memory instead of one EXISTS round trip per person.
+        $taken = Folder::query()
+            ->where('parent_id', $root->id)
+            ->pluck('name')
+            ->mapWithKeys(fn ($name) => [mb_strtolower((string) $name) => true])
+            ->all();
+
+        $created = 0;
+        $batch = [];
+
+        $flush = function () use (&$batch, &$created, $root, $ownerId, $now, $subfolders, $progress) {
+            if ($batch === []) {
+                return;
+            }
+
+            $folderIdsByUuid = [];
+
+            DB::transaction(function () use (&$batch, &$folderIdsByUuid, $root, $ownerId, $now) {
+                $rows = [];
+                foreach ($batch as $item) {
+                    $rows[] = [
+                        'uuid' => $item['uuid'],
+                        'name' => $item['name'],
+                        'folder_type' => Folder::TYPE_CLIENT,
+                        'client_id' => $item['client_id'],
+                        'parent_id' => $root->id,
+                        'owner_id' => $ownerId,
+                        'created_by' => $ownerId,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                DB::table('folders')->insert($rows);
+
+                $folderIdsByUuid = DB::table('folders')
+                    ->whereIn('uuid', array_column($batch, 'uuid'))
+                    ->pluck('id', 'uuid')
+                    ->all();
+
+                $case = 'CASE id';
+                $clientIds = [];
+                foreach ($batch as $item) {
+                    $folderId = $folderIdsByUuid[$item['uuid']] ?? null;
+                    if ($folderId === null) {
+                        continue;
+                    }
+                    $case .= ' WHEN '.(int) $item['client_id'].' THEN '.(int) $folderId;
+                    $clientIds[] = (int) $item['client_id'];
+                }
+                $case .= ' END';
+
+                if ($clientIds !== []) {
+                    $idList = implode(',', $clientIds);
+                    DB::update("UPDATE clients SET folder_id = {$case}, updated_at = '{$now->toDateTimeString()}' WHERE id IN ({$idList})");
+                }
+            });
+
+            if ($subfolders !== []) {
+                $subRows = [];
+                foreach ($batch as $item) {
+                    $folderId = (int) ($folderIdsByUuid[$item['uuid']] ?? 0);
+                    if (! $folderId) {
+                        continue;
+                    }
+                    foreach ($subfolders as $sub) {
+                        $clean = Naming::clean((string) $sub);
+                        if ($clean === '') {
+                            continue;
+                        }
+                        $subRows[] = [
+                            'uuid' => (string) Str::uuid(),
+                            'name' => $clean,
+                            'folder_type' => Folder::TYPE_USER,
+                            'parent_id' => $folderId,
+                            'owner_id' => $ownerId,
+                            'created_by' => $ownerId,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ];
+                    }
+                }
+                foreach (array_chunk($subRows, 500) as $chunk) {
+                    DB::table('folders')->insert($chunk);
+                }
+            }
+
+            $n = count($batch);
+            $created += $n;
+            $this->stats['foldersCreated'] += $n;
+            if ($progress) {
+                for ($i = 0; $i < $n; $i++) {
+                    $progress();
+                }
+            }
+            $batch = [];
+        };
+
+        Client::query()
+            ->whereNull('folder_id')
+            ->whereIn('id', CbiApplication::query()->whereNotNull('client_id')->select('client_id'))
+            ->orderBy('id')
+            ->chunkById($batchSize, function ($clients) use (&$batch, &$taken, $flush, $batchSize) {
+                foreach ($clients as $client) {
+                    $base = Naming::clean($client->name ?: 'Client') ?: 'Client';
+                    $name = $base;
+                    $n = 2;
+                    while (isset($taken[mb_strtolower($name)])) {
+                        $name = $base.' ('.$n.')';
+                        $n++;
+                    }
+                    $taken[mb_strtolower($name)] = true;
+
+                    $batch[] = [
+                        'uuid' => (string) Str::uuid(),
+                        'name' => $name,
+                        'client_id' => $client->id,
+                    ];
+
+                    if (count($batch) >= $batchSize) {
+                        $flush();
+                    }
+                }
+            });
+
+        $flush();
+
+        return $created;
     }
 
     /**

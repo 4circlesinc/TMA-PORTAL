@@ -791,7 +791,10 @@
 
     var tabs = [{ key: 'overview', label: 'Overview' }];
     if (assess.length) tabs.push({ key: 'assessment', label: 'Assessment  ' + num(assess.length) });
-    tabs.push({ key: 'documents', label: 'Documents  ' + num(files.length) });
+    // Count starts as mirrored attachments; the folder panel replaces it with
+    // the live File Library total once the listing loads.
+    var mirrored = files.filter(function (f) { return f.fileId; }).length;
+    tabs.push({ key: 'documents', label: 'Documents' + (mirrored ? '  ' + num(mirrored) : (files.length ? '  ' + num(files.length) : '')) });
     tabs.push({ key: 'comments', label: 'Comments  ' + num(comments.length) });
     tabs.push({ key: 'activity', label: 'Activity' });
     if ((a.financials && Object.keys(a.financials).length) || (a.extra && Object.keys(a.extra).length)) {
@@ -816,7 +819,7 @@
       stripHtml +
       tabPanel('overview', renderOverviewTab(a)) +
       (assess.length ? tabPanel('assessment', renderAssessmentTab(assess)) : '') +
-      tabPanel('documents', renderDocumentsTab(files, d.data.folderUuid)) +
+      tabPanel('documents', renderDocumentsTab(d)) +
       tabPanel('comments', renderCommentsTab(comments, d)) +
       tabPanel('activity', renderActivityTab(events)) +
       tabPanel('fields', renderFieldsTab(a));
@@ -909,79 +912,341 @@
       doneCount + ' of ' + assess.length + ' complete');
   }
 
-  function renderDocumentsTab(files, folderUuid) {
-    if (!files.length) {
-      return ui().emptyState({ title: 'No documents yet', subtitle: 'Files attached in Smartsheet appear here after a sync.', illustration: 'Illustration07' });
-    }
-    var rows = files.map(function (f) {
-      /*
-       * A mirrored document opens in the File Library's viewer — the same
-       * window, with its comments, versions and review controls — because it
-       * is the same file. One still only in Smartsheet keeps the download
-       * link, which fetches a fresh expiring URL on click.
-       */
-      var name = f.fileId
-        ? '<button type="button" class="tma-portal-file-link" data-cbi-file="' + esc(f.fileId) + '">' +
-          esc(f.name) + '</button>'
-        : '<a class="tma-portal-file-link" href="' + BASE + '/attachments/' + f.id +
-          '" target="_blank" rel="noopener">' + esc(f.name) + '</a>';
+  /*
+   * Documents — the client's File Library folder, same window the Client hub
+   * opens under its Documents tab.
+   *
+   * Smartsheet attachments are mirrored into that folder on sync. Showing the
+   * live folder (icons, review chips, lightbox) rather than a separate
+   * attachment table means both doors open the same file.
+   */
+  var cbiFolderNav = null;
+  var cbiFolderFiles = [];
 
-      return '<tr>' +
-        '<td>' + name + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(fmtSize(f.sizeKb) || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(f.by || '—') + '</td>' +
-        '<td class="tma-portal-table__muted">' + esc(fmtDate(f.at) || '—') + '</td>' +
-        '</tr>';
-    }).join('');
+  function renderDocumentsTab(d) {
+    var folderUuid = d.data && d.data.folderUuid;
+    var pending = (d.data && d.data.pendingDocuments) || 0;
+    var clientUid = d.data && d.data.application && d.data.application.clientUid;
+
+    if (!folderUuid) {
+      return ui().emptyState({
+        title: clientUid ? 'Folder not ready yet' : 'No client folder yet',
+        subtitle: clientUid
+          ? 'Run Sync to provision this client’s File Library folder and pull documents across.'
+          : 'Sync links this applicant to the Client hub and files Smartsheet documents in their folder.',
+        illustration: 'Illustration07',
+      });
+    }
+
+    var pendingNote = pending
+      ? '<p class="tma-portal-subtitle cbi-docs-pending">' +
+        esc(pending === 1
+          ? '1 Smartsheet file is still copying into this folder.'
+          : pending + ' Smartsheet files are still copying into this folder.') +
+        '</p>'
+      : '';
 
     return contentGroup('Documents',
-      '<div data-cbi-docs' + (folderUuid ? ' data-cbi-folder="' + esc(folderUuid) + '"' : '') + '>' +
-      ui().table(['Name', 'Size', 'Added by', 'Date'], rows) + '</div>',
-      files.length === 1 ? '1 file' : files.length + ' files');
+      pendingNote +
+      '<div class="tma-dash__clients-folders-head">' +
+        '<span class="tma-dash__clients-folders-title" data-cbi-folder-crumbs>Client documents</span>' +
+        '<div class="tma-dash__clients-folders-actions">' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-cbi-folder-new>' +
+            '<img src="' + PH_ICON + 'Plus.svg" alt=""><span>New folder</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-cbi-folder-upload>' +
+            '<img src="' + PH_ICON + 'ArrowLineUp.svg" alt=""><span>Upload</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-cbi-open-library>' +
+            '<img src="' + PH_ICON + 'FolderNotch.svg" alt=""><span>Open in File Library</span></button>' +
+          '<input type="file" multiple hidden data-cbi-folder-fileinput>' +
+        '</div>' +
+      '</div>' +
+      '<div class="tma-dash__clients-folders" data-cbi-folder-drop' +
+        ' data-folder-uuid="' + esc(folderUuid) + '"' +
+        ' data-root-uuid="' + esc(folderUuid) + '">' +
+        '<div class="tma-dash__clients-assigned-empty" data-cbi-folder-list>Loading…</div>' +
+      '</div>',
+      '');
   }
 
-  /*
-   * Opening a document in the viewer.
-   *
-   * The viewer wants the row the File Library itself would hand it, so the
-   * folder listing is fetched once and cached for the tab — the same trick the
-   * client profile's Documents tab uses.
-   */
-  var docRows = { folder: null, rows: null, pending: null };
+  function filesNet() { return window.TMAFilesNet; }
 
-  function folderRows(folderUuid) {
-    if (docRows.folder === folderUuid && docRows.rows) return Promise.resolve(docRows.rows);
-    if (docRows.pending && docRows.folder === folderUuid) return docRows.pending;
-
-    var net = window.TMAFilesNet;
-    if (!net || !net.fetchJSON) return Promise.reject(new Error('files unavailable'));
-
-    docRows.folder = folderUuid;
-    docRows.pending = net.fetchJSON(net.url('/?folder=' + encodeURIComponent(folderUuid) + '&perPage=500'))
-      .then(function (res) {
-        docRows.rows = (res && (res.items || res.files)) || [];
-        docRows.pending = null;
-
-        return docRows.rows;
-      });
-
-    return docRows.pending;
+  function cbiStatusChip(f) {
+    var s = f && f.status;
+    if (!s || !s.label) return '';
+    return '<span class="tma-portal-status tma-portal-status--' + esc(s.tone || 'neutral') +
+      ' tma-portal-status--inline">' + esc(s.label) + '</span>';
   }
 
-  function openDocument(fileUuid, folderUuid) {
-    if (!window.TMAFileActions || !window.TMAFileActions.open || !folderUuid) {
-      toast('The viewer isn’t available here.', false);
+  function cbiFolderMetaLabel(f) {
+    var parts = [];
+    var files = f.fileCount || 0;
+    var folders = f.folderCount || 0;
+    if (files) parts.push(files + (files === 1 ? ' file' : ' files'));
+    if (folders) parts.push(folders + (folders === 1 ? ' folder' : ' folders'));
+    if (!parts.length) return 'Empty';
+    if (f.sizeLabel) parts.push(f.sizeLabel);
+    return parts.join(' · ');
+  }
 
+  function fmtShortDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function renderCbiFolderList(root, res) {
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    if (!wrap) return;
+    var folders = (res && res.folders) || [];
+    var files = (res && res.files) || [];
+    cbiFolderFiles = files;
+
+    if (!folders.length && !files.length) {
+      wrap.innerHTML = '<div class="tma-dash__clients-assigned-empty" data-cbi-folder-list>' +
+        'No files yet. They appear here after a sync copies Smartsheet attachments into this folder.</div>';
       return;
     }
 
-    folderRows(folderUuid).then(function (rows) {
-      var row = rows.filter(function (r) { return r.id === fileUuid || r.uuid === fileUuid; })[0];
-      if (!row) { toast('That document isn’t in the client’s folder yet.', false); return; }
-      window.TMAFileActions.open(row, function () { docRows.rows = null; });
-    }).catch(function () {
-      toast('Could not open that document.', false);
+    var html = '';
+    folders.forEach(function (f) {
+      var count = (f.fileCount || 0) + (f.folderCount || 0);
+      var folderBase = f.fileCount === 0 ? 'FolderEmpty' : 'FolderFilled';
+      var folderIcon = window.TMAFolderIcons
+        ? window.TMAFolderIcons.html(folderBase, f.colour, f.iconName, 24)
+        : '<img src="' + PH_ICON + 'FolderNotch.svg" alt="">';
+      html += '<button type="button" class="tma-dash__clients-folder" data-cbi-subfolder="' + esc(f.id) +
+        '" data-cbi-subfolder-name="' + esc(f.name) + '">' +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
+        '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name">' + esc(f.name) + '</span>' +
+        '<span class="tma-dash__clients-folder-meta">' + esc(cbiFolderMetaLabel(f)) + '</span></span>' +
+        '<span class="tma-dash__clients-folder-count" aria-hidden="true">' + count + '</span>' +
+        '</button>';
     });
+
+    files.forEach(function (f) {
+      var icon = (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc)
+        ? window.TMAFileIcons.fileIconSrc(f.icon, f.name)
+        : PH_ICON + 'File.svg';
+      var who = f.uploadedBy && f.uploadedBy.name ? f.uploadedBy.name : null;
+      var meta = [f.sizeLabel, f.uploadedAt ? fmtShortDate(f.uploadedAt) : null, who]
+        .filter(Boolean).join(' · ');
+
+      html += '<button type="button" class="tma-dash__clients-folder" data-cbi-file="' + esc(f.id) + '">' +
+        '<span class="tma-dash__clients-folder-icon" aria-hidden="true"><img src="' + esc(icon) + '" alt=""></span>' +
+        '<span class="tma-dash__clients-folder-main">' +
+          '<span class="tma-dash__clients-folder-name">' + esc(f.name) + cbiStatusChip(f) + '</span>' +
+          (meta ? '<span class="tma-dash__clients-folder-meta">' + esc(meta) + '</span>' : '') +
+        '</span></button>';
+    });
+    wrap.innerHTML = html;
+  }
+
+  function setDocumentsTabCount(count) {
+    if (!state.el) return;
+    var label = state.el.querySelector('[data-tab-key="documents"] .tma-tab__label');
+    if (!label) return;
+    label.textContent = count ? ('Documents  ' + Number(count).toLocaleString()) : 'Documents';
+  }
+
+  function captureCbiDocCount(root, res) {
+    if (!cbiFolderNav) return;
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    if (!wrap) return;
+    var uuid = wrap.getAttribute('data-folder-uuid');
+    if (!uuid || uuid !== cbiFolderNav.rootUuid) return;
+
+    var counts = (res && res.counts) || {};
+    var total = typeof counts.files === 'number' ? counts.files : ((res && res.files) || []).length;
+    ((res && res.folders) || []).forEach(function (f) {
+      if (typeof f.fileCount === 'number') total += f.fileCount;
+    });
+    setDocumentsTabCount(total);
+  }
+
+  function renderCbiFolderCrumbs(root) {
+    var host = root.querySelector('[data-cbi-folder-crumbs]');
+    if (!host || !cbiFolderNav) return;
+    var path = cbiFolderNav.path;
+    host.innerHTML = path.map(function (node, i) {
+      if (i === path.length - 1) {
+        return '<span class="tma-dash__clients-crumb tma-dash__clients-crumb--current">' + esc(node.name) + '</span>';
+      }
+      return '<button type="button" class="tma-dash__clients-crumb" data-cbi-crumb="' + i + '">' + esc(node.name) + '</button>' +
+        '<span class="tma-dash__clients-crumb-sep" aria-hidden="true">›</span>';
+    }).join('');
+  }
+
+  function loadCbiFolder(root) {
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    var net = filesNet();
+    if (!wrap || !net) return;
+    var uuid = wrap.getAttribute('data-folder-uuid');
+    net.fetchJSON(net.url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200'))
+      .then(function (res) {
+        renderCbiFolderList(root, res);
+        captureCbiDocCount(root, res);
+      })
+      .catch(function () {
+        var list = wrap.querySelector('[data-cbi-folder-list]') || wrap;
+        list.textContent = 'Could not load this folder.';
+      });
+  }
+
+  function showCbiFolderCurrent(root) {
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    if (!wrap || !cbiFolderNav) return;
+    var current = cbiFolderNav.path[cbiFolderNav.path.length - 1];
+    wrap.setAttribute('data-folder-uuid', current.uuid);
+    renderCbiFolderCrumbs(root);
+    loadCbiFolder(root);
+  }
+
+  function uploadToCbiFolder(fileList, uuid) {
+    if (!fileList || !fileList.length || !window.TMAUpload) return;
+    window.TMAUpload.add(fileList, { folderId: uuid });
+    toast(fileList.length > 1 ? fileList.length + ' files uploading…' : 'Uploading…');
+  }
+
+  function wireCbiFolderPanel(root) {
+    var wrap = root.querySelector('[data-cbi-folder-drop]');
+    if (!wrap) return;
+    var rootUuid = wrap.getAttribute('data-root-uuid');
+
+    if (!cbiFolderNav || cbiFolderNav.rootUuid !== rootUuid) {
+      cbiFolderNav = { rootUuid: rootUuid, path: [{ uuid: rootUuid, name: 'Client documents' }] };
+    }
+    wrap.setAttribute('data-folder-uuid', cbiFolderNav.path[cbiFolderNav.path.length - 1].uuid);
+    renderCbiFolderCrumbs(root);
+    loadCbiFolder(root);
+
+    if (root._cbiFolderWired) return;
+    root._cbiFolderWired = true;
+
+    root.addEventListener('click', function (e) {
+      var sub = e.target.closest('[data-cbi-subfolder]');
+      if (sub && root.contains(sub)) {
+        e.preventDefault();
+        if (!cbiFolderNav) return;
+        cbiFolderNav.path.push({
+          uuid: sub.getAttribute('data-cbi-subfolder'),
+          name: sub.getAttribute('data-cbi-subfolder-name') || 'Folder',
+        });
+        showCbiFolderCurrent(root);
+        return;
+      }
+
+      var fileBtn = e.target.closest('[data-cbi-file]');
+      if (fileBtn && root.contains(fileBtn)) {
+        e.preventDefault();
+        openCbiFile(fileBtn.getAttribute('data-cbi-file'), function () { loadCbiFolder(root); });
+        return;
+      }
+
+      var crumb = e.target.closest('[data-cbi-crumb]');
+      if (crumb && root.contains(crumb)) {
+        e.preventDefault();
+        if (!cbiFolderNav) return;
+        var idx = parseInt(crumb.getAttribute('data-cbi-crumb'), 10);
+        if (isNaN(idx)) return;
+        cbiFolderNav.path = cbiFolderNav.path.slice(0, idx + 1);
+        showCbiFolderCurrent(root);
+        return;
+      }
+
+      if (e.target.closest('[data-cbi-folder-new]')) {
+        e.preventDefault();
+        var name = window.prompt('New folder name');
+        var net = filesNet();
+        var drop = root.querySelector('[data-cbi-folder-drop]');
+        var current = drop && drop.getAttribute('data-folder-uuid');
+        if (!name || !name.trim() || !net || !current) return;
+        net.fetchJSON(net.url('/folders'), { method: 'POST', json: { name: name.trim(), parent: current } })
+          .then(function () { toast('Folder created'); loadCbiFolder(root); })
+          .catch(function (err) { toast((err && err.message) || 'Could not create the folder', false); });
+        return;
+      }
+
+      if (e.target.closest('[data-cbi-folder-upload]')) {
+        e.preventDefault();
+        var input = root.querySelector('[data-cbi-folder-fileinput]');
+        if (input) input.click();
+        return;
+      }
+
+      if (e.target.closest('[data-cbi-open-library]')) {
+        e.preventDefault();
+        var wrap = root.querySelector('[data-cbi-folder-drop]');
+        var dest = (wrap && wrap.getAttribute('data-folder-uuid')) || rootUuid;
+        location.href = (window.__TMA_SITE_ROOT || '') + '/files?folder=' + encodeURIComponent(dest);
+      }
+    });
+
+    root.addEventListener('change', function (e) {
+      var input = e.target.closest('[data-cbi-folder-fileinput]');
+      if (!input || !root.contains(input)) return;
+      var drop = root.querySelector('[data-cbi-folder-drop]');
+      uploadToCbiFolder(input.files, drop && drop.getAttribute('data-folder-uuid'));
+      input.value = '';
+    });
+
+    if (!document._cbiUploadRefresh) {
+      document._cbiUploadRefresh = true;
+      document.addEventListener('tma:upload-complete', function (e) {
+        if (!state.el) return;
+        var drop = state.el.querySelector('[data-cbi-folder-drop]');
+        if (!drop) return;
+        var done = e.detail && e.detail.folderId;
+        if (!done || done === drop.getAttribute('data-folder-uuid')) {
+          loadCbiFolder(state.el);
+        }
+      });
+    }
+  }
+
+  /*
+   * Open a filed document in the portal lightbox (review, comments, versions).
+   * Uses the folder listing row when we already have it; otherwise fetches the
+   * File Library record so a just-imported attachment still opens here.
+   */
+  function openCbiFile(fileUuid, onChange) {
+    if (!fileUuid) return;
+    if (!window.TMAFileActions || !window.TMAFileActions.open) {
+      toast('The viewer isn’t available here.', false);
+      return;
+    }
+
+    var refresh = onChange || function () {
+      if (state.el) loadCbiFolder(state.el);
+    };
+
+    var row = (cbiFolderFiles || []).filter(function (f) {
+      return f.id === fileUuid || f.uuid === fileUuid;
+    })[0];
+
+    if (row) {
+      window.TMAFileActions.open(row, refresh);
+      return;
+    }
+
+    var net = filesNet();
+    if (!net) {
+      toast('The viewer isn’t available here.', false);
+      return;
+    }
+
+    net.fetchJSON(net.url('/files/' + encodeURIComponent(fileUuid)))
+      .then(function (res) {
+        var item = (res && (res.file || res.item || res)) || null;
+        if (!item || !item.id) {
+          toast('That document isn’t in the client’s folder yet.', false);
+          return;
+        }
+        if (!item.type) item.type = 'file';
+        window.TMAFileActions.open(item, refresh);
+      })
+      .catch(function () {
+        toast('That document isn’t in the client’s folder yet.', false);
+      });
   }
 
   function renderCommentsTab(comments, d) {
@@ -1059,14 +1324,6 @@
   /* ── events (delegated named handlers — safe across morphs) ── */
 
   function onClick(e) {
-    var doc = e.target.closest('[data-cbi-file]');
-    if (doc) {
-      e.preventDefault();
-      var host = doc.closest('[data-cbi-docs]');
-      openDocument(doc.getAttribute('data-cbi-file'), host && host.getAttribute('data-cbi-folder'));
-      return;
-    }
-
     var open = e.target.closest('[data-cbi-open]');
     if (open) { location.hash = '#/app/' + open.getAttribute('data-cbi-open'); return; }
 
@@ -1165,7 +1422,10 @@
       case 'sync-now':
         cbiFetch(BASE + '/sync', { method: 'POST' })
           .then(function (d) {
-            toast(d.queued ? 'Queued ' + d.queued + ' sheet sync(s).' : 'Everything already up to date.');
+            var parts = [];
+            if (d.queued) parts.push('Queued ' + d.queued + ' sheet sync(s)');
+            if (d.hubQueued) parts.push('filing documents into client folders');
+            toast(parts.length ? parts.join(' — ') + '.' : 'Everything already up to date.');
             loadSummary();
           })
           .catch(function (e) { toast((e && e.message) || 'Sync failed to start', false); });
@@ -1270,6 +1530,11 @@
           loadList();
         }
       });
+    }
+
+    // Documents tab: live File Library folder for the linked client.
+    if (el.querySelector('[data-cbi-folder-drop]')) {
+      wireCbiFolderPanel(el);
     }
   }
 

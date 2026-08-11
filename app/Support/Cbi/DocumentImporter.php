@@ -53,7 +53,7 @@ class DocumentImporter
      * 403. The batch is minted and downloaded inside the same short window
      * now, so the whole batch is one download's wait rather than the sum.
      */
-    private const BATCH = 8;
+    private const BATCH = 16;
 
     /** @var array<string, int> */
     public array $stats = [

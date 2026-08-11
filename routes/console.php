@@ -489,6 +489,22 @@ Schedule::command('smartsheet:sync --queue')
     ->withoutOverlapping();
 
 /*
+ * Client hub + paperwork, after the metadata sync.
+ *
+ * Sheet sync only mirrors names and sizes. This pass creates any missing
+ * client records (with File Library folders) and copies attachment bytes into
+ * those folders so CBI Documents and the client Documents tab open the same
+ * file in the shared lightbox. Resumable: ImportCbiDocuments re-queues itself
+ * while reachable files remain.
+ */
+Schedule::call(function () {
+    if (! config('services.smartsheet.cbi_enabled')) {
+        return;
+    }
+    \App\Jobs\SyncCbiHub::dispatch();
+})->name('cbi:sync-hub')->everyTenMinutes()->withoutOverlapping();
+
+/*
  * Re-run the mirror → CBI mapping without touching the Smartsheet API.
  * This is the whole point of the two-layer design: mapping fixes are a
  * remap, never a re-walk. Safe to run any time; it upserts.

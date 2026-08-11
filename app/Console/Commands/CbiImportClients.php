@@ -14,6 +14,7 @@ class CbiImportClients extends Command
                             {--dry-run : Report what would be created without writing anything}
                             {--companies-only : Register the referral sources and stop}
                             {--folders : Also give every imported client its File Library folder}
+                            {--provision-folders : Only create missing folders for already-linked CBI clients}
                             {--actor= : Email of the staff member to record as the creator}';
 
     protected $description = 'Bring the CBI caseload into the Client hub: a company per referral source, a client per applicant, linked';
@@ -38,6 +39,29 @@ class CbiImportClients extends Command
 
         if ($dryRun) {
             $this->warn('Dry run — nothing will be written.');
+        }
+
+        if ($this->option('provision-folders')) {
+            if (! $actor) {
+                $this->error('--provision-folders needs --actor: a folder has to be owned by somebody.');
+
+                return self::FAILURE;
+            }
+
+            $pending = \App\Models\Client::query()
+                ->whereNull('folder_id')
+                ->whereIn('id', CbiApplication::query()->whereNotNull('client_id')->select('client_id'))
+                ->count();
+
+            $this->info(sprintf('Provisioning folders for %s linked client%s…', number_format($pending), $pending === 1 ? '' : 's'));
+            $bar = $this->output->createProgressBar(max(1, $pending));
+            $bar->start();
+            $created = $importer->provisionMissingFolders(fn () => $bar->advance());
+            $bar->finish();
+            $this->newLine(2);
+            $this->info($created.' folder(s) created.');
+
+            return self::SUCCESS;
         }
 
         $this->info('Registering referral sources as companies…');
