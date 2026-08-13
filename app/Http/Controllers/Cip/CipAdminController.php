@@ -25,6 +25,15 @@ class CipAdminController extends Controller
 {
     private function gate(Request $request): void
     {
+        // Temporary tracer while debugging local "couldn't load" reports —
+        // records every arrival, including the ones the gate refuses.
+        logger()->info('cip.management request', [
+            'user' => $request->user()?->id,
+            'type' => $request->user()?->account_type,
+            'flag' => (bool) config('services.cip.enabled'),
+            'host' => $request->getHost().':'.$request->getPort(),
+        ]);
+
         abort_unless(Role::can($request->user(), 'cip.configure'), 404);
     }
 

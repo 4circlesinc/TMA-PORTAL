@@ -975,7 +975,9 @@
 
       function api(method, url, body) {
         return secApi(method, url, body).then(function (res) {
-          return res.json().then(function (j) { return { ok: res.ok, body: j }; });
+          return res.json()
+            .then(function (j) { return { ok: res.ok, status: res.status, body: j }; })
+            .catch(function () { return { ok: false, status: res.status, body: null }; });
         });
       }
 
@@ -1077,12 +1079,14 @@
 
       api('GET', '/admin/cip/management').then(function (r) {
         if (!r.ok) {
-          root.innerHTML = '<p class="tma-portal-note">Couldn’t load CIP management. Refresh to try again.</p>';
+          root.innerHTML = r.status === 404
+            ? '<p class="tma-portal-note">CIP is not switched on in this environment.</p>'
+            : '<p class="tma-portal-note">Couldn’t load CIP management (status ' + r.status + '). Refresh to try again.</p>';
           return;
         }
         paint(r.body);
       }).catch(function () {
-        root.innerHTML = '<p class="tma-portal-note">Couldn’t load CIP management. Refresh to try again.</p>';
+        root.innerHTML = '<p class="tma-portal-note">Couldn’t reach the server for CIP management. Refresh to try again.</p>';
       });
     },
   };
