@@ -1635,12 +1635,13 @@
 
   /* One client's profile failed to load. Distinct from an empty record, which
      is a perfectly ordinary thing for an imported client to be. */
-  function renderProfileError(message) {
+  function renderProfileError(message, opts) {
+    var retry = !opts || opts.retry !== false;
     return (
       '<div class="tma-dash__clients-profile-error" role="alert">' +
       '<img src="' + ICONS.Warning20 + '" alt="" width="20" height="20">' +
       '<p>' + esc(message || 'Could not load this client.') + '</p>' +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-retry-profile>Try again</button>' +
+      (retry ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-retry-profile>Try again</button>' : '') +
       '</div>'
     );
   }
@@ -2585,7 +2586,7 @@
         '<div class="tma-dash__clients-profile tma-dash__clients-profile--form' +
         (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
         (state.profileError
-          ? renderProfileError(state.profileError)
+          ? renderProfileError(state.profileError, { retry: !state.profileErrorFinal })
           : renderProfileSkeleton()) +
         '</div></div>'
       );
@@ -2645,7 +2646,7 @@
     var company = companyFor(state.companyId);
     if (!company) {
       return '<div class="tma-dash__clients-detail">' +
-        clientsEmpty('Service provider not found', 'Illustration07') + '</div>';
+        clientsEmpty('You’re not assigned to this service provider.', 'Illustration07') + '</div>';
     }
 
     return (
@@ -3893,7 +3894,7 @@
         '<div class="tma-dash__clients-profile' +
         (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
         (state.profileError
-          ? renderProfileError(state.profileError)
+          ? renderProfileError(state.profileError, { retry: !state.profileErrorFinal })
           : renderProfileSkeleton()) +
         '</div></div>'
       );
@@ -4547,6 +4548,8 @@
     MORPH.unwired(root, '[data-clients-retry-profile]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
         state.profileError = null;
+    state.profileErrorFinal = false;
+        state.profileErrorFinal = false;
         state.profileLoadingFor = null;
         ensureProfileLoaded(state, render);
         render({ detailOnly: !usesPagedClientsFlow(state) });
@@ -5511,7 +5514,15 @@
       // Our own sentence rather than err.message, which for a 500 is the
       // fetch layer's "Request failed" — true, and no use to the person
       // looking at an empty panel. The real error is in the console.
-      state.profileError = 'Couldn’t load this client.';
+      // A 404 is not a failure: the record is outside this account's slice
+      // (or does not exist — the server deliberately will not say which).
+      if (err && err.status === 404) {
+        state.profileError = 'You’re not assigned to this client.';
+        state.profileErrorFinal = true;
+      } else {
+        state.profileError = 'Couldn’t load this client.';
+        state.profileErrorFinal = false;
+      }
       redraw();
     });
   }
