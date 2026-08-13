@@ -126,8 +126,6 @@
     { value: 'finance', label: 'Finance contact' },
     { value: 'contract_manager', label: 'Contract manager' },
     { value: 'event_coordinator', label: 'Event coordinator' },
-    { value: 'reviewing_officer', label: 'CRO / Reviewing officer' },
-    { value: 'compliance_officer', label: 'Compliance officer' },
     { value: 'general', label: 'Assigned staff' },
   ];
 

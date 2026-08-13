@@ -2,24 +2,25 @@
 
 namespace App\Support\Cip;
 
-use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 
 /**
  * Who may do what inside the CIP module.
  *
- * The account-type matrix (Role) cannot tell a CRO from any other employee —
- * capabilities there resolve per account type, and officer-ness is a per-user
- * fact. Officer-ness lives where the rest of the portal already keeps access:
- * a live staff assignment on a service provider (a company record) carrying
- * one of the officer roles from ClientAssignment::ROLES. Assign Krishna to
- * Galaxy as "CRO / Reviewing officer" on the provider page and she is an
- * officer; end the assignment and she is not. There is no separate grant
- * store, no separate screen, and suspension settles it through AccessSync
- * like every other assignment.
+ * Officer-ness is the account type: "Reviewing Officer" (the brief's CRO /
+ * Reviewing Officer) and "Compliance Officer" sit beside Employee in the
+ * Users page dropdown. Both carry the full Employee baseline everywhere in
+ * the portal — the officer types only decide what they may do INSIDE the
+ * CIP module, and that mapping lives in Role::MATRIX:
  *
- * Ask this class, never the tables.
+ *   Reviewing Officer  — cip.review (assess documents, issue comments,
+ *                        request updates, approve documents for submission)
+ *   Compliance Officer — cip.compliance + cip.decide (process submissions,
+ *                        update statuses, record decisions)
+ *
+ * This class is the module's one question-answering surface so callers never
+ * compare account-type strings themselves.
  */
 class CipAccess
 {
@@ -27,20 +28,11 @@ class CipAccess
 
     public const COMPLIANCE_OFFICER = 'compliance_officer';
 
-    /** role => label, as offered by the assignment dialogs. */
-    public const ROLES = [
-        self::REVIEWING_OFFICER => 'CRO / Reviewing officer',
-        self::COMPLIANCE_OFFICER => 'Compliance officer',
+    /** officer role => the account type that carries it. */
+    private const ROLE_ACCOUNT_TYPES = [
+        self::REVIEWING_OFFICER => Role::REVIEWING_OFFICER,
+        self::COMPLIANCE_OFFICER => Role::COMPLIANCE_OFFICER,
     ];
-
-    /** What each officer role adds on top of the employee baseline. */
-    private const ROLE_CAPABILITIES = [
-        self::REVIEWING_OFFICER => ['cip.review'],
-        self::COMPLIANCE_OFFICER => ['cip.compliance', 'cip.decide'],
-    ];
-
-    /** Per-request memo so a page render asks the table once per user. */
-    private static array $rolesByUser = [];
 
     public static function enabled(): bool
     {
@@ -48,69 +40,43 @@ class CipAccess
     }
 
     /**
-     * Does this user hold the capability, counting officer assignments?
-     * Role::can already answers admins (and the FEATURE_CIP dark switch);
-     * this widens the answer for staff holding a live officer assignment.
+     * Does this user hold the capability? Role::can already answers
+     * everything — the matrix rows carry the officer types, the baseline
+     * fallback carries their employee reach, and the FEATURE_CIP check
+     * darkens it all — this wrapper only spares callers the import.
      */
     public static function can(?User $user, string $capability): bool
     {
-        if ($user === null || ! self::enabled()) {
-            return false;
-        }
-
-        if (Role::can($user, $capability)) {
-            return true;
-        }
-
-        if (! Role::isStaff($user)) {
-            return false;
-        }
-
-        foreach (self::officerRoles($user) as $role) {
-            if (in_array($capability, self::ROLE_CAPABILITIES[$role] ?? [], true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return Role::can($user, $capability);
     }
 
     /** Is this user an officer at all — or of the given role specifically? */
     public static function isOfficer(?User $user, ?string $role = null): bool
     {
-        if ($user === null || ! self::enabled() || ! Role::isStaff($user)) {
+        if ($user === null || ! self::enabled()) {
             return false;
         }
 
-        $roles = self::officerRoles($user);
+        if ($role !== null) {
+            return Role::of($user) === (self::ROLE_ACCOUNT_TYPES[$role] ?? null);
+        }
 
-        return $role === null ? $roles !== [] : in_array($role, $roles, true);
+        return in_array(Role::of($user), self::ROLE_ACCOUNT_TYPES, true);
     }
 
     /**
-     * The officer roles this user holds right now — distinct roles across
-     * every live service-provider assignment.
+     * The officer roles this user holds.
      *
      * @return list<string>
      */
     public static function officerRoles(User $user): array
     {
-        return self::$rolesByUser[$user->id] ??= CompanyStaffAssignment::query()
-            ->live()
-            ->where('user_id', $user->id)
-            ->whereIn('role', array_keys(self::ROLES))
-            ->distinct()
-            ->pluck('role')
-            ->all();
-    }
-
-    /** Drop the per-request memo after an assignment change. */
-    public static function forget(?User $user = null): void
-    {
-        if ($user === null) {
-            self::$rolesByUser = [];
-        } else {
-            unset(self::$rolesByUser[$user->id]);
+        if (! self::enabled()) {
+            return [];
         }
+
+        $roles = array_keys(self::ROLE_ACCOUNT_TYPES, Role::of($user), true);
+
+        return array_values($roles);
     }
 }

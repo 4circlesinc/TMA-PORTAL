@@ -125,7 +125,7 @@ class ClientHubSettingsController extends Controller
     private function counts(): array
     {
         return [
-            'employees' => User::query()->where('account_type', Role::EMPLOYEE)->count(),
+            'employees' => User::query()->whereIn('account_type', Role::EMPLOYEE_LIKE)->count(),
             'clients' => Client::query()->count(),
             'pendingInvitations' => Invitation::query()
                 ->whereIn('type', [Invitation::TYPE_CLIENT, Invitation::TYPE_COMPANY_MEMBER])

@@ -159,7 +159,7 @@ class ClientsController extends Controller
          * assignment list. Manager level, because creating a client is the act
          * of somebody who owns the relationship rather than observes it.
          */
-        if (Role::of($request->user()) === Role::EMPLOYEE) {
+        if (in_array(Role::of($request->user()), Role::EMPLOYEE_LIKE, true)) {
             Assignments::assign($client, $request->user(), [
                 'role' => 'account_manager',
                 'level' => 'manager',

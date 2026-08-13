@@ -30,13 +30,48 @@ class Role
 
     public const EMPLOYEE = 'Employee';
 
+    /**
+     * The CIP officer account types. Both are employees in every portal-wide
+     * sense — mail, files, calendar, the client hub — they carry the whole
+     * Employee baseline (see the fallback in can()) plus the officer rows in
+     * the matrix. "CRO" and "Reviewing Officer" are the same role; the brief
+     * writes it "CRO / Reviewing Officers".
+     */
+    public const REVIEWING_OFFICER = 'Reviewing Officer';
+
+    public const COMPLIANCE_OFFICER = 'Compliance Officer';
+
     public const ADMINISTRATOR = 'Administrator';
 
     /** Every assignable account type, in ascending order of reach. */
-    public const ALL = [self::CLIENT, self::EMPLOYEE, self::ADMINISTRATOR];
+    public const ALL = [
+        self::CLIENT,
+        self::EMPLOYEE,
+        self::REVIEWING_OFFICER,
+        self::COMPLIANCE_OFFICER,
+        self::ADMINISTRATOR,
+    ];
 
     /** Everyone who works here, as opposed to the clients they work for. */
-    public const STAFF = [self::ADMINISTRATOR, self::EMPLOYEE];
+    public const STAFF = [
+        self::ADMINISTRATOR,
+        self::EMPLOYEE,
+        self::REVIEWING_OFFICER,
+        self::COMPLIANCE_OFFICER,
+    ];
+
+    /**
+     * Staff who are not administrators — what "employees" means to the
+     * overlay screens and the headcounts. Officers follow every Employee
+     * grant (and every admin-managed Employee overlay) via can()'s baseline
+     * fallback, so anywhere that counts or lists "employees" should count
+     * these types too.
+     */
+    public const EMPLOYEE_LIKE = [
+        self::EMPLOYEE,
+        self::REVIEWING_OFFICER,
+        self::COMPLIANCE_OFFICER,
+    ];
 
     /**
      * capability => the non-administrator roles that hold it.
@@ -78,6 +113,14 @@ class Role
         // FEATURE_CIP is off — see the flag check in can(), which sits before
         // the admin short-circuit so the module does not exist for anyone.
         //
+        // The officer account types hold exactly the brief's bullets:
+        //   CRO / Reviewing Officer — review applications, assess documents,
+        //   issue comments, request updates, approve documents (cip.review).
+        //   Compliance Officer — review applications, process submissions,
+        //   update statuses, record decisions (cip.compliance + cip.decide).
+        // Both inherit the Employee rows below through can()'s baseline
+        // fallback, so cip.view / cip.create need not repeat them.
+        //
         // Reach the CIP section. Staff-wide; external Service Provider
         // contacts and private clients arrive with their scoped views in a
         // later phase. Row visibility is App\Support\Cip\ApplicationScope —
@@ -89,15 +132,14 @@ class Role
         // by ApplicationScope and the engine's creator check, the same way
         // CompanyAccess answers for company members.
         'cip.create' => [self::EMPLOYEE],
-        // Officer verbs. Admin-only here; specific employees are widened
-        // per-user through App\Support\Cip\CipAccess grants (a CRO holds
-        // cip.review, a Compliance Officer holds cip.compliance + cip.decide).
-        'cip.review' => [],
-        'cip.compliance' => [],
+        'cip.review' => [self::REVIEWING_OFFICER],
+        'cip.compliance' => [self::COMPLIANCE_OFFICER],
+        // Assigning files to officers stays with administrators (§10: "The
+        // Administrator assigns the file").
         'cip.assign' => [],
-        'cip.decide' => [],
-        // The provider registry, officer grants, document requirement and
-        // decision templates — the module's configuration surface.
+        'cip.decide' => [self::COMPLIANCE_OFFICER],
+        // Document requirement and decision templates, provider codes — the
+        // module's configuration surface.
         'cip.configure' => [],
         'cip.report' => [],
 
@@ -390,7 +432,19 @@ class Role
             return false;
         }
 
-        return in_array(self::of($user), self::holders($capability), true);
+        $holders = self::holders($capability);
+
+        if (in_array(self::of($user), $holders, true)) {
+            return true;
+        }
+
+        // Officer account types keep everything an employee holds — the CIP
+        // roles narrow what they may do INSIDE the module, never what the
+        // rest of the portal already gave staff. This also makes the
+        // admin-managed Employee overlays (client hub, permissions) apply to
+        // officers without those screens knowing the types exist.
+        return in_array(self::of($user), [self::REVIEWING_OFFICER, self::COMPLIANCE_OFFICER], true)
+            && in_array(self::EMPLOYEE, $holders, true);
     }
 
     /**

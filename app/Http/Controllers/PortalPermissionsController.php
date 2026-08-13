@@ -56,7 +56,7 @@ class PortalPermissionsController extends Controller
             // Who the two settings actually apply to, so the screen can say
             // "12 employees" rather than leaving it abstract.
             'counts' => [
-                'employees' => User::query()->where('account_type', Role::EMPLOYEE)->count(),
+                'employees' => User::query()->whereIn('account_type', Role::EMPLOYEE_LIKE)->count(),
                 'clients' => Client::query()->count(),
             ],
         ]);

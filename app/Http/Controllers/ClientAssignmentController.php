@@ -250,7 +250,7 @@ class ClientAssignmentController extends Controller
             $taken[] = (int) $client->created_by;
         }
 
-        return User::where('account_type', Role::EMPLOYEE)
+        return User::whereIn('account_type', Role::EMPLOYEE_LIKE)
             ->where('status', 'approved')
             ->whereNotIn('id', $taken)
             ->orderBy('name')

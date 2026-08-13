@@ -6,7 +6,6 @@ use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
-use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicationScope;
@@ -106,16 +105,7 @@ class CipApplicationScopeTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $this->assertCount(1, ApplicationScope::query($admin)->get());
 
-        $officer = $this->user(Role::EMPLOYEE);
-        CompanyStaffAssignment::create([
-            'company_id' => Company::create(['uid' => 'officer-home', 'name' => 'Officer Home'])->id,
-            'user_id' => $officer->id,
-            'role' => CipAccess::REVIEWING_OFFICER,
-            'permission_level' => 'view_only',
-            'applies_to_clients' => 'company_only',
-            'status' => CompanyStaffAssignment::STATUS_ACTIVE,
-        ]);
-        CipAccess::forget();
+        $officer = $this->user(Role::REVIEWING_OFFICER);
         $this->assertCount(1, ApplicationScope::query($officer)->get());
 
         // An employee with no officer grant sees nothing — widening that is a

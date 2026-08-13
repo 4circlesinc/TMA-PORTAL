@@ -52,7 +52,10 @@ class PeopleController extends Controller
             ->groupBy('account_type')
             ->pluck('aggregate', 'account_type');
 
-        $employees = (int) ($byType[Role::EMPLOYEE] ?? 0) + (int) ($byType[Role::ADMINISTRATOR] ?? 0);
+        $employees = (int) ($byType[Role::ADMINISTRATOR] ?? 0);
+        foreach (Role::EMPLOYEE_LIKE as $type) {
+            $employees += (int) ($byType[$type] ?? 0);
+        }
 
         return response()->json([
             'counts' => [

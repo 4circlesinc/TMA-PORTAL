@@ -28,7 +28,10 @@ use Illuminate\Validation\Rule;
 
 class AdminUsersController extends Controller
 {
-    public const ACCOUNT_TYPES = ['Client', 'Employee', 'Administrator'];
+    // Role::ALL, spelled out where the Users page reads it: the two CIP
+    // officer types are employees with a narrower CIP remit, assignable from
+    // the same dropdown as everything else.
+    public const ACCOUNT_TYPES = Role::ALL;
 
     public function index(Request $request): JsonResponse
     {
