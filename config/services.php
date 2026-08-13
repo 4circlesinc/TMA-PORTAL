@@ -108,4 +108,12 @@ return [
         'cbi_enabled' => (bool) env('FEATURE_CBI', false),
     ],
 
+    'cip' => [
+        // The native CIP application-management module (the CBI mirror's
+        // replacement) ships dark behind this flag. Role::can() checks it
+        // BEFORE the admin short-circuit, so while it is off the module does
+        // not exist for anyone — administrators included.
+        'enabled' => (bool) env('FEATURE_CIP', false),
+    ],
+
 ];

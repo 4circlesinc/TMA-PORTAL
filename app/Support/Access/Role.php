@@ -73,6 +73,34 @@ class Role
         // Widen to [self::EMPLOYEE] (or per-role grants) at launch.
         'cbi.view' => [],
 
+        /* ── CIP (native application-management portal) ──────────────── */
+        // The CBI mirror's replacement. Every cip.* capability is dark while
+        // FEATURE_CIP is off — see the flag check in can(), which sits before
+        // the admin short-circuit so the module does not exist for anyone.
+        //
+        // Reach the CIP section. Staff-wide; external Service Provider
+        // contacts and private clients arrive with their scoped views in a
+        // later phase. Row visibility is App\Support\Cip\ApplicationScope —
+        // this row on its own shows nobody any application.
+        'cip.view' => [self::EMPLOYEE],
+        // Create an application as staff. External creators (provider
+        // contacts, private clients) are NOT granted through the matrix —
+        // clients hold no matrix capability, ever — their reach is answered
+        // by ApplicationScope and the engine's creator check, the same way
+        // CompanyAccess answers for company members.
+        'cip.create' => [self::EMPLOYEE],
+        // Officer verbs. Admin-only here; specific employees are widened
+        // per-user through App\Support\Cip\CipAccess grants (a CRO holds
+        // cip.review, a Compliance Officer holds cip.compliance + cip.decide).
+        'cip.review' => [],
+        'cip.compliance' => [],
+        'cip.assign' => [],
+        'cip.decide' => [],
+        // The provider registry, officer grants, document requirement and
+        // decision templates — the module's configuration surface.
+        'cip.configure' => [],
+        'cip.report' => [],
+
         /* ── People and users ────────────────────────────────────────── */
         // The Users page — the account-management table. It lists every
         // account with its status, sign-in history and the approve / suspend /
@@ -259,6 +287,7 @@ class Role
         // "Connectors" stays open — it is where anyone links their own
         // Microsoft account (Outlook, Calendar, OneDrive).
         'storage-usage' => 'settings.storage',
+        'cip-management' => 'cip.configure',
         'permissions' => 'settings.advanced',
         'default-folders' => 'files.settings',
         'folder-templates' => 'files.settings',
@@ -345,6 +374,12 @@ class Role
          * agreement across every environment.
          */
         if ($capability === 'cbi.view' && ! config('services.smartsheet.cbi_enabled')) {
+            return false;
+        }
+
+        // Same contract for the native CIP module: while FEATURE_CIP is off,
+        // every cip.* capability is denied for everyone, admins included.
+        if (str_starts_with($capability, 'cip.') && ! config('services.cip.enabled')) {
             return false;
         }
 

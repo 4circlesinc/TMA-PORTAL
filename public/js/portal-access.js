@@ -82,6 +82,7 @@
     'alert-settings': 'settings.security',
     'device-security': 'settings.security',
     'storage-usage': 'settings.storage',
+    'cip-management': 'cip.configure',
     'permissions': 'settings.advanced',
     'default-folders': 'files.settings',
     'folder-templates': 'files.settings',

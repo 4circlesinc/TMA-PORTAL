@@ -2,6 +2,7 @@
 
 namespace App\Support\Access;
 
+use App\Models\CipApplicationAssignment;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Company;
@@ -73,10 +74,19 @@ final class AccessSync
             ])->save();
         }
 
+        // CIP application assignments end like client assignments — reinstate
+        // is a deliberate re-assignment. The officer *grant* survives, like
+        // company membership: the person is still a CRO, they just cannot act.
+        $endedCipFiles = CipApplicationAssignment::live()->where('user_id', $user->id)->get();
+        foreach ($endedCipFiles as $assignment) {
+            $assignment->end($by);
+        }
+
         $summary = [
             'clientAssignments' => $endedClients->count(),
             'companyAssignments' => $endedCompanies->count(),
             'companyMemberships' => $memberships->count(),
+            'cipAssignments' => $endedCipFiles->count(),
         ];
 
         if (array_sum($summary) > 0) {

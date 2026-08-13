@@ -57,6 +57,7 @@
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
     ] },
+    { id: 'cip-management', label: 'CIP management', icon: 'GlobeHemisphereWest' },
     { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
       { id: 'account-security', label: 'Account security' },
       { id: 'security-insights', label: 'Security Insights' },
@@ -955,6 +956,134 @@
         .catch(function () {
           root.innerHTML = '<p class="tma-portal-note">Couldn’t load client hub access. Refresh to try again.</p>';
         });
+    },
+  };
+
+  /* ── CIP management (real: /admin/cip) ─────────────────────────────
+     The provider registry — codes prefix every internal application number
+     (GAL26-00001), so codes are permanent — and per-user officer grants.
+     Dark without FEATURE_CIP: the server answers 404 and cip.configure
+     prunes the rail row. */
+  PAGES['cip-management'] = {
+    render: function () {
+      return '<div data-cip-root>' + ui().loading() + '</div>';
+    },
+    wire: function (el) {
+      var root = el.querySelector('[data-cip-root]');
+      if (!root) return;
+      var esc = ui().esc;
+
+      function api(method, url, body) {
+        return secApi(method, url, body).then(function (res) {
+          return res.json().then(function (j) { return { ok: res.ok, body: j }; });
+        });
+      }
+
+      function providerRow(p) {
+        return '<div class="tma-dash__settings-cookie-row">' +
+          '<span class="tma-dash__settings-cookie-copy">' +
+          '<span class="tma-dash__settings-cookie-label">' + esc(p.code) + ' — ' + esc(p.name) + (p.active ? '' : ' (inactive)') + '</span>' +
+          '<span class="tma-dash__settings-cookie-desc">' +
+          esc(p.contactName || 'No contact yet') + (p.contactEmail ? ' · ' + esc(p.contactEmail) : '') +
+          ' · ' + p.applications + ' application' + (p.applications === 1 ? '' : 's') +
+          '</span></span>' +
+          ui().btn({ label: p.active ? 'Deactivate' : 'Reactivate', variant: 'ghost', small: true,
+            attrs: 'data-cip-provider-toggle="' + esc(p.uuid) + '" data-cip-active="' + (p.active ? '1' : '0') + '"' }) +
+          '</div>';
+      }
+
+      function officerRows(d) {
+        if (!d.officers.length) return '<p class="tma-portal-note">No officers yet.</p>';
+        return d.officers.map(function (o) {
+          return (o.roles || []).map(function (role) {
+            return '<div class="tma-dash__settings-cookie-row">' +
+              '<span class="tma-dash__settings-cookie-copy">' +
+              '<span class="tma-dash__settings-cookie-label">' + esc(o.name || o.email) + '</span>' +
+              '<span class="tma-dash__settings-cookie-desc">' + esc(d.roles[role] || role) + '</span>' +
+              '</span>' +
+              ui().btn({ label: 'Remove', variant: 'ghost', small: true,
+                attrs: 'data-cip-officer-revoke="' + o.userId + '" data-cip-role="' + esc(role) + '"' }) +
+              '</div>';
+          }).join('');
+        }).join('');
+      }
+
+      function paint(d) {
+        var roleOptions = Object.keys(d.roles).map(function (r) { return { value: r, label: d.roles[r] }; });
+        var staffOptions = d.staff.map(function (s) { return { value: String(s.id), label: s.name + (s.admin ? ' (admin)' : '') }; });
+
+        root.innerHTML =
+          '<p class="tma-portal-subtitle">Providers and officers for the CIP application portal.</p>' +
+          ui().section('Service providers',
+            (d.providers.length ? d.providers.map(providerRow).join('') : '<p class="tma-portal-note">No providers yet.</p>') +
+            ui().field('Name', ui().input({ attrs: 'data-cip-new-name', ariaLabel: 'Provider name' })) +
+            ui().field('Code', ui().input({ attrs: 'data-cip-new-code maxlength="8"', ariaLabel: 'Provider code' })) +
+            ui().field('Contact name', ui().input({ attrs: 'data-cip-new-contact', ariaLabel: 'Contact name' })) +
+            ui().field('Contact email', ui().input({ attrs: 'data-cip-new-email', ariaLabel: 'Contact email' })) +
+            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Add provider', attrs: 'data-cip-provider-add' }) + '</div>') +
+          ui().section('Officers',
+            officerRows(d) +
+            ui().field('Staff member', ui().select(staffOptions, '', 'data-cip-officer-user', 'Staff member')) +
+            ui().field('Role', ui().select(roleOptions, Object.keys(d.roles)[0] || '', 'data-cip-officer-role', 'Officer role')) +
+            '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Grant role', attrs: 'data-cip-officer-grant' }) + '</div>');
+
+        wirePage(d);
+      }
+
+      function handle(promise, okMessage) {
+        promise.then(function (r) {
+          if (!r.ok) { ui().toast((r.body && r.body.message) || 'Could not save'); return; }
+          ui().toast(okMessage);
+          paint(r.body);
+        }).catch(function () { ui().toast('Could not save'); });
+      }
+
+      function wirePage(d) {
+        var add = root.querySelector('[data-cip-provider-add]');
+        if (add) add.addEventListener('click', function () {
+          handle(api('POST', '/admin/cip/providers', {
+            name: (root.querySelector('[data-cip-new-name]') || {}).value || '',
+            code: (root.querySelector('[data-cip-new-code]') || {}).value || '',
+            contactName: (root.querySelector('[data-cip-new-contact]') || {}).value || null,
+            contactEmail: (root.querySelector('[data-cip-new-email]') || {}).value || null,
+          }), 'Provider added');
+        });
+
+        root.querySelectorAll('[data-cip-provider-toggle]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            handle(api('PUT', '/admin/cip/providers/' + btn.getAttribute('data-cip-provider-toggle'), {
+              active: btn.getAttribute('data-cip-active') !== '1',
+            }), 'Provider updated');
+          });
+        });
+
+        var grant = root.querySelector('[data-cip-officer-grant]');
+        if (grant) grant.addEventListener('click', function () {
+          handle(api('POST', '/admin/cip/officers', {
+            userId: parseInt((root.querySelector('[data-cip-officer-user]') || {}).value, 10),
+            role: (root.querySelector('[data-cip-officer-role]') || {}).value,
+          }), 'Role granted');
+        });
+
+        root.querySelectorAll('[data-cip-officer-revoke]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            handle(api('DELETE', '/admin/cip/officers', {
+              userId: parseInt(btn.getAttribute('data-cip-officer-revoke'), 10),
+              role: btn.getAttribute('data-cip-role'),
+            }), 'Role removed');
+          });
+        });
+      }
+
+      api('GET', '/admin/cip/management').then(function (r) {
+        if (!r.ok) {
+          root.innerHTML = '<p class="tma-portal-note">Couldn’t load CIP management. Refresh to try again.</p>';
+          return;
+        }
+        paint(r.body);
+      }).catch(function () {
+        root.innerHTML = '<p class="tma-portal-note">Couldn’t load CIP management. Refresh to try again.</p>';
+      });
     },
   };
 
