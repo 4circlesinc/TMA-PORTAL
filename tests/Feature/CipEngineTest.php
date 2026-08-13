@@ -107,9 +107,17 @@ class CipEngineTest extends TestCase
             // expected
         }
 
-        // …but a reviewing officer may.
+        // …but a reviewing officer may — officer-ness is a live provider
+        // assignment carrying the role, not a separate grant.
         $officer = $this->user(Role::EMPLOYEE);
-        CipAccess::grant($officer, CipAccess::REVIEWING_OFFICER);
+        \App\Models\CompanyStaffAssignment::create([
+            'company_id' => \App\Models\Company::create(['uid' => 'galaxy-firm', 'name' => 'Galaxy Firm'])->id,
+            'user_id' => $officer->id,
+            'role' => CipAccess::REVIEWING_OFFICER,
+            'permission_level' => 'view_only',
+            'applies_to_clients' => 'company_only',
+            'status' => \App\Models\CompanyStaffAssignment::STATUS_ACTIVE,
+        ]);
         CipAccess::forget();
 
         Engine::apply($application->fresh(), Status::ASSESSMENT_FEEDBACK, $officer);

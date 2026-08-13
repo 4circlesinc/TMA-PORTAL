@@ -2,22 +2,24 @@
 
 namespace App\Support\Cip;
 
-use App\Models\CipOfficerRole;
+use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
-use App\Support\Activity\ActivityLogger;
 
 /**
  * Who may do what inside the CIP module.
  *
  * The account-type matrix (Role) cannot tell a CRO from any other employee —
  * capabilities there resolve per account type, and officer-ness is a per-user
- * fact. So officer grants live in cip_officer_roles and this class is the one
- * reader: Role answers the baseline (admins hold everything, subject to
- * FEATURE_CIP), the grant rows widen specific employees into officers.
+ * fact. Officer-ness lives where the rest of the portal already keeps access:
+ * a live staff assignment on a service provider (a company record) carrying
+ * one of the officer roles from ClientAssignment::ROLES. Assign Krishna to
+ * Galaxy as "CRO / Reviewing officer" on the provider page and she is an
+ * officer; end the assignment and she is not. There is no separate grant
+ * store, no separate screen, and suspension settles it through AccessSync
+ * like every other assignment.
  *
- * The precedent is CompanyAccess — a domain authority Role does not know
- * about. Ask this class, never the table.
+ * Ask this class, never the tables.
  */
 class CipAccess
 {
@@ -25,10 +27,10 @@ class CipAccess
 
     public const COMPLIANCE_OFFICER = 'compliance_officer';
 
-    /** role => label, the vocabulary the admin form offers. */
+    /** role => label, as offered by the assignment dialogs. */
     public const ROLES = [
-        self::REVIEWING_OFFICER => 'CRO / Reviewing Officer',
-        self::COMPLIANCE_OFFICER => 'Compliance Officer',
+        self::REVIEWING_OFFICER => 'CRO / Reviewing officer',
+        self::COMPLIANCE_OFFICER => 'Compliance officer',
     ];
 
     /** What each officer role adds on top of the employee baseline. */
@@ -46,9 +48,9 @@ class CipAccess
     }
 
     /**
-     * Does this user hold the capability, counting officer grants? Role::can
-     * already answers admins (and the FEATURE_CIP dark switch); this widens
-     * the answer for employees holding an officer role.
+     * Does this user hold the capability, counting officer assignments?
+     * Role::can already answers admins (and the FEATURE_CIP dark switch);
+     * this widens the answer for staff holding a live officer assignment.
      */
     public static function can(?User $user, string $capability): bool
     {
@@ -85,64 +87,24 @@ class CipAccess
         return $role === null ? $roles !== [] : in_array($role, $roles, true);
     }
 
-    /** @return list<string> */
+    /**
+     * The officer roles this user holds right now — distinct roles across
+     * every live service-provider assignment.
+     *
+     * @return list<string>
+     */
     public static function officerRoles(User $user): array
     {
-        return self::$rolesByUser[$user->id] ??= CipOfficerRole::query()
+        return self::$rolesByUser[$user->id] ??= CompanyStaffAssignment::query()
+            ->live()
             ->where('user_id', $user->id)
+            ->whereIn('role', array_keys(self::ROLES))
+            ->distinct()
             ->pluck('role')
             ->all();
     }
 
-    public static function grant(User $user, string $role, ?User $by = null): CipOfficerRole
-    {
-        if (! array_key_exists($role, self::ROLES)) {
-            throw new \InvalidArgumentException('Unknown CIP officer role: '.$role);
-        }
-
-        if (! Role::isStaff($user)) {
-            throw new \InvalidArgumentException('Only staff accounts can hold a CIP officer role.');
-        }
-
-        $grant = CipOfficerRole::firstOrCreate(
-            ['user_id' => $user->id, 'role' => $role],
-            ['granted_by' => $by?->id],
-        );
-
-        if ($grant->wasRecentlyCreated) {
-            self::forget($user);
-            ActivityLogger::log([
-                'actor' => $by,
-                'type' => 'cip.officer_granted',
-                'module' => 'cip',
-                'description' => $user->name.' was made '.self::ROLES[$role],
-                'subject' => $user,
-            ]);
-        }
-
-        return $grant;
-    }
-
-    public static function revoke(User $user, string $role, ?User $by = null): void
-    {
-        $removed = CipOfficerRole::query()
-            ->where('user_id', $user->id)
-            ->where('role', $role)
-            ->delete();
-
-        if ($removed > 0) {
-            self::forget($user);
-            ActivityLogger::log([
-                'actor' => $by,
-                'type' => 'cip.officer_revoked',
-                'module' => 'cip',
-                'description' => $user->name.' is no longer '.(self::ROLES[$role] ?? $role),
-                'subject' => $user,
-            ]);
-        }
-    }
-
-    /** Drop the per-request memo after a grant change. */
+    /** Drop the per-request memo after an assignment change. */
     public static function forget(?User $user = null): void
     {
         if ($user === null) {

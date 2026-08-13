@@ -287,7 +287,6 @@ class Role
         // "Connectors" stays open — it is where anyone links their own
         // Microsoft account (Outlook, Calendar, OneDrive).
         'storage-usage' => 'settings.storage',
-        'cip-management' => 'cip.configure',
         'permissions' => 'settings.advanced',
         'default-folders' => 'files.settings',
         'folder-templates' => 'files.settings',

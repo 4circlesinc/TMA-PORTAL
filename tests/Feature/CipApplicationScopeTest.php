@@ -6,6 +6,7 @@ use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicationScope;
@@ -106,7 +107,14 @@ class CipApplicationScopeTest extends TestCase
         $this->assertCount(1, ApplicationScope::query($admin)->get());
 
         $officer = $this->user(Role::EMPLOYEE);
-        CipAccess::grant($officer, CipAccess::REVIEWING_OFFICER);
+        CompanyStaffAssignment::create([
+            'company_id' => Company::create(['uid' => 'officer-home', 'name' => 'Officer Home'])->id,
+            'user_id' => $officer->id,
+            'role' => CipAccess::REVIEWING_OFFICER,
+            'permission_level' => 'view_only',
+            'applies_to_clients' => 'company_only',
+            'status' => CompanyStaffAssignment::STATUS_ACTIVE,
+        ]);
         CipAccess::forget();
         $this->assertCount(1, ApplicationScope::query($officer)->get());
 

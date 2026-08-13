@@ -13,7 +13,6 @@ use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
-use App\Http\Controllers\Cip\CipAdminController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientCustomFieldsController;
 use App\Http\Controllers\ClientHubSettingsController;
@@ -304,18 +303,6 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         ->name('admin.client-fields.update');
     Route::delete('/admin/client-fields/{id}', [ClientCustomFieldsController::class, 'destroy'])
         ->name('admin.client-fields.destroy');
-
-    // Settings → CIP management: the provider registry (whose codes prefix
-    // every internal application number) and per-user officer grants. Dark
-    // without FEATURE_CIP; the controller answers 404 — never 403 — for the
-    // flag and the capability alike.
-    Route::prefix('admin/cip')->name('admin.cip.')->group(function () {
-        Route::get('/management', [CipAdminController::class, 'show'])->name('management');
-        Route::post('/providers', [CipAdminController::class, 'storeProvider'])->name('providers.store');
-        Route::put('/providers/{uuid}', [CipAdminController::class, 'updateProvider'])->name('providers.update');
-        Route::post('/officers', [CipAdminController::class, 'grantOfficer'])->name('officers.grant');
-        Route::delete('/officers', [CipAdminController::class, 'revokeOfficer'])->name('officers.revoke');
-    });
 
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])
         ->name('admin.security-policies');

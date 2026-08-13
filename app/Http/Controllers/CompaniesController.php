@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
+use App\Support\Cip\Providers;
 use App\Support\Clients\ClientDirectory;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
@@ -151,6 +152,7 @@ class CompaniesController extends Controller
             'address' => ['nullable', 'array'],
             'billing' => ['nullable', 'array'],
             'status' => ['nullable', 'in:active,prospect,archived'],
+            'cipCode' => ['nullable', 'string', 'max:8', 'alpha'],
         ]);
 
         $base = $data['uid'] ?? Str::slug($data['name']);
@@ -159,6 +161,10 @@ class CompaniesController extends Controller
             'name' => $data['name'],
             'created_by' => $request->user()->id,
         ], $this->profileColumns($data)));
+
+        if (array_key_exists('cipCode', $data)) {
+            Providers::syncCode($company, $data['cipCode']);
+        }
 
         Cache::forget('companies.directory');
 
@@ -197,6 +203,7 @@ class CompaniesController extends Controller
             'address' => ['nullable', 'array'],
             'billing' => ['nullable', 'array'],
             'status' => ['nullable', 'in:active,prospect,archived'],
+            'cipCode' => ['nullable', 'string', 'max:8', 'alpha'],
         ]);
 
         if (array_key_exists('name', $data)) {
@@ -204,6 +211,10 @@ class CompaniesController extends Controller
         }
         $company->forceFill($this->profileColumns($data));
         $company->save();
+
+        if (array_key_exists('cipCode', $data)) {
+            Providers::syncCode($company, $data['cipCode']);
+        }
 
         // Keep denormalised company name on linked contacts in sync.
         if (array_key_exists('name', $data)) {

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -69,6 +70,12 @@ class Company extends Model
     }
 
     /** Everyone at the company who has (or is being given) portal access. */
+    /** The CIP numbering registry row, when this company is a service provider. */
+    public function cipProvider(): HasOne
+    {
+        return $this->hasOne(CipProvider::class, 'company_id');
+    }
+
     public function members(): HasMany
     {
         return $this->hasMany(CompanyMember::class);
@@ -120,6 +127,9 @@ class Company extends Model
             'id' => $this->uid,
             'name' => $this->name,
             'logoUrl' => $this->logo_url,
+            // The service-provider code that prefixes CIP application
+            // numbers, when this company has one.
+            'cipCode' => $this->cipProvider?->code,
             'companyType' => $this->company_type,
             'companyTypeLabel' => $this->typeLabel(),
             'registrationNumber' => $this->registration_number,

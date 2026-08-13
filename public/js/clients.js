@@ -107,15 +107,15 @@
     { value: 'event', label: 'Event contact' },
     { value: 'signatory', label: 'Contract signatory' },
     { value: 'viewer', label: 'Viewer' },
-    { value: 'member', label: 'Company member' },
+    { value: 'member', label: 'Service provider member' },
   ];
 
   /* How far a staff assignment reaches. Company-only is the default on purpose
      — the wider options are shown with what they will cover before they apply. */
   var COMPANY_SCOPES = [
-    { value: 'company_only', label: 'The company only' },
-    { value: 'existing', label: 'The company and its current contacts' },
-    { value: 'existing_future', label: 'The company and all its contacts, now and in future' },
+    { value: 'company_only', label: 'The service provider only' },
+    { value: 'existing', label: 'The service provider and its current contacts' },
+    { value: 'existing_future', label: 'The service provider and all its contacts, now and in future' },
   ];
 
   /* What the staff member does for the client, as opposed to what they may
@@ -126,6 +126,8 @@
     { value: 'finance', label: 'Finance contact' },
     { value: 'contract_manager', label: 'Contract manager' },
     { value: 'event_coordinator', label: 'Event coordinator' },
+    { value: 'reviewing_officer', label: 'CRO / Reviewing officer' },
+    { value: 'compliance_officer', label: 'Compliance officer' },
     { value: 'general', label: 'Assigned staff' },
   ];
 
@@ -403,7 +405,7 @@
   }
 
   function emptyCompanyDraft() {
-    return { name: '', website: '', notes: '' };
+    return { name: '', website: '', notes: '', cipCode: '' };
   }
 
   var clientsLoaded = false;
@@ -944,7 +946,7 @@
   var CLIENT_SORTS = [
     { value: 'name', label: 'Name (A–Z)' },
     { value: 'name-desc', label: 'Name (Z–A)' },
-    { value: 'company', label: 'Company' },
+    { value: 'company', label: 'Service provider' },
     { value: 'type', label: 'Type' },
   ];
 
@@ -1275,12 +1277,12 @@
     label.textContent = count === 1 ? '1 Selected' : count + ' Selected';
   }
   function referralFilterLabel(value) {
-    if (value === 'company') return 'Any company';
+    if (value === 'company') return 'Any service provider';
     if (value === 'private') return 'Private';
     if (value === 'none') return 'No referral';
     if (value.indexOf('company:') === 0) {
       var company = companyFor(value.slice('company:'.length));
-      return company ? company.name : 'Company';
+      return company ? company.name : 'Service provider';
     }
     return '';
   }
@@ -1434,7 +1436,7 @@
       if (!companyMatchesSearch(company, search)) return;
       var key = 'company:' + company.id;
       if (removed[key]) return;
-      rows.push({ kind: 'company', key: key, id: company.id, name: company.name || 'Company', company: company });
+      rows.push({ kind: 'company', key: key, id: company.id, name: company.name || 'Service provider', company: company });
     });
 
     return sortTableRows(rows, state && state.sort);
@@ -1462,7 +1464,7 @@
     }
     if (sort === 'type') {
       return rows.sort(keyed(function (r) {
-        return r.kind === 'company' ? 'Company' : clientTypeLabel(clientTypeOf(r.id));
+        return r.kind === 'company' ? 'Service provider' : clientTypeLabel(clientTypeOf(r.id));
       }));
     }
 
@@ -1518,7 +1520,7 @@
       // No checkbox: the bulk actions post to the clients endpoint.
       '<div class="tma-dash__cc tma-dash__cc--check"></div>' +
       '<div class="tma-dash__cc tma-dash__cc--user">' + companyAvatarMarkup(company) +
-      '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Company') + '</span></div>' +
+      '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">Company</span></div>' +
       // Its own name belongs in the first column, not repeated here; what the
       // reader wants of a company at a glance is how many people it holds.
@@ -1812,7 +1814,7 @@
       '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all"></div>' +
       '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">Client</div>' +
       '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">Company</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">Service provider</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
       '</div>' +
       '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
@@ -2222,7 +2224,7 @@
 
   function renderCompanyFormToolbar(state) {
     var isNew = state.screen === 'add-company';
-    var title = isNew ? 'New company' : 'Edit company';
+    var title = isNew ? 'New service provider' : 'Edit service provider';
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
@@ -2379,7 +2381,7 @@
       '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-referral>' +
       '<option value="none"' + (selected === 'none' ? ' selected' : '') + '>No referral</option>' +
       '<option value="private"' + (selected === 'private' ? ' selected' : '') + '>Private</option>' +
-      (companyOpts ? '<optgroup label="Companies">' + companyOpts + '</optgroup>' : '') +
+      (companyOpts ? '<optgroup label="Service providers">' + companyOpts + '</optgroup>' : '') +
       '</select></label>'
     );
   }
@@ -2615,10 +2617,11 @@
       toolbar +
       '<form class="tma-dash__clients-form" data-clients-company-form novalidate>' +
       renderFormSection(
-        'Company',
+        'Service provider',
         '<div class="tma-dash__clients-form-grid">' +
-        renderFormField('Company name', 'companyName', draft.name) +
+        renderFormField('Service provider name', 'companyName', draft.name) +
         renderFormField('Website', 'companyWebsite', draft.website, { type: 'url', placeholder: 'https://' }) +
+        renderFormField('CIP code', 'companyCipCode', draft.cipCode, { placeholder: 'GAL' }) +
         '</div>' +
         '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
         '<span class="tma-dash__clients-form-label">Notes</span>' +
@@ -2644,7 +2647,7 @@
     var company = companyFor(state.companyId);
     if (!company) {
       return '<div class="tma-dash__clients-detail">' +
-        clientsEmpty('Company not found', 'Illustration07') + '</div>';
+        clientsEmpty('Service provider not found', 'Illustration07') + '</div>';
     }
 
     return (
@@ -2750,6 +2753,7 @@
       { icon: ICONS.User, label: 'Contacts', value: String((company.people || []).length) },
       { icon: ICONS.UserCircle, label: 'Portal access', value: String(company.memberCount || 0) },
       website,
+      { icon: ICONS.Briefcase, label: 'CIP code', value: company.cipCode },
       { icon: ICONS.Briefcase, label: 'Industry', value: company.industry },
       { icon: ICONS.EnvelopeSimple, label: 'Email', value: company.email },
       { icon: ICONS.Phone, label: 'Phone', value: company.phone },
@@ -2782,7 +2786,7 @@
     for (var i = 0; i < COMPANY_ROLES.length; i++) {
       if (COMPANY_ROLES[i].value === role) return COMPANY_ROLES[i].label;
     }
-    return 'Company member';
+    return 'Service provider member';
   }
 
   /* Who at the company can reach its records, and how far each has got. */
@@ -4228,7 +4232,7 @@
       var facets = referralFacets();
       var current = filters.referral || '';
       html = clientsPopItem('data-clients-filter-value', '', 'All clients', { selected: !current }) +
-        clientsPopItem('data-clients-filter-value', 'company', 'Any company', {
+        clientsPopItem('data-clients-filter-value', 'company', 'Any service provider', {
           selected: current === 'company',
           meta: facets.company ? String(facets.company) : '',
         }) +
@@ -5095,13 +5099,15 @@
         var nameEl = root.querySelector('[data-clients-field="companyName"]');
         var websiteEl = root.querySelector('[data-clients-field="companyWebsite"]');
         var notesEl = root.querySelector('[data-clients-field="companyNotes"]');
+        var cipCodeEl = root.querySelector('[data-clients-field="companyCipCode"]');
         var payload = {
           name: nameEl ? nameEl.value.trim() : '',
           website: websiteEl ? websiteEl.value.trim() : '',
           notes: notesEl ? notesEl.value.trim() : '',
+          cipCode: cipCodeEl ? cipCodeEl.value.trim() : '',
         };
         if (!payload.name) {
-          clientsToast('Company name is required', 'negative');
+          clientsToast('Service provider name is required', 'negative');
           return;
         }
         saveCompanyBtn.disabled = true;
@@ -5117,7 +5123,7 @@
             else COMPANIES.push(company);
             hydrateCompanies(COMPANIES);
           }
-          clientsToast(isNew ? 'Company created' : 'Company saved', 'positive');
+          clientsToast(isNew ? 'Service provider created' : 'Service provider saved', 'positive');
           navigate('company', null, { companyId: company ? company.id : state.companyId });
         }).catch(function (err) {
           saveCompanyBtn.disabled = false;
@@ -5650,11 +5656,11 @@
         return { title: 'New person', crumb: 'Clients / New person' };
       }
       if (screen === 'add-company') {
-        return { title: 'New company', crumb: 'Clients / New company' };
+        return { title: 'New service provider', crumb: 'Clients / New service provider' };
       }
       if (screen === 'company' || screen === 'edit-company') {
         var company = companyFor(companyId || state.companyId);
-        var companyName = company ? company.name : 'Company';
+        var companyName = company ? company.name : 'Service provider';
         if (screen === 'edit-company') {
           return { title: companyName, crumb: 'Clients / ' + companyName };
         }
@@ -5723,6 +5729,7 @@
           name: editCompany.name || '',
           website: editCompany.website || '',
           notes: editCompany.notes || '',
+          cipCode: editCompany.cipCode || '',
         };
         state.draft = null;
         return;

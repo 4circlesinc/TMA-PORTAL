@@ -42,6 +42,11 @@ class ClientAssignment extends Model
         'finance' => 'Finance contact',
         'contract_manager' => 'Contract manager',
         'event_coordinator' => 'Event coordinator',
+        // The CIP officer roles. Assigning staff to a service provider with
+        // one of these is what MAKES them an officer — CipAccess reads live
+        // assignments, there is no separate grant store.
+        'reviewing_officer' => 'CRO / Reviewing officer',
+        'compliance_officer' => 'Compliance officer',
         'general' => 'Assigned staff',
     ];
 

@@ -2,17 +2,21 @@
 
 namespace Tests\Feature;
 
+use App\Models\Company;
+use App\Models\CompanyStaffAssignment;
 use App\Models\User;
+use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * The native CIP module ships dark behind FEATURE_CIP, exactly like CBI: 404
- * — never 403 — while the flag is off (administrators included) and for every
- * non-holder while it is on. Officer-ness is a per-user grant on top of the
- * Employee account type, readable only through CipAccess.
+ * The native CIP module ships dark behind FEATURE_CIP, exactly like CBI —
+ * every cip.* capability is denied for everyone, administrators included,
+ * while the flag is off. Officer-ness is not a fourth account type and not a
+ * separate grant store: it is a live staff assignment on a service provider
+ * (a company record) carrying an officer role, read through CipAccess.
  */
 class CipAccessTest extends TestCase
 {
@@ -29,119 +33,120 @@ class CipAccessTest extends TestCase
         ]);
     }
 
-    public function test_everything_404s_when_the_flag_is_off(): void
+    /** Assign a staff member to a service provider with an officer role. */
+    private function makeOfficer(User $user, string $role, ?Company $provider = null): CompanyStaffAssignment
+    {
+        $provider ??= Company::create(['uid' => 'provider-'.uniqid(), 'name' => 'Galaxy']);
+
+        $assignment = CompanyStaffAssignment::create([
+            'company_id' => $provider->id,
+            'user_id' => $user->id,
+            'role' => $role,
+            'permission_level' => 'view_only',
+            'applies_to_clients' => 'company_only',
+            'status' => CompanyStaffAssignment::STATUS_ACTIVE,
+        ]);
+
+        CipAccess::forget();
+
+        return $assignment;
+    }
+
+    public function test_the_flag_darkens_every_cip_capability_for_everyone(): void
     {
         config(['services.cip.enabled' => false]);
         $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::EMPLOYEE);
+        $this->makeOfficer($officer, CipAccess::REVIEWING_OFFICER);
 
-        $this->actingAs($admin)->getJson('/admin/cip/management')->assertNotFound();
-        $this->actingAs($admin)->postJson('/admin/cip/providers', ['name' => 'Galaxy', 'code' => 'GAL'])->assertNotFound();
-
-        // The capability itself is dark for admins too — the flag check sits
-        // before the admin short-circuit.
         $this->assertFalse(Role::can($admin, 'cip.view'));
+        $this->assertFalse(Role::can($admin, 'cip.configure'));
         $this->assertFalse(CipAccess::can($admin, 'cip.review'));
+        // Even a live officer assignment grants nothing while the module is dark.
+        $this->assertFalse(CipAccess::isOfficer($officer));
+        $this->assertFalse(CipAccess::can($officer, 'cip.review'));
     }
 
-    public function test_non_admins_get_404_not_403_with_the_flag_on(): void
+    public function test_an_officer_assignment_widens_an_employee(): void
     {
         config(['services.cip.enabled' => true]);
-
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $type) {
-            $user = $this->user($type);
-            $this->actingAs($user)->getJson('/admin/cip/management')->assertNotFound();
-            $this->actingAs($user)->postJson('/admin/cip/providers', ['name' => 'Galaxy', 'code' => 'GAL'])->assertNotFound();
-            $this->actingAs($user)->postJson('/admin/cip/officers', ['userId' => $user->id, 'role' => CipAccess::REVIEWING_OFFICER])->assertNotFound();
-        }
-    }
-
-    public function test_an_admin_manages_providers(): void
-    {
-        config(['services.cip.enabled' => true]);
-        $admin = $this->user(Role::ADMINISTRATOR);
-
-        $this->actingAs($admin)->getJson('/admin/cip/management')
-            ->assertOk()
-            ->assertJsonStructure(['canEdit', 'providers', 'officers', 'staff', 'roles']);
-
-        $this->actingAs($admin)
-            ->postJson('/admin/cip/providers', [
-                'name' => 'Galaxy', 'code' => 'gal',
-                'contactName' => 'Kevin M', 'contactEmail' => 'kevin@galaxy.example',
-            ])
-            ->assertCreated()
-            ->assertJsonPath('providers.0.code', 'GAL');
-
-        // Codes are unique whatever the case they were typed in.
-        $this->actingAs($admin)
-            ->postJson('/admin/cip/providers', ['name' => 'Galaxy Two', 'code' => 'GAL'])
-            ->assertStatus(422);
-    }
-
-    public function test_officer_grants_widen_an_employee_and_revoke_narrows_them(): void
-    {
-        config(['services.cip.enabled' => true]);
-        $admin = $this->user(Role::ADMINISTRATOR);
         $employee = $this->user(Role::EMPLOYEE);
 
         $this->assertFalse(CipAccess::can($employee, 'cip.review'));
 
-        $this->actingAs($admin)
-            ->postJson('/admin/cip/officers', ['userId' => $employee->id, 'role' => CipAccess::REVIEWING_OFFICER])
-            ->assertCreated();
+        $assignment = $this->makeOfficer($employee, CipAccess::REVIEWING_OFFICER);
 
-        CipAccess::forget();
         $this->assertTrue(CipAccess::isOfficer($employee, CipAccess::REVIEWING_OFFICER));
         $this->assertTrue(CipAccess::can($employee, 'cip.review'));
         // A reviewing officer is not a compliance officer.
         $this->assertFalse(CipAccess::can($employee, 'cip.decide'));
 
-        $this->actingAs($admin)
-            ->deleteJson('/admin/cip/officers', ['userId' => $employee->id, 'role' => CipAccess::REVIEWING_OFFICER])
-            ->assertOk();
-
+        // Ending the assignment ends the officer-ness — no grant survives it.
+        $assignment->forceFill(['status' => CompanyStaffAssignment::STATUS_ENDED, 'ended_at' => now()])->save();
         CipAccess::forget();
+
         $this->assertFalse(CipAccess::isOfficer($employee));
         $this->assertFalse(CipAccess::can($employee, 'cip.review'));
     }
 
-    public function test_suspension_ends_live_cip_assignments_but_keeps_the_officer_grant(): void
+    public function test_a_compliance_assignment_carries_the_decision_capabilities(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $employee = $this->user(Role::EMPLOYEE);
+        $this->makeOfficer($employee, CipAccess::COMPLIANCE_OFFICER);
+
+        $this->assertTrue(CipAccess::can($employee, 'cip.compliance'));
+        $this->assertTrue(CipAccess::can($employee, 'cip.decide'));
+        $this->assertFalse(CipAccess::can($employee, 'cip.review'));
+    }
+
+    public function test_officer_roles_are_valid_assignment_roles_end_to_end(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $employee = $this->user(Role::EMPLOYEE);
+        $provider = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+
+        // The same endpoint the provider page's Assigned staff dialog calls.
+        $this->actingAs($admin)
+            ->postJson('/portal/companies/'.$provider->uid.'/staff', [
+                'userId' => $employee->id,
+                'role' => CipAccess::REVIEWING_OFFICER,
+                'level' => 'view_only',
+                'appliesToClients' => 'company_only',
+            ])
+            ->assertSuccessful();
+
+        CipAccess::forget();
+        $this->assertTrue(CipAccess::isOfficer($employee, CipAccess::REVIEWING_OFFICER));
+    }
+
+    public function test_suspension_settles_officer_assignments(): void
     {
         config(['services.cip.enabled' => true]);
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::EMPLOYEE);
-        CipAccess::grant($officer, CipAccess::REVIEWING_OFFICER);
+        $this->makeOfficer($officer, CipAccess::REVIEWING_OFFICER);
 
-        $galaxy = \App\Models\CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
-        $application = \App\Support\Cip\Applications::create($galaxy, $admin);
-        $assignment = $application->assignments()->create([
-            'user_id' => $officer->id,
-            'role' => CipAccess::REVIEWING_OFFICER,
-            'status' => \App\Models\CipApplicationAssignment::STATUS_ACTIVE,
-            'assigned_by' => $admin->id,
-        ]);
+        $this->assertTrue(CipAccess::isOfficer($officer));
 
-        $summary = \App\Support\Access\AccessSync::userSuspended($officer, $admin);
-
-        $this->assertSame(1, $summary['cipAssignments']);
-        $this->assertSame(
-            \App\Models\CipApplicationAssignment::STATUS_ENDED,
-            $assignment->fresh()->status,
-        );
-        // The grant survives like company membership: the person is still an
-        // officer, they just cannot act while suspended.
+        AccessSync::userSuspended($officer, $admin);
         CipAccess::forget();
-        $this->assertTrue(CipAccess::isOfficer($officer, CipAccess::REVIEWING_OFFICER));
+
+        // The provider assignment ended with the account, and officer-ness
+        // ended with the assignment — one mechanism, no second store.
+        $this->assertFalse(CipAccess::isOfficer($officer));
     }
 
-    public function test_clients_cannot_hold_officer_roles(): void
+    public function test_clients_are_never_officers(): void
     {
         config(['services.cip.enabled' => true]);
-        $admin = $this->user(Role::ADMINISTRATOR);
         $client = $this->user(Role::CLIENT);
+        $this->makeOfficer($client, CipAccess::REVIEWING_OFFICER);
 
-        $this->actingAs($admin)
-            ->postJson('/admin/cip/officers', ['userId' => $client->id, 'role' => CipAccess::COMPLIANCE_OFFICER])
-            ->assertStatus(422);
+        // Even if a stray assignment row exists, a client account holds no
+        // officer capability.
+        $this->assertFalse(CipAccess::isOfficer($client));
+        $this->assertFalse(CipAccess::can($client, 'cip.review'));
     }
 }
