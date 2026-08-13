@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Company;
 use App\Support\Access\AccessSync;
+use App\Support\Access\CompanyScope;
 use App\Support\Access\Role;
 use App\Support\Cip\Providers;
 use App\Support\Clients\ClientDirectory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,34 +45,49 @@ class CompaniesController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $payload = Cache::remember('companies.directory', self::INDEX_TTL_SECONDS, function () {
-            $companies = Company::with(['clients' => fn ($q) => $q
-                // Only the columns toRecord() prints for a person. Unconstrained,
-                // this pulls each member's whole `data` blob — harmless while one
-                // client belongs to a company, and a second copy of the clients
-                // problem the moment the firm starts using membership.
-                ->select(self::PERSON_COLUMNS)
-                ->orderBy('name')
-                ->orderBy('id')])
-                // Every count the record prints, aggregated in the listing query.
-                // toRecord() falls back to a query per count when the figure is
-                // absent, which for member counts meant one round trip per company.
-                ->withCount([
-                    'referredClients',
-                    'clients',
-                    'members as current_members_count' => fn ($q) => $q->current(),
-                ])
-                ->orderBy('name')
-                ->get();
-
-            $this->attachReferredPreviews($companies);
-
-            return [
-                'companies' => $companies->map->toRecord()->values()->all(),
-            ];
-        });
+        // The firm-wide cache is only right for accounts that see the whole
+        // directory. Everyone else gets their assignment slice, computed per
+        // request — a handful of rows, not worth a per-user cache.
+        if (CompanyScope::seesEveryCompany($request->user())) {
+            $payload = Cache::remember(
+                'companies.directory',
+                self::INDEX_TTL_SECONDS,
+                fn () => $this->directoryPayload(Company::query()),
+            );
+        } else {
+            $payload = $this->directoryPayload(CompanyScope::query($request->user()));
+        }
 
         return response()->json($payload);
+    }
+
+    /** The listing payload for whichever slice of companies the query holds. */
+    private function directoryPayload(Builder $query): array
+    {
+        $companies = $query->with(['clients' => fn ($q) => $q
+            // Only the columns toRecord() prints for a person. Unconstrained,
+            // this pulls each member's whole `data` blob — harmless while one
+            // client belongs to a company, and a second copy of the clients
+            // problem the moment the firm starts using membership.
+            ->select(self::PERSON_COLUMNS)
+            ->orderBy('name')
+            ->orderBy('id')])
+            // Every count the record prints, aggregated in the listing query.
+            // toRecord() falls back to a query per count when the figure is
+            // absent, which for member counts meant one round trip per company.
+            ->withCount([
+                'referredClients',
+                'clients',
+                'members as current_members_count' => fn ($q) => $q->current(),
+            ])
+            ->orderBy('name')
+            ->get();
+
+        $this->attachReferredPreviews($companies);
+
+        return [
+            'companies' => $companies->map->toRecord()->values()->all(),
+        ];
     }
 
     /**
@@ -166,6 +183,20 @@ class CompaniesController extends Controller
             Providers::syncCode($company, $data['cipCode']);
         }
 
+        // An employee's directory is their assignments — without this row the
+        // provider they just created would vanish from their own list.
+        if (! CompanyScope::seesEveryCompany($request->user())) {
+            \App\Models\CompanyStaffAssignment::create([
+                'company_id' => $company->id,
+                'user_id' => $request->user()->id,
+                'role' => 'general',
+                'permission_level' => 'manager',
+                'applies_to_clients' => \App\Models\CompanyStaffAssignment::SCOPE_COMPANY_ONLY,
+                'status' => \App\Models\CompanyStaffAssignment::STATUS_ACTIVE,
+                'assigned_by' => $request->user()->id,
+            ]);
+        }
+
         Cache::forget('companies.directory');
 
         return response()->json([
@@ -177,9 +208,10 @@ class CompaniesController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $company = Company::with(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])
-            ->where('uid', $uid)
-            ->firstOrFail();
+        $company = CompanyScope::query(
+            $request->user(),
+            Company::with(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')]),
+        )->where('uid', $uid)->firstOrFail();
 
         return response()->json(['company' => $company->toRecord()]);
     }
@@ -188,7 +220,7 @@ class CompaniesController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $company = Company::where('uid', $uid)->firstOrFail();
+        $company = CompanyScope::findOrFail($request->user(), $uid);
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'website' => ['nullable', 'string', 'max:255'],
@@ -241,7 +273,7 @@ class CompaniesController extends Controller
     {
         $this->authorizeStaff($request);
 
-        $company = Company::where('uid', $uid)->firstOrFail();
+        $company = CompanyScope::findOrFail($request->user(), $uid);
         // Settle the access first, while the company still exists to log it.
         AccessSync::companyArchived($company, $request->user());
         // People stay; they just become unattached.
