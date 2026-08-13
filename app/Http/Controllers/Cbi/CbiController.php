@@ -344,11 +344,11 @@ class CbiController extends Controller
 
             $user = $staff[$key] ?? null;
             $people[$key] = [
-                'name' => $user?->name ?? Names::tidy($name),
+                'name' => $user['name'] ?? Names::tidy($name),
                 'roles' => [$role],
-                'email' => $user?->email,
-                'photo' => $user?->photoUrl(),
-                'userId' => $user?->id,
+                'email' => $user['email'] ?? null,
+                'photo' => $user['photo'] ?? null,
+                'userId' => $user['id'] ?? null,
             ];
         }
 
@@ -362,34 +362,42 @@ class CbiController extends Controller
     }
 
     /**
-     * Staff accounts keyed by normalised name, read once per request.
+     * Staff directory keyed by normalised name.
      *
-     * Without this the list endpoint would look a name up per row per role —
-     * seven hundred queries to draw a hundred rows.
+     * Cached as plain arrays, never Eloquent models: the file cache cannot
+     * reliably unserialize a Collection, and the leftover object became the
+     * list endpoint's "Server Error". Thirteen rows; the map is cheap.
      *
-     * @var array<string, \App\Models\User>|null
+     * @return array<string, array{id: int, name: string, email: ?string, photo: ?string}>
      */
-    private static ?array $staffCache = null;
-
-    /** @return array<string, \App\Models\User> */
     private static function staffByName(): array
     {
-        if (self::$staffCache !== null) {
-            return self::$staffCache;
-        }
+        $rows = Cache::remember('cbi.staff-directory', 300, function () {
+            Cache::forget('cbi.staff-users');
 
-        // Warm across list pages for a few minutes — staff names rarely change
-        // mid-session, and rebuilding this map used to accompany every page.
-        $users = Cache::remember('cbi.staff-users', 300, function () {
-            return \App\Models\User::whereIn('account_type', Role::STAFF)->get();
+            return \App\Models\User::whereIn('account_type', Role::STAFF)
+                ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url'])
+                ->map(fn ($user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'photo' => $user->photoUrl(),
+                ])
+                ->all();
         });
 
         $byName = [];
-        foreach ($users as $user) {
-            $byName[Names::normalise((string) $user->name)] = $user;
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $name = Names::normalise((string) ($row['name'] ?? ''));
+            if ($name !== '') {
+                $byName[$name] = $row;
+            }
         }
 
-        return self::$staffCache = $byName;
+        return $byName;
     }
 
     /** @return array<string, mixed> */

@@ -6,6 +6,7 @@ use App\Models\CbiApplication;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -117,5 +118,35 @@ class CbiAccessTest extends TestCase
             'type' => 'comment_added',
             'actor_user_id' => $admin->id,
         ]);
+    }
+
+    public function test_applications_list_resolves_assignees_from_a_plain_staff_cache(): void
+    {
+        config(['services.smartsheet.cbi_enabled' => true]);
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        CbiApplication::create([
+            'dedupe_key' => 'N:2026004',
+            'applicant_name' => 'Amara Okafor',
+            'stage' => 'applications',
+            'assigned_to' => $admin->name,
+            'assigned_to_canonical' => $admin->name,
+        ]);
+
+        $first = $this->actingAs($admin)->getJson('/portal/cbi/applications')->assertOk();
+        $first->assertJsonPath('items.0.people.0.name', $admin->name);
+        $first->assertJsonPath('items.0.people.0.userId', $admin->id);
+
+        $cached = Cache::get('cbi.staff-directory');
+        $this->assertIsArray($cached);
+        $this->assertIsArray($cached[0] ?? null);
+        $this->assertArrayHasKey('name', $cached[0]);
+        $this->assertArrayHasKey('photo', $cached[0]);
+        $this->assertArrayNotHasKey('password', $cached[0]);
+
+        $this->actingAs($admin)->getJson('/portal/cbi/applications')
+            ->assertOk()
+            ->assertJsonPath('items.0.people.0.name', $admin->name)
+            ->assertJsonPath('items.0.people.0.userId', $admin->id);
     }
 }
