@@ -127,6 +127,7 @@ class CipAdminController extends Controller
     private function payload(): array
     {
         $providers = CipProvider::withTrashed()
+            ->withCount('applications')
             ->orderBy('name')
             ->get()
             ->map(fn (CipProvider $p) => [
@@ -136,7 +137,7 @@ class CipAdminController extends Controller
                 'contactName' => $p->contact_name,
                 'contactEmail' => $p->contact_email,
                 'active' => $p->active && ! $p->trashed(),
-                'applications' => $p->applications()->count(),
+                'applications' => $p->applications_count,
             ])->values();
 
         $grants = CipOfficerRole::with('user:id,name,email')
