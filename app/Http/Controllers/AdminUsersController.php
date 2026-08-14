@@ -32,6 +32,27 @@ class AdminUsersController extends Controller
     // parked Employee type is recognized on existing rows but never granted.
     public const ACCOUNT_TYPES = Role::ASSIGNABLE;
 
+    /** How the directory describes an account — never what a dropdown offers. */
+    private function accountTypeLabel(User $user, $providerContactIds, $referredClientIds): string
+    {
+        if ($user->account_type === Role::EMPLOYEE) {
+            // Parked: approved, but waiting on a real role.
+            return 'Pending';
+        }
+
+        if ($user->account_type === Role::CLIENT) {
+            if ($providerContactIds->has($user->id)) {
+                return 'Service Provider Contact';
+            }
+
+            return $referredClientIds->has($user->id)
+                ? 'Service Provider Client'
+                : 'Private Client';
+        }
+
+        return $user->account_type ?? 'Not assigned';
+    }
+
     public function index(Request $request): JsonResponse
     {
         // The account-management table: every account's status, sign-in
@@ -54,6 +75,25 @@ class AdminUsersController extends Controller
         $userModels = User::orderByDesc('created_at')->get();
         $workStatuses = WorkDay::publicStatusesForUsers($userModels);
 
+        /*
+         * What an external account IS comes from the Client Hub, not from a
+         * dropdown: an active membership on a service provider makes them a
+         * Service Provider Contact; a client record referred by a provider
+         * makes them a Service Provider Client; a client under no provider
+         * is a Private Client. Measured in two grouped queries, not per row.
+         */
+        $externalIds = $userModels->where('account_type', Role::CLIENT)->pluck('id');
+        $providerContactIds = $externalIds->isEmpty() ? collect() : \App\Models\CompanyMember::query()
+            ->active()
+            ->whereIn('user_id', $externalIds)
+            ->pluck('user_id')
+            ->flip();
+        $referredClientIds = $externalIds->isEmpty() ? collect() : \App\Models\Client::query()
+            ->whereIn('user_id', $externalIds)
+            ->whereNotNull('referred_by_company_id')
+            ->pluck('user_id')
+            ->flip();
+
         $users = $userModels->map(fn (User $user) => [
             'id' => $user->id,
             'name' => $user->name,
@@ -63,6 +103,7 @@ class AdminUsersController extends Controller
             'gender' => $user->gender,
             'email' => $user->email,
             'accountType' => $user->account_type,
+            'accountTypeLabel' => $this->accountTypeLabel($user, $providerContactIds, $referredClientIds),
             'avatar' => $user->avatar_url,
             'phone' => $user->phone,
             'jobTitle' => $user->job_title,

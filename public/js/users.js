@@ -74,7 +74,7 @@
       user: u.name,
       avatar: u.avatar || initialsAvatar(u.name, u.id),
       email: u.email,
-      address: u.accountType === 'Employee' ? 'Pending' : (u.accountType || 'Not assigned'),
+      address: u.accountTypeLabel || u.accountType || 'Not assigned',
       date: u.joined,
       _ts: u.joinedIso ? Date.parse(u.joinedIso) : null,
       _status: u.status,

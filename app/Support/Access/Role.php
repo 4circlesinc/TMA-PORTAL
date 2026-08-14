@@ -56,13 +56,16 @@ class Role
     ];
 
     /**
-     * The types a person can be given — the working roles, and only them.
-     * Employee is deliberately absent: it is a one-way street out. Existing
-     * Employee rows stay recognized (and parked on /auth/role-pending), but
-     * no dropdown offers the type and no invitation grants it.
+     * The types the Users page may hand out — the INTERNAL working roles,
+     * and only them. Employee is deliberately absent (a one-way street out:
+     * existing rows stay recognized and parked, nothing grants it again).
+     * Client is deliberately absent too: external people are never typed by
+     * hand — they arrive through invitations sent from a client or service
+     * provider page, always as Client accounts, and the Users page merely
+     * *describes* them (Service Provider Contact / Service Provider Client /
+     * Private Client) from their hub relationships.
      */
     public const ASSIGNABLE = [
-        self::CLIENT,
         self::REVIEWING_OFFICER,
         self::COMPLIANCE_OFFICER,
         self::ADMINISTRATOR,
