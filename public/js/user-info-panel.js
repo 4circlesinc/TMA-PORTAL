@@ -427,6 +427,7 @@
     if (!options || !options.row || !options.rows) return;
 
     ensureOverlay();
+    if (window.TMADesktop) overlayEl.classList.add('tma-user-info-overlay--desktop');
     watchHostView(document.querySelector('.tma-dash__view:not([hidden])'));
     session = {
       row: options.row,

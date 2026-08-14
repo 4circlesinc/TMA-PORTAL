@@ -134,6 +134,12 @@ function buildCss(platform = process.platform) {
     }
   }
 
+  /* The user-info drawer is fixed full-height in every state, so its offset
+     is unconditional — without it the bar covers the drawer's own toolbar. */
+  .tma-user-info-overlay .tma-user-info-panel {
+    top: ${HEIGHT + 16}px !important;
+  }
+
   @media (max-width: 1024px) {
     /* Narrow window: the rail and rightbar become drawers, pinned below the bar.
        The header is deliberately not in this list — see the narrow-window
@@ -389,6 +395,12 @@ function buildCss(platform = process.platform) {
    * shape for a small window. Scoped to .tma-dash--desktop-bar throughout, so a
    * browser at the same width is untouched and still gets the phone layout.
    */
+  /* The user-info drawer is fixed full-height in every state, so its offset
+     is unconditional — without it the bar covers the drawer's own toolbar. */
+  .tma-user-info-overlay .tma-user-info-panel {
+    top: ${HEIGHT + 16}px !important;
+  }
+
   @media (max-width: 1024px) {
     /*
      * The header is the bar, at every width. The phone layout floats it over
