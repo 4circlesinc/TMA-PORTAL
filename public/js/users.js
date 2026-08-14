@@ -450,7 +450,7 @@ if (state.filters.user) {
     '</button>';
   }
 
-  var GRID_PAGE_SIZE = 55;
+  var GRID_PAGE_SIZE = 100;
 
   function getPageSize(state) {
     return state.viewMode === 'grid' ? GRID_PAGE_SIZE : state.pageSize;
@@ -533,7 +533,7 @@ if (state.filters.user) {
     '</div>';
   }
 
-  var PAGE_SIZES = [5, 10, 20];
+  var PAGE_SIZES = [10, 25, 50, 100];
 
   function renderPagination(state, totalRows) {
     var pageSize = getPageSize(state);
@@ -656,7 +656,7 @@ if (state.filters.user) {
       filters: {},
       sort: { column: null, direction: null },
       page: 1,
-      pageSize: isOverview ? 10 : 5,
+      pageSize: isOverview ? 10 : 100,
       selected: {},
       nextId: 9806,
       activeField: null,

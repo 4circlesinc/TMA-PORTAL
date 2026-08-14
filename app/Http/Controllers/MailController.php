@@ -38,7 +38,7 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  */
 class MailController extends Controller
 {
-    private const PER_PAGE = 50;
+    private const PER_PAGE = 100;
 
     /** Page sizes the inbox's "per page" control offers. */
     public const PER_PAGE_OPTIONS = [25, 50, 100, 200];

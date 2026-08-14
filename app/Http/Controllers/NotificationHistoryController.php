@@ -25,7 +25,7 @@ use Illuminate\Support\Carbon;
  */
 class NotificationHistoryController extends Controller
 {
-    private const PER_PAGE = 50;
+    private const PER_PAGE = 100;
 
     /** Recipients offered in the filter. Long enough to be useful, short enough to load. */
     private const RECIPIENT_LIMIT = 200;

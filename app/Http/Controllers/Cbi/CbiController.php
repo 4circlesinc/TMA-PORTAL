@@ -185,7 +185,7 @@ class CbiController extends Controller
             default => $query->orderByDesc('source_modified_at'),
         };
 
-        $perPage = min(100, max(10, (int) $request->query('per_page', 50)));
+        $perPage = min(100, max(10, (int) $request->query('per_page', 100)));
         $page = $query->paginate($perPage);
 
         return response()->json([
