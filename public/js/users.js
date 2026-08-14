@@ -37,7 +37,7 @@
   /* ── real user directory (database-backed, staff-readable) ── */
   /* Filled/overwritten from GET /admin/users. Declared here so assigning
      under 'use strict' does not throw ReferenceError and blank the table. */
-  var ACCOUNT_TYPES = ['Client', 'Employee', 'Reviewing Officer', 'Compliance Officer', 'Administrator'];
+  var ACCOUNT_TYPES = ['Client', 'Reviewing Officer', 'Compliance Officer', 'Administrator'];
   /* the design system's own avatar set - filled from the server */
   var SYSTEM_AVATARS = [];
 
@@ -950,7 +950,11 @@ if (state.filters.user) {
         index: filteredIndex,
         fieldLabels: state.live ? { address: 'Account type' } : null,
         hideDuplicate: !!state.live,
-        addressOptions: state.live ? ACCOUNT_TYPES : null,
+        addressOptions: state.live
+          ? (ACCOUNT_TYPES.indexOf(row.accountType) !== -1 || !row.accountType
+            ? ACCOUNT_TYPES
+            : [row.accountType].concat(ACCOUNT_TYPES))
+          : null,
         avatarChoices: state.live ? SYSTEM_AVATARS : null,
         profileFields: !!state.live,
         nameParts: !!state.live,

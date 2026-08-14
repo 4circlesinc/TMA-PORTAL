@@ -28,10 +28,9 @@ use Illuminate\Validation\Rule;
 
 class AdminUsersController extends Controller
 {
-    // Role::ALL, spelled out where the Users page reads it: the two CIP
-    // officer types are employees with a narrower CIP remit, assignable from
-    // the same dropdown as everything else.
-    public const ACCOUNT_TYPES = Role::ALL;
+    // What the Users page offers and accepts: the working roles only. The
+    // parked Employee type is recognized on existing rows but never granted.
+    public const ACCOUNT_TYPES = Role::ASSIGNABLE;
 
     public function index(Request $request): JsonResponse
     {

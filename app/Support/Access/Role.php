@@ -43,10 +43,26 @@ class Role
 
     public const ADMINISTRATOR = 'Administrator';
 
-    /** Every assignable account type, in ascending order of reach. */
+    /**
+     * Every account type the portal recognizes, in ascending order of reach —
+     * including the parked Employee type existing rows still carry.
+     */
     public const ALL = [
         self::CLIENT,
         self::EMPLOYEE,
+        self::REVIEWING_OFFICER,
+        self::COMPLIANCE_OFFICER,
+        self::ADMINISTRATOR,
+    ];
+
+    /**
+     * The types a person can be given — the working roles, and only them.
+     * Employee is deliberately absent: it is a one-way street out. Existing
+     * Employee rows stay recognized (and parked on /auth/role-pending), but
+     * no dropdown offers the type and no invitation grants it.
+     */
+    public const ASSIGNABLE = [
+        self::CLIENT,
         self::REVIEWING_OFFICER,
         self::COMPLIANCE_OFFICER,
         self::ADMINISTRATOR,

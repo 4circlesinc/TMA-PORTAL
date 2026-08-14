@@ -278,7 +278,7 @@ final class Invitations
             // A staff invitation can promote an existing client account, but it
             // must never quietly demote an administrator.
             if (! Role::isAdmin($user)) {
-                $user->forceFill(['account_type' => $invitation->role ?: Role::EMPLOYEE])->save();
+                $user->forceFill(['account_type' => $invitation->role ?: Role::REVIEWING_OFFICER])->save();
             }
 
             if (! empty($invitation->access['jobTitle']) && ! $user->job_title) {

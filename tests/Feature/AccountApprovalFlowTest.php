@@ -55,12 +55,12 @@ class AccountApprovalFlowTest extends TestCase
         $newbie = $this->pending();
         event(new Registered($newbie));
 
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])
             ->assertOk();
 
         $newbie->refresh();
         $this->assertSame('approved', $newbie->status);
-        $this->assertSame('Employee', $newbie->account_type);
+        $this->assertSame('Reviewing Officer', $newbie->account_type);
 
         // The user is told, and it's audited.
         $this->assertSame(1, Notification::where('user_id', $newbie->id)->where('type', 'account.approved')->count());
@@ -80,8 +80,8 @@ class AccountApprovalFlowTest extends TestCase
         $admin = $this->admin();
         $newbie = $this->pending();
 
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])->assertOk();
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])->assertStatus(422);
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])->assertOk();
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])->assertStatus(422);
     }
 
     public function test_denying_records_a_reason_notifies_and_clears_the_alert(): void
@@ -182,7 +182,7 @@ class AccountApprovalFlowTest extends TestCase
         $admin = $this->admin();
         $newbie = $this->pending();
 
-        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])
+        $this->actingAs($admin)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])
             ->assertOk();
 
         Mail::assertSent(Postcard::class, fn (Postcard $m) => $m->hasTo($newbie->email)
@@ -221,7 +221,7 @@ class AccountApprovalFlowTest extends TestCase
         ]);
         $newbie = $this->pending();
 
-        $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])->assertStatus(403);
+        $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Reviewing Officer'])->assertStatus(403);
         $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/deny")->assertStatus(403);
     }
 }

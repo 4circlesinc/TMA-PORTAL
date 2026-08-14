@@ -338,7 +338,7 @@ class InvitationTest extends TestCase
         $this->actingAs($admin)->postJson('/admin/users', [
             'name' => 'Sam Fielding',
             'email' => 'sam@firm.test',
-            'account_type' => 'Employee',
+            'account_type' => 'Reviewing Officer',
             'job_title' => 'Paralegal',
         ])->assertOk();
 
@@ -347,18 +347,18 @@ class InvitationTest extends TestCase
 
         $invitation = Invitation::first();
         $this->assertSame('staff', $invitation->type);
-        $this->assertSame('Employee', $invitation->role);
+        $this->assertSame('Reviewing Officer', $invitation->role);
         $this->assertSame('Paralegal', $invitation->access['jobTitle']);
     }
 
-    public function test_a_staff_invitation_creates_an_employee_on_acceptance(): void
+    public function test_a_staff_invitation_creates_a_staff_account_on_acceptance(): void
     {
         Mail::fake();
         $admin = $this->admin();
         $this->actingAs($admin)->postJson('/admin/users', [
             'name' => 'Sam Fielding',
             'email' => 'sam@firm.test',
-            'account_type' => 'Employee',
+            'account_type' => 'Reviewing Officer',
         ]);
 
         $token = null;
@@ -377,7 +377,7 @@ class InvitationTest extends TestCase
 
         $user = User::where('email', 'sam@firm.test')->first();
         $this->assertNotNull($user);
-        $this->assertSame('Employee', $user->account_type);
+        $this->assertSame('Reviewing Officer', $user->account_type);
         $this->assertSame('approved', $user->status);
     }
 
@@ -390,7 +390,7 @@ class InvitationTest extends TestCase
             'type' => 'staff',
             'email' => 'nope@firm.test',
             'name' => 'Nope',
-            'role' => 'Employee',
+            'role' => 'Reviewing Officer',
         ])->assertForbidden();
     }
 

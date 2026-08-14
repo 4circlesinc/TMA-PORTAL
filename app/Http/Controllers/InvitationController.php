@@ -84,7 +84,7 @@ class InvitationController extends Controller
             'name' => ['nullable', 'string', 'max:255'],
             'clientUid' => ['nullable', 'string', 'max:96'],
             'companyUid' => ['nullable', 'string', 'max:96'],
-            'role' => ['nullable', Rule::in(Role::ALL)],
+            'role' => ['nullable', Rule::in(Role::ASSIGNABLE)],
             'jobTitle' => ['nullable', 'string', 'max:120'],
             'department' => ['nullable', 'string', 'max:120'],
             'companyRole' => ['nullable', 'string', 'max:64'],
@@ -124,7 +124,9 @@ class InvitationController extends Controller
 
         abort_if($duplicate, 422, 'There is already a pending invitation for this address. Resend or cancel it instead.');
 
-        $role = $data['role'] ?? ($type === Invitation::TYPE_STAFF ? Role::EMPLOYEE : Role::CLIENT);
+        // Staff invites default to the reviewing side — Employee is parked
+        // and would only send the new person to the role-pending screen.
+        $role = $data['role'] ?? ($type === Invitation::TYPE_STAFF ? Role::REVIEWING_OFFICER : Role::CLIENT);
 
         // Only an administrator may hand out administrator access.
         if ($role === Role::ADMINISTRATOR) {
