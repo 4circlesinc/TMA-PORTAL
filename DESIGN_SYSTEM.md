@@ -536,6 +536,25 @@ Component demos under `public/demo/` and Figma-derived frame docs may still refe
 
 **Set selection:** TMA icons for TMA-specific glyphs (Sidebar, Rightbar, Checkbox, Search-16). Phosphor for general UI (User, Bell, Folder, Star).
 
+#### Tinting - an `<img>` of an icon is always black
+
+These SVGs carry `fill="currentColor"`, but through an `<img>` that resolves to **black and CSS cannot recolour it**. Anywhere an icon has to take the colour of what it sits in - and *anywhere it is drawn on a dark surface* - use a **masked `<span>`** instead:
+
+```css
+.thing__ico {
+  background-color: currentColor;          /* the tint */
+  mask-image: url('../images/icons/phosphor/Microphone.svg');
+  -webkit-mask-image: url('../images/icons/phosphor/Microphone.svg');
+  mask-repeat: no-repeat; mask-position: center; mask-size: contain;
+}
+```
+
+Then run `python3 scripts/inline_icon_masks.py`, which rewrites each `url()` as a data: URI and keeps the filename in a trailing comment. **Editing an SVG on disk changes nothing until that script is re-run.** Inlined art also works in documents that have no base URL of their own, such as the floating call window.
+
+Live examples: the sidebar nav (`.tma-dash__nav-icon--*`) and every call control (`.tma-call__ico--*`).
+
+**Testing a masked icon:** assert the *resolved* mask URL, not just size and colour - a mask that failed to resolve leaves a correctly sized, correctly coloured solid block that looks fine in a screenshot. `tests/Browser/call-float.mjs` and `folder-shortcuts.mjs` both do this.
+
 ### Brand Logos (app identity)
 
 | Asset | Path | JS helper |
@@ -575,6 +594,7 @@ Component demos under `public/demo/` and Figma-derived frame docs may still refe
 | Table list/grid toggle | `table-view-toggle.js` + `dashboard.css` | Shared header toggle for all `data-table-view` pages; register per page |
 | Table add data modal | `table-add-data.js` | × auto-saves draft; Cancel clears; Save stages |
 | Global search | `global-search.js` | `/` opens; highlight matches; recent/visited/contacts |
+| Call window | `messaging-calls.js` + `dashboard.css` (`.tma-call__compact`) | An answered call moves into a floating picture-in-picture window above other apps. The picture runs edge to edge; the window's controls (top) and the call's controls (bottom) are revealed together on hover and on `:focus-within`. Icons are masked spans, never `<img>` — see below |
 | Toast auto-dismiss | `toast.js` | Scene overlay on dashboard; timed visibility |
 | Date picker | `date-picker-guidance.js` | Range, time, preset chips |
 | Tab keyboard | `tab-group.js` | Arrow keys switch tabs |

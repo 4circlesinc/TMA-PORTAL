@@ -162,6 +162,44 @@ for (const want of ['mute', 'camera', 'hangup', 'pop-in']) {
   check(inWindow && inWindow.controls.includes(want), `it offers "${want}"`);
 }
 
+/*
+ * The icons, measured rather than eyeballed. They are Phosphor artwork worn as
+ * a CSS mask, and every way that fails is invisible in a screenshot taken on a
+ * dark window: a mask that did not resolve leaves a correctly sized, correctly
+ * coloured *solid block*, and an <img> of the same file would render black on
+ * near-black. So this asserts the resolved mask is real art and the tint is the
+ * control's own colour. It runs inside the floating window on purpose — that is
+ * a second document, where a relative URL is exactly the kind of thing that
+ * quietly resolves to nothing.
+ */
+const icons = await page.evaluate(() => {
+  const doc = window.documentPictureInPicture.window.document;
+  return [...doc.querySelectorAll('.tma-call__compact [data-call-action] .tma-call__ico')]
+    .map((el) => {
+      const s = getComputedStyle(el);
+      const mask = s.maskImage || s.webkitMaskImage || '';
+      return {
+        action: el.parentElement.getAttribute('data-call-action'),
+        art: mask.indexOf('url("data:image/svg+xml') === 0,
+        raw: mask.slice(0, 24),
+        // The control's *own* colour, whatever that is — the window buttons are
+        // deliberately a little softer than the call controls.
+        tinted: s.backgroundColor === s.color,
+        // Zero-sized ones are the swap buttons the compact layout hides on
+        // purpose; they are not icons anybody is looking for.
+        shown: el.getBoundingClientRect().width > 0,
+      };
+    })
+    .filter((i) => i.shown);
+});
+check(icons.length >= 4, `every visible control carries an icon (${icons.length})`);
+const brokenArt = icons.filter((i) => !i.art);
+const brokenTint = icons.filter((i) => !i.tinted);
+check(brokenArt.length === 0,
+  `each one resolves to real artwork${brokenArt.length ? ': ' + brokenArt.map((i) => i.action + '=' + i.raw).join(', ') : ''}`);
+check(brokenTint.length === 0,
+  `and is drawn in the control's own colour${brokenTint.length ? ': ' + brokenTint.map((i) => i.action).join(', ') : ''}`);
+
 /* ── 3. Edge to edge, and controls that keep out of the way ── */
 step(3, 'the picture is the window');
 await wait(2600);   // the controls introduce themselves once, then hide

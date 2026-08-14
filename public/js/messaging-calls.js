@@ -1896,82 +1896,48 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * Icons — the existing set, plus the ones the new controls need. Same
-   * single-path, currentColor style so tinting and sizing stay in CSS.
+   * Icons
+   *
+   * The artwork is Phosphor, from `public/images/icons/phosphor/`, named in
+   * dashboard.css and inlined by `scripts/inline_icon_masks.py`. Nothing here
+   * is drawn by hand: DESIGN_SYSTEM.md § Assets → Icons forbids new inline
+   * paths in JS while a file for the glyph exists, and one exists for all of
+   * these.
+   *
+   * A masked <span>, not an <img>. These SVGs are black, and an <img> of one
+   * cannot be recoloured by CSS — the same trap the sidebar nav hit. A call is
+   * drawn on near-black, so every glyph has to take its colour from the control
+   * around it, which is what `background-color: currentColor` behind a mask
+   * does. The name is the only thing this file decides; the art and the size
+   * both live in CSS.
    * ------------------------------------------------------------------ */
 
-  function svg(inner) {
-    return '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">' + inner + '</svg>';
+  function ico(name) {
+    return '<span class="tma-call__ico tma-call__ico--' + name + '" aria-hidden="true"></span>';
   }
-  function path(d) { return '<path fill="currentColor" d="' + d + '"/>'; }
 
-  function iconPhone() {
-    return svg(path('M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.3 1l-2.2 2.2z'));
-  }
-  function iconVideo() {
-    return svg(path('M4 6h11a2 2 0 0 1 2 2v2.2l3.3-2.3c.5-.4 1.2 0 1.2.6v7c0 .6-.7 1-1.2.6L17 13.8V16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z'));
-  }
-  function iconCameraOff() {
-    return svg(path('M2.1 3.5 3.5 2.1l18.4 18.4-1.4 1.4-3-3H4a2 2 0 0 1-2-2V8a2 2 0 0 1 1.2-1.8L2.1 3.5zM8.8 6H15a2 2 0 0 1 2 2v2.2l3.3-2.3c.5-.4 1.2 0 1.2.6v7c0 .3-.2.6-.5.8L8.8 6z'));
-  }
-  function iconHangup() {
-    return svg(path('M12 9c-1.7 0-3.4.3-5 .8V13c0 .5-.3.9-.7 1l-2.3.6c-.5.1-1-.1-1.2-.6C2.3 12.3 2 10.7 2 9c0-.6.4-1 .9-1.1C5.7 6.9 8.8 6.3 12 6.3s6.3.6 9.1 1.6c.5.1.9.5.9 1.1 0 1.7-.3 3.3-.8 5-.2.5-.7.7-1.2.6L17.7 14c-.4-.1-.7-.5-.7-1V9.8C15.4 9.3 13.7 9 12 9z'));
-  }
-  function iconMic() {
-    return svg(path('M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1A7 7 0 0 0 19 12h-2z'));
-  }
-  function iconMicOff() {
-    return svg(path('M3.5 2.1 2.1 3.5l4.9 4.9V12a5 5 0 0 0 7.6 4.3l1.5 1.5A7 7 0 0 1 5 12H3a9 9 0 0 0 8 8.9V23h2v-2.1a8.9 8.9 0 0 0 3.5-1.2l3 3 1.4-1.4L3.5 2.1zM15 11.8V6a3 3 0 0 0-5.9-.7l5.9 6.5z'));
-  }
-  function iconMinimize() {
-    return svg(path('M6 13h12a1 1 0 0 1 0 2H6a1 1 0 0 1 0-2z'));
-  }
-  function iconExpand() {
-    return svg(path('M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z'));
-  }
-  function iconCompact() {
-    return svg(path('M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v10h9V7H4z'));
-  }
-  function iconIsland() {
-    return svg(path('M7 8h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8z'));
-  }
-  function iconSwap() {
-    return svg(path('M7 7h9l-2.3-2.3L15.1 3.3 19.8 8l-4.7 4.7-1.4-1.4L16 9H7V7zm10 10H8l2.3 2.3-1.4 1.4L4.2 16l4.7-4.7 1.4 1.4L8 15h9v2z'));
-  }
-  function iconMore() {
-    return svg(path('M6 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm6 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm6 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z'));
-  }
-  function iconSpeaker() {
-    return svg(path('M11 5 6.5 8.5H3v7h3.5L11 19V5zm4.5 2.6a6 6 0 0 1 0 8.8l-1.4-1.4a4 4 0 0 0 0-6l1.4-1.4zm2.8-2.8a10 10 0 0 1 0 14.4l-1.4-1.4a8 8 0 0 0 0-11.6l1.4-1.4z'));
-  }
-  function iconSettings() {
-    return svg(path('M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 4c0-.5 0-1-.1-1.4l2-1.6-2-3.4-2.4 1a7.9 7.9 0 0 0-2.4-1.4L15.7 2h-3.9l-.4 2.6c-.9.3-1.7.8-2.4 1.4l-2.4-1-2 3.4 2 1.6a8.3 8.3 0 0 0 0 2.9l-2 1.6 2 3.4 2.4-1c.7.6 1.5 1.1 2.4 1.4l.4 2.6h3.9l.4-2.6c.9-.3 1.7-.8 2.4-1.4l2.4 1 2-3.4-2-1.6c.1-.5.1-1 .1-1.4z'));
-  }
-  function iconClose() {
-    return svg(path('M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6 6.4 5z'));
-  }
-  function iconBack() {
-    return svg(path('M10.8 5.4 12.2 6.8 8 11h11v2H8l4.2 4.2-1.4 1.4L4.2 12l6.6-6.6z'));
-  }
-  function iconSignal() {
-    return svg('<path fill="currentColor" d="M3 17h3v4H3v-4z"/>' +
-      '<path fill="currentColor" opacity=".85" d="M9 13h3v8H9v-8z"/>' +
-      '<path fill="currentColor" opacity=".7" d="M15 9h3v12h-3V9z"/>' +
-      '<path fill="currentColor" opacity=".55" d="M21 4h-3v17h3V4z"/>');
-  }
-  function iconMove() {
-    return svg(path('M12 2l3 3h-2v6h6V9l3 3-3 3v-2h-6v6h2l-3 3-3-3h2v-6H5v2l-3-3 3-3v2h6V5H9l3-3z'));
-  }
-  function iconScreen() {
-    return svg(path('M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6v2h3v2H7v-2h3v-2H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 2v9h14V6H5z'));
-  }
-  /* A small pane lifting away from a larger one, and settling back into it. */
-  function iconPopOut() {
-    return svg(path('M3 4h11a1 1 0 0 1 1 1v3h-2V6H5v9h3v2H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm7 7h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zm1 2v5h9v-5h-9z'));
-  }
-  function iconPopIn() {
-    return svg(path('M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 2v12h16V6H4zm7 3h7a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1zm1 2v3h5v-3h-5z'));
-  }
+  function iconPhone()      { return ico('phone'); }            /* Phone */
+  function iconVideo()      { return ico('video'); }            /* VideoCamera */
+  function iconCameraOff()  { return ico('video-off'); }        /* VideoCameraSlash */
+  function iconHangup()     { return ico('hangup'); }           /* PhoneDisconnect */
+  function iconMic()        { return ico('mic'); }              /* Microphone */
+  function iconMicOff()     { return ico('mic-off'); }          /* MicrophoneSlash */
+  function iconMinimize()   { return ico('minimize'); }         /* Minus */
+  function iconExpand()     { return ico('expand'); }           /* ArrowsOut */
+  function iconCompact()    { return ico('compact'); }          /* PictureInPicture */
+  function iconIsland()     { return ico('island'); }           /* Rectangle */
+  function iconSwap()       { return ico('swap'); }             /* Swap */
+  function iconMore()       { return ico('more'); }             /* DotsThree */
+  function iconSpeaker()    { return ico('speaker'); }          /* SpeakerHigh */
+  function iconSettings()   { return ico('settings'); }         /* GearSix */
+  function iconClose()      { return ico('close'); }            /* X */
+  function iconBack()       { return ico('back'); }             /* ArrowLeft */
+  function iconSignal()     { return ico('signal'); }           /* CellSignalHigh */
+  function iconMove()       { return ico('move'); }             /* ArrowsOutCardinal */
+  function iconScreen()     { return ico('screen'); }           /* Monitor */
+  /* Out of the page into a window of its own, and back into the page. */
+  function iconPopOut()     { return ico('pop-out'); }          /* ArrowSquareOut */
+  function iconPopIn()      { return ico('pop-in'); }           /* ArrowSquareIn */
 
   /* ------------------------------------------------------------------ *
    * Modes
