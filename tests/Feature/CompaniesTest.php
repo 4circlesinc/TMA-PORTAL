@@ -64,4 +64,42 @@ class CompaniesTest extends TestCase
             ->assertOk()
             ->assertJsonPath('company.people.0.id', 'bruce-wayne');
     }
+
+    public function test_deleting_a_provider_keeps_its_people_and_referrals(): void
+    {
+        $staff = $this->staff();
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+
+        $contact = Client::create([
+            'uid' => 'contact-one', 'name' => 'Contact One',
+            'company_id' => $company->id, 'data' => [],
+        ]);
+        $referred = Client::create([
+            'uid' => 'referred-one', 'name' => 'Referred One',
+            'referral_type' => 'company', 'referred_by_company_id' => $company->id, 'data' => [],
+        ]);
+
+        $this->actingAs($staff)->deleteJson('/portal/companies/'.$company->uid)->assertOk();
+
+        $this->assertSoftDeleted('companies', ['id' => $company->id]);
+        // The people survive; only their link to the provider goes.
+        $this->assertNull($contact->fresh()->company_id);
+        $this->assertNull($referred->fresh()->referred_by_company_id);
+        $this->assertSame('none', $referred->fresh()->referral_type);
+    }
+
+    public function test_a_provider_with_numbered_applications_cannot_be_deleted(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $provider = \App\Support\Cip\Providers::syncCode($company, 'GAL');
+        \App\Support\Cip\Applications::create($provider, $staff);
+
+        // Those numbers name this provider forever.
+        $this->actingAs($staff)->deleteJson('/portal/companies/'.$company->uid)
+            ->assertStatus(422);
+
+        $this->assertNotSoftDeleted('companies', ['id' => $company->id]);
+    }
 }

@@ -2191,6 +2191,8 @@
       '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-person>' +
       '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>' +
+      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
+      '<img src="' + ICONS.Trash + '" alt=""></button>' +
       '</div></div>'
     );
   }
@@ -4478,8 +4480,22 @@
     state.selected = {};
     state.page = 1;
     render({ forceFull: true });
-    ClientsAPI.bulkRemove(keys).then(function () {
-      clientsToast(keys.length > 1 ? keys.length + ' clients removed' : 'Client removed', 'positive');
+    var companyKeys = keys.filter(function (k) { return k.indexOf('company:') === 0; });
+    var clientKeys = keys.filter(function (k) { return k.indexOf('company:') !== 0; });
+
+    Promise.all([
+      clientKeys.length ? ClientsAPI.bulkRemove(clientKeys) : Promise.resolve(),
+      Promise.all(companyKeys.map(function (k) {
+        return CompaniesAPI.remove(k.slice('company:'.length));
+      })),
+    ]).then(function () {
+      if (companyKeys.length) {
+        COMPANIES = COMPANIES.filter(function (c) {
+          return companyKeys.indexOf('company:' + c.id) === -1;
+        });
+        hydrateCompanies(COMPANIES);
+      }
+      clientsToast(keys.length > 1 ? keys.length + ' records removed' : 'Record removed', 'positive');
     }).catch(function (err) {
       keys.forEach(function (key) { delete state.removedIds[key]; });
       render({ forceFull: true });
@@ -5066,6 +5082,28 @@
     if (editCompanyBtn) {
       editCompanyBtn.addEventListener('click', function () {
         navigate('edit-company', null, { companyId: state.companyId });
+      });
+    }
+
+    var deleteCompanyBtn = unwiredClientsChrome(root, '[data-clients-delete-company]');
+    if (deleteCompanyBtn) {
+      deleteCompanyBtn.addEventListener('click', function () {
+        var company = companyFor(state.companyId);
+        if (!company) return;
+        // Say what survives: people and referrals are kept, only the link to
+        // this record goes. Staff access to it ends with the record.
+        if (!window.confirm('Delete ' + company.name + '? Its people and referred clients are kept, '
+          + 'but they stop being linked to it, and staff access to it ends.')) return;
+        deleteCompanyBtn.disabled = true;
+        CompaniesAPI.remove(state.companyId).then(function () {
+          COMPANIES = COMPANIES.filter(function (c) { return c.id !== state.companyId; });
+          hydrateCompanies(COMPANIES);
+          clientsToast('Service provider deleted', 'positive');
+          navigate('list');
+        }).catch(function (err) {
+          deleteCompanyBtn.disabled = false;
+          clientsToast((err && err.message) || 'Could not delete this service provider', 'negative');
+        });
       });
     }
 

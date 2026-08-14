@@ -274,6 +274,14 @@ class CompaniesController extends Controller
         $this->authorizeStaff($request);
 
         $company = CompanyScope::findOrFail($request->user(), $uid);
+
+        // A service provider whose code has already numbered applications is
+        // not deletable: those numbers (GAL26-00001) name it forever, and an
+        // audit trail that cannot say who the provider was is worthless.
+        $applications = $company->cipProvider?->applications()->count() ?? 0;
+        abort_if($applications > 0, 422, 'This service provider has '.$applications.' application'
+            .($applications === 1 ? '' : 's').' and cannot be deleted.');
+
         // Settle the access first, while the company still exists to log it.
         AccessSync::companyArchived($company, $request->user());
         // People stay; they just become unattached.
