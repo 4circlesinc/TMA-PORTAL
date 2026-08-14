@@ -4092,6 +4092,31 @@
     if (detail) detail.scrollTop = 0;
   }
 
+  function wireRowContextMenus(root, state, navigate, render) {
+    clientsMenuCtx = { root: root, state: state, navigate: navigate, render: render };
+    ensureClientsPopovers();
+
+    function bind(sel, kind, attr) {
+      MORPH.unwired(root, sel, 'ctx').forEach(function (el) {
+        el.addEventListener('contextmenu', function (e) {
+          // Leave the browser's own menu to links and selected text.
+          if (e.target.closest('a') || String(window.getSelection() || '')) return;
+          // A person's row carries a link to their service provider, so both
+          // handlers see this event. The innermost target wins: right-clicking
+          // the provider link asks about the provider, not the person.
+          if (kind !== 'company' && e.target.closest('[data-clients-open-company]')) return;
+          var id = el.getAttribute(attr);
+          if (!id) return;
+          e.preventDefault();
+          openClientsContextMenu(kind, id, e.clientX, e.clientY);
+        });
+      });
+    }
+
+    bind('[data-clients-row]', 'client', 'data-clients-row');
+    bind('[data-clients-open-company]', 'company', 'data-clients-open-company');
+  }
+
   function wireDirectoryRows(root, state, navigate) {
     MORPH.unwired(root, '[data-clients-row]').forEach(function (row) {
       row.addEventListener('click', function (e) {
@@ -4180,13 +4205,14 @@
     if (clientsPop && clientsPop.host && document.body.contains(clientsPop.host)) return clientsPop;
     var host = document.createElement('div');
     host.className = 'tma-dash__clients-popover-host';
-    host.innerHTML = clientsPopShell('fields') + clientsPopShell('values') + clientsPopShell('sort');
+    host.innerHTML = clientsPopShell('fields') + clientsPopShell('values') + clientsPopShell('sort') + clientsPopShell('context');
     document.body.appendChild(host);
     clientsPop = {
       host: host,
       fields: host.querySelector('[data-clients-popover="fields"]'),
       values: host.querySelector('[data-clients-popover="values"]'),
       sort: host.querySelector('[data-clients-popover="sort"]'),
+      context: host.querySelector('[data-clients-popover="context"]'),
     };
     wireClientsPopovers();
     return clientsPop;
@@ -4271,7 +4297,7 @@
 
   function closeClientsPopovers(keep) {
     if (!clientsPop) return;
-    [clientsPop.fields, clientsPop.values, clientsPop.sort].forEach(function (el) {
+    [clientsPop.fields, clientsPop.values, clientsPop.sort, clientsPop.context].forEach(function (el) {
       if (!el || (keep && keep.indexOf(el) !== -1)) return;
       el.removeAttribute('data-open');
       el.setAttribute('aria-hidden', 'true');
@@ -4281,6 +4307,17 @@
         b.setAttribute('aria-expanded', 'false');
       });
     }
+  }
+
+  /* The context menu opens where the pointer is, so it takes a synthetic
+     rect rather than an element. positionClientsPopover already flips a
+     menu that would fall off the bottom, which is exactly right here. */
+  function openClientsPopoverAt(el, x, y) {
+    closeClientsPopovers();
+    el.setAttribute('data-open', 'true');
+    el.setAttribute('aria-hidden', 'false');
+    el._anchorRect = { left: x, right: x, top: y, bottom: y };
+    requestAnimationFrame(function () { positionClientsPopover(el, el._anchorRect); });
   }
 
   function openClientsPopover(el, anchor, keep) {
@@ -4350,6 +4387,36 @@
       }
     });
 
+    if (clientsPop.context) {
+      clientsPop.context.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-clients-ctx-act]');
+        if (!btn) return;
+        var act = btn.getAttribute('data-clients-ctx-act');
+        var kind = clientsPop.context.getAttribute('data-ctx-kind');
+        var id = clientsPop.context.getAttribute('data-ctx-id');
+        closeClientsPopovers();
+        runClientsContextAction(act, kind, id);
+      });
+    }
+
+    // A right-click anywhere else dismisses an open menu; without this the
+    // browser's own menu would appear beside ours.
+    document.addEventListener('contextmenu', function (e) {
+      if (!clientsPop || !clientsPop.context) return;
+      if (!clientsPop.context.hasAttribute('data-open')) return;
+      // The row handler that just opened this menu preventDefault()s, and its
+      // event still bubbles here — without this check the menu would close
+      // itself the instant it opened.
+      if (e.defaultPrevented) return;
+      if (e.target.closest('[data-clients-popover]')) return;
+      closeClientsPopovers();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !clientsPop) return;
+      closeClientsPopovers();
+    });
+
     document.addEventListener('click', function (e) {
       if (!clientsPop || !clientsPop.host.isConnected) return;
       if (!clientsFilterLive()) { closeClientsPopovers(); return; }
@@ -4360,10 +4427,90 @@
 
     window.addEventListener('resize', function () {
       if (!clientsPop) return;
-      [clientsPop.fields, clientsPop.values, clientsPop.sort].forEach(function (el) {
+      [clientsPop.fields, clientsPop.values, clientsPop.sort, clientsPop.context].forEach(function (el) {
         if (el && el.hasAttribute('data-open')) positionClientsPopover(el, el._anchorRect);
       });
     });
+  }
+
+  /* ── row context menu ───────────────────────────────
+   *
+   * Right-click (and long-press, which the browser reports as contextmenu on
+   * touch) on any directory row — a person or a service provider, in the
+   * table, the A-Z list, or a company's people list. The items are the same
+   * verbs the toolbar carries; this only saves the trip.
+   */
+  var clientsMenuCtx = null;
+
+  function clientsContextItems(kind) {
+    if (kind === 'company') {
+      return [
+        { act: 'open', label: 'Open' },
+        { act: 'edit', label: 'Edit' },
+        { act: 'add-person', label: 'Add person' },
+        { act: 'delete', label: 'Delete' },
+      ];
+    }
+    return [
+      { act: 'open', label: 'Open' },
+      { act: 'edit', label: 'Edit' },
+      { act: 'delete', label: 'Delete' },
+    ];
+  }
+
+  function openClientsContextMenu(kind, id, x, y) {
+    var pop = ensureClientsPopovers();
+    if (!pop.context) return;
+    pop.context.innerHTML = clientsContextItems(kind).map(function (item) {
+      return clientsPopItem('data-clients-ctx-act', item.act, item.label);
+    }).join('');
+    pop.context.setAttribute('data-ctx-kind', kind);
+    pop.context.setAttribute('data-ctx-id', id);
+    openClientsPopoverAt(pop.context, x, y);
+  }
+
+  function runClientsContextAction(act, kind, id) {
+    var ctx = clientsMenuCtx;
+    if (!ctx) return;
+    var state = ctx.state;
+    var navigate = ctx.navigate;
+
+    if (kind === 'company') {
+      if (act === 'open') return navigate('company', null, { companyId: id });
+      if (act === 'edit') return navigate('edit-company', null, { companyId: id });
+      if (act === 'add-person') {
+        state.prefillCompanyId = id;
+        return navigate('add');
+      }
+      if (act === 'delete') {
+        var company = companyFor(id);
+        if (!company) return;
+        if (!window.confirm('Delete ' + company.name + '? Its people and referred clients are kept, '
+          + 'but they stop being linked to it, and staff access to it ends.')) return;
+        return CompaniesAPI.remove(id).then(function () {
+          COMPANIES = COMPANIES.filter(function (c) { return c.id !== id; });
+          hydrateCompanies(COMPANIES);
+          clientsToast('Service provider deleted', 'positive');
+          if (state.companyId === id) navigate('list');
+          else ctx.render({ forceFull: true });
+        }).catch(function (err) {
+          clientsToast((err && err.message) || 'Could not delete this service provider', 'negative');
+        });
+      }
+      return;
+    }
+
+    if (act === 'open') {
+      state.profileTab = 'info';
+      return navigate('detail', id);
+    }
+    if (act === 'edit') return navigate('edit', id);
+    if (act === 'delete') {
+      var item = directoryItemFor(id);
+      var name = (item && item.name) || 'this client';
+      if (!window.confirm('Delete ' + name + '?')) return;
+      deleteDirectoryKeys(state, ctx.render, [id]);
+    }
   }
 
   function wireTableFilters(root, state, render) {
@@ -4474,11 +4621,18 @@
   function deleteSelectedClients(state, render) {
     var keys = Object.keys(state.selected || {});
     if (!keys.length) return;
-    // Hide them at once, then confirm with the server; restore on failure.
-    state.removedIds = state.removedIds || {};
-    keys.forEach(function (key) { state.removedIds[key] = true; });
     state.selected = {};
     state.page = 1;
+    deleteDirectoryKeys(state, render, keys);
+  }
+
+  /* Records leave the table at once and come back if the server refuses —
+     the row a reader just deleted lingering for a round trip reads as the
+     click not having landed. */
+  function deleteDirectoryKeys(state, render, keys) {
+    if (!keys.length) return;
+    state.removedIds = state.removedIds || {};
+    keys.forEach(function (key) { state.removedIds[key] = true; });
     render({ forceFull: true });
     var companyKeys = keys.filter(function (k) { return k.indexOf('company:') === 0; });
     var clientKeys = keys.filter(function (k) { return k.indexOf('company:') !== 0; });
@@ -4849,6 +5003,7 @@
   function wireEvents(root, state, scope, navigate, render) {
     // Rows appear in the directory, table list, and company people lists.
     wireDirectoryRows(root, state, navigate);
+    wireRowContextMenus(root, state, navigate, render);
     wireSeeAllReferred(root, state, navigate);
     // Empty and failed states show in every view, so this is wired before the
     // per-view branches below — several of which return early.
