@@ -1,5 +1,3 @@
-- Fixes the app not opening after the 0.8.24 update (if yours is stuck, reinstall from the portal's download button — this version updates normally again)
-- Screen sharing in calls works in the desktop app (it silently did nothing before; on a Mac the system may ask for Screen Recording permission the first time)
-- Windows: the search, activity and notification buttons no longer disappear from the title bar in a smaller window
-- Windows: the unread count shows on the taskbar icon again
-- Windows: a new install now says how to pin the app to your taskbar
+- Calls now open in their own small window that floats above your other apps, so you can take a call and carry on working
+- The call window shows the camera edge to edge; move your pointer over it to bring up the controls, and use the button in its corner to put the call back in the page
+- Calls no longer flicker while they are running
