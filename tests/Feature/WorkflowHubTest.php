@@ -126,7 +126,7 @@ class WorkflowHubTest extends TestCase
     public function test_the_inbox_lists_requests_waiting_on_you(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($ada);
 
         $this->send($ada, $file, ['recipients' => [['userId' => $ben->id]], 'message' => 'Before Friday please']);
@@ -161,7 +161,7 @@ class WorkflowHubTest extends TestCase
     public function test_responding_clears_the_inbox(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($ada);
 
         $wf = $this->send($ada, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -190,8 +190,8 @@ class WorkflowHubTest extends TestCase
     public function test_the_firm_wide_list_never_shows_a_file_you_cannot_open(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
 
         // Ada's own upload with no folder: hers alone, and she asks Ben — who
         // can only answer because sending granted him access.
@@ -228,7 +228,7 @@ class WorkflowHubTest extends TestCase
     public function test_requests_can_be_filtered_by_type_and_searched_by_file(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $contract = $this->sharedFile($ada, 'Contract.txt');
         $invoice = $this->sharedFile($ada, 'Invoice.txt');
 
@@ -251,7 +251,7 @@ class WorkflowHubTest extends TestCase
     public function test_the_comments_list_shows_threads_that_name_you(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($ada);
 
         $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
@@ -278,7 +278,7 @@ class WorkflowHubTest extends TestCase
     public function test_resolving_a_thread_clears_the_mention_count(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($ada);
 
         $comment = $this->actingAs($ada)->postJson("/portal/files/files/{$file->uuid}/comments", [
@@ -307,7 +307,7 @@ class WorkflowHubTest extends TestCase
     public function test_a_comment_on_a_file_you_cannot_open_is_never_listed(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
 
         $secret = $this->privateFile($ada, 'Payroll.txt');
 

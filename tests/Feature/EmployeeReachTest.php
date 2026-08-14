@@ -8,12 +8,18 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Every portal page, walked as an employee and as a client.
+ * Every portal page, walked as employee-like staff and as a client.
  *
  * The Users page shipped open to employees because nothing enumerated the
  * nav — each gate was checked in isolation, so a page nobody thought about
  * stayed open by default. This walks the whole list and prints what each role
- * reaches, so "what can an employee actually open?" has one answer.
+ * reaches, so "what can employee-like staff actually open?" has one answer.
+ *
+ * 'Employee' itself is a parked type now: an approved account still typed
+ * Employee is held on /auth/role-pending until an administrator assigns a
+ * real role. The officer types carry the whole Employee capability baseline,
+ * so the reach walked here uses a Reviewing Officer — the same expectations
+ * the Employee walk used to pin.
  */
 class EmployeeReachTest extends TestCase
 {
@@ -48,16 +54,16 @@ class EmployeeReachTest extends TestCase
         return $pages;
     }
 
-    public function test_the_administration_pages_are_closed_to_employees(): void
+    public function test_the_administration_pages_are_closed_to_employee_like_staff(): void
     {
-        $employee = $this->user(Role::EMPLOYEE);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
 
         foreach (['users', 'users/new', 'people',
             'people/employees', 'people/clients', 'people/prospects',
             'people/shared-address-book', 'people/personal-address-book',
             'people/distribution-groups', 'people/resend-welcome-emails'] as $page) {
-            $this->actingAs($employee)->get('/'.$page)
-                ->assertNotFound('/'.$page.' should be closed to an employee');
+            $this->actingAs($officer)->get('/'.$page)
+                ->assertNotFound('/'.$page.' should be closed to a reviewing officer');
         }
     }
 
@@ -77,7 +83,7 @@ class EmployeeReachTest extends TestCase
         // A snapshot, so widening access to any page is a visible diff in this
         // test rather than something noticed in production months later.
         $reach = [];
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $accountType) {
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $accountType) {
             $user = $this->user($accountType);
             foreach ($this->pages() as $page) {
                 if ($this->actingAs($user)->get('/'.$page)->getStatusCode() === 200) {
@@ -97,7 +103,7 @@ class EmployeeReachTest extends TestCase
             'projects/closed', 'projects/recently_deleted',
             'settings/change-email', 'signatures', 'social/feed',
             'social/messages', 'templates', 'workflows', 'workflows/feedback',
-        ], $reach[Role::EMPLOYEE], 'the pages an employee reaches have changed');
+        ], $reach[Role::REVIEWING_OFFICER], 'the pages employee-like staff reach have changed');
 
         // A client keeps their own File Library screens; the two
         // organization-wide ones (All Files, Shared Folders) are staff.
@@ -110,5 +116,16 @@ class EmployeeReachTest extends TestCase
             'projects/closed', 'projects/recently_deleted',
             'settings/change-email', 'signatures', 'social/messages',
         ], $reach[Role::CLIENT], 'the pages a client reaches have changed');
+    }
+
+    public function test_an_approved_employee_is_held_on_the_role_pending_screen(): void
+    {
+        // 'Employee' is a parked type: approval alone no longer opens the
+        // portal. Until an administrator assigns a real role, every portal
+        // page sends the account to /auth/role-pending.
+        $employee = $this->user(Role::EMPLOYEE);
+
+        $this->actingAs($employee)->get('/overview')
+            ->assertRedirect('/auth/role-pending');
     }
 }

@@ -988,6 +988,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/auth/pending', fn (Request $request) => view('auth.pending', [
         'user' => $request->user(),
     ]))->name('pending');
+
+    // The holding screen for approved accounts still typed 'Employee' — the
+    // portal's roles are the brief's five (Administrator, the two officer
+    // types, and the external Service Provider / Private Client accounts),
+    // and an account with none of them waits here until an administrator
+    // assigns one. Deliberately inside the same pre-approval group so the
+    // account.approved gate that sends people here cannot loop.
+    Route::get('/auth/role-pending', fn (Request $request) => view('auth.role-pending', [
+        'user' => $request->user(),
+    ]))->name('role-pending');
 });
 
 /*

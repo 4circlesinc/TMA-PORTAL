@@ -65,9 +65,9 @@ class BackgroundOperationsTest extends TestCase
         return $uuid;
     }
 
-    public function test_an_employee_cannot_see_the_queue(): void
+    public function test_a_non_admin_staff_member_cannot_see_the_queue(): void
     {
-        $this->actingAs($this->user('Employee'))
+        $this->actingAs($this->user('Reviewing Officer'))
             ->getJson('/admin/background-ops')
             ->assertForbidden();
     }

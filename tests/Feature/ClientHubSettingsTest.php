@@ -120,10 +120,10 @@ class ClientHubSettingsTest extends TestCase
 
     public function test_an_employee_cannot_read_or_write_the_settings_either(): void
     {
-        $employee = $this->user(Role::EMPLOYEE);
+        $employee = $this->user(Role::REVIEWING_OFFICER);
 
         // `settings.clientHub` is administrators-only, so the section never
-        // opens for an employee — shaping the hub is not using it.
+        // opens for employee-like staff — shaping the hub is not using it.
         $this->actingAs($employee)->getJson('/admin/client-hub')->assertForbidden();
         $this->actingAs($employee)->putJson('/admin/client-hub', $this->payload())->assertForbidden();
     }
@@ -133,7 +133,7 @@ class ClientHubSettingsTest extends TestCase
     public function test_revoking_reach_closes_the_hub_api_and_page_for_employees(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
-        $employee = $this->user(Role::EMPLOYEE);
+        $employee = $this->user(Role::REVIEWING_OFFICER);
         $this->client();
 
         $this->actingAs($employee)->getJson('/portal/clients')->assertOk();
@@ -167,7 +167,7 @@ class ClientHubSettingsTest extends TestCase
     public function test_granting_view_all_widens_an_employee_from_assignments_to_everything(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
-        $employee = $this->user(Role::EMPLOYEE);
+        $employee = $this->user(Role::REVIEWING_OFFICER);
         $this->client();
         $this->client(['uid' => 'globex', 'name' => 'Globex', 'email' => 'hi@globex.test']);
 
@@ -182,7 +182,7 @@ class ClientHubSettingsTest extends TestCase
     public function test_revoking_manage_leaves_the_hub_readable_but_not_writable(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
-        $employee = $this->user(Role::EMPLOYEE);
+        $employee = $this->user(Role::REVIEWING_OFFICER);
 
         $this->save($admin, ['clients.manage' => false])->assertOk();
 
@@ -196,7 +196,7 @@ class ClientHubSettingsTest extends TestCase
     {
         Mail::fake();
         $admin = $this->user(Role::ADMINISTRATOR);
-        $employee = $this->user(Role::EMPLOYEE);
+        $employee = $this->user(Role::REVIEWING_OFFICER);
         $client = $this->client();
 
         $this->save($admin, ['clients.invite' => false])->assertOk();

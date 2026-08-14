@@ -46,7 +46,7 @@ class CbiAccessTest extends TestCase
     {
         config(['services.smartsheet.cbi_enabled' => true]);
 
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $type) {
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $type) {
             $user = $this->user($type);
             $this->actingAs($user)->get('/dev/cbi')->assertNotFound();
             $this->actingAs($user)->getJson('/portal/cbi/summary')->assertNotFound();

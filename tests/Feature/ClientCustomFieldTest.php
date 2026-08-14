@@ -106,7 +106,7 @@ class ClientCustomFieldTest extends TestCase
 
     public function test_only_administrators_can_change_custom_fields(): void
     {
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $type) {
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $type) {
             $this->actingAs($this->user($type))->postJson('/admin/client-fields', [
                 'label' => 'Mine',
                 'type' => 'text',

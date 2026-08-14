@@ -21,7 +21,7 @@ class ProfileDetailsTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function user(string $accountType = Role::EMPLOYEE, array $overrides = []): User
+    private function user(string $accountType = Role::REVIEWING_OFFICER, array $overrides = []): User
     {
         return User::factory()->create(array_merge([
             'status' => 'approved',
@@ -34,7 +34,7 @@ class ProfileDetailsTest extends TestCase
 
     public function test_me_carries_every_field_the_card_shows(): void
     {
-        $user = $this->user(Role::EMPLOYEE, [
+        $user = $this->user(Role::REVIEWING_OFFICER, [
             'phone' => '+1 555 123 4567',
             'job_title' => 'Paralegal',
             'company' => 'TM ANTOINE Advisory',

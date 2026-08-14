@@ -171,7 +171,7 @@ class DashboardMetricsTest extends TestCase
     public function test_internal_staff_threads_are_not_client_response_times(): void
     {
         $staff = $this->staff();
-        $colleague = $this->staff('other@example.com', 'Employee');
+        $colleague = $this->staff('other@example.com', 'Reviewing Officer');
         $c = $this->conversation($staff, $colleague);
 
         $this->say($c, $colleague, '5 hours');
@@ -392,19 +392,19 @@ class DashboardMetricsTest extends TestCase
 
     /* ── scope ─────────────────────────────────────────────────────── */
 
-    public function test_an_employee_sees_their_own_numbers_and_an_admin_sees_the_firm(): void
+    public function test_a_non_admin_staff_member_sees_their_own_numbers_and_an_admin_sees_the_firm(): void
     {
         $admin = $this->staff('admin@example.com');
-        $employee = $this->staff('emp@example.com', 'Employee');
+        $officer = $this->staff('officer@example.com', 'Reviewing Officer');
 
         $this->share($admin, now()->subDay());
-        $this->share($employee, now()->subDay());
+        $this->share($officer, now()->subDay());
 
         $this->assertSame('organization', $this->metrics($admin)['scope']);
         $this->assertSame(2, $this->metrics($admin)['cards']['filesShared']['count']);
 
-        $this->assertSame('personal', $this->metrics($employee)['scope']);
-        $this->assertSame(1, $this->metrics($employee)['cards']['filesShared']['count']);
+        $this->assertSame('personal', $this->metrics($officer)['scope']);
+        $this->assertSame(1, $this->metrics($officer)['cards']['filesShared']['count']);
     }
 
     public function test_clients_get_no_kpi_row(): void

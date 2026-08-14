@@ -94,7 +94,7 @@ class GroupsController extends Controller
         $like = $this->likeOperator();
 
         $staff = User::query()
-            ->whereIn('account_type', ['Administrator', 'Employee'])
+            ->whereIn('account_type', Role::STAFF)
             ->where('status', User::STATUS_APPROVED)
             ->when($query !== '', fn ($q) => $q->where(function ($w) use ($query, $like) {
                 $w->where('name', $like, '%'.$query.'%')
@@ -297,7 +297,7 @@ class GroupsController extends Controller
         if ($ids) {
             $staff = User::whereIn('id', $ids)
                 // A group is internal structure; client accounts never join one.
-                ->whereIn('account_type', ['Administrator', 'Employee'])
+                ->whereIn('account_type', Role::STAFF)
                 ->pluck('id');
 
             $newlyAdded = [];

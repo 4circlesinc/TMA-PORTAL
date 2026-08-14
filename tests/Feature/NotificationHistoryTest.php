@@ -59,10 +59,11 @@ class NotificationHistoryTest extends TestCase
             ->json();
     }
 
-    public function test_the_history_is_closed_to_employees_and_clients(): void
+    public function test_the_history_is_closed_to_non_admin_staff_and_clients(): void
     {
-        foreach (['Employee', 'Client'] as $type) {
-            $this->actingAs($this->user($type, mb_strtolower($type).'@example.com'))
+        foreach (['Reviewing Officer', 'Client'] as $type) {
+            $email = str_replace(' ', '.', mb_strtolower($type)).'@example.com';
+            $this->actingAs($this->user($type, $email))
                 ->getJson('/admin/notification-history')
                 ->assertForbidden();
         }

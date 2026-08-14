@@ -50,17 +50,17 @@ class CompanyScopeTest extends TestCase
         $galaxy = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
         Company::create(['uid' => 'bluemina', 'name' => 'Bluemina']);
 
-        $employee = $this->user(Role::EMPLOYEE);
-        $this->assign($employee, $galaxy);
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $this->assign($staff, $galaxy);
 
-        $names = collect($this->actingAs($employee)->getJson('/portal/companies')
+        $names = collect($this->actingAs($staff)->getJson('/portal/companies')
             ->assertOk()->json('companies'))->pluck('name');
 
         $this->assertSame(['Galaxy'], $names->all());
 
-        // Officers are scoped the same way — the account type widens CIP
-        // verbs, not the directory.
-        $officer = $this->user(Role::REVIEWING_OFFICER);
+        // Both officer types are scoped the same way — the account type
+        // widens CIP verbs, not the directory.
+        $officer = $this->user(Role::COMPLIANCE_OFFICER);
         $this->assertSame([], $this->actingAs($officer)->getJson('/portal/companies')
             ->assertOk()->json('companies'));
     }
@@ -81,27 +81,27 @@ class CompanyScopeTest extends TestCase
     {
         Cache::flush();
         $bluemina = Company::create(['uid' => 'bluemina', 'name' => 'Bluemina']);
-        $employee = $this->user(Role::EMPLOYEE);
+        $staff = $this->user(Role::REVIEWING_OFFICER);
 
-        $this->actingAs($employee)->getJson('/portal/companies/'.$bluemina->uid)->assertNotFound();
-        $this->actingAs($employee)->patchJson('/portal/companies/'.$bluemina->uid, ['name' => 'X'])->assertNotFound();
-        $this->actingAs($employee)->deleteJson('/portal/companies/'.$bluemina->uid)->assertNotFound();
+        $this->actingAs($staff)->getJson('/portal/companies/'.$bluemina->uid)->assertNotFound();
+        $this->actingAs($staff)->patchJson('/portal/companies/'.$bluemina->uid, ['name' => 'X'])->assertNotFound();
+        $this->actingAs($staff)->deleteJson('/portal/companies/'.$bluemina->uid)->assertNotFound();
 
         // Assigned, the same provider opens.
-        $this->assign($employee, $bluemina);
-        $this->actingAs($employee)->getJson('/portal/companies/'.$bluemina->uid)->assertOk();
+        $this->assign($staff, $bluemina);
+        $this->actingAs($staff)->getJson('/portal/companies/'.$bluemina->uid)->assertOk();
     }
 
     public function test_creating_a_provider_assigns_the_creator(): void
     {
         Cache::flush();
-        $employee = $this->user(Role::EMPLOYEE);
+        $staff = $this->user(Role::REVIEWING_OFFICER);
 
-        $this->actingAs($employee)
+        $this->actingAs($staff)
             ->postJson('/portal/companies', ['name' => 'Fresh Provider'])
             ->assertCreated();
 
-        $names = collect($this->actingAs($employee)->getJson('/portal/companies')
+        $names = collect($this->actingAs($staff)->getJson('/portal/companies')
             ->assertOk()->json('companies'))->pluck('name');
 
         $this->assertContains('Fresh Provider', $names->all());

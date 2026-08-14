@@ -16,7 +16,7 @@ class NotificationsApiTest extends TestCase
     {
         return User::factory()->create(array_merge([
             'status' => 'approved',
-            'account_type' => 'Employee',
+            'account_type' => 'Reviewing Officer',
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),
@@ -142,7 +142,7 @@ class NotificationsApiTest extends TestCase
             ->assertJsonPath('preferences.security.portal', true);
     }
 
-    public function test_activity_admin_sees_all_but_employee_sees_only_their_own(): void
+    public function test_activity_admin_sees_all_but_a_staff_member_sees_only_their_own(): void
     {
         $admin = $this->user(['account_type' => 'Administrator']);
         $alice = $this->user();

@@ -75,7 +75,7 @@ class FolderShortcutTest extends TestCase
             ->getJson('/portal/files/shortcuts')->assertOk();
 
         // …a non-admin still gets none — it would list every client.
-        foreach (['Employee', 'Client'] as $type) {
+        foreach (['Reviewing Officer', 'Client'] as $type) {
             $user = $this->approvedUser(['account_type' => $type]);
             $this->assertSame([], $this->actingAs($user)->getJson('/portal/files/shortcuts')->json('groups.libraries'));
         }

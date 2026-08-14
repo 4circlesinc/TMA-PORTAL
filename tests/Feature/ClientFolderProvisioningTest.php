@@ -204,7 +204,7 @@ class ClientFolderProvisioningTest extends TestCase
 
     public function test_only_admins_manage_assignments_and_org_folders(): void
     {
-        $staff = $this->user('Employee');
+        $staff = $this->user('Reviewing Officer');
         $clientUser = $this->user('Client');
         $admin = $this->user('Administrator');
         $this->actingAs($admin)->postJson('/portal/clients', $this->payload('vernon-francis', 'Vernon Francis'))->assertOk();

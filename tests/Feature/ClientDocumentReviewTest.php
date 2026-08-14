@@ -25,7 +25,7 @@ class ClientDocumentReviewTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function staff(string $type = 'Employee'): User
+    private function staff(string $type = 'Reviewing Officer'): User
     {
         $user = User::create([
             'name' => $type.' '.uniqid(),

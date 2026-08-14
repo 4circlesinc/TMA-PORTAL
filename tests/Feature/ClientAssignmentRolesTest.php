@@ -104,7 +104,7 @@ class ClientAssignmentRolesTest extends TestCase
     {
         Mail::fake();
         $admin = $this->admin();
-        $emp = $this->staff();
+        $emp = $this->staff('Reviewing Officer');
         $a = $this->client();
         $b = $this->client(['uid' => 'wayne-co', 'name' => 'Wayne Co', 'email' => 'b@wayne.test']);
 
@@ -380,22 +380,22 @@ class ClientAssignmentRolesTest extends TestCase
         $this->assertNull($rows->first()->ended_at);
     }
 
-    public function test_an_employee_cannot_assign_or_end_assignments(): void
+    public function test_a_non_admin_staff_member_cannot_assign_or_end_assignments(): void
     {
         Mail::fake();
-        $employee = $this->staff('Employee');
+        $officer = $this->staff('Reviewing Officer');
         $client = $this->client();
 
-        $this->actingAs($employee)->postJson("/portal/clients/{$client->uid}/assignments", [
+        $this->actingAs($officer)->postJson("/portal/clients/{$client->uid}/assignments", [
             'userId' => $this->staff()->id, 'level' => 'editor',
         ])->assertForbidden();
 
-        $this->actingAs($employee)
+        $this->actingAs($officer)
             ->deleteJson("/portal/clients/{$client->uid}/assignments/1")
             ->assertForbidden();
 
         // But they may still see who is assigned.
-        $this->actingAs($employee)->getJson("/portal/clients/{$client->uid}/assignments")->assertOk();
+        $this->actingAs($officer)->getJson("/portal/clients/{$client->uid}/assignments")->assertOk();
     }
 
     public function test_a_client_account_cannot_be_assigned_as_staff(): void

@@ -27,7 +27,7 @@ class InvitationTest extends TestCase
         return $this->staff('Administrator');
     }
 
-    private function staff(string $type = 'Employee'): User
+    private function staff(string $type = 'Reviewing Officer'): User
     {
         return User::factory()->create([
             'status' => 'approved',
@@ -384,7 +384,7 @@ class InvitationTest extends TestCase
     public function test_an_employee_cannot_invite_staff(): void
     {
         Mail::fake();
-        $employee = $this->staff('Employee');
+        $employee = $this->staff('Reviewing Officer');
 
         $this->actingAs($employee)->postJson('/portal/invitations', [
             'type' => 'staff',
@@ -397,7 +397,7 @@ class InvitationTest extends TestCase
     public function test_only_an_administrator_can_hand_out_administrator_access(): void
     {
         Mail::fake();
-        $employee = $this->staff('Employee');
+        $employee = $this->staff('Reviewing Officer');
         $client = $this->client();
 
         $this->actingAs($employee)->postJson('/portal/invitations', [

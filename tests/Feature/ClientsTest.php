@@ -160,30 +160,31 @@ class ClientsTest extends TestCase
         $this->actingAs($client)->postJson('/portal/clients', $this->payload())->assertForbidden();
     }
 
-    public function test_employees_can_create_a_client_and_are_its_first_assignee(): void
+    public function test_non_admin_staff_can_create_a_client_and_are_its_first_assignee(): void
     {
         /*
          * This reverses the rule this test used to assert.
          *
-         * Employees are scoped to their live assignments, and creating a client
-         * previously left them unable to see it until an administrator assigned
-         * them — which meant an employee could add a client and immediately
-         * lose it. The 2026-08-09 brief makes the creator the default assignee
-         * instead, so the act of creating is itself the assignment.
+         * Non-admin staff are scoped to their live assignments, and creating a
+         * client previously left them unable to see it until an administrator
+         * assigned them — which meant a staff member could add a client and
+         * immediately lose it. The 2026-08-09 brief makes the creator the
+         * default assignee instead, so the act of creating is itself the
+         * assignment.
          *
          * Administrators are deliberately *not* assigned: they already reach
          * every client, so a row would grant nothing. See ClientScopeTest for
          * the scoping this relies on.
          */
-        $employee = $this->staff(['account_type' => 'Employee']);
+        $officer = $this->staff(['account_type' => 'Reviewing Officer']);
 
-        $this->actingAs($employee)->postJson('/portal/clients', $this->payload())->assertOk();
-        $this->actingAs($employee)->getJson('/portal/clients')->assertOk()->assertJsonCount(1, 'clients');
+        $this->actingAs($officer)->postJson('/portal/clients', $this->payload())->assertOk();
+        $this->actingAs($officer)->getJson('/portal/clients')->assertOk()->assertJsonCount(1, 'clients');
 
         $this->assertTrue(
             \App\Models\ClientAssignment::live()
                 ->where('client_id', \App\Models\Client::firstOrFail()->id)
-                ->where('user_id', $employee->id)
+                ->where('user_id', $officer->id)
                 ->exists()
         );
 
@@ -272,10 +273,10 @@ class ClientsTest extends TestCase
         $admin = $this->staff();
         $this->actingAs($admin)->postJson('/portal/clients', $this->payload())->assertOk();
 
-        // An employee with no assignment sees no clients (see ClientScopeTest);
-        // search must not become the way around that.
-        $employee = $this->staff(['account_type' => 'Employee']);
-        $this->actingAs($employee)->getJson('/portal/clients/search?q=Executive')
+        // A staff member with no assignment sees no clients (see
+        // ClientScopeTest); search must not become the way around that.
+        $officer = $this->staff(['account_type' => 'Reviewing Officer']);
+        $this->actingAs($officer)->getJson('/portal/clients/search?q=Executive')
             ->assertOk()
             ->assertJsonCount(0, 'ids');
 

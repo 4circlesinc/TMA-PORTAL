@@ -221,7 +221,7 @@ class SecurityAlertPolicyTest extends TestCase
 
     public function test_only_administrators_can_change_the_alert_settings(): void
     {
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $type) {
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $type) {
             $this->actingAs($this->user($type))->putJson('/admin/security-policies/alerts', [
                 'newDevice' => ['admins' => true],
                 'failedSignIns' => ['admins' => true],

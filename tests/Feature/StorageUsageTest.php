@@ -70,9 +70,9 @@ class StorageUsageTest extends TestCase
         $this->fail("No `$key` category in the response.");
     }
 
-    public function test_an_employee_cannot_see_firm_wide_storage(): void
+    public function test_a_non_administrator_cannot_see_firm_wide_storage(): void
     {
-        $this->actingAs($this->user('Employee'))
+        $this->actingAs($this->user('Reviewing Officer'))
             ->getJson('/admin/storage-usage')
             ->assertForbidden();
     }

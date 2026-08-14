@@ -19,7 +19,7 @@ class ClientHubInviteTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function staff(string $type = 'Employee'): User
+    private function staff(string $type = 'Reviewing Officer'): User
     {
         return User::factory()->create([
             'status' => 'approved',
@@ -49,10 +49,10 @@ class ClientHubInviteTest extends TestCase
             ->assertJsonPath('invitation', null);
     }
 
-    public function test_an_employee_can_send_and_then_chase_an_invitation(): void
+    public function test_a_reviewing_officer_can_send_and_then_chase_an_invitation(): void
     {
         Mail::fake();
-        $staff = $this->staff('Employee');
+        $staff = $this->staff('Reviewing Officer');
         $client = $this->client();
 
         // First press: a first ask.

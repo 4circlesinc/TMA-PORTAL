@@ -79,7 +79,7 @@ class PortalAccessTest extends TestCase
         // sign-in history, with approve / suspend / reset / delete on each
         // row. `users.view` used to be granted to Employee *and* used to gate
         // the People section, so closing one closed the other.
-        $this->actingAs($this->user(Role::EMPLOYEE))->get('/users')->assertNotFound();
+        $this->actingAs($this->user(Role::REVIEWING_OFFICER))->get('/users')->assertNotFound();
         $this->actingAs($this->user(Role::CLIENT))->get('/users')->assertNotFound();
         $this->actingAs($this->user(Role::ADMINISTRATOR))->get('/users')->assertOk();
     }
@@ -87,7 +87,7 @@ class PortalAccessTest extends TestCase
     public function test_an_employee_cannot_read_the_account_table_through_the_api(): void
     {
         // The page 404s; this is the check that makes it more than cosmetic.
-        $this->actingAs($this->user(Role::EMPLOYEE))
+        $this->actingAs($this->user(Role::REVIEWING_OFFICER))
             ->getJson('/admin/users')
             ->assertForbidden();
 
@@ -100,7 +100,7 @@ class PortalAccessTest extends TestCase
     {
         // Every screen in the section, including the two that carry a second
         // capability — reopening `clients.view` must not reopen People.
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $accountType) {
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $accountType) {
             $user = $this->user($accountType);
 
             foreach (['people', 'people/employees', 'people/clients',
@@ -138,7 +138,7 @@ class PortalAccessTest extends TestCase
     {
         // Degrades rather than 403s — the dashboard asks for this on every
         // load, so a hard refusal would surface as a broken widget.
-        $this->actingAs($this->user(Role::EMPLOYEE))
+        $this->actingAs($this->user(Role::REVIEWING_OFFICER))
             ->getJson('/portal/dashboard/staff')
             ->assertOk()
             ->assertJsonPath('staff', false)
@@ -252,7 +252,7 @@ class PortalAccessTest extends TestCase
 
     public function test_staff_still_reach_the_staff_pages(): void
     {
-        $employee = $this->user(Role::EMPLOYEE);
+        $employee = $this->user(Role::REVIEWING_OFFICER);
 
         // 'users' is deliberately absent — that is the account-management
         // table, not staff tooling. See the Users page tests above.
@@ -267,7 +267,7 @@ class PortalAccessTest extends TestCase
         // administration it also carries (the settings-rail Admin Overview
         // panel; the Users and Recycle Bin tabs) is gated by its own
         // capabilities, so opening the page must not have opened those.
-        $employee = $this->user(Role::EMPLOYEE);
+        $employee = $this->user(Role::REVIEWING_OFFICER);
 
         $this->actingAs($employee)->get('/overview')->assertOk();
         $this->actingAs($this->user(Role::CLIENT))->get('/overview')->assertNotFound();
@@ -349,8 +349,8 @@ class PortalAccessTest extends TestCase
 
     public function test_staff_keep_the_whole_directory(): void
     {
-        $me = $this->user(Role::EMPLOYEE);
-        $colleague = $this->user(Role::EMPLOYEE);
+        $me = $this->user(Role::REVIEWING_OFFICER);
+        $colleague = $this->user(Role::REVIEWING_OFFICER);
         $client = $this->user(Role::CLIENT);
 
         $ids = array_column(

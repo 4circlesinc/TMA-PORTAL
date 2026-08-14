@@ -26,8 +26,6 @@ use Illuminate\Support\Facades\DB;
  */
 class DashboardMetrics
 {
-    private const STAFF_TYPES = ['Administrator', 'Employee'];
-
     private readonly CarbonImmutable $now;
 
     private readonly CarbonImmutable $windowStart;
@@ -57,7 +55,7 @@ class DashboardMetrics
         $this->lookbackStart = $this->now->subDays($lookbackDays);
 
         $this->allStaffIds = User::query()
-            ->whereIn('account_type', self::STAFF_TYPES)
+            ->whereIn('account_type', Role::STAFF)
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();

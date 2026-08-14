@@ -130,7 +130,7 @@ class ReportingTest extends TestCase
 
     public function test_reporting_is_closed_to_employees_and_clients(): void
     {
-        foreach (['Employee', 'Client'] as $type) {
+        foreach (['Reviewing Officer', 'Client'] as $type) {
             $user = $this->user($type, mb_strtolower($type).'@example.com');
 
             $this->actingAs($user)->getJson('/admin/reports')->assertForbidden();

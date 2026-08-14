@@ -5,6 +5,7 @@ namespace App\Support\Calendar;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Support\Collection;
 
 /**
@@ -80,7 +81,7 @@ class GroupMembership
     public static function usersIn(Group $group)
     {
         if ($group->auto_join) {
-            return User::whereIn('account_type', ['Administrator', 'Employee'])
+            return User::whereIn('account_type', Role::STAFF)
                 ->where('status', User::STATUS_APPROVED)
                 ->get();
         }

@@ -144,7 +144,7 @@ class ClientOnboardingTest extends TestCase
     public function test_staff_still_get_the_security_checklist(): void
     {
         $staff = User::factory()->create([
-            'status' => 'approved', 'account_type' => 'Employee',
+            'status' => 'approved', 'account_type' => 'Reviewing Officer',
             'email_verified_at' => now(), 'profile_completed_at' => now(),
             'onboarding_completed_at' => null,
         ]);
@@ -341,7 +341,7 @@ class ClientOnboardingTest extends TestCase
     public function test_assigned_staff_are_notified_on_completion(): void
     {
         [$user, $client] = $this->client();
-        $staff = User::factory()->create(['status' => 'approved', 'account_type' => 'Employee']);
+        $staff = User::factory()->create(['status' => 'approved', 'account_type' => 'Reviewing Officer']);
         ClientAssignment::create([
             'client_id' => $client->id, 'user_id' => $staff->id,
             'permission_level' => 'editor', 'is_primary' => true,

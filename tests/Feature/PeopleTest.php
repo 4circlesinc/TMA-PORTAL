@@ -69,21 +69,22 @@ class PeopleTest extends TestCase
         $this->actingAs($client)->get('/people/employees')->assertNotFound();
     }
 
-    public function test_an_employee_reaches_none_of_the_people_section(): void
+    public function test_non_admin_staff_reach_none_of_the_people_section(): void
     {
-        // The section is `directory.view`, administrators only — an employee
-        // has no need to enumerate the firm. It used to be readable by any
-        // employee, along with both address books.
-        $employee = $this->user('Employee');
+        // The section is `directory.view`, administrators only — ordinary
+        // staff (officers carry the employee capability baseline) have no
+        // need to enumerate the firm. It used to be readable by any of them,
+        // along with both address books.
+        $staff = $this->user('Reviewing Officer');
 
-        $this->actingAs($employee)->getJson('/portal/people/employees')->assertForbidden();
-        $this->actingAs($employee)->getJson('/portal/people/summary')->assertForbidden();
-        $this->actingAs($employee)->getJson('/portal/contacts')->assertForbidden();
-        $this->actingAs($employee)->getJson('/portal/people/welcome-candidates')->assertForbidden();
-        $this->actingAs($employee)->postJson('/portal/people/welcome', ['email' => 'x@example.com'])
+        $this->actingAs($staff)->getJson('/portal/people/employees')->assertForbidden();
+        $this->actingAs($staff)->getJson('/portal/people/summary')->assertForbidden();
+        $this->actingAs($staff)->getJson('/portal/contacts')->assertForbidden();
+        $this->actingAs($staff)->getJson('/portal/people/welcome-candidates')->assertForbidden();
+        $this->actingAs($staff)->postJson('/portal/people/welcome', ['email' => 'x@example.com'])
             ->assertForbidden();
 
-        $this->actingAs($employee)->get('/people')->assertNotFound();
+        $this->actingAs($staff)->get('/people')->assertNotFound();
     }
 
     /* ── the lists ────────────────────────────────────────────────── */
@@ -292,7 +293,7 @@ class PeopleTest extends TestCase
         // halves at the unit the collapse cannot hide.
         $author = $this->user('Administrator');
         $colleague = $this->user('Administrator');
-        $employee = $this->user('Employee');
+        $staff = $this->user('Reviewing Officer');
 
         $contact = Contact::create([
             'uuid' => (string) Str::uuid(),
@@ -309,8 +310,8 @@ class PeopleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('contacts.0.canEdit', true);
 
-        // An employee is refused before authorship is ever consulted.
-        $this->actingAs($employee)->deleteJson('/portal/contacts/'.$contact->uuid)
+        // Non-admin staff are refused before authorship is ever consulted.
+        $this->actingAs($staff)->deleteJson('/portal/contacts/'.$contact->uuid)
             ->assertForbidden();
 
         $this->actingAs($author)->deleteJson('/portal/contacts/'.$contact->uuid)->assertOk();

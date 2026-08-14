@@ -70,7 +70,7 @@ class FilePresenceTest extends TestCase
     public function test_a_session_that_stops_beating_drops_off(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->orgFile($admin);
 
         $this->actingAs($ben)->postJson("/portal/files/files/{$file->uuid}/presence", ['session' => 'tab-b']);
@@ -133,7 +133,7 @@ class FilePresenceTest extends TestCase
         $file = $this->orgFile($admin);
 
         for ($i = 1; $i <= 8; $i++) {
-            $person = $this->user('Employee', "p{$i}@example.com", "Person {$i}");
+            $person = $this->user('Reviewing Officer', "p{$i}@example.com", "Person {$i}");
             $this->actingAs($person)->postJson("/portal/files/files/{$file->uuid}/presence", ['session' => "s{$i}"]);
         }
 
@@ -146,7 +146,7 @@ class FilePresenceTest extends TestCase
 
     public function test_someone_without_access_can_neither_join_nor_read_the_roster(): void
     {
-        $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'olive@example.com', 'Olive Owner');
         // Firm-wide default means a colleague has access; a client does not.
         $stranger = $this->user('Client', 'sam@example.com', 'Sam Stranger');
 
@@ -164,7 +164,7 @@ class FilePresenceTest extends TestCase
     /** Losing access mid-session must remove you from everyone else's stack. */
     public function test_a_viewer_who_loses_access_leaves_the_roster(): void
     {
-        $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'olive@example.com', 'Olive Owner');
         $guest = $this->user('Client', 'gus@example.com', 'Gus Guest');
 
         $file = FileItem::create([

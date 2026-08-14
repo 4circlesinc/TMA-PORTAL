@@ -68,7 +68,7 @@ class BrandingTest extends TestCase
     public function test_an_administrator_saves_branding_for_the_whole_firm(): void
     {
         $admin = $this->user();
-        $employee = $this->user('Employee', 'sam@example.com');
+        $colleague = $this->user('Reviewing Officer', 'sam@example.com');
 
         $this->save($admin)->assertOk()->assertJsonPath('branding.accountName', 'Antoine & Partners');
 
@@ -76,7 +76,7 @@ class BrandingTest extends TestCase
         $this->assertDatabaseHas('portal_settings', ['key' => 'branding']);
 
         // …and everybody else reads the same thing.
-        $this->actingAs($employee)->getJson('/admin/branding')
+        $this->actingAs($colleague)->getJson('/admin/branding')
             ->assertOk()
             ->assertJsonPath('branding.pageTitle', 'Antoine & Partners — Client Portal')
             ->assertJsonPath('branding.accentColor', '#C8A24A');
@@ -84,8 +84,8 @@ class BrandingTest extends TestCase
 
     public function test_only_administrators_can_change_branding(): void
     {
-        foreach (['Employee', 'Client'] as $type) {
-            $user = $this->user($type, mb_strtolower($type).'@example.com');
+        foreach (['Reviewing Officer', 'Client'] as $type) {
+            $user = $this->user($type, str_replace(' ', '.', mb_strtolower($type)).'@example.com');
 
             // Reading is open — branding is chrome every account's shell paints.
             $this->actingAs($user)->getJson('/admin/branding')->assertOk();
@@ -197,7 +197,7 @@ class BrandingTest extends TestCase
         Storage::fake(Branding::disk());
 
         $this->actingAs($this->user())->get('/media/branding/..%2F..%2Fsecret.png')->assertNotFound();
-        $this->actingAs($this->user('Employee', 'sam@example.com'))->get('/media/branding/anything.png')->assertNotFound();
+        $this->actingAs($this->user('Reviewing Officer', 'sam@example.com'))->get('/media/branding/anything.png')->assertNotFound();
     }
 
     public function test_a_save_is_not_lost_to_a_reader_that_cached_the_row_late(): void

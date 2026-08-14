@@ -46,7 +46,7 @@ class CalendarProviderSyncTest extends TestCase
     {
         return User::factory()->create(array_merge([
             'status' => 'approved',
-            'account_type' => 'Employee',
+            'account_type' => 'Reviewing Officer',
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),

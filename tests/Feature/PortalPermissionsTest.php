@@ -105,14 +105,14 @@ class PortalPermissionsTest extends TestCase
 
     public function test_only_administrators_can_change_the_permissions(): void
     {
-        $employee = $this->user(Role::EMPLOYEE);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
         $client = $this->user(Role::CLIENT);
 
-        // An employee cannot even open it — `settings.advanced` is admin-only.
-        $this->actingAs($employee)->getJson('/admin/permissions')->assertForbidden();
+        // An officer cannot even open it — `settings.advanced` is admin-only.
+        $this->actingAs($officer)->getJson('/admin/permissions')->assertForbidden();
         $this->actingAs($client)->getJson('/admin/permissions')->assertForbidden();
 
-        $this->save($employee)->assertForbidden();
+        $this->save($officer)->assertForbidden();
         $this->save($client)->assertForbidden();
 
         $this->save($this->user(Role::ADMINISTRATOR))->assertOk();

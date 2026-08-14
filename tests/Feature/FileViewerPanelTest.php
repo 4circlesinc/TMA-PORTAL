@@ -138,7 +138,7 @@ class FileViewerPanelTest extends TestCase
     public function test_a_colleague_can_read_a_firm_wide_file(): void
     {
         $owner = $this->user('Employee', 'owner@example.com');
-        $colleague = $this->user('Employee', 'colleague@example.com');
+        $colleague = $this->user('Reviewing Officer', 'colleague@example.com');
         $file = $this->file($owner);
 
         $this->actingAs($colleague)->getJson("/portal/files/files/{$file->uuid}/details")->assertOk();

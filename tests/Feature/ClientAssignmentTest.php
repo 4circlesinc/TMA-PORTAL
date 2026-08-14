@@ -65,7 +65,7 @@ class ClientAssignmentTest extends TestCase
     public function test_staff_sees_their_assigned_clients_and_only_those(): void
     {
         $admin = $this->user('Administrator');
-        $staff = $this->user('Employee');
+        $staff = $this->user('Reviewing Officer');
         $mine = $this->makeClient($admin, 'client-a', 'Client A');
         $this->makeClient($admin, 'client-b', 'Client B');
 
@@ -82,7 +82,7 @@ class ClientAssignmentTest extends TestCase
     public function test_assigned_client_folder_appears_in_folder_shortcuts_groups(): void
     {
         $admin = $this->user('Administrator');
-        $staff = $this->user('Employee');
+        $staff = $this->user('Reviewing Officer');
         $this->makeClient($admin);
 
         $this->actingAs($admin)->postJson('/portal/clients/vernon-francis/assignments', [

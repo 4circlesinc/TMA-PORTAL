@@ -279,8 +279,8 @@ class FileVersionTest extends TestCase
 
     public function test_a_viewer_cannot_add_or_restore_a_version(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
-        $guest = $this->user('Employee', 'guest@example.com', 'Gus Guest');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
+        $guest = $this->user('Reviewing Officer', 'guest@example.com', 'Gus Guest');
         $file = $this->uploadFile($owner);
 
         Share::create([
@@ -306,7 +306,7 @@ class FileVersionTest extends TestCase
 
     public function test_a_stranger_cannot_read_version_history(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
         // A client: colleagues can read firm-wide files by default now.
         $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $file = $this->uploadFile($owner);

@@ -36,7 +36,7 @@ class ClientScopeTest extends TestCase
         parent::setUp();
 
         $this->admin = $this->user(Role::ADMINISTRATOR);
-        $this->employee = $this->user(Role::EMPLOYEE);
+        $this->employee = $this->user(Role::REVIEWING_OFFICER);
 
         $this->mine = $this->client('acme', 'Acme Corp');
         $this->theirs = $this->client('rival', 'Rival Ltd');

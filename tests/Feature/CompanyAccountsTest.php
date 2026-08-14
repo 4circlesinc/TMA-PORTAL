@@ -558,13 +558,13 @@ class CompanyAccountsTest extends TestCase
         $this->assertDatabaseHas('activity_logs', ['activity_type' => 'company.staff_removed']);
     }
 
-    public function test_an_employee_cannot_assign_staff_to_a_company(): void
+    public function test_a_non_admin_staff_member_cannot_assign_staff_to_a_company(): void
     {
         Mail::fake();
-        $employee = $this->staff('Employee');
+        $officer = $this->staff('Reviewing Officer');
         $company = $this->company();
 
-        $this->actingAs($employee)->postJson("/portal/companies/{$company->uid}/staff", [
+        $this->actingAs($officer)->postJson("/portal/companies/{$company->uid}/staff", [
             'userId' => $this->staff()->id, 'level' => 'editor',
         ])->assertForbidden();
     }

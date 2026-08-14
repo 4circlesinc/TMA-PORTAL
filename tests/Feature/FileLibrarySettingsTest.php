@@ -106,7 +106,7 @@ class FileLibrarySettingsTest extends TestCase
 
     public function test_non_admins_cannot_manage_the_file_library(): void
     {
-        foreach (['Employee', 'Client'] as $type) {
+        foreach (['Reviewing Officer', 'Client'] as $type) {
             $user = $this->user($type);
             $this->actingAs($user)->getJson('/portal/file-library/settings')->assertForbidden();
             $this->actingAs($user)->postJson('/portal/file-library/organization-folders', [

@@ -42,14 +42,14 @@ class SignInActivityTest extends TestCase
         ]);
     }
 
-    public function test_an_employee_sees_the_whole_firms_sign_ins(): void
+    public function test_a_staff_member_sees_the_whole_firms_sign_ins(): void
     {
-        $employee = $this->user(Role::EMPLOYEE, ['name' => 'Emp Loyee']);
+        $officer = $this->user(Role::REVIEWING_OFFICER, ['name' => 'Rev Officer']);
         $colleague = $this->user(Role::ADMINISTRATOR, ['name' => 'Ada Admin']);
 
         $this->event('login', $colleague);
 
-        $this->actingAs($employee)
+        $this->actingAs($officer)
             ->getJson('/portal/sign-ins')
             ->assertOk()
             ->assertJsonPath('items.0.description', 'Ada Admin signed in')
@@ -73,7 +73,7 @@ class SignInActivityTest extends TestCase
     /** Failed attempts are the reason this reads auth_events at all. */
     public function test_it_reports_failed_attempts_and_lockouts(): void
     {
-        $staff = $this->user(Role::EMPLOYEE, ['name' => 'Emp Loyee']);
+        $staff = $this->user(Role::REVIEWING_OFFICER, ['name' => 'Rev Officer']);
         $known = $this->user(Role::ADMINISTRATOR, ['name' => 'Ada Admin']);
 
         $this->event('login_failed', $known, '-3 minutes');
@@ -99,7 +99,7 @@ class SignInActivityTest extends TestCase
 
     public function test_it_leaves_out_sign_outs(): void
     {
-        $staff = $this->user(Role::EMPLOYEE);
+        $staff = $this->user(Role::REVIEWING_OFFICER);
         $other = $this->user(Role::ADMINISTRATOR, ['name' => 'Ada Admin']);
 
         $this->event('logout', $other, '-1 minute');
@@ -128,7 +128,7 @@ class SignInActivityTest extends TestCase
 
     public function test_it_returns_the_newest_first_and_honours_the_limit(): void
     {
-        $staff = $this->user(Role::EMPLOYEE);
+        $staff = $this->user(Role::REVIEWING_OFFICER);
         $one = $this->user(Role::ADMINISTRATOR, ['name' => 'First Person']);
         $two = $this->user(Role::EMPLOYEE, ['name' => 'Second Person']);
 

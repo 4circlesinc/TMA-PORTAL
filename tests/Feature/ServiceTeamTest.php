@@ -245,7 +245,7 @@ class ServiceTeamTest extends TestCase
         $this->join($team, $this->user(Role::EMPLOYEE, 'Alice'));
         $client = $this->client();
 
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $type) {
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $type) {
             $this->actingAs($this->user($type))
                 ->postJson('/admin/service-teams/'.$team->uuid.'/assign', [
                     'client' => $client->uid,

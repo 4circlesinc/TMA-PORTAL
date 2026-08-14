@@ -37,11 +37,11 @@ class ImportPauseTest extends TestCase
         ]);
     }
 
-    private function employee(): User
+    private function officer(): User
     {
         return User::factory()->create([
             'status' => 'approved',
-            'account_type' => 'Employee',
+            'account_type' => 'Reviewing Officer',
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),
@@ -100,9 +100,9 @@ class ImportPauseTest extends TestCase
             ->assertJsonFragment(['id' => 'library:'.$lib->uuid, 'paused' => true]);
     }
 
-    public function test_employee_cannot_pause_imports(): void
+    public function test_a_reviewing_officer_cannot_pause_imports(): void
     {
-        $this->actingAs($this->employee())
+        $this->actingAs($this->officer())
             ->putJson('/admin/background-ops/imports-pause', [
                 'target' => 'onedrive',
                 'paused' => true,

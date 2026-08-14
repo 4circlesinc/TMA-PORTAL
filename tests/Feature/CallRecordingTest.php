@@ -23,7 +23,7 @@ class CallRecordingTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function user(string $email, string $accountType = 'Employee'): User
+    private function user(string $email, string $accountType = 'Reviewing Officer'): User
     {
         return User::factory()->create([
             'email' => $email,

@@ -165,8 +165,8 @@ class UserRecycleBinTest extends TestCase
 
     public function test_only_administrators_reach_the_bin(): void
     {
-        $employee = $this->user('Employee');
+        $officer = $this->user('Reviewing Officer');
 
-        $this->actingAs($employee)->getJson('/portal/admin/recycle-bin?kind=user')->assertForbidden();
+        $this->actingAs($officer)->getJson('/portal/admin/recycle-bin?kind=user')->assertForbidden();
     }
 }

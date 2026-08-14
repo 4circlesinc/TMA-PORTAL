@@ -116,7 +116,7 @@ class FolderTemplateTest extends TestCase
 
     public function test_only_administrators_can_manage_templates(): void
     {
-        foreach ([Role::EMPLOYEE, Role::CLIENT] as $type) {
+        foreach ([Role::REVIEWING_OFFICER, Role::CLIENT] as $type) {
             $user = $this->user($type);
 
             $this->actingAs($user)->getJson('/portal/file-library/folder-templates')->assertForbidden();
@@ -216,7 +216,7 @@ class FolderTemplateTest extends TestCase
         // may write into a given folder, so a template must not become a way
         // around a folder nobody granted them.
         $admin = $this->user(Role::ADMINISTRATOR);
-        $other = $this->user(Role::EMPLOYEE);
+        $other = $this->user(Role::REVIEWING_OFFICER);
 
         $private = Folder::create([
             'uuid' => (string) Str::uuid(),
@@ -229,7 +229,7 @@ class FolderTemplateTest extends TestCase
 
         $template = FolderTemplates::create('Setup', ['Documents']);
 
-        // The employee cannot manage templates at all.
+        // The officer cannot manage templates at all.
         $this->actingAs($other)
             ->postJson('/portal/file-library/folder-templates/'.$template['id'].'/apply', ['folder' => $private->uuid])
             ->assertForbidden();

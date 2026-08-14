@@ -22,7 +22,7 @@ class SocialConnectReturnTest extends TestCase
     {
         return User::factory()->create([
             'status' => 'approved',
-            'account_type' => 'Employee',
+            'account_type' => 'Reviewing Officer',
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             // Mid-onboarding: this is the screen with the Connect buttons.

@@ -96,7 +96,7 @@ class FileWorkflowTest extends TestCase
     public function test_a_file_can_be_sent_for_approval(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, [
@@ -123,7 +123,7 @@ class FileWorkflowTest extends TestCase
     public function test_the_panel_counts_open_requests_and_what_is_waiting_on_you(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -152,7 +152,7 @@ class FileWorkflowTest extends TestCase
     public function test_approving_completes_the_request_and_stamps_the_version(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -177,8 +177,8 @@ class FileWorkflowTest extends TestCase
     public function test_a_decline_halts_the_whole_flow(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, [
@@ -203,7 +203,7 @@ class FileWorkflowTest extends TestCase
     public function test_a_refusal_must_carry_a_reason(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -216,7 +216,7 @@ class FileWorkflowTest extends TestCase
     public function test_require_comment_is_enforced_on_the_server(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, [
@@ -236,8 +236,8 @@ class FileWorkflowTest extends TestCase
     public function test_all_approvers_must_respond_when_require_all_is_set(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, [
@@ -259,8 +259,8 @@ class FileWorkflowTest extends TestCase
     public function test_any_one_approver_can_settle_it_when_require_all_is_off(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, [
@@ -278,8 +278,8 @@ class FileWorkflowTest extends TestCase
     public function test_an_ordered_flow_asks_one_person_at_a_time(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, [
@@ -319,7 +319,7 @@ class FileWorkflowTest extends TestCase
     public function test_a_new_version_supersedes_but_never_moves_the_request(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin, 'draft one');
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -349,7 +349,7 @@ class FileWorkflowTest extends TestCase
     public function test_locking_refuses_new_versions_while_the_request_is_open(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, [
@@ -376,7 +376,7 @@ class FileWorkflowTest extends TestCase
      */
     public function test_a_request_may_be_sent_to_someone_who_cannot_open_the_file_yet(): void
     {
-        $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'olive@example.com', 'Olive Owner');
         // A client cannot open an internal file until this brings them in.
         $stranger = $this->user('Client', 'sam@example.com', 'Sam Stranger');
 
@@ -405,13 +405,13 @@ class FileWorkflowTest extends TestCase
     /** A sender who cannot share the file still cannot pull anybody into it. */
     public function test_a_sender_who_cannot_share_cannot_add_someone_without_access(): void
     {
-        $owner = $this->user('Employee', 'olive@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'olive@example.com', 'Olive Owner');
         $stranger = $this->user('Client', 'sam@example.com', 'Sam Stranger');
         $file = $this->sharedFile($owner);
 
         // The org folder is editor-for-all-staff: enough to send a request,
         // never enough to hand the file to somebody new.
-        $editor = $this->user('Employee', 'eddie@example.com', 'Eddie Editor');
+        $editor = $this->user('Reviewing Officer', 'eddie@example.com', 'Eddie Editor');
 
         $this->actingAs($editor)
             ->postJson("/portal/files/files/{$file->uuid}/workflows", [
@@ -425,8 +425,8 @@ class FileWorkflowTest extends TestCase
     public function test_only_the_sender_can_cancel(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -444,8 +444,8 @@ class FileWorkflowTest extends TestCase
     public function test_a_step_can_be_delegated_and_the_trail_keeps_both_names(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -471,8 +471,8 @@ class FileWorkflowTest extends TestCase
     public function test_someone_not_asked_cannot_respond(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -485,7 +485,7 @@ class FileWorkflowTest extends TestCase
     public function test_feedback_completes_rather_than_claiming_approval(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['type' => 'feedback', 'recipients' => [['userId' => $ben->id]]]);
@@ -503,7 +503,7 @@ class FileWorkflowTest extends TestCase
     public function test_requesting_changes_halts_the_flow(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -519,8 +519,8 @@ class FileWorkflowTest extends TestCase
     public function test_overdue_requests_expire_and_reminders_are_sent(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
-        $cara = $this->user('Employee', 'cara@example.com', 'Cara Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
+        $cara = $this->user('Reviewing Officer', 'cara@example.com', 'Cara Staff');
         $overdue = $this->sharedFile($admin, 'overdue');
         $nagging = $this->sharedFile($admin, 'nagging');
 
@@ -549,7 +549,7 @@ class FileWorkflowTest extends TestCase
     public function test_the_workflow_history_records_the_whole_story(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);
@@ -568,7 +568,7 @@ class FileWorkflowTest extends TestCase
     public function test_workflow_events_reach_the_file_activity_timeline(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $file = $this->sharedFile($admin);
 
         $wf = $this->send($admin, $file, ['recipients' => [['userId' => $ben->id]]]);

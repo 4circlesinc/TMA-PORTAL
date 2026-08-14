@@ -215,13 +215,13 @@ class AccountApprovalFlowTest extends TestCase
 
     public function test_non_admins_cannot_approve_or_deny(): void
     {
-        $employee = User::factory()->create([
-            'status' => 'approved', 'account_type' => 'Employee',
+        $officer = User::factory()->create([
+            'status' => 'approved', 'account_type' => 'Reviewing Officer',
             'email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
         ]);
         $newbie = $this->pending();
 
-        $this->actingAs($employee)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])->assertStatus(403);
-        $this->actingAs($employee)->postJson("/admin/users/{$newbie->id}/deny")->assertStatus(403);
+        $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/approve", ['account_type' => 'Employee'])->assertStatus(403);
+        $this->actingAs($officer)->postJson("/admin/users/{$newbie->id}/deny")->assertStatus(403);
     }
 }

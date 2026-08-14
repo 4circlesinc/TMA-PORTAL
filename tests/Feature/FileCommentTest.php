@@ -83,7 +83,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $staff = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $staff = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
 
         $root = $this->actingAs($admin)
             ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Question about clause 4.'])
@@ -109,7 +109,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
 
         $this->actingAs($admin)->postJson("/portal/files/files/{$file->uuid}/comments", [
             'body' => 'Ben Staff can you check this?',
@@ -126,7 +126,7 @@ class FileCommentTest extends TestCase
      */
     public function test_mentioning_someone_without_access_gives_them_access(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
         $file = $this->file($owner);
         // A client, not a colleague: files are firm-wide by default now, so a
         // colleague is no longer an example of somebody without access.
@@ -157,7 +157,7 @@ class FileCommentTest extends TestCase
      */
     public function test_a_mention_by_someone_who_cannot_share_is_dropped_silently(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
         $file = $this->file($owner);
         $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
 
@@ -183,7 +183,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
         $ben->forceFill(['status' => 'suspended'])->save();
 
         $this->actingAs($admin)->postJson("/portal/files/files/{$file->uuid}/comments", [
@@ -197,7 +197,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
 
         $root = $this->actingAs($admin)
             ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Thoughts?'])->json('id');
@@ -225,7 +225,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
 
         $id = $this->actingAs($ben)
             ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'First draft'])->json('id');
@@ -246,7 +246,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
 
         $root = $this->actingAs($ben)
             ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Sensitive text'])->json('id');
@@ -269,7 +269,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
 
         $id = $this->actingAs($ben)
             ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Off topic'])->json('id');
@@ -281,7 +281,7 @@ class FileCommentTest extends TestCase
     {
         $admin = $this->user();
         $file = $this->orgFile($admin);
-        $ben = $this->user('Employee', 'ben@example.com', 'Ben Staff');
+        $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
 
         $id = $this->actingAs($ben)
             ->postJson("/portal/files/files/{$file->uuid}/comments", ['body' => 'Is this final?'])->json('id');
@@ -317,7 +317,7 @@ class FileCommentTest extends TestCase
 
     public function test_someone_without_file_access_cannot_read_or_write_comments(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
         $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $file = $this->file($owner);
 
@@ -330,8 +330,8 @@ class FileCommentTest extends TestCase
     /** A viewer-level share is enough to join the discussion. */
     public function test_a_viewer_may_comment(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
-        $guest = $this->user('Employee', 'guest@example.com', 'Gus Guest');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
+        $guest = $this->user('Reviewing Officer', 'guest@example.com', 'Gus Guest');
         $file = $this->file($owner);
 
         Share::create([
@@ -403,7 +403,7 @@ class FileCommentTest extends TestCase
      */
     public function test_someone_who_can_share_may_mention_anyone(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
         $file = $this->file($owner);
         $stranger = $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $admin = $this->user('Administrator', 'admin@example.com', 'Ada Admin');
@@ -422,7 +422,7 @@ class FileCommentTest extends TestCase
     /** Everyone else sees only the people already on the file. */
     public function test_mentionable_people_are_limited_for_someone_who_cannot_share(): void
     {
-        $owner = $this->user('Employee', 'owner@example.com', 'Olive Owner');
+        $owner = $this->user('Reviewing Officer', 'owner@example.com', 'Olive Owner');
         $file = $this->file($owner);
         $this->user('Client', 'stranger@example.com', 'Sam Stranger');
         $admin = $this->user('Administrator', 'admin@example.com', 'Ada Admin');
