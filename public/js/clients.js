@@ -118,16 +118,6 @@
     { value: 'existing_future', label: 'The service provider and all its contacts, now and in future' },
   ];
 
-  /* What the staff member does for the client, as opposed to what they may
-     open. Mirrors ClientAssignment::ROLES — the server refuses anything else. */
-  var ASSIGNMENT_ROLES = [
-    { value: 'account_manager', label: 'Account manager' },
-    { value: 'booking_coordinator', label: 'Booking coordinator' },
-    { value: 'finance', label: 'Finance contact' },
-    { value: 'contract_manager', label: 'Contract manager' },
-    { value: 'event_coordinator', label: 'Event coordinator' },
-    { value: 'general', label: 'Assigned staff' },
-  ];
 
   function assignmentLevelLabel(level) {
     for (var i = 0; i < ASSIGNMENT_LEVELS.length; i++) {
@@ -3847,12 +3837,6 @@
         '<div class="tma-dash__clients-assign-form">' +
         '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-assign-user>' +
         '<option value="">Assign staff…</option>' + options + '</select>' +
-        '<select class="tma-dash__clients-field-select" data-clients-assign-role aria-label="Assignment role">' +
-        ASSIGNMENT_ROLES.map(function (r) {
-          return '<option value="' + esc(r.value) + '"' + (r.value === 'general' ? ' selected' : '') + '>' +
-            esc(r.label) + '</option>';
-        }).join('') +
-        '</select>' +
         '<select class="tma-dash__clients-field-select" data-clients-assign-level aria-label="Permission level">' +
         ASSIGNMENT_LEVELS.map(function (l) {
           return '<option value="' + esc(l.value) + '"' + (l.value === 'editor' ? ' selected' : '') + '>' +
@@ -5143,10 +5127,8 @@
           clientsToast('Choose a staff member to assign', 'negative');
           return;
         }
-        var roleSel = root.querySelector('[data-clients-assign-role]');
         ClientsAPI.assign(state.selectedId, {
           userId: userId,
-          role: roleSel ? roleSel.value : 'general',
           level: levelSel ? levelSel.value : 'editor',
         }).then(function (res) {
           state.assignments = (res && res.assignments) || [];
