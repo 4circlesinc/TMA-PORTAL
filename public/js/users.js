@@ -74,7 +74,7 @@
       user: u.name,
       avatar: u.avatar || initialsAvatar(u.name, u.id),
       email: u.email,
-      address: u.accountType || 'Not assigned',
+      address: u.accountType === 'Employee' ? 'Pending' : (u.accountType || 'Not assigned'),
       date: u.joined,
       _ts: u.joinedIso ? Date.parse(u.joinedIso) : null,
       _status: u.status,
@@ -951,9 +951,9 @@ if (state.filters.user) {
         fieldLabels: state.live ? { address: 'Account type' } : null,
         hideDuplicate: !!state.live,
         addressOptions: state.live
-          ? (ACCOUNT_TYPES.indexOf(row.accountType) !== -1 || !row.accountType
+          ? (ACCOUNT_TYPES.indexOf(row.address) !== -1
             ? ACCOUNT_TYPES
-            : [row.accountType].concat(ACCOUNT_TYPES))
+            : [row.address].concat(ACCOUNT_TYPES))
           : null,
         avatarChoices: state.live ? SYSTEM_AVATARS : null,
         profileFields: !!state.live,
