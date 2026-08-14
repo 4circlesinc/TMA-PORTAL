@@ -171,17 +171,17 @@ class NotificationHistoryTest extends TestCase
     {
         $admin = $this->user();
 
-        for ($i = 0; $i < 55; $i++) {
+        for ($i = 0; $i < 105; $i++) {
             $this->delivery(['subject' => 'Message '.$i, 'created_at' => now()->subMinutes($i)]);
         }
 
         $first = $this->history($admin);
-        $this->assertCount(50, $first['notifications']);
+        $this->assertCount(100, $first['notifications']);
         $this->assertSame(2, $first['pages']);
-        $this->assertSame(55, $first['total']);
+        $this->assertSame(105, $first['total']);
 
         $second = $this->history($admin, ['page' => 2]);
         $this->assertCount(5, $second['notifications']);
-        $this->assertSame('Message 54', $second['notifications'][4]['subject']);
+        $this->assertSame('Message 104', $second['notifications'][4]['subject']);
     }
 }
