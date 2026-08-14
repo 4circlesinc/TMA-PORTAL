@@ -3416,7 +3416,7 @@
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap || !filesNet()) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
-    filesNet().fetchJSON(filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200'))
+    filesNet().fetchJSON(filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0'))
       .then(function (res) {
         renderClientFolderList(root, res);
         bindClientFolderRows(root);

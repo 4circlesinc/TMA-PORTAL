@@ -1166,7 +1166,7 @@
     var net = filesNet();
     if (!wrap || !net) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
-    net.fetchJSON(net.url('/?folder=' + encodeURIComponent(uuid) + '&perPage=200'))
+    net.fetchJSON(net.url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0'))
       .then(function (res) {
         renderCbiFolderList(root, res);
         captureCbiDocCount(root, res);

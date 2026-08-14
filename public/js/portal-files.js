@@ -219,7 +219,7 @@
     if (state.filterOwner) params.set('owner', state.filterOwner);
     params.set('sort', state.sort);
     params.set('dir', state.dir);
-    params.set('perPage', '200');
+    params.set('perPage', '0');
 
     // Returned so a live refresh can wait for it and avoid stacking refetches
     // on top of each other when several changes land at once.
@@ -5071,7 +5071,7 @@
           var p = new URLSearchParams();
           p.set('section', 'my');
           if (pick.folder) p.set('folder', pick.folder);
-          p.set('perPage', '200'); p.set('sort', 'name');
+          p.set('perPage', '0'); p.set('sort', 'name');
           net().fetchJSON(net().url('/?' + p.toString())).then(function (res) {
             pick.crumb = res.breadcrumb || [];
             var crumbHtml = '<button type="button" class="tma-portal-picker__crumb" data-pick-crumb="">Top level</button>';

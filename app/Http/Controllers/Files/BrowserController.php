@@ -29,7 +29,10 @@ class BrowserController extends BaseFilesController
             $section = 'all';
         }
 
-        $perPage = min(max((int) $request->query('perPage', 60), 1), 200);
+        // perPage=0 means everything: the library shows whole folders, not
+        // windows of them. The ceiling is a runaway guard, not a page size.
+        $requested = (int) $request->query('perPage', 60);
+        $perPage = $requested === 0 ? 100000 : min(max($requested, 1), 200);
         $page = max((int) $request->query('page', 1), 1);
         $search = trim((string) $request->query('search', ''));
 
