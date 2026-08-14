@@ -86,4 +86,25 @@ function close() {
 
 const isOpen = () => !!panel && !panel.isDestroyed();
 
-module.exports = { show, close, isOpen, WIDTH, HEIGHT, topRight };
+/*
+ * The *other* window a call can open: the floating one it moves itself into
+ * once it is answered, so it can be left open above Excel or a browser while
+ * the person gets on with their day.
+ *
+ * That window is Chromium's, not ours — which is exactly why it floats above
+ * other applications in a way a BrowserWindow of ours cannot. It is asked for
+ * with `documentPictureInPicture.requestWindow()`, and the request arrives at
+ * our window-open handler looking like a plain `about:blank` pop-up: the page
+ * fills the document itself and never navigates it.
+ *
+ * Recognising it matters because the handler's fallback is to hand anything
+ * that is not the portal to the system browser. Without this the request is
+ * denied, `about:blank` is posted to Safari, and a call simply refuses to pop
+ * out with nothing in any log to say why.
+ */
+const isPictureInPictureRequest = ({ url, disposition } = {}) =>
+  url === 'about:blank' || disposition === 'other';
+
+module.exports = {
+  show, close, isOpen, WIDTH, HEIGHT, topRight, isPictureInPictureRequest,
+};

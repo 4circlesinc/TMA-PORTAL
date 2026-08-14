@@ -33090,6 +33090,18 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-call svg { display: block; }
 
+/* The root of the floating window: it has one job, which is to be the window.
+ * (The page's overlay is positionless — its children place themselves.) */
+.tma-call--float {
+  position: absolute;
+  inset: 0;
+  background: #05070c;
+}
+
+/* The page's overlay while the call is floating: empty, and unable to catch a
+ * click meant for the portal underneath it. */
+.tma-call--parked { display: none; }
+
 /* Screen-reader announcements: present, never seen. */
 .tma-call__live {
   position: absolute;
@@ -33211,9 +33223,10 @@ span.tma-dash__messages-profile-avatar {
   display: flex;
 }
 
-/* Where the media layer waits while a mode shows no picture. It must stay in
- * the document — it carries the remote audio element — so it is shrunk out of
- * sight rather than removed or display:none'd. */
+/* Where the media layer waits while a mode shows no picture. It is moved
+ * between presentations rather than rebuilt, so it always needs somewhere to
+ * be: it is shrunk out of sight rather than removed or display:none'd, which
+ * would stop the video elements decoding and cost a black frame on return. */
 .tma-call__media-park {
   position: absolute;
   width: 1px;
@@ -33820,16 +33833,24 @@ span.tma-dash__messages-profile-avatar {
 }
 .tma-call__meter i { display: block; height: 100%; width: 0; background: #12b76a; transition: width 120ms linear; }
 
-/* ── Bottom-left compact window (§7, §8, §19) ───────────────────── */
+/* ── The small window (§7, §8, §19) ──────────────────────────────
+ *
+ * The picture is the window: the camera runs edge to edge and everything else
+ * floats over it, out of the way, until the pointer arrives. Two overlay bars
+ * — the window's own controls along the top, the call's along the bottom —
+ * both revealed together on hover and on focus.
+ *
+ * The same rules dress the window wherever it is drawn. In the page it is a
+ * fixed, draggable, rounded box; in a floating operating-system window
+ * (.tma-call--float) it simply fills the window it was given. */
 .tma-call__compact {
   position: fixed;
   z-index: 1250;
-  width: 236px;
-  display: flex;
-  flex-direction: column;
+  width: 300px;
+  height: 200px;
   overflow: hidden;
   border-radius: var(--radius-16);
-  background: #0b0f19;
+  background: #05070c;
   color: #fff;
   box-shadow: 0 18px 44px rgb(4 8 16 / 0.5);
   animation: tma-call-compact-in 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
@@ -33842,12 +33863,135 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-call__compact.is-dragging { animation: none; transition: none; user-select: none; }
 
-/* Controls at the top, where they cannot cover the face or the video. */
-.tma-call__compact-bar {
+/* The floating window has no edges of its own to draw and nowhere to be
+ * positioned: the operating system owns both. */
+.tma-call--float .tma-call__compact {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+/* The picture, edge to edge and behind everything else. */
+.tma-call__compact-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: #05070c;
+}
+.tma-call__compact-stage > * { flex: 1; min-width: 0; }
+
+.tma-call__compact-face {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 40%, #1b2436, #0a0e17 75%);
+}
+.tma-call__compact-avatar { width: 76px; height: 76px; font-size: 26px; }
+
+/* Edge to edge: the picture *is* the window, so the layer and its frame fill
+ * the stage and let the window's own corners do the clipping. */
+.tma-call--compact .tma-call__media,
+.tma-call--compact .tma-call__frame.is-big { border-radius: 0; }
+
+/* The compact window is a single face, not a two-up: the small video would be
+ * unreadable at this size, and so would a name plate over it. */
+.tma-call--compact .tma-call__frame.is-pip { display: none; }
+.tma-call--compact .tma-call__frame-tag,
+.tma-call--compact .tma-call__frame-swap { display: none; }
+.tma-call--compact .tma-call__off-avatar { width: 56px; height: 56px; font-size: var(--text-size-16); }
+.tma-call--compact .tma-call__off-name { font-size: var(--text-size-12); }
+
+/* Both bars are the same idea: a gradient veil so white text stays readable
+ * over any picture, hidden until the pointer or the keyboard arrives. */
+.tma-call__compact-top,
+.tma-call__compact-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  /* Above the video frames, which carry z-index 1 and 2 of their own and sit
+   * in this same stacking context — without this the bars are painted, and
+   * measurably visible, directly underneath the picture. */
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.tma-call__compact-top {
+  top: 0;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-10);
+  transform: translateY(-6px);
+  background: linear-gradient(to bottom, rgb(4 8 16 / 0.78), rgb(4 8 16 / 0));
+}
+.tma-call__compact-controls {
+  bottom: 0;
+  gap: var(--space-8);
+  justify-content: center;
+  padding: var(--space-14) var(--space-10) var(--space-10);
+  transform: translateY(6px);
+  background: linear-gradient(to top, rgb(4 8 16 / 0.82), rgb(4 8 16 / 0));
+}
+
+.tma-call__compact:hover .tma-call__compact-top,
+.tma-call__compact:hover .tma-call__compact-controls,
+.tma-call__compact:focus-within .tma-call__compact-top,
+.tma-call__compact:focus-within .tma-call__compact-controls,
+/* Shown for a moment when the window first appears, so nobody has to discover
+ * that there are controls at all. */
+.tma-call__compact.is-revealed .tma-call__compact-top,
+.tma-call__compact.is-revealed .tma-call__compact-controls {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+/* A touch screen has no hover to reveal them with. */
+@media (hover: none) {
+  .tma-call__compact-top,
+  .tma-call__compact-controls {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
+.tma-call__compact-id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.tma-call__compact-name {
+  font-size: var(--text-size-13, 13px);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+.tma-call__compact-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-size-12);
+  color: rgb(255 255 255 / 0.78);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+.tma-call__compact-kind { white-space: nowrap; }
+
+.tma-call__compact-window-btns {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: var(--space-6);
+  flex: none;
 }
 
 .tma-call__compact-btn {
@@ -33860,15 +34004,13 @@ span.tma-dash__messages-profile-avatar {
   padding: 0;
   border: none;
   border-radius: var(--radius-pill);
-  background: transparent;
-  color: rgb(255 255 255 / 0.8);
+  background: rgb(8 12 20 / 0.45);
+  color: rgb(255 255 255 / 0.86);
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
-.tma-call__compact-btn:hover { background: rgb(255 255 255 / 0.14); color: #fff; }
+.tma-call__compact-btn:hover { background: rgb(255 255 255 / 0.22); color: #fff; }
 .tma-call__compact-btn svg { width: 15px; height: 15px; }
-.tma-call__compact-btn--end { background: #f04438; color: #fff; margin-left: auto; }
-.tma-call__compact-btn--end:hover { background: #d92d20; }
 
 .tma-call__compact-grip {
   display: inline-flex;
@@ -33876,73 +34018,43 @@ span.tma-dash__messages-profile-avatar {
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-left: auto;
-  color: rgb(255 255 255 / 0.45);
+  color: rgb(255 255 255 / 0.6);
   cursor: grab;
   touch-action: none;
 }
 .tma-call__compact-grip svg { width: 14px; height: 14px; }
 .tma-call__compact.is-dragging .tma-call__compact-grip { cursor: grabbing; }
 
-.tma-call__compact-body {
-  position: relative;
-  height: 132px;
-  margin: 0 var(--space-8);
-  border-radius: var(--radius-12);
-  overflow: hidden;
-  background: #05070c;
-  display: flex;
-}
-.tma-call__compact-face {
-  position: relative;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at 50% 40%, #1b2436, #0a0e17 75%);
-}
-.tma-call__compact-avatar { width: 76px; height: 76px; font-size: 26px; }
-
-/* The compact window is a single face, not a two-up: the small video would be
- * unreadable at this size, and so would a name plate over it. */
-.tma-call--compact .tma-call__frame.is-pip { display: none; }
-.tma-call--compact .tma-call__frame-tag,
-.tma-call--compact .tma-call__frame-swap { display: none; }
-.tma-call--compact .tma-call__off-avatar { width: 56px; height: 56px; font-size: var(--text-size-16); }
-.tma-call--compact .tma-call__off-name { font-size: var(--text-size-12); }
-
-.tma-call__compact-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: var(--space-8) var(--space-12) 0;
-  min-width: 0;
-}
-.tma-call__compact-name {
-  font-size: var(--text-size-13, 13px);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tma-call__compact-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  font-size: var(--text-size-12);
-  color: rgb(255 255 255 / 0.62);
-}
-.tma-call__compact-kind { white-space: nowrap; }
-
-.tma-call__compact-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-8);
-  padding: var(--space-8) var(--space-12) var(--space-12);
-}
 .tma-call__compact-controls .tma-call__ctrl { width: 38px; height: 38px; }
 .tma-call__compact-controls .tma-call__ctrl svg { width: 17px; height: 17px; }
+
+/*
+ * Prompts belong to the window they interrupt.
+ *
+ * The general rule pins them to the viewport, because the island has no dialog
+ * of its own to sit in. The small window does: pinned, the recording consent
+ * line lies across the page beside a call that is 300 pixels wide — and inside
+ * a floating window it would be wider than the window. So it comes home, wraps,
+ * and sits over the picture where it cannot be missed. It has an OK on it; that
+ * is how it leaves. */
+.tma-call--compact .tma-call__prompt,
+.tma-call--compact .tma-call__prompt--recording {
+  position: absolute;
+  left: var(--space-8);
+  right: var(--space-8);
+  bottom: var(--space-8);
+  transform: none;
+  width: auto;
+  max-width: none;
+  z-index: 4;
+  flex-wrap: wrap;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-10);
+  border-radius: var(--radius-12);
+  font-size: var(--text-size-12);
+}
 
 /* ── Dynamic Island (§9) — unchanged capsule ────────────────────── */
 .tma-call__pill {
@@ -34110,8 +34222,8 @@ span.tma-dash__messages-profile-avatar {
     top: auto !important;
     bottom: var(--space-12);
     width: auto;
+    height: 172px;
   }
-  .tma-call__compact-body { height: 108px; }
 
   .tma-call__pill { max-width: calc(100vw - 24px); }
   .tma-call__pill-name { max-width: 84px; }

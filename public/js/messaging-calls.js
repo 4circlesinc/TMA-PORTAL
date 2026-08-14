@@ -45,9 +45,27 @@
   var session = null;
   var overlay = null;
   var mediaLayer = null;   // persistent: survives every mode change
+  var audioSink = null;    // the remote sound; parked in the page and never moved
   var wired = false;       // delegated listeners are attached once, to `overlay`
 
   var MODES = { INCOMING: 'incoming', MODAL: 'modal', COMPACT: 'compact', ISLAND: 'island' };
+
+  /*
+   * Rendering is reconciliation, not replacement.
+   *
+   * Every render used to be `host.innerHTML = html`, which throws the whole
+   * call away and builds it again: the avatar re-requests and flashes, the
+   * window replays its entry animation, and the video element is torn out of
+   * the document and put back. A connection-quality sample lands every four
+   * seconds, so a live call visibly blinked at rest — as if it were reloading
+   * itself. patch() updates the existing tree in place instead, so a state
+   * change that touches one word touches one word and nothing else moves.
+   *
+   * Resolved per call rather than captured: dom-morph.js is a separate script,
+   * and a call must not depend on which of the two loaded first.
+   */
+  var MORPH_FALLBACK = { patch: function (root, html) { root.innerHTML = html; } };
+  function morph() { return window.TMAMorph || MORPH_FALLBACK; }
 
   /* Where the island sits. Six anchors, cycled by its move handle. */
   var PILL_POSITIONS = ['tc', 'tr', 'br', 'bc', 'bl', 'tl'];
@@ -451,8 +469,13 @@
     stopRinging();
     document.documentElement.removeAttribute('data-tma-call');
     releaseFocus();
+    // The window belongs to the call, not the other way round: when the call
+    // is over the window goes with it, without being read as "stop floating".
+    closeFloat(false);
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     overlay = null;
+    if (audioSink && audioSink.parentNode) audioSink.parentNode.removeChild(audioSink);
+    audioSink = null;
     mediaLayer = null;
     wired = false;
   }
@@ -608,8 +631,8 @@
   }
 
   function applySpeaker() {
-    if (!session || !session.devices.speaker || !mediaLayer) return;
-    var audio = mediaLayer.querySelector('[data-call-audio]');
+    if (!session || !session.devices.speaker) return;
+    var audio = audioSink;
     if (!audio || typeof audio.setSinkId !== 'function') return;
     audio.setSinkId(session.devices.speaker).catch(function () { /* ignore */ });
   }
@@ -831,7 +854,10 @@
     // now the caller has been watching the modal ring, which is what they
     // wanted to see; once it is answered their preference takes over.
     session.prevMode = defaultMode();
-    if (session.mode !== defaultMode()) setMode(defaultMode(), { silent: true });
+    // …unless it is already floating in a window of its own, which outranks a
+    // preference about where it should sit *in the page*.
+    if (isFloating()) render();
+    else if (session.mode !== defaultMode()) setMode(defaultMode(), { silent: true });
     else render();
 
     publishState();
@@ -843,9 +869,10 @@
   }
 
   function tickDuration() {
-    if (!session || !session.startedAt || !overlay) return;
+    var host = hostEl();
+    if (!session || !session.startedAt || !host) return;
     var text = formatDuration(Date.now() - session.startedAt);
-    overlay.querySelectorAll('[data-call-duration]').forEach(function (n) { n.textContent = text; });
+    host.querySelectorAll('[data-call-duration]').forEach(function (n) { n.textContent = text; });
   }
 
   function formatDuration(ms) {
@@ -905,14 +932,16 @@
   function setStatus(text) {
     if (!session) return;
     session.statusText = text;
-    if (!overlay) return;
-    overlay.querySelectorAll('[data-call-status]').forEach(function (n) { n.textContent = text; });
+    var host = hostEl();
+    if (!host) return;
+    host.querySelectorAll('[data-call-status]').forEach(function (n) { n.textContent = text; });
   }
 
   /* One assertive region so a screen reader hears the call, not the layout. */
   function announce(text) {
-    if (!overlay || !text) return;
-    var live = overlay.querySelector('[data-call-live]');
+    var host = hostEl();
+    if (!host || !text) return;
+    var live = host.querySelector('[data-call-live]');
     if (!live || session.announced === text) return;
     session.announced = text;
     live.textContent = text;
@@ -954,11 +983,29 @@
       '<button type="button" class="tma-call__frame-swap" data-call-action="swap" ' +
       'aria-label="Swap the large and small video">' + iconSwap() + '</button>' +
       '<span class="tma-call__frame-tag">You</span>' +
-      '</div>' +
-      '<audio data-call-audio autoplay></audio>';
+      '</div>';
     mediaLayer = el;
     wireLocalDrag();
     return el;
+  }
+
+  /*
+   * The remote *sound*, deliberately outside the media layer.
+   *
+   * The layer is re-parented for every presentation, and now into an entirely
+   * different document when the call floats in its own window. Sound has to
+   * survive all of that, so the one element carrying it is created once, parked
+   * in the page, and never moved — a call cannot be silenced by a change of
+   * scenery it never hears about.
+   */
+  function buildAudioSink() {
+    if (audioSink && audioSink.parentNode) return audioSink;
+    audioSink = document.createElement('audio');
+    audioSink.setAttribute('data-call-audio', '');
+    audioSink.autoplay = true;
+    audioSink.style.display = 'none';
+    document.body.appendChild(audioSink);
+    return audioSink;
   }
 
   function localPicture() {
@@ -995,11 +1042,25 @@
       remote.srcObject = session.remoteStream;
       remote.play().catch(function () {});
     }
-    var audio = mediaLayer.querySelector('[data-call-audio]');
+    var audio = buildAudioSink();
     if (audio && session.remoteStream && audio.srcObject !== session.remoteStream) {
       audio.srcObject = session.remoteStream;
       audio.play().catch(function () {});
       applySpeaker();
+    }
+  }
+
+  /*
+   * Moving the media layer between documents can leave its video elements
+   * paused. They are muted, so asking them to play again is always permitted.
+   */
+  function resumeMedia() {
+    if (!mediaLayer) return;
+    mediaLayer.querySelectorAll('video').forEach(function (v) {
+      if (v.srcObject && v.paused) v.play().catch(function () { /* ignore */ });
+    });
+    if (audioSink && audioSink.srcObject && audioSink.paused) {
+      audioSink.play().catch(function () { /* ignore */ });
     }
   }
 
@@ -1036,6 +1097,16 @@
     }
 
     var big = session.swapped ? 'local' : 'remote';
+    /*
+     * The small window has room for exactly one picture, so it shows the best
+     * one there is: the other person once they are on camera, and until then
+     * your own preview. Without this a call spends the whole time it is ringing
+     * showing a black rectangle — the camera is running, it is just in the
+     * self-view, which this presentation hides.
+     */
+    if ((isFloating() || session.mode === MODES.COMPACT) && !remoteHasVideo && localHasVideo) {
+      big = 'local';
+    }
     mediaLayer.querySelectorAll('[data-call-frame]').forEach(function (f) {
       var isBig = f.getAttribute('data-call-frame') === big;
       f.classList.toggle('is-big', isBig);
@@ -1044,9 +1115,16 @@
 
     var avatar = mediaLayer.querySelector('[data-call-remote-avatar]');
     if (avatar) {
-      avatar.innerHTML = session.peerAvatar
+      // Written only when it actually changes. This runs on every render, and
+      // rewriting the same photo makes the browser fetch and decode it again —
+      // which is the other half of the flicker patch() was brought in to stop.
+      var face = session.peerAvatar
         ? '<img src="' + esc(session.peerAvatar) + '" alt="" referrerpolicy="no-referrer">'
         : esc(initials(session.peerName));
+      if (avatar.getAttribute('data-face') !== face) {
+        avatar.setAttribute('data-face', face);
+        avatar.innerHTML = face;
+      }
       avatar.classList.toggle('tma-call__off-avatar--initials', !session.peerAvatar);
     }
     var nameEl = mediaLayer.querySelector('[data-call-remote-name]');
@@ -1135,9 +1213,168 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * The floating window (§24)
+   *
+   * A call should not hold the machine hostage. You take it, and then you get
+   * on with your work — in the portal, in Excel, anywhere. Document
+   * Picture-in-Picture gives us a real operating-system window for exactly
+   * that: it floats above every other application, it is not a browser tab,
+   * and it stays put while the user works somewhere else.
+   *
+   * The reason this is possible at all is the rule the rest of this file is
+   * built on: there is one call, and the presentations are only ever renders of
+   * it. The floating window is a *fifth place to draw the compact window*, not
+   * a second call. The same persistent media layer is re-parented into it, so
+   * the peer connection, the streams and the timer never learn that the window
+   * changed; the same delegated [data-call-action] listener runs inside it, so
+   * every control behaves identically to the one in the page.
+   *
+   * Where the browser has no such window (Safari, Firefox, an insecure origin,
+   * or a gesture that has already expired) the compact window in the page is
+   * the same thing without the operating system's help, and the call falls back
+   * to it silently.
+   * ------------------------------------------------------------------ */
+
+  var floatWin = null;    // the WindowProxy, while it is open
+  var floatRoot = null;   // the .tma-call element inside it
+
+  /* Roomy enough for a face, small enough to leave open beside real work. */
+  var FLOAT_SIZE = { video: { w: 380, h: 300 }, audio: { w: 320, h: 210 } };
+
+  /*
+   * Whether a call should float. Remembered on the machine rather than the
+   * account, for the same reason a camera id is: it describes this screen and
+   * this desk, not the person. Closing the window is itself an answer — the
+   * call stops floating until it is popped out again.
+   */
+  var floatWanted = readStore('tma.call.float', '1') !== '0';
+
+  function setFloatWanted(on) {
+    floatWanted = !!on;
+    writeStore('tma.call.float', on ? '1' : '0');
+  }
+
+  function floatSupported() {
+    return !!(window.documentPictureInPicture &&
+      typeof window.documentPictureInPicture.requestWindow === 'function');
+  }
+
+  function isFloating() { return !!(floatWin && !floatWin.closed && floatRoot); }
+
+  /* Wherever the call is currently drawn. Everything that reaches into the
+   * rendered call — the timer, the status line, focus — asks for this rather
+   * than assuming the page. */
+  function hostEl() { return isFloating() ? floatRoot : overlay; }
+
+  /*
+   * Must be called from a user gesture: no browser hands out a floating window
+   * without one. Answering a call and placing a call are both clicks, which is
+   * why the window is opened at those moments rather than when the call
+   * finally connects — by then the gesture is long gone.
+   */
+  function openFloat() {
+    if (!session || isFloating() || !floatWanted || !floatSupported()) {
+      return Promise.resolve(false);
+    }
+
+    var size = FLOAT_SIZE[session.media === 'video' ? 'video' : 'audio'];
+
+    return window.documentPictureInPicture
+      .requestWindow({ width: size.w, height: size.h })
+      .then(function (win) {
+        if (!session) { try { win.close(); } catch (e) { /* ignore */ } return false; }
+        floatWin = win;
+        dressFloatWindow(win);
+        // Closed from its own close button, or by the browser reclaiming it.
+        win.addEventListener('pagehide', function () {
+          if (floatWin !== win) return;   // we closed it ourselves; already handled
+          floatWin = null;
+          floatRoot = null;
+          if (!session) return;
+          // Closing the window is the user saying "not like that": keep the
+          // call, put it back in the page, and stop floating until asked again.
+          setFloatWanted(false);
+          render();
+          resumeMedia();
+        });
+        // The floating window *is* the small window; popping back in should
+        // land there rather than in whatever was on screen before.
+        session.mode = MODES.COMPACT;
+        render();
+        resumeMedia();
+        return true;
+      })
+      .catch(function () {
+        // No gesture left, or the browser said no. The page's own compact
+        // window is the same call; nothing is lost by staying there.
+        return false;
+      });
+  }
+
+  function closeFloat(userAsked) {
+    var win = floatWin;
+    floatWin = null;
+    floatRoot = null;
+    if (userAsked) setFloatWanted(false);
+    if (win && !win.closed) { try { win.close(); } catch (e) { /* ignore */ } }
+  }
+
+  /*
+   * A picture-in-picture window opens empty — no stylesheet, no theme, not even
+   * a background colour. Everything the call needs to look like itself has to
+   * be carried across.
+   */
+  function dressFloatWindow(win) {
+    var doc = win.document;
+    doc.title = callKindLabel(session.media) + ' · ' + (session.peerName || '');
+
+    /* The call's look lives in the app's own stylesheets. Copying the <link>s
+     * means the window is styled by exactly the same rules — and, being links
+     * to files the page has already fetched, they come from cache. */
+    document.querySelectorAll('link[rel="stylesheet"], style').forEach(function (node) {
+      if (node.tagName === 'LINK') {
+        var link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = node.href;    // the property is already absolute
+        doc.head.appendChild(link);
+        return;
+      }
+      var style = doc.createElement('style');
+      style.textContent = node.textContent;
+      doc.head.appendChild(style);
+    });
+
+    /* Last, and inline, so it is doing two jobs: it paints the window dark
+     * immediately — before a single one of those stylesheets has arrived, which
+     * is what stops the window opening as a white rectangle — and it still wins
+     * afterwards over the app's light page background, which was never meant
+     * to be behind a call. */
+    var boot = doc.createElement('style');
+    boot.textContent =
+      'html,body{margin:0;height:100%;background:#05070c;overflow:hidden;' +
+      '-webkit-font-smoothing:antialiased;}';
+    doc.head.appendChild(boot);
+
+    // Theme tokens hang off <html>; without them the window has no colours.
+    var root = document.documentElement;
+    doc.documentElement.className = root.className;
+    if (root.getAttribute('data-theme')) {
+      doc.documentElement.setAttribute('data-theme', root.getAttribute('data-theme'));
+    }
+
+    floatRoot = doc.createElement('div');
+    floatRoot.className = 'tma-call tma-call--float';
+    doc.body.appendChild(floatRoot);
+
+    wireHost(floatRoot);
+    // Escape has to mean the same thing in here as it does out there.
+    doc.addEventListener('keydown', onKeyDown, true);
+  }
+
+  /* ------------------------------------------------------------------ *
    * Rendering
    *
-   * One shell per mode, rebuilt on render; the media layer is re-parented
+   * One shell per mode, reconciled on render; the media layer is re-parented
    * into it rather than recreated. Every control is a [data-call-action], so
    * a single delegated listener covers all four modes — which is what stops a
    * control existing in one layout and doing nothing in another.
@@ -1156,50 +1393,92 @@
     if (!session) return;
     ensureOverlay();
     buildMediaLayer();
+    buildAudioSink();
 
-    var mode = session.mode;
+    var floating = isFloating();
+    // A floating call is drawn in its own window, and the page is left with an
+    // empty overlay — the portal underneath stays completely usable, which is
+    // the whole point of putting the call in a window of its own.
+    var mode = floating ? MODES.COMPACT : session.mode;
+    var host = floating ? floatRoot : overlay;
+
+    if (floating) {
+      // Nothing of the call is left behind in the page — not an empty scrim,
+      // not a stale class that still catches clicks.
+      if (overlay.firstChild) overlay.textContent = '';
+      overlay.className = 'tma-call tma-call--parked';
+    }
+
     // hasAnyVideo, not session.media: a screen share in a voice call needs
     // the video layout (big frame, floating controls) without being one.
-    overlay.className = 'tma-call tma-call--' + mode +
+    host.className = 'tma-call tma-call--' + mode +
+      (floating ? ' tma-call--float' : '') +
       ' tma-call--' + (hasAnyVideo() ? 'video' : 'audio') +
       (session.connected ? ' is-connected' : '') +
       (session.error ? ' has-error' : '');
 
-    // A render replaces every control, which would drop focus to <body> and
-    // send the next Tab back to the top of the page. Remember which control
-    // had it and hand focus back to its replacement.
-    var focusedAction = document.activeElement &&
-      overlay.contains(document.activeElement) &&
-      document.activeElement.getAttribute('data-call-action');
+    // Reconciling keeps focus on a surviving control, but a control that is
+    // genuinely replaced still drops focus to <body> and sends the next Tab
+    // back to the top of the page. Remember which one had it.
+    var active = host.ownerDocument.activeElement;
+    var focusedAction = active && host.contains(active) &&
+      active.getAttribute('data-call-action');
 
     var html =
-      '<div class="tma-call__live" data-call-live role="status" aria-live="assertive"></div>';
+      '<div class="tma-call__live" data-call-live data-key="live" role="status" aria-live="assertive"></div>';
 
     if (mode === MODES.INCOMING) html += renderIncoming();
     else if (mode === MODES.MODAL) html += renderModal();
     else if (mode === MODES.COMPACT) html += renderCompact();
     else html += renderIsland();
 
-    overlay.innerHTML = html;
+    morph().patch(host, html);
 
-    if (focusedAction) {
-      var again = overlay.querySelector('[data-call-action="' + focusedAction + '"]');
+    if (focusedAction && host.ownerDocument.activeElement !== active) {
+      var again = host.querySelector('[data-call-action="' + focusedAction + '"]');
       if (again) again.focus();
     }
 
-    var slot = overlay.querySelector('[data-call-media-slot]');
-    if (slot) slot.appendChild(mediaLayer);
+    // The slot is morph-skipped, so it keeps whatever it is already holding.
+    // Appending only on a genuine move is what stops a live video element
+    // being pulled out of the document and put back on every render.
+    var slot = host.querySelector('[data-call-media-slot]');
+    if (slot && mediaLayer.parentNode !== slot) {
+      slot.appendChild(mediaLayer);
+      resumeMedia();
+    }
 
     syncMediaLayer();
     attachStreams();
     applyCompactPos();
     applyPillPos();
+    revealControls(host);
 
-    if (mode === MODES.MODAL || mode === MODES.INCOMING) captureFocus();
+    if (!floating && (mode === MODES.MODAL || mode === MODES.INCOMING)) captureFocus();
     else releaseFocus();
 
     publishCallPhase();
     tickDuration();
+  }
+
+  /*
+   * Hidden controls have to introduce themselves once. The small window shows
+   * its bars for a moment when it first appears and then gets out of the way,
+   * so nobody has to guess that hovering does anything. Only on arrival — a
+   * later render must not make them flash back, which is the exact behaviour
+   * this whole change is here to remove.
+   */
+  var revealTimer = null;
+
+  function revealControls(host) {
+    var box = host && host.querySelector('.tma-call__compact');
+    if (!box || box.__tmaRevealed) return;
+    box.__tmaRevealed = true;
+    box.classList.add('is-revealed');
+    if (revealTimer) clearTimeout(revealTimer);
+    revealTimer = setTimeout(function () {
+      if (box.isConnected) box.classList.remove('is-revealed');
+    }, 2200);
   }
 
   function avatarBlock(cls, size) {
@@ -1225,16 +1504,17 @@
     var permission = session.previewError;
     var showPreview = isVideo && !permission;
 
-    return '<div class="tma-call__scrim"></div>' +
+    return '<div class="tma-call__scrim" data-key="scrim"></div>' +
       '<div class="tma-call__dialog tma-call__dialog--incoming' +
-      (showPreview ? ' tma-call__dialog--incoming-video' : '') + '" role="dialog" aria-modal="true" ' +
+      (showPreview ? ' tma-call__dialog--incoming-video' : '') + '" data-key="incoming" ' +
+      'role="dialog" aria-modal="true" ' +
       'aria-label="Incoming ' + (isVideo ? 'video' : 'voice') + ' call from ' + esc(session.peerName) + '">' +
 
       '<div class="tma-call__incoming-hero">' +
       (showPreview
-        ? '<div class="tma-call__media-slot" data-call-media-slot></div>'
+        ? '<div class="tma-call__media-slot" data-call-media-slot data-morph-skip></div>'
         : avatarBlock('tma-call__incoming-photo') +
-          '<div class="tma-call__media-park" data-call-media-slot aria-hidden="true"></div>') +
+          '<div class="tma-call__media-park" data-call-media-slot data-morph-skip aria-hidden="true"></div>') +
       '</div>' +
 
       '<div class="tma-call__incoming-id">' +
@@ -1267,8 +1547,9 @@
   function renderModal() {
     var isVideo = session.media === 'video';
     var showsVideo = hasAnyVideo();
-    return '<div class="tma-call__scrim" data-call-action="minimize"></div>' +
-      '<div class="tma-call__dialog tma-call__dialog--stage" role="dialog" aria-modal="true" ' +
+    return '<div class="tma-call__scrim" data-key="scrim" data-call-action="minimize"></div>' +
+      '<div class="tma-call__dialog tma-call__dialog--stage" data-key="modal" ' +
+      'role="dialog" aria-modal="true" ' +
       'aria-label="' + esc(callKindLabel(session.media)) + ' with ' + esc(session.peerName) + '">' +
 
       '<div class="tma-call__stage-head">' +
@@ -1290,7 +1571,7 @@
       '</div></div>' +
 
       '<div class="tma-call__stage-body">' +
-      '<div class="tma-call__media-slot" data-call-media-slot></div>' +
+      '<div class="tma-call__media-slot" data-call-media-slot data-morph-skip></div>' +
       (showsVideo ? '' : '<div class="tma-call__audio-face">' + avatarBlock('tma-call__avatar-big') +
         '<div class="tma-call__audio-name">' + esc(session.peerName) + '</div></div>') +
       renderUpgradePrompt() +
@@ -1374,42 +1655,71 @@
       iconSignal() + '<span class="tma-call__quality-label">' + esc(label) + '</span></span>';
   }
 
-  /* ── Bottom-left compact window (§7, §8) ── */
+  /*
+   * ── The small window (§7, §8, §19) ──
+   *
+   * The picture *is* the window. It runs edge to edge, and everything else —
+   * who you are talking to, how long for, and every control — floats over it
+   * and stays out of the way until the pointer arrives. That is how a call
+   * window behaves everywhere else on the machine, and it is what makes this
+   * small enough to leave open beside real work.
+   *
+   * Two bars, on purpose. The top one is about the *window*: where it sits,
+   * how big it is, whether it floats. The bottom one is about the *call*:
+   * microphone, camera, screen, hang up. Both appear together on hover, and on
+   * focus, so a keyboard reaches everything the pointer can.
+   *
+   * The same markup draws the window in the page and in the floating window;
+   * only the document it lands in differs.
+   */
   function renderCompact() {
     var isVideo = session.media === 'video';
     var showsVideo = hasAnyVideo();
-    return '<div class="tma-call__compact" role="dialog" aria-label="' +
+    var floating = isFloating();
+
+    var windowBtns = floating
+      // Floating: the operating system owns where this window sits and how big
+      // it is, so the only thing left to offer is the way back into the page.
+      ? '<button type="button" class="tma-call__compact-btn" data-call-action="pop-in" ' +
+        'aria-label="Put the call back in the page" title="Put the call back in the page">' +
+        iconPopIn() + '</button>'
+      : (floatSupported()
+          ? '<button type="button" class="tma-call__compact-btn" data-call-action="pop-out" ' +
+            'aria-label="Float the call above other apps" title="Float the call above other apps">' +
+            iconPopOut() + '</button>'
+          : '') +
+        '<button type="button" class="tma-call__compact-btn" data-call-action="mode-modal" ' +
+        'aria-label="Open the large call window" title="Open the large call window">' +
+        iconExpand() + '</button>' +
+        '<button type="button" class="tma-call__compact-btn" data-call-action="mode-island" ' +
+        'aria-label="Switch to Dynamic Island" title="Switch to Dynamic Island">' +
+        iconIsland() + '</button>' +
+        '<button type="button" class="tma-call__compact-btn" data-call-action="restore" ' +
+        'aria-label="Return to the previous call view" title="Return to the previous call view">' +
+        iconBack() + '</button>' +
+        '<span class="tma-call__compact-grip" data-call-drag aria-hidden="true">' + iconMove() + '</span>';
+
+    return '<div class="tma-call__compact" data-key="compact" role="dialog" aria-label="' +
       esc(callKindLabel(session.media)) + ' with ' + esc(session.peerName) + '">' +
 
-      '<div class="tma-call__compact-bar">' +
-      '<button type="button" class="tma-call__compact-btn" data-call-action="restore" ' +
-      'aria-label="Return to the previous call view">' + iconBack() + '</button>' +
-      '<button type="button" class="tma-call__compact-btn" data-call-action="mode-modal" ' +
-      'aria-label="Open the large call window">' + iconExpand() + '</button>' +
-      '<button type="button" class="tma-call__compact-btn" data-call-action="mode-island" ' +
-      'aria-label="Switch to Dynamic Island">' + iconIsland() + '</button>' +
-      '<span class="tma-call__compact-grip" data-call-drag aria-hidden="true">' + iconMove() + '</span>' +
-      '<button type="button" class="tma-call__compact-btn tma-call__compact-btn--end" ' +
-      'data-call-action="hangup" aria-label="End call">' + iconHangup() + '</button>' +
-      '</div>' +
-
-      '<div class="tma-call__compact-body">' +
+      '<div class="tma-call__compact-stage">' +
       (showsVideo
-        ? '<div class="tma-call__media-slot" data-call-media-slot></div>'
+        ? '<div class="tma-call__media-slot" data-call-media-slot data-morph-skip></div>'
         // A voice call has no picture, but the media layer still has to live
-        // somewhere: it carries the remote *audio* element, and a layout that
-        // dropped it would silence the call.
+        // somewhere — it is the one thing that is moved rather than rebuilt.
         : '<div class="tma-call__compact-face">' + avatarBlock('tma-call__compact-avatar') +
-          '<div class="tma-call__media-park" data-call-media-slot aria-hidden="true"></div></div>') +
+          '<div class="tma-call__media-park" data-call-media-slot data-morph-skip aria-hidden="true"></div></div>') +
       '</div>' +
 
-      '<div class="tma-call__compact-foot">' +
+      '<div class="tma-call__compact-top">' +
+      '<div class="tma-call__compact-id">' +
       '<span class="tma-call__compact-name">' + esc(session.peerName) + '</span>' +
       '<span class="tma-call__compact-meta">' +
       recordingChip() +
       '<span class="tma-call__compact-kind">' + esc(callKindLabel(session.media)) + '</span>' +
       '<span class="tma-call__duration" data-call-duration></span>' +
-      '</span>' +
+      '</span></div>' +
+      '<div class="tma-call__compact-window-btns">' + windowBtns + '</div>' +
       '</div>' +
 
       '<div class="tma-call__compact-controls">' +
@@ -1419,6 +1729,8 @@
         isVideo && session.cameraOff,
         isVideo ? (session.cameraOff ? 'Turn camera on' : 'Turn camera off') : 'Switch to video') +
       shareScreenBtn(true) +
+      '<button type="button" class="tma-call__ctrl tma-call__ctrl--sm tma-call__ctrl--end" ' +
+      'data-call-action="hangup" aria-label="End call" title="End call">' + iconHangup() + '</button>' +
       '</div>' +
 
       renderUpgradePrompt() +
@@ -1430,7 +1742,7 @@
   /* ── Dynamic Island (§9) — the original capsule, kept as it was ── */
   function renderIsland() {
     var isVideo = session.media === 'video';
-    return '<div class="tma-call__pill tma-call__pill--' + pillPos + '" role="dialog" ' +
+    return '<div class="tma-call__pill tma-call__pill--' + pillPos + '" data-key="island" role="dialog" ' +
       'aria-label="' + esc(callKindLabel(session.media)) + ' with ' + esc(session.peerName) + '">' +
       '<button type="button" class="tma-call__pill-body" data-call-action="mode-modal" ' +
       'aria-label="Open the large call window">' +
@@ -1459,9 +1771,9 @@
       '<button type="button" class="tma-call__pill-end" data-call-action="hangup" ' +
       'aria-label="End call">' + iconHangup() + '</button>' +
       '</div>' +
-      // The media layer still needs a home while the island is showing, or the
-      // remote audio element would be detached and the call would go silent.
-      '<div class="tma-call__media-park" data-call-media-slot aria-hidden="true"></div>' +
+      // The media layer still needs a home while the island is showing: it is
+      // moved between presentations, never rebuilt, so it always has one.
+      '<div class="tma-call__media-park" data-call-media-slot data-morph-skip aria-hidden="true"></div>' +
       renderUpgradePrompt() +
       renderRecordingNotice() +
       renderErrorPanel();
@@ -1653,6 +1965,13 @@
   function iconScreen() {
     return svg(path('M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-6v2h3v2H7v-2h3v-2H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 2v9h14V6H5z'));
   }
+  /* A small pane lifting away from a larger one, and settling back into it. */
+  function iconPopOut() {
+    return svg(path('M3 4h11a1 1 0 0 1 1 1v3h-2V6H5v9h3v2H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm7 7h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zm1 2v5h9v-5h-9z'));
+  }
+  function iconPopIn() {
+    return svg(path('M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 2v12h16V6H4zm7 3h7a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1zm1 2v3h5v-3h-5z'));
+  }
 
   /* ------------------------------------------------------------------ *
    * Modes
@@ -1721,6 +2040,8 @@
   }
 
   function applyCompactPos() {
+    // A floating window is placed by the operating system, not by us.
+    if (isFloating()) return;
     if (!overlay || !session || session.mode !== MODES.COMPACT) return;
     var box = overlay.querySelector('.tma-call__compact');
     if (!box) return;
@@ -1762,6 +2083,16 @@
     'mode-compact': function () { setMode(MODES.COMPACT); },
     'mode-island': function () { setMode(MODES.ISLAND); },
 
+    // Out of the page and into a window of its own; and back again. Both run
+    // from a click, which is the only moment a floating window can be asked for.
+    'pop-out': function () { setFloatWanted(true); openFloat(); },
+    'pop-in': function () {
+      closeFloat(true);
+      setMode(MODES.COMPACT, { silent: true });
+      render();
+      resumeMedia();
+    },
+
     more: function () {
       session.sheet = session.sheet === 'more' ? null : 'more';
       stopMeter();
@@ -1787,25 +2118,36 @@
     'upgrade-cancel': function () { cancelUpgrade(); },
   };
 
-  function wireOverlay() {
-    if (wired || !overlay) return;
-    wired = true;
+  /*
+   * One delegated listener per place the call can be drawn. Bound to the root
+   * rather than to the controls, so it survives every render — and applied to
+   * the floating window's root too, which is what makes a button in that
+   * window do exactly what the same button does in the page.
+   */
+  function wireHost(root) {
+    if (!root || root.__tmaCallWired) return;
+    root.__tmaCallWired = true;
 
-    overlay.addEventListener('click', function (e) {
+    root.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-call-action]');
-      if (!btn || !overlay.contains(btn)) return;
+      if (!btn || !root.contains(btn)) return;
       e.preventDefault();
       e.stopPropagation();
       var fn = ACTIONS[btn.getAttribute('data-call-action')];
       if (fn && session) fn(btn);
     });
 
-    overlay.addEventListener('change', function (e) {
+    root.addEventListener('change', function (e) {
       var sel = e.target.closest('[data-call-device]');
       if (!sel) return;
       switchDevice(sel.getAttribute('data-call-device'), sel.value);
     });
+  }
 
+  function wireOverlay() {
+    if (wired || !overlay) return;
+    wired = true;
+    wireHost(overlay);
     wireDragHandles();
   }
 
@@ -1817,10 +2159,13 @@
     if (!session) return;
     if (e.key === 'Escape') {
       if (session.sheet) { session.sheet = null; stopMeter(); render(); e.preventDefault(); return; }
-      if (session.mode === MODES.MODAL) { minimize(); e.preventDefault(); }
+      // Escape in the floating window would have to mean "close the window",
+      // which the operating system already offers and which is not what the
+      // key means anywhere else in the call.
+      if (!isFloating() && session.mode === MODES.MODAL) { minimize(); e.preventDefault(); }
       return;
     }
-    if (e.key === 'Tab' && overlay &&
+    if (e.key === 'Tab' && !isFloating() && overlay &&
         (session.mode === MODES.MODAL || session.mode === MODES.INCOMING)) {
       trapTab(e);
     }
@@ -1848,17 +2193,19 @@
   var lastFocus = null;
 
   function focusables() {
-    if (!overlay) return [];
-    return Array.prototype.slice.call(overlay.querySelectorAll(
+    var root = hostEl();
+    if (!root) return [];
+    return Array.prototype.slice.call(root.querySelectorAll(
       'button:not([disabled]), select:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )).filter(function (el) { return el.offsetParent !== null; });
   }
 
   function captureFocus() {
-    if (!overlay) return;
+    var root = hostEl();
+    if (!root) return;
     if (!lastFocus) lastFocus = document.activeElement;
     var items = focusables();
-    if (items.length && !overlay.contains(document.activeElement)) items[0].focus();
+    if (items.length && !root.contains(root.ownerDocument.activeElement)) items[0].focus();
   }
 
   function releaseFocus() {
@@ -1871,9 +2218,10 @@
   function trapTab(e) {
     var items = focusables();
     if (!items.length) return;
+    var here = items[0].ownerDocument.activeElement;
     var first = items[0], last = items[items.length - 1];
-    if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
-    else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+    if (e.shiftKey && here === first) { last.focus(); e.preventDefault(); }
+    else if (!e.shiftKey && here === last) { first.focus(); e.preventDefault(); }
   }
 
   /*
@@ -2665,6 +3013,10 @@
       statusText: 'Calling…',
     });
     render();
+    // Straight into its own window, from the click that placed the call — the
+    // only moment a floating window can be asked for. It rings, connects and
+    // runs in there, and the portal behind it is never taken over.
+    openFloat();
     // The caller hears the same tone back while it rings, which is the only
     // signal that the call is actually going somewhere. It is started from the
     // click, so autoplay policy never blocks this side.
@@ -2730,6 +3082,10 @@
     session.mode = defaultMode();
     session.prevMode = session.mode;
     render();
+    // Answering is a click — in the page, or the desktop app's ring panel,
+    // which forwards it as a real gesture. That click is the whole budget for
+    // opening a floating window, so it is spent here rather than on connect.
+    openFloat();
 
     // Reuse the preview's tracks — no second permission prompt (§22).
     var ready = session.previewStream
@@ -3069,7 +3425,27 @@
         if (window.TMAMessagingSettings) window.TMAMessagingSettings.callDisplay = mode;
       }
     },
+    /*
+     * Whether a call floats in a window of its own. The setting is per machine
+     * (a floating window is about this screen), so it is read and written here
+     * rather than through MessagingSettings.
+     */
+    floatPreference: function (on) {
+      if (on === undefined) return floatWanted;
+      setFloatWanted(on);
+      if (!on) closeFloat(false);
+      else if (session) openFloat();
+      return floatWanted;
+    },
+    floatSupported: floatSupported,
     /* Exposed for the browser tests, which drive the UI without a real peer. */
-    _debug: function () { return { session: session, mode: session && session.mode, meter: !!meter }; },
+    _debug: function () {
+      return {
+        session: session,
+        mode: session && session.mode,
+        meter: !!meter,
+        floating: isFloating(),
+      };
+    },
   };
 })();

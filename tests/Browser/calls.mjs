@@ -352,13 +352,41 @@ await calleePage.click('.tma-call__controls [data-call-action="mute"]');  // mut
 await wait(300);
 await calleePage.click('[data-call-action="mode-compact"]');
 await calleePage.waitForSelector('.tma-call__compact', { timeout: 5000 });
+
+/*
+ * The small window shows its controls for a moment when it appears, so that
+ * they can be discovered at all. Wait that out before testing that they hide.
+ */
+await wait(2600);
+const atRest = await calleePage.evaluate(() => {
+  const box = document.querySelector('.tma-call__compact');
+  const r = box.getBoundingClientRect();
+  const stage = box.querySelector('.tma-call__compact-stage').getBoundingClientRect();
+  const seen = (sel) => Number(getComputedStyle(box.querySelector(sel)).opacity);
+  return {
+    // Edge to edge: the picture is the window, not a panel inside it.
+    stageFills: Math.abs(stage.width - r.width) < 1 && Math.abs(stage.height - r.height) < 1,
+    top: seen('.tma-call__compact-top'),
+    bottom: seen('.tma-call__compact-controls'),
+  };
+});
+check(atRest.stageFills, 'the camera runs edge to edge in the small window');
+check(atRest.top === 0 && atRest.bottom === 0,
+  'and the controls are out of the way until they are wanted');
+
+// Hovering the window is what brings them back.
+await calleePage.hover('.tma-call__compact');
+await wait(320);
 const compact = await calleePage.evaluate(() => {
   const box = document.querySelector('.tma-call__compact');
   const r = box.getBoundingClientRect();
+  const bar = box.querySelector('.tma-call__compact-controls').getBoundingClientRect();
   const sidebar = document.querySelector('.tma-dash__sidebar');
   return {
     controls: [...box.querySelectorAll('[data-call-action]')].map((b) => b.getAttribute('data-call-action')),
-    controlsAtTop: box.querySelector('.tma-call__compact-bar').getBoundingClientRect().top < r.top + 40,
+    revealed: Number(getComputedStyle(box.querySelector('.tma-call__compact-controls')).opacity) > 0.9,
+    // The call's own controls belong along the bottom edge.
+    controlsAtBottom: bar.bottom > r.bottom - 4 && bar.top > r.top + r.height / 2,
     name: box.querySelector('.tma-call__compact-name')?.textContent.trim(),
     duration: box.querySelector('[data-call-duration]')?.textContent.trim(),
     kind: box.querySelector('.tma-call__compact-kind')?.textContent.trim(),
@@ -368,7 +396,8 @@ const compact = await calleePage.evaluate(() => {
     clearOfSidebar: !sidebar || r.left >= sidebar.getBoundingClientRect().right - 1,
   };
 });
-check(compact.controlsAtTop, 'the compact window puts its controls at the top');
+check(compact.revealed, 'hovering the small window brings the controls up');
+check(compact.controlsAtBottom, 'and they come up along the bottom of it');
 for (const want of ['restore', 'mode-modal', 'mode-island', 'hangup', 'mute']) {
   check(compact.controls.includes(want), `the compact window offers "${want}"`);
 }
@@ -405,6 +434,7 @@ await calleePage.click('[data-call-action="mute"]');   // unmute again
 step(8, 'minimize returns where the call came from');
 await calleePage.click('.tma-call__pill [data-call-action="mode-compact"]');
 await calleePage.waitForSelector('.tma-call__compact');
+await calleePage.hover('.tma-call__compact');   // its controls hide until asked for
 await calleePage.click('.tma-call__compact [data-call-action="mode-modal"]');
 await calleePage.waitForSelector('.tma-call__dialog--stage');
 await calleePage.click('.tma-call__stage-head-actions [data-call-action="minimize"]');

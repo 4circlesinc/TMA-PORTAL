@@ -268,7 +268,14 @@ function revealWindow({ steal }) {
 function attachNavigationRules(win) {
   const { webContents } = win;
 
-  webContents.setWindowOpenHandler(({ url }) => {
+  webContents.setWindowOpenHandler(({ url, disposition }) => {
+    // A call popping out into its own floating window (see call-window.js).
+    // Checked first: the fallback below would post `about:blank` to the system
+    // browser and deny the window the call is trying to move into.
+    if (callWindow.isPictureInPictureRequest({ url, disposition })) {
+      return { action: 'allow' };
+    }
+
     const provider = signInProviderFor(url, webContents.getURL());
     if (provider) {
       startBrowserSignIn(provider);
@@ -668,9 +675,14 @@ async function ringPanel() {
 function answerCall() {
   callWindow.close();
   if (!mainWindow) return;
-  mainWindow.webContents.executeJavaScript('window.TMAMessagingCalls.accept(true)', true).catch(() => {});
-  // Answering is the one moment the app should come forward.
+  // Forward first, then answer — not the other way round. Answering opens the
+  // call's own floating window, and a browser will not hand one to a page that
+  // is not on screen. The call then floats above whatever the user goes back
+  // to, which is the point of it having a window at all.
   revealWindow({ steal: true });
+  // `true` is the user-gesture flag: this really was a click, on the ring
+  // panel, and a floating window can only be asked for from one.
+  mainWindow.webContents.executeJavaScript('window.TMAMessagingCalls.accept(true)', true).catch(() => {});
 }
 
 function declineCall() {

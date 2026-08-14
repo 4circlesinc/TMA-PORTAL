@@ -1736,6 +1736,43 @@ buttons open it and the kind is picked there — so anything that places a call
 must click `[data-messages-call="…"]` and then `[data-callask-start="…"]`
 (see `startCall()` in `calls.mjs`).
 
+- **`call-float.mjs`** — the floating call window, and the small window it
+  draws. **It needs nothing**: no server, no database, no Reverb, no second
+  person. It serves `public/` itself over `http://127.0.0.1` — a secure
+  context, which is the whole reason it cannot just open a file — and drives
+  `window.TMAMessagingCalls` directly against Chromium's fake camera, with
+  signalling that goes nowhere. So it runs in about ten seconds:
+
+  ```sh
+  node tests/Browser/call-float.mjs
+  ```
+
+  It covers the three things that are only true or false in a real browser:
+
+  - **A call moves itself into an operating-system window.** Document
+    picture-in-picture is a *second document*, so the checks reach into
+    `documentPictureInPicture.window` rather than the page. The call has to
+    arrive there with the same peer connection, the same tracks and a video
+    element that never stopped — and the page has to be left with nothing at
+    all, or the portal underneath would be covered by an invisible overlay.
+  - **The picture runs edge to edge, with the controls hidden until wanted.**
+    Both bars are measured for opacity *and* for where they sit, because a bar
+    that is visible but off the bottom of the window is a different bug that
+    looks the same in a screenshot.
+  - **Re-rendering does not rebuild the call.** Twenty renders in a row, then
+    node identity on the window, the media layer and the `<video>`. This is the
+    regression test for the blinking: before `TMAMorph`, every render replaced
+    the whole subtree, which re-fetched the avatar and replayed the window's
+    entry animation roughly every four seconds for the length of the call.
+
+  Two things it is built around. **The floating window can only be asked for
+  from a real user gesture**, so the test clicks a button rather than calling
+  `start()` from `evaluate` — the same constraint the production code is shaped
+  by. And **hover cannot be driven across documents**: Playwright's mouse
+  belongs to the page, so the reveal is exercised through the `is-revealed`
+  class the module itself uses. The in-page window's real hover is covered in
+  `calls.mjs`.
+
 - **`calls-recording.mjs`** — screen sharing and client-call recording against
   a live call, which is the only place either is true or false. A staff↔client
   voice call must arrange a recording server-side, show the consent sentence
