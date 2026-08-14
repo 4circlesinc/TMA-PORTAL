@@ -13,6 +13,29 @@
   }
 
   var PANEL_MODE_KEY = 'tma.userInfoPanelMode.v2';
+
+  /* The panel floats above the shell, and views hide rather than unmount —
+     left alone it would ride along to whatever page comes next. The host
+     view's container gaining [hidden] IS "no longer on that page", whatever
+     navigation path did it, so that is the close signal. A re-render of the
+     same view never hides the container, so refreshes keep the panel open. */
+  var hostViewObserver = null;
+
+  function watchHostView(viewEl) {
+    unwatchHostView();
+    if (!viewEl || !window.MutationObserver) return;
+    hostViewObserver = new MutationObserver(function () {
+      if (viewEl.hasAttribute('hidden')) close();
+    });
+    hostViewObserver.observe(viewEl, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
+  function unwatchHostView() {
+    if (hostViewObserver) {
+      hostViewObserver.disconnect();
+      hostViewObserver = null;
+    }
+  }
   var DOCKED_BP = 1281;
 
   var session = null;
@@ -169,6 +192,8 @@
       if (!overlayEl || !overlayEl.hasAttribute('data-open')) return;
       applyPanelMode();
     });
+
+
 
     loadPanelMode();
 
@@ -387,6 +412,7 @@
   }
 
   function close() {
+    unwatchHostView();
     if (!overlayEl) return;
     overlayEl.removeAttribute('data-open');
     overlayEl.setAttribute('aria-hidden', 'true');
@@ -401,6 +427,7 @@
     if (!options || !options.row || !options.rows) return;
 
     ensureOverlay();
+    watchHostView(document.querySelector('.tma-dash__view:not([hidden])'));
     session = {
       row: options.row,
       rows: options.rows,
