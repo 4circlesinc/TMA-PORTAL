@@ -126,6 +126,37 @@ try {
   check(inside.includes('Documents') && inside.includes('Investment'),
     `the rest keep their title in the card (${inside.join(', ')})`);
 
+  /*
+   * The asterisks mark exactly what the save would stop for.
+   *
+   * A mark that is decoration is worse than none — it teaches a reader to
+   * ignore it. So this checks the two that move: "Specify investment type"
+   * gains its mark only when Other is picked, and a sponsor's optional scans
+   * never carry one even though the applicant's identical controls do.
+   */
+  step('3b', 'Required fields are marked, and only those');
+  const starred = () => page.evaluate(() => {
+    const out = {};
+    document.querySelectorAll('.tma-portal-field__label').forEach(l => {
+      out[l.textContent.replace('*', '').trim()] = !!l.querySelector('.tma-portal-field__required');
+    });
+
+    return out;
+  });
+  let marks = await starred();
+  check(marks['First name'] && marks['Passport photo'] && marks['Birth certificate'],
+    'the applicant’s fields and uploads are marked');
+  check(marks['Specify investment type'] === undefined, 'a hidden conditional field has no mark yet');
+  check(await page.locator('[data-cip-field="firstName"]').getAttribute('aria-required') === 'true',
+    'and the control says so to a screen reader');
+
+  await page.selectOption('[data-cip-field="investmentType"]', 'other');
+  await page.waitForTimeout(400);
+  marks = await starred();
+  check(marks['Specify investment type'] === true, 'Other reveals a field that is marked');
+  await page.selectOption('[data-cip-field="investmentType"]', 'real_estate');
+  await page.waitForTimeout(400);
+
   step(4, 'The region follows the country of residence');
   await page.fill('[data-cip-field="firstName"]', 'John');
   await page.fill('[data-cip-field="lastName"]', 'Smith');
@@ -260,6 +291,23 @@ try {
       && Math.abs(box.bottom - docs.bottom) < 4
       && docs.left > box.right - 2;
   }), 'on the same row and the same height, the way the applicant’s is');
+
+  // ...but not marked required, because they are not. The applicant's two
+  // identical controls are, which is the whole point of marking anything.
+  check(await page.evaluate(() => {
+    const docs = [...document.querySelectorAll('.tma-dash__clients-card--narrow')]
+      .find(el => el.querySelector('[data-cip-drop="sponsor.passportBioPage"]'));
+
+    return [...docs.querySelectorAll('.tma-portal-field__label')]
+      .every(l => !l.querySelector('.tma-portal-field__required'));
+  }), 'whose scans are offered, not demanded, and carry no asterisk');
+  check(await page.evaluate(() => {
+    const sec = [...document.querySelectorAll('.tma-portal-section')]
+      .find(el => el.querySelector('[data-cip-field="sponsor.firstName"]'));
+
+    return [...sec.querySelectorAll('.tma-portal-field__label')]
+      .every(l => !!l.querySelector('.tma-portal-field__required'));
+  }), 'while every field the sponsor must answer is marked');
 
   await page.selectOption('[data-cip-field="sponsored"]', '0');
   await page.waitForTimeout(400);

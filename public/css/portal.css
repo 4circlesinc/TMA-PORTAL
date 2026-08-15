@@ -933,6 +933,19 @@
   color: var(--color-black);
 }
 
+/*
+ * The mark on a label the form will not file without.
+ *
+ * Red, because that is what an asterisk on a form means. It appears only
+ * where the check that stops the save would fire, so a field that is required
+ * under a condition wears it only under that condition — a sponsor's name
+ * once Sponsored is Yes, and their scans never, because those are offered.
+ */
+.tma-portal-field__required {
+  margin-left: 2px;
+  color: var(--color-red);
+}
+
 .tma-portal-input,
 .tma-portal-select,
 .tma-portal-textarea {

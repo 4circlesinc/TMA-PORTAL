@@ -201,15 +201,47 @@
     return msg ? '<span class="tma-portal-field__error">' + esc(msg) + '</span>' : '';
   }
 
+  /*
+   * Whether this control is one the form will not file without.
+   *
+   * Read from the same lists {@see missing} checks rather than a flag passed
+   * in beside each field, so a mark can never promise something the check
+   * does not enforce. It follows the form as it changes: a sponsor's fields
+   * are required only once Sponsored is Yes, "Specify investment type" only
+   * once Other is picked, and a sponsor's scans never — those are offered.
+   */
+  function isRequired(path) {
+    if (path === 'investmentTypeOther') return state.draft.investmentType === 'other';
+
+    return requiredPaths().indexOf(path) !== -1
+      || requiredFiles().indexOf(path) !== -1
+      || requiredDocuments().indexOf(path) !== -1;
+  }
+
+  /* A label, and the mark if there is one. Hidden from screen readers, which
+     are told by aria-required on the control itself. */
+  function fieldLabel(path, text) {
+    return '<span class="tma-portal-field__label">' + esc(text) +
+      (isRequired(path)
+        ? '<span class="tma-portal-field__required" aria-hidden="true">*</span>'
+        : '') +
+      '</span>';
+  }
+
+  function requiredAttr(path) {
+    return isRequired(path) ? ' aria-required="true"' : '';
+  }
+
   function textField(path, opts) {
     opts = opts || {};
     return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
-      '<span class="tma-portal-field__label">' + esc(opts.label || labelFor(path)) + '</span>' +
+      fieldLabel(path, opts.label || labelFor(path)) +
       '<input class="tma-portal-input" type="' + (opts.type || 'text') + '"' +
       ' data-cip-field="' + esc(path) + '"' +
       ' value="' + esc(state.draft[path] || '') + '"' +
       (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') +
       (opts.max ? ' max="' + esc(opts.max) + '"' : '') +
+      requiredAttr(path) +
       ' autocomplete="off">' +
       fieldError(path) +
       '</label>';
@@ -219,8 +251,8 @@
     opts = opts || {};
     var list = [{ value: '', label: placeholder }].concat(options);
     return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
-      '<span class="tma-portal-field__label">' + esc(opts.label || labelFor(path)) + '</span>' +
-      '<select class="tma-portal-select" data-cip-field="' + esc(path) + '">' +
+      fieldLabel(path, opts.label || labelFor(path)) +
+      '<select class="tma-portal-select" data-cip-field="' + esc(path) + '"' + requiredAttr(path) + '>' +
       list.map(function (o) {
         return '<option value="' + esc(o.value) + '"' +
           (String(state.draft[path]) === String(o.value) ? ' selected' : '') + '>' +
@@ -238,7 +270,7 @@
     var preview = state.previews[path];
     return '<div class="tma-dash__clients-photo' +
       (state.errors[path] ? ' is-invalid' : '') + '">' +
-      '<span class="tma-portal-field__label">' + esc(labelFor(path)) + '</span>' +
+      fieldLabel(path, labelFor(path)) +
       '<input type="file" accept="image/jpeg,image/png,image/webp"' +
       ' class="tma-dash__clients-photo-input" data-cip-photo="' + esc(path) + '" aria-hidden="true">' +
       '<div class="tma-dash__clients-photo-wrap">' +
@@ -278,7 +310,7 @@
 
     return '<div class="tma-portal-drop' + (state.errors[path] ? ' is-invalid' : '') +
       (files.length ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
-      '<span class="tma-portal-field__label">' + esc(labelFor(path)) + '</span>' +
+      fieldLabel(path, labelFor(path)) +
       '<input type="file" accept=".pdf,image/*" multiple class="tma-dash__clients-photo-input"' +
       ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +
       '<button type="button" class="tma-portal-drop__zone" data-cip-file-btn="' + esc(path) + '">' +
