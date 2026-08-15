@@ -38,6 +38,50 @@
   min-height: var(--pagination-min-height);
 }
 
+/*
+ * A table's footer sits at the foot of the table, not under the last row.
+ *
+ * With a full page of rows the two are the same place, so this was invisible
+ * until a filter or a small dataset left one row — and then the pager rode up
+ * into the middle of the page with an acre of empty table beneath it, reading
+ * as a torn-off fragment rather than the end of a list.
+ *
+ * `margin-top: auto` claims the slack in a flex column, which is what every
+ * one of these tables is laid out as. Where a container is not one it costs
+ * nothing: auto margins outside flex resolve to zero. The --overview variant
+ * is deliberately left out — those pagers end a short card, and there is no
+ * slack in a card to push them through.
+ */
+.tma-pagination-bar--footer {
+  margin-top: auto;
+}
+
+/*
+ * ...and the page it ends has to be tall enough to have slack.
+ *
+ * An auto margin can only claim space that exists. The clients page is
+ * already a full-height column so it worked there immediately; the others sit
+ * in document flow, ending wherever their rows end, and their pager was at
+ * the foot of a container that stopped three rows down the screen. Giving the
+ * view the height and passing it to the page inside is what turns "under the
+ * last row" into "at the bottom".
+ *
+ * Matched on the pager rather than named per page, so a table added later
+ * gets it by having a footer at all. Views with a taller layout of their own —
+ * the clients split view — out-specify this and keep theirs.
+ */
+.tma-dash__view:has(.tma-pagination-bar--footer) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tma-dash__view:has(.tma-pagination-bar--footer) > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .tma-pagination-bar__meta {
   display: inline-flex;
   align-items: center;
