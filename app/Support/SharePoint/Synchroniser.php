@@ -45,45 +45,78 @@ class Synchroniser
     /** How long a run may hold the lock before another may take over. */
     public const LOCK_MINUTES = 30;
 
-    /**
-     * This connection's mappings, keyed by Graph item id.
-     *
-     * Loaded once per run instead of a SELECT per item. Every item costs at
-     * least one lookup for itself and one for its parent, and against a
-     * database in another region — where a round-trip is ~380ms, not ~0.4ms —
-     * that alone is over an hour for a few thousand items.
-     *
-     * @var array<string, SharePointItem>|null
-     */
-    private static ?array $mappingIndex = null;
+    /** Rows read at a time where a whole table would not fit in memory. */
+    private const CHUNK = 500;
 
-    private static function loadMappingIndex(SharePointConnection $connection): void
+    /**
+     * The mappings for the page being processed, keyed by Graph item id.
+     *
+     * A SELECT per item is not affordable — every item costs a lookup for
+     * itself and one for its parent, and against a database in another region,
+     * where a round-trip is ~380ms rather than ~0.4ms, that alone is over an
+     * hour for a few thousand items. So they are fetched in bulk.
+     *
+     * But in bulk PER PAGE, not per connection. Loading every mapping a
+     * connection has took 370 MB on the firm's largest library — 85,404
+     * mappings — which is more than the whole instance has, so the process was
+     * killed before it could log anything. Three days of "Syncing 85,404 of
+     * 85,404" was that: a run dying on the first breath, the lock going stale
+     * half an hour later, and the next run dying in exactly the same place.
+     *
+     * A page is 200 items, so this is one query for at most a few hundred rows
+     * and the cost stops growing with the library.
+     *
+     * @var array<string, SharePointItem|null>
+     */
+    private static array $mappings = [];
+
+    /**
+     * Fetch the mappings this page will ask for, in one query.
+     *
+     * Parents included: every item asks where its parent went, and a parent
+     * that arrived on an earlier page would otherwise be a lookup of its own.
+     *
+     * @param  array<int, array>  $items
+     */
+    private static function primeMappings(SharePointConnection $connection, array $items): void
     {
-        self::$mappingIndex = SharePointItem::where('connection_id', $connection->id)
+        self::$mappings = [];
+        $wanted = [];
+
+        foreach ($items as $item) {
+            if (! empty($item['id'])) {
+                $wanted[$item['id']] = true;
+            }
+            if (! empty($item['parentReference']['id'])) {
+                $wanted[$item['parentReference']['id']] = true;
+            }
+        }
+
+        if ($wanted === []) {
+            return;
+        }
+
+        self::$mappings = SharePointItem::where('connection_id', $connection->id)
+            ->whereIn('graph_item_id', array_keys($wanted))
             ->get()->keyBy('graph_item_id')->all();
     }
 
     private static function mappingFor(SharePointConnection $connection, string $graphId): ?SharePointItem
     {
-        if (self::$mappingIndex === null) {
-            self::loadMappingIndex($connection);
+        // A miss is cached as null: the answer "there is no mapping" is worth
+        // remembering too, or an unmapped parent is re-queried for every one
+        // of its children on the page.
+        if (array_key_exists($graphId, self::$mappings)) {
+            return self::$mappings[$graphId];
         }
 
-        return self::$mappingIndex[$graphId] ?? null;
+        return self::$mappings[$graphId] = SharePointItem::where('connection_id', $connection->id)
+            ->where('graph_item_id', $graphId)->first();
     }
 
     private static function rememberMapping(SharePointItem $mapping): void
     {
-        if (self::$mappingIndex !== null) {
-            self::$mappingIndex[$mapping->graph_item_id] = $mapping;
-        }
-    }
-
-    private static function forgetMapping(SharePointItem $mapping): void
-    {
-        if (self::$mappingIndex !== null) {
-            unset(self::$mappingIndex[$mapping->graph_item_id]);
-        }
+        self::$mappings[$mapping->graph_item_id] = $mapping;
     }
 
     public static function sync(SharePointConnection $connection): array
@@ -93,7 +126,7 @@ class Synchroniser
         }
 
         // Fresh per run — a long-lived worker syncs many connections.
-        self::$mappingIndex = null;
+        self::$mappings = [];
 
         /*
          * One run at a time per connection.
@@ -130,6 +163,9 @@ class Synchroniser
             for ($page = 0; $page < self::MAX_PAGES; $page++) {
                 $batch = Drive::delta($connection->drive_id, $link, $connection->root_item_id);
                 $stats['pages']++;
+
+                // One query for this page's mappings, then none per item.
+                self::primeMappings($connection, $batch['items']);
 
                 foreach ($batch['items'] as $item) {
                     // A deletion always changes its parent folder, so the
@@ -246,33 +282,16 @@ class Synchroniser
             try {
                 $present = array_flip(Drive::childIds($connection->drive_id, $graphFolderId));
 
-                $mappings = SharePointItem::where('connection_id', $connection->id)
+                // Chunked: a folder can hold tens of thousands of items, and
+                // the whole point of this pass is that it runs on libraries
+                // too big to hold in memory.
+                SharePointItem::where('connection_id', $connection->id)
                     ->where('graph_parent_id', $graphFolderId)
-                    ->get();
-
-                foreach ($mappings as $mapping) {
-                    if (isset($present[$mapping->graph_item_id])) {
-                        if ($mapping->isRecycled()) {
-                            self::applyRestore($connection, $mapping);
-                            $stats['restored'] = ($stats['restored'] ?? 0) + 1;
+                    ->chunkById(self::CHUNK, function ($mappings) use ($connection, $present, &$stats) {
+                        foreach ($mappings as $mapping) {
+                            self::settle($connection, $mapping, $present, $stats);
                         }
-
-                        continue;
-                    }
-
-                    // Already in the portal's bin: nothing left to do, and
-                    // re-deleting would reset the date it was recycled.
-                    if ($mapping->isRecycled()) {
-                        continue;
-                    }
-
-                    if (! self::confirmRemoved($connection, $mapping)) {
-                        continue;
-                    }
-
-                    self::applyDelete($connection, $mapping);
-                    $stats['deleted']++;
-                }
+                    });
             } catch (GraphThrottledException $e) {
                 // Graph asked us to back off. Stopping the whole run is right:
                 // continuing would mean reading half-listings as deletions.
@@ -284,6 +303,38 @@ class Synchroniser
                 self::log($connection, 'reconcile-failed', 'warning', $graphFolderId, $e->getMessage());
             }
         }
+    }
+
+    /**
+     * One mapping, against what its folder actually holds now.
+     *
+     * @param  array<string, int>  $present  the folder's child ids, as a set
+     */
+    private static function settle(SharePointConnection $connection, SharePointItem $mapping, array $present, array &$stats): void
+    {
+        if (isset($present[$mapping->graph_item_id])) {
+            // Back in the folder while the portal still has it in the bin:
+            // somebody restored it from SharePoint's recycle bin.
+            if ($mapping->isRecycled()) {
+                self::applyRestore($connection, $mapping);
+                $stats['restored'] = ($stats['restored'] ?? 0) + 1;
+            }
+
+            return;
+        }
+
+        // Already in the portal's bin: nothing left to do, and re-deleting
+        // would reset the date it was recycled.
+        if ($mapping->isRecycled()) {
+            return;
+        }
+
+        if (! self::confirmRemoved($connection, $mapping)) {
+            return;
+        }
+
+        self::applyDelete($connection, $mapping);
+        $stats['deleted']++;
     }
 
     /**

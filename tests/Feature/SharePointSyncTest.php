@@ -551,6 +551,57 @@ class SharePointSyncTest extends TestCase
         $this->assertNull(SharePointItem::where('graph_item_id', 'i-1')->first()->recycled_at);
     }
 
+    /**
+     * The run's memory must not grow with the library.
+     *
+     * It used to load every mapping the connection had, to spare itself a
+     * lookup per item. On the firm's largest library — 85,404 mappings — that
+     * was 370 MB before a single Graph response, more than the instance has,
+     * so the process was killed on its first breath. Nothing was logged
+     * because nothing survives an OOM: the panel read "Syncing 85,404 of
+     * 85,404" for three days while every run died in the same place.
+     *
+     * Hence the shape this asserts: a read of `sharepoint_items` is scoped to
+     * the ids in hand, never to the connection alone.
+     */
+    public function test_the_sync_never_reads_a_whole_library_at_once(): void
+    {
+        // Mappings this run has no business loading.
+        for ($i = 0; $i < 30; $i++) {
+            SharePointItem::create([
+                'connection_id' => $this->connection->id,
+                'graph_item_id' => 'old-'.$i,
+                'graph_parent_id' => 'somewhere-else',
+                'item_type' => 'file',
+                'name' => 'Old '.$i.'.txt',
+            ]);
+        }
+
+        $queries = [];
+        \Illuminate\Support\Facades\DB::listen(function ($q) use (&$queries) {
+            $queries[] = $q->sql;
+        });
+
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+
+        $unbounded = array_values(array_filter($queries, function (string $sql) {
+            if (! str_contains($sql, 'from "sharepoint_items"')) {
+                return false;
+            }
+
+            // Scoped by the ids being worked on, or by a single folder's
+            // children a chunk at a time. Anything else is the whole table.
+            return ! str_contains($sql, 'graph_item_id')
+                && ! str_contains($sql, 'graph_parent_id')
+                && ! str_contains($sql, 'file_id')
+                && ! str_contains($sql, 'folder_id');
+        }));
+
+        $this->assertSame([], $unbounded,
+            'the sync read sharepoint_items without narrowing it: '.implode(' | ', $unbounded));
+    }
+
     /** A recycled item keeps its mapping, or a restore has nothing to find. */
     public function test_a_recycled_item_keeps_its_mapping(): void
     {
