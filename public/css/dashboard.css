@@ -18263,11 +18263,23 @@
   max-width: 340px;
 }
 
-.tma-dash__clients-staff-picker__btn {
+/*
+ * The button fills its picker, and the picker does the sizing.
+ *
+ * Written against the assign form because that is what it is competing with:
+ * the row sizes its own selects with `.tma-dash__clients-assign-form
+ * .tma-dash__clients-field-select--full`, and the button wears that class to
+ * borrow the field's look. It inherited `width: auto` with it and shrank to
+ * its label — a 140px control in a 340px slot, with the rest of the row
+ * stranded to the right of a gap.
+ */
+.tma-dash__clients-assign-form .tma-dash__clients-staff-picker__btn {
   display: flex;
   align-items: center;
   gap: var(--space-8);
   width: 100%;
+  max-width: none;
+  flex: none;
   text-align: left;
   cursor: pointer;
 }
