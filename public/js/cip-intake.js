@@ -374,7 +374,9 @@
     var countries = countryOptions();
     var region = regionFor(state.draft[prefix + 'countryOfResidence']);
 
-    return '<div class="tma-portal-form-grid">' +
+    // Two to a row: a person's card is two thirds of the width now, and three
+    // columns in it left the fields narrower than the answers they take.
+    return '<div class="tma-portal-form-grid tma-portal-form-grid--two">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
       selectField(prefix + 'gender', genderOptions(), 'Select') +
