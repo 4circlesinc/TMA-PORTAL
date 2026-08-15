@@ -32,12 +32,19 @@
     Copy: 'images/icons/tma/Copy-16.svg',
     EnvelopeSimple: 'images/icons/phosphor/EnvelopeSimple.svg',
     ThreeDots: 'images/icons/tma/ThreeDots-16.svg',
+    ArrowUpRight: 'images/icons/phosphor/ArrowUpRight.svg',
+    UserSwitch: 'images/icons/phosphor/UserSwitch.svg',
+    Prohibit: 'images/icons/phosphor/Prohibit.svg',
+    ArrowClockwise: 'images/icons/phosphor/ArrowClockwise.svg',
+    Key: 'images/icons/phosphor/Key.svg',
+    CaretRight: 'images/icons/phosphor/CaretRight.svg',
+    SealCheck: 'images/icons/phosphor/SealCheck.svg',
   };
 
   /* ── real user directory (database-backed, staff-readable) ── */
   /* Filled/overwritten from GET /admin/users. Declared here so assigning
      under 'use strict' does not throw ReferenceError and blank the table. */
-  var ACCOUNT_TYPES = ['Client', 'Reviewing Officer', 'Compliance Officer', 'Administrator'];
+  var ACCOUNT_TYPES = ['Reviewing Officer', 'Compliance Officer', 'Administrator'];
   /* the design system's own avatar set - filled from the server */
   var SYSTEM_AVATARS = [];
 
@@ -760,6 +767,190 @@ if (state.filters.user) {
       }).catch(function () { usersToast('That action failed.', false); });
     }
 
+    /* ── row context menu ───────────────────────────────
+     *
+     * Right-click any account: the same verbs the status menu carries, plus
+     * the account type itself, on the portal's context-menu component (the
+     * File Library's, and the client hub's) rather than a second look.
+     */
+    var uCtxEl = null;
+    var uCtxSubEl = null;
+
+    function closeUserCtx() {
+      closeUserCtxSub();
+      if (uCtxEl && uCtxEl.parentNode) uCtxEl.parentNode.removeChild(uCtxEl);
+      uCtxEl = null;
+      document.removeEventListener('click', onUserCtxDocClick);
+      document.removeEventListener('keydown', onUserCtxKey);
+      document.removeEventListener('scroll', closeUserCtx, true);
+    }
+
+    function closeUserCtxSub() {
+      if (uCtxSubEl && uCtxSubEl.parentNode) uCtxSubEl.parentNode.removeChild(uCtxSubEl);
+      uCtxSubEl = null;
+      if (uCtxEl) {
+        var parent = uCtxEl.querySelector('[data-uctx-act="type"]');
+        if (parent) parent.removeAttribute('data-open');
+      }
+    }
+
+    function onUserCtxDocClick(e) {
+      if (e.target.closest('.tma-portal-context-menu')) return;
+      closeUserCtx();
+    }
+
+    function onUserCtxKey(e) { if (e.key === 'Escape') closeUserCtx(); }
+
+    function placeUserCtx(el, x, y) {
+      var w = el.offsetWidth;
+      var h = el.offsetHeight;
+      el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+      el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+    }
+
+    function uCtxItem(act, label, icon, opts) {
+      opts = opts || {};
+      if (opts.sep) return '<div class="tma-portal-context-menu__sep" role="separator"></div>';
+      return '<button type="button" role="menuitem"' +
+        ' class="tma-portal-context-menu__item' +
+        (opts.danger ? ' tma-portal-context-menu__item--danger' : '') +
+        (opts.submenu ? ' tma-portal-context-menu__item--parent' : '') + '"' +
+        ' data-uctx-act="' + act + '"' + (opts.submenu ? ' aria-haspopup="true"' : '') + '>' +
+        '<img class="tma-portal-context-menu__icon" src="' + icon + '" alt="" width="16" height="16">' +
+        '<span class="tma-portal-context-menu__label">' + escapeHtml(label) + '</span>' +
+        (opts.submenu
+          ? '<img class="tma-portal-context-menu__chevron" src="' + ICONS.CaretRight + '" alt="" width="16" height="16" aria-hidden="true">'
+          : '') +
+        '</button>';
+    }
+
+    function userCtxItems(row) {
+      var html = uCtxItem('open', 'Open', ICONS.ArrowUpRight);
+
+      // Only an administrator may re-type an account, and never their own —
+      // the server refuses both, so the menu should not offer them.
+      if (state.canManage && !row._self) {
+        html += uCtxItem('type', row._status === 'pending' ? 'Approve as' : 'Change account type',
+          ICONS.UserSwitch, { submenu: true });
+      }
+
+      html += uCtxItem('', '', '', { sep: true });
+
+      if (state.canManage) {
+        if (row._status === 'suspended') {
+          html += uCtxItem('reactivate', 'Reactivate account', ICONS.ArrowClockwise);
+        } else if (!row._self) {
+          html += uCtxItem('suspend', 'Suspend account', ICONS.Prohibit, { danger: true });
+        }
+      }
+
+      html += uCtxItem('send-reset', 'Email password reset link', ICONS.EnvelopeSimple) +
+        uCtxItem('generate-password', 'Generate temporary password', ICONS.Key);
+      return html;
+    }
+
+    function openUserCtxTypeSub(parentBtn, row) {
+      if (uCtxSubEl && parentBtn.hasAttribute('data-open')) return;
+      closeUserCtxSub();
+      parentBtn.setAttribute('data-open', 'true');
+
+      uCtxSubEl = document.createElement('div');
+      uCtxSubEl.className = 'tma-portal-context-menu tma-portal-context-menu--sub';
+      uCtxSubEl.setAttribute('role', 'menu');
+      uCtxSubEl.innerHTML = ACCOUNT_TYPES.map(function (type) {
+        var current = row.address === type;
+        return '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
+          ' data-uctx-type="' + escapeHtml(type) + '"' + (current ? ' data-selected' : '') + '>' +
+          '<img class="tma-portal-context-menu__icon" src="' + (current ? ICONS.SealCheck : ICONS.User) +
+            '" alt="" width="16" height="16">' +
+          '<span class="tma-portal-context-menu__label">' + escapeHtml(type) + '</span>' +
+          '</button>';
+      }).join('');
+      document.body.appendChild(uCtxSubEl);
+
+      var rect = parentBtn.getBoundingClientRect();
+      placeUserCtx(uCtxSubEl, rect.right + 2, rect.top - 4);
+
+      uCtxSubEl.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-uctx-type]');
+        if (!btn) return;
+        var type = btn.getAttribute('data-uctx-type');
+        closeUserCtx();
+        if (type === row.address) return;
+        // Approving a pending account and re-typing an approved one are two
+        // different endpoints; the row's status decides which.
+        if (row._status === 'pending') {
+          statusAction('/admin/users/' + row._id + '/approve', { account_type: type });
+        } else {
+          // The endpoint validates the whole identity, not just the field
+          // being changed — send the row's own values back unaltered.
+          usersApi('PATCH', '/admin/users/' + row._id, {
+            first_name: row.firstName || row.user || '',
+            middle_name: row.middleName || null,
+            last_name: row.lastName || '',
+            email: row.email,
+            account_type: type,
+          })
+            .then(function (res) {
+              if (res.ok) { usersToast(row.user + ' is now ' + type, true); loadRealUsers(); }
+              else usersToast('Could not change the account type.', false);
+            })
+            .catch(function () { usersToast('Could not change the account type.', false); });
+        }
+      });
+    }
+
+    function openUserContextMenu(row, index, x, y) {
+      closeUserCtx();
+      uCtxEl = document.createElement('div');
+      uCtxEl.className = 'tma-portal-context-menu';
+      uCtxEl.setAttribute('role', 'menu');
+      uCtxEl.innerHTML = userCtxItems(row);
+      document.body.appendChild(uCtxEl);
+      placeUserCtx(uCtxEl, x, y);
+
+      uCtxEl.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-uctx-act]');
+        if (!btn) return;
+        var act = btn.getAttribute('data-uctx-act');
+        if (act === 'type') { openUserCtxTypeSub(btn, row); return; }
+        closeUserCtx();
+        runUserCtxAction(act, row, index);
+      });
+
+      uCtxEl.addEventListener('mouseover', function (e) {
+        var btn = e.target.closest('[data-uctx-act]');
+        if (!btn) return;
+        if (btn.getAttribute('data-uctx-act') === 'type') openUserCtxTypeSub(btn, row);
+        else closeUserCtxSub();
+      });
+
+      setTimeout(function () {
+        document.addEventListener('click', onUserCtxDocClick);
+        document.addEventListener('keydown', onUserCtxKey);
+        document.addEventListener('scroll', closeUserCtx, true);
+      }, 0);
+    }
+
+    function runUserCtxAction(act, row, index) {
+      if (act === 'open') { openUserInfoPanel(index); return; }
+      if (act === 'suspend') statusAction('/admin/users/' + row._id + '/suspend');
+      if (act === 'reactivate') statusAction('/admin/users/' + row._id + '/reactivate');
+      if (act === 'send-reset') {
+        usersApi('POST', '/admin/users/' + row._id + '/send-reset').then(function (res) {
+          usersToast(res.ok ? 'Reset link sent to ' + row.email : 'Could not send the link.', res.ok);
+        });
+      }
+      if (act === 'generate-password') {
+        usersApi('POST', '/admin/users/' + row._id + '/generate-password').then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            if (!res.ok || !j.password) { usersToast('Could not generate a password.', false); return; }
+            window.prompt('Temporary password for ' + row.user + ' - shown once, share it securely:', j.password);
+          });
+        });
+      }
+    }
+
     function openStatusMenu(btn) {
       closeStatusMenu();
       var row = null;
@@ -835,6 +1026,18 @@ if (state.filters.user) {
     container.addEventListener('keydown', function (e) {
       var head = e.target.closest('[data-sort-col]');
       if (head && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleSort(head.getAttribute('data-sort-col')); }
+    });
+
+    container.addEventListener('contextmenu', function (e) {
+      // Leave the browser's own menu to links and selected text.
+      if (e.target.closest('a') || String(window.getSelection() || '')) return;
+      var el = e.target.closest('.tma-dash__uavatar-tile') || e.target.closest('.tma-dash__ctr--body');
+      if (!el || !container.contains(el)) return;
+      var index = parseInt(el.getAttribute('data-row-index'), 10);
+      var row = applyPipeline(state)[index];
+      if (!row) return;
+      e.preventDefault();
+      openUserContextMenu(row, index, e.clientX, e.clientY);
     });
 
     container.addEventListener('click', function (e) {
