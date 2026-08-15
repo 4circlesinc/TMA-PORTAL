@@ -110,6 +110,22 @@ try {
   check(formText.includes('Main applicant') && formText.includes('Investment'), 'both sections visible at once');
   check(await page.locator('[data-cip-next], [data-cip-back]').count() === 0, 'no step buttons');
 
+  /*
+   * Two headings sit above their card; every other card keeps its own.
+   *
+   * The ones held outside name a PERSON on the application. Applying that to
+   * every card was the wrong reading of it, so this pins which is which
+   * rather than leaving the next change to guess.
+   */
+  const outside = await page.locator('.tma-portal-section > .tma-portal-section__title')
+    .evaluateAll(hs => hs.map(h => h.textContent.trim()));
+  check(outside.join('|') === 'Main applicant|Dependents',
+    `only the person sections carry their name outside (${outside.join(', ')})`);
+  const inside = await page.locator('.tma-dash__clients-card .tma-dash__clients-card-title')
+    .evaluateAll(hs => hs.map(h => h.textContent.trim()));
+  check(inside.includes('Documents') && inside.includes('Investment'),
+    `the rest keep their title in the card (${inside.join(', ')})`);
+
   step(4, 'The region follows the country of residence');
   await page.fill('[data-cip-field="firstName"]', 'John');
   await page.fill('[data-cip-field="lastName"]', 'Smith');

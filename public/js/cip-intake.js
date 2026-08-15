@@ -327,16 +327,28 @@
 
   /* ── cards ─────────────────────────────────────────────────────── */
 
-  /*
-   * A named section: the name above the card, not inside it.
-   *
-   * Whose fields these are is the first thing a reader needs and the last
-   * thing they should have to look inside a box to find. Held outside, the
-   * heading labels the card the way a caption labels a figure — and on the
-   * row where the applicant's fields sit beside their documents, the two
-   * names line up instead of floating at different heights inside two boxes.
-   */
   function card(title, body, opts) {
+    opts = opts || {};
+    return '<section class="tma-dash__clients-card' +
+      (opts.modifier ? ' ' + opts.modifier : '') + '">' +
+      '<header class="tma-dash__clients-card-head">' +
+      '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
+      (opts.action || '') +
+      '</header>' +
+      body +
+      '</section>';
+  }
+
+  /*
+   * A card whose name is held above it rather than inside.
+   *
+   * Only the two that name a PERSON on the application — the main applicant
+   * and the dependents. Those are the groupings a reader navigates by, and
+   * whose fields they are wanting saying before the box rather than within
+   * it. Everything else is a card with a title, which is what a card with a
+   * title looks like.
+   */
+  function titledCard(title, body, opts) {
     opts = opts || {};
     return '<section class="tma-portal-section' +
       (opts.modifier ? ' ' + opts.modifier : '') + '">' +
@@ -379,7 +391,7 @@
   }
 
   function applicantCard() {
-    return card('Main applicant',
+    return titledCard('Main applicant',
       photoField('passportPhoto') + personFields(''),
       { modifier: 'tma-portal-section--wide' });
   }
@@ -392,7 +404,7 @@
       documentField('passportBioPage') +
       documentField('birthCertificate') +
       '</div>',
-      { modifier: 'tma-portal-section--narrow' });
+      { modifier: 'tma-dash__clients-card--narrow' });
   }
 
   function investmentCard() {
@@ -444,7 +456,7 @@
         'Add dependent</button>'
       : '';
 
-    return card('Dependents',
+    return titledCard('Dependents',
       (rows || '<p class="tma-portal-note">No dependents on this application.</p>') +
       '<div class="tma-portal-form-actions">' + add + '</div>');
   }

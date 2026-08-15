@@ -18420,20 +18420,20 @@
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 
-/* Each section is a heading and its card together, so the grid places the
-   pair — a card whose name had stayed behind in the previous cell would be a
-   caption for the wrong thing. */
+/* A section is a heading and its card together, so the grid places the pair —
+   a card whose name had stayed behind in the previous cell would be a caption
+   for the wrong thing. */
 .tma-dash__clients-cards--intake > .tma-portal-section { grid-column: 1 / -1; }
 
 .tma-dash__clients-cards--intake > .tma-portal-section--wide { grid-column: 1; }
 
-.tma-dash__clients-cards--intake > .tma-portal-section--narrow { grid-column: 2; }
+.tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow { grid-column: 2; }
 
 /* Below the point where two thirds stops fitting three fields, they stack. */
 @media (max-width: 1250px) {
   .tma-dash__clients-cards--intake { grid-template-columns: minmax(0, 1fr); }
   .tma-dash__clients-cards--intake > .tma-portal-section--wide,
-  .tma-dash__clients-cards--intake > .tma-portal-section--narrow {
+  .tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow {
     grid-column: 1 / -1;
   }
 }
