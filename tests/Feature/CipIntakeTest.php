@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
@@ -11,6 +12,7 @@ use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Countries;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -591,13 +593,62 @@ class CipIntakeTest extends TestCase
 
         $this->file($staff, $this->payload($provider, [
             'passportBioPage' => UploadedFile::fake()->create('notes.exe', 20),
-        ]))->assertStatus(422)->assertJsonValidationErrors('passportBioPage');
+        ]))->assertStatus(422)->assertJsonValidationErrors('passportBioPage.0');
 
         $this->file($staff, $this->payload($provider, [
             'birthCertificate' => UploadedFile::fake()->create('huge.pdf', 20480, 'application/pdf'),
-        ]))->assertStatus(422)->assertJsonValidationErrors('birthCertificate');
+        ]))->assertStatus(422)->assertJsonValidationErrors('birthCertificate.0');
 
         $this->assertSame(0, CipApplication::count());
+    }
+
+    /**
+     * A requirement can be answered with more than one file.
+     *
+     * A bio page is often a passport's two pages and a birth certificate
+     * arrives with its translation, so a control that keeps only the last file
+     * dropped on it loses documents that were sent.
+     */
+    public function test_a_requirement_takes_more_than_one_file(): void
+    {
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, [
+            'birthCertificate' => [$this->scan('birth.pdf'), $this->scan('translation.pdf')],
+        ]))->assertStatus(201);
+
+        $main = CipPerson::where('role', CipPerson::ROLE_MAIN_APPLICANT)->firstOrFail();
+        $slot = CipDocument::where('person_id', $main->id)
+            ->where('type', DocumentTypes::BIRTH_CERTIFICATE)->firstOrFail();
+
+        // One requirement, one answer — the second file is filed beside it
+        // rather than becoming a version of a document it is not.
+        $this->assertSame(1, CipDocument::where('person_id', $main->id)
+            ->where('type', DocumentTypes::BIRTH_CERTIFICATE)->count());
+        $this->assertDatabaseMissing('file_versions', [
+            'file_id' => $slot->file_id, 'version_number' => 2,
+        ]);
+
+        $filed = \App\Models\FileItem::where('folder_id', $main->folder_id)
+            ->pluck('name')->all();
+        $this->assertContains('John Smith — Birth certificate.pdf', $filed);
+        $this->assertContains('John Smith — Birth certificate (2).pdf', $filed);
+    }
+
+    /** One file on its own is still a list of one — the endpoint takes both. */
+    public function test_a_single_file_is_accepted_where_a_list_is_expected(): void
+    {
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, [
+            'birthCertificate' => $this->scan('birth.pdf'),
+        ]))->assertStatus(201);
+
+        $main = CipPerson::where('role', CipPerson::ROLE_MAIN_APPLICANT)->firstOrFail();
+        $this->assertNotNull(CipDocument::where('person_id', $main->id)
+            ->where('type', DocumentTypes::BIRTH_CERTIFICATE)->value('file_id'));
     }
 
     public function test_the_form_offers_the_five_investment_types_and_every_country(): void

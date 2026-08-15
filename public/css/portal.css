@@ -730,39 +730,73 @@
   color: var(--color-text-secondary);
 }
 
-.tma-portal-drop__name {
-  max-width: 100%;
+/*
+ * What has been chosen, under the box it was dropped on.
+ *
+ * A list rather than a filled-in zone: a requirement can take several scans,
+ * and a control that swaps its prompt for a filename the moment the first one
+ * lands hides the way to add the second.
+ */
+.tma-portal-drop__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tma-portal-drop__file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+}
+
+/* The real file mark, at its own colours — these are the File Library's
+   icons, so a PDF here is the PDF everywhere else. Never tinted. */
+.tma-portal-drop__file-icon { flex: none; }
+
+.tma-portal-drop__file-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
-  font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.tma-portal-drop.is-filled .tma-portal-drop__zone {
-  border-style: solid;
-  border-color: var(--color-border-medium);
+.tma-portal-drop__file-size {
+  flex: none;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Sits over the zone's top-right rather than after it: the zone is a button,
-   and a button cannot contain another one. */
-.tma-portal-drop__clear {
-  position: absolute;
-  top: 26px;
-  right: var(--space-8);
+.tma-portal-drop__file-remove {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-4);
+  padding: var(--space-2);
   border: 0;
   border-radius: var(--radius-8);
   background: none;
   cursor: pointer;
 }
 
-.tma-portal-drop__clear:hover { background: var(--color-hover); }
+.tma-portal-drop__file-remove:hover { background: var(--color-overlay-4); }
+
+.tma-portal-drop.is-filled .tma-portal-drop__zone {
+  border-style: solid;
+  border-color: var(--color-border-medium);
+}
 
 .tma-portal-drop.is-invalid .tma-portal-drop__zone { border-color: var(--color-red); }
 

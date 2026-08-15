@@ -6,7 +6,9 @@ use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -34,6 +36,12 @@ class Intake
 {
     /** A scanned document: generous, but not a photo library. */
     public const MAX_DOCUMENT_KB = 10240;
+
+    /** How many files one requirement may be answered with in a single filing. */
+    public const MAX_DOCUMENTS_PER_SLOT = 10;
+
+    /** The §2 uploads that take a list rather than a single file. */
+    private const DOCUMENT_LISTS = ['passportBioPage', 'birthCertificate'];
 
     /** The shared person field set — §2's list, which §4 says a sponsor repeats. */
     private const PERSON_FIELDS = [
@@ -70,14 +78,52 @@ class Intake
         ];
     }
 
-    /** §2's three uploads. The photo has shape rules; the scans have limits. */
+    /**
+     * §2's three uploads. The photo has shape rules; the scans have limits.
+     *
+     * A scan is a LIST. One requirement is not always one sheet of paper — a
+     * bio page can be a passport's two pages, a birth certificate can arrive
+     * with its translation — and a control that takes only the last file
+     * dropped on it quietly loses the rest. {@see normaliseDocuments()} lets a
+     * single file still arrive on its own.
+     */
     private static function mainApplicantDocumentRules(): array
     {
         return [
             'passportPhoto' => ['required', 'file', self::photoRule()],
-            'passportBioPage' => self::documentRule(),
-            'birthCertificate' => self::documentRule(),
+            'passportBioPage' => ['required', 'array', 'min:1', 'max:'.self::MAX_DOCUMENTS_PER_SLOT],
+            'passportBioPage.*' => self::documentRule(),
+            'birthCertificate' => ['required', 'array', 'min:1', 'max:'.self::MAX_DOCUMENTS_PER_SLOT],
+            'birthCertificate.*' => self::documentRule(),
         ];
+    }
+
+    /**
+     * Let one file arrive where a list is expected.
+     *
+     * The form always sends `passportBioPage[]`, but the endpoint is also the
+     * documented shape for a single upload, and a caller sending one file
+     * should not have to know it is joining a list. Wrapping here rather than
+     * loosening the rules keeps `passportBioPage.*` meaning exactly one thing.
+     */
+    public static function normaliseDocuments(Request $request): void
+    {
+        foreach (self::DOCUMENT_LISTS as $field) {
+            /*
+             * The bag, not $request->file().
+             *
+             * Reading a file through the request memoises the whole converted
+             * set, and a later write to the bag does not invalidate that cache
+             * — so the validator would go on seeing the single file we just
+             * replaced, and reject it for not being an array. Both halves of
+             * this have to talk to the same bag.
+             */
+            $value = $request->files->get($field);
+
+            if ($value !== null && ! is_array($value)) {
+                $request->files->set($field, [$value]);
+            }
+        }
     }
 
     private static function investmentRules(): array
@@ -167,10 +213,14 @@ class Intake
             'countryOfResidence.in' => 'Choose a country from the list.',
             'sponsor.countryOfBirth.in' => 'Choose a country from the list.',
             'sponsor.countryOfResidence.in' => 'Choose a country from the list.',
-            'passportBioPage.mimes' => 'Upload the bio page as a PDF or an image.',
-            'birthCertificate.mimes' => 'Upload the birth certificate as a PDF or an image.',
-            'passportBioPage.max' => 'That file is too large. Keep it under 10MB.',
-            'birthCertificate.max' => 'That file is too large. Keep it under 10MB.',
+            'passportBioPage.required' => 'The bio page is required.',
+            'birthCertificate.required' => 'The birth certificate is required.',
+            'passportBioPage.*.mimes' => 'Upload the bio page as a PDF or an image.',
+            'birthCertificate.*.mimes' => 'Upload the birth certificate as a PDF or an image.',
+            'passportBioPage.*.max' => 'That file is too large. Keep it under 10MB.',
+            'birthCertificate.*.max' => 'That file is too large. Keep it under 10MB.',
+            'passportBioPage.max' => 'Up to '.self::MAX_DOCUMENTS_PER_SLOT.' files here.',
+            'birthCertificate.max' => 'Up to '.self::MAX_DOCUMENTS_PER_SLOT.' files here.',
         ];
     }
 
@@ -273,12 +323,32 @@ class Intake
     {
         self::filePhoto($main, $data['passportPhoto'] ?? null, $creator);
 
+        /*
+         * The first file answers the requirement; the rest are filed beside it.
+         *
+         * The slot is one question with one answer — the unique key on
+         * (person, type) says so — so a second scan cannot be a second slot,
+         * and making it a new *version* of the first would bury a separate
+         * document inside another one's history. It goes in the person's
+         * folder, where a reviewer opening the file list finds everything that
+         * was sent for that requirement.
+         */
         foreach ([
-            DocumentTypes::PASSPORT_BIO_PAGE => $data['passportBioPage'] ?? null,
-            DocumentTypes::BIRTH_CERTIFICATE => $data['birthCertificate'] ?? null,
-        ] as $type => $upload) {
-            if ($upload instanceof UploadedFile) {
-                DocumentSlots::fill($main, $type, $upload, $creator);
+            DocumentTypes::PASSPORT_BIO_PAGE => $data['passportBioPage'] ?? [],
+            DocumentTypes::BIRTH_CERTIFICATE => $data['birthCertificate'] ?? [],
+        ] as $type => $uploads) {
+            $filed = 0;
+
+            foreach (Arr::wrap($uploads) as $upload) {
+                if (! $upload instanceof UploadedFile) {
+                    continue;
+                }
+
+                $filed === 0
+                    ? DocumentSlots::fill($main, $type, $upload, $creator)
+                    : DocumentSlots::attach($main, $type, $upload, $creator, $filed + 1);
+
+                $filed++;
             }
         }
 

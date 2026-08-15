@@ -32,6 +32,8 @@
   /* 2 inches at 300dpi — the same floor App\Support\Cip\PassportPhoto keeps. */
   var PHOTO_MIN_PX = 600;
   var MAX_DOCUMENT_MB = 10;
+  /* Matches Intake::MAX_DOCUMENTS_PER_SLOT — the server is the authority. */
+  var MAX_DOCUMENTS_PER_SLOT = 10;
   var MAX_DEPENDENTS = 20;
 
   /* One draft per mount. Deliberately not persisted yet: until the form can
@@ -48,10 +50,14 @@
 
   var state = {
     draft: emptyDraft(),
-    /* Chosen files, keyed by the same path the server validates. Kept apart
+    /* Chosen photos, keyed by the same path the server validates. Kept apart
        from the draft because a File cannot be re-rendered into an attribute
        the way a string can. */
     files: {},
+    /* Chosen documents — a LIST per path, because a requirement can be
+       answered with more than one scan. Kept apart from `files` so nothing
+       has to ask whether the value at a path is one file or several. */
+    documents: {},
     /* Data URLs for the photo previews only — display, never the payload. */
     previews: {},
     /* How many dependent blocks are on the page. The rows themselves live in
@@ -110,10 +116,15 @@
   /* Files are required in their own right — an empty one is not a blank
      string, so it cannot be checked the same way. */
   function requiredFiles() {
-    var paths = ['passportPhoto', 'passportBioPage', 'birthCertificate'];
+    var paths = ['passportPhoto'];
     if (sponsored()) paths.push('sponsor.passportPhoto');
 
     return paths;
+  }
+
+  /* The requirements that take a list, and must have at least one. */
+  function requiredDocuments() {
+    return ['passportBioPage', 'birthCertificate'];
   }
 
   function missing() {
@@ -127,6 +138,11 @@
 
     requiredFiles().forEach(function (path) {
       if (!state.files[path]) found[path] = labelFor(path) + ' is required';
+    });
+
+    requiredDocuments().forEach(function (path) {
+      var files = state.documents[path];
+      if (!files || !files.length) found[path] = labelFor(path) + ' is required';
     });
 
     if (state.draft.investmentType === 'other'
@@ -239,49 +255,93 @@
   }
 
   /*
-   * A scan, dropped or chosen.
+   * A scan, dropped or chosen — and there can be more than one.
    *
-   * No preview: a reader recognises a document by its filename, and rendering
-   * the first page of a PDF here would be a viewer rather than a form control.
-   * The whole zone is the button, so the target for a dropped file and the
-   * target for a click are the same shape — a drop area that is smaller than
-   * it looks is worse than none.
+   * One requirement is not one sheet of paper: a bio page is often a
+   * passport's two pages, a birth certificate arrives with its translation.
+   * So the zone keeps saying "drop a file here" after the first, and what has
+   * been chosen is listed under it rather than replacing the prompt — the way
+   * to add a second must not disappear the moment there is a first.
+   *
+   * No preview: a reader recognises a document by its filename and its kind,
+   * and rendering the first page of a PDF here would be a viewer rather than a
+   * form control. The whole zone is the button, so the target for a dropped
+   * file and the target for a click are the same shape — a drop area that is
+   * smaller than it looks is worse than none.
    */
   function documentField(path) {
-    var file = state.files[path];
+    var files = state.documents[path] || [];
 
     return '<div class="tma-portal-drop' + (state.errors[path] ? ' is-invalid' : '') +
-      (file ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
+      (files.length ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
       '<span class="tma-portal-field__label">' + esc(labelFor(path)) + '</span>' +
-      '<input type="file" accept=".pdf,image/*" class="tma-dash__clients-photo-input"' +
+      '<input type="file" accept=".pdf,image/*" multiple class="tma-dash__clients-photo-input"' +
       ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +
       '<button type="button" class="tma-portal-drop__zone" data-cip-file-btn="' + esc(path) + '">' +
-      '<img src="' + ICON + (file ? 'FileText.svg' : 'UploadSimple.svg') + '" alt="" width="20" height="20">' +
-      (file
-        ? '<span class="tma-portal-drop__name">' + esc(file.name) + '</span>'
-        : '<span class="tma-portal-drop__hint">Drop a file here, or choose one</span>' +
-          '<span class="tma-portal-drop__meta">PDF or image, up to ' + MAX_DOCUMENT_MB + 'MB</span>') +
+      '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
+      '<span class="tma-portal-drop__hint">' +
+      (files.length ? 'Drop another file here, or choose one' : 'Drop a file here, or choose one') +
+      '</span>' +
+      '<span class="tma-portal-drop__meta">PDF or image, up to ' + MAX_DOCUMENT_MB + 'MB</span>' +
       '</button>' +
-      (file
-        ? '<button type="button" class="tma-portal-drop__clear"' +
-          ' data-cip-file-remove="' + esc(path) + '" aria-label="Remove ' + esc(labelFor(path)) + '">' +
-          '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>'
-        : '') +
+      documentList(path, files) +
       fieldError(path) +
       '</div>';
   }
 
+  /* What has been chosen, under the box it was dropped on. */
+  function documentList(path, files) {
+    if (!files.length) return '';
+
+    return '<ul class="tma-portal-drop__files">' +
+      files.map(function (file, index) {
+        return '<li class="tma-portal-drop__file">' +
+          '<img class="tma-portal-drop__file-icon" src="' + esc(fileIcon(file.name)) +
+          '" alt="" width="20" height="20">' +
+          '<span class="tma-portal-drop__file-name">' + esc(file.name) + '</span>' +
+          '<span class="tma-portal-drop__file-size">' + esc(fileSize(file.size)) + '</span>' +
+          '<button type="button" class="tma-portal-drop__file-remove"' +
+          ' data-cip-file-remove="' + esc(path) + '" data-cip-file-index="' + index + '"' +
+          ' aria-label="Remove ' + esc(file.name) + '">' +
+          '<img src="' + ICON + 'Xcircle.svg" alt="" width="16" height="16"></button>' +
+          '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
+  /* The File Library's own icon map, so a PDF here is the PDF mark everywhere
+     else in the portal rather than a second opinion about what a file is. */
+  function fileIcon(name) {
+    if (window.TMAFileIcons) return window.TMAFileIcons.fileIconSrc('', name);
+
+    return ICON + 'File.svg';
+  }
+
+  function fileSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
   /* ── cards ─────────────────────────────────────────────────────── */
 
+  /*
+   * A named section: the name above the card, not inside it.
+   *
+   * Whose fields these are is the first thing a reader needs and the last
+   * thing they should have to look inside a box to find. Held outside, the
+   * heading labels the card the way a caption labels a figure — and on the
+   * row where the applicant's fields sit beside their documents, the two
+   * names line up instead of floating at different heights inside two boxes.
+   */
   function card(title, body, opts) {
     opts = opts || {};
-    return '<section class="tma-dash__clients-card' +
+    return '<section class="tma-portal-section' +
       (opts.modifier ? ' ' + opts.modifier : '') + '">' +
-      '<header class="tma-dash__clients-card-head">' +
-      '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
-      (opts.action || '') +
-      '</header>' +
-      body +
+      '<h3 class="tma-portal-section__title">' + esc(title) + '</h3>' +
+      '<div class="tma-portal-section__card">' + body + '</div>' +
       '</section>';
   }
 
@@ -321,7 +381,7 @@
   function applicantCard() {
     return card('Main applicant',
       photoField('passportPhoto') + personFields(''),
-      { modifier: 'tma-dash__clients-card--wide' });
+      { modifier: 'tma-portal-section--wide' });
   }
 
   /* §2's other two uploads, beside the person they belong to. Listed down one
@@ -332,7 +392,7 @@
       documentField('passportBioPage') +
       documentField('birthCertificate') +
       '</div>',
-      { modifier: 'tma-dash__clients-card--narrow' });
+      { modifier: 'tma-portal-section--narrow' });
   }
 
   function investmentCard() {
@@ -533,8 +593,7 @@
     MORPH.unwired(root, '[data-cip-file]').forEach(function (input) {
       var path = input.getAttribute('data-cip-file');
       input.addEventListener('change', function () {
-        var file = input.files && input.files[0];
-        if (file) takeDocument(root, path, file, input);
+        takeDocuments(root, path, input.files, input);
       });
     });
 
@@ -550,7 +609,10 @@
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        delete state.files[btn.getAttribute('data-cip-file-remove')];
+        var path = btn.getAttribute('data-cip-file-remove');
+        var list = state.documents[path] || [];
+        list.splice(Number(btn.getAttribute('data-cip-file-index')), 1);
+        if (!list.length) delete state.documents[path];
         render(root);
       });
     });
@@ -588,22 +650,53 @@
         e.preventDefault();
         e.stopPropagation();
         zone.classList.remove('is-dragging');
-        var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-        if (file) takeDocument(root, path, file);
+        takeDocuments(root, path, e.dataTransfer && e.dataTransfer.files);
       });
     });
   }
 
-  /* One place a document is accepted, however it arrived. */
-  function takeDocument(root, path, file, input) {
-    if (file.size > MAX_DOCUMENT_MB * 1024 * 1024) {
-      state.errors[path] = 'That file is too large. Keep it under ' + MAX_DOCUMENT_MB + 'MB.';
-      delete state.files[path];
-      if (input) input.value = '';
-    } else {
-      state.files[path] = file;
+  /*
+   * One place documents are accepted, however they arrived.
+   *
+   * They ADD to what is already there — dropping a second page must not throw
+   * away the first. An oversized file is refused by name, so the reader knows
+   * which one to shrink, and the files that were fine still land.
+   *
+   * The input is always cleared: a file picked, removed and picked again is
+   * the same value as far as the input is concerned, and `change` would not
+   * fire the second time.
+   */
+  function takeDocuments(root, path, chosen, input) {
+    var files = Array.prototype.slice.call(chosen || []);
+    var list = state.documents[path] || [];
+    var tooBig = [];
+
+    files.forEach(function (file) {
+      if (file.size > MAX_DOCUMENT_MB * 1024 * 1024) {
+        tooBig.push(file.name);
+
+        return;
+      }
+      // The same file twice is the reader clicking twice, not two documents.
+      var seen = list.some(function (had) {
+        return had.name === file.name && had.size === file.size;
+      });
+      if (!seen) list.push(file);
+    });
+
+    if (list.length > MAX_DOCUMENTS_PER_SLOT) {
+      list = list.slice(0, MAX_DOCUMENTS_PER_SLOT);
+      state.errors[path] = 'Up to ' + MAX_DOCUMENTS_PER_SLOT + ' files here.';
+    } else if (tooBig.length) {
+      state.errors[path] = tooBig.length === 1
+        ? '“' + tooBig[0] + '” is too large. Keep each file under ' + MAX_DOCUMENT_MB + 'MB.'
+        : tooBig.length + ' files are too large. Keep each one under ' + MAX_DOCUMENT_MB + 'MB.';
+    } else if (list.length) {
       delete state.errors[path];
     }
+
+    if (list.length) state.documents[path] = list;
+    if (input) input.value = '';
     render(root);
   }
 
@@ -733,9 +826,30 @@
       form.append(bracketed(path), state.files[path]);
     });
 
+    // A requirement's scans go up as a list, in the order they were added.
+    Object.keys(state.documents).forEach(function (path) {
+      if (!sponsored() && path.indexOf('sponsor.') === 0) return;
+      state.documents[path].forEach(function (file) {
+        form.append(bracketed(path) + '[]', file);
+      });
+    });
+
     form.append('sponsored', sponsored() ? '1' : '0');
 
     return form;
+  }
+
+  /*
+   * The control a server error belongs on.
+   *
+   * A list's members are keyed by index — `birthCertificate.2` — and there is
+   * no control by that name, so the message would land nowhere and the form
+   * would refuse to submit with nothing marked. The list itself is the control.
+   */
+  function fieldForError(key) {
+    var listed = key.match(/^([A-Za-z]+)\.\d+$/);
+
+    return listed && requiredDocuments().indexOf(listed[1]) !== -1 ? listed[1] : key;
   }
 
   /* dependents.0.firstName → dependents[0][firstName] */
@@ -776,9 +890,13 @@
         if (state.onSaving) state.onSaving(false);
 
         if (res.status === 422 && json.errors) {
-          // The server's word, field by field — already keyed to our paths.
+          // The server's word, field by field — already keyed to our paths,
+          // except that one file in a list objects as `passportBioPage.0` and
+          // the control it belongs to is `passportBioPage`.
           state.errors = {};
-          Object.keys(json.errors).forEach(function (k) { state.errors[k] = json.errors[k][0]; });
+          Object.keys(json.errors).forEach(function (k) {
+            state.errors[fieldForError(k)] = json.errors[k][0];
+          });
           render(root);
 
           return;

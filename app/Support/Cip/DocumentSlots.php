@@ -76,7 +76,7 @@ class DocumentSlots
 
         // A name that says what it answers and who for. The uploaded filename
         // is usually "scan0001.pdf", which tells a reviewer nothing.
-        $name = $person->fullName().' — '.DocumentTypes::label($type).'.'.$meta['extension'];
+        $name = self::documentName($person, $type, $meta['extension']);
 
         return DB::transaction(function () use ($slot, $person, $stored, $meta, $name, $actor) {
             if ($slot->file_id && $file = $slot->file) {
@@ -86,21 +86,7 @@ class DocumentSlots
                 return $slot;
             }
 
-            $file = FileItem::create([
-                'uuid' => $stored['uuid'],
-                'folder_id' => $person->folder_id,
-                'name' => $name,
-                'extension' => $meta['extension'],
-                'mime_type' => $meta['mime'],
-                'size' => $stored['size'],
-                'disk' => $stored['disk'],
-                'storage_path' => $stored['path'],
-                'checksum' => $stored['checksum'],
-                'owner_id' => FolderProvisioner::systemOwnerId($actor),
-                'uploaded_by' => $actor->id,
-            ]);
-
-            Versions::recordInitial($file, $actor->id);
+            $file = self::storeFile($person, $stored, $meta, $name, $actor);
 
             $slot->forceFill([
                 'file_id' => $file->id,
@@ -110,6 +96,54 @@ class DocumentSlots
 
             return $slot;
         });
+    }
+
+    /**
+     * A further file for a requirement already answered.
+     *
+     * One requirement can take more than one sheet of paper — a bio page over
+     * two pages, a birth certificate with its translation. The slot still holds
+     * the one answer (its unique key allows no second), and a second *version*
+     * would bury a separate document inside another one's history, so these are
+     * filed into the person's folder alongside it and numbered so the set reads
+     * in order.
+     */
+    public static function attach(CipPerson $person, string $type, UploadedFile $upload, User $actor, int $number): FileItem
+    {
+        $meta = \App\Support\Files\FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
+        $stored = Vault::store($upload->getRealPath(), $meta['extension']);
+        $name = self::documentName($person, $type, $meta['extension'], $number);
+
+        return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor));
+    }
+
+    /** "Ada Lovelace — Birth certificate (2).pdf" */
+    private static function documentName(CipPerson $person, string $type, string $extension, ?int $number = null): string
+    {
+        return $person->fullName().' — '.DocumentTypes::label($type).
+            ($number ? ' ('.$number.')' : '').'.'.$extension;
+    }
+
+    /** One stored upload as a portal file in the person's folder. */
+    private static function storeFile(CipPerson $person, array $stored, array $meta, string $name, User $actor): FileItem
+    {
+        $file = FileItem::create([
+            'uuid' => $stored['uuid'],
+            'folder_id' => $person->folder_id,
+            'name' => $name,
+            'extension' => $meta['extension'],
+            'mime_type' => $meta['mime'],
+            'size' => $stored['size'],
+            'disk' => $stored['disk'],
+            'storage_path' => $stored['path'],
+            'checksum' => $stored['checksum'],
+            'owner_id' => FolderProvisioner::systemOwnerId($actor),
+            'uploaded_by' => $actor->id,
+        ]);
+
+        Versions::recordInitial($file, $actor->id);
+
+        return $file;
     }
 
     /**

@@ -54,6 +54,10 @@ class CipApplicationController extends Controller
         $user = $request->user();
         abort_unless(CipAccess::canCreate($user), 404);
 
+        // A requirement takes a list of files; one file on its own still counts
+        // as a list of one.
+        Intake::normaliseDocuments($request);
+
         $data = $request->validate(Intake::rules(), Intake::messages());
 
         // A provider this account may not file under is not offered and not

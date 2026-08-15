@@ -152,6 +152,37 @@ try {
   check((await page.locator('[data-cip-form]').innerText()).includes('bio.pdf'),
     'a chosen document is named back');
 
+  /*
+   * One requirement, several files.
+   *
+   * A bio page is often a passport's two pages, so the control has to add
+   * rather than replace — and the way to add the second must still be there
+   * after the first, which is why the prompt stays and the files are listed
+   * under it. The icon is checked because a generic sheet of paper for every
+   * file is what this was reported as: it must be the File Library's own PDF
+   * mark, and an image must not get the same one.
+   */
+  await page.setInputFiles('[data-cip-file="passportBioPage"]', [
+    { name: 'bio-page-2.pdf', mimeType: 'application/pdf', buffer: pdf() },
+    { name: 'bio-scan.png', mimeType: 'image/png', buffer: png(40, 40) },
+  ]);
+  await page.waitForTimeout(600);
+
+  const listed = page.locator('[data-cip-drop="passportBioPage"] .tma-portal-drop__file');
+  check(await listed.count() === 3, `all three files are listed (${await listed.count()})`);
+  check((await page.locator('[data-cip-drop="passportBioPage"]').innerText()).includes('Drop another file here'),
+    'the zone still offers to take another');
+
+  const icons = await page.locator('[data-cip-drop="passportBioPage"] .tma-portal-drop__file-icon')
+    .evaluateAll(imgs => imgs.map(i => i.getAttribute('src')));
+  check(icons[0].includes('FilePdf'), `a PDF gets the PDF mark (${icons[0]})`);
+  check(icons[2].includes('FileImage'), `an image gets the image mark (${icons[2]})`);
+
+  // Removing one takes that one, not the list.
+  await page.locator('[data-cip-drop="passportBioPage"] .tma-portal-drop__file-remove').nth(1).click();
+  await page.waitForTimeout(400);
+  check(await listed.count() === 2, 'a file can be removed on its own');
+
   step(5, 'Investment: Other asks what it is');
   await page.selectOption('[data-cip-field="investmentType"]', 'other');
   await page.waitForTimeout(400);
