@@ -258,7 +258,9 @@
   border-radius: var(--radius-16);
   border-width: 0.5px;
   border-color: var(--color-border-medium);
-  background: var(--color-bg-input);
+  /* background-color, not the shorthand: a select carries its caret as a
+     background-image, and this rule out-specifies the one that sets it. */
+  background-color: var(--color-bg-input);
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
 }
@@ -974,7 +976,34 @@
 .tma-portal-input::placeholder,
 .tma-portal-textarea::placeholder { color: var(--color-text-placeholder); }
 
-.tma-portal-select { width: auto; min-width: 160px; }
+/*
+ * The portal's own caret, not the operating system's.
+ *
+ * A bare select draws whatever chevron the platform feels like — a different
+ * weight, colour and inset on every machine, sitting hard against a rounded
+ * 12px border that was drawn to different rules. This is the same inline
+ * caret the settings payment select already uses, at the field's own 12px
+ * inset, so a select looks like the inputs beside it.
+ *
+ * background-image rather than the shorthand: the dark-theme rule further
+ * down sets a background-color, and a shorthand there would wipe the caret.
+ */
+.tma-portal-select {
+  width: auto;
+  min-width: 160px;
+  appearance: none;
+  cursor: pointer;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M8.70711 11.3193C8.31658 10.8936 7.68342 10.8936 7.29289 11.3193C6.90237 11.7451 6.90237 12.3783 7.29289 12.7688L14.7071 20.183C15.3166 20.7925 16.3166 20.7925 16.9261 20.183L24.3403 12.7688C24.7308 12.3783 24.7308 11.7451 24.3403 11.3193C23.9498 10.9288 23.3166 10.9288 22.9261 11.3193L15.8166 18.4288L8.70711 11.3193Z' fill='%23000' fill-opacity='0.4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-12) center;
+}
+
+/* The toolbar's select is shorter and tighter, so its caret comes in too. */
+.tma-portal-toolbar .tma-portal-field .tma-portal-select {
+  padding-right: 28px;
+  background-position: right var(--space-8) center;
+}
 
 .tma-portal-radio-row { display: flex; gap: var(--space-16); align-items: center; flex-wrap: wrap; }
 
@@ -4178,7 +4207,9 @@ label.tma-portal-check-row:hover {
 .tma-dash[data-theme="dark"] .tma-portal-tpl-card,
 .tma-dash[data-theme="dark"] .tma-portal-plan,
 .tma-dash[data-theme="dark"] .tma-portal-connector-list {
-  background: var(--dash-panel-bg, var(--color-bg-card));
+  /* background-color, not the shorthand: a select carries its caret as a
+     background-image and the shorthand would clear it. */
+  background-color: var(--dash-panel-bg, var(--color-bg-card));
   color: inherit;
 }
 
