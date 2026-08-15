@@ -18427,15 +18427,37 @@
 
 .tma-dash__clients-cards--intake > .tma-portal-section--wide { grid-column: 1; }
 
-.tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow { grid-column: 2; }
+/* A section stretches to its row, but the card inside it is only as tall as
+   its fields — so a taller neighbour left the named card short by the
+   difference. The card takes the section's height, whatever sets it. */
+.tma-dash__clients-cards--intake > .tma-portal-section > .tma-portal-section__card {
+  flex: 1 1 auto;
+}
 
-/* Below the point where two thirds stops fitting three fields, they stack. */
+/*
+ * The card beside the applicant starts where the applicant's card starts.
+ *
+ * Its neighbour is a section — a name, then a card — so a grid that lines the
+ * two items up puts this card's top edge against the other one's HEADING and
+ * leaves the two boxes an eyebrow apart, one taller than the other for no
+ * reason a reader can see. Dropping it by exactly the heading it does not have
+ * lines up both edges: the tops by this margin, and the bottoms because a
+ * stretched item's height is what is left after its margins.
+ */
+.tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow {
+  grid-column: 2;
+  margin-top: calc(var(--text-lh-14) + var(--space-8));
+}
+
+/* Below the point where two thirds stops fitting three fields, they stack —
+   and a card with nothing beside it has nothing to line up with. */
 @media (max-width: 1250px) {
   .tma-dash__clients-cards--intake { grid-template-columns: minmax(0, 1fr); }
   .tma-dash__clients-cards--intake > .tma-portal-section--wide,
   .tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow {
     grid-column: 1 / -1;
   }
+  .tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow { margin-top: 0; }
 }
 
 .tma-dash__clients-list--profile {

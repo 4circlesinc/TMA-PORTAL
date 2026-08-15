@@ -661,12 +661,22 @@
   gap: var(--space-16);
 }
 
+/*
+ * ...except a person's own fields, which are two to a row.
+ *
+ * A person's card is two thirds of the width — the rest is their documents —
+ * and three columns inside it made every field narrower than the answer it
+ * takes. A country name does not fit in a third of two thirds.
+ */
+.tma-portal-form-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
 @media (max-width: 1100px) {
   .tma-portal-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 700px) {
-  .tma-portal-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .tma-portal-form-grid,
+  .tma-portal-form-grid--two { grid-template-columns: minmax(0, 1fr); }
 }
 
 /*
@@ -677,11 +687,25 @@
  * target at all. No thumbnail: a scanned bio page is recognised by its
  * filename, and rendering its first page would be a viewer, not a control.
  */
+/*
+ * The drop boxes fill the card they are in.
+ *
+ * The card is as tall as whatever sits beside it, and two drop targets at
+ * their natural height leave the rest of it empty — which reads as a card
+ * that failed to load rather than one that is finished. The slack goes into
+ * the zones themselves, where a bigger target is worth having.
+ */
 .tma-portal-drops {
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
+  flex: 1 1 auto;
+  min-height: 0;
 }
+
+.tma-portal-drops > .tma-portal-drop { flex: 1 1 auto; }
+
+.tma-portal-drops > .tma-portal-drop > .tma-portal-drop__zone { flex: 1 1 auto; }
 
 .tma-portal-drop {
   position: relative;

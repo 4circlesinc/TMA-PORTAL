@@ -194,6 +194,25 @@ try {
   check(icons[0].includes('FilePdf'), `a PDF gets the PDF mark (${icons[0]})`);
   check(icons[2].includes('FileImage'), `an image gets the image mark (${icons[2]})`);
 
+  /*
+   * The two boxes on this row are one box tall.
+   *
+   * Checked with files in, which is the harder half: the documents card grows
+   * as they are listed, and the applicant's card has to grow with it. The
+   * card is measured, not the section around it — the section includes the
+   * heading held above it, and comparing those would pass while the boxes a
+   * reader sees were an eyebrow apart.
+   */
+  const edges = async sel => page.locator(sel).evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom) };
+  });
+  const applicantBox = await edges('.tma-portal-section--wide > .tma-portal-section__card');
+  const documentsBox = await edges('.tma-dash__clients-card--narrow');
+  check(Math.abs(applicantBox.top - documentsBox.top) <= 1
+    && Math.abs(applicantBox.bottom - documentsBox.bottom) <= 1,
+    `the applicant and documents cards are the same box (${applicantBox.top}–${applicantBox.bottom} vs ${documentsBox.top}–${documentsBox.bottom})`);
+
   // Removing one takes that one, not the list.
   await page.locator('[data-cip-drop="passportBioPage"] .tma-portal-drop__file-remove').nth(1).click();
   await page.waitForTimeout(400);
