@@ -52,8 +52,8 @@
       { id: 'notification-history', label: 'Notification History' },
       { id: 'branding', label: 'Edit Company Branding' },
     ] },
-    { group: 'clienthub-group', label: 'Client hub management', icon: 'UsersThree', items: [
-      { id: 'clienthub-access', label: 'Client hub access' },
+    { group: 'clienthub-group', label: 'CIP Applications management', icon: 'UsersThree', items: [
+      { id: 'clienthub-access', label: 'Access' },
       { id: 'service-teams', label: 'Service teams' },
       { id: 'custom-fields', label: 'Custom fields' },
     ] },
@@ -878,12 +878,12 @@
         var counts = d.counts || {};
 
         root.innerHTML =
-          '<p class="tma-portal-subtitle">Who may work in the client hub, and how clients get their account — ' +
+          '<p class="tma-portal-subtitle">Who may work in CIP Applications, and how clients get their account — ' +
           'administrators always hold every permission below.</p>' +
-          (canEdit ? '' : '<p class="tma-portal-note">Only administrators can change client hub access.</p>') +
+          (canEdit ? '' : '<p class="tma-portal-note">Only administrators can change this access.</p>') +
           ui().section('What employees can do',
             d.capabilities.map(function (cap) { return hubCapRow(cap, canEdit); }).join('') +
-            '<p class="tma-portal-note" data-hub-reach-note hidden>Employees cannot open the client hub, so the permissions above it do nothing.</p>' +
+            '<p class="tma-portal-note" data-hub-reach-note hidden>Employees cannot open CIP Applications, so the permissions above it do nothing.</p>' +
             '<p class="tma-portal-note">Applies to ' + counts.employees + ' employee account' + (counts.employees === 1 ? '' : 's') +
             ', the next time each one loads the portal.</p>') +
           ui().section('Client invitations',
@@ -943,7 +943,7 @@
             return res.json().then(function (j) { return { ok: res.ok, body: j }; });
           }).then(function (r) {
             if (!r.ok) { ui().toast((r.body && r.body.message) || 'Could not save'); return; }
-            ui().toast('Client hub access saved');
+            ui().toast('Access settings saved');
             paint(r.body);
           }).catch(function () { ui().toast('Could not save'); });
         });
@@ -953,7 +953,7 @@
         .then(function (r) { return r.json(); })
         .then(paint)
         .catch(function () {
-          root.innerHTML = '<p class="tma-portal-note">Couldn’t load client hub access. Refresh to try again.</p>';
+          root.innerHTML = '<p class="tma-portal-note">Couldn’t load access settings. Refresh to try again.</p>';
         });
     },
   };

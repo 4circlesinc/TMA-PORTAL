@@ -38,6 +38,16 @@ class SharePointSyncTest extends TestCase
 
     protected array $children = [];
 
+    /**
+     * Ids Graph answers 404 for — a real delete, since a deleted item leaves
+     * the drive for SharePoint's recycle bin. Verified against the live tenant:
+     * creating a folder, deleting it, and asking for it again returns 404.
+     */
+    protected array $deletedItems = [];
+
+    /** Pages of children, when a test exercises a listing bigger than one page. */
+    protected ?array $childPages = null;
+
     protected string $content = 'file bytes';
 
     protected bool $throttle = false;
@@ -150,7 +160,23 @@ class SharePointSyncTest extends TestCase
                 ]);
             }
             if (str_contains($url, '/children')) {
-                return Http::response(['value' => $this->children]);
+                if ($this->childPages === null) {
+                    return Http::response(['value' => $this->children]);
+                }
+
+                $index = preg_match('/[?&]\$skiptoken=c(\d+)/', $url, $m) ? (int) $m[1] : 0;
+                $page = ['value' => $this->childPages[$index] ?? []];
+
+                if (isset($this->childPages[$index + 1])) {
+                    $page['@odata.nextLink'] = 'https://graph.microsoft.com/v1.0/drives/drive-1/items/root-1/children?$skiptoken=c'.($index + 1);
+                }
+
+                return Http::response($page);
+            }
+            // Gone from the drive. Answered before anything else that serves a
+            // single item, so a test cannot accidentally have it both ways.
+            if (preg_match('#/items/([^/?]+)(\?|$)#', $url, $m) && in_array($m[1], $this->deletedItems, true)) {
+                return Http::response(['error' => ['code' => 'itemNotFound', 'message' => 'Item does not exist']], 404);
             }
             // Download and upload BOTH end in /content — only the GET returns
             // raw bytes. Answering a PUT with a string made json() null and
@@ -419,25 +445,125 @@ class SharePointSyncTest extends TestCase
 
     /**
      * Deletions are found by difference, because a real library was observed
-     * not to emit tombstones at all.
+     * not to emit tombstones at all — but confirmed against Graph before
+     * anything is recycled.
      */
-    public function test_an_item_missing_from_its_parent_is_recycled(): void
+    public function test_an_item_deleted_in_sharepoint_is_recycled(): void
     {
         $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
         Synchroniser::sync($this->connection);
         $file = FileItem::first();
 
-        // Delta reports the parent folder changed; the child is simply absent.
+        // Delta reports the parent folder changed; the child is simply absent,
+        // and Graph confirms it has left the drive.
         $this->fakeGraph(
             [['id' => 'root-1', 'name' => 'root', 'root' => new \stdClass, 'folder' => ['childCount' => 0]]],
             []   // no children at all
         );
+        $this->deletedItems = ['i-1'];
         $stats = Synchroniser::sync($this->connection->fresh());
 
         $this->assertSame(1, $stats['deleted']);
         $this->assertTrue(FileItem::withTrashed()->find($file->id)->trashed(), 'recycled, not purged');
         // The bytes survive so a wrong delete on either side is recoverable.
         $this->assertFileExists($this->vaultRoot.'/'.$file->storage_path);
+    }
+
+    /**
+     * Absence from a listing is a hint, not a verdict.
+     *
+     * This is the bug that put 626 files nobody had touched into the recycle
+     * bin: the reconcile pass treated "not in the children I was handed" as
+     * "deleted", and a listing can be short for reasons that have nothing to do
+     * with deletion. If Graph still has the item, it stays.
+     */
+    public function test_an_item_still_in_sharepoint_is_never_recycled(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+        $file = FileItem::first();
+
+        // The listing comes back empty, but the item itself is alive and well.
+        $this->fakeGraph(
+            [['id' => 'root-1', 'name' => 'root', 'root' => new \stdClass, 'folder' => ['childCount' => 1]]],
+            []
+        );
+        $this->remoteItem = $this->fileItem('i-1', 'Brief.txt', 'c:1');
+        $stats = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(0, $stats['deleted']);
+        $this->assertFalse(FileItem::withTrashed()->find($file->id)->trashed());
+    }
+
+    /**
+     * A folder bigger than one page is read to the end.
+     *
+     * Graph pages `/children` at 200 regardless. Reading only the first page
+     * meant every item after the 200th looked deleted — the whole reason
+     * hundreds of live files ended up in the bin.
+     */
+    public function test_the_children_listing_is_read_past_the_first_page(): void
+    {
+        $this->fakeGraph([
+            $this->fileItem('i-1', 'One.txt', 'c:1'),
+            $this->fileItem('i-2', 'Two.txt', 'c:1'),
+        ], [['id' => 'i-1'], ['id' => 'i-2']]);
+        Synchroniser::sync($this->connection);
+
+        // i-2 is on the SECOND page of the listing; only a walk that follows
+        // nextLink sees it, and only that walk leaves it alone.
+        $this->fakeGraph([['id' => 'root-1', 'name' => 'root', 'root' => new \stdClass, 'folder' => ['childCount' => 2]]]);
+        $this->childPages = [[['id' => 'i-1']], [['id' => 'i-2']]];
+
+        $stats = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(0, $stats['deleted']);
+        $this->assertSame(0, FileItem::onlyTrashed()->count());
+    }
+
+    /**
+     * Restoring in OneDrive restores here — on the same row.
+     *
+     * The mapping survives the delete precisely so this can happen: the file
+     * keeps its id, versions, comments and shares instead of being imported
+     * again as a second copy while the original sits in the bin for ever.
+     */
+    public function test_restoring_in_sharepoint_restores_the_portal_file(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+        $file = FileItem::first();
+
+        $this->fakeGraph([['id' => 'root-1', 'name' => 'root', 'root' => new \stdClass, 'folder' => ['childCount' => 0]]], []);
+        $this->deletedItems = ['i-1'];
+        Synchroniser::sync($this->connection->fresh());
+        $this->assertTrue(FileItem::withTrashed()->find($file->id)->trashed());
+
+        // Put it back in OneDrive. Its eTag need not have changed at all, which
+        // is why the restore is checked before the "nothing changed" shortcut.
+        $this->deletedItems = [];
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        $stats = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(1, $stats['restored'] ?? 0);
+        $this->assertFalse(FileItem::withTrashed()->find($file->id)->trashed());
+        $this->assertSame(1, FileItem::withTrashed()->count(), 'restored, not imported again');
+        $this->assertNull(SharePointItem::where('graph_item_id', 'i-1')->first()->recycled_at);
+    }
+
+    /** A recycled item keeps its mapping, or a restore has nothing to find. */
+    public function test_a_recycled_item_keeps_its_mapping(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+        Synchroniser::sync($this->connection);
+
+        $this->fakeGraph([['id' => 'root-1', 'name' => 'root', 'root' => new \stdClass, 'folder' => ['childCount' => 0]]], []);
+        $this->deletedItems = ['i-1'];
+        Synchroniser::sync($this->connection->fresh());
+
+        $mapping = SharePointItem::where('graph_item_id', 'i-1')->first();
+        $this->assertNotNull($mapping);
+        $this->assertNotNull($mapping->recycled_at);
     }
 
     /**

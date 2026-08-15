@@ -299,6 +299,9 @@ class Pusher
             'last_error' => null,
             'failure_count' => 0,
             'last_synced_at' => now(),
+            // Pushing an item up is the end of its time in the bin — a restore
+            // in the portal comes through here.
+            'recycled_at' => null,
         ];
 
         $mapping ? $mapping->update($attributes) : SharePointItem::create($attributes);
@@ -338,7 +341,10 @@ class Pusher
     {
         return self::withMapping($file, function (SharePointConnection $c, SharePointItem $m) {
             Drive::delete($c->drive_id, $m->graph_item_id);
-            $m->delete();
+            // Flagged, not destroyed: the mapping is what lets the inbound pass
+            // recognise this item if it is restored on either side, instead of
+            // importing it back as a second copy.
+            $m->update(['recycled_at' => now()]);
 
             return ['status' => 'deleted'];
         });

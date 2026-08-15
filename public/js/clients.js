@@ -1049,8 +1049,8 @@
               {
                 navId: 'clients',
                 view: 'clients',
-                title: 'Clients',
-                crumb: 'Clients',
+                title: 'CIP Applications',
+                crumb: 'CIP Applications',
                 clientsScreen: 'list',
                 contactId: entry.state.selectedId || null,
               },
@@ -1058,7 +1058,7 @@
               '/clients'
             );
             if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
-              window.TMADashboard.updatePageMeta({ title: 'Clients', crumb: 'Clients' });
+              window.TMADashboard.updatePageMeta({ title: 'CIP Applications', crumb: 'CIP Applications' });
             }
           }
         }
@@ -1168,24 +1168,24 @@
       (canManageClientHub()
         ? '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
           '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--secondary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
-          'Manage client hub' +
+          'Manage' +
           '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
           '</button>' +
-          '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--start" data-head-dropdown-menu hidden role="menu" aria-label="Manage client hub">' +
-          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:clienthub-access">Manage client hub access</button>' +
+          '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--start" data-head-dropdown-menu hidden role="menu" aria-label="Manage CIP Applications">' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:clienthub-access">Manage access</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:service-teams">Manage service teams</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:custom-fields">Manage custom fields</button>' +
           '</div></div>'
         : '') +
       '<div class="tma-dash__head-dropdown-wrap" data-head-dropdown-wrap>' +
       '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary" data-head-dropdown-toggle aria-haspopup="menu" aria-expanded="false">' +
-      'Create client' +
+      'Create New Application' +
       '<img class="tma-dash__head-dropdown-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
       '</button>' +
-      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu hidden role="menu" aria-label="Create client">' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-new">Create person</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-company">Create company</button>' +
-      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import clients</button>' +
+      '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu hidden role="menu" aria-label="Create New Application">' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-new">New application</button>' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-company">New service provider</button>' +
+      '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import</button>' +
       '</div>' +
       '<input type="file" accept=".csv,.xlsx,.xls" class="tma-dash__clients-import-input" data-clients-import-input hidden aria-hidden="true">' +
       '</div>'
@@ -1684,10 +1684,10 @@
 
     if (!noData) return 'No clients yet';
     return noData.render({
-      title: 'No clients yet',
-      subtitle: 'Add your first client to get started.',
+      title: 'No applications yet',
+      subtitle: 'Create your first application to get started.',
       illustrationName: 'Illustration07',
-      buttonLabel: 'Add client',
+      buttonLabel: 'Create New Application',
       showButton: canManageClients(),
     });
   }
@@ -2205,7 +2205,7 @@
     var draft = state.draft || emptyDraft({ companyId: state.prefillCompanyId || '' });
     var isNew = !!state.adding;
     var contact = isNew ? null : contactFor(state.selectedId);
-    var title = isNew ? 'New person' : 'Edit person';
+    var title = isNew ? 'New application' : 'Edit application';
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' + renderFormHeadAvatar(draft, contact, isNew) +
@@ -5151,7 +5151,7 @@
   var clientsHeadActionsWired = false;
 
   var CLIENTS_ADMIN_PAGES = {
-    'clienthub-access': { title: 'Client hub access' },
+    'clienthub-access': { title: 'Access' },
     'service-teams': { title: 'Service teams' },
     'custom-fields': { title: 'Custom fields' },
   };
@@ -5164,7 +5164,7 @@
       navId: 'account-settings',
       view: 'admin',
       title: meta.title,
-      crumb: 'Account settings / Client hub management / ' + meta.title,
+      crumb: 'Account settings / CIP Applications management / ' + meta.title,
       adminPage: adminPage,
     });
   }
@@ -5354,7 +5354,7 @@
     function refreshFormHeadAvatar() {
       if (!formHead) return;
       var contact = state.adding ? null : contactFor(state.selectedId);
-      var title = state.adding ? 'New person' : 'Edit person';
+      var title = state.adding ? 'New application' : 'Edit application';
       formHead.innerHTML =
         renderFormHeadAvatar(state.draft, contact, !!state.adding) +
         '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span>';
@@ -6042,27 +6042,27 @@
       // In table/mobile detail flow the in-page back bar already says "Clients",
       // so keep the global page title empty to avoid the duplicate label.
       if (usesPagedClientsFlow(state) && screen !== 'list') {
-        return { title: '', crumb: 'Clients' };
+        return { title: '', crumb: 'CIP Applications' };
       }
       if (screen === 'add') {
-        return { title: 'New person', crumb: 'Clients / New person' };
+        return { title: 'New application', crumb: 'CIP Applications / New application' };
       }
       if (screen === 'add-company') {
-        return { title: 'New service provider', crumb: 'Clients / New service provider' };
+        return { title: 'New service provider', crumb: 'CIP Applications / New service provider' };
       }
       if (screen === 'company' || screen === 'edit-company') {
         var company = companyFor(companyId || state.companyId);
         var companyName = company ? company.name : 'Service provider';
         if (screen === 'edit-company') {
-          return { title: companyName, crumb: 'Clients / ' + companyName };
+          return { title: companyName, crumb: 'CIP Applications / ' + companyName };
         }
-        return { title: companyName, crumb: 'Clients / ' + companyName };
+        return { title: companyName, crumb: 'CIP Applications / ' + companyName };
       }
       if ((screen === 'detail' || screen === 'edit') && contactId) {
         var contact = contactFor(contactId);
-        return { title: contact.name, crumb: 'Clients / ' + contact.name };
+        return { title: contact.name, crumb: 'CIP Applications / ' + contact.name };
       }
-      return { title: 'Clients', crumb: 'Clients' };
+      return { title: 'CIP Applications', crumb: 'CIP Applications' };
     }
 
     function applyScreen(screen, contactId, companyId) {
@@ -6323,8 +6323,8 @@
           {
             navId: 'clients',
             view: 'clients',
-            title: route.screen === 'add' ? 'New person' : 'Clients',
-            crumb: route.screen === 'add' ? 'Clients / New person' : 'Clients',
+            title: route.screen === 'add' ? 'New application' : 'CIP Applications',
+            crumb: route.screen === 'add' ? 'CIP Applications / New application' : 'CIP Applications',
             clientsScreen: route.screen || 'list',
             contactId: route.contactId || null,
             companyId: route.companyId || null,
@@ -6360,8 +6360,8 @@
             {
               navId: 'clients',
               view: 'clients',
-              title: 'Clients',
-              crumb: 'Clients',
+              title: 'CIP Applications',
+              crumb: 'CIP Applications',
               clientsScreen: 'list',
               contactId: state.selectedId,
             },

@@ -58,6 +58,76 @@ class Drive
     }
 
     /**
+     * Every child id of a folder — ALL of them.
+     *
+     * Graph pages `/children` at 200 whether you ask it to or not, and a caller
+     * that reads `['value']` and stops has silently been handed "the first 200
+     * of 600". The sync used exactly that list to decide what had been deleted,
+     * so on any folder with more than 200 children the remainder looked gone
+     * and was recycled — 626 files and 73 folders that were never deleted in
+     * OneDrive at all. Following nextLink is the whole fix.
+     *
+     * @return array<int, string>
+     */
+    public static function childIds(string $driveId, string $itemId): array
+    {
+        $ids = [];
+        // Only the id is needed, and asking for less is materially faster on a
+        // folder of thousands.
+        $url = "/drives/{$driveId}/items/{$itemId}/children";
+        $query = ['$select' => 'id', '$top' => self::PAGE];
+
+        // A folder cannot be walked forever; 200 pages is 40,000 children.
+        for ($page = 0; $page < 200; $page++) {
+            $response = $query === []
+                ? GraphClient::get($url)
+                : GraphClient::get($url, $query);
+
+            foreach ($response['value'] ?? [] as $child) {
+                if (! empty($child['id'])) {
+                    $ids[] = $child['id'];
+                }
+            }
+
+            $next = $response['@odata.nextLink'] ?? null;
+            if (! $next) {
+                return $ids;
+            }
+
+            // nextLink is absolute and carries its own $skiptoken — follow it
+            // verbatim, and never alongside a query array that would strip it.
+            $url = $next;
+            $query = [];
+        }
+
+        // Hitting the cap means the listing is incomplete, and an incomplete
+        // listing must never be read as "the rest were deleted".
+        throw new GraphException('Could not list every child of '.$itemId.'; the folder is too large.');
+    }
+
+    /**
+     * The item, or null when SharePoint no longer has it.
+     *
+     * A delete moves an item into SharePoint's own recycle bin, out of the
+     * drive's item space, so Graph answers 404 for it. That 404 is the only
+     * trustworthy evidence that something was really deleted — anything else
+     * (a throttle, a permissions blip, a truncated listing) must not be read
+     * as one.
+     */
+    public static function find(string $driveId, string $itemId): ?array
+    {
+        try {
+            return self::item($driveId, $itemId);
+        } catch (GraphException $e) {
+            if (in_array($e->status, [404, 410], true)) {
+                return null;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
      * Stream an item's bytes to a local path.
      *
      * Streams rather than buffering: a 2 GB document must not be held in

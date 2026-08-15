@@ -9,6 +9,7 @@ use App\Models\SharePointItem;
 use App\Models\User;
 use App\Support\Files\Activity;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Files\FolderTree;
 use App\Support\Files\Naming;
 use App\Support\Files\Vault;
 use App\Support\Files\Versions;
@@ -214,7 +215,7 @@ class Synchroniser
     }
 
     /**
-     * Find items that have been deleted in SharePoint.
+     * Settle what is really still in SharePoint, folder by folder.
      *
      * **This exists because delta does not reliably emit tombstones.** Verified
      * against a real library on 2026-08-01: deleting a file produced no
@@ -223,33 +224,108 @@ class Synchroniser
      * propagating, which is the worst kind of sync bug because nothing looks
      * wrong until someone notices a file that should be gone.
      *
-     * So deletions are detected by difference, but only for the folders delta
-     * actually reported as changed — a deletion always modifies its parent. The
-     * library is never re-walked wholesale, which §1 forbids.
+     * So absence from a listing is the *hint* that something went — never the
+     * verdict. Absence has three other explanations, and all three were seen on
+     * real drives: a truncated listing (see {@see Drive::childIds()}), an item
+     * that moved elsewhere, and a listing that failed halfway. Acting on the
+     * hint alone put 626 files nobody had touched into the recycle bin. So
+     * every candidate is checked directly against Graph, and only Graph's own
+     * "this item is gone" recycles anything.
+     *
+     * The same listing answers the opposite question for free: an item that is
+     * back in the folder while the portal still has it in the bin was restored
+     * from OneDrive's recycle bin, and belongs back in the library here too.
+     *
+     * Only the folders delta reported as changed are examined — a delete or a
+     * restore always modifies the parent. The library is never re-walked
+     * wholesale, which §1 forbids.
      */
     private static function reconcileDeletions(SharePointConnection $connection, array $folderGraphIds, array &$stats): void
     {
         foreach (array_unique($folderGraphIds) as $graphFolderId) {
             try {
-                $children = GraphClient::get("/drives/{$connection->drive_id}/items/{$graphFolderId}/children")['value'] ?? [];
-                $present = array_values(array_filter(array_column($children, 'id')));
+                $present = array_flip(Drive::childIds($connection->drive_id, $graphFolderId));
 
-                $gone = SharePointItem::where('connection_id', $connection->id)
+                $mappings = SharePointItem::where('connection_id', $connection->id)
                     ->where('graph_parent_id', $graphFolderId)
-                    // An empty folder means everything mapped under it is gone;
-                    // whereNotIn([]) would match nothing, so guard it.
-                    ->when($present !== [], fn ($q) => $q->whereNotIn('graph_item_id', $present))
                     ->get();
 
-                foreach ($gone as $mapping) {
+                foreach ($mappings as $mapping) {
+                    if (isset($present[$mapping->graph_item_id])) {
+                        if ($mapping->isRecycled()) {
+                            self::applyRestore($connection, $mapping);
+                            $stats['restored'] = ($stats['restored'] ?? 0) + 1;
+                        }
+
+                        continue;
+                    }
+
+                    // Already in the portal's bin: nothing left to do, and
+                    // re-deleting would reset the date it was recycled.
+                    if ($mapping->isRecycled()) {
+                        continue;
+                    }
+
+                    if (! self::confirmRemoved($connection, $mapping)) {
+                        continue;
+                    }
+
                     self::applyDelete($connection, $mapping);
                     $stats['deleted']++;
                 }
+            } catch (GraphThrottledException $e) {
+                // Graph asked us to back off. Stopping the whole run is right:
+                // continuing would mean reading half-listings as deletions.
+                throw $e;
             } catch (\Throwable $e) {
-                // A folder we cannot list is not a reason to fail the sync.
+                // A folder we cannot list is not a reason to fail the sync —
+                // but it is emphatically not a reason to delete anything under
+                // it either, so nothing in this folder is touched.
                 self::log($connection, 'reconcile-failed', 'warning', $graphFolderId, $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Did SharePoint really lose this item?
+     *
+     * Yes only if Graph says so. A delete moves an item into SharePoint's own
+     * recycle bin, out of the drive, and Graph then answers 404 for it — so a
+     * 404 (or an explicit `deleted` facet) is the evidence, and nothing else
+     * is. An item that answers normally is alive: it was missing from its old
+     * parent's listing because it MOVED, so the mapping is re-pointed at
+     * wherever it now lives instead of being recycled.
+     *
+     * Any other outcome — a 403, a timeout, a throttle — is uncertainty, and
+     * uncertainty must fail towards keeping the file.
+     */
+    private static function confirmRemoved(SharePointConnection $connection, SharePointItem $mapping): bool
+    {
+        try {
+            $remote = Drive::find($connection->drive_id, $mapping->graph_item_id);
+        } catch (GraphThrottledException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            self::log($connection, 'delete-unverified', 'warning', $mapping->graph_item_id,
+                'Left alone — could not confirm it was deleted: '.$e->getMessage());
+
+            return false;
+        }
+
+        if ($remote === null) {
+            return true;
+        }
+
+        if (isset($remote['deleted'])) {
+            return true;
+        }
+
+        $parent = $remote['parentReference']['id'] ?? null;
+        if ($parent && $parent !== $mapping->graph_parent_id) {
+            $mapping->update(['graph_parent_id' => $parent]);
+        }
+
+        return false;
     }
 
     /** Apply one delta entry. */
@@ -288,6 +364,19 @@ class Synchroniser
         $isFolder = isset($item['folder']);
 
         if ($mapping) {
+            /*
+             * Back from OneDrive's recycle bin.
+             *
+             * This has to be tested BEFORE the eTag short-circuit below: a
+             * restore does not have to change the item at all, so the eTag can
+             * come back exactly as we stored it — and "nothing changed" would
+             * leave the file sitting in the portal's bin for ever.
+             */
+            if ($mapping->isRecycled()) {
+                self::applyRestore($connection, $mapping);
+                $stats['restored'] = ($stats['restored'] ?? 0) + 1;
+            }
+
             /*
              * eTag covers ANY change — content, name, or move. If it matches
              * what we stored, this item is byte-for-byte what we already have
@@ -411,25 +500,69 @@ class Synchroniser
      * A deletion in SharePoint recycles in the portal — it never purges.
      * Retention and "somebody deleted the wrong thing" are the same problem,
      * and only a recoverable delete solves both.
+     *
+     * The mapping is flagged, not destroyed. Destroying it severed the only
+     * link between the Graph item and the portal row now in the bin, so putting
+     * the item back in OneDrive imported a second copy and stranded the first.
      */
     private static function applyDelete(SharePointConnection $connection, SharePointItem $mapping): void
     {
         DB::transaction(function () use ($mapping, $connection) {
-            if ($mapping->file) {
-                $mapping->file->update(['deleted_by' => $connection->created_by]);
-                $mapping->file->delete();
-                Activity::forFile($connection->created_by, $mapping->file, 'delete', ['via' => 'sharepoint']);
+            if ($file = $mapping->trashedFile()) {
+                if (! $file->trashed()) {
+                    $file->update(['deleted_by' => $connection->created_by]);
+                    $file->delete();
+                    Activity::forFile($connection->created_by, $file, 'delete', ['via' => 'sharepoint']);
+                }
             }
-            if ($mapping->folder) {
-                $mapping->folder->update(['deleted_by' => $connection->created_by]);
-                $mapping->folder->delete();
+            if ($folder = $mapping->trashedFolder()) {
+                if (! $folder->trashed()) {
+                    $folder->update(['deleted_by' => $connection->created_by]);
+                    // The whole subtree goes together, or its contents are left
+                    // loose in a folder that no longer exists.
+                    FolderTree::softDeleteTree($folder, (int) $connection->created_by);
+                }
             }
-            $mapping->delete();
+
+            $mapping->update(['recycled_at' => now()]);
         });
 
-        self::forgetMapping($mapping);
+        self::rememberMapping($mapping);
 
         self::log($connection, 'deleted', 'info', $mapping->graph_item_id, $mapping->name);
+    }
+
+    /**
+     * Put back what SharePoint put back.
+     *
+     * Restoring an item from OneDrive's recycle bin restores it here, on the
+     * same row — the file keeps its versions, comments, shares and link. That
+     * is only possible because the mapping outlived the delete.
+     *
+     * Public because `sharepoint:recover-recycled` undoes the deletions made
+     * before that was true, and must undo them exactly the same way.
+     */
+    public static function applyRestore(SharePointConnection $connection, SharePointItem $mapping): void
+    {
+        DB::transaction(function () use ($mapping) {
+            if (($file = $mapping->trashedFile()) && $file->trashed()) {
+                $file->restore();
+                $file->update(['deleted_by' => null]);
+            }
+            if (($folder = $mapping->trashedFolder()) && $folder->trashed()) {
+                FolderTree::restoreTree($folder);
+                $folder->update(['deleted_by' => null]);
+            }
+
+            $mapping->update(['recycled_at' => null]);
+        });
+
+        // A relation loaded while the row was trashed came back null; drop it
+        // so the update that follows sees the restored row.
+        $mapping->unsetRelation('file')->unsetRelation('folder');
+        self::rememberMapping($mapping);
+
+        self::log($connection, 'restored', 'info', $mapping->graph_item_id, $mapping->name);
     }
 
     /**
@@ -529,7 +662,7 @@ class Synchroniser
      * mapped. Writing idempotently makes the second arrival a no-op instead of
      * a constraint violation.
      */
-    private static function mapFile(SharePointConnection $connection, array $item, FileItem $file): SharePointItem
+    public static function mapFile(SharePointConnection $connection, array $item, FileItem $file): SharePointItem
     {
         return SharePointItem::updateOrCreate(
             ['connection_id' => $connection->id, 'graph_item_id' => $item['id']],
@@ -537,7 +670,7 @@ class Synchroniser
         );
     }
 
-    private static function mapFolder(SharePointConnection $connection, array $item, Folder $folder): SharePointItem
+    public static function mapFolder(SharePointConnection $connection, array $item, Folder $folder): SharePointItem
     {
         return SharePointItem::updateOrCreate(
             ['connection_id' => $connection->id, 'graph_item_id' => $item['id']],
@@ -571,6 +704,8 @@ class Synchroniser
             'last_synced_at' => now(),
             'last_error' => null,
             'failure_count' => 0,
+            // Written from a live Graph item, so by definition not recycled.
+            'recycled_at' => null,
         ];
     }
 

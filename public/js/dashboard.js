@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-10-menu-v4';
+  var NAV_SHELL_VERSION = '2026-08-15-cip-applications';
   var SIDEBAR_BP = 1024; // sidebar becomes a drawer at/below this width
   var RIGHTBAR_BP = 1024; // rightbar becomes a drawer at/below this width (match sidebar)
 
@@ -381,7 +381,7 @@
           navId: 'clients',
           view: 'clients',
           title: 'Client',
-          crumb: 'Clients',
+          crumb: 'CIP Applications',
           clientsScreen: 'edit',
           contactId: decodeURIComponent(clientsEditMatch[1]),
         };
@@ -392,7 +392,7 @@
           navId: 'clients',
           view: 'clients',
           title: 'Client',
-          crumb: 'Clients',
+          crumb: 'CIP Applications',
           clientsScreen: 'detail',
           contactId: decodeURIComponent(clientsDetailMatch[1]),
         };
@@ -401,8 +401,8 @@
         return {
           navId: 'clients',
           view: 'clients',
-          title: 'Clients',
-          crumb: 'Clients',
+          title: 'CIP Applications',
+          crumb: 'CIP Applications',
           clientsScreen: 'list',
         };
       }
@@ -422,7 +422,7 @@
           navId: 'clients',
           view: 'clients',
           title: 'Client',
-          crumb: 'Clients',
+          crumb: 'CIP Applications',
           clientsScreen: 'edit',
           contactId: decodeURIComponent(legacyClientsEditMatch[1]),
           legacyRedirect: true,
@@ -434,7 +434,7 @@
           navId: 'clients',
           view: 'clients',
           title: 'Client',
-          crumb: 'Clients',
+          crumb: 'CIP Applications',
           clientsScreen: 'detail',
           contactId: decodeURIComponent(legacyClientsDetailMatch[1]),
           legacyRedirect: true,
@@ -444,8 +444,8 @@
         return {
           navId: 'clients',
           view: 'clients',
-          title: 'Clients',
-          crumb: 'Clients',
+          title: 'CIP Applications',
+          crumb: 'CIP Applications',
           clientsScreen: 'list',
           legacyRedirect: true,
         };
@@ -1289,7 +1289,7 @@
         }
         if (root.querySelector('.tma-dash__view[data-view="clients"]')) {
           activate('clients', {
-            view: 'clients', title: 'Clients', crumb: 'Clients',
+            view: 'clients', title: 'CIP Applications', crumb: 'CIP Applications',
             clientsScreen: contactId ? 'detail' : 'list', contactId: contactId,
           });
           return true;
