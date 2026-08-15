@@ -1243,6 +1243,34 @@
     refreshClientsHeadActions(slot);
   }
 
+  /*
+   * The list's tabs, in the page head rather than above the table.
+   *
+   * They sit on the same line as Create New Application, where the page title
+   * was. The title said "CIP Applications" while the lit tab said
+   * "Applications" directly beneath it — the same word twice, one of them
+   * doing nothing. The tab that is lit names the page now.
+   *
+   * Rendered into the shell's head, so it is synced on every render the way
+   * the head actions are; the page's own DOM no longer contains them.
+   */
+  function syncClientsHeadTabs(state, render) {
+    var slot = document.querySelector('[data-page-head-tabs]');
+    if (!slot) return;
+
+    // The tabs describe a list. There is no list on a profile or a form.
+    var show = state.screen === 'list' && state.viewMode === 'list';
+    slot.hidden = !show;
+    if (!show) {
+      slot.innerHTML = '';
+
+      return;
+    }
+
+    MORPH.patch(slot, '<div data-clients-head-tabs>' + renderListTabs(state) + '</div>');
+    wireListTabs(slot, state, render);
+  }
+
   /* Rendered once per access state, not once per mount: on a hard refresh at
      /clients the actions are drawn before /me has answered, so an
      administrator would otherwise be left without the hub controls until they
@@ -1899,7 +1927,7 @@
     var providers = onProvidersTab(state);
 
     return (
-      renderListTabs(state) +
+      // The tabs live in the page head — see syncClientsHeadTabs.
       renderTableToolbar(state) +
       renderClientsFilterChips(state) +
       // The grid is wider than a narrow window; without a scroller of its own
@@ -5078,8 +5106,6 @@
         navigate(onProvidersTab(state) ? 'add-company' : 'add');
       });
     });
-
-    wireListTabs(root, state, render);
   }
 
   /*
@@ -6422,6 +6448,7 @@
       options = options || {};
       syncClientsShell(state.screen, state.viewMode);
       syncClientsPageActions(state, navigate);
+      syncClientsHeadTabs(state, render);
       syncClientsDetailHead(state);
       root.className = state.viewMode === 'grid'
         ? 'tma-dash__clients tma-dash__clients--grid'

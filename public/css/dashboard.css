@@ -17832,17 +17832,22 @@
 /*
  * The list's own tabs — Applications and Service providers.
  *
- * Same treatment the profile's tablist gets, so the two tab rows on this page
- * read as the same control at different depths. It sits above the toolbar and
- * keeps its rule the full width, which is what separates it from the table
- * rather than from the count beside it.
+ * They sit in the page head, on the line the Create button is on, where the
+ * title used to be. No rule under them: the head already has its own edge, and
+ * a second one directly above the toolbar drew a band across the page that
+ * belonged to neither.
  */
-.tma-dash__clients-list-tabs {
-  width: 100%;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--color-overlay-4);
-  padding-bottom: var(--space-4);
-  margin-bottom: var(--space-8);
+.tma-dash__head-tabs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.tma-dash__head-tabs[hidden] { display: none; }
+
+/* The heading and the tabs are two answers to "what page is this". */
+.tma-dash__main-head-left:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__page-title {
+  display: none;
 }
 
 .tma-dash__clients-list-tabs .tma-tab:not(.is-active) {
