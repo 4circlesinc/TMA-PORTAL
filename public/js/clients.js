@@ -2233,11 +2233,11 @@
     var isNew = state.screen === 'add-company';
     var title = isNew ? 'New service provider' : 'Edit service provider';
     return (
+      // No avatar, for the same reason the new application head has none: a
+      // form is not a record, and the circle stood in for a provider that
+      // does not exist until the form is submitted.
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
-      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
-      '<img src="' + ICONS.Buildings + '" alt="" width="20" height="20">' +
-      '</span>' +
       '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
