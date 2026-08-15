@@ -4193,6 +4193,9 @@
     opts = opts || {};
     return '<button type="button" class="tma-filter-popover__item" ' + attr + '="' + esc(value) + '"' +
       (opts.selected ? ' data-selected' : '') + '>' +
+      (opts.icon
+        ? '<img src="' + esc(opts.icon) + '" alt="" class="tma-filter-popover__item-icon" width="16" height="16">'
+        : '') +
       '<span class="tma-filter-popover__item-label">' + esc(label) + '</span>' +
       (opts.meta ? '<span class="tma-filter-popover__item-meta">' + esc(opts.meta) + '</span>' : '') +
       (opts.chevron
@@ -4445,16 +4448,16 @@
   function clientsContextItems(kind) {
     if (kind === 'company') {
       return [
-        { act: 'open', label: 'Open' },
-        { act: 'edit', label: 'Edit' },
-        { act: 'add-person', label: 'Add person' },
-        { act: 'delete', label: 'Delete' },
+        { act: 'open', label: 'Open', icon: ICONS.ArrowUpRight },
+        { act: 'edit', label: 'Edit', icon: ICONS.PencilSimple },
+        { act: 'add-person', label: 'Add person', icon: ICONS.Plus },
+        { act: 'delete', label: 'Delete', icon: ICONS.Trash },
       ];
     }
     return [
-      { act: 'open', label: 'Open' },
-      { act: 'edit', label: 'Edit' },
-      { act: 'delete', label: 'Delete' },
+      { act: 'open', label: 'Open', icon: ICONS.ArrowUpRight },
+      { act: 'edit', label: 'Edit', icon: ICONS.PencilSimple },
+      { act: 'delete', label: 'Delete', icon: ICONS.Trash },
     ];
   }
 
@@ -4462,7 +4465,7 @@
     var pop = ensureClientsPopovers();
     if (!pop.context) return;
     pop.context.innerHTML = clientsContextItems(kind).map(function (item) {
-      return clientsPopItem('data-clients-ctx-act', item.act, item.label);
+      return clientsPopItem('data-clients-ctx-act', item.act, item.label, { icon: item.icon });
     }).join('');
     pop.context.setAttribute('data-ctx-kind', kind);
     pop.context.setAttribute('data-ctx-id', id);
