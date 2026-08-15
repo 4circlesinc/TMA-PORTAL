@@ -88,6 +88,31 @@ class CompaniesTest extends TestCase
         $this->assertSame('none', $referred->fresh()->referral_type);
     }
 
+    public function test_deleting_a_provider_can_take_its_people_with_it(): void
+    {
+        $staff = $this->staff();
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+
+        $contact = Client::create([
+            'uid' => 'contact-one', 'name' => 'Contact One',
+            'company_id' => $company->id, 'data' => [],
+        ]);
+        $referred = Client::create([
+            'uid' => 'referred-one', 'name' => 'Referred One',
+            'referral_type' => 'company', 'referred_by_company_id' => $company->id, 'data' => [],
+        ]);
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/companies/'.$company->uid.'?withPeople=1')
+            ->assertOk();
+
+        // Its own people go with it…
+        $this->assertSoftDeleted('clients', ['id' => $contact->id]);
+        // …but the applicants it referred are the firm's, and stay.
+        $this->assertNotSoftDeleted('clients', ['id' => $referred->id]);
+        $this->assertNull($referred->fresh()->referred_by_company_id);
+    }
+
     public function test_a_provider_with_numbered_applications_cannot_be_deleted(): void
     {
         config(['services.cip.enabled' => true]);

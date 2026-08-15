@@ -373,8 +373,9 @@
     update: function (uid, payload) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload });
     },
-    remove: function (uid) {
-      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid), { method: 'DELETE' });
+    remove: function (uid, withPeople) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
+        (withPeople ? '?withPeople=1' : ''), { method: 'DELETE' });
     },
   };
 
@@ -4406,6 +4407,48 @@
   var clientsCtxSubEl = null;
   var clientsAssignable = {};
 
+  /* Deleting a provider asks a real question — keep its people or take them
+     with it — which a browser confirm() cannot. Referred clients are never
+     deleted here: they are the firm's applicants, not the provider's staff. */
+  function confirmCompanyDelete(company, onConfirm) {
+    var ui = window.TMAPortalUI;
+    var people = (company.people || []).length;
+    if (!ui || !ui.openModal) {
+      // No UI kit (a standalone preview): fall back to the simple question.
+      if (window.confirm('Delete ' + company.name + '? Its people are kept.')) onConfirm(false);
+      return;
+    }
+
+    var host = ui.openModal({
+      title: 'Delete ' + company.name + '?',
+      body:
+        '<p class="tma-portal-modal__text">' +
+        (people
+          ? esc(people === 1 ? 'One person belongs to this service provider.'
+            : people + ' people belong to this service provider.')
+          : 'Nobody belongs to this service provider.') +
+        ' Referred clients are always kept.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-company-del-cancel>Cancel</button>' +
+        (people
+          ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-company-del-keep>Delete, keep the people</button>' +
+            '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-company-del-all>Delete with its ' +
+              esc(people === 1 ? 'person' : people + ' people') + '</button>'
+          : '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-company-del-keep>Delete</button>') +
+        '</div>',
+      onMount: function (el) {
+        var close = function () { ui.closeModal(); };
+        var cancel = el.querySelector('[data-company-del-cancel]');
+        if (cancel) cancel.addEventListener('click', close);
+        var keep = el.querySelector('[data-company-del-keep]');
+        if (keep) keep.addEventListener('click', function () { close(); onConfirm(false); });
+        var all = el.querySelector('[data-company-del-all]');
+        if (all) all.addEventListener('click', function () { close(); onConfirm(true); });
+      },
+    });
+    return host;
+  }
+
   function canAssignClients() {
     var access = window.TMAPortalAccess;
     return !!(access && access.can && access.can('clients.assign'));
@@ -4619,17 +4662,18 @@
       if (act === 'delete') {
         var company = companyFor(id);
         if (!company) return;
-        if (!window.confirm('Delete ' + company.name + '? Its people and referred clients are kept, '
-          + 'but they stop being linked to it, and staff access to it ends.')) return;
-        return CompaniesAPI.remove(id).then(function () {
-          COMPANIES = COMPANIES.filter(function (c) { return c.id !== id; });
-          hydrateCompanies(COMPANIES);
-          clientsToast('Service provider deleted', 'positive');
-          if (state.companyId === id) navigate('list');
-          else ctx.render({ forceFull: true });
-        }).catch(function (err) {
-          clientsToast((err && err.message) || 'Could not delete this service provider', 'negative');
+        confirmCompanyDelete(company, function (withPeople) {
+          CompaniesAPI.remove(id, withPeople).then(function () {
+            COMPANIES = COMPANIES.filter(function (c) { return c.id !== id; });
+            hydrateCompanies(COMPANIES);
+            clientsToast('Service provider deleted', 'positive');
+            if (state.companyId === id) navigate('list');
+            else ctx.render({ forceFull: true });
+          }).catch(function (err) {
+            clientsToast((err && err.message) || 'Could not delete this service provider', 'negative');
+          });
         });
+        return;
       }
       return;
     }
@@ -5379,12 +5423,9 @@
       deleteCompanyBtn.addEventListener('click', function () {
         var company = companyFor(state.companyId);
         if (!company) return;
-        // Say what survives: people and referrals are kept, only the link to
-        // this record goes. Staff access to it ends with the record.
-        if (!window.confirm('Delete ' + company.name + '? Its people and referred clients are kept, '
-          + 'but they stop being linked to it, and staff access to it ends.')) return;
+        confirmCompanyDelete(company, function (withPeople) {
         deleteCompanyBtn.disabled = true;
-        CompaniesAPI.remove(state.companyId).then(function () {
+        CompaniesAPI.remove(state.companyId, withPeople).then(function () {
           COMPANIES = COMPANIES.filter(function (c) { return c.id !== state.companyId; });
           hydrateCompanies(COMPANIES);
           clientsToast('Service provider deleted', 'positive');
@@ -5392,6 +5433,7 @@
         }).catch(function (err) {
           deleteCompanyBtn.disabled = false;
           clientsToast((err && err.message) || 'Could not delete this service provider', 'negative');
+        });
         });
       });
     }

@@ -284,8 +284,20 @@ class CompaniesController extends Controller
 
         // Settle the access first, while the company still exists to log it.
         AccessSync::companyArchived($company, $request->user());
-        // People stay; they just become unattached.
-        $company->clients()->update(['company_id' => null]);
+
+        // Its contact people can go with it. Referred clients never do:
+        // they are the firm's own applicants, and the provider that
+        // introduced them is not who they belong to.
+        if ($request->boolean('withPeople')) {
+            $people = $company->clients()->get();
+            foreach ($people as $person) {
+                AccessSync::clientArchived($person, $request->user());
+                $person->delete();
+            }
+        } else {
+            // People stay; they just become unattached.
+            $company->clients()->update(['company_id' => null]);
+        }
         // Same for anyone it referred. The referral goes back to "not
         // recorded" rather than lingering as a company nothing can name.
         $company->referredClients()->update([
