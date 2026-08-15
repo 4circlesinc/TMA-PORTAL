@@ -133,12 +133,11 @@
   /* The same card the service provider page draws a record in. Full width
      rather than paired: the applicant's eight fields and the investment's
      three do not balance side by side, and the form reads down the page. */
-  function card(title, description, body) {
+  function card(title, body) {
     return '<section class="tma-dash__clients-card">' +
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
       '</header>' +
-      (description ? '<p class="tma-portal-note">' + esc(description) + '</p>' : '') +
       body +
       '</section>';
   }
@@ -152,7 +151,7 @@
     });
     var region = regionFor(state.draft.countryOfResidence);
 
-    return card('Main applicant', 'Every field here is required by the CIP application.',
+    return card('Main applicant',
       '<div class="tma-portal-form-grid">' +
       textField('firstName') +
       textField('lastName') +
@@ -164,9 +163,10 @@
       textField('passportNumber', { placeholder: 'As printed on the bio page' }) +
       '</div>' +
       // Derived, and shown so it is never a surprise on the submitted form.
+      // Nothing to say before a country is chosen.
       (region
-        ? '<p class="tma-portal-note" data-cip-region>Region: <strong>' + esc(region) + '</strong> — from the country of residence.</p>'
-        : '<p class="tma-portal-note" data-cip-region>The region follows the country of residence.</p>'));
+        ? '<p class="tma-portal-note" data-cip-region>Region: <strong>' + esc(region) + '</strong></p>'
+        : ''));
   }
 
   function investmentStep() {
@@ -177,7 +177,7 @@
       return { value: t.value, label: t.label };
     });
 
-    return card('Investment', 'One investment route per application.',
+    return card('Investment',
       '<div class="tma-portal-form-grid">' +
       // One provider and nothing to choose: say whose file this is instead
       // of offering a select of one.

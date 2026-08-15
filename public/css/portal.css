@@ -650,14 +650,23 @@
   border-color: var(--color-red);
 }
 
-/* ── CIP intake wizard ───────────────────────────────
-   The form kit already dresses the inputs; these only lay them out. Two
-   columns where there is room, one on a narrow window, because a
-   fifteen-field form in a single column is a scroll nobody finishes. */
+/* ── CIP intake form ─────────────────────────────────
+   The form kit already dresses the inputs; these only lay them out. Three to
+   a row, fixed rather than auto-fit: a row that grows to four on a wide
+   monitor re-flows the field order under the reader, and the government form
+   these follow is read in threes. Two, then one, as the window narrows. */
 .tma-portal-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-16);
+}
+
+@media (max-width: 1100px) {
+  .tma-portal-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .tma-portal-form-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .tma-portal-field__static {
