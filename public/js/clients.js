@@ -3027,14 +3027,9 @@
     var assignable = state.companyStaffAssignable || [];
     var loading = !!state.companyStaffLoading;
 
-    var options = assignable.map(function (u) {
-      return '<option value="' + esc(String(u.id)) + '">' + esc(u.name) + '</option>';
-    }).join('');
-
     var form = !loading
       ? '<div class="tma-dash__clients-assign-form">' +
-        '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-company-staff-user>' +
-        '<option value="">Assign staff…</option>' + options + '</select>' +
+        staffPicker('data-company-staff-user', assignable, state.companyStaffPick, 'Assign staff…') +
         '<select class="tma-dash__clients-field-select" data-company-staff-level aria-label="Permission level">' +
         ASSIGNMENT_LEVELS.map(function (l) {
           return '<option value="' + esc(l.value) + '"' + (l.value === 'editor' ? ' selected' : '') + '>' +
@@ -3126,6 +3121,120 @@
       }).join('') +
       '</div>'
     );
+  }
+
+  /*
+   * Choosing a person by their face, not their name in a system menu.
+   *
+   * A native <select> is drawn by the operating system, so an option can hold
+   * text and nothing else — which is why this list looked like a font menu
+   * while every other place the portal names staff shows them. It is the
+   * documented context menu instead, with the avatars renderAssignSub already
+   * uses.
+   *
+   * The value stays on a hidden input under the same data attribute the
+   * select had, so everything that reads `.value` to submit the form carries
+   * on reading `.value`.
+   */
+  function staffPicker(attr, list, chosenId, placeholder) {
+    var chosen = null;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(chosenId)) { chosen = list[i]; break; }
+    }
+
+    var options = list.length
+      ? list.map(function (person) {
+        var active = chosen && String(chosen.id) === String(person.id);
+        return '<button type="button" role="option" aria-selected="' + (active ? 'true' : 'false') + '"' +
+          ' class="tma-portal-context-menu__item' + (active ? ' is-active' : '') + '"' +
+          ' data-staff-pick="' + esc(String(person.id)) + '">' +
+          ctxAvatarHtml(person) +
+          '<span class="tma-portal-context-menu__label">' +
+          esc(person.name || person.email || 'Staff') + '</span></button>';
+      }).join('')
+      : '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
+        '<span class="tma-portal-context-menu__label">Nobody left to assign</span></div>';
+
+    return (
+      '<div class="tma-dash__clients-staff-picker" data-staff-picker>' +
+      '<input type="hidden" ' + attr + ' value="' + esc(chosen ? String(chosen.id) : '') + '">' +
+      '<button type="button" class="tma-dash__clients-field-select tma-dash__clients-field-select--full' +
+      ' tma-dash__clients-staff-picker__btn" data-staff-picker-toggle' +
+      ' aria-haspopup="listbox" aria-expanded="false">' +
+      (chosen
+        ? ctxAvatarHtml(chosen) + '<span class="tma-dash__clients-staff-picker__name">' +
+          esc(chosen.name || chosen.email || 'Staff') + '</span>'
+        : '<span class="tma-dash__clients-staff-picker__placeholder">' + esc(placeholder) + '</span>') +
+      '</button>' +
+      '<div class="tma-portal-context-menu tma-dash__clients-staff-picker__menu"' +
+      ' data-staff-picker-menu role="listbox" hidden>' + options + '</div>' +
+      '</div>'
+    );
+  }
+
+  /*
+   * The picker's behaviour, done here rather than by re-rendering the panel.
+   *
+   * Choosing somebody repaints the button in place: a full render would tear
+   * the open menu out from under the pointer, and the level and scope selects
+   * beside it would lose anything already chosen.
+   */
+  function wireStaffPickers(root, state) {
+    MORPH.unwired(root, '[data-staff-picker]').forEach(function (picker) {
+      var toggle = picker.querySelector('[data-staff-picker-toggle]');
+      var menu = picker.querySelector('[data-staff-picker-menu]');
+      var input = picker.querySelector('input[type="hidden"]');
+      if (!toggle || !menu || !input) return;
+
+      var close = function () {
+        menu.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+      };
+
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var opening = menu.hidden;
+        // One open at a time, including any other picker on the page.
+        document.querySelectorAll('[data-staff-picker-menu]').forEach(function (m) { m.hidden = true; });
+        document.querySelectorAll('[data-staff-picker-toggle]').forEach(function (t) {
+          t.setAttribute('aria-expanded', 'false');
+        });
+        menu.hidden = !opening;
+        toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      });
+
+      menu.addEventListener('click', function (e) {
+        var pick = e.target.closest('[data-staff-pick]');
+        if (!pick) return;
+        e.stopPropagation();
+
+        input.value = pick.getAttribute('data-staff-pick');
+        // Remembered so a re-render — an assignment landing, the panel
+        // reloading — does not silently forget who was chosen.
+        if (picker.querySelector('[data-clients-assign-user]')) state.assignPick = input.value;
+        else state.companyStaffPick = input.value;
+
+        toggle.innerHTML = pick.innerHTML.replace('tma-portal-context-menu__label',
+          'tma-dash__clients-staff-picker__name');
+        menu.querySelectorAll('[data-staff-pick]').forEach(function (o) {
+          var active = o === pick;
+          o.classList.toggle('is-active', active);
+          o.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        close();
+      });
+
+      MORPH.on(document, 'click', function () {
+        document.querySelectorAll('[data-staff-picker-menu]').forEach(function (m) { m.hidden = true; });
+        document.querySelectorAll('[data-staff-picker-toggle]').forEach(function (t) {
+          t.setAttribute('aria-expanded', 'false');
+        });
+      }, 'staff-picker-dismiss');
+
+      MORPH.on(document, 'keydown', function (e) {
+        if (e.key === 'Escape') close();
+      }, 'staff-picker-escape');
+    });
   }
 
   function staffAvatarHtml(person) {
@@ -4018,17 +4127,12 @@
     var admin = isClientsAdmin();
     var assignForm = '';
     if (admin && !hidden) {
-      var options = assignable
-        .filter(function (s) {
-          return !items.some(function (a) { return String(a.userId) === String(s.id); });
-        })
-        .map(function (s) {
-          return '<option value="' + esc(String(s.id)) + '">' + esc(s.name) + '</option>';
-        }).join('');
+      var unassigned = assignable.filter(function (s) {
+        return !items.some(function (a) { return String(a.userId) === String(s.id); });
+      });
       assignForm =
         '<div class="tma-dash__clients-assign-form">' +
-        '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-assign-user>' +
-        '<option value="">Assign staff…</option>' + options + '</select>' +
+        staffPicker('data-clients-assign-user', unassigned, state.assignPick, 'Assign staff…') +
         '<select class="tma-dash__clients-field-select" data-clients-assign-level aria-label="Permission level">' +
         ASSIGNMENT_LEVELS.map(function (l) {
           return '<option value="' + esc(l.value) + '"' + (l.value === 'editor' ? ' selected' : '') + '>' +
@@ -5794,6 +5898,8 @@
       });
     }
 
+    wireStaffPickers(root, state);
+
     var assignSubmit = MORPH.unwiredOne(root, '[data-clients-assign-submit]');
     if (assignSubmit) {
       assignSubmit.addEventListener('click', function () {
@@ -5809,6 +5915,8 @@
           level: levelSel ? levelSel.value : 'editor',
         }).then(function (res) {
           state.assignments = (res && res.assignments) || [];
+          // Chosen and gone: they are on the list now, not in the picker.
+          state.assignPick = '';
           clientsToast('Staff assigned', 'positive');
           if (usesPagedClientsFlow(state)) render();
           else render({ detailOnly: true });
@@ -5941,6 +6049,8 @@
             level: levelEl ? levelEl.value : 'editor',
             appliesToClients: scope,
           }).then(function () {
+            // Chosen and gone: they are on the list now, not in the picker.
+            state.companyStaffPick = '';
             clientsToast('Staff assigned', 'positive');
             refreshCompanyPanels();
           }).catch(function (err) {

@@ -18247,6 +18247,69 @@
   box-sizing: border-box;
 }
 
+/*
+ * The staff picker: a field that shows a face.
+ *
+ * It wears the select's own recipe so it sits in the assign row like the two
+ * real selects beside it, and opens the documented context menu rather than
+ * the operating system's option list — which draws text and nothing else,
+ * which is why this was the one place the portal named staff without showing
+ * them.
+ */
+.tma-dash__clients-staff-picker {
+  position: relative;
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 340px;
+}
+
+.tma-dash__clients-staff-picker__btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__clients-staff-picker__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__clients-staff-picker__placeholder {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * Anchored to the field, not the viewport.
+ *
+ * The context menu is `position: fixed` — it is normally opened at a pointer
+ * and placed by script — and portal.css is read after this file, so a plain
+ * class here lost the tie and `top: 100%` resolved against the window instead
+ * of the picker. Two classes take it back, and the menu hangs under the field
+ * the way a dropdown should.
+ */
+.tma-dash__clients-staff-picker .tma-dash__clients-staff-picker__menu {
+  position: absolute;
+  top: calc(100% + var(--space-4));
+  left: 0;
+  z-index: 40;
+  width: auto;
+  min-width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.tma-dash__clients-staff-picker .tma-dash__clients-staff-picker__menu[hidden] {
+  display: none;
+}
+
+.tma-dash__clients-staff-picker__menu .tma-portal-context-menu__item.is-active {
+  background: var(--color-hover);
+}
+
 .tma-dash__clients-field-select--full {
   width: 100%;
 }
