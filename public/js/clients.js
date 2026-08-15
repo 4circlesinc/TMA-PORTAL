@@ -4208,14 +4208,13 @@
     if (clientsPop && clientsPop.host && document.body.contains(clientsPop.host)) return clientsPop;
     var host = document.createElement('div');
     host.className = 'tma-dash__clients-popover-host';
-    host.innerHTML = clientsPopShell('fields') + clientsPopShell('values') + clientsPopShell('sort') + clientsPopShell('context');
+    host.innerHTML = clientsPopShell('fields') + clientsPopShell('values') + clientsPopShell('sort');
     document.body.appendChild(host);
     clientsPop = {
       host: host,
       fields: host.querySelector('[data-clients-popover="fields"]'),
       values: host.querySelector('[data-clients-popover="values"]'),
       sort: host.querySelector('[data-clients-popover="sort"]'),
-      context: host.querySelector('[data-clients-popover="context"]'),
     };
     wireClientsPopovers();
     return clientsPop;
@@ -4300,7 +4299,7 @@
 
   function closeClientsPopovers(keep) {
     if (!clientsPop) return;
-    [clientsPop.fields, clientsPop.values, clientsPop.sort, clientsPop.context].forEach(function (el) {
+    [clientsPop.fields, clientsPop.values, clientsPop.sort].forEach(function (el) {
       if (!el || (keep && keep.indexOf(el) !== -1)) return;
       el.removeAttribute('data-open');
       el.setAttribute('aria-hidden', 'true');
@@ -4310,17 +4309,6 @@
         b.setAttribute('aria-expanded', 'false');
       });
     }
-  }
-
-  /* The context menu opens where the pointer is, so it takes a synthetic
-     rect rather than an element. positionClientsPopover already flips a
-     menu that would fall off the bottom, which is exactly right here. */
-  function openClientsPopoverAt(el, x, y) {
-    closeClientsPopovers();
-    el.setAttribute('data-open', 'true');
-    el.setAttribute('aria-hidden', 'false');
-    el._anchorRect = { left: x, right: x, top: y, bottom: y };
-    requestAnimationFrame(function () { positionClientsPopover(el, el._anchorRect); });
   }
 
   function openClientsPopover(el, anchor, keep) {
@@ -4390,36 +4378,6 @@
       }
     });
 
-    if (clientsPop.context) {
-      clientsPop.context.addEventListener('click', function (e) {
-        var btn = e.target.closest('[data-clients-ctx-act]');
-        if (!btn) return;
-        var act = btn.getAttribute('data-clients-ctx-act');
-        var kind = clientsPop.context.getAttribute('data-ctx-kind');
-        var id = clientsPop.context.getAttribute('data-ctx-id');
-        closeClientsPopovers();
-        runClientsContextAction(act, kind, id);
-      });
-    }
-
-    // A right-click anywhere else dismisses an open menu; without this the
-    // browser's own menu would appear beside ours.
-    document.addEventListener('contextmenu', function (e) {
-      if (!clientsPop || !clientsPop.context) return;
-      if (!clientsPop.context.hasAttribute('data-open')) return;
-      // The row handler that just opened this menu preventDefault()s, and its
-      // event still bubbles here — without this check the menu would close
-      // itself the instant it opened.
-      if (e.defaultPrevented) return;
-      if (e.target.closest('[data-clients-popover]')) return;
-      closeClientsPopovers();
-    });
-
-    document.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape' || !clientsPop) return;
-      closeClientsPopovers();
-    });
-
     document.addEventListener('click', function (e) {
       if (!clientsPop || !clientsPop.host.isConnected) return;
       if (!clientsFilterLive()) { closeClientsPopovers(); return; }
@@ -4430,7 +4388,7 @@
 
     window.addEventListener('resize', function () {
       if (!clientsPop) return;
-      [clientsPop.fields, clientsPop.values, clientsPop.sort, clientsPop.context].forEach(function (el) {
+      [clientsPop.fields, clientsPop.values, clientsPop.sort].forEach(function (el) {
         if (el && el.hasAttribute('data-open')) positionClientsPopover(el, el._anchorRect);
       });
     });
@@ -4444,32 +4402,193 @@
    * verbs the toolbar carries; this only saves the trip.
    */
   var clientsMenuCtx = null;
+  var clientsCtxEl = null;
+  var clientsCtxSubEl = null;
+  var clientsAssignable = {};
+
+  function canAssignClients() {
+    var access = window.TMAPortalAccess;
+    return !!(access && access.can && access.can('clients.assign'));
+  }
 
   function clientsContextItems(kind) {
-    if (kind === 'company') {
-      return [
-        { act: 'open', label: 'Open', icon: ICONS.ArrowUpRight },
-        { act: 'edit', label: 'Edit', icon: ICONS.PencilSimple },
-        { act: 'add-person', label: 'Add person', icon: ICONS.Plus },
-        { act: 'delete', label: 'Delete', icon: ICONS.Trash },
-      ];
-    }
-    return [
-      { act: 'open', label: 'Open', icon: ICONS.ArrowUpRight },
-      { act: 'edit', label: 'Edit', icon: ICONS.PencilSimple },
-      { act: 'delete', label: 'Delete', icon: ICONS.Trash },
+    var items = [
+      { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
+      { act: 'edit', label: 'Edit', icon: 'PencilSimple' },
     ];
+    if (kind === 'company') items.push({ act: 'add-person', label: 'Add person', icon: 'Plus' });
+    // Assigning staff is `clients.assign` — the same capability the server
+    // enforces, read through the access mirror rather than guessed from the
+    // current-user store (which is not always populated by the time a row
+    // is right-clicked).
+    if (canAssignClients()) items.push({ act: 'assign', label: 'Assign to', icon: 'UserPlus', submenu: true });
+    items.push({ sep: true });
+    items.push({ act: 'delete', label: 'Delete', icon: 'Trash', danger: true });
+    return items;
+  }
+
+  function ctxItemHtml(item) {
+    if (item.sep) return '<div class="tma-portal-context-menu__sep" role="separator"></div>';
+    return '<button type="button" role="menuitem"' +
+      ' class="tma-portal-context-menu__item' +
+      (item.danger ? ' tma-portal-context-menu__item--danger' : '') +
+      (item.submenu ? ' tma-portal-context-menu__item--parent' : '') + '"' +
+      ' data-clients-ctx-act="' + esc(item.act) + '"' + (item.submenu ? ' aria-haspopup="true"' : '') + '>' +
+      '<img class="tma-portal-context-menu__icon" src="images/icons/phosphor/' + esc(item.icon) + '.svg" alt="" width="16" height="16">' +
+      '<span class="tma-portal-context-menu__label">' + esc(item.label) + '</span>' +
+      (item.submenu
+        ? '<img class="tma-portal-context-menu__chevron" src="images/icons/phosphor/CaretRight.svg" alt="" width="16" height="16" aria-hidden="true">'
+        : '') +
+      '</button>';
+  }
+
+  /* Placed at the pointer, then pulled back inside the window — the same
+     clamp the File Library's menu uses. */
+  function placeCtxMenu(el, x, y) {
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+    el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+  }
+
+  function closeClientsContextMenu() {
+    closeClientsCtxSub();
+    if (clientsCtxEl && clientsCtxEl.parentNode) clientsCtxEl.parentNode.removeChild(clientsCtxEl);
+    clientsCtxEl = null;
+    document.removeEventListener('click', onClientsCtxDocClick);
+    document.removeEventListener('keydown', onClientsCtxKey);
+    document.removeEventListener('scroll', closeClientsContextMenu, true);
+  }
+
+  function closeClientsCtxSub() {
+    if (clientsCtxSubEl && clientsCtxSubEl.parentNode) clientsCtxSubEl.parentNode.removeChild(clientsCtxSubEl);
+    clientsCtxSubEl = null;
+    if (clientsCtxEl) {
+      var parent = clientsCtxEl.querySelector('[data-clients-ctx-act="assign"]');
+      if (parent) parent.removeAttribute('data-open');
+    }
+  }
+
+  function onClientsCtxDocClick(e) {
+    if (e.target.closest('.tma-portal-context-menu')) return;
+    closeClientsContextMenu();
+  }
+
+  function onClientsCtxKey(e) {
+    if (e.key === 'Escape') closeClientsContextMenu();
   }
 
   function openClientsContextMenu(kind, id, x, y) {
-    var pop = ensureClientsPopovers();
-    if (!pop.context) return;
-    pop.context.innerHTML = clientsContextItems(kind).map(function (item) {
-      return clientsPopItem('data-clients-ctx-act', item.act, item.label, { icon: item.icon });
+    closeClientsContextMenu();
+    var items = clientsContextItems(kind);
+
+    clientsCtxEl = document.createElement('div');
+    clientsCtxEl.className = 'tma-portal-context-menu';
+    clientsCtxEl.setAttribute('role', 'menu');
+    clientsCtxEl.innerHTML = items.map(ctxItemHtml).join('');
+    document.body.appendChild(clientsCtxEl);
+    placeCtxMenu(clientsCtxEl, x, y);
+
+    clientsCtxEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-clients-ctx-act]');
+      if (!btn) return;
+      var act = btn.getAttribute('data-clients-ctx-act');
+      // The parent row only opens its submenu; it is not an action itself.
+      if (act === 'assign') { openClientsAssignSub(btn, kind, id); return; }
+      closeClientsContextMenu();
+      runClientsContextAction(act, kind, id);
+    });
+
+    // Hovering the parent opens the list; hovering any other row closes it,
+    // so two submenus can never be open at once.
+    clientsCtxEl.addEventListener('mouseover', function (e) {
+      var btn = e.target.closest('[data-clients-ctx-act]');
+      if (!btn) return;
+      if (btn.getAttribute('data-clients-ctx-act') === 'assign') openClientsAssignSub(btn, kind, id);
+      else closeClientsCtxSub();
+    });
+
+    setTimeout(function () {
+      document.addEventListener('click', onClientsCtxDocClick);
+      document.addEventListener('keydown', onClientsCtxKey);
+      document.addEventListener('scroll', closeClientsContextMenu, true);
+    }, 0);
+  }
+
+  /* The people this record can be assigned to, fetched once per record and
+     kept for the life of the menu session. */
+  function loadAssignable(kind, id) {
+    var key = kind + ':' + id;
+    if (clientsAssignable[key]) return Promise.resolve(clientsAssignable[key]);
+    var req = kind === 'company' ? CompanyStaffAPI.list(id) : ClientsAPI.assignments(id);
+    return req.then(function (data) {
+      clientsAssignable[key] = (data && data.assignable) || [];
+      return clientsAssignable[key];
+    });
+  }
+
+  function renderAssignSub(list) {
+    if (!list.length) {
+      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
+        '<span class="tma-portal-context-menu__label">Everyone is already assigned</span></div>';
+    }
+    return list.map(function (person) {
+      return '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
+        ' data-clients-assign-to="' + esc(String(person.id)) + '">' +
+        '<span class="tma-portal-context-menu__label">' + esc(person.name || person.email || 'Staff') + '</span>' +
+        '</button>';
     }).join('');
-    pop.context.setAttribute('data-ctx-kind', kind);
-    pop.context.setAttribute('data-ctx-id', id);
-    openClientsPopoverAt(pop.context, x, y);
+  }
+
+  function openClientsAssignSub(parentBtn, kind, id) {
+    if (clientsCtxSubEl && parentBtn.hasAttribute('data-open')) return;
+    closeClientsCtxSub();
+    parentBtn.setAttribute('data-open', 'true');
+
+    clientsCtxSubEl = document.createElement('div');
+    clientsCtxSubEl.className = 'tma-portal-context-menu tma-portal-context-menu--sub';
+    clientsCtxSubEl.setAttribute('role', 'menu');
+    clientsCtxSubEl.innerHTML = '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
+      '<span class="tma-portal-context-menu__label">Loading…</span></div>';
+    document.body.appendChild(clientsCtxSubEl);
+
+    var rect = parentBtn.getBoundingClientRect();
+    placeCtxMenu(clientsCtxSubEl, rect.right + 2, rect.top - 4);
+
+    clientsCtxSubEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-clients-assign-to]');
+      if (!btn) return;
+      var userId = parseInt(btn.getAttribute('data-clients-assign-to'), 10);
+      closeClientsContextMenu();
+      assignFromContextMenu(kind, id, userId);
+    });
+
+    var sub = clientsCtxSubEl;
+    loadAssignable(kind, id).then(function (list) {
+      if (sub !== clientsCtxSubEl) return;
+      sub.innerHTML = renderAssignSub(list);
+      placeCtxMenu(sub, rect.right + 2, rect.top - 4);
+    }).catch(function () {
+      if (sub !== clientsCtxSubEl) return;
+      sub.innerHTML = '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
+        '<span class="tma-portal-context-menu__label">Couldn\u2019t load staff</span></div>';
+    });
+  }
+
+  function assignFromContextMenu(kind, id, userId) {
+    if (!userId) return;
+    var key = kind + ':' + id;
+    var req = kind === 'company'
+      ? CompanyStaffAPI.assign(id, { userId: userId, level: 'editor', appliesToClients: 'company_only' })
+      : ClientsAPI.assign(id, { userId: userId, level: 'editor' });
+
+    req.then(function () {
+      delete clientsAssignable[key];
+      clientsToast('Staff assigned', 'positive');
+      if (clientsMenuCtx && clientsMenuCtx.render) clientsMenuCtx.render({ forceFull: true });
+    }).catch(function (err) {
+      clientsToast((err && err.message) || 'Could not assign staff', 'negative');
+    });
   }
 
   function runClientsContextAction(act, kind, id) {
