@@ -16,8 +16,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'uuid', 'application_id', 'role', 'relationship', 'dependent_ordinal',
     'first_name', 'last_name', 'gender', 'date_of_birth', 'country_of_birth',
-    'country_of_residence', 'region', 'occupation', 'passport_number',
-    'folder_id',
+    'country_of_residence', 'occupation', 'passport_number', 'folder_id',
 ])]
 class CipPerson extends Model
 {

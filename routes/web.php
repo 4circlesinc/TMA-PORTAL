@@ -13,6 +13,7 @@ use App\Http\Controllers\CalendarIcsController;
 use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
+use App\Http\Controllers\Cip\CipApplicationController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientCustomFieldsController;
 use App\Http\Controllers\ClientHubSettingsController;
@@ -303,6 +304,18 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         ->name('admin.client-fields.update');
     Route::delete('/admin/client-fields/{id}', [ClientCustomFieldsController::class, 'destroy'])
         ->name('admin.client-fields.destroy');
+
+    /*
+     * CIP applications. The intake wizard asks for its own options rather
+     * than hard-coding a country list in the browser, so the region a
+     * country implies is decided in one place. Gated by CipAccess, which
+     * answers for external applicants too — they hold no capability.
+     */
+    Route::prefix('portal/cip')->name('cip.')->group(function () {
+        Route::get('/applications/form', [CipApplicationController::class, 'form'])->name('applications.form');
+        Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
+        Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
+    });
 
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])
         ->name('admin.security-policies');

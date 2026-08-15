@@ -22,7 +22,7 @@ use Illuminate\Support\Str;
 // the code that has the authority, never mass-assigned from a request.
 #[Fillable([
     'uuid', 'provider_id', 'client_id', 'created_by',
-    'investment_type', 'investment_type_other', 'unit_contact',
+    'investment_type', 'investment_type_other', 'sponsored', 'unit_contact',
 ])]
 class CipApplication extends Model
 {
@@ -48,6 +48,7 @@ class CipApplication extends Model
             'accepted_at' => 'date',
             'decided_at' => 'date',
             'locked_at' => 'datetime',
+            'sponsored' => 'boolean',
         ];
     }
 

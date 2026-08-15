@@ -830,6 +830,9 @@
     if (p === '/clients' || p === '/user-profile/clients') {
       return { screen: 'list' };
     }
+    if (p === '/clients/applications/new') {
+      return { screen: 'new-application' };
+    }
     if (p === '/clients/new') {
       return { screen: 'add' };
     }
@@ -870,6 +873,7 @@
   }
 
   function pathForClientsScreen(screen, contactId, companyId) {
+    if (screen === 'new-application') return '/clients/applications/new';
     if (screen === 'add') return '/clients/new';
     if (screen === 'add-company') return '/clients/companies/new';
     if (screen === 'edit-company' && companyId) {
@@ -1929,6 +1933,12 @@
     if (state.screen === 'company') {
       return renderCompanyProfile(state, opts);
     }
+    if (state.screen === 'new-application') {
+      return '<div class="tma-dash__clients-detail">' +
+        '<div class="tma-dash__clients-profile tma-dash__clients-profile--form">' +
+        '<div data-cip-intake-mount data-morph-skip></div>' +
+        '</div></div>';
+    }
     if (state.adding || state.editing) {
       return renderContactFormPanel(state, opts);
     }
@@ -2240,6 +2250,13 @@
       toolbar = renderContactProfileToolbar(contactFor(state.selectedId), state);
     } else if (state.screen === 'company' && state.companyId) {
       toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
+    } else if (state.screen === 'new-application') {
+      toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
+        '<div class="tma-dash__clients-profile-head">' +
+        '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
+        '<img src="' + ICONS.Plus + '" alt="" width="20" height="20"></span>' +
+        '<span class="tma-dash__clients-profile-name">New application</span>' +
+        '</div></div>';
     } else if (state.screen === 'add' || state.screen === 'edit') {
       toolbar = renderContactFormToolbar(state);
     } else if (state.screen === 'add-company' || state.screen === 'edit-company') {
@@ -5189,7 +5206,7 @@
         return;
       }
       if (action === 'create-new' && clientsHeadActionsNavigate) {
-        clientsHeadActionsNavigate('add');
+        clientsHeadActionsNavigate('new-application');
         return;
       }
       if (action === 'create-company' && clientsHeadActionsNavigate) {
@@ -5211,6 +5228,24 @@
 
 
   function wireEvents(root, state, scope, navigate, render) {
+    // The intake wizard owns its own subtree once mounted; re-mounting on a
+    // re-render would wipe a half-typed application.
+    var intakeMount = root.querySelector('[data-cip-intake-mount]');
+    if (intakeMount && !intakeMount.querySelector('[data-cip-wizard]')) intakeMount._cipMounted = false;
+    if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
+      intakeMount._cipMounted = true;
+      window.TMACipIntake.open(intakeMount, {
+        onDone: function (application) {
+          if (application) {
+            // Filed: show it where the caseload lives. The list refetches
+            // itself from the live signal the write raised.
+            clientsToast('Application ' + application.number + ' created', 'positive');
+          }
+          navigate('list');
+        },
+      });
+    }
+
     // Rows appear in the directory, table list, and company people lists.
     wireDirectoryRows(root, state, navigate);
     wireRowContextMenus(root, state, navigate, render);
@@ -6043,6 +6078,9 @@
       // so keep the global page title empty to avoid the duplicate label.
       if (usesPagedClientsFlow(state) && screen !== 'list') {
         return { title: '', crumb: 'CIP Applications' };
+      }
+      if (screen === 'new-application') {
+        return { title: 'New application', crumb: 'CIP Applications / New application' };
       }
       if (screen === 'add') {
         return { title: 'New application', crumb: 'CIP Applications / New application' };

@@ -650,6 +650,69 @@
   border-color: var(--color-red);
 }
 
+/* ── CIP intake wizard ───────────────────────────────
+   The form kit already dresses the inputs; these only lay them out. Two
+   columns where there is room, one on a narrow window, because a
+   fifteen-field form in a single column is a scroll nobody finishes. */
+.tma-portal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-16);
+}
+
+.tma-portal-field__static {
+  margin: 0;
+  padding: var(--space-8) 0;
+  font: 400 var(--text-size-14) / var(--text-lh-14) var(--font-family);
+  color: var(--color-text-primary);
+}
+
+.tma-portal-form-actions--split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-portal-form-actions__end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+/* The review step: label and answer per row, so the reader checks a list
+   rather than re-reading a form. */
+.tma-portal-review {
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-portal-review__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-8) 0;
+  border-bottom: 0.5px solid var(--color-border-soft);
+}
+
+.tma-portal-review__row:last-child { border-bottom: 0; }
+
+.tma-portal-review__label {
+  font-size: var(--text-size-14);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-review__value {
+  font-size: var(--text-size-14);
+  color: var(--color-text-primary);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.tma-portal-field.is-invalid .tma-portal-input,
+.tma-portal-field.is-invalid .tma-portal-select { border-color: var(--color-red); }
+
 .tma-portal-field__error {
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);

@@ -53,6 +53,9 @@ final class Live
      * one signal that is about the reader rather than about a list they happen
      * to be looking at.
      */
+    /** CIP applications — the intake wizard and the module's lists. */
+    public const CIP = 'cip';
+
     public const IDENTITY = 'identity';
 
     /** resource => channel name => PrivateChannel, built up during the request. */
