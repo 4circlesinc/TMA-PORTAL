@@ -35,6 +35,8 @@
   /* Matches Intake::MAX_DOCUMENTS_PER_SLOT — the server is the authority. */
   var MAX_DOCUMENTS_PER_SLOT = 10;
   var MAX_DEPENDENTS = 20;
+  /* The requirements answered with a list of files rather than one. */
+  var DOCUMENT_LISTS = ['passportBioPage', 'birthCertificate'];
 
   /* One draft per mount. Deliberately not persisted yet: until the form can
      save a partial application server-side, a "resume" that lived only in
@@ -124,7 +126,9 @@
 
   /* The requirements that take a list, and must have at least one. */
   function requiredDocuments() {
-    return ['passportBioPage', 'birthCertificate'];
+    // The main applicant's only. §2's upload list is theirs; a sponsor's
+    // scans are offered here but not made the reason a draft cannot start.
+    return DOCUMENT_LISTS.slice();
   }
 
   function missing() {
@@ -398,13 +402,13 @@
       { modifier: 'tma-portal-section--wide' });
   }
 
-  /* §2's other two uploads, beside the person they belong to. Listed down one
+  /* The other two uploads, beside the person they belong to. Listed down one
      column: two drop targets side by side are two small drop targets. */
-  function documentsCard() {
+  function documentsCard(prefix) {
     return card('Documents',
       '<div class="tma-portal-drops">' +
-      documentField('passportBioPage') +
-      documentField('birthCertificate') +
+      documentField(prefix + 'passportBioPage') +
+      documentField(prefix + 'birthCertificate') +
       '</div>',
       { modifier: 'tma-dash__clients-card--narrow' });
   }
@@ -439,9 +443,13 @@
   function sponsorCard() {
     if (!sponsored()) return '';
 
-    return card('Sponsor',
-      photoField('sponsor.passportPhoto') +
-      personFields('sponsor.'));
+    // A person is a person: the sponsor gets the main applicant's row — name
+    // above the box, photo, fields two to a row, documents beside them. The
+    // only difference is that their scans are not demanded to start a draft.
+    return titledCard('Sponsor',
+      photoField('sponsor.passportPhoto') + personFields('sponsor.'),
+      { modifier: 'tma-portal-section--wide' }) +
+      documentsCard('sponsor.');
   }
 
   /* §5: one block per dependent, each with the number the form will carry. */
@@ -492,7 +500,7 @@
   function formBody() {
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       applicantCard() +
-      documentsCard() +
+      documentsCard('') +
       investmentCard() +
       sponsorCard() +
       dependentsCard() +
@@ -861,9 +869,13 @@
    * would refuse to submit with nothing marked. The list itself is the control.
    */
   function fieldForError(key) {
-    var listed = key.match(/^([A-Za-z]+)\.\d+$/);
+    // The prefix travels with it: `sponsor.birthCertificate.2` belongs on the
+    // sponsor's own control, not the main applicant's.
+    var listed = key.match(/^(.+)\.\d+$/);
 
-    return listed && requiredDocuments().indexOf(listed[1]) !== -1 ? listed[1] : key;
+    return listed && DOCUMENT_LISTS.indexOf(listed[1].split('.').pop()) !== -1
+      ? listed[1]
+      : key;
   }
 
   /* dependents.0.firstName → dependents[0][firstName] */

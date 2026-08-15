@@ -145,9 +145,10 @@ class Intake
      *
      * The sponsor repeats the applicant's personal fields and their photo, so
      * they have a face in the portal like everyone else. Their bio page and
-     * birth certificate are opened as empty slots instead of demanded here —
-     * §2's upload list is the main applicant's, and asking for six files to
-     * start a draft would make the sponsor the reason nobody finishes one.
+     * birth certificate are offered but optional — §2's upload list is the
+     * main applicant's, and making six files the price of starting a draft
+     * would leave the sponsor as the reason nobody finishes one. The slots
+     * are opened either way, so what is skipped here is still asked for.
      */
     private static function sponsorRules(): array
     {
@@ -159,6 +160,11 @@ class Intake
         }
 
         $rules['sponsor.passportPhoto'] = [Rule::requiredIf($sponsored), 'file', self::photoRule()];
+
+        foreach (self::DOCUMENT_LISTS as $list) {
+            $rules['sponsor.'.$list] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+            $rules['sponsor.'.$list.'.*'] = self::documentRule();
+        }
 
         return $rules;
     }
@@ -322,17 +328,29 @@ class Intake
     private static function fileUploads(CipPerson $main, ?CipPerson $sponsor, array $data, User $creator): void
     {
         self::filePhoto($main, $data['passportPhoto'] ?? null, $creator);
+        self::fileDocuments($main, $data, $creator);
 
-        /*
-         * The first file answers the requirement; the rest are filed beside it.
-         *
-         * The slot is one question with one answer — the unique key on
-         * (person, type) says so — so a second scan cannot be a second slot,
-         * and making it a new *version* of the first would bury a separate
-         * document inside another one's history. It goes in the person's
-         * folder, where a reviewer opening the file list finds everything that
-         * was sent for that requirement.
-         */
+        if ($sponsor) {
+            self::filePhoto($sponsor, $data['sponsor']['passportPhoto'] ?? null, $creator);
+            self::fileDocuments($sponsor, $data['sponsor'] ?? [], $creator);
+        }
+    }
+
+    /**
+     * A person's scans, requirement by requirement.
+     *
+     * The first file answers the requirement; the rest are filed beside it.
+     * The slot is one question with one answer — the unique key on
+     * (person, type) says so — so a second scan cannot be a second slot, and
+     * making it a new *version* of the first would bury a separate document
+     * inside another one's history. It goes in the person's folder, where a
+     * reviewer opening the file list finds everything sent for that
+     * requirement.
+     *
+     * @param  array<string, mixed>  $data  that person's own slice of the body
+     */
+    private static function fileDocuments(CipPerson $person, array $data, User $creator): void
+    {
         foreach ([
             DocumentTypes::PASSPORT_BIO_PAGE => $data['passportBioPage'] ?? [],
             DocumentTypes::BIRTH_CERTIFICATE => $data['birthCertificate'] ?? [],
@@ -345,15 +363,11 @@ class Intake
                 }
 
                 $filed === 0
-                    ? DocumentSlots::fill($main, $type, $upload, $creator)
-                    : DocumentSlots::attach($main, $type, $upload, $creator, $filed + 1);
+                    ? DocumentSlots::fill($person, $type, $upload, $creator)
+                    : DocumentSlots::attach($person, $type, $upload, $creator, $filed + 1);
 
                 $filed++;
             }
-        }
-
-        if ($sponsor) {
-            self::filePhoto($sponsor, $data['sponsor']['passportPhoto'] ?? null, $creator);
         }
     }
 

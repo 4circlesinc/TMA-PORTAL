@@ -236,6 +236,31 @@ try {
   await page.waitForTimeout(500);
   check(await page.locator('[data-cip-field="sponsor.firstName"]').count() > 0,
     'the sponsor card appears');
+
+  // A person is a person: the sponsor gets the applicant's row — their name
+  // above the box, fields two to a row, their own documents beside them.
+  check((await page.locator('.tma-portal-section > .tma-portal-section__title')
+    .evaluateAll(hs => hs.map(h => h.textContent.trim()))).includes('Sponsor'),
+    'and carries its name outside the card, like the other person sections');
+  check(await page.locator('[data-cip-drop="sponsor.passportBioPage"]').count() > 0
+    && await page.locator('[data-cip-drop="sponsor.birthCertificate"]').count() > 0,
+    'with its own documents card');
+  // Box against box, not box against heading: the documents card is dropped
+  // by exactly the heading it does not have, so it is the section's CARD its
+  // top edge has to meet.
+  check(await page.evaluate(() => {
+    const box = [...document.querySelectorAll('.tma-portal-section')]
+      .find(el => el.querySelector('[data-cip-field="sponsor.firstName"]'))
+      .querySelector('.tma-portal-section__card').getBoundingClientRect();
+    const docs = [...document.querySelectorAll('.tma-dash__clients-card--narrow')]
+      .find(el => el.querySelector('[data-cip-drop="sponsor.passportBioPage"]'))
+      .getBoundingClientRect();
+
+    return Math.abs(box.top - docs.top) < 4
+      && Math.abs(box.bottom - docs.bottom) < 4
+      && docs.left > box.right - 2;
+  }), 'on the same row and the same height, the way the applicant’s is');
+
   await page.selectOption('[data-cip-field="sponsored"]', '0');
   await page.waitForTimeout(400);
   check(await page.locator('[data-cip-field="sponsor.firstName"]').count() === 0,

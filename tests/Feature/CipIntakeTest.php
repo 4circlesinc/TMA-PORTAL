@@ -425,6 +425,32 @@ class CipIntakeTest extends TestCase
         );
     }
 
+    public function test_a_sponsors_scans_are_offered_but_never_demanded(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, array_merge(
+            ['sponsored' => '1'],
+            $this->sponsor(['passportBioPage' => [$this->scan('sponsor-bio.pdf')]]),
+        )))->assertCreated()->json('application');
+
+        // What was sent answers the sponsor's own slot, on the sponsor's own
+        // folder — not the applicant's.
+        $sponsor = CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR);
+        $this->assertSame(['Birth certificate'], \App\Support\Cip\DocumentSlots::outstanding($sponsor));
+
+        $slot = \App\Models\CipDocument::where('person_id', $sponsor->id)
+            ->where('type', \App\Support\Cip\DocumentTypes::PASSPORT_BIO_PAGE)->first();
+        $file = \App\Models\FileItem::find($slot->file_id);
+        $this->assertSame($sponsor->folder_id, $file->folder_id);
+        $this->assertSame('Maryam Haddad — Passport bio page.pdf', $file->name);
+
+        // The main applicant's own slots are untouched by any of it.
+        $this->assertSame([], $body['applicant']['outstanding']);
+    }
+
     public function test_a_sponsored_application_will_not_file_without_the_sponsor(): void
     {
         $staff = $this->user(Role::REVIEWING_OFFICER);
