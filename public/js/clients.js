@@ -1589,8 +1589,8 @@
     return (
       '<div class="tma-dash__ctr tma-dash__ctr--body" data-clients-open-company="' + esc(company.id) +
       '" data-row-index="' + index + '" role="row">' +
-      // No checkbox: the bulk actions post to the clients endpoint.
-      '<div class="tma-dash__cc tma-dash__cc--check"></div>' +
+      // No checkbox cell either — the head has none to line up with, and an
+      // empty one only indents the name away from its own column heading.
       '<div class="tma-dash__cc tma-dash__cc--user">' + companyAvatarMarkup(company) +
       '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">Company</span></div>' +
@@ -1934,16 +1934,21 @@
       // the last columns are simply unreachable, and the page body scrolling
       // sideways drags the whole shell with it.
       '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
-      '<div class="tma-dash__ctable tma-dash__ctable--clients" role="table" aria-label="' +
+      '<div class="tma-dash__ctable tma-dash__ctable--clients' +
+      // The column tracks are positional, so dropping the checkbox cell has
+      // to drop its track with it — see --noselect.
+      (providers ? ' tma-dash__ctable--noselect' : '') +
+      '" role="table" aria-label="' +
       (providers ? 'Service providers' : 'Applications') + '">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
-      // No select-all on the providers tab: a provider row carries no
-      // checkbox — the bulk actions post to the clients endpoint — so the box
-      // would tick nothing and mean nothing.
-      '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
+      // No checkbox column at all on the providers tab. A provider row carries
+      // no checkbox — the bulk actions post to the clients endpoint — so an
+      // empty cell was reserving 40px of gutter to hold nothing, and the list
+      // began an inch inside the table that framed it.
       (providers ? ''
-        : '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all">') +
-      '</div>' +
+        : '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
+          '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all">' +
+          '</div>') +
       // The columns say what the rows are. A provider listed under "Client",
       // with its own name repeated under "Service provider", was the table
       // describing one record as if it were the other.

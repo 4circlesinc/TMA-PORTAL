@@ -17206,6 +17206,19 @@
   align-items: center;
 }
 
+/*
+ * The same table without its checkbox column.
+ *
+ * The tracks are positional, so a row that simply omits the first cell slides
+ * every column one place left and the name lands in the 40px gutter meant for
+ * a checkbox. The count has to change with the cells — this is the same five
+ * columns minus the first, not a different table.
+ */
+.tma-dash__ctable--clients.tma-dash__ctable--noselect .tma-dash__ctr--head,
+.tma-dash__ctable--clients.tma-dash__ctable--noselect .tma-dash__ctr--body {
+  grid-template-columns: minmax(160px, 1.3fr) 96px minmax(140px, 1fr) minmax(160px, 1.1fr);
+}
+
 .tma-dash__ctable--clients .tma-dash__cc--user,
 .tma-dash__ctable--clients .tma-dash__cc--type,
 .tma-dash__ctable--clients .tma-dash__cc--referral,
@@ -21472,6 +21485,11 @@ a.tma-dash__clients-edit-btn--accent:visited {
   .tma-dash__ctable--clients .tma-dash__ctr--head,
   .tma-dash__ctable--clients .tma-dash__ctr--body {
     grid-template-columns: 40px minmax(120px, 1fr) 80px minmax(100px, 0.9fr) minmax(100px, 1fr);
+  }
+
+  .tma-dash__ctable--clients.tma-dash__ctable--noselect .tma-dash__ctr--head,
+  .tma-dash__ctable--clients.tma-dash__ctable--noselect .tma-dash__ctr--body {
+    grid-template-columns: minmax(120px, 1fr) 80px minmax(100px, 0.9fr) minmax(100px, 1fr);
   }
 
   .tma-dash__clients-form-row--dates {
