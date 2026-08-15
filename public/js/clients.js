@@ -2253,10 +2253,11 @@
     } else if (state.screen === 'company' && state.companyId) {
       toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
     } else if (state.screen === 'new-application') {
+      // No avatar. A profile head carries one because it depicts somebody; a
+      // blank application depicts nobody, and the applicant's actual face is
+      // asked for in the form a few inches below.
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
-        '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
-        '<img src="' + ICONS.Plus + '" alt="" width="20" height="20"></span>' +
         '<span class="tma-dash__clients-profile-name">New application</span>' +
         '</div>' +
         '<div class="tma-dash__clients-profile-actions">' +
