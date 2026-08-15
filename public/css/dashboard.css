@@ -1110,6 +1110,23 @@
   margin-left: auto;
 }
 
+/*
+ * A two-row head puts its right-hand controls on the second row.
+ *
+ * A clients detail head stacks the back link over the title-and-actions row,
+ * so centring the head's right side against the whole block floated it
+ * between the two — level with neither, and visibly out of line with the
+ * buttons it sits next to. It belongs on the row that has the actions.
+ *
+ * The 2px is the same offset those actions have: 24px buttons centred in a
+ * 28px row leave 2px under them, and matching it puts the two on one line
+ * rather than merely in one corner.
+ */
+.tma-dash__main-head:has(.tma-dash__main-head-left--clients-detail) .tma-dash__main-head-right {
+  align-self: flex-end;
+  margin-bottom: 2px;
+}
+
 .tma-dash__main-head-right .tma-dash__clients-head-actions {
   display: flex;
   align-items: center;
