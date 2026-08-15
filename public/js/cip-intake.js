@@ -499,7 +499,7 @@
       : '';
 
     return titledCard('Dependents',
-      (rows || '<p class="tma-portal-note">No dependents on this application.</p>') +
+      (rows || '<p class="tma-portal-note tma-portal-note--empty">No dependents on this application.</p>') +
       '<div class="tma-portal-form-actions">' + add + '</div>');
   }
 

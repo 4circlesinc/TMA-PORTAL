@@ -626,6 +626,19 @@
   color: var(--color-text-secondary);
 }
 
+/*
+ * A note standing in for content, rather than describing it.
+ *
+ * "No dependents on this application." is the card's whole body, so it wants
+ * the room an empty state gets — the same 16px above and below that
+ * .tma-dash__clients-card gives .tma-portal-empty. Without it the sentence
+ * and the button under it were 16px apart in a card 20px deep, which read as
+ * two things that had slid together rather than a state and its way out.
+ */
+.tma-portal-note--empty {
+  padding: var(--space-16) 0;
+}
+
 .tma-portal-section__card ul,
 .tma-portal-section__card ol {
   margin: 0;
