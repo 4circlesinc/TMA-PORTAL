@@ -38,17 +38,22 @@ try {
   }
   await page.waitForTimeout(500);
   await page.click('[data-head-dropdown-item="create-new"]');
-  await page.waitForSelector('[data-cip-wizard]', { timeout: 25000 });
-  check(await page.locator('[data-cip-field="firstName"]').count() > 0, 'applicant step rendered');
-  check((await page.locator('.tma-portal-sig-wizard__steps').innerText()).includes('Main applicant'), 'stepper shows the steps');
+  await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
+  check(await page.locator('[data-cip-field="firstName"]').count() > 0, 'the form rendered');
+  check(await page.locator('[data-cip-save]').count() > 0, 'the toolbar carries Add');
 
-  step(2, 'An empty step refuses to advance');
-  await page.click('[data-cip-next]');
-  await page.waitForTimeout(400);
+  step(2, 'Add with nothing filled in refuses, and says how much is missing');
+  await page.click('[data-cip-save]');
+  await page.waitForTimeout(600);
   check(await page.locator('.tma-portal-field__error').count() > 0, 'missing answers are named');
-  check(await page.locator('[data-cip-field="firstName"]').count() > 0, 'still on the applicant step');
+  check((await page.locator('[data-cip-form]').innerText()).includes('still needed'), 'a summary says how many');
 
-  step(3, 'The region follows the country of residence');
+  step(3, 'The whole form is on one page');
+  const formText = await page.locator('[data-cip-form]').innerText();
+  check(formText.includes('Main applicant') && formText.includes('Investment'), 'both sections visible at once');
+  check(await page.locator('[data-cip-next], [data-cip-back]').count() === 0, 'no step buttons');
+
+  step(4, 'The region follows the country of residence');
   await page.fill('[data-cip-field="firstName"]', 'John');
   await page.fill('[data-cip-field="lastName"]', 'Smith');
   await page.selectOption('[data-cip-field="gender"]', 'Male');
@@ -60,10 +65,7 @@ try {
   await page.fill('[data-cip-field="occupation"]', 'Engineer');
   await page.fill('[data-cip-field="passportNumber"]', 'X1234567');
 
-  step(4, 'Investment: Other asks what it is');
-  await page.click('[data-cip-next]');
-  await page.waitForTimeout(500);
-  check(await page.locator('[data-cip-field="investmentType"]').count() > 0, 'investment step rendered');
+  step(5, 'Investment: Other asks what it is');
   await page.selectOption('[data-cip-field="investmentType"]', 'other');
   await page.waitForTimeout(400);
   check(await page.locator('[data-cip-field="investmentTypeOther"]').count() > 0, 'the specify field appears for Other');
@@ -71,24 +73,15 @@ try {
   await page.waitForTimeout(400);
   check(await page.locator('[data-cip-field="investmentTypeOther"]').count() === 0, 'and goes away again');
 
-  const providerSelect = await page.locator('[data-cip-field="providerId"]').count();
-  if (providerSelect) {
+  if (await page.locator('[data-cip-field="providerId"]').count()) {
     const value = await page.$eval('[data-cip-field="providerId"] option:nth-child(2)', o => o.value);
     await page.selectOption('[data-cip-field="providerId"]', value);
   }
   await page.selectOption('[data-cip-field="sponsored"]', '0');
 
-  step(5, 'Review shows what the record will say');
-  await page.click('[data-cip-next]');
-  await page.waitForTimeout(500);
-  const review = await page.locator('.tma-portal-review').innerText();
-  check(review.includes('John Smith'), 'applicant on the review');
-  check(review.includes('Middle East'), 'derived region on the review');
-  check(review.includes('Real Estate Project'), 'investment type on the review');
-
   step(6, 'Filing creates a numbered draft');
   const created = page.waitForResponse(r => r.url().includes('/portal/cip/applications') && r.request().method() === 'POST', { timeout: 20000 });
-  await page.click('[data-cip-file]');
+  await page.click('[data-cip-save]');
   const res = await created;
   check(res.status() === 201, `filed (HTTP ${res.status()})`);
   const body = await res.json().catch(() => ({}));

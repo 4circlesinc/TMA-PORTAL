@@ -2,8 +2,8 @@
  *
  * The form the firm actually files with: the government's own field set, in
  * the government's own order, so what is collected here is what gets
- * submitted. Three steps rather than one long page — an application is
- * fifteen answers, and a wall of fifteen reads as a chore nobody finishes.
+ * submitted. One page, like every other form in the hub — the reader fills
+ * it top to bottom and sees the whole ask at once.
  *
  * Two answers are never asked for. The region follows the country of
  * residence, and the application number is minted server-side; the review
@@ -21,12 +21,6 @@
   var ui = function () { return window.TMAPortalUI; };
   var MORPH = window.TMAMorph;
 
-  var STEPS = [
-    { key: 'applicant', label: 'Main applicant', icon: 'User' },
-    { key: 'investment', label: 'Investment', icon: 'Buildings' },
-    { key: 'review', label: 'Review', icon: 'CheckCircle' },
-  ];
-
   /* One draft per mount. Deliberately not persisted yet: until the wizard can
      save a partial application server-side (Phase 2d), a "resume" that lived
      only in this tab would promise more than it keeps. */
@@ -40,7 +34,6 @@
   }
 
   var state = {
-    step: 'applicant',
     draft: emptyDraft(),
     options: null,
     loading: false,
@@ -55,12 +48,9 @@
   /* ── what each step must answer before it can be left ──────────────
      Mirrors App\Support\Cip\Intake::rules — the server is the authority,
      this only spares the reader a round trip to find out. */
-  var REQUIRED = {
-    applicant: ['firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
-      'countryOfResidence', 'occupation', 'passportNumber'],
-    investment: ['providerId', 'investmentType', 'sponsored'],
-    review: [],
-  };
+  var REQUIRED = ['providerId', 'firstName', 'lastName', 'gender', 'dateOfBirth',
+    'countryOfBirth', 'countryOfResidence', 'occupation', 'passportNumber',
+    'investmentType', 'sponsored'];
 
   var LABELS = {
     providerId: 'Service provider', firstName: 'First name', lastName: 'Last name',
@@ -70,16 +60,16 @@
     investmentTypeOther: 'Specify investment type', sponsored: 'Sponsored',
   };
 
-  function missingOn(stepKey) {
-    var missing = {};
-    (REQUIRED[stepKey] || []).forEach(function (field) {
-      if (String(state.draft[field] || '').trim() === '') missing[field] = LABELS[field] + ' is required';
+  function missing() {
+    var found = {};
+    REQUIRED.forEach(function (field) {
+      if (String(state.draft[field] || '').trim() === '') found[field] = LABELS[field] + ' is required';
     });
-    if (stepKey === 'investment' && state.draft.investmentType === 'other'
+    if (state.draft.investmentType === 'other'
       && String(state.draft.investmentTypeOther || '').trim() === '') {
-      missing.investmentTypeOther = 'Say which investment type this is';
+      found.investmentTypeOther = 'Say which investment type this is';
     }
-    return missing;
+    return found;
   }
 
   function regionFor(country) {
@@ -193,65 +183,9 @@
       { description: 'One investment route per application.' });
   }
 
-  function reviewRow(label, value) {
-    return '<div class="tma-portal-review__row">' +
-      '<span class="tma-portal-review__label">' + esc(label) + '</span>' +
-      '<span class="tma-portal-review__value">' + esc(value || '—') + '</span>' +
-      '</div>';
-  }
-
-  function reviewStep() {
-    var d = state.draft;
-    var name = [d.firstName, d.lastName].filter(Boolean).join(' ');
-
-    return ui().section('Review',
-      '<div class="tma-portal-review">' +
-      reviewRow('Applicant', name) +
-      reviewRow('Gender', d.gender) +
-      reviewRow('Date of birth', d.dateOfBirth) +
-      reviewRow('Country of birth', d.countryOfBirth) +
-      reviewRow('Country of residence', d.countryOfResidence) +
-      reviewRow('Region', regionFor(d.countryOfResidence)) +
-      reviewRow('Occupation', d.occupation) +
-      reviewRow('Passport number', d.passportNumber) +
-      reviewRow('Service provider', providerName(d.providerId)) +
-      reviewRow('Investment type', investmentLabel()) +
-      reviewRow('Sponsored', String(d.sponsored) === '1' ? 'Yes' : 'No') +
-      '</div>' +
-      '<p class="tma-portal-note">Filing this creates a draft and its application number. ' +
-      'Documents and dependents come next, and nothing reaches an officer until it is submitted.</p>',
-      { description: 'What the application will say.' });
-  }
-
-  function stepper() {
-    return '<div class="tma-portal-sig-wizard__steps" role="list">' +
-      STEPS.map(function (step, i) {
-        var on = step.key === state.step;
-        var done = STEPS.findIndex(function (s) { return s.key === state.step; }) > i;
-        return (i ? '<span class="tma-portal-sig-wizard__step-line' + (done ? ' is-done' : '') + '" aria-hidden="true"></span>' : '') +
-          '<div class="tma-portal-sig-wizard__step' + (on ? ' is-active' : done ? ' is-done' : '') + '" role="listitem">' +
-          '<span class="tma-portal-sig-wizard__step-icon">' +
-          '<img src="images/icons/phosphor/' + (done ? 'CheckCircle' : step.icon) + '.svg" alt="">' +
-          '</span>' +
-          '<span class="tma-portal-sig-wizard__step-label">' + esc(step.label) + '</span>' +
-          '</div>';
-      }).join('') +
-      '</div>';
-  }
-
-  function actions() {
-    var isFirst = state.step === STEPS[0].key;
-    var isLast = state.step === STEPS[STEPS.length - 1].key;
-
-    return '<div class="tma-portal-form-actions tma-portal-form-actions--split">' +
-      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel>Cancel</button>' +
-      '<span class="tma-portal-form-actions__end">' +
-      (isFirst ? '' : '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-back>Back</button>') +
-      (isLast
-        ? '<button type="button" class="tma-no-data__btn" data-cip-file' + (state.saving ? ' disabled' : '') + '>' +
-          (state.saving ? 'Filing…' : 'File application') + '</button>'
-        : '<button type="button" class="tma-no-data__btn" data-cip-next>Continue</button>') +
-      '</span></div>';
+  /* The whole ask on one page, in the government form's order. */
+  function formBody() {
+    return applicantStep() + investmentStep();
   }
 
   function render(root) {
@@ -261,13 +195,18 @@
       return;
     }
 
-    var body = state.step === 'applicant' ? applicantStep()
-      : state.step === 'investment' ? investmentStep()
-        : reviewStep();
+    var count = Object.keys(state.errors).length;
 
     MORPH.patch(root,
-      '<div class="tma-portal-sig-wizard" data-cip-wizard>' +
-      stepper() + body + actions() +
+      '<div class="tma-dash__clients-form" data-cip-form>' +
+      // One summary at the top: a reader who pressed Add and nothing
+      // happened deserves to be told why without hunting the page.
+      (count
+        ? '<p class="tma-portal-modal__error" role="alert">' +
+          esc(count === 1 ? 'One answer is still needed.' : count + ' answers are still needed.') +
+          '</p>'
+        : '') +
+      formBody() +
       '</div>');
     wire(root);
   }
@@ -275,8 +214,10 @@
   function wire(root) {
     MORPH.unwired(root, '[data-cip-field]').forEach(function (el) {
       var name = el.getAttribute('data-cip-field');
-      // input for typing, change for selects and the date picker.
-      el.addEventListener('input', function () { state.draft[name] = el.value; });
+      el.addEventListener('input', function () {
+        state.draft[name] = el.value;
+        delete state.errors[name];
+      });
       el.addEventListener('change', function () {
         state.draft[name] = el.value;
         delete state.errors[name];
@@ -287,31 +228,6 @@
         }
       });
     });
-
-    var next = MORPH.unwiredOne(root, '[data-cip-next]');
-    if (next) next.addEventListener('click', function () {
-      state.errors = missingOn(state.step);
-      if (Object.keys(state.errors).length) { render(root); return; }
-      var i = STEPS.findIndex(function (s) { return s.key === state.step; });
-      state.step = STEPS[Math.min(i + 1, STEPS.length - 1)].key;
-      render(root);
-    });
-
-    var back = MORPH.unwiredOne(root, '[data-cip-back]');
-    if (back) back.addEventListener('click', function () {
-      var i = STEPS.findIndex(function (s) { return s.key === state.step; });
-      state.step = STEPS[Math.max(i - 1, 0)].key;
-      state.errors = {};
-      render(root);
-    });
-
-    var cancel = MORPH.unwiredOne(root, '[data-cip-cancel]');
-    if (cancel) cancel.addEventListener('click', function () {
-      if (state.onDone) state.onDone(null);
-    });
-
-    var file = MORPH.unwiredOne(root, '[data-cip-file]');
-    if (file) file.addEventListener('click', function () { submit(root); });
   }
 
   function xsrf() {
@@ -339,22 +255,25 @@
     });
   }
 
-  function submit(root) {
-    // Everything, not just this step — the reader can reach Review with an
-    // earlier step half-answered by walking back and forth.
-    var all = {};
-    Object.keys(REQUIRED).forEach(function (key) {
-      Object.assign(all, missingOn(key));
-    });
-    if (Object.keys(all).length) {
-      state.errors = all;
-      state.step = REQUIRED.applicant.some(function (f) { return all[f]; }) ? 'applicant' : 'investment';
+  function submit() {
+    var root = state.root;
+    if (!root || state.saving) return;
+
+    var found = missing();
+    if (Object.keys(found).length) {
+      state.errors = found;
       render(root);
+      // Take the reader to the first thing they still owe.
+      var first = root.querySelector('.tma-portal-field.is-invalid [data-cip-field]');
+      if (first && first.focus) {
+        first.focus();
+        if (first.scrollIntoView) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
       return;
     }
 
     state.saving = true;
-    render(root);
+    if (state.onSaving) state.onSaving(true);
 
     var d = state.draft;
     api('POST', '/portal/cip/applications', {
@@ -373,20 +292,18 @@
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.saving = false;
+        if (state.onSaving) state.onSaving(false);
 
         if (res.status === 422 && json.errors) {
-          // The server's word, field by field, on the step that owns them.
+          // The server's word, field by field.
           state.errors = {};
           Object.keys(json.errors).forEach(function (k) { state.errors[k] = json.errors[k][0]; });
-          state.step = REQUIRED.applicant.some(function (f) { return state.errors[f]; })
-            ? 'applicant' : 'investment';
           render(root);
           return;
         }
 
         if (!res.ok) {
           ui().toastError((json && json.message) || 'Could not file this application');
-          render(root);
           return;
         }
 
@@ -395,8 +312,8 @@
       });
     }).catch(function () {
       state.saving = false;
+      if (state.onSaving) state.onSaving(false);
       ui().toastError('Could not reach the server');
-      render(root);
     });
   }
 
@@ -404,12 +321,13 @@
 
   function open(root, opts) {
     opts = opts || {};
-    state.step = 'applicant';
+    state.root = root;
     state.draft = emptyDraft();
     state.errors = {};
     state.saving = false;
     state.error = '';
     state.onDone = opts.onDone || null;
+    state.onSaving = opts.onSaving || null;
     state.loading = true;
     render(root);
 
@@ -431,5 +349,7 @@
     });
   }
 
-  window.TMACipIntake = { open: open, STEPS: STEPS };
+  // submit() is the page toolbar's Add button: the form looks and behaves
+  // like every other form in the hub, so its actions live where they do.
+  window.TMACipIntake = { open: open, submit: submit };
 })();

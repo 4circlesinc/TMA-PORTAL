@@ -2100,9 +2100,9 @@
 
   function renderClientsBackBtn() {
     return (
-      '<button type="button" class="tma-dash__clients-back-btn" data-clients-back aria-label="Back to clients">' +
+      '<button type="button" class="tma-dash__clients-back-btn" data-clients-back aria-label="Back to CIP Applications">' +
       '<img src="' + ICONS.CaretLeft + '" alt="" aria-hidden="true">' +
-      '<span>Clients</span>' +
+      '<span>CIP Applications</span>' +
       '</button>'
     );
   }
@@ -2256,6 +2256,10 @@
         '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
         '<img src="' + ICONS.Plus + '" alt="" width="20" height="20"></span>' +
         '<span class="tma-dash__clients-profile-name">New application</span>' +
+        '</div>' +
+        '<div class="tma-dash__clients-profile-actions">' +
+        '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
+        '<button type="button" class="tma-dash__clients-message-btn" data-cip-save>Add</button>' +
         '</div></div>';
     } else if (state.screen === 'add' || state.screen === 'edit') {
       toolbar = renderContactFormToolbar(state);
@@ -5227,7 +5231,29 @@
   }
 
 
+  /* The application form's Cancel and Add sit in the page head, which is
+     rendered outside this view's mount — so they are delegated once rather
+     than bound on every render. */
+  var cipToolbarWired = false;
+
+  function wireCipToolbar(navigate) {
+    if (cipToolbarWired) return;
+    cipToolbarWired = true;
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-cip-save]')) {
+        e.preventDefault();
+        if (window.TMACipIntake) window.TMACipIntake.submit();
+        return;
+      }
+      if (e.target.closest('[data-cip-cancel]')) {
+        e.preventDefault();
+        navigate('list');
+      }
+    });
+  }
+
   function wireEvents(root, state, scope, navigate, render) {
+    wireCipToolbar(navigate);
     // The intake wizard owns its own subtree once mounted; re-mounting on a
     // re-render would wipe a half-typed application.
     var intakeMount = root.querySelector('[data-cip-intake-mount]');
@@ -5235,6 +5261,12 @@
     if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
       intakeMount._cipMounted = true;
       window.TMACipIntake.open(intakeMount, {
+        onSaving: function (saving) {
+          var btn = document.querySelector('[data-cip-save]');
+          if (!btn) return;
+          btn.disabled = !!saving;
+          btn.textContent = saving ? 'Adding…' : 'Add';
+        },
         onDone: function (application) {
           if (application) {
             // Filed: show it where the caseload lives. The list refetches
