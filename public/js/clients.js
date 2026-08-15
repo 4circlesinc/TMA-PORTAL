@@ -22,6 +22,38 @@
   var ICON = 'images/icons/phosphor/';
 
   var VIEW_KEY = 'tma.clientsViewMode.v1';
+  var LIST_TAB_KEY = 'tma.cipListTab.v1';
+
+  /*
+   * The two things this page lists.
+   *
+   * They shared one table, told apart by a Type column and a filter — which
+   * meant the answer to "how many applications are there" was a number you
+   * had to filter for, and paging through applications walked you into
+   * providers. They are different records with different columns; a tab each
+   * is what the page was doing informally.
+   */
+  var LIST_TABS = [
+    { id: 'applications', label: 'Applications' },
+    { id: 'providers', label: 'Service providers' },
+  ];
+
+  function loadListTab() {
+    try {
+      var saved = localStorage.getItem(LIST_TAB_KEY);
+      return saved === 'providers' ? 'providers' : 'applications';
+    } catch (e) {
+      return 'applications';
+    }
+  }
+
+  function saveListTab(tab) {
+    try { localStorage.setItem(LIST_TAB_KEY, tab === 'providers' ? 'providers' : 'applications'); } catch (e) { /* private mode */ }
+  }
+
+  function onProvidersTab(state) {
+    return state && state.listTab === 'providers';
+  }
 
   var ICONS = {
     MagnifyingGlass: ICON + 'MagnifyingGlass.svg',
@@ -1418,22 +1450,38 @@
 
   // Client rows keep the bare uid as their key: it is what `selected` holds and
   // what bulk-delete posts, so a company key has to be namespaced instead.
-  function tableRowEntries(state) {
-    var rows = filteredDirectoryItems(state).map(function (item) {
+  function applicationRowEntries(state) {
+    return filteredDirectoryItems(state).map(function (item) {
       return { kind: 'client', key: item.id, id: item.id, name: item.name, item: item };
     });
+  }
 
-    var filters = state && state.filters;
+  /*
+   * Providers answer to the search box and nothing else.
+   *
+   * The filters ask client questions — what type of record this is, who
+   * referred it — and a provider is the answer to the second, not a subject of
+   * either. Running them here left the tab empty whenever a filter was set for
+   * the other one, which reads as "there are no providers".
+   */
+  function providerRowEntries(state) {
+    var rows = [];
     var search = state && state.search;
     var removed = (state && state.removedIds) || {};
+
     COMPANIES.forEach(function (company) {
       if (!company || !company.id) return;
-      if (!companyMatchesFilters(company, filters)) return;
       if (!companyMatchesSearch(company, search)) return;
       var key = 'company:' + company.id;
       if (removed[key]) return;
       rows.push({ kind: 'company', key: key, id: company.id, name: company.name || 'Service provider', company: company });
     });
+
+    return rows;
+  }
+
+  function tableRowEntries(state) {
+    var rows = onProvidersTab(state) ? providerRowEntries(state) : applicationRowEntries(state);
 
     return sortTableRows(rows, state && state.sort);
   }
@@ -1672,21 +1720,35 @@
     var searching = !!String(state.search || '').trim();
     var filtered = anyClientFilter(state.filters);
 
+    var providers = onProvidersTab(state);
+    var noun = providers ? 'service provider' : 'client';
+
     if (searching || filtered) {
       // Nothing to add here: the records exist, the query is what is wrong.
       var what = searching ? 'search' : 'filters';
-      if (!noData) return 'No clients match this ' + what;
+      if (!noData) return 'No ' + noun + 's match this ' + what;
       return noData.render({
         title: 'No matches',
         subtitle: searching
-          ? 'No client matches “' + state.search.trim() + '”.'
-          : 'No client matches these filters.',
+          ? 'No ' + noun + ' matches “' + state.search.trim() + '”.'
+          : 'No ' + noun + ' matches these filters.',
         illustrationName: 'Illustration19',
         showButton: false,
       });
     }
 
-    if (!noData) return 'No clients yet';
+    if (providers) {
+      if (!noData) return 'No service providers yet';
+      return noData.render({
+        title: 'No service providers yet',
+        subtitle: 'Add the firms that file applications with you.',
+        illustrationName: 'Illustration07',
+        buttonLabel: 'New service provider',
+        showButton: canManageClients(),
+      });
+    }
+
+    if (!noData) return 'No applications yet';
     return noData.render({
       title: 'No applications yet',
       subtitle: 'Create your first application to get started.',
@@ -1796,22 +1858,72 @@
     );
   }
 
+  /*
+   * The page's two lists, as the documented tab group.
+   *
+   * Same recipe as the profile's tabs and every other tablist in the portal:
+   * the underline variant, a label, the count chip, and the indicator span
+   * the variant draws its rule from. tab-group.js is not wired to these —
+   * this page re-renders its own DOM, so the active tab has to come from
+   * state rather than a class the component toggled.
+   */
+  function renderListTabs(state) {
+    var loading = state.loadState === 'loading';
+
+    return (
+      '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-list-tabs"' +
+      ' role="tablist" aria-label="CIP Applications sections">' +
+      LIST_TABS.map(function (tab) {
+        var active = (state.listTab || 'applications') === tab.id;
+        var count = loading ? null : (tab.id === 'providers'
+          ? providerRowEntries(state).length
+          : applicationRowEntries(state).length);
+
+        return (
+          '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab"' +
+          ' aria-selected="' + (active ? 'true' : 'false') + '"' +
+          ' tabindex="' + (active ? '0' : '-1') + '"' +
+          ' data-clients-list-tab="' + esc(tab.id) + '">' +
+          '<span class="tma-tab__label">' + esc(tab.label) +
+          (count === null ? '' : tabCountChip(count)) + '</span>' +
+          '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
+          '</button>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
   function renderTableListPage(state) {
     var page = getTablePageData(state);
+    var providers = onProvidersTab(state);
+
     return (
+      renderListTabs(state) +
       renderTableToolbar(state) +
       renderClientsFilterChips(state) +
       // The grid is wider than a narrow window; without a scroller of its own
       // the last columns are simply unreachable, and the page body scrolling
       // sideways drags the whole shell with it.
       '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
-      '<div class="tma-dash__ctable tma-dash__ctable--clients" role="table" aria-label="Clients">' +
+      '<div class="tma-dash__ctable tma-dash__ctable--clients" role="table" aria-label="' +
+      (providers ? 'Service providers' : 'Applications') + '">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
+      // No select-all on the providers tab: a provider row carries no
+      // checkbox — the bulk actions post to the clients endpoint — so the box
+      // would tick nothing and mean nothing.
       '<div class="tma-dash__cc tma-dash__cc--check tma-dash__cc--head">' +
-      '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all"></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">Client</div>' +
+      (providers ? ''
+        : '<input type="checkbox" class="tma-dash__check" data-clients-selectall aria-label="Select all">') +
+      '</div>' +
+      // The columns say what the rows are. A provider listed under "Client",
+      // with its own name repeated under "Service provider", was the table
+      // describing one record as if it were the other.
+      '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">' +
+      (providers ? 'Service provider' : 'Client') + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">Service provider</div>' +
+      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">' +
+      (providers ? 'People' : 'Service provider') + '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
       '</div>' +
       '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
@@ -1841,23 +1953,35 @@
       );
     }
 
-    var total = totalClientRecords();
-    var filtered = anyClientFilter(state.filters) || !!state.search;
+    // Counted within the tab: the number above a list has to be the number of
+    // things in it, or it is answering a question nobody asked.
+    var providers = onProvidersTab(state);
+    var total = providers ? COMPANIES.length : totalApplicationRecords();
+    var filtered = providers ? !!state.search : (anyClientFilter(state.filters) || !!state.search);
     var shown = filtered ? tableRowEntries(state).length : total;
+    var noun = providers
+      ? (total === 1 && !filtered ? 'service provider' : 'service providers')
+      : (total === 1 && !filtered ? 'application' : 'applications');
 
     return (
       '<span class="tma-dash__toolbar-count" data-clients-count aria-live="polite">' +
       '<span class="tma-dash__toolbar-count-value">' +
       esc(filtered ? shown.toLocaleString() + ' of ' + total.toLocaleString() : total.toLocaleString()) +
-      '</span> ' + (total === 1 && !filtered ? 'client' : 'clients') +
+      '</span> ' + noun +
       '</span>'
     );
   }
 
   function totalClientRecords() {
+    return totalApplicationRecords() + COMPANIES.length;
+  }
+
+  /* Applicants only — the providers have a tab and a count of their own. */
+  function totalApplicationRecords() {
     var people = 0;
     DIRECTORY.forEach(function (group) { people += group.items.length; });
-    return people + COMPANIES.length;
+
+    return people;
   }
   function renderDirectoryListBody(state) {
     if (state.loadState === 'loading') return renderDirectorySkeleton();
@@ -4951,7 +5075,53 @@
 
     MORPH.unwired(root, '[data-no-data-action="add"]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
-        navigate('add');
+        navigate(onProvidersTab(state) ? 'add-company' : 'add');
+      });
+    });
+
+    wireListTabs(root, state, render);
+  }
+
+  /*
+   * Switching tabs.
+   *
+   * Selection and the page number are dropped on the way: they refer to rows
+   * that are no longer on screen, and carrying them over means landing on
+   * page 4 of a list with two entries, or deleting a client the reader can no
+   * longer see is ticked. Arrow keys move between tabs, which is what a
+   * tablist is expected to do.
+   */
+  function wireListTabs(root, state, render) {
+    var tabs = MORPH.unwired(root, '[data-clients-list-tab]');
+    if (!tabs.length) return;
+
+    var select = function (id) {
+      if (state.listTab === id) return;
+      state.listTab = id;
+      saveListTab(id);
+      state.page = 1;
+      state.selected = {};
+      render();
+    };
+
+    tabs.forEach(function (tab, index) {
+      tab.addEventListener('click', function () {
+        select(tab.getAttribute('data-clients-list-tab'));
+      });
+
+      tab.addEventListener('keydown', function (e) {
+        var next = null;
+        if (e.key === 'ArrowRight') next = (index + 1) % tabs.length;
+        else if (e.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+        else if (e.key === 'Home') next = 0;
+        else if (e.key === 'End') next = tabs.length - 1;
+        else return;
+
+        e.preventDefault();
+        select(tabs[next].getAttribute('data-clients-list-tab'));
+        var moved = root.querySelector('[data-clients-list-tab="' +
+          tabs[next].getAttribute('data-clients-list-tab') + '"]');
+        if (moved && moved.focus) moved.focus();
       });
     });
   }
@@ -6096,6 +6266,7 @@
       filters: emptyClientFilters(),
       sort: 'name',
       viewMode: loadViewMode(),
+      listTab: loadListTab(),
       page: 1,
       pageSize: loadPageSize(),
       selected: {},
