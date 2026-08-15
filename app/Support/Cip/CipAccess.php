@@ -2,6 +2,9 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipProvider;
+use App\Models\Client;
+use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 
@@ -48,6 +51,63 @@ class CipAccess
     public static function can(?User $user, string $capability): bool
     {
         return Role::can($user, $capability);
+    }
+
+    /**
+     * May this account reach the module at all?
+     *
+     * Staff are answered by the capability matrix. External accounts never
+     * hold a matrix capability — that is a portal-wide invariant — so the
+     * brief's two external types are answered by what they ARE in the Client
+     * Hub: a Service Provider contact is an active member of a firm that
+     * carries a CIP code; a Private Client is somebody with a client record.
+     * Both are promised "create and manage applications" and "view status",
+     * so neither can be gated on a capability they are not allowed to hold.
+     */
+    public static function canReach(?User $user): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        if (Role::isStaff($user)) {
+            // A parked Employee cannot reach the portal at all, so the module
+            // must not claim otherwise.
+            return Role::of($user) !== Role::EMPLOYEE && Role::can($user, 'cip.view');
+        }
+
+        return self::isProviderContact($user) || self::isPrivateClient($user);
+    }
+
+    /**
+     * May this account start an application? Staff need the capability;
+     * both external types are promised it by §1 of the brief.
+     */
+    public static function canCreate(?User $user): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        return Role::isStaff($user)
+            ? Role::of($user) !== Role::EMPLOYEE && Role::can($user, 'cip.create')
+            : self::canReach($user);
+    }
+
+    /** An active member of a firm registered as a CIP service provider. */
+    public static function isProviderContact(User $user): bool
+    {
+        return CompanyMember::query()
+            ->active()
+            ->where('user_id', $user->id)
+            ->whereIn('company_id', CipProvider::query()->select('company_id')->whereNotNull('company_id'))
+            ->exists();
+    }
+
+    /** Somebody the firm holds a client record for. */
+    public static function isPrivateClient(User $user): bool
+    {
+        return Client::query()->where('user_id', $user->id)->exists();
     }
 
     /** Is this user an officer at all — or of the given role specifically? */

@@ -154,17 +154,17 @@ class Role
         // Both inherit the Employee rows below through can()'s baseline
         // fallback, so cip.view / cip.create need not repeat them.
         //
-        // Reach the CIP section. Staff-wide; external Service Provider
-        // contacts and private clients arrive with their scoped views in a
-        // later phase. Row visibility is App\Support\Cip\ApplicationScope —
-        // this row on its own shows nobody any application.
-        'cip.view' => [self::EMPLOYEE],
-        // Create an application as staff. External creators (provider
-        // contacts, private clients) are NOT granted through the matrix —
-        // clients hold no matrix capability, ever — their reach is answered
-        // by ApplicationScope and the engine's creator check, the same way
-        // CompanyAccess answers for company members.
-        'cip.create' => [self::EMPLOYEE],
+        // Reach the CIP section, and start an application. Named for the
+        // officer types rather than left on the Employee row: a parked
+        // Employee cannot reach the portal at all, so granting them the
+        // module would be a promise nothing can keep. External Service
+        // Provider contacts and Private Clients are NOT granted here —
+        // clients hold no matrix capability, ever — they are answered by
+        // App\Support\Cip\CipAccess::canReach/canCreate from what they are
+        // in the Client Hub. Row visibility is always ApplicationScope;
+        // these rows on their own show nobody any application.
+        'cip.view' => [self::REVIEWING_OFFICER, self::COMPLIANCE_OFFICER],
+        'cip.create' => [self::REVIEWING_OFFICER, self::COMPLIANCE_OFFICER],
         'cip.review' => [self::REVIEWING_OFFICER],
         'cip.compliance' => [self::COMPLIANCE_OFFICER],
         // Assigning files to officers stays with administrators (§10: "The

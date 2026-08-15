@@ -101,10 +101,13 @@ class CipAccessTest extends TestCase
     {
         config(['services.cip.enabled' => true]);
 
+        // The parked type holds nothing: those accounts sit on the
+        // role-pending screen, so any grant would be unusable anyway.
         $employee = $this->user(Role::EMPLOYEE);
-        $this->assertTrue(Role::can($employee, 'cip.view'));
+        $this->assertFalse(Role::can($employee, 'cip.view'));
         $this->assertFalse(CipAccess::can($employee, 'cip.review'));
         $this->assertFalse(CipAccess::isOfficer($employee));
+        $this->assertFalse(CipAccess::canReach($employee));
 
         $client = $this->user(Role::CLIENT);
         $this->assertFalse(Role::can($client, 'cip.view'));
