@@ -18471,8 +18471,22 @@
  * drop boxes — splitting the width evenly would crush the one and strand the
  * other in whitespace.
  */
+/*
+ * Sections have to look further apart than the parts inside them.
+ *
+ * A section holds its title 8px above its own card, and the rows sat 16px
+ * apart — near enough the same distance that "Dependents" read as a label
+ * floating between two boxes rather than the heading of the one under it.
+ * The gap between sections is now four times the gap within one, which is
+ * what makes each a group instead of a stack of evenly spaced parts.
+ *
+ * Rows only: the applicant and their documents sit side by side and want to
+ * look joined, so the column gap stays where it was.
+ */
 .tma-dash__clients-cards--intake {
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  column-gap: var(--space-16);
+  row-gap: var(--space-32);
 }
 
 /* A section is a heading and its card together, so the grid places the pair —
