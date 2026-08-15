@@ -28,3 +28,4 @@ Thumbs.db
 composer.phar
 /dist-pages
 /tmp
+/storage/app/public/cip
