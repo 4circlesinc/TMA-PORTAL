@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Realtime\Live;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\User;
@@ -185,6 +186,7 @@ class ClientsController extends Controller
         ]);
 
         ClientDirectory::flushFor($request->user());
+        Live::staff(Live::CLIENTS);
 
         return response()->json(['client' => $client->fresh(['folder', 'companyRecord', 'referredByCompany'])->toRecord()]);
     }
@@ -225,6 +227,7 @@ class ClientsController extends Controller
         ]);
 
         ClientDirectory::flushFor($request->user());
+        Live::staff(Live::CLIENTS);
 
         return response()->json(['client' => $client->fresh(['folder', 'companyRecord', 'referredByCompany'])->toRecord()]);
     }
@@ -246,6 +249,7 @@ class ClientsController extends Controller
         AccessSync::clientArchived($client, $request->user());
         $client->delete();
         ClientDirectory::flushFor($request->user());
+        Live::staff(Live::CLIENTS);
 
         return response()->json(['status' => 'ok']);
     }
@@ -264,6 +268,7 @@ class ClientsController extends Controller
             ->delete();
 
         ClientDirectory::flushFor($request->user());
+        Live::staff(Live::CLIENTS);
 
         return response()->json(['deleted' => $deleted]);
     }
@@ -281,6 +286,7 @@ class ClientsController extends Controller
         $copy->save();
 
         ClientDirectory::flushFor($request->user());
+        Live::staff(Live::CLIENTS);
 
         return response()->json(['client' => $copy->toRecord()]);
     }

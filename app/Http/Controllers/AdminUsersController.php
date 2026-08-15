@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Realtime\Live;
 use App\Models\AuthEvent;
 use App\Models\FileLibrarySetting;
 use App\Models\Invitation;
@@ -168,6 +169,8 @@ class AdminUsersController extends Controller
             $deleted++;
         }
 
+        Live::staff(Live::USERS);
+
         return response()->json(['deleted' => $deleted, 'skippedSelf' => $selfIncluded]);
     }
 
@@ -244,6 +247,7 @@ class AdminUsersController extends Controller
             ],
         ]);
 
+        Live::staff(Live::USERS);
         return response()->json([
             'status' => 'ok',
             'invitation' => Invitations::toRecord($invitation->fresh()),
@@ -320,6 +324,7 @@ class AdminUsersController extends Controller
 
         $this->record($user->id, 'account_updated');
 
+        Live::staffAnd(Live::USERS, [$user->id]);
         return response()->json(['status' => 'ok']);
     }
 
@@ -436,6 +441,7 @@ class AdminUsersController extends Controller
         );
         $this->clearPendingApprovalNotifications($user);
 
+        Live::staffAnd(Live::USERS, [$user->id]);
         return response()->json(['status' => 'ok']);
     }
 
@@ -539,6 +545,7 @@ class AdminUsersController extends Controller
 
         $this->record($user->id, 'account_suspended');
 
+        Live::staffAnd(Live::USERS, [$user->id]);
         return response()->json(['status' => 'ok']);
     }
 
@@ -575,6 +582,7 @@ class AdminUsersController extends Controller
 
         $this->moveToRecycleBin($user, $request->user());
 
+        Live::staffAnd(Live::USERS, [$user->id]);
         return response()->json(['status' => 'ok']);
     }
 
@@ -620,6 +628,7 @@ class AdminUsersController extends Controller
 
         $this->record($user->id, 'account_reactivated');
 
+        Live::staffAnd(Live::USERS, [$user->id]);
         return response()->json(['status' => 'ok']);
     }
 

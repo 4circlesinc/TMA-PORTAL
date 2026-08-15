@@ -4660,7 +4660,18 @@
     req.then(function () {
       delete clientsAssignable[key];
       clientsToast('Staff assigned', 'positive');
-      if (clientsMenuCtx && clientsMenuCtx.render) clientsMenuCtx.render({ forceFull: true });
+      if (!clientsMenuCtx) return;
+      // The panels cache what they loaded; a render alone would redraw the
+      // same stale list the assignment was just added to.
+      var state = clientsMenuCtx.state;
+      if (kind === 'company') {
+        state.companyPanelsFor = null;
+        ensureCompanyPanelsLoaded(state, clientsMenuCtx.render);
+      } else {
+        state.assignmentsLoadedFor = null;
+        ensureAssignmentsLoaded(state, clientsMenuCtx.render, { force: true });
+      }
+      clientsMenuCtx.render({ forceFull: true });
     }).catch(function (err) {
       clientsToast((err && err.message) || 'Could not assign staff', 'negative');
     });

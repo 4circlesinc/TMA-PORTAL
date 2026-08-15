@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Realtime\Live;
 use App\Models\ClientAssignment;
 use App\Models\Company;
 use App\Models\CompanyStaffAssignment;
@@ -140,6 +141,11 @@ class CompanyStaffController extends Controller
             ]);
         }
 
+        // The provider directory is assignment-scoped, so this row can put a
+        // provider into somebody's list for the first time.
+        Live::staffAnd(Live::COMPANIES, [$staff->id]);
+        Live::staffAnd(Live::CLIENTS, [$staff->id]);
+
         return response()->json([
             'assignments' => $this->present($company),
             'assignable' => $this->assignableStaff($company),
@@ -185,6 +191,9 @@ class CompanyStaffController extends Controller
                 ]);
             }
         }
+
+        Live::staffAnd(Live::COMPANIES, [$userId]);
+        Live::staffAnd(Live::CLIENTS, [$userId]);
 
         return response()->json([
             'assignments' => $this->present($company),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Realtime\Live;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
@@ -105,6 +106,10 @@ class ClientAssignmentController extends Controller
             'notes' => $data['notes'] ?? null,
         ], $request->user());
 
+        // The assignee's own directory changes shape too — this row is what
+        // puts the client in it.
+        Live::staffAnd(Live::CLIENTS, [$staff->id]);
+
         return response()->json([
             'assignments' => $this->present($client->fresh()),
             'assignable' => $this->assignableStaff($client->fresh()),
@@ -137,6 +142,8 @@ class ClientAssignmentController extends Controller
             'notes' => array_key_exists('notes', $data) ? $data['notes'] : $current->notes,
         ], $request->user());
 
+        Live::staffAnd(Live::CLIENTS, [$userId]);
+
         return response()->json(['assignments' => $this->present($client->fresh())]);
     }
 
@@ -159,6 +166,8 @@ class ClientAssignmentController extends Controller
 
         Assignments::reassign($client, $from, $to, $request->user());
 
+        Live::staffAnd(Live::CLIENTS, [$userId, $to->id]);
+
         return response()->json([
             'assignments' => $this->present($client->fresh()),
             'assignable' => $this->assignableStaff($client->fresh()),
@@ -180,6 +189,8 @@ class ClientAssignmentController extends Controller
         if ($assignment) {
             Assignments::end($client, $assignment, $request->user());
         }
+
+        Live::staffAnd(Live::CLIENTS, [$userId]);
 
         return response()->json([
             'assignments' => $this->present($client->fresh()),

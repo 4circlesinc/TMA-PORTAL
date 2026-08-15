@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Realtime\Live;
 use App\Models\Client;
 use App\Models\Company;
 use App\Support\Access\AccessSync;
@@ -198,6 +199,8 @@ class CompaniesController extends Controller
         }
 
         Cache::forget('companies.directory');
+        Live::staff(Live::COMPANIES);
+        Live::staff(Live::CLIENTS);
 
         return response()->json([
             'company' => $company->load(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])->toRecord(),
@@ -263,6 +266,8 @@ class CompaniesController extends Controller
         }
 
         Cache::forget('companies.directory');
+        Live::staff(Live::COMPANIES);
+        Live::staff(Live::CLIENTS);
 
         return response()->json([
             'company' => $company->fresh()->load(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')])->toRecord(),
@@ -313,6 +318,8 @@ class CompaniesController extends Controller
         $company->delete();
 
         Cache::forget('companies.directory');
+        Live::staff(Live::COMPANIES);
+        Live::staff(Live::CLIENTS);
         ClientDirectory::flush();
 
         return response()->json(['status' => 'ok']);
