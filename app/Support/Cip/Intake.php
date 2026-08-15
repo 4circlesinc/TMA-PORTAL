@@ -38,6 +38,20 @@ class Intake
             'countryOfResidence' => ['required', 'string', Rule::in(Countries::all())],
             'occupation' => ['required', 'string', 'max:191'],
             'passportNumber' => ['required', 'string', 'max:64'],
+            // §2 names a passport-sized photo among the required fields. The
+            // shape rules live with the photo, so the wizard, this validator
+            // and a later importer all refuse the same pictures.
+            'passportPhoto' => ['required', 'string', function ($attribute, $value, $fail) {
+                $binary = PassportPhoto::decode((string) $value);
+                if ($binary === null) {
+                    $fail('Upload the passport photo again — that file did not arrive.');
+
+                    return;
+                }
+                if ($why = PassportPhoto::reject($binary)) {
+                    $fail($why);
+                }
+            }],
             'investmentType' => ['required', Rule::in(array_keys(InvestmentType::ALL))],
             // §3: "If Other is selected, the portal shall display a Specify
             // Investment Type free-text field" — required exactly then.
@@ -105,6 +119,17 @@ class Intake
         // Derived, never asked for.
         $person->region = Countries::region($data['countryOfResidence']);
         $person->save();
+
+        // The photo arrives with the person and is stored as a file, not as
+        // the base64 it travelled in. Saving first gives it an id to replace
+        // against when the photo is changed later.
+        if ($binary = PassportPhoto::decode((string) ($data['passportPhoto'] ?? ''))) {
+            $stored = PassportPhoto::store($binary, $person);
+            $person->forceFill([
+                'photo_path' => $stored['path'],
+                'photo_url' => $stored['url'],
+            ])->save();
+        }
 
         return $person;
     }

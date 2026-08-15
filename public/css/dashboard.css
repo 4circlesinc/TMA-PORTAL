@@ -18403,6 +18403,11 @@
   color: var(--color-text-secondary);
 }
 
+/* A refused passport photo, marked the way a refused input is. */
+.tma-dash__clients-photo.is-invalid .tma-dash__clients-photo-btn {
+  border-color: var(--color-red);
+}
+
 .tma-dash__clients-list--profile {
   min-width: 0;
 }

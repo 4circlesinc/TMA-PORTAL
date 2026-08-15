@@ -14,6 +14,7 @@ use App\Support\Cip\Countries;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -54,10 +55,27 @@ class CipIntakeTest extends TestCase
         ]);
     }
 
+    /**
+     * A square image of a given size, as the data URL the wizard posts.
+     *
+     * Drawn rather than fixtured: the rules are about pixels, and a test that
+     * has to ship a 600×600 JPEG to prove 599 is refused proves it badly.
+     */
+    private function photo(int $width = 600, ?int $height = null): string
+    {
+        $img = imagecreatetruecolor($width, $height ?? $width);
+        imagefill($img, 0, 0, imagecolorallocate($img, 200, 210, 220));
+        ob_start();
+        imagejpeg($img, null, 90);
+
+        return 'data:image/jpeg;base64,'.base64_encode((string) ob_get_clean());
+    }
+
     /** @return array<string, mixed> */
     private function payload(CipProvider $provider, array $overrides = []): array
     {
         return array_merge([
+            'passportPhoto' => $this->photo(),
             'providerId' => $provider->uuid,
             'firstName' => 'John',
             'lastName' => 'Smith',
@@ -125,7 +143,8 @@ class CipIntakeTest extends TestCase
         // §2: "All fields are required."
         foreach ([
             'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
-            'countryOfResidence', 'occupation', 'passportNumber', 'investmentType', 'sponsored',
+            'countryOfResidence', 'occupation', 'passportNumber', 'passportPhoto',
+            'investmentType', 'sponsored',
         ] as $field) {
             $payload = $this->payload($provider);
             unset($payload[$field]);
@@ -253,6 +272,87 @@ class CipIntakeTest extends TestCase
         $this->actingAs($admin)
             ->postJson('/portal/cip/applications', $this->payload($provider))
             ->assertNotFound();
+    }
+
+    public function test_the_passport_photo_becomes_the_applicants_profile_picture(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications', $this->payload($provider))
+            ->assertCreated()->json('application');
+
+        // One upload, two jobs: the picture drawn beside the applicant's name
+        // is the photo that was filed, not a second thing to keep in step.
+        $person = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertNotNull($person->photo_url);
+        $this->assertSame($person->photo_url, $body['applicant']['photo']);
+        $this->assertStringStartsWith('/media/avatars/', $person->photo_url);
+
+        // ...and the archival copy is kept separately, because the avatar is
+        // 320px and what gets filed with the government cannot be.
+        $this->assertNotNull($person->photo_path);
+        Storage::disk(config('filesystems.avatar_disk', 'public'))->assertExists($person->photo_path);
+
+        [$width] = getimagesizefromstring(
+            Storage::disk(config('filesystems.avatar_disk', 'public'))->get($person->photo_path)
+        );
+        $this->assertSame(600, $width, 'the filed photo keeps the resolution it arrived at');
+    }
+
+    public function test_a_photo_that_is_not_two_by_two_is_refused(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        // Square but too small to print at two inches.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications', $this->payload($provider, [
+                'passportPhoto' => $this->photo(400),
+            ]))
+            ->assertStatus(422)->assertJsonValidationErrors('passportPhoto');
+
+        // Big enough, but a portrait snapshot — centre-cropping it would cut
+        // the head the government wants framed, so it is refused, not fixed.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications', $this->payload($provider, [
+                'passportPhoto' => $this->photo(600, 900),
+            ]))
+            ->assertStatus(422)->assertJsonValidationErrors('passportPhoto');
+
+        // Not an image at all.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications', $this->payload($provider, [
+                'passportPhoto' => 'data:image/jpeg;base64,'.base64_encode('not a picture'),
+            ]))
+            ->assertStatus(422)->assertJsonValidationErrors('passportPhoto');
+
+        $this->assertSame(0, CipApplication::count(), 'nothing is filed without a usable photo');
+    }
+
+    public function test_the_filed_photo_is_reachable_only_through_the_application(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications', $this->payload($provider))
+            ->assertCreated();
+
+        $person = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $url = '/portal/cip/people/'.$person->uuid.'/passport-photo';
+
+        $this->actingAs($staff)->get($url)
+            ->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+
+        // A uuid is not an argument for showing someone's face: a reader who
+        // cannot open the application cannot see who it is for.
+        $stranger = $this->user(Role::CLIENT);
+        $this->actingAs($stranger)->get($url)->assertNotFound();
     }
 
     public function test_the_form_offers_the_five_investment_types_and_every_country(): void

@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { deflateSync } from 'node:zlib';
 
 // The CIP intake wizard (§2, §3). PHPUnit pins the endpoint; this pins that
 // the form is wired to it — the steps advance, a missing answer stops the
@@ -7,6 +8,57 @@ import { chromium } from 'playwright';
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
 const PASSWORD = process.env.TMA_STAFF_PASSWORD || 'password12345';
+
+/*
+ * A solid PNG of a given size, built here rather than shipped as a fixture.
+ * The passport-photo rules are about pixel dimensions, so the test needs to
+ * name the dimensions it is testing — a checked-in image would hide them, and
+ * two of them (600×900, 600×600) exist only to be measured.
+ */
+function png(width, height) {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = buf => {
+    let c = 0xffffffff;
+    for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc(body));
+    return Buffer.concat([len, body, sum]);
+  };
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;   // 8 bits per channel
+  ihdr[9] = 2;   // truecolour RGB
+
+  // One filter byte then RGB per pixel, per scanline.
+  const raw = Buffer.alloc(height * (1 + width * 3));
+  for (let y = 0; y < height; y++) {
+    const row = y * (1 + width * 3);
+    for (let x = 0; x < width; x++) {
+      raw[row + 1 + x * 3] = 200;
+      raw[row + 2 + x * 3] = 210;
+      raw[row + 3 + x * 3] = 220;
+    }
+  }
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 const failures = [];
 const check = (ok, msg) => { console.log(`    ${ok ? '✓' : '✗'} ${msg}`); if (!ok) failures.push(msg); };
@@ -46,7 +98,7 @@ try {
   await page.click('[data-cip-save]');
   await page.waitForTimeout(600);
   check(await page.locator('.tma-portal-field__error').count() > 0, 'missing answers are named');
-  check((await page.locator('[data-cip-form]').innerText()).includes('still needed'), 'a summary says how many');
+  check((await page.locator('[data-cip-form]').innerText()).includes('Check '), 'a summary says how many');
 
   step(3, 'The whole form is on one page');
   const formText = await page.locator('[data-cip-form]').innerText();
@@ -64,6 +116,25 @@ try {
   check((await page.locator('[data-cip-region]').innerText()).includes('Middle East'), 'region derived as Middle East');
   await page.fill('[data-cip-field="occupation"]', 'Engineer');
   await page.fill('[data-cip-field="passportNumber"]', 'X1234567');
+
+  step('4b', 'The passport photo is measured before it is accepted');
+  // A portrait snapshot is what people actually pick, so it is what the
+  // check has to refuse — and it must say so without a round trip.
+  await page.setInputFiles('[data-cip-photo-input]', {
+    name: 'portrait.png', mimeType: 'image/png', buffer: png(600, 900),
+  });
+  await page.waitForTimeout(600);
+  check((await page.locator('[data-cip-form]').innerText()).includes('has to be square'),
+    'a portrait photo is refused, with the measurement');
+  check(!(await page.locator('[data-cip-photo-btn]').getAttribute('data-has-image')),
+    'and is not kept');
+
+  await page.setInputFiles('[data-cip-photo-input]', {
+    name: 'passport.png', mimeType: 'image/png', buffer: png(600, 600),
+  });
+  await page.waitForTimeout(600);
+  check(!!(await page.locator('[data-cip-photo-btn]').getAttribute('data-has-image')),
+    'a 2×2 photo is accepted and previewed');
 
   step(5, 'Investment: Other asks what it is');
   await page.selectOption('[data-cip-field="investmentType"]', 'other');
@@ -88,6 +159,8 @@ try {
   check(/^[A-Z]{2,8}\d{2}-\d{5}$/.test(body?.application?.number || ''), `numbered ${body?.application?.number}`);
   check(body?.application?.status === 'draft', 'starts as a draft');
   check(body?.application?.applicant?.region === 'Middle East', 'region stored server-side');
+  check(/^\/media\/avatars\//.test(body?.application?.applicant?.photo || ''),
+    'the passport photo became the applicant’s profile picture');
 
   await page.screenshot({ path: 'tests/Browser/cip-intake.png', fullPage: false });
 } catch (e) {

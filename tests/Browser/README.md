@@ -109,6 +109,36 @@ field placement and drawing, and computed CSS only exist in a browser.
   Note that `client-referrals.mjs` and `clients.mjs` want the *opposite* — a
   near-empty directory. Run them against a fresh database, or the clients they
   create land on page 300 of the big one and every assertion reads `undefined`.
+- **`cip-intake.mjs`** — the CIP application form (§2, §3). PHPUnit pins the
+  endpoint; this pins that the form is wired to it: one page rather than steps,
+  a missing answer named before the request is made, the region appearing from
+  the country of residence, Other revealing its free-text field, and Add landing
+  a numbered draft.
+
+  Most of it is about the passport photo, which is the one field a reader can
+  fill wrongly rather than leave empty. It builds its PNGs in the file — a
+  600×900 portrait to be refused with its measurement, then a 600×600 square to
+  be accepted — because the rules are about pixel dimensions and a checked-in
+  fixture would hide the numbers being tested. It also reads the POST response
+  back to confirm the filed photo became the applicant's profile picture.
+
+  It files a real application, so it wants a fresh database, a provider to file
+  under, and the module switched on:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+    \$u = App\Models\User::where('email', 'e2e@example.com')->first();
+    \$u->forceFill(['account_type' => 'Reviewing Officer'])->save();
+    \$c = App\Models\Company::create(['uid' => 'bluemina', 'name' => 'Bluemina', 'created_by' => \$u->id]);
+    App\Models\CipProvider::create(['name' => 'Bluemina', 'code' => 'BLU', 'company_id' => \$c->id]);
+  "
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true AVATAR_DISK=public \
+    php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-intake.mjs
+  ```
+
+  The account has to be an officer or an administrator: an `Employee` 302s to
+  `/auth/role-pending` on every portal route.
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with

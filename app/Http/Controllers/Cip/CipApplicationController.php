@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Cip;
 
 use App\Http\Controllers\Controller;
+use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Status;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
@@ -74,6 +76,27 @@ class CipApplicationController extends Controller
         return response()->json(['application' => $this->record($application)]);
     }
 
+    /**
+     * The filed passport photo at the resolution it was filed in.
+     *
+     * Scoped through the application, not the person: whoever may read the
+     * application may see who it is for, and nobody else may — a uuid in the
+     * URL is not an argument for showing someone's face.
+     */
+    public function passportPhoto(Request $request, string $uuid)
+    {
+        $person = CipPerson::query()->where('uuid', $uuid)->firstOrFail();
+        ApplicationScope::findOrFail($request->user(), $person->application->uuid);
+
+        $photo = PassportPhoto::read($person);
+        abort_unless($photo, 404);
+
+        return response($photo['body'], 200, [
+            'Content-Type' => $photo['mime'],
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
     private function record($application): array
     {
         $application->loadMissing(['provider', 'people']);
@@ -106,6 +129,11 @@ class CipApplicationController extends Controller
                 'region' => $main->region,
                 'occupation' => $main->occupation,
                 'passportNumber' => $main->passport_number,
+                // The passport photo, doubling as the avatar every list draws.
+                'photo' => $main->photoUrl(),
+                'passportPhotoUrl' => $main->photo_path
+                    ? '/portal/cip/people/'.$main->uuid.'/passport-photo'
+                    : null,
             ] : null,
             'createdAt' => $application->created_at?->toIso8601String(),
         ];

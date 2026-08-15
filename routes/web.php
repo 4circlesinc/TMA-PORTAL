@@ -315,6 +315,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications/form', [CipApplicationController::class, 'form'])->name('applications.form');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
+        // The archival passport photo, streamed through the app: it is a
+        // likeness on a private bucket, reachable only by a reader who may
+        // already open the application it belongs to.
+        Route::get('/people/{uuid}/passport-photo', [CipApplicationController::class, 'passportPhoto'])
+            ->name('people.passport-photo');
     });
 
     Route::get('/admin/security-policies', [AdminSecurityController::class, 'show'])

@@ -28,10 +28,14 @@
     return {
       providerId: '', firstName: '', lastName: '', gender: '',
       dateOfBirth: '', countryOfBirth: '', countryOfResidence: '',
-      occupation: '', passportNumber: '',
+      occupation: '', passportNumber: '', passportPhoto: '',
       investmentType: '', investmentTypeOther: '', sponsored: '',
     };
   }
+
+  var ICON = 'images/icons/phosphor/';
+  /* 2 inches at 300dpi — the same floor App\Support\Cip\PassportPhoto keeps. */
+  var PHOTO_MIN_PX = 600;
 
   var state = {
     draft: emptyDraft(),
@@ -50,13 +54,14 @@
      this only spares the reader a round trip to find out. */
   var REQUIRED = ['providerId', 'firstName', 'lastName', 'gender', 'dateOfBirth',
     'countryOfBirth', 'countryOfResidence', 'occupation', 'passportNumber',
-    'investmentType', 'sponsored'];
+    'passportPhoto', 'investmentType', 'sponsored'];
 
   var LABELS = {
     providerId: 'Service provider', firstName: 'First name', lastName: 'Last name',
     gender: 'Gender', dateOfBirth: 'Date of birth', countryOfBirth: 'Country of birth',
     countryOfResidence: 'Country of residence', occupation: 'Occupation',
-    passportNumber: 'Passport number', investmentType: 'Investment type',
+    passportNumber: 'Passport number', passportPhoto: 'Passport photo',
+    investmentType: 'Investment type',
     investmentTypeOther: 'Specify investment type', sponsored: 'Sponsored',
   };
 
@@ -128,6 +133,33 @@
       '</label>';
   }
 
+  /* The client form's photo control, wearing the passport photo's rules. The
+     same component so an applicant's picture is added the way every other
+     person's is; only the constraint is different, and the constraint is the
+     one thing worth saying out loud. */
+  function photoField() {
+    var has = !!state.draft.passportPhoto;
+    return '<div class="tma-dash__clients-photo' +
+      (state.errors.passportPhoto ? ' is-invalid' : '') + '">' +
+      '<span class="tma-portal-field__label">' + esc(LABELS.passportPhoto) + '</span>' +
+      '<input type="file" accept="image/jpeg,image/png,image/webp"' +
+      ' class="tma-dash__clients-photo-input" data-cip-photo-input aria-hidden="true">' +
+      '<div class="tma-dash__clients-photo-wrap">' +
+      '<button type="button" class="tma-dash__clients-photo-btn"' +
+      (has ? ' data-has-image="true"' : '') + ' data-cip-photo-btn>' +
+      '<img src="' + ICON + 'User.svg" alt="" class="tma-dash__clients-photo-placeholder" width="40" height="40">' +
+      '<img alt="" class="tma-dash__clients-photo-preview" data-cip-photo-preview width="80" height="80"' +
+      (has ? ' src="' + esc(state.draft.passportPhoto) + '"' : '') + '>' +
+      '</button>' +
+      '<button type="button" class="tma-dash__clients-photo-remove" data-cip-photo-remove aria-label="Remove photo">' +
+      '<img src="' + ICON + 'Xcircle.svg" alt="" class="tma-dash__clients-photo-remove-icon" width="20" height="20">' +
+      '</button></div>' +
+      '<p class="tma-dash__clients-photo-hint">2×2 inches, square, ' +
+      PHOTO_MIN_PX + '×' + PHOTO_MIN_PX + ' pixels or larger.</p>' +
+      fieldError('passportPhoto') +
+      '</div>';
+  }
+
   /* ── steps ─────────────────────────────────────────────────────── */
 
   /* The same card the service provider page draws a record in. Full width
@@ -152,6 +184,7 @@
     var region = regionFor(state.draft.countryOfResidence);
 
     return card('Main applicant',
+      photoField() +
       '<div class="tma-portal-form-grid">' +
       textField('firstName') +
       textField('lastName') +
@@ -214,7 +247,9 @@
       // happened deserves to be told why without hunting the page.
       (count
         ? '<p class="tma-portal-modal__error" role="alert">' +
-          esc(count === 1 ? 'One answer is still needed.' : count + ' answers are still needed.') +
+          // Neutral about why: a field can be empty or, in the photo's case,
+          // filled with something that cannot be filed.
+          esc(count === 1 ? 'Check one answer.' : 'Check ' + count + ' answers.') +
           '</p>'
         : '') +
       formBody() +
@@ -239,6 +274,80 @@
         }
       });
     });
+
+    wirePhoto(root);
+  }
+
+  /*
+   * The photo, measured before it is accepted.
+   *
+   * The server refuses the same pictures, but a reader who chose a portrait
+   * snapshot should learn that while the file picker is still in mind rather
+   * than after filling in eight more fields and pressing Add.
+   */
+  function wirePhoto(root) {
+    var btn = root.querySelector('[data-cip-photo-btn]');
+    var input = root.querySelector('[data-cip-photo-input]');
+    var preview = root.querySelector('[data-cip-photo-preview]');
+    var remove = root.querySelector('[data-cip-photo-remove]');
+    if (!btn || !input) return;
+
+    MORPH.on(btn, 'click', function () { input.click(); });
+
+    MORPH.on(input, 'change', function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        measure(ev.target.result, function (why, dataUrl) {
+          if (why) {
+            state.errors.passportPhoto = why;
+            state.draft.passportPhoto = '';
+            input.value = '';
+            render(root);
+            return;
+          }
+          state.draft.passportPhoto = dataUrl;
+          delete state.errors.passportPhoto;
+          if (preview) { preview.src = dataUrl; preview.alt = 'Passport photo'; }
+          btn.dataset.hasImage = 'true';
+          // Clears the error summary the moment the last answer arrives.
+          if (!Object.keys(state.errors).length) render(root);
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (remove) {
+      MORPH.on(remove, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        state.draft.passportPhoto = '';
+        input.value = '';
+        render(root);
+      });
+    }
+  }
+
+  /* Square within a pixel or two, and big enough to print at 2 inches. */
+  function measure(dataUrl, done) {
+    var img = new Image();
+    img.onload = function () {
+      var w = img.naturalWidth;
+      var h = img.naturalHeight;
+      if (w < PHOTO_MIN_PX || h < PHOTO_MIN_PX) {
+        done('A passport photo has to be at least ' + PHOTO_MIN_PX + '×' + PHOTO_MIN_PX +
+          ' pixels — this one is ' + w + '×' + h + '.');
+        return;
+      }
+      if (Math.abs(w - h) / Math.max(w, h) > 0.02) {
+        done('A passport photo has to be square (2×2 inches) — this one is ' + w + '×' + h + '.');
+        return;
+      }
+      done(null, dataUrl);
+    };
+    img.onerror = function () { done('That image could not be read. Try a JPG, PNG, or WebP.'); };
+    img.src = dataUrl;
   }
 
   function xsrf() {
@@ -297,6 +406,7 @@
       countryOfResidence: d.countryOfResidence,
       occupation: d.occupation,
       passportNumber: d.passportNumber,
+      passportPhoto: d.passportPhoto,
       investmentType: d.investmentType,
       investmentTypeOther: d.investmentTypeOther,
       sponsored: String(d.sponsored) === '1',

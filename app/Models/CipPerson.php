@@ -55,4 +55,16 @@ class CipPerson extends Model
     {
         return trim(($this->first_name ?? '').' '.($this->last_name ?? ''));
     }
+
+    /**
+     * The profile picture, which is the passport photo.
+     *
+     * One likeness per person: the photo they filed is the face the portal
+     * draws, so a table row and the filed application can never disagree
+     * about who this is.
+     */
+    public function photoUrl(): ?string
+    {
+        return $this->photo_url;
+    }
 }
