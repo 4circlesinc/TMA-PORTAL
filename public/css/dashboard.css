@@ -18408,6 +18408,31 @@
   border-color: var(--color-red);
 }
 
+/*
+ * The intake form's first row: a person, and their documents beside them.
+ *
+ * Two thirds and one third rather than half each. The applicant's eight
+ * fields still want three to a row, and the documents are a short list of
+ * drop boxes — splitting the width evenly would crush the one and strand the
+ * other in whitespace.
+ */
+.tma-dash__clients-cards--intake {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.tma-dash__clients-cards--intake > .tma-dash__clients-card--wide { grid-column: 1; }
+
+.tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow { grid-column: 2; }
+
+/* Below the point where two thirds stops fitting three fields, they stack. */
+@media (max-width: 1250px) {
+  .tma-dash__clients-cards--intake { grid-template-columns: minmax(0, 1fr); }
+  .tma-dash__clients-cards--intake > .tma-dash__clients-card--wide,
+  .tma-dash__clients-cards--intake > .tma-dash__clients-card--narrow {
+    grid-column: 1 / -1;
+  }
+}
+
 .tma-dash__clients-list--profile {
   min-width: 0;
 }

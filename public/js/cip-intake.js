@@ -238,27 +238,35 @@
       '</div>';
   }
 
-  /* A scan, named once chosen. No preview: a reader recognises a document by
-     its filename, and rendering a PDF here would be a viewer, not a field. */
+  /*
+   * A scan, dropped or chosen.
+   *
+   * No preview: a reader recognises a document by its filename, and rendering
+   * the first page of a PDF here would be a viewer rather than a form control.
+   * The whole zone is the button, so the target for a dropped file and the
+   * target for a click are the same shape — a drop area that is smaller than
+   * it looks is worse than none.
+   */
   function documentField(path) {
     var file = state.files[path];
-    return '<div class="tma-portal-field tma-portal-file' +
-      (state.errors[path] ? ' is-invalid' : '') + '">' +
+
+    return '<div class="tma-portal-drop' + (state.errors[path] ? ' is-invalid' : '') +
+      (file ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
       '<span class="tma-portal-field__label">' + esc(labelFor(path)) + '</span>' +
       '<input type="file" accept=".pdf,image/*" class="tma-dash__clients-photo-input"' +
       ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +
-      '<div class="tma-portal-file__row">' +
-      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost"' +
-      ' data-cip-file-btn="' + esc(path) + '">' +
-      (file ? 'Replace' : 'Choose file') + '</button>' +
+      '<button type="button" class="tma-portal-drop__zone" data-cip-file-btn="' + esc(path) + '">' +
+      '<img src="' + ICON + (file ? 'FileText.svg' : 'UploadSimple.svg') + '" alt="" width="20" height="20">' +
       (file
-        ? '<span class="tma-portal-file__name">' + esc(file.name) + '</span>' +
-          '<button type="button" class="tma-portal-file__clear"' +
-          ' data-cip-file-remove="' + esc(path) + '" aria-label="Remove">' +
-          '<img src="' + ICON + 'Xcircle.svg" alt="" width="16" height="16"></button>'
-        : '<span class="tma-portal-file__name tma-portal-file__name--empty">PDF or image, up to ' +
-          MAX_DOCUMENT_MB + 'MB</span>') +
-      '</div>' +
+        ? '<span class="tma-portal-drop__name">' + esc(file.name) + '</span>'
+        : '<span class="tma-portal-drop__hint">Drop a file here, or choose one</span>' +
+          '<span class="tma-portal-drop__meta">PDF or image, up to ' + MAX_DOCUMENT_MB + 'MB</span>') +
+      '</button>' +
+      (file
+        ? '<button type="button" class="tma-portal-drop__clear"' +
+          ' data-cip-file-remove="' + esc(path) + '" aria-label="Remove ' + esc(labelFor(path)) + '">' +
+          '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>'
+        : '') +
       fieldError(path) +
       '</div>';
   }
@@ -267,7 +275,8 @@
 
   function card(title, body, opts) {
     opts = opts || {};
-    return '<section class="tma-dash__clients-card">' +
+    return '<section class="tma-dash__clients-card' +
+      (opts.modifier ? ' ' + opts.modifier : '') + '">' +
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
       (opts.action || '') +
@@ -311,12 +320,19 @@
 
   function applicantCard() {
     return card('Main applicant',
-      photoField('passportPhoto') +
-      personFields('') +
-      '<div class="tma-portal-form-grid">' +
+      photoField('passportPhoto') + personFields(''),
+      { modifier: 'tma-dash__clients-card--wide' });
+  }
+
+  /* §2's other two uploads, beside the person they belong to. Listed down one
+     column: two drop targets side by side are two small drop targets. */
+  function documentsCard() {
+    return card('Documents',
+      '<div class="tma-portal-drops">' +
       documentField('passportBioPage') +
       documentField('birthCertificate') +
-      '</div>');
+      '</div>',
+      { modifier: 'tma-dash__clients-card--narrow' });
   }
 
   function investmentCard() {
@@ -400,8 +416,9 @@
 
   /* The whole ask on one page, in the government form's order. */
   function formBody() {
-    return '<div class="tma-dash__clients-cards">' +
+    return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       applicantCard() +
+      documentsCard() +
       investmentCard() +
       sponsorCard() +
       dependentsCard() +
@@ -517,16 +534,7 @@
       var path = input.getAttribute('data-cip-file');
       input.addEventListener('change', function () {
         var file = input.files && input.files[0];
-        if (!file) return;
-        if (file.size > MAX_DOCUMENT_MB * 1024 * 1024) {
-          state.errors[path] = 'That file is too large. Keep it under ' + MAX_DOCUMENT_MB + 'MB.';
-          input.value = '';
-          delete state.files[path];
-        } else {
-          state.files[path] = file;
-          delete state.errors[path];
-        }
-        render(root);
+        if (file) takeDocument(root, path, file, input);
       });
     });
 
@@ -541,10 +549,62 @@
     MORPH.unwired(root, '[data-cip-file-remove]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
+        e.stopPropagation();
         delete state.files[btn.getAttribute('data-cip-file-remove')];
         render(root);
       });
     });
+
+    wireDrops(root);
+  }
+
+  /*
+   * Dropping a file on the zone.
+   *
+   * dragover has to be cancelled or the browser navigates to the file
+   * instead — which loses the half-filled form, so this is the one listener
+   * here that matters more for what it prevents than what it does.
+   */
+  function wireDrops(root) {
+    MORPH.unwired(root, '[data-cip-drop]').forEach(function (zone) {
+      var path = zone.getAttribute('data-cip-drop');
+
+      ['dragenter', 'dragover'].forEach(function (type) {
+        zone.addEventListener(type, function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.add('is-dragging');
+        });
+      });
+
+      zone.addEventListener('dragleave', function (e) {
+        // Moving between the zone's own children fires dragleave too; only a
+        // pointer that has actually left the box should clear the highlight.
+        if (zone.contains(e.relatedTarget)) return;
+        zone.classList.remove('is-dragging');
+      });
+
+      zone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('is-dragging');
+        var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) takeDocument(root, path, file);
+      });
+    });
+  }
+
+  /* One place a document is accepted, however it arrived. */
+  function takeDocument(root, path, file, input) {
+    if (file.size > MAX_DOCUMENT_MB * 1024 * 1024) {
+      state.errors[path] = 'That file is too large. Keep it under ' + MAX_DOCUMENT_MB + 'MB.';
+      delete state.files[path];
+      if (input) input.value = '';
+    } else {
+      state.files[path] = file;
+      delete state.errors[path];
+    }
+    render(root);
   }
 
   function wireDependents(root) {

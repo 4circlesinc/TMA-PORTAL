@@ -670,35 +670,91 @@
 }
 
 /*
- * A document field: a button, and the name of what was chosen.
+ * A document drop box.
  *
- * No thumbnail. A scanned bio page is recognised by its filename, and
- * rendering the first page here would be a viewer rather than a form control.
+ * The whole zone is the button, so what you can drop on and what you can
+ * click are the same shape — a target smaller than it looks is worse than no
+ * target at all. No thumbnail: a scanned bio page is recognised by its
+ * filename, and rendering its first page would be a viewer, not a control.
  */
-.tma-portal-file__row {
+.tma-portal-drops {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.tma-portal-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-8);
   min-width: 0;
 }
 
-.tma-portal-file__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tma-portal-drop__zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 104px;
+  padding: var(--space-16);
+  border: 1px dashed var(--color-border-medium);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  text-align: center;
+  cursor: pointer;
+}
+
+.tma-portal-drop__zone:hover { border-color: var(--color-black); }
+
+.tma-portal-drop__zone img { opacity: 0.55; }
+
+/* While a file is over the box, so it is obvious where letting go lands it. */
+.tma-portal-drop.is-dragging .tma-portal-drop__zone {
+  border-color: var(--color-blue);
+  border-style: solid;
+  background: var(--color-hover);
+}
+
+.tma-portal-drop__hint {
   font-size: var(--text-size-12);
   line-height: var(--text-lh-12);
   color: var(--color-text-primary);
 }
 
-.tma-portal-file__name--empty { color: var(--color-text-secondary); }
+.tma-portal-drop__meta {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
 
-.tma-portal-file__clear {
+.tma-portal-drop__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-portal-drop.is-filled .tma-portal-drop__zone {
+  border-style: solid;
+  border-color: var(--color-border-medium);
+}
+
+/* Sits over the zone's top-right rather than after it: the zone is a button,
+   and a button cannot contain another one. */
+.tma-portal-drop__clear {
+  position: absolute;
+  top: 26px;
+  right: var(--space-8);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   padding: var(--space-4);
   border: 0;
   border-radius: var(--radius-8);
@@ -706,9 +762,9 @@
   cursor: pointer;
 }
 
-.tma-portal-file__clear:hover { background: var(--color-hover); }
+.tma-portal-drop__clear:hover { background: var(--color-hover); }
 
-.tma-portal-file.is-invalid .tma-no-data__btn { border: 1px solid var(--color-red); }
+.tma-portal-drop.is-invalid .tma-portal-drop__zone { border-color: var(--color-red); }
 
 /*
  * A repeated block — one dependent, one sponsor's worth of fields.
