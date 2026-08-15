@@ -2332,7 +2332,12 @@
 
   function renderDetailPage(state) {
     return (
-      '<div class="tma-dash__clients-page tma-dash__clients-page--detail" data-node-id="clients-page">' +
+      // A form is read top to bottom, so it scrolls with the page rather than
+      // inside a box of its own. Every other detail screen keeps its panes
+      // pinned and scrolls within them.
+      '<div class="tma-dash__clients-page tma-dash__clients-page--detail' +
+      (state.screen === 'new-application' ? ' tma-dash__clients-page--flowing' : '') +
+      '" data-node-id="clients-page">' +
       renderDetailContent(state, { elevateToolbar: true }) +
       '</div>'
     );

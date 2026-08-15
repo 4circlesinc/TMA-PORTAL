@@ -18449,6 +18449,44 @@
   margin-top: calc(var(--text-lh-14) + var(--space-8));
 }
 
+/*
+ * The new application form scrolls with the page.
+ *
+ * Every other clients screen pins its panes and scrolls inside them, which is
+ * right for a directory beside a profile — the list stays put while you read.
+ * A form is not that. It is read top to bottom once, and squeezing it into
+ * whatever height was left gave it a scrollbar of its own inside a page that
+ * would not move, so the reader dragged a small box around instead of the
+ * page. Here the height clamps come off the whole chain and the shell's main
+ * region does the scrolling, the way a document does.
+ */
+.tma-dash__view[data-view="clients"]:not([hidden]):has(.tma-dash__clients-page--flowing),
+.tma-dash__clients-page--flowing,
+.tma-dash__clients-page--flowing .tma-dash__clients-profile,
+.tma-dash__clients-page--flowing [data-cip-intake-mount],
+.tma-dash__clients-page--flowing .tma-dash__clients-form,
+.tma-dash__clients-page--flowing .tma-dash__clients-cards {
+  flex: 0 1 auto;
+  min-height: auto;
+  overflow: visible;
+}
+
+/*
+ * The detail pane, written to out-specify the rule that makes it a scroller.
+ *
+ * `overscroll-behavior: contain` is the load-bearing part. Without lifting it
+ * the pane stayed the nearest scrollable ancestor with nothing to scroll, and
+ * contain is a promise not to pass the wheel on — so a wheel over the form hit
+ * a dead box and the page behind it never moved. That was the bug, not the
+ * height.
+ */
+.tma-dash__clients-page--detail.tma-dash__clients-page--flowing .tma-dash__clients-detail {
+  flex: 0 1 auto;
+  min-height: auto;
+  overflow: visible;
+  overscroll-behavior: auto;
+}
+
 /* Below the point where two thirds stops fitting three fields, they stack —
    and a card with nothing beside it has nothing to line up with. */
 @media (max-width: 1250px) {
