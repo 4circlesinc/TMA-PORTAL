@@ -503,6 +503,43 @@ class CipIntakeTest extends TestCase
         $this->assertSame(5, $body['familySize']);
     }
 
+    /**
+     * §5's worked example, run verbatim.
+     *
+     * The brief prints a table — Child A aged 8, Child B 12, Child C 18,
+     * classified 1, 2, 3 — under the rule "youngest dependent receives the
+     * lowest number". The other numbering test uses dates a decade apart to
+     * make the sort obvious; this one exists to be the client's own figures,
+     * so a future change to the comparison has to disagree with the document
+     * out loud.
+     */
+    public function test_the_briefs_own_worked_example_classifies_the_same_way(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'dependents' => collect([['Child A', 8], ['Child B', 12], ['Child C', 18]])
+                ->map(fn (array $child) => [
+                    'firstName' => $child[0],
+                    'lastName' => 'Example',
+                    'dateOfBirth' => now()->subYears($child[1])->toDateString(),
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                ])->all(),
+        ]))->assertCreated()->json('application');
+
+        $classified = collect($body['dependents'])
+            ->mapWithKeys(fn ($d) => [$d['name'] => $d['label']])
+            ->all();
+
+        $this->assertSame([
+            'Child A Example' => 'Qualified Dependent 1',
+            'Child B Example' => 'Qualified Dependent 2',
+            'Child C Example' => 'Qualified Dependent 3',
+        ], $classified);
+    }
+
     public function test_removing_a_dependent_renumbers_the_rest(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
