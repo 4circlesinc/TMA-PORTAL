@@ -18471,22 +18471,33 @@
  * drop boxes — splitting the width evenly would crush the one and strand the
  * other in whitespace.
  */
-/*
- * Sections have to look further apart than the parts inside them.
- *
- * A section holds its title 8px above its own card, and the rows sat 16px
- * apart — near enough the same distance that "Dependents" read as a label
- * floating between two boxes rather than the heading of the one under it.
- * The gap between sections is now four times the gap within one, which is
- * what makes each a group instead of a stack of evenly spaced parts.
- *
- * Rows only: the applicant and their documents sit side by side and want to
- * look joined, so the column gap stays where it was.
- */
 .tma-dash__clients-cards--intake {
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  column-gap: var(--space-16);
-  row-gap: var(--space-32);
+  gap: var(--space-16);
+}
+
+/*
+ * The people stand apart. Everything else stays where it was.
+ *
+ * Main applicant, Sponsor and Dependents each name a person on the
+ * application, and each holds its title 8px above its own card — near enough
+ * the 16px between rows that a heading read as a label floating between two
+ * boxes rather than the name of the one beneath it. They get double the gap
+ * above them, so the space says where one person ends and the next begins.
+ *
+ * Investment is not a person. It is a plain card with its title inside, it
+ * belongs to the application rather than to anybody on it, and widening the
+ * gap around it only pushed the form apart at a seam that is not one.
+ */
+.tma-dash__clients-cards--intake > .tma-portal-section:not(:first-child) {
+  margin-top: var(--space-16);
+}
+
+/* A section's documents card is in the same row, so it moves with it or the
+   pair stops being a pair. The alignment offset below is carried through. */
+.tma-dash__clients-cards--intake
+  > .tma-portal-section:not(:first-child) + .tma-dash__clients-card--narrow {
+  margin-top: calc(var(--text-lh-14) + var(--space-8) + var(--space-16));
 }
 
 /* A section is a heading and its card together, so the grid places the pair —
