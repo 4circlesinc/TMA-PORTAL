@@ -1935,7 +1935,9 @@
     }
     if (state.screen === 'new-application') {
       return '<div class="tma-dash__clients-detail">' +
-        '<div class="tma-dash__clients-profile tma-dash__clients-profile--form">' +
+        // --cards, not --form: the sections are cards, and a card inside the
+        // panel's own fill reads as one grey block.
+        '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
         '<div data-cip-intake-mount data-morph-skip></div>' +
         '</div></div>';
     }

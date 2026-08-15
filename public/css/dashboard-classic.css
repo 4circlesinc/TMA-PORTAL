@@ -13911,6 +13911,23 @@
   padding: var(--space-24);
 }
 
+/*
+ * ...except a panel made of cards, which would be cards inside a card: one
+ * flat grey block with faint seams. The cards carry the colour there.
+ */
+.tma-dash__clients-profile--cards {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.tma-dash__clients-profile--cards > [data-cip-intake-mount] {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .tma-dash__clients-profile {
   display: flex;
   flex-direction: column;

@@ -130,6 +130,19 @@
 
   /* ── steps ─────────────────────────────────────────────────────── */
 
+  /* The same card the service provider page draws a record in. Full width
+     rather than paired: the applicant's eight fields and the investment's
+     three do not balance side by side, and the form reads down the page. */
+  function card(title, description, body) {
+    return '<section class="tma-dash__clients-card">' +
+      '<header class="tma-dash__clients-card-head">' +
+      '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
+      '</header>' +
+      (description ? '<p class="tma-portal-note">' + esc(description) + '</p>' : '') +
+      body +
+      '</section>';
+  }
+
   function applicantStep() {
     var countries = ((state.options && state.options.countries) || []).map(function (c) {
       return { value: c.value, label: c.label };
@@ -139,7 +152,7 @@
     });
     var region = regionFor(state.draft.countryOfResidence);
 
-    return ui().section('Main applicant',
+    return card('Main applicant', 'Every field here is required by the CIP application.',
       '<div class="tma-portal-form-grid">' +
       textField('firstName') +
       textField('lastName') +
@@ -153,8 +166,7 @@
       // Derived, and shown so it is never a surprise on the submitted form.
       (region
         ? '<p class="tma-portal-note" data-cip-region>Region: <strong>' + esc(region) + '</strong> — from the country of residence.</p>'
-        : '<p class="tma-portal-note" data-cip-region>The region follows the country of residence.</p>'),
-      { description: 'Every field here is required by the CIP application.' });
+        : '<p class="tma-portal-note" data-cip-region>The region follows the country of residence.</p>'));
   }
 
   function investmentStep() {
@@ -165,7 +177,7 @@
       return { value: t.value, label: t.label };
     });
 
-    return ui().section('Investment',
+    return card('Investment', 'One investment route per application.',
       '<div class="tma-portal-form-grid">' +
       // One provider and nothing to choose: say whose file this is instead
       // of offering a select of one.
@@ -179,13 +191,12 @@
       '</div>' +
       (String(state.draft.sponsored) === '1'
         ? '<p class="tma-portal-note">A sponsor profile and its own document folder are created with the application.</p>'
-        : ''),
-      { description: 'One investment route per application.' });
+        : ''));
   }
 
   /* The whole ask on one page, in the government form's order. */
   function formBody() {
-    return applicantStep() + investmentStep();
+    return '<div class="tma-dash__clients-cards">' + applicantStep() + investmentStep() + '</div>';
   }
 
   function render(root) {

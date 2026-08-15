@@ -17727,6 +17727,27 @@
   padding: 0;
 }
 
+/*
+ * ...and the intake form, for the same reason.
+ *
+ * A new application is written into the same cards a company is read from, so
+ * the panel behind them has to get out of the way here too, or the sections
+ * are seams in one grey block rather than surfaces of their own.
+ */
+.tma-dash__clients-profile--cards {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* The element a form mounts into is a pass-through, not a layer of its own. */
+.tma-dash__clients-profile--cards > [data-cip-intake-mount] {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .tma-dash__clients-profile {
   display: flex;
   flex-direction: column;
