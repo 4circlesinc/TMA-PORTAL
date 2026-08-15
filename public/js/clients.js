@@ -4527,6 +4527,17 @@
     });
   }
 
+  /* Their real photo when they have one, their initial when they don't —
+     the portal never invents a face (see staffAvatarHtml, same rule). */
+  function ctxAvatarHtml(person) {
+    if (person && person.avatar) {
+      return '<img class="tma-portal-context-menu__avatar" src="' + esc(person.avatar) + '" alt="" width="20" height="20">';
+    }
+    var initial = String((person && person.name) || '?').charAt(0).toUpperCase();
+    return '<span class="tma-portal-context-menu__avatar tma-dash__clients-avatar' +
+      ' tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue">' + esc(initial) + '</span>';
+  }
+
   function renderAssignSub(list) {
     if (!list.length) {
       return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
@@ -4535,6 +4546,7 @@
     return list.map(function (person) {
       return '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
         ' data-clients-assign-to="' + esc(String(person.id)) + '">' +
+        ctxAvatarHtml(person) +
         '<span class="tma-portal-context-menu__label">' + esc(person.name || person.email || 'Staff') + '</span>' +
         '</button>';
     }).join('');

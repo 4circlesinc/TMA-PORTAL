@@ -525,6 +525,18 @@
 
 .tma-portal-context-menu__item--parent[data-open] { background: var(--color-hover); }
 
+/* A person in a menu reads by their face first — the same photo-or-initials
+   avatar the assigned-staff list uses, at menu scale. */
+.tma-portal-context-menu__avatar {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  font-size: 10px;
+  line-height: 20px;
+}
+
 /* Loading and empty rows: the menu's own type, minus the affordance. */
 .tma-portal-context-menu__item--static {
   cursor: default;
