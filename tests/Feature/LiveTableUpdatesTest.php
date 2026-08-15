@@ -141,6 +141,40 @@ class LiveTableUpdatesTest extends TestCase
         $this->assertContains(Live::USERS, $signals);
     }
 
+    public function test_assigning_and_unassigning_updates_the_assignees_own_directory(): void
+    {
+        $admin = $this->admin();
+        $officer = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::REVIEWING_OFFICER,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        $client = Client::create(['uid' => 'cache-client', 'name' => 'Cache Client', 'data' => []]);
+
+        // Warm their directory while they have nothing.
+        $names = fn () => collect(
+            $this->actingAs($officer)->getJson('/portal/clients')->assertOk()->json('clients')
+        )->pluck('name')->all();
+        $this->assertSame([], $names());
+
+        $this->actingAs($admin)->postJson('/portal/clients/'.$client->uid.'/assignments', [
+            'userId' => $officer->id, 'level' => 'editor',
+        ])->assertSuccessful();
+
+        // The assignment is what puts it in their list — a stale cache would
+        // keep the list empty until the entry expired on its own.
+        $this->assertSame(['Cache Client'], $names());
+
+        $this->actingAs($admin)
+            ->deleteJson('/portal/clients/'.$client->uid.'/assignments/'.$officer->id)
+            ->assertSuccessful();
+
+        // And ending it takes the client back out, at once.
+        $this->assertSame([], $names());
+    }
+
     public function test_reading_a_list_signals_nothing(): void
     {
         $admin = $this->admin();

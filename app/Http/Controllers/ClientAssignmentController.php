@@ -8,6 +8,7 @@ use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Clients\Assignments;
+use App\Support\Clients\ClientDirectory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -109,6 +110,7 @@ class ClientAssignmentController extends Controller
         // The assignee's own directory changes shape too — this row is what
         // puts the client in it.
         Live::staffAnd(Live::CLIENTS, [$staff->id]);
+        ClientDirectory::flushFor($staff);
 
         return response()->json([
             'assignments' => $this->present($client->fresh()),
@@ -143,6 +145,7 @@ class ClientAssignmentController extends Controller
         ], $request->user());
 
         Live::staffAnd(Live::CLIENTS, [$userId]);
+        ClientDirectory::flushFor($staff);
 
         return response()->json(['assignments' => $this->present($client->fresh())]);
     }
@@ -167,6 +170,8 @@ class ClientAssignmentController extends Controller
         Assignments::reassign($client, $from, $to, $request->user());
 
         Live::staffAnd(Live::CLIENTS, [$userId, $to->id]);
+        ClientDirectory::flushFor($from->user);
+        ClientDirectory::flushFor($to);
 
         return response()->json([
             'assignments' => $this->present($client->fresh()),
@@ -191,6 +196,7 @@ class ClientAssignmentController extends Controller
         }
 
         Live::staffAnd(Live::CLIENTS, [$userId]);
+        ClientDirectory::flushFor($assignment?->user);
 
         return response()->json([
             'assignments' => $this->present($client->fresh()),

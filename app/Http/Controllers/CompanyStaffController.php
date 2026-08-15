@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Facades\Cache;
+use App\Support\Clients\ClientDirectory;
 use App\Support\Realtime\Live;
 use App\Models\ClientAssignment;
 use App\Models\Company;
@@ -145,6 +147,9 @@ class CompanyStaffController extends Controller
         // provider into somebody's list for the first time.
         Live::staffAnd(Live::COMPANIES, [$staff->id]);
         Live::staffAnd(Live::CLIENTS, [$staff->id]);
+        // A company assignment can reach that firm's clients too.
+        Cache::forget('companies.directory');
+        ClientDirectory::flushFor($staff);
 
         return response()->json([
             'assignments' => $this->present($company),
@@ -194,6 +199,8 @@ class CompanyStaffController extends Controller
 
         Live::staffAnd(Live::COMPANIES, [$userId]);
         Live::staffAnd(Live::CLIENTS, [$userId]);
+        Cache::forget('companies.directory');
+        ClientDirectory::flushFor($assignment?->user);
 
         return response()->json([
             'assignments' => $this->present($company),
