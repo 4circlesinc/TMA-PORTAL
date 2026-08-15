@@ -27,7 +27,7 @@ class ClientAssignmentRolesTest extends TestCase
         return $this->staff('Administrator');
     }
 
-    private function staff(string $type = 'Employee', array $o = []): User
+    private function staff(string $type = 'Reviewing Officer', array $o = []): User
     {
         return User::factory()->create(array_merge([
             'status' => 'approved',

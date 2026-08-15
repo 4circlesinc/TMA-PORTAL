@@ -250,7 +250,7 @@ class ClientAssignmentController extends Controller
             $taken[] = (int) $client->created_by;
         }
 
-        return User::whereIn('account_type', Role::EMPLOYEE_LIKE)
+        return User::whereIn('account_type', Role::OFFICERS)
             ->where('status', 'approved')
             // The firm's own service account owns provisioned folders; it is
             // not somebody to hand a client to.

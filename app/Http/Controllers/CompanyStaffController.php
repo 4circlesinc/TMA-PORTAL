@@ -209,7 +209,7 @@ class CompanyStaffController extends Controller
     {
         $taken = CompanyStaffAssignment::live()->where('company_id', $company->id)->pluck('user_id')->all();
 
-        return User::whereIn('account_type', Role::EMPLOYEE_LIKE)
+        return User::whereIn('account_type', Role::OFFICERS)
             ->where('status', 'approved')
             ->where('email', '!=', (string) config('portal.system_account_email'))
             ->whereNotIn('id', $taken)

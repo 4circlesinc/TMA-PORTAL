@@ -129,7 +129,7 @@ class ClientAssignmentTest extends TestCase
             ->assertOk()
             ->assertJsonPath('settings.autoCreateStaffFolder', true);
     }
-    public function test_the_assignable_list_leaves_out_admins_and_the_service_account(): void
+    public function test_the_assignable_list_offers_only_working_staff(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $admin->forceFill(['name' => 'An Admin'])->save();
@@ -137,6 +137,8 @@ class ClientAssignmentTest extends TestCase
         $officer->forceFill(['name' => 'An Officer'])->save();
         $system = $this->user(Role::REVIEWING_OFFICER);
         $system->forceFill(['name' => 'The Firm', 'email' => (string) config('portal.system_account_email')])->save();
+        $parked = $this->user(Role::EMPLOYEE);
+        $parked->forceFill(['name' => 'A Parked Account'])->save();
         $client = Client::create(['uid' => 'assignable-co', 'name' => 'Assignable Co', 'data' => []]);
 
         $names = collect(
@@ -144,10 +146,12 @@ class ClientAssignmentTest extends TestCase
                 ->assertOk()->json('assignable')
         )->pluck('name');
 
-        // Administrators already reach every client, and the firm's own
+        // Administrators already reach every client, a parked Employee cannot
+        // get past the role-pending screen to open one, and the firm's own
         // service account is not somebody to hand work to.
         $this->assertContains('An Officer', $names->all());
         $this->assertNotContains('An Admin', $names->all());
+        $this->assertNotContains('A Parked Account', $names->all());
         $this->assertNotContains('The Firm', $names->all());
     }
 }

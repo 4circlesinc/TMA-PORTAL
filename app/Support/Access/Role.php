@@ -93,6 +93,20 @@ class Role
     ];
 
     /**
+     * The working non-administrator staff types — the people a client or a
+     * service provider can actually be handed to.
+     *
+     * EMPLOYEE_LIKE is not the same question: it includes the parked Employee
+     * type, whose accounts sit on the role-pending screen and cannot reach
+     * the portal at all. Offering one of them as an assignee promises work to
+     * somebody who cannot open it.
+     */
+    public const OFFICERS = [
+        self::REVIEWING_OFFICER,
+        self::COMPLIANCE_OFFICER,
+    ];
+
+    /**
      * capability => the non-administrator roles that hold it.
      *
      * An empty array means administrators only. A capability that is not
