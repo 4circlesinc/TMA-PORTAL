@@ -14,6 +14,7 @@ use App\Support\Cip\Countries;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -56,26 +57,39 @@ class CipIntakeTest extends TestCase
     }
 
     /**
-     * A square image of a given size, as the data URL the wizard posts.
+     * A real square image of a given size, as an upload.
      *
-     * Drawn rather than fixtured: the rules are about pixels, and a test that
-     * has to ship a 600×600 JPEG to prove 599 is refused proves it badly.
+     * Drawn rather than fixtured: the rules are about pixel dimensions, and a
+     * test that has to ship a 600×600 JPEG to prove 599 is refused proves it
+     * badly. UploadedFile::fake()->image() would do the drawing, but not the
+     * bytes — the validator reads them with GD.
      */
-    private function photo(int $width = 600, ?int $height = null): string
+    private function photo(int $width = 600, ?int $height = null): UploadedFile
     {
         $img = imagecreatetruecolor($width, $height ?? $width);
         imagefill($img, 0, 0, imagecolorallocate($img, 200, 210, 220));
-        ob_start();
-        imagejpeg($img, null, 90);
 
-        return 'data:image/jpeg;base64,'.base64_encode((string) ob_get_clean());
+        $path = tempnam(sys_get_temp_dir(), 'cip').'.jpg';
+        imagejpeg($img, $path, 90);
+
+        return new UploadedFile($path, 'photo.jpg', 'image/jpeg', null, true);
     }
 
-    /** @return array<string, mixed> */
+    /** A scanned document — the bytes are never inspected, only the size. */
+    private function scan(string $name = 'scan.pdf'): UploadedFile
+    {
+        return UploadedFile::fake()->create($name, 40, 'application/pdf');
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * Flat rather than nested for the same reason the request is: this is a
+     * multipart body, and `sponsor[firstName]` is how one carries a sponsor.
+     */
     private function payload(CipProvider $provider, array $overrides = []): array
     {
         return array_merge([
-            'passportPhoto' => $this->photo(),
             'providerId' => $provider->uuid,
             'firstName' => 'John',
             'lastName' => 'Smith',
@@ -85,9 +99,35 @@ class CipIntakeTest extends TestCase
             'countryOfResidence' => 'United Arab Emirates',
             'occupation' => 'Engineer',
             'passportNumber' => 'X1234567',
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => $this->scan('bio.pdf'),
+            'birthCertificate' => $this->scan('birth.pdf'),
             'investmentType' => InvestmentType::REAL_ESTATE,
-            'sponsored' => false,
+            'sponsored' => '0',
         ], $overrides);
+    }
+
+    /** The whole sponsor block §4 asks for when Sponsored is Yes. */
+    private function sponsor(array $overrides = []): array
+    {
+        return ['sponsor' => array_merge([
+            'firstName' => 'Maryam',
+            'lastName' => 'Haddad',
+            'gender' => 'Female',
+            'dateOfBirth' => '1960-02-02',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'Lebanon',
+            'occupation' => 'Retired',
+            'passportNumber' => 'S7654321',
+            'passportPhoto' => $this->photo(),
+        ], $overrides)];
+    }
+
+    /** Post the intake the way the form does — multipart, not JSON. */
+    private function file(User $actor, array $payload)
+    {
+        return $this->actingAs($actor)
+            ->post('/portal/cip/applications', $payload, ['Accept' => 'application/json']);
     }
 
     public function test_a_complete_application_is_filed_as_a_numbered_draft(): void
@@ -95,8 +135,8 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::REVIEWING_OFFICER);
         $provider = $this->provider('GAL');
 
-        $body = $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider))
+        $body = $this->file($staff,
+                $this->payload($provider))
             ->assertCreated()
             ->json('application');
 
@@ -125,7 +165,7 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::REVIEWING_OFFICER);
         $provider = $this->provider('GAL');
 
-        $body = $this->actingAs($staff)->postJson('/portal/cip/applications', $this->payload($provider, [
+        $body = $this->file($staff, $this->payload($provider, [
             'countryOfResidence' => 'Saint Lucia',
             // A form that tried to dictate the region is ignored.
             'region' => 'Antarctica',
@@ -149,8 +189,8 @@ class CipIntakeTest extends TestCase
             $payload = $this->payload($provider);
             unset($payload[$field]);
 
-            $this->actingAs($staff)
-                ->postJson('/portal/cip/applications', $payload)
+            $this->file($staff,
+                    $payload)
                 ->assertStatus(422)
                 ->assertJsonValidationErrors($field);
         }
@@ -164,15 +204,15 @@ class CipIntakeTest extends TestCase
         $provider = $this->provider('GAL');
 
         // §3: choosing Other reveals a required "Specify Investment Type".
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, [
+        $this->file($staff,
+                $this->payload($provider, [
                 'investmentType' => InvestmentType::OTHER,
             ]))
             ->assertStatus(422)
             ->assertJsonValidationErrors('investmentTypeOther');
 
-        $body = $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, [
+        $body = $this->file($staff,
+                $this->payload($provider, [
                 'investmentType' => InvestmentType::OTHER,
                 'investmentTypeOther' => 'Government bond variant',
             ]))
@@ -188,16 +228,16 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::REVIEWING_OFFICER);
         $provider = $this->provider('GAL');
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, ['gender' => 'Other']))
+        $this->file($staff,
+                $this->payload($provider, ['gender' => 'Other']))
             ->assertStatus(422)->assertJsonValidationErrors('gender');
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, ['countryOfBirth' => 'Atlantis']))
+        $this->file($staff,
+                $this->payload($provider, ['countryOfBirth' => 'Atlantis']))
             ->assertStatus(422)->assertJsonValidationErrors('countryOfBirth');
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, ['dateOfBirth' => now()->addYear()->toDateString()]))
+        $this->file($staff,
+                $this->payload($provider, ['dateOfBirth' => now()->addYear()->toDateString()]))
             ->assertStatus(422)->assertJsonValidationErrors('dateOfBirth');
     }
 
@@ -224,13 +264,13 @@ class CipIntakeTest extends TestCase
         $this->assertTrue($form['providerFixed']);
 
         // §1: Service Providers create applications.
-        $this->actingAs($contact)
-            ->postJson('/portal/cip/applications', $this->payload($mine))
+        $this->file($contact,
+                $this->payload($mine))
             ->assertCreated();
 
         // Another firm's code is not theirs to file under, even if named.
-        $this->actingAs($contact)
-            ->postJson('/portal/cip/applications', $this->payload($theirs))
+        $this->file($contact,
+                $this->payload($theirs))
             ->assertStatus(422);
     }
 
@@ -243,8 +283,8 @@ class CipIntakeTest extends TestCase
         $form = $this->actingAs($account)->getJson('/portal/cip/applications/form')->assertOk()->json();
         $this->assertSame(['PRI'], collect($form['providers'])->pluck('code')->all());
 
-        $body = $this->actingAs($account)
-            ->postJson('/portal/cip/applications', $this->payload($private))
+        $body = $this->file($account,
+                $this->payload($private))
             ->assertCreated()->json('application');
 
         $this->assertStringStartsWith('PRI', $body['internalNumber']);
@@ -257,8 +297,8 @@ class CipIntakeTest extends TestCase
 
         // 404, not 403: the module does not exist for them.
         $this->actingAs($stranger)->getJson('/portal/cip/applications/form')->assertNotFound();
-        $this->actingAs($stranger)
-            ->postJson('/portal/cip/applications', $this->payload($provider))
+        $this->file($stranger,
+                $this->payload($provider))
             ->assertNotFound();
     }
 
@@ -269,8 +309,8 @@ class CipIntakeTest extends TestCase
         $provider = $this->provider('GAL');
 
         $this->actingAs($admin)->getJson('/portal/cip/applications/form')->assertNotFound();
-        $this->actingAs($admin)
-            ->postJson('/portal/cip/applications', $this->payload($provider))
+        $this->file($admin,
+                $this->payload($provider))
             ->assertNotFound();
     }
 
@@ -280,8 +320,8 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::REVIEWING_OFFICER);
         $provider = $this->provider('GAL');
 
-        $body = $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider))
+        $body = $this->file($staff,
+                $this->payload($provider))
             ->assertCreated()->json('application');
 
         // One upload, two jobs: the picture drawn beside the applicant's name
@@ -309,23 +349,23 @@ class CipIntakeTest extends TestCase
         $provider = $this->provider('GAL');
 
         // Square but too small to print at two inches.
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, [
+        $this->file($staff,
+                $this->payload($provider, [
                 'passportPhoto' => $this->photo(400),
             ]))
             ->assertStatus(422)->assertJsonValidationErrors('passportPhoto');
 
         // Big enough, but a portrait snapshot — centre-cropping it would cut
         // the head the government wants framed, so it is refused, not fixed.
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, [
+        $this->file($staff,
+                $this->payload($provider, [
                 'passportPhoto' => $this->photo(600, 900),
             ]))
             ->assertStatus(422)->assertJsonValidationErrors('passportPhoto');
 
         // Not an image at all.
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider, [
+        $this->file($staff,
+                $this->payload($provider, [
                 'passportPhoto' => 'data:image/jpeg;base64,'.base64_encode('not a picture'),
             ]))
             ->assertStatus(422)->assertJsonValidationErrors('passportPhoto');
@@ -339,8 +379,8 @@ class CipIntakeTest extends TestCase
         $staff = $this->user(Role::REVIEWING_OFFICER);
         $provider = $this->provider('GAL');
 
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications', $this->payload($provider))
+        $this->file($staff,
+                $this->payload($provider))
             ->assertCreated();
 
         $person = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
@@ -353,6 +393,211 @@ class CipIntakeTest extends TestCase
         // cannot open the application cannot see who it is for.
         $stranger = $this->user(Role::CLIENT);
         $this->actingAs($stranger)->get($url)->assertNotFound();
+    }
+
+    public function test_saying_yes_to_sponsored_files_the_sponsor_in_the_same_save(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, array_merge(
+            ['sponsored' => '1'],
+            $this->sponsor(),
+        )))->assertCreated()->json('application');
+
+        // §4: the sponsor is not a follow-up step somebody can skip.
+        $this->assertSame('Maryam Haddad', $body['sponsor']['name']);
+        $this->assertSame('Sponsor', $body['sponsor']['label']);
+        $this->assertSame(2, $body['familySize']);
+
+        $sponsor = CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR);
+        $this->assertNotNull($sponsor->photo_url, 'a sponsor has a face like everyone else');
+        $this->assertNotNull($sponsor->folder_id, 'and their own document repository');
+
+        // Their checklist exists from the first save, mostly unanswered —
+        // that is what makes it a checklist rather than a pile of uploads.
+        $this->assertSame(
+            ['Passport bio page', 'Birth certificate'],
+            \App\Support\Cip\DocumentSlots::outstanding($sponsor),
+        );
+    }
+
+    public function test_a_sponsored_application_will_not_file_without_the_sponsor(): void
+    {
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, ['sponsored' => '1']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['sponsor.firstName', 'sponsor.passportPhoto']);
+
+        $this->assertSame(0, CipApplication::count());
+
+        // ...and an unsponsored one files with no sponsor at all.
+        $body = $this->file($staff, $this->payload($provider))
+            ->assertCreated()->json('application');
+        $this->assertNull($body['sponsor']);
+    }
+
+    public function test_qualified_dependents_are_numbered_from_the_youngest(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'dependents' => [
+                ['firstName' => 'Nadia', 'lastName' => 'Smith', 'dateOfBirth' => '1990-01-01',
+                    'relationship' => CipPerson::RELATIONSHIP_SPOUSE],
+                ['firstName' => 'Omar', 'lastName' => 'Smith', 'dateOfBirth' => '2010-05-05',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+                ['firstName' => 'Lina', 'lastName' => 'Smith', 'dateOfBirth' => '2016-09-09',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+                ['firstName' => 'Sami', 'lastName' => 'Smith', 'dateOfBirth' => '2013-03-03',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+            ],
+        ]))->assertCreated()->json('application');
+
+        // §5's worked example: youngest first. Lina (2016) is QD1.
+        $numbered = collect($body['dependents'])
+            ->filter(fn ($d) => $d['relationship'] === CipPerson::RELATIONSHIP_QUALIFIED)
+            ->sortBy('dependentOrdinal')
+            ->pluck('name')->values()->all();
+        $this->assertSame(['Lina Smith', 'Sami Smith', 'Omar Smith'], $numbered);
+
+        // A spouse is a dependent but not a *qualified* one, so numbering
+        // them would shift every ordinal on the government's form.
+        $spouse = collect($body['dependents'])->firstWhere('name', 'Nadia Smith');
+        $this->assertNull($spouse['dependentOrdinal']);
+        $this->assertSame('Spouse', $spouse['label']);
+
+        $this->assertSame(5, $body['familySize']);
+    }
+
+    public function test_removing_a_dependent_renumbers_the_rest(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, [
+            'dependents' => [
+                ['firstName' => 'Omar', 'lastName' => 'S', 'dateOfBirth' => '2010-05-05',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+                ['firstName' => 'Lina', 'lastName' => 'S', 'dateOfBirth' => '2016-09-09',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+            ],
+        ]))->assertCreated();
+
+        $application = CipApplication::first();
+        $lina = CipPerson::firstWhere('first_name', 'Lina');
+        $this->assertSame(1, $lina->dependent_ordinal);
+
+        // The ordinal is a position in a list, so losing QD1 must not leave
+        // the application with a QD2 and no QD1.
+        $lina->delete();
+        \App\Support\Cip\Dependents::renumber($application->fresh());
+
+        $this->assertSame(1, CipPerson::firstWhere('first_name', 'Omar')->dependent_ordinal);
+
+        // ...and the folder follows the label rather than keeping a stale one.
+        \App\Support\Cip\Tree::resyncNames($application->fresh());
+        $this->assertSame(
+            'Qualified Dependent 1',
+            \App\Models\Folder::find(CipPerson::firstWhere('first_name', 'Omar')->folder_id)->name,
+        );
+    }
+
+    public function test_the_application_gets_a_client_record_and_a_folder_per_person(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        // An administrator exists so the firm's owner is demonstrably not the
+        // officer filing — with only one user, every fallback resolves to them.
+        $this->user(Role::ADMINISTRATOR);
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $provider = $this->provider('GAL', $company);
+
+        $this->file($staff, $this->payload($provider, array_merge(
+            ['sponsored' => '1', 'dependents' => [
+                ['firstName' => 'Lina', 'lastName' => 'Smith', 'dateOfBirth' => '2016-09-09',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+            ]],
+            $this->sponsor(),
+        )))->assertCreated();
+
+        $application = CipApplication::first();
+
+        // The applicant becomes a client-hub record, so the Service-Provider
+        // path and the Private-Client path have the same shape.
+        $client = Client::find($application->client_id);
+        $this->assertNotNull($client, 'the applicant is a client record now');
+        $this->assertSame('John Smith', $client->name);
+        $this->assertSame($company->id, $client->referred_by_company_id);
+
+        // §6's tree, under that client's folder rather than loose in the
+        // library — where the firm-wide downloader default would reach it.
+        $root = \App\Models\Folder::find($application->folder_id);
+        $this->assertSame('Application '.$application->internal_number, $root->name);
+        $this->assertSame($client->folder_id, $root->parent_id);
+
+        $children = \App\Models\Folder::where('parent_id', $root->id)->pluck('name')->sort()->values()->all();
+        $this->assertSame(
+            ['Additional Documents', 'Main Applicant', 'Qualified Dependent 1', 'Sponsor'],
+            $children,
+        );
+
+        // Owned by the firm, not the person who pressed Add: an owner's
+        // rights cannot be revoked, and folders cascade on user delete.
+        $this->assertSame(\App\Support\Files\FolderProvisioner::systemOwnerId(), $root->owner_id);
+        $this->assertNotSame($staff->id, $root->owner_id);
+    }
+
+    public function test_the_intake_uploads_land_in_document_slots(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider))
+            ->assertCreated()->json('application');
+
+        // §2's three uploads are answers to requirements from the first save,
+        // not loose files Phase 3 would have to find and re-home.
+        $this->assertSame(
+            ['Passport photo', 'Passport bio page', 'Birth certificate'],
+            collect($body['applicant']['documents'])->pluck('label')->all(),
+        );
+        $this->assertTrue(collect($body['applicant']['documents'])->every(fn ($d) => $d['uploaded']));
+        $this->assertSame([], $body['applicant']['outstanding']);
+
+        $main = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $slot = \App\Models\CipDocument::where('person_id', $main->id)
+            ->where('type', \App\Support\Cip\DocumentTypes::BIRTH_CERTIFICATE)->first();
+
+        // Through Vault and Versions like every other file in the portal, so
+        // these are ordinary library objects with ordinary history.
+        $file = \App\Models\FileItem::find($slot->file_id);
+        $this->assertSame($main->folder_id, $file->folder_id);
+        $this->assertSame('John Smith — Birth certificate.pdf', $file->name);
+        $this->assertDatabaseHas('file_versions', ['file_id' => $file->id, 'version_number' => 1]);
+    }
+
+    public function test_a_bio_page_that_is_not_a_document_is_refused(): void
+    {
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, [
+            'passportBioPage' => UploadedFile::fake()->create('notes.exe', 20),
+        ]))->assertStatus(422)->assertJsonValidationErrors('passportBioPage');
+
+        $this->file($staff, $this->payload($provider, [
+            'birthCertificate' => UploadedFile::fake()->create('huge.pdf', 20480, 'application/pdf'),
+        ]))->assertStatus(422)->assertJsonValidationErrors('birthCertificate');
+
+        $this->assertSame(0, CipApplication::count());
     }
 
     public function test_the_form_offers_the_five_investment_types_and_every_country(): void

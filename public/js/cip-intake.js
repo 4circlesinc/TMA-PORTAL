@@ -1,19 +1,26 @@
-/* TMA — CIP application intake (§2 Application Creation, §3 Investment Types)
+/* TMA — CIP application intake (§2–§6)
  *
  * The form the firm actually files with: the government's own field set, in
  * the government's own order, so what is collected here is what gets
  * submitted. One page, like every other form in the hub — the reader fills
  * it top to bottom and sees the whole ask at once.
  *
- * Two answers are never asked for. The region follows the country of
- * residence, and the application number is minted server-side; the review
- * step shows both so the reader can see what the record will say without
- * being invited to contradict it.
+ * Fields are keyed by the path the server validates them under —
+ * `firstName`, `sponsor.firstName`, `dependents.2.dateOfBirth`. That is the
+ * whole trick that lets one set of field helpers draw a main applicant, a
+ * sponsor and any number of dependents: a 422 comes back keyed the same way,
+ * so the server's objection lands on the exact control that caused it without
+ * anything having to translate between the two.
  *
- * The options come from the server (/portal/cip/applications/form) rather
- * than a list in here: the country a browser offers and the country the
- * validator accepts have to be the same list, and the region mapping lives
- * with it.
+ * Three answers are never asked for. The region follows the country of
+ * residence, the application number is minted server-side, and a qualified
+ * dependent's number is computed from the dates of birth — the form shows all
+ * three so the reader can see what the record will say without being invited
+ * to contradict it.
+ *
+ * Uploads are real files on a multipart body, not base64 in JSON: a scanned
+ * passport would grow by a third on the way and put the request through its
+ * own size limit for nothing.
  */
 (function () {
   'use strict';
@@ -21,24 +28,35 @@
   var ui = function () { return window.TMAPortalUI; };
   var MORPH = window.TMAMorph;
 
-  /* One draft per mount. Deliberately not persisted yet: until the wizard can
-     save a partial application server-side (Phase 2d), a "resume" that lived
-     only in this tab would promise more than it keeps. */
+  var ICON = 'images/icons/phosphor/';
+  /* 2 inches at 300dpi — the same floor App\Support\Cip\PassportPhoto keeps. */
+  var PHOTO_MIN_PX = 600;
+  var MAX_DOCUMENT_MB = 10;
+  var MAX_DEPENDENTS = 20;
+
+  /* One draft per mount. Deliberately not persisted yet: until the form can
+     save a partial application server-side, a "resume" that lived only in
+     this tab would promise more than it keeps. */
   function emptyDraft() {
     return {
       providerId: '', firstName: '', lastName: '', gender: '',
       dateOfBirth: '', countryOfBirth: '', countryOfResidence: '',
-      occupation: '', passportNumber: '', passportPhoto: '',
+      occupation: '', passportNumber: '',
       investmentType: '', investmentTypeOther: '', sponsored: '',
     };
   }
 
-  var ICON = 'images/icons/phosphor/';
-  /* 2 inches at 300dpi — the same floor App\Support\Cip\PassportPhoto keeps. */
-  var PHOTO_MIN_PX = 600;
-
   var state = {
     draft: emptyDraft(),
+    /* Chosen files, keyed by the same path the server validates. Kept apart
+       from the draft because a File cannot be re-rendered into an attribute
+       the way a string can. */
+    files: {},
+    /* Data URLs for the photo previews only — display, never the payload. */
+    previews: {},
+    /* How many dependent blocks are on the page. The rows themselves live in
+       the draft under dependents.N.*, so removing one has to close the gap. */
+    dependents: 0,
     options: null,
     loading: false,
     error: '',
@@ -49,31 +67,73 @@
 
   function esc(s) { return ui().esc(s); }
 
-  /* ── what each step must answer before it can be left ──────────────
+  /* ── what the form owes before it can be filed ─────────────────────
      Mirrors App\Support\Cip\Intake::rules — the server is the authority,
      this only spares the reader a round trip to find out. */
-  var REQUIRED = ['providerId', 'firstName', 'lastName', 'gender', 'dateOfBirth',
-    'countryOfBirth', 'countryOfResidence', 'occupation', 'passportNumber',
-    'passportPhoto', 'investmentType', 'sponsored'];
+  var PERSON_FIELDS = ['firstName', 'lastName', 'gender', 'dateOfBirth',
+    'countryOfBirth', 'countryOfResidence', 'occupation', 'passportNumber'];
 
   var LABELS = {
     providerId: 'Service provider', firstName: 'First name', lastName: 'Last name',
     gender: 'Gender', dateOfBirth: 'Date of birth', countryOfBirth: 'Country of birth',
     countryOfResidence: 'Country of residence', occupation: 'Occupation',
     passportNumber: 'Passport number', passportPhoto: 'Passport photo',
-    investmentType: 'Investment type',
-    investmentTypeOther: 'Specify investment type', sponsored: 'Sponsored',
+    passportBioPage: 'Passport bio page', birthCertificate: 'Birth certificate',
+    investmentType: 'Investment type', investmentTypeOther: 'Specify investment type',
+    sponsored: 'Sponsored', relationship: 'Relationship',
   };
+
+  /* The label for a path: the last segment names the field. */
+  function labelFor(path) {
+    return LABELS[path.split('.').pop()] || path;
+  }
+
+  function sponsored() { return String(state.draft.sponsored) === '1'; }
+
+  /* Every path this form must have an answer for, given what it now says. */
+  function requiredPaths() {
+    var paths = ['providerId'].concat(PERSON_FIELDS)
+      .concat(['investmentType', 'sponsored']);
+
+    if (sponsored()) {
+      paths = paths.concat(PERSON_FIELDS.map(function (f) { return 'sponsor.' + f; }));
+    }
+
+    for (var i = 0; i < state.dependents; i++) {
+      paths = paths.concat(['firstName', 'lastName', 'dateOfBirth', 'relationship']
+        .map(function (f) { return 'dependents.' + i + '.' + f; }));
+    }
+
+    return paths;
+  }
+
+  /* Files are required in their own right — an empty one is not a blank
+     string, so it cannot be checked the same way. */
+  function requiredFiles() {
+    var paths = ['passportPhoto', 'passportBioPage', 'birthCertificate'];
+    if (sponsored()) paths.push('sponsor.passportPhoto');
+
+    return paths;
+  }
 
   function missing() {
     var found = {};
-    REQUIRED.forEach(function (field) {
-      if (String(state.draft[field] || '').trim() === '') found[field] = LABELS[field] + ' is required';
+
+    requiredPaths().forEach(function (path) {
+      if (String(state.draft[path] || '').trim() === '') {
+        found[path] = labelFor(path) + ' is required';
+      }
     });
+
+    requiredFiles().forEach(function (path) {
+      if (!state.files[path]) found[path] = labelFor(path) + ' is required';
+    });
+
     if (state.draft.investmentType === 'other'
       && String(state.draft.investmentTypeOther || '').trim() === '') {
       found.investmentTypeOther = 'Say which investment type this is';
     }
+
     return found;
   }
 
@@ -89,120 +149,177 @@
     return '';
   }
 
-  function investmentLabel() {
-    if (state.draft.investmentType === 'other') {
-      return state.draft.investmentTypeOther || 'Other';
+  /*
+   * Who is qualified dependent number what.
+   *
+   * Drawn, not asked: §5 numbers qualified dependents by age and the server
+   * computes the same order on save. Showing it here means the reader sees
+   * the answer the record will hold rather than discovering it afterwards.
+   */
+  function ordinals() {
+    var rows = [];
+    for (var i = 0; i < state.dependents; i++) {
+      if (state.draft['dependents.' + i + '.relationship'] !== 'qualified_dependent') continue;
+      var dob = state.draft['dependents.' + i + '.dateOfBirth'];
+      if (!dob) continue;
+      rows.push({ index: i, dob: dob });
     }
-    var list = (state.options && state.options.investmentTypes) || [];
-    for (var i = 0; i < list.length; i++) if (list[i].value === state.draft.investmentType) return list[i].label;
-    return '';
+
+    // Youngest first — the later the date of birth, the lower the number.
+    rows.sort(function (a, b) { return a.dob < b.dob ? 1 : a.dob > b.dob ? -1 : 0; });
+
+    var out = {};
+    rows.forEach(function (row, n) { out[row.index] = n + 1; });
+
+    return out;
   }
 
   /* ── fields ────────────────────────────────────────────────────── */
 
-  function fieldError(name) {
-    var msg = state.errors[name];
+  function fieldError(path) {
+    var msg = state.errors[path];
     return msg ? '<span class="tma-portal-field__error">' + esc(msg) + '</span>' : '';
   }
 
-  function textField(name, opts) {
+  function textField(path, opts) {
     opts = opts || {};
-    return '<label class="tma-portal-field' + (state.errors[name] ? ' is-invalid' : '') + '">' +
-      '<span class="tma-portal-field__label">' + esc(LABELS[name]) + '</span>' +
+    return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
+      '<span class="tma-portal-field__label">' + esc(opts.label || labelFor(path)) + '</span>' +
       '<input class="tma-portal-input" type="' + (opts.type || 'text') + '"' +
-      ' data-cip-field="' + name + '"' +
-      ' value="' + esc(state.draft[name] || '') + '"' +
+      ' data-cip-field="' + esc(path) + '"' +
+      ' value="' + esc(state.draft[path] || '') + '"' +
       (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') +
       (opts.max ? ' max="' + esc(opts.max) + '"' : '') +
       ' autocomplete="off">' +
-      fieldError(name) +
+      fieldError(path) +
       '</label>';
   }
 
-  function selectField(name, options, placeholder) {
-    var opts = [{ value: '', label: placeholder }].concat(options);
-    return '<label class="tma-portal-field' + (state.errors[name] ? ' is-invalid' : '') + '">' +
-      '<span class="tma-portal-field__label">' + esc(LABELS[name]) + '</span>' +
-      '<select class="tma-portal-select" data-cip-field="' + name + '">' +
-      opts.map(function (o) {
+  function selectField(path, options, placeholder, opts) {
+    opts = opts || {};
+    var list = [{ value: '', label: placeholder }].concat(options);
+    return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
+      '<span class="tma-portal-field__label">' + esc(opts.label || labelFor(path)) + '</span>' +
+      '<select class="tma-portal-select" data-cip-field="' + esc(path) + '">' +
+      list.map(function (o) {
         return '<option value="' + esc(o.value) + '"' +
-          (String(state.draft[name]) === String(o.value) ? ' selected' : '') + '>' +
+          (String(state.draft[path]) === String(o.value) ? ' selected' : '') + '>' +
           esc(o.label) + '</option>';
       }).join('') +
-      '</select>' + fieldError(name) +
+      '</select>' + fieldError(path) +
       '</label>';
   }
 
   /* The client form's photo control, wearing the passport photo's rules. The
-     same component so an applicant's picture is added the way every other
+     same component so a person's picture is added the way every other
      person's is; only the constraint is different, and the constraint is the
      one thing worth saying out loud. */
-  function photoField() {
-    var has = !!state.draft.passportPhoto;
+  function photoField(path) {
+    var preview = state.previews[path];
     return '<div class="tma-dash__clients-photo' +
-      (state.errors.passportPhoto ? ' is-invalid' : '') + '">' +
-      '<span class="tma-portal-field__label">' + esc(LABELS.passportPhoto) + '</span>' +
+      (state.errors[path] ? ' is-invalid' : '') + '">' +
+      '<span class="tma-portal-field__label">' + esc(labelFor(path)) + '</span>' +
       '<input type="file" accept="image/jpeg,image/png,image/webp"' +
-      ' class="tma-dash__clients-photo-input" data-cip-photo-input aria-hidden="true">' +
+      ' class="tma-dash__clients-photo-input" data-cip-photo="' + esc(path) + '" aria-hidden="true">' +
       '<div class="tma-dash__clients-photo-wrap">' +
       '<button type="button" class="tma-dash__clients-photo-btn"' +
-      (has ? ' data-has-image="true"' : '') + ' data-cip-photo-btn>' +
+      (preview ? ' data-has-image="true"' : '') + ' data-cip-photo-btn="' + esc(path) + '">' +
       '<img src="' + ICON + 'User.svg" alt="" class="tma-dash__clients-photo-placeholder" width="40" height="40">' +
-      '<img alt="" class="tma-dash__clients-photo-preview" data-cip-photo-preview width="80" height="80"' +
-      (has ? ' src="' + esc(state.draft.passportPhoto) + '"' : '') + '>' +
+      '<img alt="" class="tma-dash__clients-photo-preview" width="80" height="80"' +
+      (preview ? ' src="' + esc(preview) + '"' : '') + '>' +
       '</button>' +
-      '<button type="button" class="tma-dash__clients-photo-remove" data-cip-photo-remove aria-label="Remove photo">' +
+      '<button type="button" class="tma-dash__clients-photo-remove"' +
+      ' data-cip-photo-remove="' + esc(path) + '" aria-label="Remove photo">' +
       '<img src="' + ICON + 'Xcircle.svg" alt="" class="tma-dash__clients-photo-remove-icon" width="20" height="20">' +
       '</button></div>' +
       '<p class="tma-dash__clients-photo-hint">2×2 inches, square, ' +
       PHOTO_MIN_PX + '×' + PHOTO_MIN_PX + ' pixels or larger.</p>' +
-      fieldError('passportPhoto') +
+      fieldError(path) +
       '</div>';
   }
 
-  /* ── steps ─────────────────────────────────────────────────────── */
+  /* A scan, named once chosen. No preview: a reader recognises a document by
+     its filename, and rendering a PDF here would be a viewer, not a field. */
+  function documentField(path) {
+    var file = state.files[path];
+    return '<div class="tma-portal-field tma-portal-file' +
+      (state.errors[path] ? ' is-invalid' : '') + '">' +
+      '<span class="tma-portal-field__label">' + esc(labelFor(path)) + '</span>' +
+      '<input type="file" accept=".pdf,image/*" class="tma-dash__clients-photo-input"' +
+      ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +
+      '<div class="tma-portal-file__row">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost"' +
+      ' data-cip-file-btn="' + esc(path) + '">' +
+      (file ? 'Replace' : 'Choose file') + '</button>' +
+      (file
+        ? '<span class="tma-portal-file__name">' + esc(file.name) + '</span>' +
+          '<button type="button" class="tma-portal-file__clear"' +
+          ' data-cip-file-remove="' + esc(path) + '" aria-label="Remove">' +
+          '<img src="' + ICON + 'Xcircle.svg" alt="" width="16" height="16"></button>'
+        : '<span class="tma-portal-file__name tma-portal-file__name--empty">PDF or image, up to ' +
+          MAX_DOCUMENT_MB + 'MB</span>') +
+      '</div>' +
+      fieldError(path) +
+      '</div>';
+  }
 
-  /* The same card the service provider page draws a record in. Full width
-     rather than paired: the applicant's eight fields and the investment's
-     three do not balance side by side, and the form reads down the page. */
-  function card(title, body) {
+  /* ── cards ─────────────────────────────────────────────────────── */
+
+  function card(title, body, opts) {
+    opts = opts || {};
     return '<section class="tma-dash__clients-card">' +
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
+      (opts.action || '') +
       '</header>' +
       body +
       '</section>';
   }
 
-  function applicantStep() {
-    var countries = ((state.options && state.options.countries) || []).map(function (c) {
+  function countryOptions() {
+    return ((state.options && state.options.countries) || []).map(function (c) {
       return { value: c.value, label: c.label };
     });
-    var genders = ((state.options && state.options.genders) || []).map(function (g) {
-      return { value: g, label: g };
-    });
-    var region = regionFor(state.draft.countryOfResidence);
-
-    return card('Main applicant',
-      photoField() +
-      '<div class="tma-portal-form-grid">' +
-      textField('firstName') +
-      textField('lastName') +
-      selectField('gender', genders, 'Select') +
-      textField('dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +
-      selectField('countryOfBirth', countries, 'Select a country') +
-      selectField('countryOfResidence', countries, 'Select a country') +
-      textField('occupation') +
-      textField('passportNumber', { placeholder: 'As printed on the bio page' }) +
-      '</div>' +
-      // Derived, and shown so it is never a surprise on the submitted form.
-      // Nothing to say before a country is chosen.
-      (region
-        ? '<p class="tma-portal-note" data-cip-region>Region: <strong>' + esc(region) + '</strong></p>'
-        : ''));
   }
 
-  function investmentStep() {
+  function genderOptions() {
+    return ((state.options && state.options.genders) || []).map(function (g) {
+      return { value: g, label: g };
+    });
+  }
+
+  /* The eight fields §2 asks of a person, and §4 asks again of a sponsor. */
+  function personFields(prefix) {
+    var countries = countryOptions();
+    var region = regionFor(state.draft[prefix + 'countryOfResidence']);
+
+    return '<div class="tma-portal-form-grid">' +
+      textField(prefix + 'firstName') +
+      textField(prefix + 'lastName') +
+      selectField(prefix + 'gender', genderOptions(), 'Select') +
+      textField(prefix + 'dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +
+      selectField(prefix + 'countryOfBirth', countries, 'Select a country') +
+      selectField(prefix + 'countryOfResidence', countries, 'Select a country') +
+      textField(prefix + 'occupation') +
+      textField(prefix + 'passportNumber', { placeholder: 'As printed on the bio page' }) +
+      '</div>' +
+      (region
+        ? '<p class="tma-portal-note" data-cip-region="' + esc(prefix) + '">Region: <strong>' +
+          esc(region) + '</strong></p>'
+        : '');
+  }
+
+  function applicantCard() {
+    return card('Main applicant',
+      photoField('passportPhoto') +
+      personFields('') +
+      '<div class="tma-portal-form-grid">' +
+      documentField('passportBioPage') +
+      documentField('birthCertificate') +
+      '</div>');
+  }
+
+  function investmentCard() {
     var providers = ((state.options && state.options.providers) || []).map(function (p) {
       return { value: p.id, label: p.name + ' (' + p.code + ')' };
     });
@@ -221,15 +338,74 @@
       selectField('investmentType', types, 'Select an investment type') +
       (state.draft.investmentType === 'other' ? textField('investmentTypeOther') : '') +
       selectField('sponsored', [{ value: '0', label: 'No' }, { value: '1', label: 'Yes' }], 'Select') +
+      '</div>');
+  }
+
+  /*
+   * §4: a sponsored application has a sponsor, asked for now rather than
+   * later — the brief calls it part of the same save, and a step that comes
+   * afterwards is a step somebody leaves undone.
+   */
+  function sponsorCard() {
+    if (!sponsored()) return '';
+
+    return card('Sponsor',
+      photoField('sponsor.passportPhoto') +
+      personFields('sponsor.'));
+  }
+
+  /* §5: one block per dependent, each with the number the form will carry. */
+  function dependentsCard() {
+    var numbers = ordinals();
+    var rows = '';
+
+    for (var i = 0; i < state.dependents; i++) {
+      rows += dependentRow(i, numbers[i]);
+    }
+
+    var add = state.dependents < MAX_DEPENDENTS
+      ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-dependent-add>' +
+        'Add dependent</button>'
+      : '';
+
+    return card('Dependents',
+      (rows || '<p class="tma-portal-note">No dependents on this application.</p>') +
+      '<div class="tma-portal-form-actions">' + add + '</div>');
+  }
+
+  function dependentRow(i, ordinal) {
+    var prefix = 'dependents.' + i + '.';
+    var relationship = state.draft[prefix + 'relationship'];
+    var title = relationship === 'spouse'
+      ? 'Spouse'
+      : (ordinal ? 'Qualified Dependent ' + ordinal : 'Dependent');
+
+    return '<div class="tma-portal-repeat" data-cip-dependent="' + i + '">' +
+      '<div class="tma-portal-repeat__head">' +
+      '<span class="tma-portal-repeat__title">' + esc(title) + '</span>' +
+      '<button type="button" class="tma-portal-repeat__remove" data-cip-dependent-remove="' + i + '"' +
+      ' aria-label="Remove ' + esc(title) + '">' +
+      '<img src="' + ICON + 'Xcircle.svg" alt="" width="18" height="18"></button>' +
       '</div>' +
-      (String(state.draft.sponsored) === '1'
-        ? '<p class="tma-portal-note">A sponsor profile and its own document folder are created with the application.</p>'
-        : ''));
+      '<div class="tma-portal-form-grid">' +
+      textField(prefix + 'firstName') +
+      textField(prefix + 'lastName') +
+      textField(prefix + 'dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +
+      selectField(prefix + 'relationship', [
+        { value: 'spouse', label: 'Spouse' },
+        { value: 'qualified_dependent', label: 'Qualified dependent' },
+      ], 'Select') +
+      '</div></div>';
   }
 
   /* The whole ask on one page, in the government form's order. */
   function formBody() {
-    return '<div class="tma-dash__clients-cards">' + applicantStep() + investmentStep() + '</div>';
+    return '<div class="tma-dash__clients-cards">' +
+      applicantCard() +
+      investmentCard() +
+      sponsorCard() +
+      dependentsCard() +
+      '</div>';
   }
 
   function render(root) {
@@ -247,7 +423,7 @@
       // happened deserves to be told why without hunting the page.
       (count
         ? '<p class="tma-portal-modal__error" role="alert">' +
-          // Neutral about why: a field can be empty or, in the photo's case,
+          // Neutral about why: a field can be empty or, in a photo's case,
           // filled with something that cannot be filed.
           esc(count === 1 ? 'Check one answer.' : 'Check ' + count + ' answers.') +
           '</p>'
@@ -257,76 +433,167 @@
     wire(root);
   }
 
+  /* ── wiring ────────────────────────────────────────────────────── */
+
   function wire(root) {
     MORPH.unwired(root, '[data-cip-field]').forEach(function (el) {
-      var name = el.getAttribute('data-cip-field');
+      var path = el.getAttribute('data-cip-field');
       el.addEventListener('input', function () {
-        state.draft[name] = el.value;
-        delete state.errors[name];
+        state.draft[path] = el.value;
+        delete state.errors[path];
       });
       el.addEventListener('change', function () {
-        state.draft[name] = el.value;
-        delete state.errors[name];
-        // These three change what the form shows: the derived region, the
-        // "Other" free text, and the sponsor note.
-        if (name === 'countryOfResidence' || name === 'investmentType' || name === 'sponsored') {
+        state.draft[path] = el.value;
+        delete state.errors[path];
+        // These change what the form shows: the derived region, the "Other"
+        // free text, whether there is a sponsor at all, and the dependent
+        // numbering that follows a date of birth or a relationship.
+        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|dateOfBirth$/.test(path)) {
           render(root);
         }
       });
     });
 
-    wirePhoto(root);
+    wirePhotos(root);
+    wireDocuments(root);
+    wireDependents(root);
   }
 
   /*
-   * The photo, measured before it is accepted.
+   * A photo, measured before it is accepted.
    *
    * The server refuses the same pictures, but a reader who chose a portrait
    * snapshot should learn that while the file picker is still in mind rather
    * than after filling in eight more fields and pressing Add.
    */
-  function wirePhoto(root) {
-    var btn = root.querySelector('[data-cip-photo-btn]');
-    var input = root.querySelector('[data-cip-photo-input]');
-    var preview = root.querySelector('[data-cip-photo-preview]');
-    var remove = root.querySelector('[data-cip-photo-remove]');
-    if (!btn || !input) return;
-
-    MORPH.on(btn, 'click', function () { input.click(); });
-
-    MORPH.on(input, 'change', function () {
-      var file = input.files && input.files[0];
-      if (!file) return;
-      var reader = new FileReader();
-      reader.onload = function (ev) {
-        measure(ev.target.result, function (why, dataUrl) {
-          if (why) {
-            state.errors.passportPhoto = why;
-            state.draft.passportPhoto = '';
-            input.value = '';
+  function wirePhotos(root) {
+    MORPH.unwired(root, '[data-cip-photo]').forEach(function (input) {
+      var path = input.getAttribute('data-cip-photo');
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          measure(ev.target.result, function (why, dataUrl) {
+            if (why) {
+              state.errors[path] = why;
+              delete state.files[path];
+              delete state.previews[path];
+              input.value = '';
+            } else {
+              state.files[path] = file;
+              state.previews[path] = dataUrl;
+              delete state.errors[path];
+            }
             render(root);
-            return;
-          }
-          state.draft.passportPhoto = dataUrl;
-          delete state.errors.passportPhoto;
-          if (preview) { preview.src = dataUrl; preview.alt = 'Passport photo'; }
-          btn.dataset.hasImage = 'true';
-          // Clears the error summary the moment the last answer arrives.
-          if (!Object.keys(state.errors).length) render(root);
-        });
-      };
-      reader.readAsDataURL(file);
+          });
+        };
+        reader.readAsDataURL(file);
+      });
     });
 
-    if (remove) {
-      MORPH.on(remove, 'click', function (e) {
+    MORPH.unwired(root, '[data-cip-photo-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var path = btn.getAttribute('data-cip-photo-btn');
+        var input = root.querySelector('[data-cip-photo="' + cssEscape(path) + '"]');
+        if (input) input.click();
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-photo-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        state.draft.passportPhoto = '';
-        input.value = '';
+        var path = btn.getAttribute('data-cip-photo-remove');
+        delete state.files[path];
+        delete state.previews[path];
+        render(root);
+      });
+    });
+  }
+
+  function wireDocuments(root) {
+    MORPH.unwired(root, '[data-cip-file]').forEach(function (input) {
+      var path = input.getAttribute('data-cip-file');
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        if (file.size > MAX_DOCUMENT_MB * 1024 * 1024) {
+          state.errors[path] = 'That file is too large. Keep it under ' + MAX_DOCUMENT_MB + 'MB.';
+          input.value = '';
+          delete state.files[path];
+        } else {
+          state.files[path] = file;
+          delete state.errors[path];
+        }
+        render(root);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-file-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var path = btn.getAttribute('data-cip-file-btn');
+        var input = root.querySelector('[data-cip-file="' + cssEscape(path) + '"]');
+        if (input) input.click();
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-file-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        delete state.files[btn.getAttribute('data-cip-file-remove')];
+        render(root);
+      });
+    });
+  }
+
+  function wireDependents(root) {
+    var add = MORPH.unwiredOne(root, '[data-cip-dependent-add]');
+    if (add) {
+      add.addEventListener('click', function () {
+        if (state.dependents >= MAX_DEPENDENTS) return;
+        state.draft['dependents.' + state.dependents + '.relationship'] = 'qualified_dependent';
+        state.dependents += 1;
         render(root);
       });
     }
+
+    MORPH.unwired(root, '[data-cip-dependent-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        removeDependent(Number(btn.getAttribute('data-cip-dependent-remove')));
+        render(root);
+      });
+    });
+  }
+
+  /*
+   * Removing one closes the gap.
+   *
+   * The paths are positional — `dependents.2.firstName` — so leaving a hole
+   * would send the server a list with a missing index, and every later
+   * dependent's answers would belong to somebody else.
+   */
+  function removeDependent(index) {
+    var fields = ['firstName', 'lastName', 'dateOfBirth', 'relationship'];
+
+    for (var i = index; i < state.dependents - 1; i++) {
+      fields.forEach(function (f) {
+        state.draft['dependents.' + i + '.' + f] = state.draft['dependents.' + (i + 1) + '.' + f];
+        delete state.errors['dependents.' + i + '.' + f];
+      });
+    }
+
+    fields.forEach(function (f) {
+      delete state.draft['dependents.' + (state.dependents - 1) + '.' + f];
+      delete state.errors['dependents.' + (state.dependents - 1) + '.' + f];
+    });
+
+    state.dependents -= 1;
+  }
+
+  /* Attribute selectors have to survive the dots in a field path. */
+  function cssEscape(value) {
+    return window.CSS && window.CSS.escape ? window.CSS.escape(value) : value.replace(/\./g, '\\.');
   }
 
   /* Square within a pixel or two, and big enough to print at 2 inches. */
@@ -350,29 +617,72 @@
     img.src = dataUrl;
   }
 
+  /* ── the wire ──────────────────────────────────────────────────── */
+
   function xsrf() {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : '';
   }
 
-  function api(method, url, body) {
-    var headers = {
+  function headers(extra) {
+    var out = {
       Accept: 'application/json',
-      'Content-Type': 'application/json',
       'X-XSRF-TOKEN': xsrf(),
       'X-Requested-With': 'XMLHttpRequest',
     };
+    Object.keys(extra || {}).forEach(function (k) { out[k] = extra[k]; });
     // Skip our own echo of the live signal this write raises.
     if (window.TMALive && window.TMALive.headers) {
-      var extra = window.TMALive.headers();
-      Object.keys(extra || {}).forEach(function (k) { headers[k] = extra[k]; });
+      var live = window.TMALive.headers();
+      Object.keys(live || {}).forEach(function (k) { out[k] = live[k]; });
     }
+
+    return out;
+  }
+
+  function api(method, url) {
     return fetch(url, {
       method: method,
       credentials: 'same-origin',
-      headers: headers,
-      body: body ? JSON.stringify(body) : undefined,
+      headers: headers({ 'Content-Type': 'application/json' }),
     });
+  }
+
+  /*
+   * The whole form as one multipart body.
+   *
+   * The field paths are the form-data names, so `sponsor[firstName]` and
+   * `dependents[0][dateOfBirth]` arrive as the nested arrays the validator
+   * expects — and come back keyed the same way when it objects.
+   */
+  function body() {
+    var form = new FormData();
+
+    Object.keys(state.draft).forEach(function (path) {
+      var value = state.draft[path];
+      if (value === '' || value === null || value === undefined) return;
+      // Dependents past the visible count are leftovers from a removal.
+      if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
+      // A sponsor's answers are not sent when there is no sponsor.
+      if (!sponsored() && path.indexOf('sponsor.') === 0) return;
+      form.append(bracketed(path), value);
+    });
+
+    Object.keys(state.files).forEach(function (path) {
+      if (!sponsored() && path.indexOf('sponsor.') === 0) return;
+      form.append(bracketed(path), state.files[path]);
+    });
+
+    form.append('sponsored', sponsored() ? '1' : '0');
+
+    return form;
+  }
+
+  /* dependents.0.firstName → dependents[0][firstName] */
+  function bracketed(path) {
+    var parts = path.split('.');
+
+    return parts[0] + parts.slice(1).map(function (p) { return '[' + p + ']'; }).join('');
   }
 
   function submit() {
@@ -384,47 +694,39 @@
       state.errors = found;
       render(root);
       // Take the reader to the first thing they still owe.
-      var first = root.querySelector('.tma-portal-field.is-invalid [data-cip-field]');
-      if (first && first.focus) {
-        first.focus();
-        if (first.scrollIntoView) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }
+      var first = root.querySelector('.is-invalid [data-cip-field], .is-invalid');
+      if (first && first.scrollIntoView) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (first && first.focus) first.focus();
+
       return;
     }
 
     state.saving = true;
     if (state.onSaving) state.onSaving(true);
 
-    var d = state.draft;
-    api('POST', '/portal/cip/applications', {
-      providerId: d.providerId,
-      firstName: d.firstName,
-      lastName: d.lastName,
-      gender: d.gender,
-      dateOfBirth: d.dateOfBirth,
-      countryOfBirth: d.countryOfBirth,
-      countryOfResidence: d.countryOfResidence,
-      occupation: d.occupation,
-      passportNumber: d.passportNumber,
-      passportPhoto: d.passportPhoto,
-      investmentType: d.investmentType,
-      investmentTypeOther: d.investmentTypeOther,
-      sponsored: String(d.sponsored) === '1',
+    fetch('/portal/cip/applications', {
+      method: 'POST',
+      credentials: 'same-origin',
+      // No Content-Type: the browser sets the multipart boundary itself.
+      headers: headers(),
+      body: body(),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.saving = false;
         if (state.onSaving) state.onSaving(false);
 
         if (res.status === 422 && json.errors) {
-          // The server's word, field by field.
+          // The server's word, field by field — already keyed to our paths.
           state.errors = {};
           Object.keys(json.errors).forEach(function (k) { state.errors[k] = json.errors[k][0]; });
           render(root);
+
           return;
         }
 
         if (!res.ok) {
           ui().toastError((json && json.message) || 'Could not file this application');
+
           return;
         }
 
@@ -444,6 +746,9 @@
     opts = opts || {};
     state.root = root;
     state.draft = emptyDraft();
+    state.files = {};
+    state.previews = {};
+    state.dependents = 0;
     state.errors = {};
     state.saving = false;
     state.error = '';
@@ -454,6 +759,7 @@
 
     api('GET', '/portal/cip/applications/form').then(function (res) {
       if (!res.ok) throw new Error('form');
+
       return res.json();
     }).then(function (options) {
       state.options = options;

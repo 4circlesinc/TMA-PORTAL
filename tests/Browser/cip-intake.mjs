@@ -60,6 +60,11 @@ function png(width, height) {
   ]);
 }
 
+/* The smallest thing a mime sniffer will call a PDF. */
+function pdf() {
+  return Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+}
+
 const failures = [];
 const check = (ok, msg) => { console.log(`    ${ok ? '✓' : '✗'} ${msg}`); if (!ok) failures.push(msg); };
 const step = (n, msg) => console.log(`\n[${n}] ${msg}`);
@@ -120,21 +125,32 @@ try {
   step('4b', 'The passport photo is measured before it is accepted');
   // A portrait snapshot is what people actually pick, so it is what the
   // check has to refuse — and it must say so without a round trip.
-  await page.setInputFiles('[data-cip-photo-input]', {
+  await page.setInputFiles('[data-cip-photo="passportPhoto"]', {
     name: 'portrait.png', mimeType: 'image/png', buffer: png(600, 900),
   });
   await page.waitForTimeout(600);
   check((await page.locator('[data-cip-form]').innerText()).includes('has to be square'),
     'a portrait photo is refused, with the measurement');
-  check(!(await page.locator('[data-cip-photo-btn]').getAttribute('data-has-image')),
+  check(!(await page.locator('[data-cip-photo-btn="passportPhoto"]').getAttribute('data-has-image')),
     'and is not kept');
 
-  await page.setInputFiles('[data-cip-photo-input]', {
+  await page.setInputFiles('[data-cip-photo="passportPhoto"]', {
     name: 'passport.png', mimeType: 'image/png', buffer: png(600, 600),
   });
   await page.waitForTimeout(600);
-  check(!!(await page.locator('[data-cip-photo-btn]').getAttribute('data-has-image')),
+  check(!!(await page.locator('[data-cip-photo-btn="passportPhoto"]').getAttribute('data-has-image')),
     'a 2×2 photo is accepted and previewed');
+
+  step('4c', 'The other two §2 uploads');
+  await page.setInputFiles('[data-cip-file="passportBioPage"]', {
+    name: 'bio.pdf', mimeType: 'application/pdf', buffer: pdf(),
+  });
+  await page.setInputFiles('[data-cip-file="birthCertificate"]', {
+    name: 'birth.pdf', mimeType: 'application/pdf', buffer: pdf(),
+  });
+  await page.waitForTimeout(600);
+  check((await page.locator('[data-cip-form]').innerText()).includes('bio.pdf'),
+    'a chosen document is named back');
 
   step(5, 'Investment: Other asks what it is');
   await page.selectOption('[data-cip-field="investmentType"]', 'other');
@@ -148,7 +164,60 @@ try {
     const value = await page.$eval('[data-cip-field="providerId"] option:nth-child(2)', o => o.value);
     await page.selectOption('[data-cip-field="providerId"]', value);
   }
+
+  step('5b', 'Sponsored = Yes asks for the sponsor there and then (§4)');
+  await page.selectOption('[data-cip-field="sponsored"]', '1');
+  await page.waitForTimeout(500);
+  check(await page.locator('[data-cip-field="sponsor.firstName"]').count() > 0,
+    'the sponsor card appears');
   await page.selectOption('[data-cip-field="sponsored"]', '0');
+  await page.waitForTimeout(400);
+  check(await page.locator('[data-cip-field="sponsor.firstName"]').count() === 0,
+    'and goes away when the answer changes back');
+  await page.selectOption('[data-cip-field="sponsored"]', '1');
+  await page.waitForTimeout(500);
+  await page.fill('[data-cip-field="sponsor.firstName"]', 'Maryam');
+  await page.fill('[data-cip-field="sponsor.lastName"]', 'Haddad');
+  await page.selectOption('[data-cip-field="sponsor.gender"]', 'Female');
+  await page.fill('[data-cip-field="sponsor.dateOfBirth"]', '1960-02-02');
+  await page.selectOption('[data-cip-field="sponsor.countryOfBirth"]', 'Lebanon');
+  await page.selectOption('[data-cip-field="sponsor.countryOfResidence"]', 'Lebanon');
+  await page.fill('[data-cip-field="sponsor.occupation"]', 'Retired');
+  await page.fill('[data-cip-field="sponsor.passportNumber"]', 'S7654321');
+  await page.setInputFiles('[data-cip-photo="sponsor.passportPhoto"]', {
+    name: 'sponsor.png', mimeType: 'image/png', buffer: png(600, 600),
+  });
+  await page.waitForTimeout(600);
+
+  step('5c', 'Dependents number themselves as they are added (§5)');
+  // Added oldest first on purpose: if the form echoed the order they were
+  // typed in rather than computing it, this would read 1, 2, 3.
+  const family = [
+    ['Omar', '2010-05-05', 'qualified_dependent'],
+    ['Lina', '2016-09-09', 'qualified_dependent'],
+    ['Sami', '2013-03-03', 'qualified_dependent'],
+    ['Nadia', '1990-01-01', 'spouse'],
+  ];
+  for (let i = 0; i < family.length; i++) {
+    await page.click('[data-cip-dependent-add]');
+    await page.waitForTimeout(300);
+    await page.fill(`[data-cip-field="dependents.${i}.firstName"]`, family[i][0]);
+    await page.fill(`[data-cip-field="dependents.${i}.lastName"]`, 'Smith');
+    await page.fill(`[data-cip-field="dependents.${i}.dateOfBirth"]`, family[i][1]);
+    await page.selectOption(`[data-cip-field="dependents.${i}.relationship"]`, family[i][2]);
+    await page.waitForTimeout(300);
+  }
+  const titles = await page.locator('.tma-portal-repeat__title').allInnerTexts();
+  check(titles[0] === 'Qualified Dependent 3' && titles[1] === 'Qualified Dependent 1'
+    && titles[2] === 'Qualified Dependent 2' && titles[3] === 'Spouse',
+    `numbered from the youngest, not the order typed (${titles.join(', ')})`);
+
+  // Removing one closes the gap rather than leaving a hole in the list.
+  await page.click('[data-cip-dependent-remove="0"]');
+  await page.waitForTimeout(400);
+  check(await page.locator('.tma-portal-repeat').count() === 3, 'a dependent can be removed');
+  check((await page.locator('[data-cip-field="dependents.0.firstName"]').inputValue()) === 'Lina',
+    'and the rows below shuffle up');
 
   step(6, 'Filing creates a numbered draft');
   const created = page.waitForResponse(r => r.url().includes('/portal/cip/applications') && r.request().method() === 'POST', { timeout: 20000 });
@@ -161,6 +230,15 @@ try {
   check(body?.application?.applicant?.region === 'Middle East', 'region stored server-side');
   check(/^\/media\/avatars\//.test(body?.application?.applicant?.photo || ''),
     'the passport photo became the applicant’s profile picture');
+  check((body?.application?.applicant?.outstanding || ['x']).length === 0,
+    '§2’s three uploads answered their slots');
+  check(body?.application?.sponsor?.name === 'Maryam Haddad', 'the sponsor was filed with it');
+  const filed = (body?.application?.dependents || [])
+    .filter(d => d.relationship === 'qualified_dependent')
+    .sort((a, b) => a.dependentOrdinal - b.dependentOrdinal)
+    .map(d => d.name);
+  check(filed.join(', ') === 'Lina Smith, Sami Smith',
+    `the server numbered them the same way (${filed.join(', ')})`);
 
   await page.screenshot({ path: 'tests/Browser/cip-intake.png', fullPage: false });
 } catch (e) {

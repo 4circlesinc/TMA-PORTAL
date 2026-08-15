@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipPerson;
 use App\Support\AvatarService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -22,10 +23,9 @@ use Illuminate\Support\Str;
  * photo in the portal goes through, so an applicant looks the same in a table
  * row as everybody else. Uploading a new photo replaces both.
  *
- * The wire format is a data URL, matching the client form: the intake posts
- * one JSON body and an application that exists without its applicant's photo
- * is a record §2 does not allow. Nothing is stored as base64 — it is decoded
- * here and written as a file.
+ * It arrives as an ordinary upload, the same way every other file in the
+ * portal does — the form is multipart precisely so a scanned document never
+ * has to be base64 in a request body.
  */
 class PassportPhoto
 {
@@ -38,21 +38,14 @@ class PassportPhoto
     /** Cameras and croppers land a pixel or two out; a face does not. */
     private const SQUARE_TOLERANCE = 0.02;
 
-    /**
-     * The bytes behind a data URL, or null if this is not one.
-     *
-     * Deliberately strict about the prefix: a bare base64 blob could be
-     * anything, and the only producer is our own file reader.
-     */
-    public static function decode(string $value): ?string
+    /** Why this upload is not a passport photo, or null if it is. */
+    public static function rejectUpload(UploadedFile $file): ?string
     {
-        if (! preg_match('#^data:image/(jpeg|jpg|png|webp);base64,#i', $value, $m)) {
-            return null;
-        }
+        $binary = @file_get_contents($file->getRealPath());
 
-        $binary = base64_decode(substr($value, strlen($m[0])), true);
-
-        return $binary === false || $binary === '' ? null : $binary;
+        return $binary === false
+            ? 'That image could not be read. Try a JPG, PNG, or WebP.'
+            : self::reject($binary);
     }
 
     /**

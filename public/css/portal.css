@@ -669,6 +669,90 @@
   .tma-portal-form-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
+/*
+ * A document field: a button, and the name of what was chosen.
+ *
+ * No thumbnail. A scanned bio page is recognised by its filename, and
+ * rendering the first page here would be a viewer rather than a form control.
+ */
+.tma-portal-file__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-portal-file__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-primary);
+}
+
+.tma-portal-file__name--empty { color: var(--color-text-secondary); }
+
+.tma-portal-file__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  cursor: pointer;
+}
+
+.tma-portal-file__clear:hover { background: var(--color-hover); }
+
+.tma-portal-file.is-invalid .tma-no-data__btn { border: 1px solid var(--color-red); }
+
+/*
+ * A repeated block — one dependent, one sponsor's worth of fields.
+ *
+ * Inset rather than boxed: these already sit inside a card, and a second
+ * border around each one turns a family into a filing cabinet.
+ */
+.tma-portal-repeat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--color-overlay-4);
+}
+
+.tma-portal-repeat:first-of-type { padding-top: 0; border-top: 0; }
+
+.tma-portal-repeat__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-portal-repeat__title {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-repeat__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: none;
+  cursor: pointer;
+}
+
+.tma-portal-repeat__remove:hover { background: var(--color-hover); }
+
 .tma-portal-field__static {
   margin: 0;
   padding: var(--space-8) 0;

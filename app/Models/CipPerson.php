@@ -51,6 +51,23 @@ class CipPerson extends Model
         return $this->belongsTo(CipApplication::class, 'application_id');
     }
 
+    /**
+     * This person's document checklist — one row per requirement.
+     *
+     * Ordered by creation, which is the order the requirement list defines:
+     * a checklist that came back in whatever order the database felt like
+     * would reshuffle itself between two reads of the same page.
+     */
+    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CipDocument::class, 'person_id')->orderBy('id');
+    }
+
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(Folder::class, 'folder_id');
+    }
+
     public function fullName(): string
     {
         return trim(($this->first_name ?? '').' '.($this->last_name ?? ''));

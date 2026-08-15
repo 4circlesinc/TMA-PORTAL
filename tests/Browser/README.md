@@ -109,18 +109,27 @@ field placement and drawing, and computed CSS only exist in a browser.
   Note that `client-referrals.mjs` and `clients.mjs` want the *opposite* — a
   near-empty directory. Run them against a fresh database, or the clients they
   create land on page 300 of the big one and every assertion reads `undefined`.
-- **`cip-intake.mjs`** — the CIP application form (§2, §3). PHPUnit pins the
+- **`cip-intake.mjs`** — the CIP application form (§2–§6). PHPUnit pins the
   endpoint; this pins that the form is wired to it: one page rather than steps,
   a missing answer named before the request is made, the region appearing from
-  the country of residence, Other revealing its free-text field, and Add landing
-  a numbered draft.
+  the country of residence, Other revealing its free-text field, the sponsor
+  card appearing and disappearing with the Sponsored answer, and Add landing a
+  numbered draft with everybody on it.
 
-  Most of it is about the passport photo, which is the one field a reader can
-  fill wrongly rather than leave empty. It builds its PNGs in the file — a
-  600×900 portrait to be refused with its measurement, then a 600×600 square to
-  be accepted — because the rules are about pixel dimensions and a checked-in
-  fixture would hide the numbers being tested. It also reads the POST response
-  back to confirm the filed photo became the applicant's profile picture.
+  Two parts of it are about things a reader can fill *wrongly* rather than
+  leave empty. The passport photo: it builds its PNGs in the file — a 600×900
+  portrait to be refused with its measurement, then a 600×600 square to be
+  accepted — because the rules are about pixel dimensions and a checked-in
+  fixture would hide the numbers being tested. And the dependent numbering: it
+  adds a family **oldest first on purpose**, so a form that echoed the typing
+  order instead of computing from the dates of birth would read 1, 2, 3 and
+  fail. It then removes the first row to prove the rest shuffle up rather than
+  leaving a hole in the positional field paths.
+
+  Finally it reads the POST response back: the photo became the applicant's
+  profile picture, §2's three uploads answered their document slots, the
+  sponsor was filed in the same save, and the server numbered the dependents
+  the same way the form drew them.
 
   It files a real application, so it wants a fresh database, a provider to file
   under, and the module switched on:

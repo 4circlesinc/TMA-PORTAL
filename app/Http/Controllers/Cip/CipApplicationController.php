@@ -8,6 +8,8 @@ use App\Models\CipProvider;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
+use App\Support\Cip\Dependents;
+use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\PassportPhoto;
@@ -99,8 +101,13 @@ class CipApplicationController extends Controller
 
     private function record($application): array
     {
-        $application->loadMissing(['provider', 'people']);
-        $main = $application->people->firstWhere('role', 'main_applicant');
+        $application->loadMissing(['provider', 'people.documents']);
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
+        $dependents = $application->people
+            ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->sortBy('dependent_ordinal')
+            ->values();
 
         return [
             'id' => $application->uuid,
@@ -120,22 +127,48 @@ class CipApplicationController extends Controller
             'sponsored' => (bool) $application->sponsored,
             'familySize' => $application->familySize(),
             'familyLabel' => $application->familyLabel(),
-            'applicant' => $main ? [
-                'name' => $main->fullName(),
-                'gender' => $main->gender,
-                'dateOfBirth' => $main->date_of_birth?->toDateString(),
-                'countryOfBirth' => $main->country_of_birth,
-                'countryOfResidence' => $main->country_of_residence,
-                'region' => $main->region,
-                'occupation' => $main->occupation,
-                'passportNumber' => $main->passport_number,
-                // The passport photo, doubling as the avatar every list draws.
-                'photo' => $main->photoUrl(),
-                'passportPhotoUrl' => $main->photo_path
-                    ? '/portal/cip/people/'.$main->uuid.'/passport-photo'
-                    : null,
-            ] : null,
+            'applicant' => $main ? $this->person($main) : null,
+            'sponsor' => $sponsor ? $this->person($sponsor) : null,
+            'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p))->all(),
             'createdAt' => $application->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * One individual, with their checklist.
+     *
+     * The same shape whoever it is — the caller already knows which role it
+     * asked for, and a sponsor that described itself differently from an
+     * applicant would mean two ways to read the same person.
+     */
+    private function person(CipPerson $person): array
+    {
+        return [
+            'id' => $person->uuid,
+            'role' => $person->role,
+            'label' => Dependents::label($person),
+            'relationship' => $person->relationship,
+            'dependentOrdinal' => $person->dependent_ordinal,
+            'name' => $person->fullName(),
+            'gender' => $person->gender,
+            'dateOfBirth' => $person->date_of_birth?->toDateString(),
+            'countryOfBirth' => $person->country_of_birth,
+            'countryOfResidence' => $person->country_of_residence,
+            'region' => $person->region,
+            'occupation' => $person->occupation,
+            'passportNumber' => $person->passport_number,
+            // The passport photo, doubling as the avatar every list draws.
+            'photo' => $person->photoUrl(),
+            'passportPhotoUrl' => $person->photo_path
+                ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
+                : null,
+            'documents' => $person->documents->map(fn ($slot) => [
+                'type' => $slot->type,
+                'label' => $slot->label,
+                'required' => (bool) $slot->required,
+                'uploaded' => $slot->isFilled(),
+            ])->values()->all(),
+            'outstanding' => DocumentSlots::outstanding($person),
         ];
     }
 }
