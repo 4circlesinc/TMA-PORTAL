@@ -211,7 +211,6 @@ class CompanyStaffController extends Controller
 
         return User::whereIn('account_type', Role::OFFICERS)
             ->where('status', 'approved')
-            ->where('email', '!=', (string) config('portal.system_account_email'))
             ->whereNotIn('id', $taken)
             ->orderBy('name')
             ->get()

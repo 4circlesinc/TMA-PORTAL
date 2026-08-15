@@ -135,8 +135,6 @@ class ClientAssignmentTest extends TestCase
         $admin->forceFill(['name' => 'An Admin'])->save();
         $officer = $this->user(Role::REVIEWING_OFFICER);
         $officer->forceFill(['name' => 'An Officer'])->save();
-        $system = $this->user(Role::REVIEWING_OFFICER);
-        $system->forceFill(['name' => 'The Firm', 'email' => (string) config('portal.system_account_email')])->save();
         $parked = $this->user(Role::EMPLOYEE);
         $parked->forceFill(['name' => 'A Parked Account'])->save();
         $client = Client::create(['uid' => 'assignable-co', 'name' => 'Assignable Co', 'data' => []]);
@@ -146,12 +144,10 @@ class ClientAssignmentTest extends TestCase
                 ->assertOk()->json('assignable')
         )->pluck('name');
 
-        // Administrators already reach every client, a parked Employee cannot
-        // get past the role-pending screen to open one, and the firm's own
-        // service account is not somebody to hand work to.
+        // Administrators already reach every client, and a parked Employee
+        // cannot get past the role-pending screen to open one.
         $this->assertContains('An Officer', $names->all());
         $this->assertNotContains('An Admin', $names->all());
         $this->assertNotContains('A Parked Account', $names->all());
-        $this->assertNotContains('The Firm', $names->all());
     }
 }
