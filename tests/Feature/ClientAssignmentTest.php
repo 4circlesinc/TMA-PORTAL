@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -127,5 +128,26 @@ class ClientAssignmentTest extends TestCase
         $this->actingAs($admin)->getJson('/portal/file-library/settings')
             ->assertOk()
             ->assertJsonPath('settings.autoCreateStaffFolder', true);
+    }
+    public function test_the_assignable_list_leaves_out_admins_and_the_service_account(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $admin->forceFill(['name' => 'An Admin'])->save();
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $officer->forceFill(['name' => 'An Officer'])->save();
+        $system = $this->user(Role::REVIEWING_OFFICER);
+        $system->forceFill(['name' => 'The Firm', 'email' => (string) config('portal.system_account_email')])->save();
+        $client = Client::create(['uid' => 'assignable-co', 'name' => 'Assignable Co', 'data' => []]);
+
+        $names = collect(
+            $this->actingAs($admin)->getJson('/portal/clients/'.$client->uid.'/assignments')
+                ->assertOk()->json('assignable')
+        )->pluck('name');
+
+        // Administrators already reach every client, and the firm's own
+        // service account is not somebody to hand work to.
+        $this->assertContains('An Officer', $names->all());
+        $this->assertNotContains('An Admin', $names->all());
+        $this->assertNotContains('The Firm', $names->all());
     }
 }

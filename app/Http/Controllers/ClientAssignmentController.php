@@ -252,6 +252,9 @@ class ClientAssignmentController extends Controller
 
         return User::whereIn('account_type', Role::EMPLOYEE_LIKE)
             ->where('status', 'approved')
+            // The firm's own service account owns provisioned folders; it is
+            // not somebody to hand a client to.
+            ->where('email', '!=', (string) config('portal.system_account_email'))
             ->whereNotIn('id', $taken)
             ->orderBy('name')
             ->get()
