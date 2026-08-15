@@ -566,10 +566,12 @@ class CipIntakeTest extends TestCase
 
         $this->assertSame(1, CipPerson::firstWhere('first_name', 'Omar')->dependent_ordinal);
 
-        // ...and the folder follows the label rather than keeping a stale one.
+        // ...and the folder follows the new order rather than keeping a stale
+        // name. Folders count the dependants; the classification is the
+        // government's answer and stays on the person.
         \App\Support\Cip\Tree::resyncNames($application->fresh());
         $this->assertSame(
-            'Qualified Dependent 1',
+            'Dependent 1',
             \App\Models\Folder::find(CipPerson::firstWhere('first_name', 'Omar')->folder_id)->name,
         );
     }
@@ -601,15 +603,16 @@ class CipIntakeTest extends TestCase
         $this->assertSame('John Smith', $client->name);
         $this->assertSame($company->id, $client->referred_by_company_id);
 
-        // §6's tree, under that client's folder rather than loose in the
-        // library — where the firm-wide downloader default would reach it.
+        // §6's tree, hanging straight off the client's own folder rather than
+        // loose in the library — where the firm-wide downloader default would
+        // reach it — and with no numbered folder in between: opening a client
+        // shows the people.
         $root = \App\Models\Folder::find($application->folder_id);
-        $this->assertSame('Application '.$application->internal_number, $root->name);
-        $this->assertSame($client->folder_id, $root->parent_id);
+        $this->assertSame($client->folder_id, $root->id);
 
         $children = \App\Models\Folder::where('parent_id', $root->id)->pluck('name')->sort()->values()->all();
         $this->assertSame(
-            ['Additional Documents', 'Main Applicant', 'Qualified Dependent 1', 'Sponsor'],
+            ['Additional Documents', 'Dependent 1', 'Main Applicant', 'Sponsor'],
             $children,
         );
 

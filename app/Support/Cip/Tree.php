@@ -13,22 +13,23 @@ use Illuminate\Support\Str;
 /**
  * The application's folder tree (§6), and the client record it hangs from.
  *
- * §6 asks for one repository per individual:
+ * §6 asks for one repository per individual, and they hang off the client:
  *
- *     Application GAL26-00001
+ *     Asem Haddad
  *       ├── Main Applicant
  *       ├── Sponsor              (only when there is one)
- *       ├── Qualified Dependent 1
+ *       ├── Dependent 1
+ *       ├── Dependent 2
  *       └── Additional Documents
  *
  * **Where it hangs.** Every application's main applicant gets a lightweight
  * client-hub record, created here if the applicant is not already one, and
- * the tree is provisioned under that client's folder. Two reasons. It makes
- * the Service-Provider path (the applicant has no portal account) and the
- * Private-Client path the same shape. And a client folder is carved out of
- * the firm-wide default that makes every staff member a downloader — so an
- * application's documents are not readable by the whole firm the moment they
- * are uploaded, which they would be anywhere else in the library.
+ * the people are provisioned straight into that client's folder. Two reasons.
+ * It makes the Service-Provider path (the applicant has no portal account)
+ * and the Private-Client path the same shape. And a client folder is carved
+ * out of the firm-wide default that makes every staff member a downloader —
+ * so an application's documents are not readable by the whole firm the moment
+ * they are uploaded, which they would be anywhere else in the library.
  *
  * **Addressed by id.** `cip_applications.folder_id` and `cip_people.folder_id`
  * hold the links. Client folders rename themselves to follow the client's
@@ -47,15 +48,28 @@ class Tree
     /**
      * Give the application a client record, a folder tree, and one folder per
      * person. Safe to call again: it fills in what is missing.
+     *
+     * The people hang directly off the client:
+     *
+     *     Asem Haddad
+     *       ├── Main Applicant
+     *       ├── Sponsor              (only when there is one)
+     *       ├── Dependent 1
+     *       ├── Dependent 2
+     *       └── Additional Documents
+     *
+     * Not under a folder named for the application. Somebody opening a client
+     * wants the people, and a numbered folder holding one more folder called
+     * "Main Applicant" is a click that tells them nothing they did not know.
+     * ⚠ The trade is that a second application for the same client shares
+     * these folders rather than getting its own set.
      */
     public static function provision(CipApplication $application, ?User $actor = null): Folder
     {
         $application->loadMissing(['people', 'provider']);
 
         $client = self::client($application, $actor);
-        $clientFolder = $client->folder ?: FolderProvisioner::provisionClientFolder($client, $actor);
-
-        $root = self::applicationFolder($application, $clientFolder, $actor);
+        $root = $client->folder ?: FolderProvisioner::provisionClientFolder($client, $actor);
 
         foreach ($application->people as $person) {
             self::personFolder($person, $root, $actor);
@@ -64,6 +78,10 @@ class Tree
         // One shared drawer for everything that belongs to the file rather
         // than to a person on it.
         self::childNamed($root, self::ADDITIONAL, $actor);
+
+        if ($application->folder_id !== $root->id) {
+            $application->forceFill(['folder_id' => $root->id])->save();
+        }
 
         return $root;
     }
@@ -111,27 +129,45 @@ class Tree
         return $client;
     }
 
-    /** The application's own folder, under the client's. */
-    private static function applicationFolder(CipApplication $application, Folder $parent, ?User $actor): Folder
+    /**
+     * What a person's folder is called.
+     *
+     * Not {@see Dependents::label}, which answers the government's question —
+     * "Qualified Dependent 2", or "Spouse", the classification §5 computes
+     * from the dates of birth. A folder answers a simpler one: which of the
+     * dependants is this. So they run 1, 2, 3 down the tree in the order the
+     * classification puts them, and a spouse is a dependant like the rest.
+     */
+    public static function folderName(CipPerson $person): string
     {
-        if ($application->folder_id && $folder = Folder::find($application->folder_id)) {
-            return $folder;
+        if ($person->role === CipPerson::ROLE_MAIN_APPLICANT) {
+            return 'Main Applicant';
+        }
+        if ($person->role === CipPerson::ROLE_SPONSOR) {
+            return 'Sponsor';
         }
 
-        $folder = self::childNamed($parent, 'Application '.$application->displayNumber(), $actor);
-        $application->forceFill(['folder_id' => $folder->id])->save();
+        // One composite key, not a list of them: sortBy() reads an array as
+        // [column, direction] pairs, so passing two closures sorted by
+        // neither and a spouse came out ahead of the second qualified
+        // dependent. Unnumbered people sort last, then by id so the order is
+        // total and two dependants never swap places between renders.
+        $order = $person->application?->people
+            ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->sortBy(fn (CipPerson $p) => ($p->dependent_ordinal ?? 9999) * 1000000 + $p->id)
+            ->values()
+            ->search(fn (CipPerson $p) => $p->id === $person->id);
 
-        return $folder;
+        return 'Dependent '.(is_int($order) ? $order + 1 : 1);
     }
 
     /**
-     * One person, one repository. Renamed rather than recreated when a
-     * dependent's ordinal changes — the link is the id, so the name is free
-     * to follow {@see Dependents::label}.
+     * One person, one repository. Renamed rather than recreated when the
+     * numbering changes — the link is the id, so the name is free to follow.
      */
     public static function personFolder(CipPerson $person, Folder $root, ?User $actor = null): Folder
     {
-        $name = Dependents::label($person);
+        $name = self::folderName($person);
 
         if ($person->folder_id && $folder = Folder::find($person->folder_id)) {
             if ($folder->name !== $name) {
@@ -148,9 +184,9 @@ class Tree
     }
 
     /**
-     * Rename every person's folder to match their current label. Called after
-     * dependents are renumbered, so "Qualified Dependent 2" is never the
-     * folder of somebody who has become QD1.
+     * Rename every person's folder to match their current place. Called after
+     * dependants are renumbered, so "Dependent 2" is never the folder of
+     * somebody who has become the first.
      */
     public static function resyncNames(CipApplication $application): void
     {
@@ -160,8 +196,9 @@ class Tree
             if (! $person->folder_id) {
                 continue;
             }
+            $person->setRelation('application', $application);
             $folder = Folder::find($person->folder_id);
-            $name = Dependents::label($person);
+            $name = self::folderName($person);
             if ($folder && $folder->name !== $name) {
                 $folder->forceFill(['name' => $name])->save();
             }
