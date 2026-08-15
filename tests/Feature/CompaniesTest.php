@@ -106,11 +106,10 @@ class CompaniesTest extends TestCase
             ->deleteJson('/portal/companies/'.$company->uid.'?withPeople=1')
             ->assertOk();
 
-        // Its own people go with it…
+        // Everyone attached to it goes: its contacts and the clients it
+        // referred, which is what the reader is shown on the record.
         $this->assertSoftDeleted('clients', ['id' => $contact->id]);
-        // …but the applicants it referred are the firm's, and stay.
-        $this->assertNotSoftDeleted('clients', ['id' => $referred->id]);
-        $this->assertNull($referred->fresh()->referred_by_company_id);
+        $this->assertSoftDeleted('clients', ['id' => $referred->id]);
     }
 
     public function test_a_provider_with_numbered_applications_cannot_be_deleted(): void

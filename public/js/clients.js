@@ -369,6 +369,9 @@
 
   var CompaniesAPI = {
     list: function () { return clientsFetch(COMPANIES_BASE); },
+    get: function (uid) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid));
+    },
     create: function (payload) { return clientsFetch(COMPANIES_BASE, { method: 'POST', json: payload }); },
     update: function (uid, payload) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload });
@@ -4410,30 +4413,47 @@
   /* Deleting a provider asks a real question — keep its people or take them
      with it — which a browser confirm() cannot. Referred clients are never
      deleted here: they are the firm's applicants, not the provider's staff. */
+  /* The record if the page already holds it, else the server's copy. A
+     company button rides inside client rows too, where this list may never
+     have been loaded. */
+  function resolveCompany(id) {
+    var local = companyFor(id);
+    if (local) return Promise.resolve(local);
+    return CompaniesAPI.get(id).then(function (data) {
+      return (data && data.company) || null;
+    }).catch(function () { return null; });
+  }
+
   function confirmCompanyDelete(company, onConfirm) {
     var ui = window.TMAPortalUI;
-    var people = (company.people || []).length;
+    // Two populations hang off a provider and both are "its people": the
+    // contacts on its own record, and the clients it referred.
+    var contacts = (company.people || []).length;
+    var referred = company.referredCount || 0;
+    var total = contacts + referred;
+
     if (!ui || !ui.openModal) {
-      // No UI kit (a standalone preview): fall back to the simple question.
       if (window.confirm('Delete ' + company.name + '? Its people are kept.')) onConfirm(false);
       return;
     }
 
+    var parts = [];
+    if (contacts) parts.push(contacts === 1 ? 'one contact' : contacts + ' contacts');
+    if (referred) parts.push(referred === 1 ? 'one referred client' : referred + ' referred clients');
+    var summary = total
+      ? 'This service provider has ' + parts.join(' and ') + '.'
+      : 'Nobody is attached to this service provider.';
+
     var host = ui.openModal({
       title: 'Delete ' + company.name + '?',
       body:
-        '<p class="tma-portal-modal__text">' +
-        (people
-          ? esc(people === 1 ? 'One person belongs to this service provider.'
-            : people + ' people belong to this service provider.')
-          : 'Nobody belongs to this service provider.') +
-        ' Referred clients are always kept.</p>' +
+        '<p class="tma-portal-modal__text">' + esc(summary) + '</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-company-del-cancel>Cancel</button>' +
-        (people
-          ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-company-del-keep>Delete, keep the people</button>' +
-            '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-company-del-all>Delete with its ' +
-              esc(people === 1 ? 'person' : people + ' people') + '</button>'
+        (total
+          ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-company-del-keep>Delete, keep them</button>' +
+            '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-company-del-all>Delete with ' +
+              esc(total === 1 ? 'them' : 'all ' + total) + '</button>'
           : '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-company-del-keep>Delete</button>') +
         '</div>',
       onMount: function (el) {
@@ -4660,9 +4680,9 @@
         return navigate('add');
       }
       if (act === 'delete') {
-        var company = companyFor(id);
-        if (!company) return;
-        confirmCompanyDelete(company, function (withPeople) {
+        resolveCompany(id).then(function (company) {
+          if (!company) { clientsToast('Could not open this service provider', 'negative'); return; }
+          confirmCompanyDelete(company, function (withPeople) {
           CompaniesAPI.remove(id, withPeople).then(function () {
             COMPANIES = COMPANIES.filter(function (c) { return c.id !== id; });
             hydrateCompanies(COMPANIES);
@@ -4671,6 +4691,7 @@
             else ctx.render({ forceFull: true });
           }).catch(function (err) {
             clientsToast((err && err.message) || 'Could not delete this service provider', 'negative');
+          });
           });
         });
         return;

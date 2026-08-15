@@ -285,12 +285,18 @@ class CompaniesController extends Controller
         // Settle the access first, while the company still exists to log it.
         AccessSync::companyArchived($company, $request->user());
 
-        // Its contact people can go with it. Referred clients never do:
-        // they are the firm's own applicants, and the provider that
-        // introduced them is not who they belong to.
+        /*
+         * Everyone attached to the provider can go with it — its own contacts
+         * and the clients it referred alike, which is what "its people" means
+         * to the person looking at the record. Left alone (the default) they
+         * survive and are simply unlinked.
+         */
         if ($request->boolean('withPeople')) {
-            $people = $company->clients()->get();
-            foreach ($people as $person) {
+            foreach ($company->clients()->get() as $person) {
+                AccessSync::clientArchived($person, $request->user());
+                $person->delete();
+            }
+            foreach ($company->referredClients()->get() as $person) {
                 AccessSync::clientArchived($person, $request->user());
                 $person->delete();
             }
