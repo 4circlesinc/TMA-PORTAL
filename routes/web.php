@@ -315,6 +315,12 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications/form', [CipApplicationController::class, 'form'])->name('applications.form');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
+        // Multipart carries the files, and PHP only parses a body for POST —
+        // so the update is posted with _method, the way every other form in
+        // the portal that sends files does it.
+        Route::post('/applications/{uuid}', [CipApplicationController::class, 'update'])->name('applications.update');
+        // Which application a client's profile is showing, or none yet.
+        Route::get('/clients/{uid}/application', [CipApplicationController::class, 'forClient'])->name('clients.application');
         // The archival passport photo, streamed through the app: it is a
         // likeness on a private bucket, reachable only by a reader who may
         // already open the application it belongs to.

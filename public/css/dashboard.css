@@ -34695,3 +34695,39 @@ span.tma-dash__messages-profile-avatar {
   .tma-pull-refresh--settling { transition-duration: 1ms; }
   .tma-pull-refresh--busy .tma-pull-refresh__ring { animation-duration: 1.6s; }
 }
+
+/*
+ * A person's document checklist on the applicant profile.
+ *
+ * A row per requirement, filed or not — the same question the intake form
+ * asked, answered. Kept plain: this is a status list, and a table would be
+ * three columns of which two are always the same width.
+ */
+.tma-dash__clients-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tma-dash__clients-checklist-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+}
+
+.tma-dash__clients-checklist-row img { opacity: 0.55; flex-shrink: 0; }
+
+/* The state sits at the end of the row, where a reader scanning for what is
+   still missing looks — not tucked against the name it belongs to. */
+.tma-dash__clients-checklist-state {
+  margin-left: auto;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}

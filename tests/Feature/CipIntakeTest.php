@@ -717,6 +717,120 @@ class CipIntakeTest extends TestCase
             ->where('type', DocumentTypes::BIRTH_CERTIFICATE)->value('file_id'));
     }
 
+    public function test_an_edit_asks_the_same_questions_and_keeps_the_people(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $created = $this->file($staff, $this->payload($provider, array_merge(
+            ['sponsored' => '1', 'dependents' => [
+                ['firstName' => 'Omar', 'lastName' => 'S', 'dateOfBirth' => '2010-05-05',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+                ['firstName' => 'Lina', 'lastName' => 'S', 'dateOfBirth' => '2016-09-09',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+            ]],
+            $this->sponsor(),
+        )))->assertCreated()->json('application');
+
+        $mainFolderId = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->folder_id;
+        $omarUuid = collect($created['dependents'])->firstWhere('name', 'Omar S')['id'];
+
+        // The same body the form posts to create, minus the files: they are
+        // already filed, and an edit must not demand them a second time.
+        $edit = $this->payload($provider, [
+            'occupation' => 'Retired Engineer',
+            'sponsored' => '1',
+            'dependents' => [
+                ['id' => $omarUuid, 'firstName' => 'Omar', 'lastName' => 'S',
+                    'dateOfBirth' => '2010-05-05', 'relationship' => CipPerson::RELATIONSHIP_QUALIFIED],
+            ],
+        ]);
+        unset($edit['passportPhoto'], $edit['passportBioPage'], $edit['birthCertificate'], $edit['providerId']);
+        $edit = array_merge($edit, $this->sponsor());
+        unset($edit['sponsor']['passportPhoto']);
+
+        $body = $this->actingAs($staff)
+            ->post('/portal/cip/applications/'.$created['id'], $edit, ['Accept' => 'application/json'])
+            ->assertOk()->json('application');
+
+        // Still one application, still the same one.
+        $this->assertSame(1, CipApplication::count());
+        $this->assertSame($created['internalNumber'], $body['internalNumber']);
+
+        // The applicant was changed, not replaced — the folder their documents
+        // are filed in is the folder they still have.
+        $this->assertSame('Retired Engineer', $body['applicant']['occupation']);
+        $this->assertSame($mainFolderId, CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->folder_id);
+        $this->assertSame([], $body['applicant']['outstanding'], 'the filed uploads survive an edit');
+
+        // Lina was dropped from the form, so she is off the application — and
+        // Omar, the only one left, is QD1 now.
+        $this->assertCount(1, $body['dependents']);
+        $this->assertSame('Omar S', $body['dependents'][0]['name']);
+        $this->assertSame(1, $body['dependents'][0]['dependentOrdinal']);
+        $this->assertSame('Dependent 1', \App\Models\Folder::find(
+            CipPerson::firstWhere('first_name', 'Omar')->folder_id
+        )->name);
+    }
+
+    public function test_turning_the_sponsor_off_and_on_keeps_the_same_person(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $created = $this->file($staff, $this->payload($provider, array_merge(
+            ['sponsored' => '1'],
+            $this->sponsor(),
+        )))->assertCreated()->json('application');
+
+        $sponsorId = CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR)->id;
+        $edit = $this->payload($provider, ['sponsored' => '0']);
+        unset($edit['passportPhoto'], $edit['passportBioPage'], $edit['birthCertificate'], $edit['providerId']);
+
+        $off = $this->actingAs($staff)
+            ->post('/portal/cip/applications/'.$created['id'], $edit, ['Accept' => 'application/json'])
+            ->assertOk()->json('application');
+        $this->assertNull($off['sponsor'], 'unticking Sponsored takes the sponsor off');
+
+        // Soft-deleted, not destroyed: their folder holds filed documents.
+        $this->assertSoftDeleted('cip_people', ['id' => $sponsorId]);
+
+        $back = $this->actingAs($staff)->post(
+            '/portal/cip/applications/'.$created['id'],
+            array_merge($edit, ['sponsored' => '1'], $this->sponsor(['passportPhoto' => null])),
+            ['Accept' => 'application/json'],
+        )->assertOk()->json('application');
+
+        $this->assertSame('Maryam Haddad', $back['sponsor']['name']);
+        $this->assertSame($sponsorId, CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR)->id,
+            'the same sponsor comes back, not a second one');
+    }
+
+    public function test_a_client_profile_can_ask_for_its_application(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider))->assertCreated();
+        $client = Client::first();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/clients/'.$client->uid.'/application')
+            ->assertOk()->json('application');
+        $this->assertSame('John Smith', $body['applicant']['name']);
+
+        // A client without one is answered, not refused: plenty of clients
+        // predate the module.
+        $other = Client::create(['uid' => 'nobody', 'name' => 'No Application', 'data' => []]);
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/clients/'.$other->uid.'/application')
+            ->assertOk()
+            ->assertJson(['application' => null]);
+    }
+
     public function test_the_form_offers_the_five_investment_types_and_every_country(): void
     {
         $staff = $this->user(Role::REVIEWING_OFFICER);

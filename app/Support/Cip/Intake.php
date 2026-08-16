@@ -49,14 +49,24 @@ class Intake
         'countryOfResidence', 'occupation', 'passportNumber',
     ];
 
-    public static function rules(): array
+    /**
+     * @param  bool  $editing  an update, where the uploads are already on file
+     *
+     * Editing keeps every answer required — §2 does not stop applying once a
+     * draft exists — but stops demanding the files, because they were handed
+     * over at creation and are sitting in the person's folder. Sending one
+     * replaces it; sending nothing leaves it alone. The provider is not in the
+     * list at all: its code is minted into the internal number, so changing it
+     * afterwards would leave the number naming a firm that did not file.
+     */
+    public static function rules(bool $editing = false): array
     {
         return array_merge(
-            ['providerId' => ['required', 'string']],
+            $editing ? [] : ['providerId' => ['required', 'string']],
             self::personRules(),
-            self::mainApplicantDocumentRules(),
+            self::mainApplicantDocumentRules($editing),
             self::investmentRules(),
-            self::sponsorRules(),
+            self::sponsorRules($editing),
             self::dependentRules(),
         );
     }
@@ -87,13 +97,18 @@ class Intake
      * dropped on it quietly loses the rest. {@see normaliseDocuments()} lets a
      * single file still arrive on its own.
      */
-    private static function mainApplicantDocumentRules(): array
+    private static function mainApplicantDocumentRules(bool $editing = false): array
     {
+        // On an edit they are already filed: sending one replaces it, sending
+        // nothing keeps what is there.
+        $need = $editing ? 'nullable' : 'required';
+        $min = $editing ? [] : ['min:1'];
+
         return [
-            'passportPhoto' => ['required', 'file', self::photoRule()],
-            'passportBioPage' => ['required', 'array', 'min:1', 'max:'.self::MAX_DOCUMENTS_PER_SLOT],
+            'passportPhoto' => [$need, 'file', self::photoRule()],
+            'passportBioPage' => array_merge([$need, 'array'], $min, ['max:'.self::MAX_DOCUMENTS_PER_SLOT]),
             'passportBioPage.*' => self::documentRule(),
-            'birthCertificate' => ['required', 'array', 'min:1', 'max:'.self::MAX_DOCUMENTS_PER_SLOT],
+            'birthCertificate' => array_merge([$need, 'array'], $min, ['max:'.self::MAX_DOCUMENTS_PER_SLOT]),
             'birthCertificate.*' => self::documentRule(),
         ];
     }
@@ -150,7 +165,7 @@ class Intake
      * would leave the sponsor as the reason nobody finishes one. The slots
      * are opened either way, so what is skipped here is still asked for.
      */
-    private static function sponsorRules(): array
+    private static function sponsorRules(bool $editing = false): array
     {
         $sponsored = fn () => filter_var(request()->input('sponsored'), FILTER_VALIDATE_BOOLEAN);
 
@@ -159,7 +174,10 @@ class Intake
             $rules[$field] = array_merge([Rule::requiredIf($sponsored)], array_slice($rule, 1));
         }
 
-        $rules['sponsor.passportPhoto'] = [Rule::requiredIf($sponsored), 'file', self::photoRule()];
+        // A sponsor already on file has a photo; only a new one must bring one.
+        $rules['sponsor.passportPhoto'] = $editing
+            ? ['nullable', 'file', self::photoRule()]
+            : [Rule::requiredIf($sponsored), 'file', self::photoRule()];
 
         foreach (self::DOCUMENT_LISTS as $list) {
             $rules['sponsor.'.$list] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
@@ -174,6 +192,9 @@ class Intake
     {
         return [
             'dependents' => ['nullable', 'array', 'max:20'],
+            // The uuid of a dependant already on the application, so an edit
+            // changes that person rather than replacing the family.
+            'dependents.*.id' => ['nullable', 'string'],
             'dependents.*.firstName' => ['required', 'string', 'max:191'],
             'dependents.*.lastName' => ['required', 'string', 'max:191'],
             'dependents.*.dateOfBirth' => ['required', 'date', 'before:today'],
@@ -280,6 +301,163 @@ class Intake
 
             return $application->fresh();
         });
+    }
+
+    /**
+     * Change an application that already exists.
+     *
+     * The same shape going in as {@see create}, because it is the same form —
+     * a reader editing a draft should not be asked a different set of
+     * questions than the one who started it. What differs is what happens to
+     * the people already on it:
+     *
+     *  - The main applicant is updated in place. There is exactly one, and
+     *    replacing them would orphan their folder and their filed documents.
+     *  - Turning Sponsored off removes the sponsor, and turning it back on
+     *    brings back the same person rather than a second one — the row is
+     *    soft-deleted, so their folder and anything filed in it survives being
+     *    changed your mind about.
+     *  - A dependant carrying a uuid is that dependant; one without is new;
+     *    one on the application but absent from the payload has been removed.
+     *
+     * Then the ordinals are recomputed and the folders renamed to match,
+     * because who is QD1 changes the moment a date of birth does.
+     *
+     * @param  array<string, mixed>  $data  already validated by self::rules(editing: true)
+     */
+    public static function update(CipApplication $application, User $actor, array $data): CipApplication
+    {
+        return DB::transaction(function () use ($application, $actor, $data) {
+            $application->forceFill([
+                'investment_type' => $data['investmentType'],
+                'investment_type_other' => $data['investmentType'] === InvestmentType::OTHER
+                    ? trim((string) ($data['investmentTypeOther'] ?? ''))
+                    : null,
+                'sponsored' => (bool) $data['sponsored'],
+            ])->save();
+
+            $application->load('people');
+
+            $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+            $main
+                ? self::applyPerson($main, $data)
+                : $main = self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
+
+            $sponsor = self::syncSponsor($application, $data);
+            self::syncDependents($application, $data['dependents'] ?? []);
+
+            Dependents::renumber($application);
+
+            // Reload: renumbering wrote ordinals, and the folder names read
+            // from them. Anyone created just now still needs a folder too.
+            $application->load('people');
+            Tree::provision($application, $actor);
+            Tree::resyncNames($application);
+
+            foreach ($application->people as $person) {
+                DocumentSlots::open($person);
+            }
+
+            self::fileUploads(
+                $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT),
+                $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR),
+                $data,
+                $actor,
+            );
+
+            return $application->fresh();
+        });
+    }
+
+    /**
+     * The sponsor after an edit: created, updated, restored or removed.
+     *
+     * Soft-deleted rather than destroyed when Sponsored goes to No. Their
+     * folder holds filed documents, and a firm that unticks a box by accident
+     * should not lose a passport scan to it.
+     */
+    private static function syncSponsor(CipApplication $application, array $data): ?CipPerson
+    {
+        $existing = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR)
+            ?: CipPerson::withTrashed()
+                ->where('application_id', $application->id)
+                ->where('role', CipPerson::ROLE_SPONSOR)
+                ->first();
+
+        if (! (bool) $data['sponsored']) {
+            $existing?->delete();
+
+            return null;
+        }
+
+        if (! $existing) {
+            return self::writePerson($application, CipPerson::ROLE_SPONSOR, $data['sponsor'] ?? []);
+        }
+
+        if ($existing->trashed()) {
+            $existing->restore();
+        }
+
+        self::applyPerson($existing, $data['sponsor'] ?? []);
+
+        return $existing;
+    }
+
+    /**
+     * The dependants after an edit, matched by uuid.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private static function syncDependents(CipApplication $application, array $rows): void
+    {
+        $kept = [];
+
+        foreach ($rows as $row) {
+            $person = ! empty($row['id'])
+                ? $application->people->firstWhere('uuid', $row['id'])
+                : null;
+
+            if ($person) {
+                self::applyPerson($person, $row);
+                $person->forceFill(['relationship' => $row['relationship']])->save();
+            } else {
+                $person = self::writePerson($application, CipPerson::ROLE_DEPENDENT, $row);
+            }
+
+            $kept[] = $person->id;
+        }
+
+        // Gone from the form means gone from the application. Soft-deleted, so
+        // their folder and its contents outlive the removal.
+        $application->people
+            ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->reject(fn (CipPerson $p) => in_array($p->id, $kept, true))
+            ->each(fn (CipPerson $p) => $p->delete());
+    }
+
+    /**
+     * Write the answers onto somebody already on the application.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function applyPerson(CipPerson $person, array $data): CipPerson
+    {
+        $attributes = [];
+        foreach (self::PERSON_FIELDS as $field) {
+            if (array_key_exists($field, $data)) {
+                $attributes[\Illuminate\Support\Str::snake($field)] = is_string($data[$field])
+                    ? trim($data[$field])
+                    : $data[$field];
+            }
+        }
+
+        if (! empty($data['countryOfResidence'])) {
+            $attributes['region'] = Countries::region($data['countryOfResidence']);
+        }
+
+        $person->forceFill($attributes)->save();
+
+        return $person;
     }
 
     /**

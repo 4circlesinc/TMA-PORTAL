@@ -62,6 +62,12 @@
     documents: {},
     /* Data URLs for the photo previews only — display, never the payload. */
     previews: {},
+    /* Paths the server already holds a file for, when editing. An answer that
+       is already filed is answered — the control asks for a replacement, and
+       the check below stops demanding one. */
+    filed: {},
+    /* The application being edited, or null when this is a new one. */
+    applicationId: null,
     /* How many dependent blocks are on the page. The rows themselves live in
        the draft under dependents.N.*, so removing one has to close the gap. */
     dependents: 0,
@@ -141,12 +147,14 @@
     });
 
     requiredFiles().forEach(function (path) {
-      if (!state.files[path]) found[path] = labelFor(path) + ' is required';
+      if (!state.files[path] && !state.filed[path]) found[path] = labelFor(path) + ' is required';
     });
 
     requiredDocuments().forEach(function (path) {
       var files = state.documents[path];
-      if (!files || !files.length) found[path] = labelFor(path) + ' is required';
+      if ((!files || !files.length) && !state.filed[path]) {
+        found[path] = labelFor(path) + ' is required';
+      }
     });
 
     if (state.draft.investmentType === 'other'
@@ -316,10 +324,18 @@
       '<button type="button" class="tma-portal-drop__zone" data-cip-file-btn="' + esc(path) + '">' +
       '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
       '<span class="tma-portal-drop__hint">' +
-      (files.length ? 'Drop another file here, or choose one' : 'Drop a file here, or choose one') +
+      (files.length || state.filed[path]
+        ? 'Drop another file here, or choose one'
+        : 'Drop a file here, or choose one') +
       '</span>' +
       '<span class="tma-portal-drop__meta">PDF or image, up to ' + MAX_DOCUMENT_MB + 'MB</span>' +
       '</button>' +
+      // An edit opens with the answer already on the server. Saying so is the
+      // difference between "this is filed" and "this was never uploaded" —
+      // the control looks identical otherwise.
+      (state.filed[path] && !files.length
+        ? '<p class="tma-portal-drop__meta">Already filed. Choose a file to replace it.</p>'
+        : '') +
       documentList(path, files) +
       fieldError(path) +
       '</div>';
@@ -936,7 +952,11 @@
     state.saving = true;
     if (state.onSaving) state.onSaving(true);
 
-    fetch('/portal/cip/applications', {
+    // Editing posts to the application's own URL. Still POST, not PUT: PHP
+    // parses a multipart body for POST only, and these carry files.
+    fetch(state.applicationId
+      ? '/portal/cip/applications/' + encodeURIComponent(state.applicationId)
+      : '/portal/cip/applications', {
       method: 'POST',
       credentials: 'same-origin',
       // No Content-Type: the browser sets the multipart boundary itself.
@@ -961,7 +981,8 @@
         }
 
         if (!res.ok) {
-          ui().toastError((json && json.message) || 'Could not file this application');
+          ui().toastError((json && json.message)
+            || (state.applicationId ? 'Could not save this application' : 'Could not file this application'));
 
           return;
         }
@@ -978,36 +999,100 @@
 
   /* ── mount ─────────────────────────────────────────────────────── */
 
+  /*
+   * Put a filed application back into the form.
+   *
+   * Every answer goes into the same draft keys the form writes, so editing is
+   * the create form with values in it rather than a second screen that has to
+   * be kept in step. What cannot come back as a value is a file: the uploads
+   * are on the server, so the controls remember what is already filed and ask
+   * for a replacement rather than an answer.
+   */
+  function prefill(app) {
+    var into = function (prefix, person) {
+      if (!person) return;
+      PERSON_FIELDS.forEach(function (f) { state.draft[prefix + f] = person[f] || ''; });
+      if (person.photo) state.previews[prefix + 'passportPhoto'] = person.photo;
+      state.filed[prefix + 'passportPhoto'] = !!person.photo;
+      DOCUMENT_LISTS.forEach(function (list) {
+        var slot = (person.documents || []).filter(function (d) {
+          return d.type === (list === 'passportBioPage' ? 'passport_bio_page' : 'birth_certificate');
+        })[0];
+        state.filed[prefix + list] = !!(slot && slot.uploaded);
+      });
+    };
+
+    state.draft.providerId = app.providerId || '';
+    state.draft.investmentType = app.investmentTypeValue || '';
+    state.draft.investmentTypeOther = app.investmentTypeOther || '';
+    state.draft.sponsored = app.sponsored ? '1' : '0';
+
+    into('', app.applicant);
+    into('sponsor.', app.sponsor);
+
+    (app.dependents || []).forEach(function (d, i) {
+      var p = 'dependents.' + i + '.';
+      // The uuid rides along so the server changes this dependant rather than
+      // replacing the family with a new one.
+      state.draft[p + 'id'] = d.id;
+      state.draft[p + 'firstName'] = d.firstName || '';
+      state.draft[p + 'lastName'] = d.lastName || '';
+      state.draft[p + 'dateOfBirth'] = d.dateOfBirth || '';
+      state.draft[p + 'relationship'] = d.relationship || 'qualified_dependent';
+    });
+    state.dependents = (app.dependents || []).length;
+  }
+
   function open(root, opts) {
     opts = opts || {};
     state.root = root;
     state.draft = emptyDraft();
     state.files = {};
     state.previews = {};
+    state.documents = {};
+    state.filed = {};
     state.dependents = 0;
     state.errors = {};
     state.saving = false;
     state.error = '';
+    state.applicationId = opts.applicationId || null;
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;
     state.loading = true;
     render(root);
 
-    api('GET', '/portal/cip/applications/form').then(function (res) {
+    // The options and, when editing, the record to put back into them. Asked
+    // for together so the form paints once with everything it needs rather
+    // than filling in under the reader.
+    var wants = [api('GET', '/portal/cip/applications/form').then(function (res) {
       if (!res.ok) throw new Error('form');
 
       return res.json();
-    }).then(function (options) {
-      state.options = options;
+    })];
+
+    if (state.applicationId) {
+      wants.push(api('GET', '/portal/cip/applications/' + encodeURIComponent(state.applicationId))
+        .then(function (res) {
+          if (!res.ok) throw new Error('application');
+
+          return res.json();
+        }).then(function (json) { return json.application; }));
+    }
+
+    Promise.all(wants).then(function (answers) {
+      state.options = answers[0];
       // Nothing to choose means the answer is already known.
-      if (options.providers && options.providers.length === 1) {
-        state.draft.providerId = options.providers[0].id;
+      if (state.options.providers && state.options.providers.length === 1) {
+        state.draft.providerId = state.options.providers[0].id;
       }
+      if (answers[1]) prefill(answers[1]);
       state.loading = false;
       render(root);
     }).catch(function () {
       state.loading = false;
-      state.error = 'Couldn’t load the application form. Refresh to try again.';
+      state.error = state.applicationId
+        ? 'Couldn’t load this application. Refresh to try again.'
+        : 'Couldn’t load the application form. Refresh to try again.';
       render(root);
     });
   }

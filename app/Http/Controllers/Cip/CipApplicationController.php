@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
@@ -83,6 +84,63 @@ class CipApplicationController extends Controller
     }
 
     /**
+     * The application a client's profile is showing.
+     *
+     * Answered as null rather than 404 when there is none: a client can exist
+     * without one — imported, or created by hand — and the profile asking
+     * "which application is this person's" deserves "none yet" rather than an
+     * error it has to special-case.
+     */
+    public function forClient(Request $request, string $uid): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+
+        /*
+         * Scoped on the application, not the client.
+         *
+         * ClientScope answers "may you see this client", which is about hub
+         * assignments and would refuse an officer looking at an application
+         * they are perfectly entitled to work on. What governs here is CIP
+         * reach, and ApplicationScope is what holds it — an application this
+         * reader may not see comes back as none, which is what they would be
+         * told anyway.
+         */
+        $client = Client::where('uid', $uid)->firstOrFail();
+
+        $application = ApplicationScope::query($user)
+            ->where('client_id', $client->id)
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            'application' => $application ? $this->record($application) : null,
+        ]);
+    }
+
+    /**
+     * Change one.
+     *
+     * The same body the form posts to create, because it is the same form —
+     * see Intake::update for what happens to the people already on it.
+     */
+    public function update(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+        abort_unless(CipAccess::canCreate($user), 404);
+
+        Intake::normaliseDocuments($request);
+        $data = $request->validate(Intake::rules(editing: true), Intake::messages());
+
+        $application = Intake::update($application, $user, $data);
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application)]);
+    }
+
+    /**
      * The filed passport photo at the resolution it was filed in.
      *
      * Scoped through the application, not the person: whoever may read the
@@ -108,9 +166,12 @@ class CipApplicationController extends Controller
         $application->loadMissing(['provider', 'people.documents']);
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
+        // Numbered first and in their number, then the unnumbered — a spouse
+        // carries no ordinal, and sorting on the column alone put null first,
+        // so the family read Spouse, QD1, QD2 instead of the other way round.
         $dependents = $application->people
             ->where('role', CipPerson::ROLE_DEPENDENT)
-            ->sortBy('dependent_ordinal')
+            ->sortBy(fn (CipPerson $p) => ($p->dependent_ordinal ?? 9999) * 1000000 + $p->id)
             ->values();
 
         return [
@@ -123,11 +184,17 @@ class CipApplicationController extends Controller
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
             'provider' => $application->provider?->name,
+            'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,
             'investmentType' => InvestmentType::display(
                 $application->investment_type,
                 $application->investment_type_other,
             ),
+            // The stored values, for a form that has to put the record back
+            // into its own controls — `investmentType` above is the display
+            // string, which is the free text once somebody picked Other.
+            'investmentTypeValue' => $application->investment_type,
+            'investmentTypeOther' => $application->investment_type_other,
             'sponsored' => (bool) $application->sponsored,
             'familySize' => $application->familySize(),
             'familyLabel' => $application->familyLabel(),
@@ -154,6 +221,11 @@ class CipApplicationController extends Controller
             'relationship' => $person->relationship,
             'dependentOrdinal' => $person->dependent_ordinal,
             'name' => $person->fullName(),
+            // Both halves as well as the whole: the form asks for them
+            // separately, and splitting a full name back apart guesses wrong
+            // on everyone whose surname is two words.
+            'firstName' => $person->first_name,
+            'lastName' => $person->last_name,
             'gender' => $person->gender,
             'dateOfBirth' => $person->date_of_birth?->toDateString(),
             'countryOfBirth' => $person->country_of_birth,

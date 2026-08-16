@@ -22,6 +22,20 @@
   var ICON = 'images/icons/phosphor/';
 
   var VIEW_KEY = 'tma.clientsViewMode.v1';
+
+  /*
+   * The CIP application a client's profile is showing, by client uid.
+   *
+   * A client is the hub's record of a person; the application is what the
+   * firm is actually working on for them, and the profile's tabs are its
+   * sections. Cached per client so switching tabs does not refetch, and
+   * cleared on the way into an edit so a saved change is read back.
+   */
+  var APPLICATIONS = {};
+
+  function applicationFor(id) {
+    return Object.prototype.hasOwnProperty.call(APPLICATIONS, id) ? APPLICATIONS[id] : undefined;
+  }
   var LIST_TAB_KEY = 'tma.cipListTab.v1';
 
   /*
@@ -75,6 +89,9 @@
     Buildings: ICON + 'Buildings.svg',
     Globe: ICON + 'Globe.svg',
     CalendarBlank: ICON + 'CalendarBlank.svg',
+    CheckCircle: ICON + 'CheckCircle.svg',
+    IdentificationCard: ICON + 'IdentificationCard.svg',
+    Circle: ICON + 'Circle.svg',
     LinkedinLogo: ICON + 'LinkedinLogo.svg',
     Trash: ICON + 'Trash.svg',
     Copy: 'images/icons/tma/Copy-16.svg',
@@ -870,6 +887,10 @@
     if (p === '/clients/applications/new') {
       return { screen: 'new-application' };
     }
+    var editApp = p.match(/^\/clients\/applications\/([^/]+)\/edit$/);
+    if (editApp) {
+      return { screen: 'edit-application', applicationId: decodeURIComponent(editApp[1]) };
+    }
     if (p === '/clients/new') {
       return { screen: 'add' };
     }
@@ -911,6 +932,9 @@
 
   function pathForClientsScreen(screen, contactId, companyId) {
     if (screen === 'new-application') return '/clients/applications/new';
+    if (screen === 'edit-application' && contactId) {
+      return '/clients/applications/' + encodeURIComponent(contactId) + '/edit';
+    }
     if (screen === 'add') return '/clients/new';
     if (screen === 'add-company') return '/clients/companies/new';
     if (screen === 'edit-company' && companyId) {
@@ -2095,7 +2119,7 @@
     if (state.screen === 'company') {
       return renderCompanyProfile(state, opts);
     }
-    if (state.screen === 'new-application') {
+    if (state.screen === 'new-application' || state.screen === 'edit-application') {
       return '<div class="tma-dash__clients-detail">' +
         // --cards, not --form: the sections are cards, and a card inside the
         // panel's own fill reads as one grey block.
@@ -2294,8 +2318,13 @@
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
         : '') +
       inviteToolbarBtn(c, state) +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
-      '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
+      // Edit opens the application in the form it was filed with, not the
+      // hub's contact record — the applicant IS the application here.
+      (applicationFor(c.id)
+        ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-application>' +
+          '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>'
+        : '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit>' +
+          '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>') +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-message>' +
       '<img src="' + ICONS.ChatTeardropDots + '" alt=""><span>Message</span></button>' +
       // Last in the row: it is the one action that leaves the page, so it
@@ -2414,17 +2443,20 @@
       toolbar = renderContactProfileToolbar(contactFor(state.selectedId), state);
     } else if (state.screen === 'company' && state.companyId) {
       toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
-    } else if (state.screen === 'new-application') {
+    } else if (state.screen === 'new-application' || state.screen === 'edit-application') {
       // No avatar. A profile head carries one because it depicts somebody; a
       // blank application depicts nobody, and the applicant's actual face is
       // asked for in the form a few inches below.
+      var editingApp = state.screen === 'edit-application';
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
-        '<span class="tma-dash__clients-profile-name">New application</span>' +
+        '<span class="tma-dash__clients-profile-name">' +
+        (editingApp ? 'Edit application' : 'New application') + '</span>' +
         '</div>' +
         '<div class="tma-dash__clients-profile-actions">' +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
-        '<button type="button" class="tma-dash__clients-message-btn" data-cip-save>Add</button>' +
+        '<button type="button" class="tma-dash__clients-message-btn" data-cip-save>' +
+        (editingApp ? 'Save' : 'Add') + '</button>' +
         '</div></div>';
     } else if (state.screen === 'add' || state.screen === 'edit') {
       toolbar = renderContactFormToolbar(state);
@@ -2498,7 +2530,8 @@
       // inside a box of its own. Every other detail screen keeps its panes
       // pinned and scrolls within them.
       '<div class="tma-dash__clients-page tma-dash__clients-page--detail' +
-      (state.screen === 'new-application' ? ' tma-dash__clients-page--flowing' : '') +
+      (state.screen === 'new-application' || state.screen === 'edit-application'
+        ? ' tma-dash__clients-page--flowing' : '') +
       '" data-node-id="clients-page">' +
       renderDetailContent(state, { elevateToolbar: true }) +
       '</div>'
@@ -3396,6 +3429,12 @@
       return (state.assignments || []).length;
     }
     if (tabId === 'folders') return documentCountFor(clientFolderUuid(state.selectedId));
+    // How many people are on the application, so the tab says how big the
+    // family is before it is opened.
+    if (tabId === 'dependents') {
+      var app = applicationFor(state.selectedId);
+      return app ? (app.dependents || []).length : null;
+    }
     return null;
   }
 
@@ -3409,8 +3448,39 @@
     return '<span class="tma-tab__count">' + esc(count > 999 ? '999+' : String(count)) + '</span>';
   }
 
+  /*
+   * The tabs this profile actually has.
+   *
+   * A CIP applicant's profile is their application, so its sections are the
+   * people on it — the main applicant, the sponsor when there is one, the
+   * dependants when there are any. "Client info" was the hub's own contact
+   * record standing in for all of that, which is not what anybody opens an
+   * applicant to read.
+   *
+   * A client with no application keeps the contact record: plenty predate the
+   * module, and a page of empty person tabs would say less than their phone
+   * number does.
+   */
+  function profileTabsFor(state) {
+    var app = applicationFor(state.selectedId);
+    if (!app) return PROFILE_TABS;
+
+    var tabs = [{ id: 'applicant', label: 'Main applicant' }];
+    if (app.sponsor) tabs.push({ id: 'sponsor', label: 'Sponsor' });
+    if ((app.dependents || []).length) tabs.push({ id: 'dependents', label: 'Dependents' });
+
+    return tabs.concat(PROFILE_TABS.filter(function (t) { return t.id !== 'info'; }));
+  }
+
+  /* The tab to open on, which is the first one this profile has. */
+  function defaultProfileTab(state) {
+    var tabs = profileTabsFor(state);
+
+    return tabs.length ? tabs[0].id : 'info';
+  }
+
   function renderProfileTabs(state, activeTab) {
-    return PROFILE_TABS.map(function (tab) {
+    return profileTabsFor(state).map(function (tab) {
       var active = tab.id === activeTab;
       return (
         '<button type="button" class="tma-tab' + (active ? ' is-active' : '') + '" role="tab"' +
@@ -3421,6 +3491,81 @@
         '</button>'
       );
     }).join('');
+  }
+
+  /*
+   * One person from the application, as the profile's own list rows.
+   *
+   * The same list component the contact record uses, so an applicant reads
+   * like every other record in the hub rather than like a form printed out.
+   */
+  function renderCipPersonPanel(state, person, panelId, hidden) {
+    if (!person) return '';
+
+    var rows = [
+      { icon: ICONS.User, label: 'Name', value: person.name },
+      { icon: ICONS.User, label: 'Gender', value: person.gender },
+      { icon: ICONS.CalendarBlank, label: 'Date of birth', value: person.dateOfBirth },
+      { icon: ICONS.MapPin, label: 'Country of birth', value: person.countryOfBirth },
+      { icon: ICONS.MapPin, label: 'Country of residence', value: person.countryOfResidence },
+      { icon: ICONS.MapPin, label: 'Region', value: person.region },
+      { icon: ICONS.Briefcase, label: 'Occupation', value: person.occupation },
+      { icon: ICONS.IdentificationCard, label: 'Passport number', value: person.passportNumber },
+    ].filter(function (r) { return !!r.value; }).map(renderListItem);
+
+    return (
+      '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
+      (hidden ? ' hidden' : '') + '>' +
+      renderProfileListColumns(rows) +
+      renderCipChecklist(person) +
+      '</div>'
+    );
+  }
+
+  /* What this person owes, and what they have handed over. */
+  function renderCipChecklist(person) {
+    var docs = person.documents || [];
+    if (!docs.length) return '';
+
+    return (
+      '<div class="tma-dash__clients-card">' +
+      '<header class="tma-dash__clients-card-head">' +
+      '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
+      tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
+      '</header>' +
+      '<ul class="tma-dash__clients-checklist">' +
+      docs.map(function (d) {
+        return '<li class="tma-dash__clients-checklist-row">' +
+          '<img src="' + ICONS[d.uploaded ? 'CheckCircle' : 'Circle'] + '" alt="" width="18" height="18">' +
+          '<span>' + esc(d.label) + '</span>' +
+          '<span class="tma-dash__clients-checklist-state">' +
+          (d.uploaded ? 'Filed' : 'Outstanding') + '</span></li>';
+      }).join('') +
+      '</ul></div>'
+    );
+  }
+
+  /* Every dependant, each with their classification and their checklist. */
+  function renderCipDependentsPanel(state, app, hidden) {
+    var list = (app.dependents || []);
+
+    return (
+      '<div class="tma-dash__clients-profile-panel" data-clients-panel="dependents" role="tabpanel"' +
+      (hidden ? ' hidden' : '') + '>' +
+      list.map(function (d) {
+        return '<div class="tma-dash__clients-card">' +
+          '<header class="tma-dash__clients-card-head">' +
+          '<h3 class="tma-dash__clients-card-title">' + esc(d.label) + '</h3>' +
+          '</header>' +
+          renderProfileListColumns([
+            { icon: ICONS.User, label: 'Name', value: d.name },
+            { icon: ICONS.CalendarBlank, label: 'Date of birth', value: d.dateOfBirth },
+          ].filter(function (r) { return !!r.value; }).map(renderListItem)) +
+          renderCipChecklist(d) +
+          '</div>';
+      }).join('') +
+      '</div>'
+    );
   }
 
   function renderContactInfoPanel(c, listItems, hidden) {
@@ -4186,7 +4331,13 @@
     }
 
     var c = contactFor(state.selectedId);
-    var activeTab = state.profileTab || 'info';
+    var app = applicationFor(state.selectedId);
+    // The stored tab may not exist on this profile — an applicant has no
+    // "Client info", and a client with no application has no "Main applicant".
+    var tabIds = profileTabsFor(state).map(function (t) { return t.id; });
+    var activeTab = tabIds.indexOf(state.profileTab) !== -1
+      ? state.profileTab
+      : defaultProfileTab(state);
     var listItems = buildProfileListItems(c);
     var toolbar = opts.elevateToolbar ? '' : renderContactProfileToolbar(c, state);
 
@@ -4198,7 +4349,13 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +
       '</div>' +
-      renderContactInfoPanel(c, listItems, activeTab !== 'info') +
+      (app
+        ? renderCipPersonPanel(state, app.applicant, 'applicant', activeTab !== 'applicant') +
+          renderCipPersonPanel(state, app.sponsor, 'sponsor', activeTab !== 'sponsor') +
+          ((app.dependents || []).length
+            ? renderCipDependentsPanel(state, app, activeTab !== 'dependents')
+            : '')
+        : renderContactInfoPanel(c, listItems, activeTab !== 'info')) +
       renderFoldersPanel(c.id, activeTab !== 'folders') +
       renderAssignedPanel(state, c.id, activeTab !== 'assigned') +
       renderAccessPanel(state, c, activeTab !== 'access') +
@@ -5578,18 +5735,22 @@
     if (intakeMount && !intakeMount.querySelector('[data-cip-wizard]')) intakeMount._cipMounted = false;
     if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
       intakeMount._cipMounted = true;
+      var editing = state.screen === 'edit-application';
       window.TMACipIntake.open(intakeMount, {
+        applicationId: editing ? state.applicationId : null,
         onSaving: function (saving) {
           var btn = document.querySelector('[data-cip-save]');
           if (!btn) return;
           btn.disabled = !!saving;
-          btn.textContent = saving ? 'Adding…' : 'Add';
+          btn.textContent = saving
+            ? (editing ? 'Saving…' : 'Adding…')
+            : (editing ? 'Save' : 'Add');
         },
         onDone: function (application) {
           if (application) {
-            // Filed: show it where the caseload lives. The list refetches
-            // itself from the live signal the write raised.
-            clientsToast('Application ' + application.number + ' created', 'positive');
+            // The list refetches itself from the live signal the write raised.
+            clientsToast('Application ' + application.number +
+              (editing ? ' saved' : ' created'), 'positive');
           }
           navigate('list');
         },
@@ -5647,6 +5808,18 @@
     if (editBtn) {
       editBtn.addEventListener('click', function () {
         navigate('edit', state.selectedId);
+      });
+    }
+
+    var editAppBtn = unwiredClientsChrome(root, '[data-clients-edit-application]');
+    if (editAppBtn) {
+      editAppBtn.addEventListener('click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        // Dropped so the profile re-reads it after the save, rather than
+        // showing the answers the reader has just changed.
+        delete APPLICATIONS[state.selectedId];
+        navigate('edit-application', null, { applicationId: app.id });
       });
     }
 
@@ -6265,6 +6438,18 @@
       else render({ detailOnly: true });
     };
 
+    // The application rides along with the profile: the tabs are its
+    // sections, and asking for it after the panel has drawn would show a
+    // client with no application for as long as the second request took.
+    if (applicationFor(id) === undefined) {
+      clientsFetch('/portal/cip/clients/' + encodeURIComponent(id) + '/application')
+        .then(function (json) {
+          APPLICATIONS[id] = (json && json.application) || null;
+          if (state.selectedId === id) redraw();
+        })
+        .catch(function () { APPLICATIONS[id] = null; });
+    }
+
     ClientsAPI.show(id).then(function (res) {
       if (stale()) return;
       var rec = res && res.client;
@@ -6439,6 +6624,9 @@
       if (screen === 'new-application') {
         return { title: 'New application', crumb: 'CIP Applications / New application' };
       }
+      if (screen === 'edit-application') {
+        return { title: 'Edit application', crumb: 'CIP Applications / Edit application' };
+      }
       if (screen === 'add') {
         return { title: 'New application', crumb: 'CIP Applications / New application' };
       }
@@ -6460,11 +6648,14 @@
       return { title: 'CIP Applications', crumb: 'CIP Applications' };
     }
 
-    function applyScreen(screen, contactId, companyId) {
+    function applyScreen(screen, contactId, companyId, applicationId) {
       var previousId = state.selectedId;
       state.screen = screen;
       state.adding = screen === 'add';
       state.editing = screen === 'edit';
+      // Which application the form is editing. Cleared on the way out, or a
+      // later New application would open with the last one's answers in it.
+      state.applicationId = screen === 'edit-application' ? (applicationId || state.applicationId) : null;
       if (companyId) state.companyId = companyId;
       if (contactId) state.selectedId = contactId;
       if (contactId && contactId !== previousId) {
@@ -6628,6 +6819,9 @@
     function navigate(screen, contactId, navOpts) {
       navOpts = navOpts || {};
       var companyId = navOpts.companyId || state.companyId;
+      // Editing an application is addressed by the application, not the
+      // client — one client can hold more than one over time.
+      var applicationId = navOpts.applicationId || null;
       if (screen === 'detail' || screen === 'edit' || screen === 'add') {
         contactId = contactId || state.selectedId;
       } else {
@@ -6638,7 +6832,7 @@
         var dirBody = root.querySelector('.tma-dash__clients-directory-body');
         if (dirBody) state.listScrollTop = dirBody.scrollTop;
 
-        applyScreen(screen, contactId, companyId);
+        applyScreen(screen, contactId, companyId, applicationId);
 
         var meta = pageMetaFor(screen, contactId || state.selectedId, companyId);
         if (screen === 'list') {
@@ -6656,7 +6850,9 @@
             companyId: state.companyId || null,
           },
           '',
-          pathForClientsScreen(screen === 'list' ? 'list' : screen, state.selectedId, state.companyId)
+          screen === 'edit-application'
+            ? pathForClientsScreen(screen, state.applicationId)
+            : pathForClientsScreen(screen === 'list' ? 'list' : screen, state.selectedId, state.companyId)
         );
 
         if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
@@ -6678,7 +6874,7 @@
         state.listScrollTop = listDirBody ? listDirBody.scrollTop : 0;
       }
 
-      applyScreen(screen, contactId, companyId);
+      applyScreen(screen, contactId, companyId, applicationId);
 
       var mobileMeta = pageMetaFor(screen, contactId || state.selectedId, companyId);
       var historyState = {
@@ -6694,7 +6890,12 @@
       history.pushState(
         historyState,
         '',
-        pathForClientsScreen(screen, contactId || state.selectedId, state.companyId)
+        // An application edit is addressed by the application, not the client
+        // whose profile it was opened from — otherwise a refresh here would
+        // ask the server for an application with a client's uid.
+        screen === 'edit-application'
+          ? pathForClientsScreen(screen, state.applicationId)
+          : pathForClientsScreen(screen, contactId || state.selectedId, state.companyId)
       );
 
       if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
@@ -6731,9 +6932,10 @@
       }
 
       if (!isClientsMobile() && state.viewMode !== 'list') {
-        applyScreen(route.screen || 'detail', route.contactId || state.selectedId, route.companyId || null);
+        applyScreen(route.screen || 'detail', route.contactId || state.selectedId, route.companyId || null, route.applicationId);
         if (!state.selectedId && route.screen !== 'add' && route.screen !== 'add-company' &&
-            route.screen !== 'company' && route.screen !== 'edit-company') {
+            route.screen !== 'company' && route.screen !== 'edit-company' &&
+            route.screen !== 'edit-application') {
           var first = firstDirectoryItem();
           state.selectedId = first ? first.id : null;
           if (state.screen === 'detail' || state.screen === 'list') {
@@ -6768,7 +6970,7 @@
         return;
       }
 
-      applyScreen(route.screen || 'list', route.contactId, route.companyId || null);
+      applyScreen(route.screen || 'list', route.contactId, route.companyId || null, route.applicationId);
       syncClientsShell(state.screen, state.viewMode);
 
       var meta = pageMetaFor(state.screen, state.selectedId, state.companyId);
