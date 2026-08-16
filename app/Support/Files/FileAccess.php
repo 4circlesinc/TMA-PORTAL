@@ -445,7 +445,48 @@ class FileAccess
             return false;
         }
 
+        /*
+         * A client's records are not assigned file by file.
+         *
+         * Who works on a client is a client assignment — ClientAssignment,
+         * with a job role and an end date, kept in step by AccessSync — and
+         * everything under that client's folder follows from it. A share
+         * bolted onto one document would be a second, invisible door: nothing
+         * closes it when the assignment ends, it appears in no client's
+         * assigned-staff list, and it says the person works on that file
+         * rather than that client, which is not a thing the firm tracks.
+         *
+         * So assignment is refused on anything inside a client's tree, and
+         * refused here rather than in the menu that surfaces it: the endpoint
+         * is the door, and the applicant's Documents tab, the File Library and
+         * anything added later all reach this method.
+         *
+         * The rest of the row menu is untouched. Naming a colleague in a
+         * comment still lets them in ({@see AccessGrants}) — that is the way
+         * in for a document, and it leaves a record of who was asked and why.
+         */
+        if ($ability === 'assign' && self::inClientTree($item)) {
+            return false;
+        }
+
         return true;
+    }
+
+    /**
+     * Is this item part of a client's records?
+     *
+     * Asked of the whole chain rather than the item's own folder. `client_id`
+     * is inherited as subfolders are created (FolderProvisioner, Cip\Tree), so
+     * the parent alone would usually answer it — but a folder made by hand
+     * inside a client's tree carries whatever `create()` gave it, and "usually
+     * inherited" is not a permission rule. The chain is already cached from
+     * the role check a few lines above, so this costs no query.
+     */
+    private static function inClientTree(FileItem|Folder $item): bool
+    {
+        $folderId = $item instanceof FileItem ? $item->folder_id : $item->id;
+
+        return self::chainFolders($folderId)->contains(fn (Folder $f) => $f->client_id !== null);
     }
 
     /** Abort with a clear 403 unless the user may perform the ability. */

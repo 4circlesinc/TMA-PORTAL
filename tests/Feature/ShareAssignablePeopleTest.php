@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\FileAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -144,6 +146,76 @@ class ShareAssignablePeopleTest extends TestCase
         );
 
         $this->assertContains($colleague->name, $names);
+    }
+
+    /**
+     * A client's records are not assigned file by file — who works on a client
+     * is a client assignment, and everything under their folder follows from
+     * it. Refused at the endpoint, so the menu that offers it is not the thing
+     * holding the line.
+     */
+    public function test_a_client_document_cannot_be_assigned_to_anybody(): void
+    {
+        $admin = $this->user('Administrator', 'admin@example.com', 'Ada Admin');
+        $this->user('Employee', 'emp@example.com', 'Ed Employee');
+
+        $client = Client::create([
+            'uid' => 'cleo', 'name' => 'Cleo Client', 'created_by' => $admin->id, 'data' => [],
+        ]);
+        $clientFolder = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Cleo Client',
+            'owner_id' => $admin->id, 'created_by' => $admin->id,
+            'folder_type' => Folder::TYPE_CLIENT, 'client_id' => $client->id,
+        ]);
+        // The applicant's own subfolder, the way Cip\Tree builds one.
+        $inner = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Main Applicant',
+            'parent_id' => $clientFolder->id, 'owner_id' => $admin->id,
+            'created_by' => $admin->id, 'folder_type' => Folder::TYPE_USER,
+            'client_id' => $client->id,
+        ]);
+        $file = $this->file($admin, $inner);
+
+        $this->actingAs($admin)
+            ->getJson('/portal/files/shares/people?type=file&id='.$file->uuid)
+            ->assertForbidden();
+
+        $this->assertFalse(
+            FileAccess::can($admin, 'assign', $file),
+            'Not even an administrator assigns a client document.',
+        );
+        $this->assertFalse(
+            FileAccess::can($admin, 'assign', $inner),
+            'Nor the folder it sits in.',
+        );
+    }
+
+    /**
+     * Only assignment. Everything else the row menu offers still works — in
+     * particular naming somebody in a comment, which is the way a colleague is
+     * brought to a client document and leaves a record of who was asked.
+     */
+    public function test_a_client_document_can_still_be_shared_and_commented_on(): void
+    {
+        $admin = $this->user('Administrator', 'admin@example.com', 'Ada Admin');
+
+        $client = Client::create([
+            'uid' => 'cleo', 'name' => 'Cleo Client', 'created_by' => $admin->id, 'data' => [],
+        ]);
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'Cleo Client',
+            'owner_id' => $admin->id, 'created_by' => $admin->id,
+            'folder_type' => Folder::TYPE_CLIENT, 'client_id' => $client->id,
+        ]);
+        $file = $this->file($admin, $folder);
+
+        $this->assertTrue(FileAccess::can($admin, 'share', $file));
+        $this->assertTrue(FileAccess::can($admin, 'preview', $file));
+        $this->assertTrue(FileAccess::can($admin, 'delete', $file));
+
+        $this->actingAs($admin)
+            ->getJson('/portal/files/files/'.$file->uuid.'/mentionable')
+            ->assertOk();
     }
 
     public function test_the_search_narrows_the_list(): void
