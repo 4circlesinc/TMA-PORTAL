@@ -1205,7 +1205,7 @@
                 navId: 'clients',
                 view: 'clients',
                 title: 'CIP Applications',
-                crumb: 'CIP Applications',
+                crumb: '',
                 clientsScreen: 'list',
                 contactId: entry.state.selectedId || null,
               },
@@ -1213,7 +1213,7 @@
               '/clients'
             );
             if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
-              window.TMADashboard.updatePageMeta({ title: 'CIP Applications', crumb: 'CIP Applications' });
+              window.TMADashboard.updatePageMeta({ title: 'CIP Applications', crumb: '' });
             }
           }
         }
@@ -7846,37 +7846,41 @@
       searchTerm: '',
     };
 
+    /*
+     * The hub says where you are three times over, so it now says it once.
+     *
+     * The sidebar names the section. The head names the record — the
+     * applicant's face and name, with the application's number and status
+     * under it. The breadcrumb read "CIP Applications / Asem Haddad" above
+     * both of them, and the page title said it a third time.
+     *
+     * So the crumb is empty here and the title is only for the list, where
+     * the tabs are the label. Every other view keeps its own: `activate()`
+     * sets them from the nav item on the way in, and this only overrides for
+     * the screens inside the hub.
+     */
     function pageMetaFor(screen, contactId, companyId) {
-      // In table/mobile detail flow the in-page back bar already says "Clients",
-      // so keep the global page title empty to avoid the duplicate label.
-      if (usesPagedClientsFlow(state) && screen !== 'list') {
-        return { title: '', crumb: 'CIP Applications' };
-      }
-      if (screen === 'new-application') {
-        return { title: 'New application', crumb: 'CIP Applications / New application' };
+      if (screen === 'new-application' || screen === 'add') {
+        return { title: 'New application', crumb: '' };
       }
       if (screen === 'edit-application') {
-        return { title: 'Edit application', crumb: 'CIP Applications / Edit application' };
-      }
-      if (screen === 'add') {
-        return { title: 'New application', crumb: 'CIP Applications / New application' };
+        return { title: 'Edit application', crumb: '' };
       }
       if (screen === 'add-company') {
-        return { title: 'New service provider', crumb: 'CIP Applications / New service provider' };
+        return { title: 'New service provider', crumb: '' };
       }
       if (screen === 'company' || screen === 'edit-company') {
         var company = companyFor(companyId || state.companyId);
-        var companyName = company ? company.name : 'Service provider';
-        if (screen === 'edit-company') {
-          return { title: companyName, crumb: 'CIP Applications / ' + companyName };
-        }
-        return { title: companyName, crumb: 'CIP Applications / ' + companyName };
+
+        return { title: company ? company.name : 'Service provider', crumb: '' };
       }
       if ((screen === 'detail' || screen === 'edit') && contactId) {
         var contact = contactFor(contactId);
-        return { title: contact.name, crumb: 'CIP Applications / ' + contact.name };
+
+        return { title: contact ? contact.name : '', crumb: '' };
       }
-      return { title: 'CIP Applications', crumb: 'CIP Applications' };
+
+      return { title: 'CIP Applications', crumb: '' };
     }
 
     function applyScreen(screen, contactId, companyId, applicationId) {
@@ -8192,7 +8196,9 @@
               navId: 'clients',
               view: 'clients',
               title: 'CIP Applications',
-              crumb: 'CIP Applications',
+              // Empty here too, or stepping back into the hub restores a
+              // breadcrumb the hub itself no longer draws.
+              crumb: '',
               clientsScreen: 'list',
               contactId: state.selectedId,
             },
