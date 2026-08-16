@@ -3,6 +3,7 @@
 namespace App\Support\Access;
 
 use App\Models\CipApplicationAssignment;
+use App\Support\Cip\Assignments;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Company;
@@ -80,6 +81,20 @@ final class AccessSync
         $endedCipFiles = CipApplicationAssignment::live()->where('user_id', $user->id)->get();
         foreach ($endedCipFiles as $assignment) {
             $assignment->end($by);
+
+            /*
+             * And the cache with it.
+             *
+             * `cip_applications.assigned_officer_id` is a copy of whoever holds
+             * the file, and every screen reads the copy rather than the
+             * assignments table. Ending the row without refreshing it left the
+             * §8 table and the officer's own work queue naming a suspended
+             * colleague — the file would have looked handled while nobody held
+             * it.
+             */
+            if ($assignment->application) {
+                Assignments::refreshCache($assignment->application);
+            }
         }
 
         $summary = [

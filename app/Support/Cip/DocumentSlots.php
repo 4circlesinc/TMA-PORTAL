@@ -170,6 +170,22 @@ class DocumentSlots
      */
     public static function outstanding(CipPerson $person): array
     {
+        /*
+         * Read from the loaded checklist where the caller already has one.
+         *
+         * This is asked for every person on an application, and an application
+         * is a family — so on a sync page of fifty it was three hundred
+         * queries against documents the same request had already fetched in
+         * full. The filter is the same either way; only where it runs moves.
+         */
+        if ($person->relationLoaded('documents')) {
+            return $person->documents
+                ->filter(fn (CipDocument $slot) => $slot->file_id === null && $slot->required)
+                ->pluck('label')
+                ->values()
+                ->all();
+        }
+
         return $person->documents()
             ->whereNull('file_id')->where('required', true)
             ->pluck('label')->all();

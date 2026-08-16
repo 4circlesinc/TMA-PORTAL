@@ -5,11 +5,11 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
-use App\Models\Client;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
@@ -18,6 +18,7 @@ use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
@@ -130,8 +131,21 @@ class CipApplicationController extends Controller
         $since = $this->cursorTime($request->query('since'));
         $after = (int) $request->query('after', 0);
 
+        /*
+         * Everything {@see record()} reads, loaded once for the page.
+         *
+         * It builds every row of this answer, so a relation it has to fetch
+         * for itself is not one query — it is fifty. The officer names both
+         * photo columns because photoUrl() falls back from one to the other,
+         * and a column that was never selected reads as no photo at all.
+         */
         $query = ApplicationScope::query($user)
-            ->with(['provider', 'people.documents.file']);
+            ->with([
+                'provider',
+                'client',
+                'assignedOfficer:id,name,email,avatar_url,provider_avatar_url',
+                'people.documents.file',
+            ]);
 
         if ($since !== null) {
             /*
@@ -157,8 +171,10 @@ class CipApplicationController extends Controller
 
         $last = $page->last();
 
+        $presenter = self::presenterFor($user, $page);
+
         return response()->json([
-            'applications' => $page->map(fn ($application) => $this->record($application, $user))->all(),
+            'applications' => $page->map(fn ($application) => $this->record($application, $user, $presenter))->all(),
             /*
              * Where to carry on from. The caller stores this and hands it back
              * next time; it is deliberately opaque prose-free data rather than
@@ -221,6 +237,8 @@ class CipApplicationController extends Controller
         $data = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', 'string', 'max:32'],
+            // A dashboard chip clicking through (§9).
+            'bucket' => ['nullable', 'string', 'max:64'],
             'page' => ['nullable', 'integer', 'min:1'],
             'perPage' => ['nullable', 'integer', 'min:1', 'max:200'],
         ]);
@@ -253,6 +271,24 @@ class CipApplicationController extends Controller
 
         if (! empty($data['status']) && Status::isValid($data['status'])) {
             $query->where('status', $data['status']);
+        }
+
+        /*
+         * A chip opening the table it counted.
+         *
+         * Applied by the SAME definition that measured the count, so the
+         * number on the chip and the rows behind it cannot disagree — which
+         * they would the moment this re-expressed a bucket as a status filter,
+         * because four of them are a person as well as a status.
+         *
+         * A bucket that is not on this reader's dashboard was never offered to
+         * them, so it answers 404 rather than an empty table: an empty table
+         * says "none of these", and the truth is "not yours to ask".
+         */
+        if (! empty($data['bucket'])) {
+            $bucket = Buckets::find($user, $data['bucket']);
+            abort_unless($bucket, 404);
+            Buckets::apply($query, $bucket, $user);
         }
 
         $this->applyListSearch($query, trim($data['q'] ?? ''));
@@ -429,10 +465,22 @@ class CipApplicationController extends Controller
          * reader may not see comes back as none, which is what they would be
          * told anyway.
          */
-        $client = Client::where('uid', $uid)->firstOrFail();
-
+        /*
+         * Resolved THROUGH the scope, not beside it.
+         *
+         * Looking the client up first and scoping only the application told a
+         * reader two different things: a uid nobody holds answered 404, and a
+         * uid held by somebody they may not see answered 200 with null. That
+         * difference is enumerable, and client uids are name slugs — so any
+         * account that passes canReach, a contact at a rival firm included,
+         * could have walked a list of names and learned which of them are the
+         * firm's clients.
+         *
+         * One query, one answer: no application in your slice for that uid
+         * reads the same whether the person exists or not.
+         */
         $application = ApplicationScope::query($user)
-            ->where('client_id', $client->id)
+            ->whereHas('client', fn ($q) => $q->where('uid', $uid))
             ->latest('id')
             ->first();
 
@@ -540,27 +588,25 @@ class CipApplicationController extends Controller
         ]);
     }
 
-    private function record($application, User $viewer): array
+    private function record($application, User $viewer, ?Presenter $presenter = null): array
     {
         // The slots' files as well as the slots: the checklist only needs to
         // know a slot is answered, but the passport photo is opened from here.
-        $application->loadMissing(['provider', 'client', 'people.documents.file']);
+        $application->loadMissing(['provider', 'client', 'assignedOfficer', 'people.documents.file']);
 
         /*
-         * One presenter for the whole family, primed once.
+         * One presenter, primed once — for the family, or for the whole page.
          *
-         * Presenter::file() rolls up shares, review status and favourites,
-         * and unprimed it does that per file — six people would be six sets
-         * of the same queries. Priming asks once for all of them.
+         * Presenter::file() rolls up shares, review status and favourites, and
+         * unprimed it does that per file: six people would be six sets of the
+         * same queries. Priming asks once.
+         *
+         * A caller reading MANY applications passes its own, primed across all
+         * of them. Without that the priming was per application and the sync
+         * page cost four queries a row on top of everything else — invisible
+         * on a family of six and three hundred queries on a page of fifty.
          */
-        $photos = $application->people
-            ->map(fn (CipPerson $p) => $this->photoFileModel($p))
-            ->filter()
-            ->values()
-            ->all();
-
-        $presenter = new Presenter($viewer);
-        $presenter->prime($photos, []);
+        $presenter ??= self::presenterFor($viewer, [$application]);
 
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
@@ -599,6 +645,11 @@ class CipApplicationController extends Controller
             'applicant' => $main ? $this->person($main, $presenter) : null,
             'sponsor' => $sponsor ? $this->person($sponsor, $presenter) : null,
             'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter))->all(),
+            // §4d's dates card: how far the file has travelled, and — because
+            // the steps it has not reached are answered too — how far it has
+            // left to go.
+            'milestones' => Milestones::for($application),
+            'assignedOfficer' => $this->officer($application),
             'createdAt' => $application->created_at?->toIso8601String(),
             // Which client's profile this belongs under, and when it last
             // moved. Both are for the offline cache: a record arriving from
@@ -608,6 +659,61 @@ class CipApplicationController extends Controller
             'clientUid' => $application->client?->uid,
             'updatedAt' => $application->updated_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The officer holding this application, or nobody.
+     *
+     * Read off the cache column rather than the assignments table, which is
+     * what that column is for: {@see App\Support\Cip\Assignments} keeps it in
+     * step with the live row, and asking the table here would be a query per
+     * application on a sync page of fifty. One person rather than the list
+     * {@see assignees()} builds — that column answers who is working this
+     * client, where the record asks the narrower question of who the file was
+     * actually handed to. A file nobody holds answers null rather than naming
+     * the last officer who did.
+     *
+     * @return array{name:string|null,email:string|null,avatar:string|null}|null
+     */
+    private function officer($application): ?array
+    {
+        $officer = $application->assignedOfficer;
+
+        if (! $officer) {
+            return null;
+        }
+
+        return [
+            'name' => $officer->name,
+            'email' => $officer->email,
+            'avatar' => $officer->photoUrl(),
+        ];
+    }
+
+    /**
+     * A presenter primed across every passport photo on these applications.
+     *
+     * @param  iterable<int, \App\Models\CipApplication>  $applications
+     */
+    private static function presenterFor(User $viewer, iterable $applications): Presenter
+    {
+        $photos = [];
+
+        foreach ($applications as $application) {
+            foreach ($application->people as $person) {
+                $file = $person->documents
+                    ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO)?->file;
+
+                if ($file) {
+                    $photos[] = $file;
+                }
+            }
+        }
+
+        $presenter = new Presenter($viewer);
+        $presenter->prime($photos, []);
+
+        return $presenter;
     }
 
     /**

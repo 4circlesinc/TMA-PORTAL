@@ -239,7 +239,15 @@ class Assignments
      * who is working it; a file nobody holds reads null rather than keeping
      * the last person who did.
      */
-    private static function refreshCache(CipApplication $application): void
+    /**
+     * Bring `cip_applications.assigned_officer_id` back into step.
+     *
+     * Public because this class is not the only thing that ends an assignment:
+     * suspending an account ends every file it holds (see AccessSync), and
+     * without this the row would say nobody holds the file while the cache
+     * went on naming the suspended officer — and every screen reads the cache.
+     */
+    public static function refreshCache(CipApplication $application): void
     {
         $live = self::live($application);
         $holder = $live->firstWhere('role', CipAccess::REVIEWING_OFFICER) ?? $live->first();

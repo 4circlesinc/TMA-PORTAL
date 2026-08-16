@@ -112,7 +112,19 @@ class CipApplication extends Model
      */
     public function familySize(): int
     {
-        return max(1, $this->people()->count());
+        /*
+         * Counted from the loaded family where there is one.
+         *
+         * `people()->count()` is a query, and this is read twice for every
+         * application on a page — once for the number and once for the "F6"
+         * label — so a sync page of fifty was a hundred COUNT statements for a
+         * relation the same request had already fetched in full.
+         */
+        $people = $this->relationLoaded('people')
+            ? $this->people->count()
+            : $this->people()->count();
+
+        return max(1, $people);
     }
 
     public function familyLabel(): string

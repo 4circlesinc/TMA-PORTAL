@@ -15,7 +15,9 @@ use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\Cip\CipApplicationController;
 use App\Http\Controllers\Cip\CipAssignmentController;
+use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
+use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
 use App\Http\Controllers\Cip\CipTransitionController;
@@ -330,6 +332,14 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // the portal that sends files does it.
         Route::post('/applications/{uuid}', [CipApplicationController::class, 'update'])->name('applications.update');
         /*
+         * §9: the buckets a reader opens their day on, counted.
+         *
+         * Deliberately uncached — see App\Support\Cip\Buckets. A work queue
+         * that lags a status change by five minutes reads as broken.
+         */
+        Route::get('/dashboard', CipDashboardController::class)->name('dashboard');
+
+        /*
          * §6: the application moves.
          *
          * One endpoint for every edge, because the lifecycle is one machine —
@@ -359,6 +369,16 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          * Review application — so it is a write of its own rather than a
          * transition somebody drives by hand.
          */
+        /*
+         * §4d: the Activity tab — one application's history, as sentences.
+         *
+         * Its own segment rather than a query on the application, because it
+         * is a different read with a different size: a profile wants the
+         * record, this wants five hundred rows of what happened to it.
+         */
+        Route::get('/applications/{uuid}/events', [CipEventController::class, 'index'])
+            ->name('applications.events');
+
         Route::get('/applications/{uuid}/assignments', [CipAssignmentController::class, 'index'])
             ->name('applications.assignments.index');
         Route::post('/applications/{uuid}/assignments', [CipAssignmentController::class, 'store'])
