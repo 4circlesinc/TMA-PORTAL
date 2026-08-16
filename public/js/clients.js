@@ -3523,12 +3523,24 @@
   }
 
   /* What this person owes, and what they have handed over. */
-  function renderCipChecklist(person) {
+  function renderCipChecklist(person, opts) {
+    opts = opts || {};
     var docs = person.documents || [];
     if (!docs.length) return '';
 
+    /*
+     * A card only where it is not already inside one.
+     *
+     * A dependant is drawn as a card, so wrapping their checklist in a second
+     * one put a card inside a card — two rounded edges a few pixels apart,
+     * which reads as a panel that failed to close rather than a section of
+     * the one above it. The applicant and the sponsor have no such wrapper,
+     * so there the card is what separates the documents from their answers.
+     */
+    var open = opts.plain ? '<div class="tma-dash__clients-checklist-block">' : '<div class="tma-dash__clients-card">';
+
     return (
-      '<div class="tma-dash__clients-card">' +
+      open +
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
       tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
@@ -3561,7 +3573,7 @@
             { icon: ICONS.User, label: 'Name', value: d.name },
             { icon: ICONS.CalendarBlank, label: 'Date of birth', value: d.dateOfBirth },
           ].filter(function (r) { return !!r.value; }).map(renderListItem)) +
-          renderCipChecklist(d) +
+          renderCipChecklist(d, { plain: true }) +
           '</div>';
       }).join('') +
       '</div>'
