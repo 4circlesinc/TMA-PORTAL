@@ -2165,7 +2165,8 @@
         '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' +
         (a.contactEmail
-          ? '<a href="mailto:' + esc(a.contactEmail) + '">' + esc(a.contactEmail) + '</a>'
+          ? '<a class="tma-cip-table__email" href="mailto:' + esc(a.contactEmail) + '">' +
+            esc(a.contactEmail) + '</a>'
           : '—') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.investmentType || '—') + '</td>' +
         // "F6" — §8's own shorthand, with the arithmetic behind it on hover.
