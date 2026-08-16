@@ -3767,8 +3767,11 @@
   }
 
   /* The rows currently on show, so a click can hand the viewer the whole file
-     rather than re-fetching one it already has. */
+     rather than re-fetching one it already has. Folders too, because the row
+     menu acts on either. */
   var clientFolderFiles = [];
+
+  var clientFolderFolders = [];
 
   function renderClientFolderList(root, res) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
@@ -3776,6 +3779,7 @@
     var folders = (res && res.folders) || [];
     var files = (res && res.files) || [];
     clientFolderFiles = files;
+    clientFolderFolders = folders;
     if (!folders.length && !files.length) {
       // Same illustrated empty state as File Library folders — plain grey copy
       // read as a broken list rather than an intentional empty folder.
@@ -3917,6 +3921,35 @@
     loadClientFolder(root);
   }
 
+  /* The loaded row behind a document button, file or folder. */
+  function clientFolderRow(id) {
+    return (clientFolderFiles || []).concat(clientFolderFolders || [])
+      .filter(function (r) { return r.id === id; })[0];
+  }
+
+  /*
+   * The File Library's row menu, on a document in this tab.
+   *
+   * Right-clicking a file here did nothing, so a rename, a move, a share or a
+   * copy link meant leaving for the library and finding the same row again.
+   * TMAFileActions.menu is the library's own menu — the same actions, the same
+   * permission rules, the same destination picker and the same confirmations —
+   * handed the row this list already holds, so there is no second, drifting
+   * copy of any of it. Anything it changes reloads the list.
+   *
+   * Anchored on the pointer: the menu is position: fixed, which is what the
+   * event's client coordinates already are.
+   */
+  function openClientFolderMenu(root, e, id) {
+    var row = clientFolderRow(id);
+    if (!row || !window.TMAFileActions || !window.TMAFileActions.menu) return;
+
+    e.preventDefault();
+    window.TMAFileActions.menu(e.clientX, e.clientY, row, function () {
+      loadClientFolder(root);
+    });
+  }
+
   function bindClientFolderRows(root) {
     root.querySelectorAll('[data-clients-subfolder]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -3927,8 +3960,14 @@
         });
         showClientFolderCurrent(root);
       });
+      btn.addEventListener('contextmenu', function (e) {
+        openClientFolderMenu(root, e, btn.getAttribute('data-clients-subfolder'));
+      });
     });
     root.querySelectorAll('[data-clients-file]').forEach(function (btn) {
+      btn.addEventListener('contextmenu', function (e) {
+        openClientFolderMenu(root, e, btn.getAttribute('data-clients-file'));
+      });
       btn.addEventListener('click', function () {
         var fu = btn.getAttribute('data-clients-file');
         if (!fu) return;
@@ -3943,7 +3982,7 @@
          * to it, and the callback refreshes this list for anything the viewer
          * changed (a review moved on, a version added).
          */
-        var row = (clientFolderFiles || []).filter(function (f) { return f.id === fu; })[0];
+        var row = clientFolderRow(fu);
 
         if (row && window.TMAFileActions && window.TMAFileActions.open) {
           window.TMAFileActions.open(row, function () { loadClientFolder(root); });
