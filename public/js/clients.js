@@ -4253,8 +4253,40 @@
       '</span>' +
       '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
       ' tma-portal-status--inline">' + esc(status) + '</span>' +
+      renderChecklistActions(d) +
       '</li>'
     );
+  }
+
+  /*
+   * Judging a document, on the row it is about.
+   *
+   * §12 is explicit that a reviewer must never have to go to the File Library
+   * to work a checklist — the verbs belong beside the requirement they are
+   * about, next to the status they change. So the row carries them, and only
+   * when they mean something: a document nobody has sent cannot be approved,
+   * and one already settled is not re-judged by accident.
+   */
+  function renderChecklistActions(d) {
+    if (!d.id || !canReviewDocuments()) return '';
+    if (d.status !== 'application_review') return '';
+
+    return (
+      '<span class="tma-dash__clients-checklist-actions">' +
+      '<button type="button" class="tma-dash__clients-checklist-act"' +
+      ' data-cip-approve="' + esc(d.id) + '">Approve</button>' +
+      '<button type="button" class="tma-dash__clients-checklist-act' +
+      ' tma-dash__clients-checklist-act--warn"' +
+      ' data-cip-changes="' + esc(d.id) + '"' +
+      ' data-cip-doc-label="' + esc(d.label) + '">Request changes</button>' +
+      '</span>'
+    );
+  }
+
+  function canReviewDocuments() {
+    var access = window.TMAPortalAccess;
+
+    return !!(access && access.can && access.can('cip.review'));
   }
 
   /* Every dependant, each with their classification and their checklist. */
@@ -5946,6 +5978,101 @@
     });
   }
 
+  /*
+   * Approving a document, and sending one back.
+   *
+   * Approving is one press: a reviewer who has read the scan has already made
+   * the decision, and a confirmation would ask them to make it twice.
+   *
+   * Sending one back is not, because §12 pairs it with a reason. "Update
+   * required" on its own is a reviewer making the provider guess what is
+   * wrong, so the reason is asked for here and refused if it is blank — the
+   * server refuses it too, and this is only the polite half of that.
+   */
+  function reviewDocument(state, render, documentId, verb, label) {
+    if (verb === 'approve') {
+      return sendReview(state, render, documentId, 'approve', {});
+    }
+
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return null;
+
+    return ui.openModal({
+      title: 'Send back ' + (label || 'this document'),
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-changes">' +
+        'What needs to change?</label>' +
+        '<textarea id="cip-changes" class="tma-dash__clients-field-input"' +
+        ' data-cip-changes-note rows="4"' +
+        ' placeholder="e.g. The second page is cut off — please re-scan the whole document."></textarea>' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">The provider sees this on the document and can reply to it.</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-changes-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-changes-send>Send back</button>' +
+        '</div>',
+      onMount: function (el) {
+        var note = el.querySelector('[data-cip-changes-note]');
+        if (note) note.focus();
+
+        var cancel = el.querySelector('[data-cip-changes-cancel]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var send = el.querySelector('[data-cip-changes-send]');
+        if (!send) return;
+
+        send.addEventListener('click', function () {
+          var comment = note ? note.value.trim() : '';
+          if (!comment) {
+            clientsToast('Say what needs to change — the provider sees this.', 'negative');
+            if (note) note.focus();
+
+            return;
+          }
+
+          send.disabled = true;
+          send.textContent = 'Sending…';
+
+          sendReview(state, render, documentId, 'request-changes', { comment: comment })
+            .then(function () { ui.closeModal(); })
+            .catch(function () {
+              send.disabled = false;
+              send.textContent = 'Send back';
+            });
+        });
+      },
+    });
+  }
+
+  function sendReview(state, render, documentId, verb, body) {
+    return clientsFetch('/portal/cip/documents/' + encodeURIComponent(documentId) + '/' + verb, {
+      method: 'POST',
+      json: body,
+    })
+      .then(function (json) {
+        /*
+         * The whole application comes back, not just the document.
+         *
+         * Judging one document can move the application — the last approval
+         * reaches assessment feedback, the first rejection puts it into update
+         * required — so a response carrying only the slot would leave the head
+         * and the tab counts describing the application as it was a moment ago.
+         */
+        var record = json && json.application;
+        if (record) rememberApplication(state.selectedId, record);
+        else forgetApplication(state.selectedId);
+
+        clientsToast(verb === 'approve' ? 'Document approved' : 'Sent back to the provider', 'positive');
+        render({ detailOnly: !usesPagedClientsFlow(state) });
+      })
+      .catch(function (err) {
+        clientsToast((err && err.message) || 'Could not record that.', 'negative');
+
+        throw err;
+      });
+  }
+
   function canAssignClients() {
     var access = window.TMAPortalAccess;
     return !!(access && access.can && access.can('clients.assign'));
@@ -7464,6 +7591,24 @@
         }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-approve]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        reviewDocument(state, render, btn.getAttribute('data-cip-approve'), 'approve');
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-changes]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        reviewDocument(
+          state,
+          render,
+          btn.getAttribute('data-cip-changes'),
+          'request-changes',
+          btn.getAttribute('data-cip-doc-label'),
+        );
       });
     });
 

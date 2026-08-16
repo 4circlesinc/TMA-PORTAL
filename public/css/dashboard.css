@@ -34979,6 +34979,39 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-secondary);
 }
 
+/* The verbs sit on the row they judge — §12 is explicit that working a
+   checklist must never mean a trip to the File Library. Quiet until the row is
+   hovered or a key lands on them, because most rows are read, not judged. */
+.tma-dash__clients-checklist-actions {
+  display: inline-flex;
+  gap: var(--space-4);
+  margin-left: var(--space-8);
+  opacity: 0;
+  transition: opacity var(--duration-fast, 120ms) ease;
+}
+
+.tma-dash__clients-checklist-row:hover .tma-dash__clients-checklist-actions,
+.tma-dash__clients-checklist-actions:focus-within {
+  opacity: 1;
+}
+
+/* Never hidden from a keyboard or a screen reader: opacity, not display, and
+   the moment one takes focus the pair appears. */
+.tma-dash__clients-checklist-act {
+  padding: 2px var(--space-8);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tma-dash__clients-checklist-act:hover { background: var(--color-hover); }
+
+.tma-dash__clients-checklist-act--warn { color: var(--color-red); }
+
 .tma-dash__clients-checklist-block {
   display: flex;
   flex-direction: column;

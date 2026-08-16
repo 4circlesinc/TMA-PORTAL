@@ -89,6 +89,26 @@ class Engine
     }
 
     /**
+     * The edges out of here that this actor may drive — what a screen needs to
+     * know before it draws a button.
+     *
+     * A filter over the two questions above rather than a second reading of
+     * the map, so the buttons and the refusal can never disagree: offering a
+     * move the engine would then reject is worse than offering none. The
+     * order is the lifecycle's own, which is the order a reader expects to
+     * see the choices in.
+     *
+     * @return list<string>
+     */
+    public static function availableTransitions(CipApplication $application, ?User $actor): array
+    {
+        return array_values(array_filter(
+            Status::ALL,
+            fn (string $to) => self::canTransition($application, $to) && self::allows($actor, $application, $to),
+        ));
+    }
+
+    /**
      * Apply one transition: validate the edge and the actor, update the row,
      * write the event — atomically. Throws rather than silently refusing, so
      * a caller cannot mistake "nothing happened" for success.
@@ -124,6 +144,17 @@ class Engine
                 'old' => ['status' => $from],
                 'new' => ['status' => $to],
             ]);
+
+            /*
+             * Phase 5's notification fan-out attaches here, and only here.
+             *
+             * The status notice the standard describes ("KM - REVIEW
+             * APPLICATION - GAL26-00001 - …") is sent for a move, so it
+             * belongs at the one place a move happens — after the row and the
+             * event have both landed, so nothing is announced that did not
+             * occur. There is no mailer yet, deliberately: an invented one
+             * would have to be unpicked when the real engine arrives.
+             */
 
             return $application;
         });

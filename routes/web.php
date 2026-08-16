@@ -14,8 +14,11 @@ use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\Cip\CipApplicationController;
+use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipRequirementController;
+use App\Http\Controllers\Cip\CipReviewController;
+use App\Http\Controllers\Cip\CipTransitionController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientCustomFieldsController;
 use App\Http\Controllers\ClientHubSettingsController;
@@ -326,6 +329,55 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // so the update is posted with _method, the way every other form in
         // the portal that sends files does it.
         Route::post('/applications/{uuid}', [CipApplicationController::class, 'update'])->name('applications.update');
+        /*
+         * §6: the application moves.
+         *
+         * One endpoint for every edge, because the lifecycle is one machine —
+         * Engine refuses an edge that is not in its map and an actor without
+         * the capability for it, so there is no gate here beyond reach.
+         */
+        Route::post('/applications/{uuid}/status', [CipTransitionController::class, 'update'])
+            ->name('applications.status');
+        /*
+         * Draft → New, the provider side filing its own work.
+         *
+         * Its own verb because it carries a precondition the generic endpoint
+         * cannot: a draft whose main applicant still owes required documents
+         * is not something anybody can assess.
+         *
+         * Named submit-draft, not submit: `applications.submit` is already the
+         * Unit submission below, and two routes of one name means one of them
+         * silently wins.
+         */
+        Route::post('/applications/{uuid}/submit', [CipTransitionController::class, 'submit'])
+            ->name('applications.submit-draft');
+
+        /*
+         * §10: who is working on this application.
+         *
+         * Assignment is what starts a review — the first one drives NEW into
+         * Review application — so it is a write of its own rather than a
+         * transition somebody drives by hand.
+         */
+        Route::get('/applications/{uuid}/assignments', [CipAssignmentController::class, 'index'])
+            ->name('applications.assignments.index');
+        Route::post('/applications/{uuid}/assignments', [CipAssignmentController::class, 'store'])
+            ->name('applications.assignments.store');
+        Route::delete('/applications/{uuid}/assignments/{userId}', [CipAssignmentController::class, 'destroy'])
+            ->name('applications.assignments.destroy');
+
+        /*
+         * §12: judging one document.
+         *
+         * Addressed by the document, because the brief is explicit that a
+         * reviewer works the checklist where it is drawn and never by going to
+         * the File Library for it.
+         */
+        Route::post('/documents/{uuid}/approve', [CipReviewController::class, 'approve'])
+            ->name('documents.approve');
+        Route::post('/documents/{uuid}/request-changes', [CipReviewController::class, 'requestChanges'])
+            ->name('documents.request-changes');
+
         /*
          * §11: the document requirements the checklists are built from.
          *
