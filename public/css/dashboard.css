@@ -34759,8 +34759,12 @@ span.tma-dash__messages-profile-avatar {
   display: block;
   width: 168px;
   height: 168px;
-  margin-top: var(--space-4);
   object-fit: cover;
   border-radius: var(--radius-12);
   background: var(--color-hover);
+  /* Back out to the row's own edge, under the icon rather than the label. A
+     one-line answer sits in the label's column because that is where reading
+     carries you; a picture that size wants the margin the card gives every
+     other block, and indenting it left a ragged 28px notch down the side. */
+  margin: var(--space-4) 0 0 calc(-16px - var(--space-12));
 }
