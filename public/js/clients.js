@@ -3523,24 +3523,22 @@
   }
 
   /* What this person owes, and what they have handed over. */
-  function renderCipChecklist(person, opts) {
-    opts = opts || {};
+  function renderCipChecklist(person) {
     var docs = person.documents || [];
     if (!docs.length) return '';
 
     /*
-     * A card only where it is not already inside one.
+     * Never a card, wherever it sits.
      *
-     * A dependant is drawn as a card, so wrapping their checklist in a second
-     * one put a card inside a card — two rounded edges a few pixels apart,
-     * which reads as a panel that failed to close rather than a section of
-     * the one above it. The applicant and the sponsor have no such wrapper,
-     * so there the card is what separates the documents from their answers.
+     * A dependant is already drawn as one, so a card here put a card inside a
+     * card — two rounded edges a few pixels apart. Giving the applicant's
+     * version a card and the dependant's a plain block then meant the same
+     * list wearing two different shapes on one page. It is a ruled section
+     * everywhere instead, and the rule is what separates the documents from
+     * the answers above them.
      */
-    var open = opts.plain ? '<div class="tma-dash__clients-checklist-block">' : '<div class="tma-dash__clients-card">';
-
     return (
-      open +
+      '<div class="tma-dash__clients-checklist-block">' +
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
       tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
@@ -3573,7 +3571,7 @@
             { icon: ICONS.User, label: 'Name', value: d.name },
             { icon: ICONS.CalendarBlank, label: 'Date of birth', value: d.dateOfBirth },
           ].filter(function (r) { return !!r.value; }).map(renderListItem)) +
-          renderCipChecklist(d, { plain: true }) +
+          renderCipChecklist(d) +
           '</div>';
       }).join('') +
       '</div>'

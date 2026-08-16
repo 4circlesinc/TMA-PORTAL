@@ -34732,9 +34732,17 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-text-secondary);
 }
 
-/* The checklist when it is already inside a card — see renderCipChecklist. */
+/*
+ * The checklist, wherever it sits — see renderCipChecklist.
+ *
+ * Ruled off at the top. The documents follow a person's answers on the same
+ * grey, so without a line the heading was just another bold word in the
+ * column rather than the start of a different kind of thing.
+ */
 .tma-dash__clients-checklist-block {
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--color-overlay-4);
 }
