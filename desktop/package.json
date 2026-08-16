@@ -1,6 +1,6 @@
 {
   "name": "tma-portal-desktop",
-  "version": "0.8.26",
+  "version": "0.8.27",
   "private": true,
   "description": "TM ANTOINE Advisory portal — macOS desktop shell",
   "main": "main.js",
@@ -100,15 +100,27 @@
       }
     },
     "dmg": {
-    "title": "TM ANTOINE Portal",
-    "icon": "assets/icon.icns",
-    "window": { "width": 540, "height": 380 },
-    "contents": [
-      { "x": 150, "y": 200, "type": "file" },
-      { "x": 390, "y": 200, "type": "link", "path": "/Applications" }
-    ]
-  },
-  "win": {
+      "title": "TM ANTOINE Portal",
+      "icon": "assets/icon.icns",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
       "icon": "assets/icon.ico",
       "target": [
         "nsis"

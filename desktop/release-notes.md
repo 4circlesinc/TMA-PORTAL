@@ -1,4 +1,5 @@
-- The app opens straight onto the portal instead of loading it — and it now opens even with no internet, showing your clients, folders and applications from the last time it was connected
-- Documents you have viewed open again offline, and changes you make offline are saved on your device and sent by themselves when you are back online
+- The app now opens instantly onto your screens exactly as you left them — your dashboard, messages, files and calendar are there the moment the window appears, and quietly bring themselves up to date
+- It opens even with no internet, showing your clients, folders and applications from the last time it was connected; documents you have viewed open offline too
+- Changes you make offline are saved on your device and sent by themselves when you are back online
 - Right-clicking works everywhere now — copy, paste, spelling suggestions in anything you write, and saving or copying images
 - Connection problems now say what is actually wrong instead of showing an unexplained error
