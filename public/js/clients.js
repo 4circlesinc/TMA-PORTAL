@@ -2774,9 +2774,13 @@
    * What this application is and where it has got to, as one line under the
    * name.
    *
-   * §7's number leads, because that is what the application is called; then
-   * the status, then who filed it. The internal number follows the CIP number
-   * once that arrives, since invoices and reviews go on quoting it.
+   * §7 requires the portal to display the application number and to switch
+   * every user-facing reference to the CIP number once it is recorded — this
+   * is that reference. The number leads, because it is what the application
+   * is called; then the status, then who filed it. `number` is the server's
+   * `displayNumber()`: the internal number until the Unit's arrives, the CIP
+   * number after. The internal one is not dropped when superseded, it moves
+   * beside — invoices, reviews and assessment feedback go on quoting it.
    */
   function renderApplicationFacts(app) {
     if (!app) return '';
@@ -2809,15 +2813,16 @@
 
   function renderContactProfileToolbar(c, state) {
     if (!c) return '';
-    var subtitle = esc(contactProfileSubtitle(c));
+    var app = applicationFor(c.id);
+    var subtitle = app ? renderApplicationFacts(app) : esc(contactProfileSubtitle(c));
 
     /*
-     * Arrow, face, name. Nothing else.
+     * Arrow, face, name — and under the name, what the application is.
      *
-     * The application's number and status were tried under the name and made
-     * the head a paragraph; they are back in their own band below the tabs,
-     * where they are one line about the application rather than more text
-     * about the person.
+     * The facts were tried in their own band below the tabs and it split
+     * "who, and where are they" across two places: the head named the person
+     * and a strip further down named the record. They live under the name,
+     * where a contact's job title would sit — one block answers both halves.
      */
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
@@ -4038,21 +4043,6 @@
   }
 
   /*
-   * The application's own line: which application this is, and where it is.
-   *
-   * §7 requires the portal to display the application number and to switch
-   * every user-facing reference to the CIP number once it is recorded. The
-   * number was reaching the browser and being drawn nowhere — a toast after
-   * saving was the only place it appeared — so there was nothing for the rule
-   * to switch. This is that reference.
-   *
-   * `number` is the server's `displayNumber()`: the internal number until the
-   * Unit's arrives, the CIP number after. The internal one is not dropped when
-   * it is superseded, it moves beside — invoices, reviews and assessment
-   * feedback keep referring to it for the life of the application, and a
-   * reader holding one needs to see that they are on the right record.
-   */
-  /*
    * What can be DONE to this application, above the panels.
    *
    * What it IS — the number, the status, the provider — moved under the name
@@ -4064,11 +4054,10 @@
   function renderApplicationBar(state, app) {
     if (!app) return '';
 
-    var facts = renderApplicationFacts(app);
     var action = renderSubmissionAction(state, app);
-    if (!facts && !action) return '';
+    if (!action) return '';
 
-    return '<div class="tma-dash__clients-appbar">' + facts + action + '</div>';
+    return '<div class="tma-dash__clients-appbar">' + action + '</div>';
   }
 
   /*

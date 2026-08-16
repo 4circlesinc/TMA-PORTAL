@@ -17827,6 +17827,10 @@
 }
 
 .tma-dash__clients-profile-subtitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8);
   font-size: var(--text-size-12);
   line-height: 16px;
   color: var(--color-text-secondary);
@@ -17851,12 +17855,14 @@
    about that section. Takes the tab row's own bottom margin, so the panels
    sit where they always did whether or not it is there. */
 /*
- * The application's own line: its number, its status, its provider.
+ * The application's verb — record the submission, correct the number.
  *
  * Between the tabs and the panels, for the same reason the sync notice is —
- * it is true of every tab below it, and inside one it would read as a fact
- * about that section. Takes the tab row's bottom margin so the panels sit
- * where they always did.
+ * it acts on the whole application, and inside one tab it would read as an
+ * action on that section. The facts (number, status, provider) live under
+ * the name in the head; only the action stands here, and when there is no
+ * action there is no band. Takes the tab row's bottom margin so the panels
+ * sit where they always did.
  */
 .tma-dash__clients-appbar {
   display: flex;
@@ -17901,16 +17907,16 @@
   border-radius: var(--radius-4, 4px);
 }
 
-/* The application's facts, in their own band: number, status, provider,
-   family. A row, so the status chip sits beside the number rather than under
-   it, and the action (when there is one) is pushed to the far end. */
-.tma-dash__clients-appbar .tma-dash__clients-profile-number {
+/* The application's facts, under the name: number, status, provider, family.
+   A row, so the status chip sits beside the number rather than under it. */
+.tma-dash__clients-profile-number {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
 }
 
-.tma-dash__clients-appbar .tma-dash__clients-profile-dot { opacity: 0.4; }
+/* The separator is punctuation, not content — it must not be read out. */
+.tma-dash__clients-profile-dot { opacity: 0.4; }
 
 .tma-dash__clients-appbar-number {
   font-size: var(--text-size-16);
