@@ -34,6 +34,7 @@ const notifications = require('./notifications');
 const splash = require('./splash');
 const handoff = require('./signin-handoff');
 const assetCache = require('./asset-cache');
+const contextMenu = require('./context-menu');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
@@ -145,6 +146,17 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  /*
+   * Right-click does something.
+   *
+   * Electron ships no context menu at all, so until now it did nothing
+   * anywhere in the app — no Copy, no Paste, and no way to reach a single one
+   * of the spelling suggestions `spellcheck: true` above has been generating
+   * all along. Attached per window rather than per session so a call window
+   * or the update window can decide for itself.
+   */
+  contextMenu.install(mainWindow.webContents);
 
   installCloseToBackground(
     mainWindow,
@@ -1121,6 +1133,25 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     session.defaultSession.setUserAgent(chromeUserAgent());
+
+    /*
+     * About this app, with the firm's mark on it.
+     *
+     * The Mac menu carries `role: 'about'`, and with nothing configured that
+     * opens a panel showing a generic icon and the word "Electron" under the
+     * version. It is a small window almost nobody opens, and it is also the
+     * one place in the app that answers "what is this program" — a stock icon
+     * there says the answer is "somebody else's".
+     */
+    app.setAboutPanelOptions({
+      applicationName: 'TM ANTOINE Portal',
+      applicationVersion: APP_VERSION,
+      // Both, deliberately: macOS prints `version` in smaller type beneath the
+      // application version, and left unset it falls back to Electron's own.
+      version: APP_VERSION,
+      copyright: `© ${new Date().getFullYear()} TM ANTOINE Advisory`,
+      iconPath: path.join(__dirname, 'assets', 'icon-master.png'),
+    });
 
     // Packaged builds get icon.icns; an unpackaged run would otherwise show
     // the stock Electron dock icon.

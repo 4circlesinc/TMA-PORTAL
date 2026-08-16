@@ -68,6 +68,37 @@ person already syncs through `/me/preferences`, so these stay local in
 Toggling one rebuilds the menu, so every checkbox reflects what is actually
 stored.
 
+## The right-click menu
+
+Electron ships none — right-clicking anywhere in the app did nothing at all,
+which no native application on either platform does. [context-menu.js](context-menu.js)
+builds one from what was actually clicked: a text field gets the editing
+commands, a link gets Copy Link / Open in Browser, an image gets Copy and Save
+Image As…, a selection gets Copy, and empty space gets nothing rather than an
+empty frame.
+
+The spelling half is why it matters most. `spellcheck: true` has been set in
+the window options all along, so Chromium has been underlining misspellings in
+every message and email the firm writes — with no way to reach a single
+suggestion. The red line was decoration until this connected it.
+
+`role:` throughout rather than hand-wired clicks, so each item carries the
+platform's own label, accelerator and enabled state. Note that Electron
+lower-cases them on the built item (`pasteAndMatchStyle` → `pasteandmatchstyle`),
+which is what `test-context-menu.js` compares against.
+
+## The About panel
+
+`app.setAboutPanelOptions` in [main.js](main.js), with `assets/icon-master.png`.
+Left unset, the Mac menu's `role: 'about'` opens a panel showing a stock icon
+and Electron's own version — the one window in the app whose entire job is to
+answer "what is this program", answering "somebody else's".
+
+That icon is reached by filename, so it has to be in the `files` whitelist.
+`verify-asar.js` now checks `assets/` references as well as `require()`s: a
+missing picture fails far more quietly than a missing module — no exception,
+no log, just a hole where the firm's mark should be.
+
 ## Closing versus quitting
 
 Closing the window hides it; the app keeps running, so messages and calls still

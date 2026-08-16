@@ -12,7 +12,7 @@
     "dist": "electron-builder --mac",
     "release": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --mac --publish never && node verify-asar.js",
     "release:win": "node bundle-assets.js && env -u ELECTRON_RUN_AS_NODE electron-builder --win --x64 --publish never && node verify-asar.js",
-    "test": "env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-badge.js && env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js && env -u ELECTRON_RUN_AS_NODE electron test-call-float.js",
+    "test": "env -u ELECTRON_RUN_AS_NODE electron test-context-menu.js && env -u ELECTRON_RUN_AS_NODE electron test-bridge.js && env -u ELECTRON_RUN_AS_NODE electron test-titlebar.js && env -u ELECTRON_RUN_AS_NODE electron test-update-window.js && env -u ELECTRON_RUN_AS_NODE electron test-notify.js && env -u ELECTRON_RUN_AS_NODE electron test-update-available.js && env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js && env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js && env -u ELECTRON_RUN_AS_NODE electron test-badge.js && env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js && env -u ELECTRON_RUN_AS_NODE electron test-signin-handoff.js && env -u ELECTRON_RUN_AS_NODE electron test-call-float.js",
     "test:update": "env -u ELECTRON_RUN_AS_NODE electron test-update.js",
     "test:call": "env -u ELECTRON_RUN_AS_NODE electron test-call-panel.js",
     "test:notify": "env -u ELECTRON_RUN_AS_NODE electron test-notify.js",
@@ -22,6 +22,8 @@
     "test:call-avatar": "env -u ELECTRON_RUN_AS_NODE electron test-call-avatar.js",
     "test:call-float": "env -u ELECTRON_RUN_AS_NODE electron test-call-float.js",
     "assets": "node bundle-assets.js",
+    "test:context-menu": "env -u ELECTRON_RUN_AS_NODE electron test-context-menu.js",
+    "test:art": "env -u ELECTRON_RUN_AS_NODE electron test-art.js",
     "test:asset-cache": "env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js",
     "test:badge": "env -u ELECTRON_RUN_AS_NODE electron test-badge.js",
     "test:taskbar-pin": "env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js",
@@ -68,7 +70,9 @@
       "splash.js",
       "splash.html",
       "assets/logo-full.png",
+      "assets/icon-master.png",
       "asset-cache.js",
+      "context-menu.js",
       "bundle-assets.js",
       "webassets/**/*"
     ],
@@ -90,7 +94,16 @@
         "NSMicrophoneUsageDescription": "Microphone access is required for voice and video calls in the portal."
       }
     },
-    "win": {
+    "dmg": {
+    "title": "TM ANTOINE Portal",
+    "icon": "assets/icon.icns",
+    "window": { "width": 540, "height": 380 },
+    "contents": [
+      { "x": 150, "y": 200, "type": "file" },
+      { "x": 390, "y": 200, "type": "link", "path": "/Applications" }
+    ]
+  },
+  "win": {
       "icon": "assets/icon.ico",
       "target": [
         "nsis"

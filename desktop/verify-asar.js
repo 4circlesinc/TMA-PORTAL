@@ -41,6 +41,24 @@ for (const archive of archives) {
         failed = true;
       }
     }
+
+    /*
+     * Art the code reaches for by name, too.
+     *
+     * The same whitelist governs `assets/`, and a missing picture fails more
+     * quietly than a missing module: no exception, no log, just a window with
+     * a hole in it or a stock Electron icon where the firm's mark should be.
+     * The tray icon, the dock icon and the About panel are all reached this
+     * way, and every one of them is invisible in a test run from a directory
+     * where the file exists.
+     */
+    for (const match of source.matchAll(/'assets',\s*'([^']+)'/g)) {
+      const asset = `assets/${match[1]}`;
+      if (!listing.has(asset)) {
+        console.error(`verify-asar: ${file} loads ${asset} but it is NOT packaged (${archive})`);
+        failed = true;
+      }
+    }
   }
 
   if (!failed) console.log(`verify-asar: ${archive} — every require resolves`);
