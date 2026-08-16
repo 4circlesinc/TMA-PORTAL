@@ -7497,23 +7497,51 @@
       redraw();
     }).catch(function (err) {
       if (stale()) return;
-      state.profileLoadingFor = null;
-      // Deliberately not marked loaded: leaving it unfetched is what lets
-      // reopening the client try again.
-      //
-      // Our own sentence rather than err.message, which for a 500 is the
-      // fetch layer's "Request failed" — true, and no use to the person
-      // looking at an empty panel. The real error is in the console.
-      // A 404 is not a failure: the record is outside this account's slice
-      // (or does not exist — the server deliberately will not say which).
-      if (err && err.status === 404) {
-        state.profileError = 'You’re not assigned to this client.';
-        state.profileErrorFinal = true;
-      } else {
-        state.profileError = 'Couldn’t load this client.';
-        state.profileErrorFinal = false;
-      }
-      redraw();
+
+      /*
+       * The server said something — a 404, a 500 — and that answer stands.
+       * The replica only speaks when nothing answered at all: err.status is
+       * unset exactly when fetch itself rejected, which is the offline case,
+       * and on the desktop the record layer clients-sync.js filled may hold
+       * the whole profile of a client nobody ever clicked while connected.
+       */
+      var offline = !(err && err.status);
+      var recovered = offline && window.TMAStore && window.TMAStore.persistent
+        ? window.TMAStore.get('clients:record:' + id)
+        : Promise.resolve(undefined);
+
+      Promise.resolve(recovered).then(function (rec) {
+        if (stale()) return;
+        state.profileLoadingFor = null;
+
+        if (rec && !rec.deleted) {
+          rememberProfile(id, rec.profile || {});
+          rememberMeta(rec);
+          if (state.screen === 'edit' && state.selectedId === id && !state.draft) {
+            state.draft = contactToDraft(contactFor(id));
+          }
+          redraw();
+
+          return;
+        }
+
+        // Deliberately not marked loaded: leaving it unfetched is what lets
+        // reopening the client try again.
+        //
+        // Our own sentence rather than err.message, which for a 500 is the
+        // fetch layer's "Request failed" — true, and no use to the person
+        // looking at an empty panel. The real error is in the console.
+        // A 404 is not a failure: the record is outside this account's slice
+        // (or does not exist — the server deliberately will not say which).
+        if (err && err.status === 404) {
+          state.profileError = 'You’re not assigned to this client.';
+          state.profileErrorFinal = true;
+        } else {
+          state.profileError = 'Couldn’t load this client.';
+          state.profileErrorFinal = false;
+        }
+        redraw();
+      });
     });
   }
 

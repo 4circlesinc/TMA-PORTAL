@@ -237,10 +237,13 @@ field placement and drawing, and computed CSS only exist in a browser.
   the directory is often fetched before /me answers, and without
   `claimAnonymous` the entry lands under `anon::` and is never found again.
 
-- **`files-replica.mjs`** — the library replica walked end to end: the
-  cursor walk into `files:folder:` / `files:item:` records, the per-page
-  cursor save, and a deletion arriving as a tombstone that removes its
-  record. It runs the REAL desktop path in a browser by declaring
+- **`files-replica.mjs`** — the replica layer walked end to end: the cursor
+  walk into `files:folder:` / `files:item:` records, the per-page cursor
+  save, a deletion arriving as a tombstone that removes its record — then
+  phase 3 on top: progress events per page, a never-visited folder
+  assembling its listing offline from the records alone (listing caches
+  deliberately dropped first), and the client book replicating with full
+  profiles under `clients:record:<uid>`. It runs the REAL desktop path in a browser by declaring
   `window.TMADesktop` in an init script before any portal script loads —
   portal-store.js reads the flag at boot, so the store gains its IndexedDB
   tier and the walker stops declining to run. An idle walk carries up to one

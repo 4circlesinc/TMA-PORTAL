@@ -158,6 +158,50 @@
   }
 
   /**
+   * Everything held under a key prefix, as values.
+   *
+   * The replica's read. Records land one key per row (`files:folder:<uuid>`),
+   * and a screen assembling a listing offline needs all of them — a store
+   * that could only answer for keys the caller already knows would make the
+   * replica write-only. Memory wins over disk for a key held in both, since
+   * memory is where fresh server answers land first.
+   */
+  function list(prefix) {
+    var start = scoped(prefix || '');
+    var out = Object.create(null);
+
+    return openDb().then(function (db) {
+      if (!db) return;
+
+      return new Promise(function (resolve) {
+        var tx;
+        try {
+          tx = db.transaction(STORE, 'readonly');
+        } catch (e) {
+          resolve();
+
+          return;
+        }
+        var req = tx.objectStore(STORE).openCursor();
+        req.onsuccess = function () {
+          var cursor = req.result;
+          if (!cursor) { resolve(); return; }
+          var entry = cursor.value;
+          if (entry.key.indexOf(start) === 0 && fresh(entry)) out[entry.key] = entry.value;
+          cursor.continue();
+        };
+        req.onerror = function () { resolve(); };
+      });
+    }).then(function () {
+      Object.keys(memory).forEach(function (k) {
+        if (k.indexOf(start) === 0 && fresh(memory[k])) out[k] = memory[k].value;
+      });
+
+      return Object.keys(out).map(function (k) { return out[k]; });
+    });
+  }
+
+  /**
    * What is held for this key, or undefined.
    *
    * Memory answers without waiting where it can, but the signature is a
@@ -312,6 +356,7 @@
   window.TMAStore = {
     get: get,
     peek: peek,
+    list: list,
     put: put,
     swr: swr,
     invalidate: invalidate,

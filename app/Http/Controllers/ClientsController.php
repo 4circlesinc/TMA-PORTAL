@@ -53,6 +53,81 @@ class ClientsController extends Controller
     }
 
     /**
+     * Every client record that has changed since a device last looked.
+     *
+     * The third cursor of the offline plan's phase 2/3, and the one its
+     * "eleven thousand clients is a large first sync" sentence was written
+     * about. Same contract as the applications and files cursors: the pair is
+     * `updated_at` AND the row id with an INCLUSIVE tie-break (a same-instant
+     * second change — delete then restore — must never be skipped for ever;
+     * the re-delivered boundary row is absorbed by the upsert), no cursor
+     * means everything, and a soft-deleted row arrives as a tombstone rather
+     * than an absence.
+     *
+     * Full records (`toRecord`), not the directory's lean rows: the replica
+     * exists so a profile can open offline for a client nobody has clicked
+     * before, and the lean row is exactly the part the directory blob
+     * already covers.
+     */
+    public function sync(Request $request): JsonResponse
+    {
+        $this->authorizeStaff($request);
+
+        $since = $this->syncCursorTime($request->query('since'));
+        $after = (int) $request->query('after', 0);
+
+        $query = ClientScope::query($request->user(), Client::withTrashed())
+            ->with(['folder', 'companyRecord', 'referredByCompany']);
+
+        if ($since !== null) {
+            $query->where(function ($q) use ($since, $after) {
+                $q->where('updated_at', '>', $since)
+                    ->orWhere(fn ($same) => $same
+                        ->where('updated_at', '=', $since)
+                        ->where('id', '>=', $after));
+            });
+        }
+
+        $page = $query
+            ->orderBy('updated_at')
+            ->orderBy('id')
+            ->limit(200)
+            ->get();
+
+        $last = $page->last();
+
+        return response()->json([
+            'clients' => $page->map(fn (Client $client) => $client->trashed()
+                ? ['id' => $client->uid, 'deleted' => true, 'deletedAt' => $client->deleted_at?->toIso8601String()]
+                : $client->toRecord())->values()->all(),
+            'cursor' => [
+                'since' => $last ? $last->updated_at?->toIso8601String() : $request->query('since'),
+                'after' => $last ? $last->id : $after,
+            ],
+            'more' => $page->count() === 200,
+        ]);
+    }
+
+    /**
+     * A cursor timestamp, or null — an unparseable value is no cursor at all,
+     * because the worst case of that is re-reading a page the device already
+     * holds, and the alternative is a client that can never recover from a
+     * corrupt value it stored itself.
+     */
+    private function syncCursorTime(?string $value): ?\Carbon\CarbonImmutable
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return \Carbon\CarbonImmutable::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * A short named slice for the right sidebar.
      *
      * The sidebar only ever paints six-to-ten rows. It used to pull the entire

@@ -34,6 +34,30 @@
     return ui() ? ui().esc(s) : String(s == null ? '' : s);
   }
 
+  /*
+   * The replica walkers, while they walk. A first sync pulls thousands of
+   * records; with nothing on screen it reads as the app doing nothing —
+   * phase 3's "progress the reader can see" is this line. Keyed per source
+   * so two walkers running at once sum rather than flicker over each other.
+   */
+  var replicating = Object.create(null);
+
+  document.addEventListener('tma:replica-progress', function (e) {
+    var d = e.detail || {};
+    if (!d.source) return;
+    if (d.running) replicating[d.source] = d.taken || 0;
+    else delete replicating[d.source];
+    if (window.TMAQueue) paint(window.TMAQueue.state());
+  });
+
+  function replicaCount() {
+    return Object.keys(replicating).reduce(function (sum, k) { return sum + replicating[k]; }, 0);
+  }
+
+  function replicaActive() {
+    return Object.keys(replicating).length > 0;
+  }
+
   function label(status) {
     if (status.failed > 0) {
       return status.failed === 1
@@ -46,19 +70,27 @@
         ? '1 change waiting to sync'
         : status.waiting + ' changes waiting to sync';
     }
+    if (!status.online) return 'You’re offline';
 
-    return 'You’re offline';
+    var taken = replicaCount();
+
+    return taken > 0
+      ? 'Syncing for offline — ' + taken.toLocaleString() + ' records'
+      : 'Syncing for offline…';
   }
 
   function tone(status) {
     if (status.failed > 0) return 'attention';
     if (!status.online) return 'offline';
+    // A background download is activity, not a warning — the grey dot, the
+    // same neutrality as offline, rather than amber asking to be looked at.
+    if (status.waiting === 0) return 'busy';
 
     return 'waiting';
   }
 
   function paint(status) {
-    var wanted = !status.online || status.waiting > 0 || status.failed > 0;
+    var wanted = !status.online || status.waiting > 0 || status.failed > 0 || replicaActive();
 
     if (!wanted) {
       if (pill) { pill.remove(); pill = null; }

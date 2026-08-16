@@ -44,7 +44,7 @@ on its own.* `public/js/portal-store.js`;
 `tests/Browser/clients-cached-directory.mjs` prove the offline paint by
 cutting the network.
 
-**2. Sync cursors.** ✅ *Shipped for applications, folders and files.* `GET /portal/cip/applications/sync?since=&after=` returns what has moved
+**2. Sync cursors.** ✅ *Shipped: applications, folders, files and clients.* `GET /portal/cip/applications/sync?since=&after=` returns what has moved
 since a cursor, in pages of 50. The cursor is `updated_at` **and** the row id,
 so two records saved in the same second cannot straddle a page boundary and
 lose one — `CipApplicationSyncTest` pins exactly that case. `CipPerson` and
@@ -60,19 +60,26 @@ absence. Both cursors use an INCLUSIVE id tie-break: the boundary row is
 re-delivered so a second change inside the same instant (delete then
 restore) can never be skipped for ever; an upsert absorbs the repeat. Two
 honest limits, settled by a fresh full walk: a purged bin row leaves no
-tombstone, and a revoked share moves no row. Still to do: clients.
+tombstone, and a revoked share moves no row. The clients cursor
+(`GET /portal/clients/sync`, `ClientsSyncTest`) completes the set, carrying
+FULL records (`toRecord`) rather than the directory's lean rows — the replica
+exists so a profile can open offline for a client nobody clicked before.
 
-**3. First-run download (desktop).** ◐ *Applications and the File Library.*
-`public/js/cip-sync.js` and `public/js/files-sync.js` walk their cursors into
-the store on sign-in, on reconnect, and after a queued write lands —
-resumable, because cursors are saved per page rather than per run. The
-library lands as records (`files:folder:<uuid>` / `files:item:<uuid>`, the
-Presenter's own row shape); the listing caches stay the screens' own, and
-assembling offline listings from the record layer is what this phase still
-owes, along with progress the reader can see. Desktop only: in a browser the
-store is memory, so the download would cost the firm's bandwidth to warm
-something a reload empties. `tests/Browser/files-replica.mjs` runs the whole
-walk against a real store by declaring TMADesktop before boot.
+**3. First-run download (desktop).** ✅ *Shipped.* One walker
+(`portal-replica.js` — the walk written once, configured three times) pulls
+all three cursors into the store on sign-in, reconnect, and after a queued
+write lands; cursors save per page, so a closed lid costs the pages that were
+left, never the ones that landed. What makes the replica *usable*:
+`portal-files.js` assembles offline listings from the records
+(`TMAStore.list`) when the network cannot answer — folder browsing, All
+Files and Personal; Shared/Recent/Favourites encode questions the rows alone
+cannot answer, and a wrong listing offline is worse than a plain refusal.
+The client hub falls back to `clients:record:<uid>` for a profile the server
+never answered. Progress is the sync pill: every page announces
+`tma:replica-progress`, and portal-sync-status shows "Syncing for offline —
+N records" with a neutral dot (activity, not a warning). Desktop only
+throughout; `tests/Browser/files-replica.mjs` drives all of it — walk,
+assembly offline, client profile, progress — against a real IndexedDB store.
 
 **4. The offline shell.** ◐ *The desktop boots offline; browsers still get
 the error page.* Three pieces (16 Aug 2026): `desktop/shell-cache.js` keeps

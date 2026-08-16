@@ -293,14 +293,103 @@
       // the refresh failed — that is the offline case working as designed.
       // Reaching here means there was nothing to show at all.
       if (listingParams().toString() !== expected) return;
-      state.loading = false;
       // A silent refresh is nobody's request. Replacing a working list with
       // an error because a background poll lost the network is a worse
       // outcome than showing slightly stale rows until the next one lands.
-      if (silent) return;
-      state.error = err.message || 'Could not load this folder.';
-      render();
+      if (silent) { state.loading = false; return; }
+
+      // Before admitting defeat: the replica. A folder nobody ever visited
+      // has no cached listing, but on the desktop its rows may all be
+      // sitting in the record layer the sync walker filled.
+      return assembleFromReplica(expected).then(function (painted) {
+        if (painted) return;
+        state.loading = false;
+        state.error = err.message || 'Could not load this folder.';
+        render();
+      });
     });
+  }
+
+  /*
+   * A listing built from the record replica instead of the network.
+   *
+   * This is what phase 3 was for (docs/offline-plan.md): the sync walker
+   * pulls every visible folder and file into the store as presented rows,
+   * and this arranges them into the same shape the server would have sent —
+   * so a never-visited folder opens offline, not just the ones somebody
+   * happened to browse while connected.
+   *
+   * Only the shapes whose server semantics are reproducible from the records
+   * alone: browsing inside a folder (children by parent link), the All Files
+   * root (no parent), and Personal (owned by the reader). Shared,
+   * favourites and recent encode questions the rows themselves cannot
+   * answer — whose share reached me, what I starred — and a wrong listing
+   * offline is worse than a plain "not available offline".
+   */
+  function assembleFromReplica(expected) {
+    var store = window.TMAStore;
+    if (!store || !store.persistent || !store.list) return Promise.resolve(false);
+    if (state.search || state.filterType || state.filterOwner) return Promise.resolve(false);
+
+    var folderId = state.folder;
+    var section = state.section;
+    if (!folderId && section !== 'all' && section !== 'my') return Promise.resolve(false);
+
+    return Promise.all([store.list('files:folder:'), store.list('files:item:')]).then(function (held) {
+      var folders = held[0];
+      var files = held[1];
+      if (!folders.length && !files.length) return false;
+      // The reader may have navigated while the store was answering.
+      if (listingParams().toString() !== expected) return true;
+
+      var childOf = function (rec, link) {
+        return folderId ? (rec[link] && rec[link].id === folderId) : !rec[link];
+      };
+      var shownFolders = folders.filter(function (f) { return childOf(f, 'parent'); });
+      var shownFiles = files.filter(function (f) { return childOf(f, 'folder'); });
+
+      if (!folderId && section === 'my') {
+        var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+        // Whose files "Personal" means is not guessable: without /me answered
+        // (or remembered — current-user.js keeps it on the desktop), showing
+        // everything as "mine" would be a wrong listing, not a helpful one.
+        if (!me || me.id == null) return false;
+        var mine = function (rec) { return rec.owner && rec.owner.userId === me.id; };
+        shownFolders = shownFolders.filter(mine);
+        shownFiles = shownFiles.filter(mine);
+      }
+
+      var dir = state.dir === 'desc' ? -1 : 1;
+      var compare = state.sort === 'modified'
+        ? function (a, b) { return dir * String(a.modifiedAt || '').localeCompare(String(b.modifiedAt || '')); }
+        : function (a, b) { return dir * String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' }); };
+      shownFolders.sort(compare);
+      shownFiles.sort(compare);
+
+      // The breadcrumb is a walk up the parent links — the replica holds the
+      // ancestors by the same right it holds the folder.
+      var crumb = [];
+      if (folderId) {
+        var byId = {};
+        folders.forEach(function (f) { byId[f.id] = f; });
+        var hop = byId[folderId];
+        if (hop) state.folderName = hop.name;
+        while (hop) {
+          crumb.unshift({ id: hop.id, name: hop.name });
+          hop = hop.parent ? byId[hop.parent.id] : null;
+        }
+      }
+
+      state.loading = false;
+      state.error = null;
+      state.data = { folders: shownFolders, files: shownFiles };
+      state.owners = [];
+      state.breadcrumb = crumb;
+      pruneSelection();
+      render();
+
+      return true;
+    }).catch(function () { return false; });
   }
 
   function pruneSelection() {

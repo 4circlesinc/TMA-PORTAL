@@ -102,6 +102,63 @@ try {
   }), made);
   check(after.child === undefined || after.child === null, 'the deleted folder is out of the replica');
   check(!!after.parent, 'and the survivor is untouched');
+
+  step(5, 'Progress is announced while a walk runs');
+  const progress = await page.evaluate(async () => {
+    const seen = [];
+    const listener = (e) => seen.push(e.detail);
+    document.addEventListener('tma:replica-progress', listener);
+    await window.TMAFilesSync.run();
+    document.removeEventListener('tma:replica-progress', listener);
+    return seen;
+  });
+  check(progress.length > 0 && progress[progress.length - 1].running === false,
+    `each page announces itself, and the end says so (${progress.length} events)`);
+
+  step(6, 'Offline, a never-visited folder assembles from the records');
+  // Make a folder tree the LISTING layer has never seen, walk it into the
+  // replica, then drop every cached listing so only the records can answer.
+  const fresh = await page.evaluate(async () => {
+    const parent = await window.TMAFilesNet.fetchJSON(window.TMAFilesNet.url('/folders'), {
+      method: 'POST', json: { name: 'Never Visited ' + Date.now().toString(36) },
+    });
+    const child = await window.TMAFilesNet.fetchJSON(window.TMAFilesNet.url('/folders'), {
+      method: 'POST', json: { name: 'Assembled Child', parent: parent.id },
+    });
+    await window.TMAFilesSync.run();
+    await window.TMAStore.invalidate('files:listing:');
+    return { parent: parent.id, child: child.id, name: parent.name };
+  });
+  await context.setOffline(true);
+  await page.evaluate((f) => {
+    window.TMADashboard.navigate({
+      navId: 'folders-all', view: 'folders', title: f.name,
+      crumb: 'File Library / ' + f.name, folderId: f.parent,
+    });
+  }, fresh);
+  const assembled = await until(() => page.evaluate(() =>
+    document.body.innerText.includes('Assembled Child')), 10000);
+  check(assembled, 'the folder opens on its rows with no network and no cached listing');
+  check(await page.evaluate((f) => document.body.innerText.includes(f.name), fresh),
+    'with its own name on the breadcrumb');
+  await context.setOffline(false);
+
+  step(7, 'The client book replicates, and a profile answers offline');
+  const clientMade = await page.evaluate(async () => {
+    const uid = 'replica-' + Date.now().toString(36);
+    await window.TMAClients.api.create({
+      uid, name: 'Replica Person', initial: 'R', initialColor: 'blue',
+      profile: { firstName: 'Replica', lastName: 'Person', notes: 'held offline' },
+    });
+    const took = await window.TMAClientsSync.run();
+    return { uid, took };
+  });
+  check(clientMade.took >= 1, `the clients walker took records in (${clientMade.took})`);
+  const heldClient = await page.evaluate((uid) =>
+    window.TMAStore.get('clients:record:' + uid), clientMade.uid);
+  // toRecord's `profile` IS the stored contact blob, unwrapped.
+  check(!!heldClient && heldClient.profile && heldClient.profile.firstName === 'Replica',
+    'the full record — profile included — is in the replica');
 } catch (err) {
   failures.push(`threw: ${err.message}`);
   console.error(err);
