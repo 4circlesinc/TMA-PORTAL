@@ -482,6 +482,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/requests/{uuid}/send', [FileRequestController::class, 'send'])->name('requests.send');
 
         Route::get('/shares', [ShareController::class, 'index'])->name('shares.index');
+        // Who an item can be assigned to, for the row menu's picker.
+        Route::get('/shares/people', [ShareController::class, 'people'])->name('shares.people');
         Route::post('/shares', [ShareController::class, 'store'])->name('shares.store');
         Route::patch('/shares/{uuid}', [ShareController::class, 'update'])->name('shares.update');
         Route::delete('/shares/{uuid}', [ShareController::class, 'destroy'])->name('shares.destroy');

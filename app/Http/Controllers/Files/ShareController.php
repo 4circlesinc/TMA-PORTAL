@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Companies\CompanyRoles;
 use App\Support\Files\Activity;
+use App\Support\Files\Assignable;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Sharing;
 use App\Support\Mail\Postcards;
@@ -35,6 +36,32 @@ class ShareController extends BaseFilesController
         FileAccess::authorize($this->user($request), 'share', $item);
 
         return response()->json($this->access($item, $data['type']));
+    }
+
+    /**
+     * Who this item can be assigned to, for a picker that lists people.
+     *
+     * Gated on `assign`, the same ability the assignment itself needs — a
+     * reader who could not act on the answer has no business asking. What the
+     * list may contain is {@see Assignable}'s rule, which is the mention
+     * composer's: naming somebody lets them in, so who you may name is who you
+     * may admit.
+     */
+    public function people(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', 'in:file,folder'],
+            'id' => ['required', 'string'],
+            'q' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        $item = $this->item($data['type'], $data['id']);
+        $user = $this->user($request);
+        FileAccess::authorize($user, 'assign', $item);
+
+        return response()->json([
+            'people' => Assignable::people($item, $user, trim($data['q'] ?? '')),
+        ]);
     }
 
     /** Invite a person by email, or create/refresh the public link. */

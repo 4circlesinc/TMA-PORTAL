@@ -4738,15 +4738,25 @@
   /* ── context menu ───────────────────────────────────── */
 
   var ctxEl = null;
+
+  /* The flyout beside a parent entry. Only ever one. */
+  var ctxSubEl = null;
   function closeContextMenu() {
+    closeCtxSub();
     if (ctxEl) { ctxEl.remove(); ctxEl = null; }
-    document.removeEventListener('click', closeContextMenu);
+    document.removeEventListener('click', onCtxDocClick);
     document.removeEventListener('contextmenu', onDocCtx, true);
     document.removeEventListener('keydown', onCtxKey);
     document.removeEventListener('scroll', closeContextMenu, true);
   }
   function onCtxKey(e) { if (e.key === 'Escape') closeContextMenu(); }
   function onDocCtx(e) { if (ctxEl && !ctxEl.contains(e.target)) closeContextMenu(); }
+  /* A click inside either menu is the menu's own business — closing on it
+     would kill the flyout before its handler ran. */
+  function onCtxDocClick(e) {
+    if (e.target.closest('.tma-portal-context-menu')) return;
+    closeContextMenu();
+  }
 
   /* Only offer signing for files the pipeline accepts, that aren't in the
      recycle bin, and that the viewer may actually read. */
@@ -4852,18 +4862,100 @@
    * what is missing to know where they are. It carries a tick and does
    * nothing instead.
    */
-  function openReviewStatusMenu(x, y, item, onDone) {
+  function reviewSubmenu(item, onDone) {
     var current = (item.review || {}).status;
 
-    openContextMenu(x, y, item, REVIEW_STATES.map(function (s) {
+    return REVIEW_STATES.map(function (s) {
       var isCurrent = s.id === current;
 
       return {
-        label: s.label + (isCurrent ? ' ✓' : ''),
+        label: s.label,
         icon: s.icon,
+        note: isCurrent ? '✓' : '',
         fn: isCurrent ? function () {} : function () { setItemReviewStatus(item, s.id, onDone); },
       };
-    }));
+    });
+  }
+
+  /** The same picker where there is no menu to hang it off — the viewer's
+      panel button, which opens it as a menu of its own. */
+  function openReviewStatusMenu(x, y, item, onDone) {
+    openContextMenu(x, y, item, reviewSubmenu(item, onDone));
+  }
+
+  /* ── assigning from the row menu ────────────────────── */
+
+  /**
+   * The people this item can be assigned to.
+   *
+   * Fetched when the flyout opens rather than with the menu: it is a request
+   * per item, and right-clicking a row to rename it should not ask the server
+   * who else could have it. The server decides who may appear — see
+   * Assignable — and answers 403 to a reader who may not assign at all, which
+   * is the same answer they would get for trying.
+   *
+   * Picking somebody grants `viewer`, the role the assign dialog opens on. The
+   * dialog is still there, last in the list, for any other role or for
+   * somebody who has no account yet.
+   */
+  function assignSubmenu(item, fill) {
+    var withDialog = function (rows) {
+      return rows.concat([
+        { sep: true },
+        { label: 'Assign with a role…', icon: 'SlidersHorizontal', fn: function () { openAssignModal(item); } },
+      ]);
+    };
+
+    net().fetchJSON(net().url('/shares/people?type=' + item.type + '&id=' + encodeURIComponent(item.id)))
+      .then(function (res) {
+        var people = (res && res.people) || [];
+        if (!people.length) {
+          fill(withDialog([{ label: 'Nobody to assign to', static: true }]));
+
+          return;
+        }
+
+        fill(withDialog(people.map(function (p) {
+          return {
+            label: p.name || p.email || 'Someone',
+            avatar: ctxAvatarHtml(p),
+            // Said before they commit, not after: assigning somebody who can
+            // already open it is a no-op worth knowing about first.
+            note: p.hasAccess ? 'Has access' : '',
+            fn: function () { assignTo(item, p); },
+          };
+        })));
+      })
+      .catch(function () {
+        fill(withDialog([{ label: 'Couldn\u2019t load people', static: true }]));
+      });
+  }
+
+  /* Their real photo where there is one, their initial where there is not —
+     the portal never invents a face. */
+  function ctxAvatarHtml(person) {
+    if (person && person.avatar) {
+      return '<img class="tma-portal-context-menu__avatar" src="' + esc(person.avatar) + '" alt="" width="20" height="20">';
+    }
+    var initial = String((person && person.name) || (person && person.email) || '?').charAt(0).toUpperCase();
+
+    return '<span class="tma-portal-context-menu__avatar tma-portal-context-menu__avatar--initial">' +
+      esc(initial) + '</span>';
+  }
+
+  function assignTo(item, person) {
+    net().fetchJSON(net().url('/shares'), {
+      method: 'POST',
+      json: { type: item.type, id: item.id, mode: 'invite', email: person.email, role: 'viewer' },
+    })
+      .then(function () {
+        ui().toast('Assigned to ' + (person.name || person.email) + '.');
+        load(true);
+        notifyExternal();
+      })
+      .catch(function (err) {
+        ui().toast((err && err.message) || 'Could not assign this.', false);
+      });
   }
 
   function contextItems(item) {
@@ -4883,7 +4975,13 @@
     }
     list.push({ sep: true });
     if (perm(item, 'share')) list.push({ label: 'Share', icon: 'ShareNetwork', fn: function () { openShareModal(item); } });
-    if (perm(item, 'assign')) list.push({ label: 'Assign to people', icon: 'UserPlus', fn: function () { openAssignModal(item); } });
+    if (perm(item, 'assign')) {
+      list.push({
+        label: 'Assign to people',
+        icon: 'UserPlus',
+        submenu: function (fill) { assignSubmenu(item, fill); },
+      });
+    }
     if (perm(item, 'share')) list.push({ label: 'Copy link', icon: 'LinkSimple', fn: function () { copyShareLink(item); } });
     // Only for folders, and only where the reader could upload themselves: a
     // request hands out write access, so it cannot be wider than write access.
@@ -4930,14 +5028,107 @@
       list.push({
         label: 'Change status',
         icon: 'SealCheck',
-        fn: function (x, y) {
-          openReviewStatusMenu(x, y, item, function () { load(true); notifyExternal(); });
+        submenu: function (fill) {
+          fill(reviewSubmenu(item, function () { load(true); notifyExternal(); }));
         },
       });
     }
     list.push({ label: 'View details', icon: 'Info', fn: function () { openDetails(item); } });
     if (perm(item, 'delete')) list.push({ label: 'Delete', icon: 'Trash', danger: true, fn: function () { deleteItem(item); } });
     return list;
+  }
+
+  /* Placed where asked, then pulled back inside the window. */
+  function placeMenu(el, x, y) {
+    var w = el.offsetWidth, h = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+    el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+  }
+
+  function menuItemHtml(it, i) {
+    if (it.sep) return '<div class="tma-portal-context-menu__sep" role="separator"></div>';
+    if (it.static) {
+      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
+        '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></div>';
+    }
+    var iconHtml = it.avatar
+      ? it.avatar
+      : (it.icon
+        ? '<img class="tma-portal-context-menu__icon" src="images/icons/phosphor/' + it.icon + '.svg" alt="" width="16" height="16">'
+        : '<span class="tma-portal-context-menu__icon"></span>');
+
+    return '<button type="button" class="tma-portal-context-menu__item' +
+      (it.danger ? ' tma-portal-context-menu__item--danger' : '') +
+      (it.submenu ? ' tma-portal-context-menu__item--parent' : '') +
+      '" role="menuitem" data-ctx="' + i + '"' +
+      (it.disabled ? ' disabled' : '') +
+      (it.submenu ? ' aria-haspopup="true"' : '') +
+      (it.title ? ' title="' + esc(it.title) + '"' : '') + '>' +
+      iconHtml +
+      '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
+      (it.note ? '<span class="tma-portal-context-menu__note">' + esc(it.note) + '</span>' : '') +
+      (it.submenu
+        ? '<img class="tma-portal-context-menu__chevron" src="images/icons/phosphor/CaretRight.svg" alt="" width="16" height="16" aria-hidden="true">'
+        : '') +
+      '</button>';
+  }
+
+  function closeCtxSub() {
+    if (ctxSubEl) { ctxSubEl.remove(); ctxSubEl = null; }
+    if (ctxEl) {
+      var open = ctxEl.querySelector('[data-ctx][data-open]');
+      if (open) open.removeAttribute('data-open');
+    }
+  }
+
+  /**
+   * A flyout beside the entry that opened it.
+   *
+   * `entry.submenu` is a function given a callback to fill the flyout with —
+   * so a list that has to be fetched can paint "Loading…" first and answer
+   * later, without every caller writing that dance out.
+   */
+  function openCtxSub(parentBtn, entry) {
+    if (ctxSubEl && parentBtn.hasAttribute('data-open')) return;
+    closeCtxSub();
+    parentBtn.setAttribute('data-open', 'true');
+
+    ctxSubEl = document.createElement('div');
+    ctxSubEl.className = 'tma-portal-context-menu tma-portal-context-menu--sub';
+    ctxSubEl.setAttribute('role', 'menu');
+    if (lb) ctxSubEl.style.zIndex = '701';
+    document.body.appendChild(ctxSubEl);
+
+    // Vertically off the entry, horizontally off the MENU: the entry sits
+    // inside the menu's padding, so hanging the flyout off it left the two
+    // overlapping by those few pixels.
+    var box = parentBtn.getBoundingClientRect();
+    var menu = ctxEl.getBoundingClientRect();
+    var sub = ctxSubEl;
+
+    var fill = function (items) {
+      if (sub !== ctxSubEl) return;
+      sub.innerHTML = items.map(menuItemHtml).join('');
+      // Placed after filling: an empty flyout has no width, so there was
+      // nothing yet to measure against the window's edge.
+      // Left of the menu when the right will not hold it, rather than clamped
+      // back over the menu it belongs beside.
+      var w = sub.offsetWidth;
+      var right = menu.right + 2;
+      var x = right + w + 8 <= window.innerWidth ? right : menu.left - w - 2;
+      placeMenu(sub, x, box.top - 4);
+
+      sub.onclick = function (e) {
+        var b = e.target.closest('[data-ctx]');
+        if (!b || b.disabled) return;
+        var picked = items[parseInt(b.getAttribute('data-ctx'), 10)];
+        closeContextMenu();
+        if (picked && picked.fn) picked.fn();
+      };
+    };
+
+    fill([{ label: 'Loading…', static: true }]);
+    entry.submenu(fill);
   }
 
   /**
@@ -4954,18 +5145,9 @@
     ctxEl = document.createElement('div');
     ctxEl.className = 'tma-portal-context-menu';
     ctxEl.setAttribute('role', 'menu');
-    ctxEl.innerHTML = list.map(function (it, i) {
-      if (it.sep) return '<div class="tma-portal-context-menu__sep" role="separator"></div>';
-      var iconHtml = it.icon ? '<img class="tma-portal-context-menu__icon" src="images/icons/phosphor/' + it.icon + '.svg" alt="" width="16" height="16">' : '<span class="tma-portal-context-menu__icon"></span>';
-      return '<button type="button" class="tma-portal-context-menu__item' + (it.danger ? ' tma-portal-context-menu__item--danger' : '') + '" role="menuitem" data-ctx="' + i + '"' + (it.disabled ? ' disabled' : '') + (it.title ? ' title="' + esc(it.title) + '"' : '') + '>' + iconHtml + '<span>' + esc(it.label) + '</span></button>';
-    }).join('');
+    ctxEl.innerHTML = list.map(menuItemHtml).join('');
     document.body.appendChild(ctxEl);
-
-    var w = ctxEl.offsetWidth, h = ctxEl.offsetHeight;
-    var left = Math.min(x, window.innerWidth - w - 8);
-    var top = Math.min(y, window.innerHeight - h - 8);
-    ctxEl.style.left = Math.max(8, left) + 'px';
-    ctxEl.style.top = Math.max(8, top) + 'px';
+    placeMenu(ctxEl, x, y);
 
     // The menu is z-index 500, the file viewer is 600 — opened from inside the
     // viewer it lands *behind* it: in the DOM, readable, and entirely
@@ -4976,16 +5158,24 @@
       var b = e.target.closest('[data-ctx]');
       if (!b || b.disabled) return;
       var picked = list[parseInt(b.getAttribute('data-ctx'), 10)];
-      // Where the entry was, for anything that opens a second menu in place
-      // of this one — a submenu that appeared at the pointer would land
-      // wherever the reader's mouse had drifted to instead.
-      var at = b.getBoundingClientRect();
+      // A parent row only opens its flyout; it is not an action itself.
+      if (picked && picked.submenu) { openCtxSub(b, picked); return; }
       closeContextMenu();
-      if (picked && picked.fn) picked.fn(at.left, at.top);
+      if (picked && picked.fn) picked.fn();
+    });
+
+    // Hovering a parent opens its flyout; hovering any other row closes it, so
+    // two can never be open at once.
+    ctxEl.addEventListener('mouseover', function (e) {
+      var b = e.target.closest('[data-ctx]');
+      if (!b) return;
+      var over = list[parseInt(b.getAttribute('data-ctx'), 10)];
+      if (over && over.submenu) openCtxSub(b, over);
+      else closeCtxSub();
     });
 
     setTimeout(function () {
-      document.addEventListener('click', closeContextMenu);
+      document.addEventListener('click', onCtxDocClick);
       document.addEventListener('contextmenu', onDocCtx, true);
       document.addEventListener('keydown', onCtxKey);
       document.addEventListener('scroll', closeContextMenu, true);
