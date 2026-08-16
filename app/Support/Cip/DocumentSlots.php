@@ -3,6 +3,7 @@
 namespace App\Support\Cip;
 
 use App\Models\CipDocument;
+use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\FileItem;
 use App\Models\User;
@@ -32,25 +33,20 @@ class DocumentSlots
     /**
      * Every slot this person owes, created empty if it is not there yet.
      *
-     * Idempotent: re-running it after Phase 3 widens a checklist adds only
-     * what is new, and never disturbs a slot that has been filled.
+     * The list is no longer a fixed three per role. It comes from the
+     * requirement templates the firm keeps — matched to the person's applicant
+     * type, which for a dependant means their age bracket — so widening a
+     * checklist is an edit in the portal rather than a deploy.
+     *
+     * Idempotent, and it never disturbs a slot that has been filled. See
+     * {@see Requirements::materialise()} for what happens when a template
+     * changes under an application already in flight.
      *
      * @return \Illuminate\Support\Collection<int, CipDocument>
      */
     public static function open(CipPerson $person): \Illuminate\Support\Collection
     {
-        foreach (DocumentTypes::forRole($person->role) as $type) {
-            CipDocument::firstOrCreate(
-                ['person_id' => $person->id, 'type' => $type],
-                [
-                    'application_id' => $person->application_id,
-                    'label' => DocumentTypes::label($type),
-                    'required' => true,
-                ],
-            );
-        }
-
-        return $person->documents()->get();
+        return Requirements::materialise($person);
     }
 
     /**
@@ -62,14 +58,7 @@ class DocumentSlots
      */
     public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor): CipDocument
     {
-        $slot = CipDocument::firstOrCreate(
-            ['person_id' => $person->id, 'type' => $type],
-            [
-                'application_id' => $person->application_id,
-                'label' => DocumentTypes::label($type),
-                'required' => true,
-            ],
-        );
+        $slot = self::slotFor($person, $type);
 
         $meta = \App\Support\Files\FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
@@ -82,6 +71,7 @@ class DocumentSlots
             if ($slot->file_id && $file = $slot->file) {
                 Versions::addStored($file, $actor, $stored, $meta);
                 $slot->forceFill(['uploaded_by' => $actor->id, 'uploaded_at' => now()])->save();
+                self::advanceOnUpload($slot, $actor);
 
                 return $slot;
             }
@@ -93,9 +83,36 @@ class DocumentSlots
                 'uploaded_by' => $actor->id,
                 'uploaded_at' => now(),
             ])->save();
+            self::advanceOnUpload($slot, $actor);
 
             return $slot;
         });
+    }
+
+    /**
+     * An upload is what moves a slot along (§12).
+     *
+     * Filling an empty requirement takes it from Pending upload into
+     * Application review; re-uploading against one a reviewer sent back takes
+     * Update required to Application review again — the revision loop. Both go
+     * through {@see DocumentEngine} rather than writing the column here, so the
+     * edge is checked and the change lands in cip_events like every other.
+     *
+     * A slot already in review, or already ready, is left alone: uploading a
+     * better scan of an approved document does not un-approve it, and nothing
+     * here should quietly undo a reviewer's decision.
+     */
+    private static function advanceOnUpload(CipDocument $slot, User $actor): void
+    {
+        $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
+
+        if (! in_array($from, [DocumentStatus::PENDING_UPLOAD, DocumentStatus::UPDATE_REQUIRED], true)) {
+            return;
+        }
+
+        DocumentEngine::apply($slot, DocumentStatus::APPLICATION_REVIEW, $actor, [
+            'reason' => 'upload',
+        ]);
     }
 
     /**
@@ -156,5 +173,32 @@ class DocumentSlots
         return $person->documents()
             ->whereNull('file_id')->where('required', true)
             ->pluck('label')->all();
+    }
+
+    /**
+     * The slot a document of this type belongs in, made if it is not there.
+     *
+     * Takes its label and its mandatory flag from the requirement template
+     * where one exists, so a slot created by an upload reads the same as one
+     * materialised from the checklist. A type with no template still gets a
+     * slot — a document the firm asked for by hand is still a document — and
+     * carries the type as its label rather than nothing.
+     */
+    private static function slotFor(CipPerson $person, string $type): CipDocument
+    {
+        $requirement = CipDocumentRequirement::query()
+            ->where('applicant_type', ApplicantType::for($person))
+            ->where('key', $type)
+            ->first();
+
+        return CipDocument::firstOrCreate(
+            ['person_id' => $person->id, 'type' => $type],
+            [
+                'application_id' => $person->application_id,
+                'requirement_id' => $requirement?->id,
+                'label' => $requirement?->label ?? DocumentTypes::label($type),
+                'required' => $requirement?->required ?? true,
+            ],
+        );
     }
 }

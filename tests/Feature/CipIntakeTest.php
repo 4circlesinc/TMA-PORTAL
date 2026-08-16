@@ -417,12 +417,18 @@ class CipIntakeTest extends TestCase
         $this->assertNotNull($sponsor->photo_url, 'a sponsor has a face like everyone else');
         $this->assertNotNull($sponsor->folder_id, 'and their own document repository');
 
-        // Their checklist exists from the first save, mostly unanswered —
-        // that is what makes it a checklist rather than a pile of uploads.
-        $this->assertSame(
-            ['Passport bio page', 'Birth certificate'],
-            \App\Support\Cip\DocumentSlots::outstanding($sponsor),
-        );
+        /*
+         * Their checklist exists from the first save, mostly unanswered —
+         * that is what makes it a checklist rather than a pile of uploads.
+         *
+         * Asserted as "these are among the outstanding" rather than as the
+         * whole list: since phase 3 the list is the firm's requirement
+         * templates, and a test that pinned every row would fail the first
+         * time somebody edited one in the portal, which is the feature.
+         */
+        $outstanding = \App\Support\Cip\DocumentSlots::outstanding($sponsor);
+        $this->assertContains('Passport bio page', $outstanding);
+        $this->assertContains('Birth certificate', $outstanding);
     }
 
     public function test_a_sponsors_scans_are_offered_but_never_demanded(): void
@@ -439,7 +445,9 @@ class CipIntakeTest extends TestCase
         // What was sent answers the sponsor's own slot, on the sponsor's own
         // folder — not the applicant's.
         $sponsor = CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR);
-        $this->assertSame(['Birth certificate'], \App\Support\Cip\DocumentSlots::outstanding($sponsor));
+        $outstanding = \App\Support\Cip\DocumentSlots::outstanding($sponsor);
+        $this->assertNotContains('Passport bio page', $outstanding, 'the one they sent is answered');
+        $this->assertContains('Birth certificate', $outstanding, 'the ones they did not still stand');
 
         $slot = \App\Models\CipDocument::where('person_id', $sponsor->id)
             ->where('type', \App\Support\Cip\DocumentTypes::PASSPORT_BIO_PAGE)->first();
@@ -447,8 +455,16 @@ class CipIntakeTest extends TestCase
         $this->assertSame($sponsor->folder_id, $file->folder_id);
         $this->assertSame('Maryam Haddad — Passport bio page.pdf', $file->name);
 
-        // The main applicant's own slots are untouched by any of it.
-        $this->assertSame([], $body['applicant']['outstanding']);
+        // The main applicant's own slots are untouched by any of it: what the
+        // form collected for them is filed, and a sponsor's upload did not
+        // reach into their checklist.
+        $this->assertSame(
+            [],
+            array_intersect(
+                ['Passport photo', 'Passport bio page', 'Birth certificate'],
+                $body['applicant']['outstanding'],
+            ),
+        );
     }
 
     public function test_a_sponsored_application_will_not_file_without_the_sponsor(): void
@@ -633,12 +649,22 @@ class CipIntakeTest extends TestCase
 
         // §2's three uploads are answers to requirements from the first save,
         // not loose files Phase 3 would have to find and re-home.
+        $documents = collect($body['applicant']['documents']);
+        $intake = ['Passport photo', 'Passport bio page', 'Birth certificate'];
+
+        // The three the form asks for are answered by the save. The rest of
+        // the checklist — whatever the firm's templates say — is outstanding,
+        // which is the honest state of an application filed a minute ago.
+        foreach ($intake as $label) {
+            $slot = $documents->firstWhere('label', $label);
+            $this->assertNotNull($slot, $label.' has a slot');
+            $this->assertTrue($slot['uploaded'], $label.' was filed by the save');
+        }
         $this->assertSame(
-            ['Passport photo', 'Passport bio page', 'Birth certificate'],
-            collect($body['applicant']['documents'])->pluck('label')->all(),
+            [],
+            array_intersect($intake, $body['applicant']['outstanding']),
+            'nothing the form collected is still outstanding',
         );
-        $this->assertTrue(collect($body['applicant']['documents'])->every(fn ($d) => $d['uploaded']));
-        $this->assertSame([], $body['applicant']['outstanding']);
 
         $main = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $slot = \App\Models\CipDocument::where('person_id', $main->id)
@@ -762,7 +788,17 @@ class CipIntakeTest extends TestCase
         // are filed in is the folder they still have.
         $this->assertSame('Retired Engineer', $body['applicant']['occupation']);
         $this->assertSame($mainFolderId, CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->folder_id);
-        $this->assertSame([], $body['applicant']['outstanding'], 'the filed uploads survive an edit');
+        // An edit does not un-file what was already filed. Asserted against
+        // the three the form collects, not against an empty checklist: the
+        // rest of the requirements were never sent and are still owed.
+        $this->assertSame(
+            [],
+            array_intersect(
+                ['Passport photo', 'Passport bio page', 'Birth certificate'],
+                $body['applicant']['outstanding'],
+            ),
+            'the filed uploads survive an edit',
+        );
 
         // Lina was dropped from the form, so she is off the application — and
         // Omar, the only one left, is QD1 now.

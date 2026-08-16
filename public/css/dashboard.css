@@ -34955,6 +34955,24 @@ span.tma-dash__messages-profile-avatar {
  * grey, so without a line the heading was just another bold word in the
  * column rather than the start of a different kind of thing.
  */
+/* The requirement's name takes the slack, so the status chip sits hard right
+   and a column of them lines up down the checklist. */
+.tma-dash__clients-checklist-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-8);
+}
+
+/* The exception is what gets marked. Nearly every requirement is mandatory, so
+   an asterisk on each of those would mark nothing — it is the optional ones
+   that are worth saying out loud. */
+.tma-dash__clients-checklist-optional {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__clients-checklist-block {
   display: flex;
   flex-direction: column;

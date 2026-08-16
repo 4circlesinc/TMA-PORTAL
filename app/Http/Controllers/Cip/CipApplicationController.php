@@ -8,11 +8,13 @@ use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
+use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
@@ -655,11 +657,26 @@ class CipApplicationController extends Controller
              * that would quietly lose a button.
              */
             'photoFile' => $photoFile ? $presenter->file($photoFile) : null,
+            // §11's applicant types decide which checklist this person owes.
+            'applicantType' => ApplicantType::for($person),
+            'applicantTypeLabel' => ApplicantType::label(ApplicantType::for($person)),
             'documents' => $person->documents->map(fn ($slot) => [
+                'id' => $slot->uuid,
                 'type' => $slot->type,
                 'label' => $slot->label,
                 'required' => (bool) $slot->required,
                 'uploaded' => $slot->isFilled(),
+                /*
+                 * §12's own status, not the file library's review_status.
+                 * They are different vocabularies with different rules — a
+                 * document waiting for a reviewer is not the same idea as a
+                 * library file marked "pending review", and conflating them
+                 * would let either one overwrite the other.
+                 */
+                'status' => $slot->status,
+                'statusLabel' => DocumentStatus::label($slot->status ?? DocumentStatus::PENDING_UPLOAD),
+                'statusTone' => DocumentStatus::tone($slot->status ?? DocumentStatus::PENDING_UPLOAD),
+                'fileId' => $slot->file?->uuid,
             ])->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
         ];

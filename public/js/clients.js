@@ -4227,14 +4227,44 @@
       tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
       '</header>' +
       '<ul class="tma-dash__clients-checklist">' +
-      docs.map(function (d) {
-        return '<li class="tma-dash__clients-checklist-row">' +
-          '<img src="' + ICONS[d.uploaded ? 'CheckCircle' : 'Circle'] + '" alt="" width="18" height="18">' +
-          '<span>' + esc(d.label) + '</span>' +
-          '<span class="tma-dash__clients-checklist-state">' +
-          (d.uploaded ? 'Filed' : 'Outstanding') + '</span></li>';
-      }).join('') +
+      docs.map(renderChecklistRow).join('') +
       '</ul></div>'
+    );
+  }
+
+  /*
+   * One requirement, and where it has got to.
+   *
+   * §11 asks for the mandatory ones to be marked and §12 for the state to be
+   * legible — and the meeting was explicit that a provider must never have to
+   * click through documents to find what needs work. So the state is the
+   * status chip's own colour: something sent back reads as danger, something
+   * settled reads as success, and a checklist can be scanned rather than
+   * opened.
+   *
+   * The tick still says whether a file is there at all, because "uploaded" and
+   * "accepted" are different questions and a row that answered only the second
+   * would hide the first.
+   */
+  function renderChecklistRow(d) {
+    var filed = !!d.uploaded;
+    var status = d.statusLabel || (filed ? 'Filed' : 'Outstanding');
+    var tone = d.statusTone || (filed ? 'success' : 'neutral');
+
+    return (
+      '<li class="tma-dash__clients-checklist-row">' +
+      '<img src="' + ICONS[filed ? 'CheckCircle' : 'Circle'] + '" alt="" width="18" height="18">' +
+      '<span class="tma-dash__clients-checklist-label">' + esc(d.label) +
+      // Not a red star after every line: the mandatory ones are the norm and
+      // the exception is worth naming, so the OPTIONAL ones are the ones
+      // marked. A checklist of asterisks marks nothing.
+      (d.required === false
+        ? '<span class="tma-dash__clients-checklist-optional">Optional</span>'
+        : '') +
+      '</span>' +
+      '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
+      ' tma-portal-status--inline">' + esc(status) + '</span>' +
+      '</li>'
     );
   }
 
