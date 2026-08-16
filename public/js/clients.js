@@ -674,12 +674,17 @@
       phones: extra.phones || [{ type: 'mobile', value: extra.phone || '' }],
       emails: extra.emails || [{ type: 'work', value: extra.email || '' }],
       work: extra.work || {
-        jobTitle: extra.role || 'Team member',
+        // No invented title. "Team member" was a placeholder standing under
+        // every client's name as if the firm had recorded it — and a client is
+        // not a member of the team, which is the one thing it managed to say.
+        jobTitle: extra.role || '',
         department: extra.department || '',
         company: extra.company || '',
       },
       addresses: extra.addresses || [
-        { type: 'work', street: '', city: extra.location || 'Remote', state: '', zip: '', country: '' },
+        // Same rule as the job title above: an unrecorded city is blank, not
+        // "Remote" — the portal does not know where they are.
+        { type: 'work', street: '', city: extra.location || '', state: '', zip: '', country: '' },
       ],
       website: extra.website || '',
       photo: extra.photo || '',
