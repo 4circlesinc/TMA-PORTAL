@@ -14,6 +14,8 @@ use App\Http\Controllers\CalendarSyncController;
 use App\Http\Controllers\CallRecordingController;
 use App\Http\Controllers\Cbi\CbiController;
 use App\Http\Controllers\Cip\CipApplicationController;
+use App\Http\Controllers\Cip\CipDocumentCommentController;
+use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\ClientCustomFieldsController;
 use App\Http\Controllers\ClientHubSettingsController;
@@ -324,6 +326,42 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // so the update is posted with _method, the way every other form in
         // the portal that sends files does it.
         Route::post('/applications/{uuid}', [CipApplicationController::class, 'update'])->name('applications.update');
+        /*
+         * §11: the document requirements the checklists are built from.
+         *
+         * Readable by anyone who may reach the module — the checklist needs
+         * the labels — and changeable only by an administrator, because one
+         * edit reaches every application at once.
+         */
+        Route::get('/requirements', [CipRequirementController::class, 'index'])->name('requirements.index');
+        Route::post('/requirements', [CipRequirementController::class, 'store'])->name('requirements.store');
+        Route::post('/requirements/reorder', [CipRequirementController::class, 'reorder'])
+            ->name('requirements.reorder');
+        Route::patch('/requirements/{uuid}', [CipRequirementController::class, 'update'])
+            ->name('requirements.update');
+        Route::delete('/requirements/{uuid}', [CipRequirementController::class, 'destroy'])
+            ->name('requirements.destroy');
+        Route::post('/requirements/{uuid}/restore', [CipRequirementController::class, 'restore'])
+            ->name('requirements.restore');
+
+        /*
+         * §13: the conversation on one checklist document.
+         *
+         * Addressed by the document, not by the file in it — the slot outlives
+         * its file, and an empty requirement is the one most worth talking
+         * about.
+         */
+        Route::get('/documents/{uuid}/comments', [CipDocumentCommentController::class, 'index'])
+            ->name('documents.comments.index');
+        Route::post('/documents/{uuid}/comments', [CipDocumentCommentController::class, 'store'])
+            ->name('documents.comments.store');
+        Route::patch('/documents/{uuid}/comments/{commentUuid}', [CipDocumentCommentController::class, 'update'])
+            ->name('documents.comments.update');
+        Route::delete('/documents/{uuid}/comments/{commentUuid}', [CipDocumentCommentController::class, 'destroy'])
+            ->name('documents.comments.destroy');
+        Route::post('/documents/{uuid}/comments/{commentUuid}/resolve', [CipDocumentCommentController::class, 'resolve'])
+            ->name('documents.comments.resolve');
+
         // §7/§16: the Unit has it — record the date and the CIP number, which
         // is also what switches every surface off the internal number.
         Route::post('/applications/{uuid}/submission', [CipApplicationController::class, 'submit'])

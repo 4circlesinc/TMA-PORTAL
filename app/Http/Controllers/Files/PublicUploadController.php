@@ -13,6 +13,7 @@ use App\Support\Files\FileType;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\Naming;
 use App\Support\Files\Vault;
+use App\Support\Cip\DocumentRequests;
 use App\Support\Files\Versions;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
@@ -138,6 +139,46 @@ class PublicUploadController extends Controller
         );
 
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
+
+        /*
+         * A link aimed at a checklist slot lands differently (§11).
+         *
+         * The ordinary path below makes a NEW file every time, which is right
+         * for "send me your invoices" and wrong for "send me your police
+         * certificate": a requirement has one answer, and a second upload is
+         * the next version of it, not a second document beside the first.
+         * DocumentRequests owns that difference, including moving the slot on
+         * through the engine.
+         */
+        if ($slot = DocumentRequests::slotFor($fileRequest)) {
+            $file = DocumentRequests::land(
+                $slot,
+                $fileRequest,
+                $stored,
+                $meta,
+                $name,
+                $request->input('name'),
+                $request->input('email'),
+                $request->ip(),
+            );
+
+            Activity::forFile($ownerId, $file, 'upload', [
+                'size' => $file->size,
+                'via' => 'request',
+                'request' => $fileRequest->uuid,
+                'document' => $slot->uuid,
+            ]);
+
+            $this->notifyRequester($fileRequest, $file, (string) $request->input('name', ''));
+
+            // The same shape the ordinary path answers with — the upload page
+            // reads it and does not care which door the file went through.
+            return response()->json([
+                'name' => $file->name,
+                'size' => (int) $file->size,
+                'remaining' => $fileRequest->fresh()->remainingUploads(),
+            ], 201);
+        }
 
         $file = DB::transaction(function () use ($fileRequest, $folder, $ownerId, $name, $meta, $stored, $request) {
             $file = FileItem::create([
