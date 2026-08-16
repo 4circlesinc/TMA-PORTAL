@@ -34998,6 +34998,9 @@ span.tma-dash__messages-profile-avatar {
   border-radius: 50%;
   object-fit: cover;
   flex: 0 0 26px;
+  /* A disc from the first frame. Without it the photo's own load left an empty
+     box the row had to grow around, which read as somewhere to add one. */
+  background: var(--color-hover);
 }
 
 .tma-cip-table__applicant-face--initial {

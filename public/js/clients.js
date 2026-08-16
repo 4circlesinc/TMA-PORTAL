@@ -2251,14 +2251,43 @@
       esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
   }
 
+  /*
+   * Loading, shaped like the answer.
+   *
+   * A bar in every cell said "nine columns of text", and the two columns that
+   * are not text — the applicant's face and the people assigned — arrived as
+   * circles that had not been there a moment before, so the row jumped and the
+   * empty avatar read as a prompt to add a photo. Each column now waits in its
+   * own shape: a disc where a face is coming, a chip where a status or a
+   * family count is, a bar where words are.
+   *
+   * Widths are staggered but deterministic — a repaint must not reshuffle
+   * them, or the block shimmers like something is still arriving when nothing
+   * has changed.
+   */
   function applicationTableSkeleton() {
+    var disc = '<span class="tma-skeleton tma-skeleton--circle"' +
+      ' style="display:inline-block;width:26px;height:26px"></span>';
+    var chip = function (w) {
+      return '<span class="tma-skeleton" style="display:inline-block;width:' + w +
+        'px;height:18px;border-radius:9px"></span>';
+    };
     var rows = '';
+
     for (var i = 0; i < 8; i++) {
-      rows += '<tr aria-hidden="true">';
-      for (var c = 0; c < 9; c++) {
-        rows += '<td>' + skeletonBar(skeletonWidth(i + c, 0.9)) + '</td>';
-      }
-      rows += '</tr>';
+      rows += '<tr aria-hidden="true">' +
+        '<td>' + skeletonBar(skeletonWidth(i, 0.7)) + '</td>' +
+        // The face, then the name — the shape the row settles into.
+        '<td><span class="tma-cip-table__applicant">' + disc +
+        skeletonBar(skeletonWidth(i + 1, 0.8)) + '</span></td>' +
+        '<td>' + skeletonBar(skeletonWidth(i + 2, 0.7)) + '</td>' +
+        '<td>' + skeletonBar(skeletonWidth(i + 3, 0.8)) + '</td>' +
+        '<td>' + skeletonBar(skeletonWidth(i + 4, 0.9)) + '</td>' +
+        '<td>' + skeletonBar(skeletonWidth(i + 5, 0.7)) + '</td>' +
+        '<td>' + chip(34) + '</td>' +
+        '<td>' + chip(76) + '</td>' +
+        '<td><span class="tma-cip-table__applicant">' + disc + '</span></td>' +
+        '</tr>';
     }
 
     return rows;
