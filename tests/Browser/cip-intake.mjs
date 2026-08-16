@@ -369,7 +369,14 @@ try {
   check(body?.application?.applicant?.region === 'Middle East', 'region stored server-side');
   check(/^\/media\/avatars\//.test(body?.application?.applicant?.photo || ''),
     'the passport photo became the applicant’s profile picture');
-  check((body?.application?.applicant?.outstanding || ['x']).length === 0,
+  /*
+   * The three the form collects are answered. Not "nothing is outstanding":
+   * since phase 3 the checklist is the firm's requirement templates, so an
+   * application filed a second ago rightly still owes the rest of them.
+   */
+  const stillOwed = body?.application?.applicant?.outstanding || ['x'];
+  const collected = ['Passport photo', 'Passport bio page', 'Birth certificate'];
+  check(collected.every(label => !stillOwed.includes(label)),
     '§2’s three uploads answered their slots');
   check(body?.application?.sponsor?.name === 'Maryam Haddad', 'the sponsor was filed with it');
   const filed = (body?.application?.dependents || [])

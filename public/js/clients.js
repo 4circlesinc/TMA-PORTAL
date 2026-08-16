@@ -2080,8 +2080,70 @@
     loading: false, error: null, loadedKey: null, status: '',
   };
 
+  /*
+   * §9's buckets, above the table they filter.
+   *
+   * A dashboard rather than a separate page: the brief asks for counts that
+   * click through to the pre-filtered table, and a screen of numbers whose
+   * only purpose is to send you somewhere else is a page nobody would keep
+   * open. The chips sit on the table, and pressing one filters it in place.
+   *
+   * Which set a reader gets is the server's to decide — an officer's four are
+   * a work queue and an administrator's ten are a report, and the difference
+   * is scope, not presentation.
+   */
+  var BUCKETS = { list: [], dashboard: null, loaded: false, loading: false, active: null };
+
+  function ensureBuckets(render) {
+    if (BUCKETS.loaded || BUCKETS.loading) return;
+    BUCKETS.loading = true;
+
+    clientsFetch('/portal/cip/dashboard')
+      .then(function (json) {
+        BUCKETS.list = (json && json.buckets) || [];
+        BUCKETS.dashboard = (json && json.dashboard) || null;
+      })
+      .catch(function () { BUCKETS.list = []; })
+      .then(function () {
+        BUCKETS.loading = false;
+        BUCKETS.loaded = true;
+        if (BUCKETS.list.length) render();
+      });
+  }
+
+  /* The counts move whenever an application does, and every CIP write already
+     raises a signal — so they are re-read rather than adjusted by hand. */
+  function forgetBuckets() {
+    BUCKETS.loaded = false;
+  }
+
+  function renderBuckets() {
+    if (!BUCKETS.list.length) return '';
+
+    return (
+      '<div class="tma-dash__cip-buckets" role="group" aria-label="Filter by what needs doing">' +
+      BUCKETS.list.map(function (b) {
+        var on = BUCKETS.active === b.key;
+
+        return '<button type="button" class="tma-dash__cip-bucket' +
+          (on ? ' tma-dash__cip-bucket--on' : '') +
+          (b.count ? '' : ' tma-dash__cip-bucket--empty') + '"' +
+          ' aria-pressed="' + (on ? 'true' : 'false') + '"' +
+          ' data-cip-bucket="' + esc(b.key) + '">' +
+          '<span class="tma-dash__cip-bucket-count">' + esc(String(b.count)) + '</span>' +
+          '<span class="tma-dash__cip-bucket-label">' + esc(b.label) + '</span>' +
+          '</button>';
+      }).join('') +
+      (BUCKETS.active
+        ? '<button type="button" class="tma-dash__cip-bucket-clear" data-cip-bucket="">' +
+          'Show all</button>'
+        : '') +
+      '</div>'
+    );
+  }
+
   function applicationTableKey(state) {
-    return [state.search || '', APP_TABLE.status || '', APP_TABLE.page].join('|');
+    return [state.search || '', APP_TABLE.status || '', BUCKETS.active || '', APP_TABLE.page].join('|');
   }
 
   function ensureApplicationTable(state, render) {
@@ -2095,6 +2157,9 @@
     var params = ['perPage=50', 'page=' + APP_TABLE.page];
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
     if (APP_TABLE.status) params.push('status=' + encodeURIComponent(APP_TABLE.status));
+    // The same key the count was measured through, so the chip and the rows
+    // behind it come from one definition on the server.
+    if (BUCKETS.active) params.push('bucket=' + encodeURIComponent(BUCKETS.active));
 
     clientsFetch('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
@@ -2174,11 +2239,111 @@
         esc(a.familyLabel || '—') + '</span></td>' +
         '<td><span class="tma-portal-status tma-portal-status--' + esc(a.statusTone || 'neutral') +
         ' tma-portal-status--inline">' + esc(a.statusLabel || '—') + '</span></td>' +
-        '<td>' + assignedCell(a.assignedTo) + '</td>' +
+        '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
         '</tr>';
     }).join('');
 
     return ui.table(headers, rows, { cls: 'tma-cip-table' }) + renderApplicationTablePagination();
+  }
+
+  /*
+   * Who to put on this file — the officers, as a menu on the row.
+   *
+   * The list is fetched when the menu opens rather than with the table: it is
+   * a question about one application, and asking it for every row of fifty to
+   * fill a menu nobody may open would be fifty round trips for nothing.
+   */
+  function openAssignMenu(button, applicationId) {
+    if (!window.TMAFileActions || !window.TMAFileActions.menu) return;
+
+    var box = button.getBoundingClientRect();
+
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/assignments')
+      .then(function (json) {
+        var free = (json && json.assignable) || [];
+        var live = (json && json.assignments) || [];
+
+        var items = live.map(function (a) {
+          return {
+            label: 'End ' + (a.name || a.email || 'this assignment'),
+            icon: 'X',
+            danger: true,
+            fn: function () { changeAssignment(applicationId, 'DELETE', a.userId); },
+          };
+        });
+
+        if (items.length && free.length) items.push({ sep: true });
+
+        if (!free.length && !items.length) {
+          items.push({ label: 'No officers to assign', static: true });
+        }
+
+        free.forEach(function (o) {
+          items.push({
+            label: o.name || o.email,
+            icon: 'UserPlus',
+            fn: function () { changeAssignment(applicationId, 'POST', o.id); },
+          });
+        });
+
+        window.TMAFileActions.menu(box.left, box.bottom + 4, { id: applicationId, type: 'file' }, null);
+        // The menu component draws from the list it is given, so hand it ours
+        // rather than the file actions it would build for a file.
+        replaceMenuItems(items);
+      })
+      .catch(function () { clientsToast('Could not load the officers.', 'negative'); });
+  }
+
+  /*
+   * The shared menu builds a FILE's actions from the item it is handed, and
+   * this is an application. Rather than teach it a second vocabulary, the menu
+   * is opened and its contents replaced — the chrome, the placement and the
+   * dismissal are the portal's, and only the lines are ours.
+   */
+  function replaceMenuItems(items) {
+    var menu = document.querySelector('.tma-portal-context-menu:not(.tma-portal-context-menu--sub)');
+    if (!menu) return;
+
+    menu.innerHTML = items.map(function (it, i) {
+      if (it.sep) return '<div class="tma-portal-context-menu__sep" role="separator"></div>';
+      if (it.static) {
+        return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
+          '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></div>';
+      }
+
+      return '<button type="button" role="menuitem" data-cip-menu="' + i + '"' +
+        ' class="tma-portal-context-menu__item' + (it.danger ? ' tma-portal-context-menu__item--danger' : '') + '">' +
+        '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></button>';
+    }).join('');
+
+    menu.onclick = function (e) {
+      var btn = e.target.closest('[data-cip-menu]');
+      if (!btn) return;
+      var picked = items[parseInt(btn.getAttribute('data-cip-menu'), 10)];
+      menu.remove();
+      if (picked && picked.fn) picked.fn();
+    };
+  }
+
+  function changeAssignment(applicationId, method, userId) {
+    var base = '/portal/cip/applications/' + encodeURIComponent(applicationId) + '/assignments';
+    var url = method === 'DELETE' ? base + '/' + encodeURIComponent(userId) : base;
+
+    clientsFetch(url, {
+      method: method,
+      json: method === 'DELETE' ? undefined : { userId: userId },
+    })
+      .then(function () {
+        clientsToast(method === 'DELETE' ? 'Assignment ended' : 'Assigned', 'positive');
+        // The first assignment moves the application into review, so the
+        // buckets and the row both have to be read again rather than patched.
+        forgetApplicationTable();
+        forgetBuckets();
+        repaintClients();
+      })
+      .catch(function (err) {
+        clientsToast((err && err.message) || 'Could not change the assignment.', 'negative');
+      });
   }
 
   function familyTitle(a) {
@@ -2196,11 +2361,27 @@
    * names them. Rebuilding any of that here would have been a second version
    * of it to keep in step.
    */
-  function assignedCell(people) {
+  function assignedCell(people, row) {
     var list = people || [];
 
+    /*
+     * Assignment happens in the table (§8).
+     *
+     * The brief puts it here rather than only on the detail page, and it is
+     * the transition that starts a review — so leaving it to the profile meant
+     * an application nobody had opened could sit at New indefinitely. The cell
+     * stays a set of faces; the button beside it is what opens the picker.
+     */
+    var picker = row && canAssignApplications()
+      ? '<button type="button" class="tma-dash__cip-assign" data-cip-assign="' + esc(row.id) + '"' +
+        ' title="' + (list.length ? 'Change who holds this' : 'Assign an officer') + '"' +
+        ' aria-label="' + (list.length ? 'Change who holds this' : 'Assign an officer') + '">' +
+        (list.length ? '⌄' : '+') + '</button>'
+      : '';
+
     if (window.TMAPersonCard && window.TMAPersonCard.faces) {
-      return window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' });
+      return '<span class="tma-dash__cip-assigned">' +
+        window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' }) + picker + '</span>';
     }
 
     return '<span class="tma-portal-table__muted">' +
@@ -2357,6 +2538,26 @@
         return;
       }
 
+      var assign = e.target.closest('[data-cip-assign]');
+      if (assign) {
+        e.stopPropagation();
+        openAssignMenu(assign, assign.getAttribute('data-cip-assign'));
+
+        return;
+      }
+
+      var chip = e.target.closest('[data-cip-bucket]');
+      if (chip) {
+        var key = chip.getAttribute('data-cip-bucket');
+        // Pressing the chip that is already on turns it off — a filter you
+        // cannot see the way out of is a trap.
+        BUCKETS.active = (!key || key === BUCKETS.active) ? null : key;
+        APP_TABLE.page = 1;
+        repaintClients();
+
+        return;
+      }
+
       var row = e.target.closest('[data-cip-open]');
       if (!row) return;
       // The Contact email column is a mailto — its own destination.
@@ -2384,6 +2585,7 @@
     if (!providers) {
       return (
         renderTableToolbar(state) +
+        renderBuckets() +
         renderClientsFilterChips(state) +
         '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
         renderApplicationTable(state) +
@@ -2799,6 +3001,18 @@
     }
     if (app.provider) bits.push('<span>' + esc(app.provider) + '</span>');
     if (app.familyLabel) bits.push('<span>' + esc(app.familyLabel) + '</span>');
+    /*
+     * Who holds the file.
+     *
+     * §4d asks the header for four things and this was the missing one —
+     * without it, finding out whose desk an applicant is on meant going back
+     * out to the table, which is the trip the merged detail page exists to
+     * save.
+     */
+    bits.push(app.assignedOfficer
+      ? '<span class="tma-dash__clients-profile-officer">' + esc(app.assignedOfficer.name) + '</span>'
+      : '<span class="tma-dash__clients-profile-officer' +
+        ' tma-dash__clients-profile-officer--none">Unassigned</span>');
 
     return bits.join('<span class="tma-dash__clients-profile-dot" aria-hidden="true">·</span>');
   }
@@ -4004,7 +4218,16 @@
     if (app.sponsor) tabs.push({ id: 'sponsor', label: 'Sponsor' });
     if ((app.dependents || []).length) tabs.push({ id: 'dependents', label: 'Dependents' });
 
-    return tabs.concat(PROFILE_TABS.filter(function (t) { return t.id !== 'info'; }));
+    /*
+     * Activity is offered only for an application.
+     *
+     * cip_events is an application's history; a client with none has nothing
+     * for the tab to read, and an empty tab that can never fill is worse than
+     * no tab.
+     */
+    return tabs
+      .concat(PROFILE_TABS.filter(function (t) { return t.id !== 'info'; }))
+      .concat([{ id: 'activity', label: 'Activity' }]);
   }
 
   /*
@@ -4040,6 +4263,32 @@
         '</button>'
       );
     }).join('');
+  }
+
+  /*
+   * The journey, as a row of dates (§4d).
+   *
+   * The one piece of the old CBI detail page the plan says comes over as-is.
+   * Steps that have not happened yet are drawn, greyed, rather than left out:
+   * a timeline with holes in it is how a reader tells what is still ahead, and
+   * dropping the empty ones would make every application look finished.
+   */
+  function renderMilestones(app) {
+    var steps = (app && app.milestones) || [];
+    if (!steps.length) return '';
+
+    return (
+      '<ol class="tma-dash__cip-dates">' +
+      steps.map(function (m) {
+        return '<li class="tma-dash__cip-date' +
+          (m.reached ? ' tma-dash__cip-date--done' : '') + '">' +
+          '<span class="tma-dash__cip-date-label">' + esc(m.label) + '</span>' +
+          '<span class="tma-dash__cip-date-value">' +
+          (m.date ? esc(fmtShortDate(m.date)) : '—') + '</span>' +
+          '</li>';
+      }).join('') +
+      '</ol>'
+    );
   }
 
   /*
@@ -4283,10 +4532,80 @@
     );
   }
 
+  /* Assigning is an administrator's, plus anyone the matrix has been widened
+     to — the server decides, and this only asks whether to draw the control. */
+  function canAssignApplications() {
+    var access = window.TMAPortalAccess;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+
+    return !!((me && me.isAdmin) || (access && access.can && access.can('cip.assign')));
+  }
+
   function canReviewDocuments() {
     var access = window.TMAPortalAccess;
 
     return !!(access && access.can && access.can('cip.review'));
+  }
+
+  /*
+   * The Activity tab (§4d): what has happened to this application.
+   *
+   * The sentences are the server's — cip_events holds actions and status
+   * codes, and turning "status_changed / review_application" into English in
+   * two places would be two places for it to drift.
+   */
+  var TIMELINE = {};
+
+  function ensureTimeline(state, render) {
+    var id = state.selectedId;
+    var app = applicationFor(id);
+    if (!id || !app) return;
+    if (TIMELINE[id] !== undefined || TIMELINE.loadingFor === id) return;
+
+    TIMELINE.loadingFor = id;
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/events')
+      .then(function (json) { TIMELINE[id] = (json && json.events) || []; })
+      .catch(function () { TIMELINE[id] = null; })
+      .then(function () {
+        TIMELINE.loadingFor = null;
+        if (state.selectedId === id) render({ detailOnly: !usesPagedClientsFlow(state) });
+      });
+  }
+
+  function renderActivityPanel(state, hidden) {
+    var events = TIMELINE[state.selectedId];
+
+    var body;
+    if (events === undefined) {
+      body = '<div class="tma-dash__clients-assigned-empty">Loading the history…</div>';
+    } else if (events === null) {
+      body = '<div class="tma-dash__clients-assigned-empty">Could not load the history.</div>';
+    } else if (!events.length) {
+      body = '<div class="tma-dash__clients-assigned-empty">Nothing has happened yet.</div>';
+    } else {
+      body = '<ol class="tma-dash__cip-activity">' + events.map(renderActivityRow).join('') + '</ol>';
+    }
+
+    return (
+      '<div class="tma-dash__clients-profile-panel" data-clients-panel="activity" role="tabpanel"' +
+      (hidden ? ' hidden' : '') + '>' + body + '</div>'
+    );
+  }
+
+  function renderActivityRow(e) {
+    var who = e.who || {};
+
+    return (
+      '<li class="tma-dash__cip-activity-row">' +
+      '<span class="tma-dash__cip-activity-face">' +
+      (who.avatar
+        ? '<img src="' + esc(who.avatar) + '" alt="" width="24" height="24">'
+        : esc(String(who.name || '?').charAt(0).toUpperCase())) +
+      '</span>' +
+      '<span class="tma-dash__cip-activity-what">' + esc(e.what || '') + '</span>' +
+      '<span class="tma-dash__cip-activity-when">' + esc(fmtShortDate(e.when)) + '</span>' +
+      '</li>'
+    );
   }
 
   /* Every dependant, each with their classification and their checklist. */
@@ -5271,6 +5590,7 @@
       renderProfileTabs(state, activeTab) +
       '</div>' +
       renderApplicationBar(state, app) +
+      renderMilestones(app) +
       renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out
       // of the way — the same reason a company's and the intake form's do.
@@ -5284,6 +5604,7 @@
             ? renderCipDependentsPanel(state, app, activeTab !== 'dependents')
             : '')
         : renderContactInfoPanel(c, listItems, activeTab !== 'info')) +
+      (app ? renderActivityPanel(state, activeTab !== 'activity') : '') +
       renderFoldersPanel(c.id, activeTab !== 'folders') +
       renderAssignedPanel(state, c.id, activeTab !== 'assigned') +
       renderAccessPanel(state, c, activeTab !== 'access') +
@@ -6931,7 +7252,10 @@
     // Asked for at paint rather than on navigation: the table is drawn from
     // whatever the search box and the page buttons currently say, and those
     // change without a route change.
-    if (state.screen === 'list' && !onProvidersTab(state)) ensureApplicationTable(state, render);
+    if (state.screen === 'list' && !onProvidersTab(state)) {
+      ensureBuckets(render);
+      ensureApplicationTable(state, render);
+    }
     // The intake wizard owns its own subtree once mounted; re-mounting on a
     // re-render would wipe a half-typed application.
     var intakeMount = root.querySelector('[data-cip-intake-mount]');
@@ -7588,6 +7912,9 @@
         }
         if (state.profileTab === 'access' && state.selectedId) {
           ensureAccessLoaded(state, render);
+        }
+        if (state.profileTab === 'activity' && state.selectedId) {
+          ensureTimeline(state, render);
         }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });

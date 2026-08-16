@@ -35170,3 +35170,166 @@ span.tma-dash__messages-profile-avatar {
 .tma-cip-table tbody tr[data-cip-open] { cursor: pointer; }
 
 .tma-cip-table tbody tr[data-cip-open]:hover { background: var(--color-hover); }
+
+/*
+ * §9's buckets, on the table they filter.
+ *
+ * A count and a name, sized so a row of ten reads as a set rather than ten
+ * separate controls. The empty ones stay — a queue that is clear is a fact
+ * worth seeing, and hiding it would make the row's shape change under a
+ * reader every time somebody else worked.
+ */
+.tma-dash__cip-buckets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+}
+
+.tma-dash__cip-bucket {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  font-family: var(--font-family);
+  cursor: pointer;
+}
+
+.tma-dash__cip-bucket:hover { background: var(--color-hover); }
+
+.tma-dash__cip-bucket--on {
+  border-color: var(--color-primary-dark);
+  box-shadow: 0 0 0 1px var(--color-primary-dark);
+}
+
+.tma-dash__cip-bucket-count {
+  font-size: var(--text-size-16);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-dash__cip-bucket-label {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+/* Nothing waiting reads quieter, without leaving the row. */
+.tma-dash__cip-bucket--empty .tma-dash__cip-bucket-count { color: var(--color-text-secondary); }
+
+.tma-dash__cip-bucket-clear {
+  border: 0;
+  background: none;
+  padding: 0 var(--space-8);
+  font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
+  color: var(--color-primary-dark);
+  cursor: pointer;
+}
+
+/* The journey, below the tabs. A row on a wide window, a column when the
+   dates would otherwise be squeezed to nothing. */
+.tma-dash__cip-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8) var(--space-24);
+  list-style: none;
+  margin: calc(var(--space-24) * -1 + var(--space-4)) 0 var(--space-24);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.tma-dash__cip-date {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tma-dash__cip-date-label {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__cip-date-value {
+  font-size: var(--text-size-14);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+/* A step that has happened carries its date in the page's own ink; one still
+   ahead stays grey, so the timeline reads without a legend. */
+.tma-dash__cip-date--done .tma-dash__cip-date-value {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.tma-dash__clients-profile-officer--none { opacity: 0.6; }
+
+/* The Activity tab: who, what, when — one line each, newest first. */
+.tma-dash__cip-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-dash__cip-activity-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: var(--space-12);
+  align-items: center;
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__cip-activity-row:first-child { border-top: 0; }
+
+.tma-dash__cip-activity-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-12);
+  font-weight: 600;
+}
+
+.tma-dash__cip-activity-face img { width: 100%; height: 100%; object-fit: cover; }
+
+.tma-dash__cip-activity-what { font-size: var(--text-size-14); min-width: 0; }
+
+.tma-dash__cip-activity-when {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The assignee cell keeps its faces; the control beside them opens the
+   picker. Quiet until the row is hovered, like the checklist's verbs. */
+.tma-dash__cip-assigned { display: inline-flex; align-items: center; gap: var(--space-4); }
+
+.tma-dash__cip-assign {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 50%;
+  background: var(--color-white);
+  color: var(--color-text-secondary);
+  font: 400 var(--text-size-12) / 1 var(--font-family);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast, 120ms) ease;
+}
+
+.tma-cip-table tbody tr:hover .tma-dash__cip-assign,
+.tma-dash__cip-assign:focus-visible { opacity: 1; }
+
+.tma-dash__cip-assign:hover { background: var(--color-hover); }

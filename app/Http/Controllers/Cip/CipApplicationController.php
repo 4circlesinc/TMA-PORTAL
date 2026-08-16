@@ -8,6 +8,7 @@ use App\Models\CipProvider;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\ApplicantType;
+use App\Support\Cip\Assignments;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
@@ -250,6 +251,10 @@ class CipApplicationController extends Controller
                 'provider:id,uuid,name,code',
                 'client:id,uid,name,email,phone,photo_url,initial,initial_color',
                 'assignedOfficer:id,name,email,avatar_url',
+                // Live only, with their people: the column names who holds the
+                // file now, and an ended assignment is somebody who has
+                // stopped. Eager, because this is fifty rows.
+                'assignments' => fn ($q) => $q->live()->with('user:id,name,email,avatar_url'),
                 /*
                  * Who is on this applicant.
                  *
@@ -409,15 +414,28 @@ class CipApplicationController extends Controller
      */
     private function assignees($application): array
     {
-        if ($application->assignedOfficer) {
-            $officer = $application->assignedOfficer;
+        /*
+         * Everyone who holds it, not just the cached one.
+         *
+         * `assigned_officer_id` caches the REVIEWING officer, so a file a
+         * compliance officer had also been put on showed one name while two
+         * people were working it. The column is "Assigned To" and the cell
+         * already draws a set of faces; naming one of two is the table
+         * choosing whose work counts.
+         */
+        $live = $application->assignments
+            ->filter(fn ($a) => $a->user !== null)
+            ->map(fn ($a) => [
+                'name' => $a->user->name,
+                'email' => $a->user->email,
+                'avatar' => $a->user->photoUrl(),
+                'role' => Assignments::roleLabel($a->role),
+            ])
+            ->values()
+            ->all();
 
-            return [[
-                'name' => $officer->name,
-                'email' => $officer->email,
-                'avatar' => $officer->photoUrl(),
-                'role' => 'Case officer',
-            ]];
+        if ($live !== []) {
+            return $live;
         }
 
         return collect($application->client?->assignments ?? [])
