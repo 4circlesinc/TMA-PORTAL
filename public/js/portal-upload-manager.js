@@ -70,7 +70,11 @@
          * makes the blanket rule safe to rely on.
          */
         if (opts.method && opts.method !== 'GET' && window.TMAStore) {
-          window.TMAStore.invalidate('files:');
+          // The LISTING prefix, not files: whole — the record replica under
+          // files:item / files:folder and the sync cursor live beside the
+          // listings, and an own write must not wipe them: the cursor is
+          // exactly how the authoritative version of this write arrives.
+          window.TMAStore.invalidate('files:listing:');
         }
         return data;
       });

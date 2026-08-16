@@ -241,6 +241,7 @@
     // answered once a load, and a catch-up per navigation would be a
     // round trip per page to be told nothing moved.
     if (window.TMACipSync) window.TMACipSync.run();
+    if (window.TMAFilesSync) window.TMAFilesSync.run();
     if (j && j.toasts && window.TMAToast && window.TMAToast.applyToastPrefs) {
       window.TMAToast.applyToastPrefs(j.toasts);
       try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}

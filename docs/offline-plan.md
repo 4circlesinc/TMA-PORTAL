@@ -44,24 +44,35 @@ on its own.* `public/js/portal-store.js`;
 `tests/Browser/clients-cached-directory.mjs` prove the offline paint by
 cutting the network.
 
-**2. Sync cursors.** ✅ *Shipped for applications; the other records still to
-do.* `GET /portal/cip/applications/sync?since=&after=` returns what has moved
+**2. Sync cursors.** ✅ *Shipped for applications, folders and files.* `GET /portal/cip/applications/sync?since=&after=` returns what has moved
 since a cursor, in pages of 50. The cursor is `updated_at` **and** the row id,
 so two records saved in the same second cannot straddle a page boundary and
 lose one — `CipApplicationSyncTest` pins exactly that case. `CipPerson` and
 `CipDocument` carry `$touches = ['application']`, because most edits change a
 person and not the application row, and a cursor that missed those would leave
-a laptop quietly wrong. Still to do: the same endpoint for clients, folders and
-files, and recorded deletions — inferring them from absence is what filled the
-SharePoint bin.
+a laptop quietly wrong. The File Library's cursor
+(`GET /portal/files/sync`, `FilesSyncTest`) extends the shape: folders and
+files page side by side on independent cursors, `SyncScope` answers
+"everything the account may see" — the containment closure the FileAccess id
+lists alone never gave (a file inside a shared folder's subtree) — and both
+models soft-delete, so a deletion arrives as a tombstone row, never an
+absence. Both cursors use an INCLUSIVE id tie-break: the boundary row is
+re-delivered so a second change inside the same instant (delete then
+restore) can never be skipped for ever; an upsert absorbs the repeat. Two
+honest limits, settled by a fresh full walk: a purged bin row leaves no
+tombstone, and a revoked share moves no row. Still to do: clients.
 
-**3. First-run download (desktop).** ◐ *Applications only.*
-`public/js/cip-sync.js` walks the cursor into the store on sign-in, on
-reconnect, and after a queued write lands — resumable, because the cursor is
-saved per page rather than per run. Desktop only: in a browser the store is
-memory, so the download would cost the firm's bandwidth to warm something a
-reload empties. Still to do: the rest of the record types, and progress the
-reader can see.
+**3. First-run download (desktop).** ◐ *Applications and the File Library.*
+`public/js/cip-sync.js` and `public/js/files-sync.js` walk their cursors into
+the store on sign-in, on reconnect, and after a queued write lands —
+resumable, because cursors are saved per page rather than per run. The
+library lands as records (`files:folder:<uuid>` / `files:item:<uuid>`, the
+Presenter's own row shape); the listing caches stay the screens' own, and
+assembling offline listings from the record layer is what this phase still
+owes, along with progress the reader can see. Desktop only: in a browser the
+store is memory, so the download would cost the firm's bandwidth to warm
+something a reload empties. `tests/Browser/files-replica.mjs` runs the whole
+walk against a real store by declaring TMADesktop before boot.
 
 **4. The offline shell.** ◐ *The desktop boots offline; browsers still get
 the error page.* Three pieces (16 Aug 2026): `desktop/shell-cache.js` keeps

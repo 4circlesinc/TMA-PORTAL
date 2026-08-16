@@ -50,6 +50,7 @@ use App\Http\Controllers\Files\FileController;
 use App\Http\Controllers\Files\FileRequestController;
 use App\Http\Controllers\Files\FileReviewController;
 use App\Http\Controllers\Files\FilePresenceController;
+use App\Http\Controllers\Files\SyncController as FilesSyncController;
 use App\Http\Controllers\Files\FileVersionController;
 use App\Http\Controllers\Files\FileViewerController;
 use App\Http\Controllers\Files\FileWorkflowController;
@@ -386,6 +387,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      */
     Route::prefix('portal/files')->name('files.')->group(function () {
         Route::get('/', [BrowserController::class, 'index'])->name('browse');
+        // What changed since a device last looked — the offline catch-up read.
+        Route::get('/sync', [FilesSyncController::class, 'index'])->name('sync');
 
         Route::post('/folders', [FolderController::class, 'store'])->name('folders.store');
         Route::get('/folders/{uuid}', [FolderController::class, 'show'])->name('folders.show');

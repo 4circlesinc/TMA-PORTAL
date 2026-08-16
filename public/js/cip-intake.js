@@ -1060,7 +1060,7 @@
       // folders and creates the client record itself, and it runs through the
       // queue's own fetch rather than TMAFilesNet or clientsFetch — so
       // neither seam that invalidates every other write ever sees this one.
-      invalidate: ['cip:application:', 'cip:application-record:', 'files:', 'clients:'],
+      invalidate: ['cip:application:', 'cip:application-record:', 'files:listing:', 'clients:'],
     }).then(function () {
       done();
       if (state.onDone) state.onDone(editing ? optimistic() : null, { queued: true });

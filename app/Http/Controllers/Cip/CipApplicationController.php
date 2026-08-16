@@ -132,11 +132,18 @@ class CipApplicationController extends Controller
             ->with(['provider', 'people.documents.file']);
 
         if ($since !== null) {
+            /*
+             * `>=` on the id tie-break: the row the cursor ended on comes
+             * again while its timestamp equals the cursor's, because it can
+             * change AGAIN inside that instant and strictly-greater would
+             * skip the second change for ever. One re-delivered record per
+             * walk, absorbed by the upsert — same rule as the files cursor.
+             */
             $query->where(function (Builder $q) use ($since, $after) {
                 $q->where('updated_at', '>', $since)
                     ->orWhere(fn (Builder $same) => $same
                         ->where('updated_at', '=', $since)
-                        ->where('id', '>', $after));
+                        ->where('id', '>=', $after));
             });
         }
 

@@ -123,8 +123,11 @@ class CipApplicationSyncTest extends TestCase
         ]);
 
         $res->assertOk();
+        // The boundary row is re-delivered (inclusive tie-break, so a second
+        // change inside the same instant can never be skipped); the assertion
+        // that matters is that `second` is not lost.
         $this->assertSame(
-            [$second->uuid],
+            [$first->uuid, $second->uuid],
             array_column($res->json('applications'), 'id'),
         );
     }
