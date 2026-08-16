@@ -4622,11 +4622,27 @@
   function renderProfile(state, opts) {
     opts = opts || {};
 
-    // The profile arrives separately from the directory listing, so the panel
-    // has a name and an avatar before it has phone numbers. Drawing the record
-    // now would show an empty one — indistinguishable from a client who really
-    // has nothing recorded, which most imported clients are.
-    if (state.selectedId && !profileLoaded(state.selectedId)) {
+    /*
+     * The profile arrives separately from the directory listing, so the panel
+     * has a name and an avatar before it has phone numbers. Drawing the record
+     * now would show an empty one — indistinguishable from a client who really
+     * has nothing recorded, which most imported clients are.
+     *
+     * The application arrives separately again, and it decides which tabs this
+     * profile HAS. Drawing before it lands gave the applicant's screen the
+     * plain-client tabs — Client info, Documents, Assigned — which then swapped
+     * for Main applicant / Sponsor / Dependents a round trip later. Not a flash
+     * on the firm's connection: two seconds of the wrong screen, offering a tab
+     * that does not belong to this client at all.
+     *
+     * Waited for only while a request is actually out. Gating on "not answered
+     * yet" would hold the skeleton for ever on any path that never asks.
+     */
+    var appPending = state.selectedId &&
+      applicationFor(state.selectedId) === undefined &&
+      state.applicationLoadingFor === state.selectedId;
+
+    if (state.selectedId && (!profileLoaded(state.selectedId) || appPending)) {
       return (
         '<div class="tma-dash__clients-detail">' +
         '<div class="tma-dash__clients-profile' +

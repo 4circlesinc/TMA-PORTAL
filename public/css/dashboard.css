@@ -17883,6 +17883,26 @@
   display: none;
 }
 
+/*
+ * With the wrapper gone, the panel is the card.
+ *
+ * The tabs moved out of the panel and the panel's fill went with them, which
+ * was right — it was a card sitting behind cards. But it was also the only
+ * surface the applicant, the sponsor and the documents had, so they were left
+ * on bare page while the dependants, which build their own cards, kept theirs.
+ * The same person read from two tabs looked like two different designs.
+ *
+ * So each panel carries the surface itself, and the one panel that is a LIST
+ * of cards is left alone — giving it one would put cards back inside a card,
+ * which is the thing this whole change was undoing.
+ */
+.tma-dash__clients-profile--cards >
+  .tma-dash__clients-profile-panel:not([data-clients-panel="dependents"]) {
+  padding: var(--space-20);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card, var(--color-white));
+}
+
 .tma-dash__clients-profile-panel[data-clients-panel="info"] .tma-dash__clients-profile-body {
   flex: 1;
 }
