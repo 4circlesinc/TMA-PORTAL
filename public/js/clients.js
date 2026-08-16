@@ -5386,6 +5386,7 @@
         state.profileErrorFinal = false;
         state.profileLoadingFor = null;
         ensureProfileLoaded(state, render);
+        ensureApplicationLoaded(state, render);
         render({ detailOnly: !usesPagedClientsFlow(state) });
       });
     });
@@ -6442,6 +6443,37 @@
    * detail view reads PROFILES, and profileLoaded() tells the view whether to
    * draw the record or a skeleton.
    */
+  /*
+   * The application behind a client, fetched once.
+   *
+   * Its own function, and its own guard, because the profile has one too — it
+   * returns early for a client whose record is already cached, and while this
+   * lived inside that function a second visit never asked for the application
+   * at all. The tabs then fell back to the hub's contact record and the
+   * profile went back to saying "Client info", which is exactly what it does
+   * for a client that has no application. The two are different questions and
+   * one being answered must not decide whether the other is asked.
+   */
+  function ensureApplicationLoaded(state, render) {
+    var id = state.selectedId;
+    if (!id || applicationFor(id) !== undefined) return;
+    if (state.applicationLoadingFor === id) return;
+
+    state.applicationLoadingFor = id;
+
+    clientsFetch('/portal/cip/clients/' + encodeURIComponent(id) + '/application')
+      .then(function (json) {
+        APPLICATIONS[id] = (json && json.application) || null;
+      })
+      .catch(function () { APPLICATIONS[id] = null; })
+      .then(function () {
+        state.applicationLoadingFor = null;
+        if (state.selectedId !== id) return;
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      });
+  }
+
   function ensureProfileLoaded(state, render) {
     var id = state.selectedId;
     if (!id || profileLoaded(id)) return;
@@ -6455,18 +6487,6 @@
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
     };
-
-    // The application rides along with the profile: the tabs are its
-    // sections, and asking for it after the panel has drawn would show a
-    // client with no application for as long as the second request took.
-    if (applicationFor(id) === undefined) {
-      clientsFetch('/portal/cip/clients/' + encodeURIComponent(id) + '/application')
-        .then(function (json) {
-          APPLICATIONS[id] = (json && json.application) || null;
-          if (state.selectedId === id) redraw();
-        })
-        .catch(function () { APPLICATIONS[id] = null; });
-    }
 
     ClientsAPI.show(id).then(function (res) {
       if (stale()) return;
@@ -6697,6 +6717,7 @@
       // in the paged/mobile one.
       if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
         ensureProfileLoaded(state, render);
+        ensureApplicationLoaded(state, render);
         ensureAccessLoaded(state, render);
         ensureAssignmentsLoaded(state, render, { quiet: true });
       }
@@ -6742,6 +6763,7 @@
         // would open a blank form over a real client, and saving it would
         // write that blank back. Wait, and build it in ensureProfileLoaded.
         ensureProfileLoaded(state, render);
+        ensureApplicationLoaded(state, render);
         state.draft = profileLoaded(contactId) ? contactToDraft(contactFor(contactId)) : null;
         state.companyDraft = null;
         return;
