@@ -32,6 +32,18 @@ class CipPerson extends Model
 
     public const RELATIONSHIP_QUALIFIED = 'qualified_dependent';
 
+    /**
+     * A person changing changes the application they are on.
+     *
+     * The offline sync cursor asks "which applications have moved since?" and
+     * answers it from `cip_applications.updated_at`. Correcting a dependant's
+     * date of birth writes a row in this table and none in that one, so
+     * without this the edit is invisible to every device that is catching up
+     * — and the family on their screen stays wrong until something unrelated
+     * happens to the application.
+     */
+    protected $touches = ['application'];
+
     protected static function booted(): void
     {
         static::creating(function (self $person) {

@@ -68,6 +68,9 @@
     filed: {},
     /* The application being edited, or null when this is a new one. */
     applicationId: null,
+    /* The filed record the form was opened on. Kept so a save that has to be
+       parked offline can say what the record will look like once it lands. */
+    record: null,
     /* How many dependent blocks are on the page. The rows themselves live in
        the draft under dependents.N.*, so removing one has to close the gap. */
     dependents: 0,
@@ -872,14 +875,19 @@
   }
 
   /*
-   * The whole form as one multipart body.
+   * The whole form, taken apart into the parts a multipart body is made of.
    *
    * The field paths are the form-data names, so `sponsor[firstName]` and
    * `dependents[0][dateOfBirth]` arrive as the nested arrays the validator
    * expects — and come back keyed the same way when it objects.
+   *
+   * A list rather than a FormData because the write queue has to be able to
+   * put this on disk and rebuild it hours later, and a FormData cannot be
+   * stored. body() below is the same thing assembled for a request that is
+   * going out now.
    */
-  function body() {
-    var form = new FormData();
+  function parts() {
+    var out = [];
 
     Object.keys(state.draft).forEach(function (path) {
       var value = state.draft[path];
@@ -888,23 +896,34 @@
       if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       // A sponsor's answers are not sent when there is no sponsor.
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
-      form.append(bracketed(path), value);
+      out.push({ name: bracketed(path), value: value });
     });
 
     Object.keys(state.files).forEach(function (path) {
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
-      form.append(bracketed(path), state.files[path]);
+      var file = state.files[path];
+      out.push({ name: bracketed(path), file: file, filename: file.name });
     });
 
     // A requirement's scans go up as a list, in the order they were added.
     Object.keys(state.documents).forEach(function (path) {
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
       state.documents[path].forEach(function (file) {
-        form.append(bracketed(path) + '[]', file);
+        out.push({ name: bracketed(path) + '[]', file: file, filename: file.name });
       });
     });
 
-    form.append('sponsored', sponsored() ? '1' : '0');
+    out.push({ name: 'sponsored', value: sponsored() ? '1' : '0' });
+
+    return out;
+  }
+
+  function body() {
+    var form = new FormData();
+    parts().forEach(function (part) {
+      if (part.file) form.append(part.name, part.file, part.filename || 'upload');
+      else form.append(part.name, part.value);
+    });
 
     return form;
   }
@@ -954,9 +973,11 @@
 
     // Editing posts to the application's own URL. Still POST, not PUT: PHP
     // parses a multipart body for POST only, and these carry files.
-    fetch(state.applicationId
+    var url = state.applicationId
       ? '/portal/cip/applications/' + encodeURIComponent(state.applicationId)
-      : '/portal/cip/applications', {
+      : '/portal/cip/applications';
+
+    fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
       // No Content-Type: the browser sets the multipart boundary itself.
@@ -991,10 +1012,138 @@
         if (state.onDone) state.onDone(json.application);
       });
     }).catch(function () {
+      /*
+       * Nothing was delivered. Not "the server said no" — the request never
+       * arrived, which is the offline case and the whole reason the queue
+       * exists. The form has already checked everything the server checks,
+       * so parking it is a reasonable bet rather than a hope.
+       */
+      park(url);
+    });
+  }
+
+  /**
+   * Save this application on the device instead.
+   *
+   * Reached only when the request could not be delivered. The reader is told
+   * plainly that it is on this machine and not yet at the firm — a "Saved"
+   * that meant two different things depending on the wifi would be the worst
+   * possible outcome of this whole feature.
+   */
+  function park(url) {
+    var root = state.root;
+    var editing = !!state.applicationId;
+    var done = function () {
       state.saving = false;
       if (state.onSaving) state.onSaving(false);
+    };
+
+    if (!window.TMAQueue || !window.TMAQueue.usable()) {
+      done();
       ui().toastError('Could not reach the server');
+
+      return;
+    }
+
+    window.TMAQueue.add({
+      kind: 'cip.application',
+      label: editing
+        ? 'Changes to application ' + ((state.record && state.record.number) || '')
+        : 'A new application for ' + fullName(),
+      method: 'POST',
+      url: url,
+      parts: parts(),
+      // Everything drawn from this application, wherever it was cached. Two
+      // prefixes because two screens ask different questions of the same
+      // record: the profile keys on the client, the wizard on the application.
+      invalidate: ['cip:application:', 'cip:application-record:'],
+    }).then(function () {
+      done();
+      if (state.onDone) state.onDone(editing ? optimistic() : null, { queued: true });
+    }).catch(function () {
+      done();
+      ui().toastError('Could not reach the server');
+      if (root) render(root);
     });
+  }
+
+  function fullName() {
+    return [state.draft.firstName, state.draft.lastName]
+      .filter(Boolean).join(' ') || 'an applicant';
+  }
+
+  /**
+   * What the record will say once the queued change lands.
+   *
+   * The server builds the real one; this is the same answers laid over the
+   * copy the form was opened with, so the profile behind the reader shows
+   * what they just typed rather than what they just replaced. It carries
+   * `pendingSync` so every screen that draws it can say so — a local copy
+   * that looked identical to a filed one would be a lie by omission.
+   *
+   * Files are deliberately not reflected. A scan chosen offline is in the
+   * queue, not on the server, and marking a requirement answered before it
+   * has been uploaded would tell the reader a checklist is complete when the
+   * firm cannot see the document.
+   */
+  function optimistic() {
+    if (!state.record) return null;
+
+    var record = JSON.parse(JSON.stringify(state.record));
+    var apply = function (person, prefix) {
+      if (!person) return person;
+      PERSON_FIELDS.forEach(function (f) {
+        if (state.draft[prefix + f] !== undefined) person[f] = state.draft[prefix + f];
+      });
+      person.name = [person.firstName, person.lastName].filter(Boolean).join(' ');
+
+      return person;
+    };
+
+    record.providerId = state.draft.providerId || record.providerId;
+    record.investmentTypeValue = state.draft.investmentType || '';
+    record.investmentTypeOther = state.draft.investmentTypeOther || '';
+    record.investmentType = investmentLabel();
+    record.sponsored = sponsored();
+
+    apply(record.applicant, '');
+    // A sponsor added offline has no filed record to lay answers over, and
+    // inventing one would put a person on the screen the server has never
+    // heard of. The queued write is what creates them.
+    if (record.sponsor) apply(record.sponsor, 'sponsor.');
+    if (!sponsored()) record.sponsor = null;
+
+    record.dependents = [];
+    for (var i = 0; i < state.dependents; i++) {
+      var p = 'dependents.' + i + '.';
+      var id = state.draft[p + 'id'];
+      var filed = (state.record.dependents || []).filter(function (d) {
+        return d.id && d.id === id;
+      })[0];
+      var dependent = filed ? JSON.parse(JSON.stringify(filed)) : { id: null, role: 'dependent', documents: [], outstanding: [] };
+      dependent.firstName = state.draft[p + 'firstName'] || '';
+      dependent.lastName = state.draft[p + 'lastName'] || '';
+      dependent.dateOfBirth = state.draft[p + 'dateOfBirth'] || '';
+      dependent.relationship = state.draft[p + 'relationship'] || 'qualified_dependent';
+      dependent.name = [dependent.firstName, dependent.lastName].filter(Boolean).join(' ');
+      record.dependents.push(dependent);
+    }
+    record.familySize = 1 + (record.sponsor ? 1 : 0) + record.dependents.length;
+
+    record.pendingSync = true;
+
+    return record;
+  }
+
+  /* The display string for the chosen investment type — the free text once
+     somebody picked Other, the option's own label otherwise. */
+  function investmentLabel() {
+    var value = state.draft.investmentType || '';
+    if (value === 'other') return state.draft.investmentTypeOther || 'Other';
+    var option = ((state.options && state.options.investmentTypes) || [])
+      .filter(function (o) { return o.value === value; })[0];
+
+    return option ? option.label : value;
   }
 
   /* ── mount ─────────────────────────────────────────────────────── */
@@ -1056,6 +1205,7 @@
     state.saving = false;
     state.error = '';
     state.applicationId = opts.applicationId || null;
+    state.record = null;
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;
     state.loading = true;
@@ -1064,19 +1214,13 @@
     // The options and, when editing, the record to put back into them. Asked
     // for together so the form paints once with everything it needs rather
     // than filling in under the reader.
-    var wants = [api('GET', '/portal/cip/applications/form').then(function (res) {
-      if (!res.ok) throw new Error('form');
-
-      return res.json();
-    })];
+    var wants = [held('cip:form', '/portal/cip/applications/form')];
 
     if (state.applicationId) {
-      wants.push(api('GET', '/portal/cip/applications/' + encodeURIComponent(state.applicationId))
-        .then(function (res) {
-          if (!res.ok) throw new Error('application');
-
-          return res.json();
-        }).then(function (json) { return json.application; }));
+      wants.push(held(
+        'cip:application-record:' + state.applicationId,
+        '/portal/cip/applications/' + encodeURIComponent(state.applicationId),
+      ).then(function (json) { return json.application; }));
     }
 
     Promise.all(wants).then(function (answers) {
@@ -1085,6 +1229,9 @@
       if (state.options.providers && state.options.providers.length === 1) {
         state.draft.providerId = state.options.providers[0].id;
       }
+      // Kept, not just poured into the draft: a save that has to be parked
+      // builds what the record will say by laying the draft over this.
+      state.record = answers[1] || null;
       if (answers[1]) prefill(answers[1]);
       state.loading = false;
       render(root);
@@ -1094,6 +1241,44 @@
         ? 'Couldn’t load this application. Refresh to try again.'
         : 'Couldn’t load the application form. Refresh to try again.';
       render(root);
+    });
+  }
+
+  /*
+   * Ask the server, and fall back to what was held.
+   *
+   * Network first, unlike the read-through cache the rest of the portal
+   * paints with. A form is about to be edited and then posted whole, so
+   * opening it on a stale copy risks a reader overwriting a colleague's
+   * change with an answer they never saw — worth the wait. The held copy is
+   * the offline case, where the choice is that or nothing.
+   *
+   * Only the desktop keeps these across a restart; in a browser the store is
+   * memory alone, so what can be edited with no network is what was opened
+   * with one. That is the firm's decision about whose disk holds a client's
+   * details, not an oversight — see portal-store.js.
+   */
+  function held(key, url) {
+    var ask = function () {
+      return api('GET', url).then(function (res) {
+        if (!res.ok) throw new Error(url);
+
+        return res.json();
+      });
+    };
+
+    if (!window.TMAStore) return ask();
+
+    return ask().then(function (json) {
+      window.TMAStore.put(key, json);
+
+      return json;
+    }).catch(function (err) {
+      return window.TMAStore.get(key).then(function (value) {
+        if (value === undefined) throw err;
+
+        return value;
+      });
     });
   }
 

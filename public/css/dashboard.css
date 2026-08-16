@@ -17846,6 +17846,16 @@
   opacity: 0.4;
 }
 
+/* The "saved on this device" line. Between the tabs and the panels, because
+   it is true of every tab below it — inside one, it would look like a note
+   about that section. Takes the tab row's own bottom margin, so the panels
+   sit where they always did whether or not it is there. */
+.tma-dash__clients-sync-notice {
+  flex-shrink: 0;
+  margin-top: calc(var(--space-24) * -1 + var(--space-4));
+  margin-bottom: var(--space-24);
+}
+
 /* A tab with no label yet. It is built from the real tab's own parts, so the
    underline group gives it the same height and nothing below it moves; all
    this adds is that it does not look clickable. */

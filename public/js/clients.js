@@ -2396,11 +2396,62 @@
     };
   }
 
-  function renderClientsBackBtn() {
+  /*
+   * The client an edit screen belongs to, or null for the listing.
+   *
+   * Editing is something you do TO a record you were looking at, so leaving it
+   * puts you back in front of that record. An application edit sent you to the
+   * table instead — the client you had open, their tabs and wherever you were
+   * in them, all thrown away to go back to a row you then had to find again.
+   *
+   * `applicationOwner` covers the case where the edit page was loaded cold, by
+   * link or reload, and there is no client open to go back to.
+   */
+  function backDestination(state) {
+    if (state.screen === 'edit') return state.selectedId || null;
+    if (state.screen === 'edit-application') return state.selectedId || applicationOwner(state);
+
+    return null;
+  }
+
+  /* Who a cold-loaded application belongs to. The URL addresses the
+     application, so the client is not in it and has to be asked for. */
+  var APPLICATION_OWNERS = {};
+
+  function applicationOwner(state) {
+    var id = state.applicationId;
+    if (!id) return null;
+    if (APPLICATION_OWNERS[id]) return APPLICATION_OWNERS[id];
+
+    if (!state.ownerLoadingFor || state.ownerLoadingFor !== id) {
+      state.ownerLoadingFor = id;
+      clientsFetch('/portal/cip/applications/' + encodeURIComponent(id))
+        .then(function (json) {
+          var uid = json && json.application && json.application.clientUid;
+          if (!uid) return;
+          APPLICATION_OWNERS[id] = uid;
+          // Repaint the head: the button was drawn before the answer arrived
+          // and is still labelled for a destination it no longer has.
+          if (clientsMountState) syncClientsDetailHead(clientsMountState);
+        })
+        .catch(function () { /* the listing is a fine place to end up */ });
+    }
+
+    return null;
+  }
+
+  function renderClientsBackBtn(state) {
+    // Named for where it goes. "CIP Applications" over a button that returns
+    // to one client is the sort of label a reader learns to distrust.
+    var owner = state && backDestination(state);
+    var client = owner ? contactFor(owner) : null;
+    var label = client && client.name ? client.name : 'CIP Applications';
+
     return (
-      '<button type="button" class="tma-dash__clients-back-btn" data-clients-back aria-label="Back to CIP Applications">' +
+      '<button type="button" class="tma-dash__clients-back-btn" data-clients-back' +
+      ' aria-label="Back to ' + esc(label) + '">' +
       '<img src="' + ICONS.CaretLeft + '" alt="" aria-hidden="true">' +
-      '<span>CIP Applications</span>' +
+      '<span>' + esc(label) + '</span>' +
       '</button>'
     );
   }
@@ -2573,7 +2624,7 @@
     } else if (state.screen === 'add-company' || state.screen === 'edit-company') {
       toolbar = renderCompanyFormToolbar(state);
     }
-    return renderClientsBackBtn() + (toolbar || '');
+    return renderClientsBackBtn(state) + (toolbar || '');
   }
 
   /* Full-page detail: put identity + actions in the global page-title row. */
@@ -4736,6 +4787,7 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +
       '</div>' +
+      renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out
       // of the way — the same reason a company's and the intake form's do.
       '<div class="tma-dash__clients-profile' +
@@ -4753,6 +4805,24 @@
       renderAccessPanel(state, c, activeTab !== 'access') +
       '</div></div>'
     );
+  }
+
+  /*
+   * Say that what is on the screen has not reached the firm yet.
+   *
+   * An application edited with no network reads exactly like one that saved
+   * normally — that is the point of applying it locally — and without this
+   * line the reader has no way to tell, and no reason to leave the laptop on
+   * long enough for the queue to run. It comes off by itself: the queue's
+   * replay refetches the record, and the server's copy has no `pendingSync`.
+   */
+  function renderApplicationSyncNotice(app) {
+    if (!app || !app.pendingSync || !window.TMAPortalUI) return '';
+
+    return '<div class="tma-dash__clients-sync-notice">' +
+      window.TMAPortalUI.banner('warning',
+        'Saved on this device. These answers sync to the firm when you’re back online.') +
+      '</div>';
   }
 
   function readFormDraft(root) {
@@ -6115,7 +6185,12 @@
       }
       if (e.target.closest('[data-cip-cancel]')) {
         e.preventDefault();
-        navigate('list');
+        // Cancel goes where Back goes. Abandoning an edit and finishing one
+        // both leave you where you started, or the safer of the two answers
+        // is the one that loses your place.
+        var owner = clientsMountState && backDestination(clientsMountState);
+        if (owner) navigate('detail', owner);
+        else navigate('list');
       }
     });
   }
@@ -6139,8 +6214,32 @@
             ? (editing ? 'Saving…' : 'Adding…')
             : (editing ? 'Save' : 'Add');
         },
-        onDone: function (application) {
+        onDone: function (application, meta) {
+          /*
+           * A parked save is a different sentence.
+           *
+           * "Saved" would be true of the device and false of the firm, and a
+           * reader who took it the second way would close the laptop on work
+           * nobody else can see yet. So the toast says where it is, and the
+           * record it hands back — the answers laid over the filed copy — is
+           * held locally so the profile behind them shows what they typed.
+           */
+          if (meta && meta.queued) {
+            if (application) rememberApplication(state.selectedId, application);
+            clientsToast(editing
+              ? 'Saved on this device — it will sync when you’re back online'
+              : 'Saved on this device — it will be filed when you’re back online',
+            'warning');
+            navigate('list');
+
+            return;
+          }
+
           if (application) {
+            // Held as well as announced: the record the server just returned
+            // is the newest there is, and refetching it would be asking for
+            // what is already in hand.
+            rememberApplication(state.selectedId, application);
             // The list refetches itself from the live signal the write raised.
             clientsToast('Application ' + application.number +
               (editing ? ' saved' : ' created'), 'positive');
@@ -6188,7 +6287,8 @@
     var backBtn = unwiredClientsChrome(root, '[data-clients-back]');
     if (backBtn) {
       backBtn.addEventListener('click', function () {
-        if (state.screen === 'edit') navigate('detail', state.selectedId);
+        var owner = backDestination(state);
+        if (owner) navigate('detail', owner);
         else if (state.screen === 'edit-company' && state.companyId) {
           navigate('company', null, { companyId: state.companyId });
         } else {
@@ -6880,6 +6980,23 @@
     if (window.TMAStore && clientId) window.TMAStore.invalidate(applicationCacheKey(clientId));
   }
 
+  /*
+   * Put a record in both places an application is remembered.
+   *
+   * Written after a save rather than forgetting and refetching: the answer
+   * the write returned is newer than anything a refetch could bring back,
+   * and offline there is no refetch to make. The same call carries an
+   * optimistic record with `pendingSync` on it, which is what lets the
+   * profile show a queued edit.
+   */
+  function rememberApplication(clientId, record) {
+    if (!clientId || record === undefined) return;
+    APPLICATIONS[clientId] = record;
+    if (window.TMAStore) {
+      window.TMAStore.put(applicationCacheKey(clientId), { application: record });
+    }
+  }
+
   function ensureProfileLoaded(state, render) {
     var id = state.selectedId;
     if (!id || profileLoaded(id)) return;
@@ -7564,6 +7681,29 @@
       },
     });
   }
+
+  /*
+   * A change made offline has just reached the server.
+   *
+   * The live signal that normally brings a colleague's edit back here is
+   * raised by the request, so the tab that made it skips its own echo — which
+   * is right when the change was applied on the screen a moment ago and wrong
+   * for a queued one, where the screen has been showing the local copy for
+   * hours and the server has only now built the real record. So the held copy
+   * is dropped and the screen re-derived, which is what takes the "saved on
+   * this device" line off it.
+   */
+  document.addEventListener('tma:queue-applied', function (e) {
+    if (!e.detail || e.detail.kind !== 'cip.application') return;
+
+    Object.keys(APPLICATIONS).forEach(function (id) {
+      var app = APPLICATIONS[id];
+      if (app && app.pendingSync) delete APPLICATIONS[id];
+    });
+
+    if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
+    clientsMountRoot._clientsController.syncRoute(parseClientsPath(window.location.pathname));
+  });
 
   window.TMAClients = {
     mount: mount,

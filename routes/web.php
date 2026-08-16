@@ -313,6 +313,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
      */
     Route::prefix('portal/cip')->name('cip.')->group(function () {
         Route::get('/applications/form', [CipApplicationController::class, 'form'])->name('applications.form');
+        // Above `/applications/{uuid}`, or the wildcard swallows it and the
+        // catch-up read becomes a lookup for an application called "sync".
+        Route::get('/applications/sync', [CipApplicationController::class, 'sync'])->name('applications.sync');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
         // Multipart carries the files, and PHP only parses a body for POST —

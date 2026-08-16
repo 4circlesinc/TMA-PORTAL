@@ -20,6 +20,8 @@ use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Status;
 use App\Support\Files\Presenter;
 use App\Support\Realtime\Live;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -33,6 +35,16 @@ use Illuminate\Http\Request;
  */
 class CipApplicationController extends Controller
 {
+    /*
+     * How many applications one sync page carries.
+     *
+     * Each is a whole family with their checklists, so this is not a cheap
+     * row — and a first sync of the firm's whole book is a lot of them. Small
+     * enough that a page answers before a phone gives up on it, large enough
+     * that catching up after a week is not two hundred round trips.
+     */
+    private const SYNC_PAGE = 50;
+
     /** Everything the wizard needs to draw itself, in one request. */
     public function form(Request $request): JsonResponse
     {
@@ -77,6 +89,97 @@ class CipApplicationController extends Controller
         return response()->json([
             'application' => $this->record($application, $user),
         ], 201);
+    }
+
+    /**
+     * Everything that has changed since the caller last asked.
+     *
+     * The pull half of working offline (docs/offline-plan.md, phase 2). A
+     * device that has been on a plane comes back, replays what it queued, and
+     * then asks this for whatever moved while it was away — so the cached
+     * copy on the desktop is brought up to date without re-downloading eleven
+     * thousand records.
+     *
+     * THE CURSOR IS A PAIR, AND HAS TO BE
+     *
+     * `updated_at` alone cannot page: two applications saved in the same
+     * second straddling a page boundary means either one is served twice or
+     * one is never served at all, and the second is a record that stays
+     * silently wrong on somebody's laptop. So the cursor is the timestamp AND
+     * the id, and the next page is "later than that timestamp, or the same
+     * timestamp with a higher id".
+     *
+     * NO CURSOR MEANS EVERYTHING
+     *
+     * A first run has nothing to catch up from, so it walks the whole set a
+     * page at a time — the same loop, no separate download path to keep in
+     * step with this one.
+     */
+    public function sync(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+
+        $since = $this->cursorTime($request->query('since'));
+        $after = (int) $request->query('after', 0);
+
+        $query = ApplicationScope::query($user)
+            ->with(['provider', 'people.documents.file']);
+
+        if ($since !== null) {
+            $query->where(function (Builder $q) use ($since, $after) {
+                $q->where('updated_at', '>', $since)
+                    ->orWhere(fn (Builder $same) => $same
+                        ->where('updated_at', '=', $since)
+                        ->where('id', '>', $after));
+            });
+        }
+
+        $page = $query
+            ->orderBy('updated_at')
+            ->orderBy('id')
+            ->limit(self::SYNC_PAGE)
+            ->get();
+
+        $last = $page->last();
+
+        return response()->json([
+            'applications' => $page->map(fn ($application) => $this->record($application, $user))->all(),
+            /*
+             * Where to carry on from. The caller stores this and hands it back
+             * next time; it is deliberately opaque prose-free data rather than
+             * a page number, because a page number means something different
+             * the moment a row is written.
+             */
+            'cursor' => [
+                'since' => $last ? $last->updated_at?->toIso8601String() : $request->query('since'),
+                'after' => $last ? $last->id : $after,
+            ],
+            // A full page probably is not the end of the set. Saying so is
+            // cheaper than a count over a scoped query that may be large.
+            'more' => $page->count() === self::SYNC_PAGE,
+        ]);
+    }
+
+    /**
+     * A cursor timestamp, or null.
+     *
+     * An unparseable `since` is treated as no cursor at all rather than as an
+     * error: the worst case is one device re-reading a page it already has,
+     * and the alternative is a client that can never recover from a corrupt
+     * value it stored itself.
+     */
+    private function cursorTime(?string $value): ?CarbonImmutable
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** One application, if this reader may see it. */
@@ -171,7 +274,7 @@ class CipApplicationController extends Controller
     {
         // The slots' files as well as the slots: the checklist only needs to
         // know a slot is answered, but the passport photo is opened from here.
-        $application->loadMissing(['provider', 'people.documents.file']);
+        $application->loadMissing(['provider', 'client', 'people.documents.file']);
 
         /*
          * One presenter for the whole family, primed once.
@@ -227,6 +330,13 @@ class CipApplicationController extends Controller
             'sponsor' => $sponsor ? $this->person($sponsor, $presenter) : null,
             'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter))->all(),
             'createdAt' => $application->created_at?->toIso8601String(),
+            // Which client's profile this belongs under, and when it last
+            // moved. Both are for the offline cache: a record arriving from
+            // the sync cursor has to be filed where the profile will look for
+            // it, and a screen showing a copy has to be able to tell whether
+            // what it holds is older than what just arrived.
+            'clientUid' => $application->client?->uid,
+            'updatedAt' => $application->updated_at?->toIso8601String(),
         ];
     }
 

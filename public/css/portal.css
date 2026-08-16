@@ -4996,3 +4996,93 @@ audio.call-recordings__player { background: transparent; }
   flex-direction: column;
   gap: var(--space-12);
 }
+
+/* ── the sync indicator ───────────────────────────────
+   One pill, bottom-left, shown only when the connection has gone or the
+   write queue is holding something. See portal-sync-status.js. */
+.tma-sync-pill {
+  position: fixed;
+  left: var(--space-16);
+  bottom: calc(var(--space-16) + env(safe-area-inset-bottom, 0px));
+  /* Over the page, under modals (300) — the panel it opens is one, and a
+     pill painted on top of its own dialog would be the file context menu
+     bug again. Toasts (600) still land above both. */
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-overlay-4);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-elevated, #ffffff);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  font-size: var(--text-size-13, 13px);
+  line-height: 16px;
+  color: var(--color-black);
+  cursor: pointer;
+}
+
+.tma-sync-pill:hover { border-color: var(--color-overlay-8, var(--color-overlay-4)); }
+
+.tma-sync-pill__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-text-secondary);
+}
+
+/* Amber while it is only waiting, red once somebody has to look at it. The
+   offline state stays grey on purpose: no connection is a fact about the
+   room, not a fault, and colouring it as one makes a train journey feel like
+   a broken portal. */
+.tma-sync-pill[data-tone="waiting"] .tma-sync-pill__dot { background: var(--color-warning, #c77d18); }
+
+.tma-sync-pill[data-tone="attention"] .tma-sync-pill__dot { background: var(--color-negative, #c0392b); }
+
+.tma-sync-panel { display: flex; flex-direction: column; gap: var(--space-16); }
+
+.tma-sync-panel__lead { margin: 0; color: var(--color-text-secondary); }
+
+.tma-sync-panel__empty { margin: 0; color: var(--color-text-secondary); }
+
+.tma-sync-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-sync-panel__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+}
+
+.tma-sync-panel__item:last-child { border-bottom: none; }
+
+.tma-sync-panel__what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.tma-sync-panel__label { overflow-wrap: anywhere; }
+
+.tma-sync-panel__meta {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.tma-sync-panel__item.is-failed .tma-sync-panel__meta { color: var(--color-negative, #c0392b); }
+
+.tma-sync-panel__actions { display: flex; gap: var(--space-12); flex: none; }
+
+.tma-sync-panel__waiting {
+  flex: none;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}

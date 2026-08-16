@@ -24,6 +24,16 @@ class CipDocument extends Model
 {
     use SoftDeletes;
 
+    /**
+     * A checklist slot filling in moves the application it belongs to.
+     *
+     * Same reason as CipPerson: the sync cursor reads the application's
+     * timestamp, and a passport scan arriving is exactly the kind of change
+     * a colleague's screen must notice. A document is reached through its
+     * person, so this is the second half of that chain.
+     */
+    protected $touches = ['application'];
+
     protected static function booted(): void
     {
         static::creating(function (self $slot) {

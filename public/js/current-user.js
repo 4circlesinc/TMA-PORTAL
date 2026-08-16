@@ -226,6 +226,19 @@
          * reader's clients would look exactly like a permissions failure.
          */
         if (window.TMAStore && j && j.id != null) window.TMAStore.setAccount(j.id);
+        /*
+         * And the write queue, which scopes the same way but for a different
+         * reason: anything parked there is work this account did and has not
+         * managed to send yet. Saying who they are is also what starts the
+         * replay, so an edit made on a train reaches the server the moment
+         * the portal loads with a connection.
+         */
+        if (window.TMAQueue && j && j.id != null) window.TMAQueue.setAccount(j.id);
+        // And the other direction: collect whatever changed while this device
+        // was away. Here rather than on an onChange listener because /me is
+        // answered once a load, and a catch-up per navigation would be a
+        // round trip per page to be told nothing moved.
+        if (window.TMACipSync) window.TMACipSync.run();
         if (j && j.toasts && window.TMAToast && window.TMAToast.applyToastPrefs) {
           window.TMAToast.applyToastPrefs(j.toasts);
           try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}

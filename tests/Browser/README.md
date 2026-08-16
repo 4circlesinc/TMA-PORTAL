@@ -171,6 +171,33 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-application-full.mjs
   ```
+- **`cip-offline.mjs`** — an application edited with the network switched off.
+  `CipApplicationSyncTest` pins the server's catch-up read; this pins the half
+  that only exists in a browser: a save that cannot be delivered is kept rather
+  than lost, the profile shows what was typed and says it is only on this
+  device, and the change goes to the server on its own when the connection
+  returns — nothing is clicked to make it.
+
+  It also files a write the server must refuse, to prove the queue parks it for
+  a person instead of retrying it forever or binning it, and that Discard is
+  the only thing that removes it.
+
+  The switch is `context.setOffline()`, not a route handler, so `fetch` rejects
+  the way it does on a train. That distinction is the design: a status code
+  means the server disagreed and must **not** be queued.
+
+  Two rules it was written around. Navigation is through the hub's own router
+  rather than by clicking a row or reloading — every portal page lives in one
+  SPA shell, so a bare selector also finds hidden views' copies, and a hard
+  reload with no network is the offline shell, which is a later phase. And
+  every panel selector is `:visible` for the same reason.
+
+  Same setup as `cip-intake.mjs`, and it wants a **fresh database**: it files
+  an application, and a second run leaves two clients with the same name.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-offline.mjs
+  ```
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with
