@@ -57,10 +57,18 @@ app.whenReady().then(async () => {
   result = await assetCache.install(origin);
   check('no build reported does not activate', result.active, false);
 
-  // A portal that is not there at all.
+  /*
+   * A portal that is not there at all. This answer CHANGED, on purpose: it
+   * used to deactivate, which offline meant a blank window — the bundle sat
+   * on disk while the app showed an error screen. Unreachable now serves the
+   * bundle unverified, because offline the choice is not "fresh or stale",
+   * it is "the bundle or nothing". The strict per-file gate returns the
+   * moment a manifest can be fetched again.
+   */
   server.close();
   result = await assetCache.install(origin);
-  check('an unreachable portal does not activate', result.active, false);
+  check('an unreachable portal serves the bundle unverified', result.active, true);
+  check('and says so', result.mode, 'unverified');
 
   /* ── path safety ───────────────────────────────────────────────── */
 

@@ -49,11 +49,16 @@ memory, so the download would cost the firm's bandwidth to warm something a
 reload empties. Still to do: the rest of the record types, and progress the
 reader can see.
 
-**4. The offline shell.** ✗ *Not started.* The app boots with no network:
-assets and the shell cached by the desktop's asset cache, `/me` and
-capabilities served from the store. **Until this ships, reloading the page with
-no connection gives the browser's own error page** — everything below works
-only in a portal that is already open.
+**4. The offline shell.** ◐ *The desktop boots offline; browsers still get
+the error page.* Three pieces (16 Aug 2026): `desktop/shell-cache.js` keeps
+the last served shell — capabilities inlined — and answers navigations from
+disk before the network has said a word, gated on a session cookie, the
+deploy build, and `/me` watchdogs for a dead session or a changed account.
+The asset cache serves the bundle *unverified* when the portal is
+unreachable — offline there is no API to be stale against. And `/me` itself
+is remembered (`tma.me` in localStorage, desktop only, cleared by sign-out
+and by a server refusal) so the boot knows who it is. Still to do: an honest
+offline banner on arrival, and the browser story if the firm ever wants one.
 
 **5. The write queue.** ✅ *Shipped, for applications.*
 `public/js/portal-queue.js`. A save that cannot be *delivered* — a rejected
@@ -83,7 +88,9 @@ Does not work yet, and each is a phase above rather than a bug:
   show the applicant until it lands — there is no client record to show, and
   inventing one means merging it into every listing and deduplicating it after
   the sync (phase 3).
-- **Reloading with no connection** (phase 4).
+- **Reloading with no connection** works on the desktop now (phase 4's shell
+  cache); in a browser it is still the error page, by the firm's own
+  disk-residue decision.
 - **An application never opened while online** cannot be edited offline in a
   browser, only on the desktop. That is the firm's decision about whose disk
   holds a client's details, not an oversight.

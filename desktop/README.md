@@ -99,6 +99,43 @@ purpose: the handler is registered for https and the dev server is http, so
 against localhost this code is not in the path at all. No local test can cover
 it.
 
+## The shell cache — the app opens before the network answers
+
+The turn away from "a window that navigates to a website": the last shell the
+portal served is kept on disk ([shell-cache.js](shell-cache.js)), and a
+navigation is answered from there in under a millisecond. The window opens ON
+the portal — the network's remaining job is data. It is the byte-for-byte
+document the server sent, capabilities inlined and all, captured whenever a
+navigation carries the `tma-shell:` marker; never a copy we compose.
+
+Three gates at serve time, and two watchdogs after:
+
+- **A session cookie must exist** — a stranger gets the network and its
+  sign-in bounce.
+- **The path's first segment must have served the shell before** — `/auth/*`
+  and friends never carried the marker, so they are never answered from disk.
+- **The deploy must not have moved** — the copy is stamped with the build it
+  was captured under; verification learning of a deploy drops it and reloads
+  the window if it is already on screen (a stale shell references bundles the
+  new deploy may not serve: a broken page, not a slow one).
+- `/me` answering **401/419** after a disk-served shell means the session died
+  behind the cookie → drop and reload. `/me` naming a **different account**
+  means the inlined capabilities on screen are somebody else's → drop and
+  reload.
+
+Verification itself moved out of the startup path: `install()` registers the
+protocol handler synchronously and verifies against `/desktop/assets` in the
+background. Asset requests hold for that answer (a stylesheet 300ms late costs
+nothing; unverified against a moved deploy costs a broken page) — navigations
+and the cached shell do not.
+
+**And one deliberate loosening:** when the portal is *unreachable* — offline,
+not answering-badly — the bundle is served unverified. Offline there is no API
+to be stale against, and the strict alternative was the app refusing to open
+with 2,000 usable files on disk. The moment a manifest can be fetched, the
+per-file gate is back. `test-asset-cache.js` pins both halves;
+`test-shell-cache.js` pins every gate and watchdog above.
+
 ## The right-click menu
 
 Electron ships none — right-clicking anywhere in the app did nothing at all,

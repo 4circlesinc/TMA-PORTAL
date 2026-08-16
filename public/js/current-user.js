@@ -212,46 +212,103 @@
     listeners.forEach(function (fn) { fn(me); });
   }
 
+  /*
+   * Everything that hangs off knowing who this is, in one place — the same
+   * wiring whether the answer came from the server or, offline on the
+   * desktop, from the copy kept from last time.
+   */
+  function applyMe(j) {
+    me = j;
+    /*
+     * Tell the store whose cache this is, before any screen reads it.
+     *
+     * A cache is scoped to an account, and until /me answers there is no
+     * account to scope it to. Signing in as somebody else from the same
+     * machine wipes what was held — warming a screen with the last
+     * reader's clients would look exactly like a permissions failure.
+     */
+    if (window.TMAStore && j && j.id != null) window.TMAStore.setAccount(j.id);
+    /*
+     * And the write queue, which scopes the same way but for a different
+     * reason: anything parked there is work this account did and has not
+     * managed to send yet. Saying who they are is also what starts the
+     * replay, so an edit made on a train reaches the server the moment
+     * the portal loads with a connection.
+     */
+    if (window.TMAQueue && j && j.id != null) window.TMAQueue.setAccount(j.id);
+    // And the other direction: collect whatever changed while this device
+    // was away. Here rather than on an onChange listener because /me is
+    // answered once a load, and a catch-up per navigation would be a
+    // round trip per page to be told nothing moved.
+    if (window.TMACipSync) window.TMACipSync.run();
+    if (j && j.toasts && window.TMAToast && window.TMAToast.applyToastPrefs) {
+      window.TMAToast.applyToastPrefs(j.toasts);
+      try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}
+    }
+    // Same idea for desktop banners: the store owns them on every shell,
+    // and this is where it learns whether the user wants them.
+    if (j && j.desktopNotifications && window.TMADesktopNotify) {
+      window.TMADesktopNotify.applyPrefs(j.desktopNotifications);
+    }
+    paint();
+    return j;
+  }
+
+  /*
+   * Who this is, remembered — the desktop only.
+   *
+   * The one answer everything else waits for. With no network, no cached
+   * copy of /me means no name, no capabilities, no account for the store to
+   * scope to: an offline boot stalls on the skeleton with a week of data
+   * sitting right there on disk. So the desktop keeps the last answer.
+   *
+   * localStorage rather than TMAStore, because the store cannot hold this:
+   * its keys are scoped to the account, and this IS how the account gets
+   * known — a copy filed under the account id can never be found by the boot
+   * that does not have the id yet. In a browser nothing is kept, which is
+   * the firm's decision about whose disk holds what (see portal-store.js).
+   */
+  var ME_KEY = 'tma.me';
+
+  function isDesktop() {
+    return !!(window.TMADesktop && window.TMADesktop.isDesktop);
+  }
+
+  function rememberMe(j) {
+    if (!isDesktop()) return;
+    try { localStorage.setItem(ME_KEY, JSON.stringify(j)); } catch (e) { /* full disk */ }
+  }
+
+  function recallMe() {
+    if (!isDesktop()) return null;
+    try { return JSON.parse(localStorage.getItem(ME_KEY)); } catch (e) { return null; }
+  }
+
   function load() {
     return api('GET', '/me').then(function (res) {
-      if (!res.ok) return null;
+      /*
+       * A real answer that is not this person — signed out, suspended. The
+       * remembered copy dies with it: falling back here would paint an
+       * account the server just refused to.
+       */
+      if (!res.ok) {
+        try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing to drop */ }
+        return null;
+      }
       return res.json().then(function (j) {
-        me = j;
-        /*
-         * Tell the store whose cache this is, before any screen reads it.
-         *
-         * A cache is scoped to an account, and until /me answers there is no
-         * account to scope it to. Signing in as somebody else from the same
-         * machine wipes what was held — warming a screen with the last
-         * reader's clients would look exactly like a permissions failure.
-         */
-        if (window.TMAStore && j && j.id != null) window.TMAStore.setAccount(j.id);
-        /*
-         * And the write queue, which scopes the same way but for a different
-         * reason: anything parked there is work this account did and has not
-         * managed to send yet. Saying who they are is also what starts the
-         * replay, so an edit made on a train reaches the server the moment
-         * the portal loads with a connection.
-         */
-        if (window.TMAQueue && j && j.id != null) window.TMAQueue.setAccount(j.id);
-        // And the other direction: collect whatever changed while this device
-        // was away. Here rather than on an onChange listener because /me is
-        // answered once a load, and a catch-up per navigation would be a
-        // round trip per page to be told nothing moved.
-        if (window.TMACipSync) window.TMACipSync.run();
-        if (j && j.toasts && window.TMAToast && window.TMAToast.applyToastPrefs) {
-          window.TMAToast.applyToastPrefs(j.toasts);
-          try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}
-        }
-        // Same idea for desktop banners: the store owns them on every shell,
-        // and this is where it learns whether the user wants them.
-        if (j && j.desktopNotifications && window.TMADesktopNotify) {
-          window.TMADesktopNotify.applyPrefs(j.desktopNotifications);
-        }
-        paint();
-        return j;
+        rememberMe(j);
+        return applyMe(j);
       });
-    }).catch(function () { return null; });
+    }).catch(function () {
+      /*
+       * Nothing answered at all — the offline case, and only that one. The
+       * server refusing lands above; this is the network being absent, where
+       * the remembered copy is not a substitute for the truth, it is the
+       * truth as of when there was last a connection.
+       */
+      var kept = recallMe();
+      return kept && kept.id != null ? applyMe(kept) : null;
+    });
   }
 
   /* ── profile picture picker ── */

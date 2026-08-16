@@ -35,6 +35,7 @@ const splash = require('./splash');
 const handoff = require('./signin-handoff');
 const assetCache = require('./asset-cache');
 const contextMenu = require('./context-menu');
+const shellCache = require('./shell-cache');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
@@ -1180,15 +1181,33 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('call:decline', declineCall);
 
     /*
-     * Before the window, so the very first load benefits. Awaited on purpose:
-     * it is one small request, and doing it after the portal has started
-     * fetching would leave the cold start — the one that matters — uncached.
+     * Before the window — and deliberately NOT awaited. The handler is live
+     * the moment install() returns; what the promise carries is verification
+     * against the deploy, which is a network round trip, and a cold start
+     * that waits on the network is the thing this whole layer exists to end.
+     * Asset requests hold for verification inside the handler; the window,
+     * and the cached shell it paints, do not.
      */
-    const assets = await assetCache.install(PORTAL_ORIGIN);
-    console.log(assets.active
-      ? `  • assets: ${assets.count}/${assets.total} served from the app`
-        + (assets.stale ? `, ${assets.stale} from the portal (changed since this build)` : '')
-      : `  • assets: using the network (${assets.reason})`);
+    const verifying = assetCache.install(PORTAL_ORIGIN);
+    verifying.then((assets) => {
+      console.log(assets.active
+        ? `  • assets: ${assets.count}/${assets.total} served from the app (${assets.mode})`
+          + (assets.stale ? `, ${assets.stale} from the portal (changed since this build)` : '')
+        : `  • assets: using the network (${assets.reason})`);
+    });
+
+    /*
+     * When a shell served from disk turns out to be the wrong one — the
+     * portal deployed, the session died, somebody else signed in — the only
+     * honest move is a fresh copy from the network. IgnoringCache, because
+     * the wrong shell may have primed the HTTP cache with the wrong assets.
+     */
+    shellCache.on({
+      stale: (reason) => {
+        console.log(`  • shell cache: reloading (${reason})`);
+        if (mainWindow) mainWindow.webContents.reloadIgnoringCache();
+      },
+    });
 
     createWindow();
     buildMenu();
