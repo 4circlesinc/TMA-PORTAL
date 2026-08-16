@@ -16,5 +16,6 @@
     },
     "dependencies": {
         "playwright": "^1.61.1"
-    }
+    },
+    "version": "0.0.1"
 }
