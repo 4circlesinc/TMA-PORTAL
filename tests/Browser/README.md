@@ -257,6 +257,15 @@ field placement and drawing, and computed CSS only exist in a browser.
   network being slow. Runs the desktop path (TMADesktop declared before
   boot) so the snapshots live in IndexedDB, as across a real quit.
 
+- **`warm-screens.mjs`** — warm-home's dead-endpoint proof, for the rest of
+  the portal: Feed (its kept post visible), Messages (no error card, no
+  loading state), Calendar (the kept grid), People (kept rows, substance
+  checked by parity with the snapshot). It creates its own feed channel and
+  post on a fresh database. Two traps it encodes: hydration must key on
+  "the server answered", because a dead fetch finishes first and marks
+  screens loaded-empty; and a raced-in error card must be cleared by the
+  snapshot that outranks it.
+
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with

@@ -1877,6 +1877,63 @@
         lastPage: state.lastPage,
       }));
     } catch (e) { /* a full or disabled sessionStorage just means a cold start */ }
+
+    /*
+     * The desktop keeps the same snapshot across a QUIT, which sessionStorage
+     * cannot: the store's disk tier holds it, and seedWarmFromStore below
+     * puts it back into sessionStorage at the next launch so every line of
+     * the machinery above works unchanged. Browsers write to the store's
+     * memory tier, which is a no-op across reloads — deliberate, and the
+     * firm's disk rule.
+     */
+    if (window.TMAStore) {
+      try {
+        window.TMAStore.put('mail:warm', JSON.parse(window.sessionStorage.getItem(MAIL_CACHE_KEY)));
+      } catch (e) { /* the session copy above still works */ }
+    }
+  }
+
+  /*
+   * A fresh launch: sessionStorage is empty, the store may not be. Re-seeding
+   * the session copy — with a fresh timestamp, because across a quit the
+   * choice is a painted inbox corrected in a second versus a skeleton, and
+   * the machinery's own TTL was written for the within-session case — lets
+   * readMailCache find it exactly as if the tab had never closed. The
+   * account stamp rides along and is still checked on read.
+   */
+  function seedWarmFromStore() {
+    if (!window.TMAStore || !window.TMAStore.persistent) return;
+    try {
+      if (window.sessionStorage.getItem(MAIL_CACHE_KEY)) return;
+    } catch (e) { return; }
+
+    window.TMAStore.get('mail:warm').then(function (kept) {
+      if (!kept || !kept.folder) return;
+      try {
+        if (window.sessionStorage.getItem(MAIL_CACHE_KEY)) return;
+        kept.at = Date.now();
+        window.sessionStorage.setItem(MAIL_CACHE_KEY, JSON.stringify(kept));
+      } catch (e) { /* cold start, as before */ }
+    });
+  }
+  /*
+   * After DCL, not at parse: the store's reads are account-scoped and the
+   * account is set during current-user.js's parse, which comes after this
+   * file's. And the guard keys on 'complete', because during deferred
+   * execution readyState is already 'interactive' while DCL has not fired —
+   * the trap that made portal-home's hydration read the anonymous scope.
+   */
+  var warmSeeded = false;
+  var seedOnce = function () {
+    if (warmSeeded) return;
+    warmSeeded = true;
+    seedWarmFromStore();
+  };
+  if (document.readyState === 'complete') {
+    seedOnce();
+  } else {
+    document.addEventListener('DOMContentLoaded', seedOnce);
+    window.addEventListener('load', seedOnce);
   }
 
   /* Start the mailbox's two boot requests as early as this file can. */

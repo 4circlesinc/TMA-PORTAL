@@ -595,7 +595,7 @@
   <script src="js/overview-activity.js?v=2" defer></script>
   <script src="js/overview-recycle.js?v=5" defer></script>
   <script src="js/overview-notifications.js?v=2" defer></script>
-  <script src="js/overview.js?v=12" defer></script>
+  <script src="js/overview.js?v=13" defer></script>
   <script src="js/table-b.js" defer></script>
   <script src="js/chart-motion.js" defer></script>
   <script src="js/account.js?v=5" defer></script>
@@ -605,7 +605,14 @@
   <script src="js/badge.js" defer></script>
   <script src="js/email-templates.js" defer></script>
   <script src="js/email-api.js?v=10" defer></script>
-  <script src="js/email.js?v=90" defer></script>
+  <!-- The store parses before everything that reads it: email's warm seed,
+       the home tiles' hydration and the replica walkers all run at parse or
+       shortly after, and a store defined three hundred lines further down is
+       a store none of them can see. -->
+  <script src="js/portal-store.js?v=3" defer></script>
+  <script src="js/portal-queue.js?v=1" defer></script>
+  <script src="js/portal-sync-status.js?v=2" defer></script>
+  <script src="js/email.js?v=91" defer></script>
   <script src="js/portal-lightbox.js?v=2" defer></script>
   <script src="js/emoji-data.js" defer></script>
   <script src="js/messaging-recorder.js" defer></script>
@@ -613,9 +620,9 @@
   <script src="js/messaging-realtime.js?v=2" defer></script>
   <script src="js/messaging-image-editor.js" defer></script>
   <script src="js/messaging-calls.js?v=3" defer></script>
-  <script src="js/messages.js?v=16" defer></script>
+  <script src="js/messages.js?v=17" defer></script>
   <script src="js/feed-api.js?v=1" defer></script>
-  <script src="js/feed.js?v=4" defer></script>
+  <script src="js/feed.js?v=5" defer></script>
   <script src="js/schedule.js" defer></script>
   <script src="js/tab-group.js?v=2" defer></script>
   <script src="js/toast-icons.js" defer></script>
@@ -629,7 +636,7 @@
   <script src="js/files-sync.js?v=2" defer></script>
   <script src="js/clients-sync.js?v=1" defer></script>
   <script src="js/clients.js?v=62" defer></script>
-  <script src="js/calendar.js?v=4" defer></script>
+  <script src="js/calendar.js?v=5" defer></script>
   <script src="js/pricing.js" defer></script>
   <script src="js/two-step-countries.js" defer></script>
   <script src="js/settings.js?v=2" defer></script>
@@ -650,7 +657,7 @@
   <script src="js/portal-projects.js" defer></script>
   <script src="js/portal-folders.js?v=2" defer></script>
   <script src="js/portal-work.js?v=2" defer></script>
-  <script src="js/portal-people.js?v=2" defer></script>
+  <script src="js/portal-people.js?v=3" defer></script>
   <script src="js/portal-admin.js?v=9" defer></script>
   <script src="js/portal-upload-manager.js?v=10" defer></script>
   <!-- The people cell and its hover card, shared by the File Library's Owner
@@ -671,9 +678,6 @@
   <script src="js/dashboard.js?v=36" defer></script>
   <script src="js/pull-refresh.js?v=1" defer></script>
   <script src="js/phone-input.js" defer></script>
-  <script src="js/portal-store.js?v=3" defer></script>
-  <script src="js/portal-queue.js?v=1" defer></script>
-  <script src="js/portal-sync-status.js?v=2" defer></script>
   <script src="js/current-user.js?v=13" defer></script>
   <script src="js/sign-out.js?v=2" defer></script>
 </body>

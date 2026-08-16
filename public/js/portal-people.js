@@ -101,6 +101,31 @@
     f.loading = true;
     f.error = null;
 
+    /*
+     * ── Warm boot ──────────────────────────────────────────────────
+     * Every People feed goes through this one function, so the warm start
+     * is one seam too: the kept list paints while the fetch below — always
+     * already running — corrects it. `f.real` (the server answered), not
+     * `f.loaded` (something finished), gates it: a dead fetch marks loaded
+     * to bring the skeleton down and must not outrank the snapshot. Mounts
+     * happen long after DCL, so the store scope is set.
+     */
+    // Prospects loads a different list per invite view under one store key —
+    // the snapshot must split the same way, or "waiting" rows warm-boot the
+    // "expired" screen.
+    var snapKey = 'people:' + key + (key === 'prospects' ? ':' + (state.inviteView || 'waiting') : '');
+
+    if (!f.real && !f.items.length && window.TMAStore) {
+      window.TMAStore.get(snapKey).then(function (snap) {
+        if (!snap || f.real || f.items.length) return;
+        f.items = snap.items || [];
+        f.extra = snap.extra || {};
+        f.loaded = true;
+        f.error = null;
+        render();
+      });
+    }
+
     return net(url)
       .then(function (d) {
         var out = pick(d || {});
@@ -109,14 +134,19 @@
         if (d && d.capabilities) state.caps = d.capabilities;
         f.loaded = true;
         f.loading = false;
+        f.real = true;
+        if (window.TMAStore) {
+          window.TMAStore.put(snapKey, { items: f.items, extra: f.extra });
+        }
         render();
       })
       .catch(function (e) {
         f.loaded = true;
         f.loading = false;
         // Keep a list that is already on screen rather than swapping it for an
-        // error because a refresh nobody requested happened to fail.
-        if (!silent) f.error = errMsg(e, 'Couldn’t load this list.');
+        // error because a refresh nobody requested happened to fail — and the
+        // warm rows count as on screen: an error card must not replace them.
+        if (!silent && !f.items.length) f.error = errMsg(e, 'Couldn’t load this list.');
         render();
       });
   }

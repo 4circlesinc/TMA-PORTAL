@@ -103,6 +103,16 @@
   var homeFilesAt = 0;
 
   /*
+   * Whether each tile's state came from the SERVER, as opposed to a failed
+   * fetch marking the tile "loaded" with nothing so the skeleton comes down.
+   * Hydration keys on this, never on the loaded flags: a dead network races
+   * the store read and loses the board otherwise — the loader fails fast,
+   * stamps loaded-empty, and a guard on "loaded" then throws the snapshot
+   * away in favour of an empty tile.
+   */
+  var homeReal = { files: false, metrics: false, staff: false, email: false, chats: false };
+
+  /*
    * ── Warm boot ─────────────────────────────────────────────────────
    *
    * Every tile below keeps its last answer in the store and starts from it.
@@ -135,7 +145,7 @@
     };
 
     window.TMAStore.get('home:files').then(function (snap) {
-      if (!snap || homeFilesLoaded) return;
+      if (!snap || homeReal.files) return;
       var s = data().state();
       s.recentFiles = snap.recentFiles || [];
       s.folders = s.folders || {};
@@ -145,14 +155,14 @@
     });
 
     window.TMAStore.get('home:metrics').then(function (snap) {
-      if (!snap || homeMetricsLoaded) return;
+      if (!snap || homeReal.metrics) return;
       homeMetrics = snap;
       homeMetricsLoaded = true;
       remount();
     });
 
     window.TMAStore.get('home:staff').then(function (snap) {
-      if (!snap || homeStaffLoaded) return;
+      if (!snap || homeReal.staff) return;
       // Presence dots a restart old are presence dots, not the truth — the
       // refresh already on its way corrects them, the same as a chat app
       // showing last-known "online" for the first breath after launch.
@@ -162,14 +172,14 @@
     });
 
     window.TMAStore.get('home:email').then(function (snap) {
-      if (!snap || homeEmailLoaded) return;
+      if (!snap || homeReal.email) return;
       homeEmail = snap;
       homeEmailLoaded = true;
       remount();
     });
 
     window.TMAStore.get('home:chats').then(function (snap) {
-      if (!snap || homeChatsLoaded) return;
+      if (!snap || homeReal.chats) return;
       homeChats = snap;
       homeChatsLoaded = true;
       remount();
@@ -564,7 +574,7 @@
       homeEmailLoaded = true;
       homeEmailAt = Date.now();
       homeEmail = payload;
-      keepWarm('email', payload);
+      if (payload && payload.real) { homeReal.email = true; keepWarm('email', payload); }
       if (changed && el && el.isConnected) mount(el, { fromLoad: true });
     }
 
@@ -575,11 +585,13 @@
       .catch(function () { return null; })
       .then(function (index) {
         if (!index) {
+          // The network failed — this is the skeleton coming down, not an
+          // answer, so it is neither kept nor allowed to outrank the kept.
           finish({ connected: true, messages: (homeEmail && homeEmail.messages) || [] });
           return null;
         }
         if (index.connected === false) {
-          finish({ connected: false, messages: [] });
+          finish({ connected: false, messages: [], real: true });
           return null;
         }
         return fetch('/portal/mail/messages?folder=inbox&perPage=25&page=1', {
@@ -590,6 +602,7 @@
           .then(function (json) {
             finish({
               connected: true,
+              real: !!json,
               messages: json && Array.isArray(json.messages) ? json.messages.slice(0, 8) : [],
             });
           });
@@ -724,7 +737,7 @@
       homeChatsLoaded = true;
       homeChatsAt = Date.now();
       homeChats = payload;
-      keepWarm('chats', payload);
+      if (payload && payload.real) { homeReal.chats = true; keepWarm('chats', payload); }
       if (changed && el && el.isConnected) mount(el, { fromLoad: true });
     }
 
@@ -743,6 +756,7 @@
         // Archived chats are off the Messages list, so they are off this tile
         // too. The server already sorts pinned first, then by recency.
         finish({
+          real: true,
           chats: json.conversations.filter(function (c) { return !c.archived; })
             .slice(0, HOME_CHAT_LIMIT),
         });
@@ -890,6 +904,7 @@
         if (json) {
           homeStaff = json;
           homeStaffAt = Date.now();
+          homeReal.staff = true;
           keepWarm('staff', json);
         } else if (!homeStaff) {
           homeStaff = { staff: true, employees: [], error: true };
@@ -1673,6 +1688,7 @@
         s.folders.favorites = favFolders.concat(favFiles);
       }
 
+      homeReal.files = true;
       keepWarm('files', {
         recentFiles: s.recentFiles || [],
         favorites: (s.folders && s.folders.favorites) || [],
@@ -1705,7 +1721,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       // A failed refresh keeps the numbers already on the cards; only the very
       // first attempt has nothing to fall back to.
-      .then(function (j) { if (j) { homeMetrics = j; homeMetricsAt = Date.now(); keepWarm('metrics', j); } })
+      .then(function (j) { if (j) { homeMetrics = j; homeMetricsAt = Date.now(); homeReal.metrics = true; keepWarm('metrics', j); } })
       .catch(function () {})
       .then(function () {
         homeMetricsInflight = null;
@@ -2169,9 +2185,38 @@
     });
   }
 
-  // Before the view registers: by the time the dashboard first mounts, the
-  // store has answered and the board paints its last-known self.
-  hydrateHomeState();
+  /*
+   * On DOMContentLoaded, not at parse — two orderings force it. The store's
+   * reads are scoped to the account, and the account is set by
+   * current-user.js, which parses AFTER this file: a read fired at parse
+   * looks under the anonymous scope and misses everything. Deferred scripts
+   * all parse before DCL fires, and the desktop's remembered /me applies
+   * synchronously during current-user's parse — so at DCL the scope is set,
+   * and the dashboard view mounts later still. (readyState guard because a
+   * deferred script can, in odd embeddings, run after DCL already fired.)
+   */
+  /*
+   * The deferred-script trap, in its precise form: while deferred scripts
+   * execute, readyState is ALREADY 'interactive' — but DOMContentLoaded has
+   * NOT fired yet; it fires after the last deferred script returns. A guard
+   * on `readyState === 'loading'` therefore runs immediately, at parse,
+   * before current-user.js (later in the order) has told the store whose
+   * scope to read — and every get() misses. 'complete' is the only state
+   * that proves DCL is in the past. Both listeners, once-guarded, cover the
+   * sliver between DCL and load.
+   */
+  var hydrated = false;
+  var hydrateOnce = function () {
+    if (hydrated) return;
+    hydrated = true;
+    hydrateHomeState();
+  };
+  if (document.readyState === 'complete') {
+    hydrateOnce();
+  } else {
+    document.addEventListener('DOMContentLoaded', hydrateOnce);
+    window.addEventListener('load', hydrateOnce);
+  }
 
   if (window.TMAPortalViews) window.TMAPortalViews.register('dashboard', mount);
 

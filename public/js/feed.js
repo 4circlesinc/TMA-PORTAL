@@ -373,6 +373,22 @@
         state.hasMore = !!data.hasMore;
         state.cursor = data.cursor;
         state.error = null;
+        state.real = true;
+        /*
+         * Warm boot keeps the plain first page of the stream — the screen a
+         * launch lands on. A search, a filter or a page deep in history is a
+         * place someone navigated to, not where they will land next time.
+         */
+        if (!append && !state.search && window.TMAStore) {
+          window.TMAStore.put('feed:warm', {
+            channelId: state.channelId || '',
+            view: state.view,
+            posts: (state.posts || []).slice(0, 10),
+            pinned: state.pinned || [],
+            channels: state.channels || [],
+            viewer: state.viewer || null,
+          });
+        }
       })
       .catch(function (err) {
         if (err.name === 'AbortError') return;
@@ -4261,6 +4277,35 @@
 
     render();
 
+    /*
+     * ── Warm boot ──────────────────────────────────────────────────
+     * The stream paints its kept first page while the loadViewer chain —
+     * which was always going to run — fetches the truth. Gated on the
+     * server not having answered yet (`state.real`), not on emptiness: a
+     * dead network fills nothing but still finishes the chain. A deep link
+     * skips it — someone following a notification means to land on that
+     * post, and the kept page may not hold it. Mount runs well after DCL,
+     * so the account scope is set and no readiness dance is needed.
+     */
+    if (window.TMAStore && !deepLink) {
+      window.TMAStore.get('feed:warm').then(function (snap) {
+        if (!snap || state.real || state.posts.length) return;
+        state.channels = snap.channels || [];
+        state.viewer = snap.viewer || state.viewer;
+        state.channelId = snap.channelId || state.channelId;
+        state.view = snap.view || state.view;
+        state.channel = state.channelId ? findChannel(state.channelId) : null;
+        state.posts = snap.posts || [];
+        state.pinned = snap.pinned || [];
+        state.loading = false;
+        state.postsLoading = false;
+        // The dead boot may have raced its error card in ahead of this
+        // snapshot; the kept rows outrank it.
+        state.error = null;
+        render();
+      });
+    }
+
     // Who is asking, then what they left open, then the data. The order
     // matters: the memory is keyed by account.
     loadViewer()
@@ -4297,7 +4342,12 @@
       })
       .catch(function (err) {
         state.loading = false;
-        state.error = (err && err.message) || 'The Feed could not be loaded.';
+        // Warm rows already painted beat an error card — they are the last
+        // known truth, and the failed boot that lands here offline was never
+        // going to say anything truer.
+        if (!state.posts.length) {
+          state.error = (err && err.message) || 'The Feed could not be loaded.';
+        }
         render();
       });
   }

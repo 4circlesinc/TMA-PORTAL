@@ -75,8 +75,12 @@ try {
 
   step(2, 'Reload with every data endpoint dead');
   // The document and static assets still serve (the desktop's shell and
-  // bundle would); the DATA cannot. Anything painted is the store's doing.
-  await context.route(/\/(me$|portal\/(mail|messaging|dashboard)\b)/, (route) => route.abort());
+  // bundle would); the DATA cannot — every /portal/* call and /me are killed.
+  // The first version of this test only killed four endpoints and passed
+  // while hydration was completely broken: the untouched files listing
+  // painted the one tile it checked, and dead tiles render EMPTY, not
+  // skeleton. Nothing may answer, and the tiles must still show substance.
+  await context.route(/\/(me$|me\/|portal\/)/, (route) => route.abort());
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
@@ -99,11 +103,26 @@ try {
     const snap = await window.TMAStore.get('home:files');
     return snap && snap.recentFiles && snap.recentFiles[0] ? snap.recentFiles[0].name : null;
   });
+  check(!!held, 'the files snapshot has rows to show (hydration read the right scope)');
   if (held) {
-    check((await body()).includes(held), `the recent-files tile shows its held rows ("${held}")`);
-  } else {
-    console.log('    (no recent files in this database — row check skipped)');
+    const shown = (await body()).includes(held);
+    if (!shown) {
+      console.log('DBG state.recentFiles:', await page.evaluate(() =>
+        (window.TMAPortalData.state().recentFiles || []).map(f => f.name).join(' | ')));
+      console.log('DBG tile text:', await page.evaluate(() => {
+        const t = document.querySelector('[data-home-tile="recentFiles"], .tma-portal-home-grid');
+        return t ? t.innerText.slice(0, 300) : '(no tile)';
+      }));
+    }
+    check(shown, `the recent-files tile shows its held rows ("${held}")`);
   }
+
+  // And the KPI row: numbers, not the em-dashes a dead fetch falls back to.
+  const metrics = await page.evaluate(async () => {
+    const snap = await window.TMAStore.get('home:metrics');
+    return !!(snap && Object.keys(snap).length);
+  });
+  check(metrics, 'the metrics snapshot survived into the dead reload');
 } catch (err) {
   failures.push(`threw: ${err.message}`);
   console.error(err);

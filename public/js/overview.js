@@ -82,6 +82,67 @@
   var SIGNINS_STATE = 'loading';
   var ROOT = window.__TMA_SITE_ROOT || '';
 
+  /* Whether the server has answered this session. Warm boot keys on this,
+     never on the panels having content — a dead fetch leaves them empty. */
+  var OVERVIEW_REAL = false;
+
+  /* The mounted container, so a snapshot resolving after mount repaints. */
+  var OVERVIEW_CONTAINER = null;
+
+  /*
+   * ── Warm boot ────────────────────────────────────────────────────
+   * Overview paints its last-known panels and lets refreshOverviewData —
+   * which was always going to run — correct them silently. The road and the
+   * work plan are day-keyed, so they only hydrate onto the same day they
+   * were kept for: yesterday's road under today's date is a wrong screen,
+   * not a warm one. Post-DCL for the account scope; 'complete' guard for
+   * the deferred-readyState trap. Desktop-persistent, browser-memory.
+   */
+  function keepOverviewWarm() {
+    if (!window.TMAStore) return;
+    window.TMAStore.put('overview:warm', {
+      day: dateKeyOf(new Date()),
+      road: ROAD,
+      roadEvents: ROAD_EVENTS,
+      files: FILES,
+      metrics: METRICS,
+      workPlan: WORK_PLAN,
+      signIns: SIGNINS,
+    });
+  }
+
+  function hydrateOverview() {
+    if (!window.TMAStore) return;
+    window.TMAStore.get('overview:warm').then(function (snap) {
+      if (!snap || OVERVIEW_REAL) return;
+      FILES = snap.files || [];
+      METRICS = snap.metrics || null;
+      SIGNINS = snap.signIns || [];
+      SIGNINS_STATE = SIGNINS.length ? 'ready' : SIGNINS_STATE;
+      if (snap.day === dateKeyOf(new Date())) {
+        ROAD = snap.road || [];
+        ROAD_EVENTS = snap.roadEvents || [];
+        WORK_PLAN = snap.workPlan || null;
+      }
+      if (OVERVIEW_CONTAINER && OVERVIEW_CONTAINER.isConnected && !OVERVIEW_REAL) {
+        remountOverviewGrid(OVERVIEW_CONTAINER, 'Overview');
+      }
+    });
+  }
+
+  var overviewHydrated = false;
+  function hydrateOverviewOnce() {
+    if (overviewHydrated) return;
+    overviewHydrated = true;
+    hydrateOverview();
+  }
+  if (document.readyState === 'complete') {
+    hydrateOverviewOnce();
+  } else {
+    document.addEventListener('DOMContentLoaded', hydrateOverviewOnce);
+    window.addEventListener('load', hydrateOverviewOnce);
+  }
+
   function apiGet(url) {
     return fetch(ROOT + url, {
       credentials: 'same-origin',
@@ -930,6 +991,12 @@
       loadWorkPlan(),
       loadSignIns(),
     ]).then(function () {
+      // Metrics answering is the tell that the server, not a dead network,
+      // produced this state — a failed apiGet resolves null everywhere.
+      if (METRICS || FILES.length || SIGNINS.length) {
+        OVERVIEW_REAL = true;
+        keepOverviewWarm();
+      }
       var current = container.querySelector('[role="tab"][aria-selected="true"]');
       var tab = (current && current.getAttribute('data-overview-tab')) || 'Overview';
       if (tab === 'Overview') remountOverviewGrid(container, 'Overview');
@@ -1015,6 +1082,7 @@
     if (activeTab === 'Recycle Bin') mountRecycleTab(container);
     setActiveTab(container, activeTab);
 
+    OVERVIEW_CONTAINER = container;
     refreshOverviewData(container);
 
     // /me may resolve after first paint — reveal the admin-only tabs then.

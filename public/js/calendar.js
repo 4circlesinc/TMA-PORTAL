@@ -359,10 +359,40 @@
     state.error = null;
     render();
 
+    /*
+     * ── Warm boot ──────────────────────────────────────────────────
+     * While the real load runs, the kept grid paints: last session's
+     * calendars and events for whatever window they were kept from. Gated
+     * on the server not having answered (`state.real`) so a snapshot can
+     * never overwrite fresh truth, and skipped for background refreshes,
+     * which by definition already have a painted grid. The load that is
+     * already in flight corrects everything silently.
+     */
+    if (!background && !state.real && window.TMAStore) {
+      window.TMAStore.get('calendar:warm').then(function (snap) {
+        if (!snap || state.real) return;
+        state.calendars = snap.calendars || state.calendars;
+        state.events = snap.events || state.events;
+        state.workDays = snap.workDays || state.workDays;
+        state.workStatuses = snap.workStatuses || state.workStatuses;
+        state.loading = false;
+        render();
+      });
+    }
+
     return Promise.all([loadCalendars(), loadEvents(), loadWorkPlan()])
       .then(function () {
         state.loading = false;
         state.refreshing = false;
+        state.real = true;
+        if (window.TMAStore) {
+          window.TMAStore.put('calendar:warm', {
+            calendars: state.calendars,
+            events: state.events,
+            workDays: state.workDays,
+            workStatuses: state.workStatuses,
+          });
+        }
         render();
       })
       .catch(function (err) {

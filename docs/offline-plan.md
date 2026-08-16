@@ -88,7 +88,16 @@ paints from its remembered copy before the network answers, and avatars
 joined the desktop byte cache — so a quit-and-reopen shows the board exactly
 as it was, data refreshing silently behind, no skeletons
 (`tests/Browser/warm-home.mjs` proves it by killing every data endpoint).
-Browsers still get the error page on a no-network reload.* Three pieces (16 Aug 2026): `desktop/shell-cache.js` keeps
+Browsers still get the error page on a no-network reload. Warm boot then
+went portal-wide (16 Aug, late): Messages' conversation list, the Feed's
+first page, Overview's panels (road and work plan only onto the day they
+were kept for), the Calendar grid, every People feed at its one load() seam,
+and the mailbox — whose existing sessionStorage warm start now writes
+through the store and re-seeds itself across a quit. Every screen keys its
+hydration on "the server answered" (`real`), never on "something finished":
+a dead network marks tiles loaded-empty to bring the skeleton down, and a
+guard on loaded throws the snapshot away — the race warm-screens.mjs exists
+to catch. And everywhere, stale rows beat an error card.* Three pieces (16 Aug 2026): `desktop/shell-cache.js` keeps
 the last served shell — capabilities inlined — and answers navigations from
 disk before the network has said a word, gated on a session cookie, the
 deploy build, and `/me` watchdogs for a dead session or a changed account.

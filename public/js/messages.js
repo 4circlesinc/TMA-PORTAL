@@ -120,7 +120,52 @@
     limits: {},
     loaded: false,
     loadError: null,
+    // Whether the SERVER has answered this session — as opposed to `loaded`,
+    // which also goes true when a fetch fails so the spinner can come down.
+    // Warm boot keys on this: a dead network must not outrank the snapshot.
+    real: false,
   };
+
+  /* Set by mount, so a warm snapshot landing after the view is up repaints
+     it. Before mount there is nothing to repaint — the first render reads
+     the hydrated STORE by itself. */
+  var warmRerender = null;
+
+  /*
+   * ── Warm boot ────────────────────────────────────────────────────
+   * The conversation list opens the way it was quit: rows, names, previews
+   * and unread counts from the store's snapshot, corrected silently by the
+   * fetch that was always going to run. Desktop-persistent, browser-memory —
+   * the standing split. Runs after DCL because the store's reads are scoped
+   * to the account current-user.js sets, and during deferred execution
+   * readyState is already 'interactive' while DCL has not fired (the trap).
+   */
+  function hydrateMessages() {
+    if (!window.TMAStore) return;
+    window.TMAStore.get('messages:warm').then(function (snap) {
+      if (!snap || STORE.real || STORE.loaded) return;
+      STORE.threads = snap.threads || [];
+      STORE.me = snap.me || null;
+      STORE.settings = snap.settings || {};
+      STORE.tabCounts = snap.tabCounts || {};
+      STORE.loaded = true;
+      STORE.loadError = null;
+      if (warmRerender) warmRerender();
+    });
+  }
+
+  var messagesHydrated = false;
+  var hydrateMessagesOnce = function () {
+    if (messagesHydrated) return;
+    messagesHydrated = true;
+    hydrateMessages();
+  };
+  if (document.readyState === 'complete') {
+    hydrateMessagesOnce();
+  } else {
+    document.addEventListener('DOMContentLoaded', hydrateMessagesOnce);
+    window.addEventListener('load', hydrateMessagesOnce);
+  }
 
   function getThreads() {
     return STORE.threads;
@@ -5337,6 +5382,18 @@
         STORE.limits = data.limits || {};
         STORE.loaded = true;
         STORE.loadError = null;
+        STORE.real = true;
+
+        if (window.TMAStore) {
+          window.TMAStore.put('messages:warm', {
+            // Capped: the list shows what fits a screen, and the fetch that
+            // follows a warm boot brings the rest within a second.
+            threads: (STORE.threads || []).slice(0, 30),
+            me: STORE.me,
+            settings: STORE.settings,
+            tabCounts: STORE.tabCounts,
+          });
+        }
 
         // Needs STORE.me and STORE.realtime, so it cannot happen at boot.
         // Guarded internally, so calling it on every load is free.
@@ -5377,9 +5434,15 @@
       })
       .catch(function (err) {
         STORE.loaded = true;
-        STORE.loadError = err;
+        // Rows already on screen — the warm snapshot, or a previous answer —
+        // beat an error card: they are the last known truth, and replacing
+        // them with "could not be loaded" because a refresh failed is the
+        // File Library lesson unlearned.
+        if (!(STORE.threads || []).length) STORE.loadError = err;
         render();
-        if (!options.silent) showMessagesToast(root, 'Conversations could not be loaded');
+        if (!options.silent && !(STORE.threads || []).length) {
+          showMessagesToast(root, 'Conversations could not be loaded');
+        }
       });
   }
 
@@ -8859,6 +8922,8 @@
       return;
     }
     root._messagesMounted = true;
+    // A warm snapshot resolving after this point repaints the mounted list.
+    warmRerender = render;
 
     var mobileMq = window.matchMedia(MESSAGES_MOBILE_MQ);
     function onMobileBreakpoint() {
