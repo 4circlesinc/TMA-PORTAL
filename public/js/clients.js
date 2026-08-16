@@ -5412,6 +5412,9 @@
     }
 
     bind('[data-clients-row]', 'client', 'data-clients-row');
+    // §8's table draws its own rows, so they carry their own hook — but the
+    // menu, its actions and its permissions are the ones every other row uses.
+    bind('[data-cip-open]', 'application', 'data-cip-open');
     bind('[data-clients-open-company]', 'company', 'data-clients-open-company');
   }
 
@@ -5879,7 +5882,15 @@
   function clientsContextItems(kind) {
     var items = [
       { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
-      { act: 'edit', label: 'Edit', icon: 'PencilSimple' },
+      // On §8's table the row IS an application, so Edit means the
+      // application — the client's contact form is a different record and
+      // sending somebody there from here would be answering a question they
+      // did not ask.
+      {
+        act: 'edit',
+        label: kind === 'application' ? 'Edit application' : 'Edit',
+        icon: 'PencilSimple',
+      },
     ];
     if (kind === 'company') items.push({ act: 'add-person', label: 'Add person', icon: 'Plus' });
     // Assigning staff is `clients.assign` — the same capability the server
@@ -6084,6 +6095,24 @@
     if (!ctx) return;
     var state = ctx.state;
     var navigate = ctx.navigate;
+
+    /*
+     * An application row is addressed by its client for everything except the
+     * edit, which belongs to the application. Opening, assigning and deleting
+     * are all questions about the person the application is for, and the hub
+     * already answers them — this only says which record is being pointed at.
+     */
+    if (kind === 'application') {
+      if (act === 'edit') {
+        var row = (APP_TABLE.rows || []).filter(function (a) { return a.clientUid === id; })[0];
+        if (row) {
+          state.selectedId = id;
+
+          return navigate('edit-application', null, { applicationId: row.id });
+        }
+      }
+      kind = 'client';
+    }
 
     if (kind === 'company') {
       if (act === 'open') return navigate('company', null, { companyId: id });
