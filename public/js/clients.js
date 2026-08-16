@@ -3556,13 +3556,13 @@
       '" alt="Passport photo of ' + esc(person.name || 'the applicant') + '" width="168" height="168">';
 
     /*
-     * Opened in the shared lightbox, because it is a file.
+     * Opened in the File Library's viewer, because it is a library file.
      *
      * The photo is filed into the person's folder like every other document
-     * on the application, so looking at it should be the viewer the rest of
-     * the portal uses — with the filename, the size and a download — rather
-     * than a tab of loose bytes. What is drawn here is still the 320px
-     * avatar; the lightbox is handed the file.
+     * on the application, so it opens the same window the library opens —
+     * comments, versions, review, sharing, the lot — the same way the client's
+     * Documents tab does. What is drawn on the page is still the 320px avatar;
+     * the viewer is handed the file row.
      */
     var opens = person.photoFile ? ' data-cip-photo="' + esc(person.id) + '"' : '';
 
@@ -3587,24 +3587,23 @@
     return [app.applicant, app.sponsor].concat(app.dependents || []).filter(Boolean);
   }
 
-  function openCipPhoto(state, personId) {
+  function openCipPhoto(state, personId, render) {
     var person = cipPeople(state).filter(function (p) { return p.id === personId; })[0];
     var file = person && person.photoFile;
     if (!file) return;
 
-    if (!window.TMAPortalLightbox || typeof TMAPortalLightbox.open !== 'function') {
-      window.open(file.previewUrl || file.downloadUrl, '_blank', 'noopener');
+    if (window.TMAFileActions && window.TMAFileActions.open) {
+      // A new photo filed from the viewer is a new version of this file, and
+      // the face on the page is derived from it — so read the application back.
+      window.TMAFileActions.open(file, function () {
+        delete APPLICATIONS[state.selectedId];
+        ensureApplicationLoaded(state, render);
+      });
       return;
     }
 
-    TMAPortalLightbox.open([{
-      name: file.name,
-      mime: file.mime || 'image/jpeg',
-      size: file.size || 0,
-      url: file.previewUrl || file.downloadUrl,
-      downloadUrl: file.downloadUrl,
-      canDownload: true,
-    }], 0);
+    // No viewer on this shell — the old behaviour beats doing nothing.
+    window.open(file.previewUrl || file.downloadUrl, '_blank', 'noopener');
   }
 
   /* What this person owes, and what they have handed over. */
@@ -6464,7 +6463,7 @@
 
     MORPH.unwired(root, '[data-cip-photo]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
-        openCipPhoto(state, btn.getAttribute('data-cip-photo'));
+        openCipPhoto(state, btn.getAttribute('data-cip-photo'), render);
       });
     });
   }

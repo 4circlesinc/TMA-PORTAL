@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\FileItem;
+use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
@@ -16,6 +18,7 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Status;
+use App\Support\Files\Presenter;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -72,7 +75,7 @@ class CipApplicationController extends Controller
         Live::staff(Live::CIP);
 
         return response()->json([
-            'application' => $this->record($application),
+            'application' => $this->record($application, $user),
         ], 201);
     }
 
@@ -81,7 +84,9 @@ class CipApplicationController extends Controller
     {
         $application = ApplicationScope::findOrFail($request->user(), $uuid);
 
-        return response()->json(['application' => $this->record($application)]);
+        return response()->json([
+            'application' => $this->record($application, $request->user()),
+        ]);
     }
 
     /**
@@ -115,7 +120,7 @@ class CipApplicationController extends Controller
             ->first();
 
         return response()->json([
-            'application' => $application ? $this->record($application) : null,
+            'application' => $application ? $this->record($application, $user) : null,
         ]);
     }
 
@@ -138,7 +143,7 @@ class CipApplicationController extends Controller
 
         Live::staff(Live::CIP);
 
-        return response()->json(['application' => $this->record($application)]);
+        return response()->json(['application' => $this->record($application, $user)]);
     }
 
     /**
@@ -162,11 +167,28 @@ class CipApplicationController extends Controller
         ]);
     }
 
-    private function record($application): array
+    private function record($application, User $viewer): array
     {
         // The slots' files as well as the slots: the checklist only needs to
         // know a slot is answered, but the passport photo is opened from here.
         $application->loadMissing(['provider', 'people.documents.file']);
+
+        /*
+         * One presenter for the whole family, primed once.
+         *
+         * Presenter::file() rolls up shares, review status and favourites,
+         * and unprimed it does that per file — six people would be six sets
+         * of the same queries. Priming asks once for all of them.
+         */
+        $photos = $application->people
+            ->map(fn (CipPerson $p) => $this->photoFileModel($p))
+            ->filter()
+            ->values()
+            ->all();
+
+        $presenter = new Presenter($viewer);
+        $presenter->prime($photos, []);
+
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
         // Numbered first and in their number, then the unnumbered — a spouse
@@ -201,9 +223,9 @@ class CipApplicationController extends Controller
             'sponsored' => (bool) $application->sponsored,
             'familySize' => $application->familySize(),
             'familyLabel' => $application->familyLabel(),
-            'applicant' => $main ? $this->person($main) : null,
-            'sponsor' => $sponsor ? $this->person($sponsor) : null,
-            'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p))->all(),
+            'applicant' => $main ? $this->person($main, $presenter) : null,
+            'sponsor' => $sponsor ? $this->person($sponsor, $presenter) : null,
+            'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter))->all(),
             'createdAt' => $application->created_at?->toIso8601String(),
         ];
     }
@@ -215,8 +237,10 @@ class CipApplicationController extends Controller
      * asked for, and a sponsor that described itself differently from an
      * applicant would mean two ways to read the same person.
      */
-    private function person(CipPerson $person): array
+    private function person(CipPerson $person, Presenter $presenter): array
     {
+        $photoFile = $this->photoFileModel($person);
+
         return [
             'id' => $person->uuid,
             'role' => $person->role,
@@ -241,11 +265,18 @@ class CipApplicationController extends Controller
             'passportPhotoUrl' => $person->photo_path
                 ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
                 : null,
-            // The photo as it was filed: a file in the person's folder, which
-            // is what opening it should show. The avatar is a 320px crop of
-            // it and the archival endpoint is bytes with no name, size or
-            // download — neither is the thing a viewer asked to look at.
-            'photoFile' => $this->photoFile($person),
+            /*
+             * The photo as it was filed, in the File Library's own shape.
+             *
+             * It IS a library file — DocumentSlots puts it in the person's
+             * folder through Vault like every other document — so opening it
+             * opens the library's viewer, with the comments, versions, review
+             * and sharing that come with it. That viewer reads a whole file
+             * row, so this is the same row the library would have handed it,
+             * built by the same presenter rather than a hand-rolled subset
+             * that would quietly lose a button.
+             */
+            'photoFile' => $photoFile ? $presenter->file($photoFile) : null,
             'documents' => $person->documents->map(fn ($slot) => [
                 'type' => $slot->type,
                 'label' => $slot->label,
@@ -256,32 +287,10 @@ class CipApplicationController extends Controller
         ];
     }
 
-    /**
-     * The passport photo's file record, for the viewer that opens it.
-     *
-     * Enough to open in the shared lightbox and no more — the same handful of
-     * keys the file library hands it. The permission check is the file
-     * routes' own: this says where the file is, not that you may read it, and
-     * a reader who may not gets the same refusal they would get anywhere else
-     * in the portal.
-     */
-    private function photoFile(CipPerson $person): ?array
+    /** The file filling this person's passport-photo slot, if it is filled. */
+    private function photoFileModel(CipPerson $person): ?FileItem
     {
-        $slot = $person->documents
-            ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO);
-
-        $file = $slot?->file;
-        if (! $file) {
-            return null;
-        }
-
-        return [
-            'id' => $file->uuid,
-            'name' => $file->name,
-            'mime' => $file->mime_type,
-            'size' => (int) $file->size,
-            'previewUrl' => route('files.preview', $file->uuid),
-            'downloadUrl' => route('files.download', $file->uuid),
-        ];
+        return $person->documents
+            ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO)?->file;
     }
 }
