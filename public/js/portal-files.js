@@ -2563,93 +2563,28 @@
     }
 
     /**
+     * The review picker, from the panel's own button.
+     *
+     * The states, the PATCH and the picker itself are shared with the row
+     * menu — see openReviewStatusMenu. All this adds is where it hangs and
+     * what to repaint: the panel first, then the list behind it, because
+     * closing the viewer must not reveal a row still showing the badge this
+     * just changed.
+     */
+    function openReviewMenu(anchor) {
+      var box = anchor.getBoundingClientRect();
+
+      openReviewStatusMenu(box.left, box.bottom + 4, current(), function () {
+        paintPanel();
+        load(true);
+      });
+    }
+
+    /**
      * Uploading a new version. The note is asked for BEFORE the bytes go up,
      * because §5 wants the reason recorded — and asking afterwards means a
      * large upload finishes with nothing to say about it.
      */
-    /**
-     * Move a client document to the next review state.
-     *
-     * A rejection asks for a reason before it goes, because the server refuses
-     * one without it — and finding that out through an error message after the
-     * click would be the interface hiding a rule it could have just asked
-     * about. Every other move goes straight through.
-     */
-    /* The states, in the order the process runs. */
-    var REVIEW_STATES = [
-      { id: 'pending_review', label: 'Pending review', icon: 'Clock' },
-      { id: 'under_review', label: 'Under review', icon: 'Eye' },
-      { id: 'awaiting_approval', label: 'Awaiting approval', icon: 'PaperPlaneTilt' },
-      { id: 'changes_requested', label: 'Changes requested', icon: 'ArrowUUpLeft' },
-      { id: 'approved', label: 'Approved', icon: 'CheckCircle' },
-      { id: 'rejected', label: 'Rejected', icon: 'X' },
-    ];
-
-    /**
-     * The status picker, on the portal's own menu.
-     *
-     * All four are listed, current one included: leaving it out makes the list
-     * shorter than the thing it describes, and the reader has to remember what
-     * is missing to know where they are. It carries a tick and does nothing
-     * instead.
-     */
-    function openReviewMenu(anchor) {
-      var r = current().review || {};
-
-      var list = REVIEW_STATES.map(function (s) {
-        var isCurrent = s.id === r.status;
-
-        return {
-          label: s.label + (isCurrent ? ' ✓' : ''),
-          icon: s.icon,
-          fn: isCurrent ? function () {} : function () { setReviewStatus(s.id); },
-        };
-      });
-
-      var box = anchor.getBoundingClientRect();
-      openContextMenu(box.left, box.bottom + 4, current(), list);
-    }
-
-    function setReviewStatus(status) {
-      var f = current();
-
-      var send = function (note) {
-        net().fetchJSON(net().url('/files/' + encodeURIComponent(f.id) + '/review'), {
-          method: 'PATCH',
-          json: { status: status, note: note || '' },
-        })
-          .then(function (res) {
-            // The panel, then the list behind it — closing the viewer must not
-            // reveal a row still showing the badge this just changed.
-            f.review = (res && res.file && res.file.review) || f.review;
-            f.status = (res && res.file && res.file.status) || f.status;
-            paintPanel();
-            load(true);
-            ui().toast('Review updated.');
-          })
-          .catch(function (err) {
-            ui().toast((err && err.message) || 'Could not update the review.', false);
-          });
-      };
-
-      if (status !== 'rejected') return send('');
-
-      confirmModal({
-        title: 'Reject this document',
-        message: 'The uploader will see why it was rejected.',
-        prompt: { label: 'Reason', placeholder: 'e.g. Expired — please send a current copy' },
-        confirmLabel: 'Reject',
-        onConfirm: function (note) {
-          if (!String(note || '').trim()) {
-            ui().toast('Say why the document is being rejected.', false);
-
-            return;
-          }
-          send(note);
-        },
-      });
-    }
-
     function pickNewVersion() {
       var input = lb.querySelector('[data-lb-versionfile]');
       if (input) input.click();
@@ -4839,6 +4774,98 @@
     openAppearanceModal(sel[0]);
   }
 
+  /*
+   * A client document's review, from anywhere that lists one.
+   *
+   * The states and the PATCH used to live inside the viewer, which meant the
+   * only way to move a document on was to open it. It is one field with a
+   * fixed set of values and one endpoint, so it lives out here and the viewer
+   * and the row menu both call it.
+   */
+
+  /* The states, in the order the process runs. */
+  var REVIEW_STATES = [
+    { id: 'pending_review', label: 'Pending review', icon: 'Clock' },
+    { id: 'under_review', label: 'Under review', icon: 'Eye' },
+    { id: 'awaiting_approval', label: 'Awaiting approval', icon: 'PaperPlaneTilt' },
+    { id: 'changes_requested', label: 'Changes requested', icon: 'ArrowUUpLeft' },
+    { id: 'approved', label: 'Approved', icon: 'CheckCircle' },
+    { id: 'rejected', label: 'Rejected', icon: 'X' },
+  ];
+
+  /* Only a document actually in a review, and only for a reader who may move
+     it — the same two conditions the viewer's panel has always applied. */
+  function canReview(item) {
+    return !!(item && item.type !== 'folder' && item.review && item.review.status && item.review.canReview);
+  }
+
+  /**
+   * Move a document to a review state.
+   *
+   * A rejection asks for a reason before it goes, because the server refuses
+   * one without it — and finding that out through an error message after the
+   * click would be the interface hiding a rule it could have just asked about.
+   * Every other move goes straight through.
+   */
+  function setItemReviewStatus(item, status, onDone) {
+    var send = function (note) {
+      net().fetchJSON(net().url('/files/' + encodeURIComponent(item.id) + '/review'), {
+        method: 'PATCH',
+        json: { status: status, note: note || '' },
+      })
+        .then(function (res) {
+          // Written back onto the row the caller holds, so a list that keeps
+          // its own copy is not left showing the badge this just changed.
+          item.review = (res && res.file && res.file.review) || item.review;
+          item.status = (res && res.file && res.file.status) || item.status;
+          if (onDone) onDone(res);
+          ui().toast('Review updated.');
+        })
+        .catch(function (err) {
+          ui().toast((err && err.message) || 'Could not update the review.', false);
+        });
+    };
+
+    if (status !== 'rejected') return send('');
+
+    confirmModal({
+      title: 'Reject this document',
+      message: 'The uploader will see why it was rejected.',
+      prompt: { label: 'Reason', placeholder: 'e.g. Expired — please send a current copy' },
+      confirmLabel: 'Reject',
+      onConfirm: function (note) {
+        if (!String(note || '').trim()) {
+          ui().toast('Say why the document is being rejected.', false);
+
+          return;
+        }
+        send(note);
+      },
+    });
+  }
+
+  /**
+   * The status picker, on the portal's own menu.
+   *
+   * All of them are listed, current one included: leaving it out makes the
+   * list shorter than the thing it describes, and the reader has to remember
+   * what is missing to know where they are. It carries a tick and does
+   * nothing instead.
+   */
+  function openReviewStatusMenu(x, y, item, onDone) {
+    var current = (item.review || {}).status;
+
+    openContextMenu(x, y, item, REVIEW_STATES.map(function (s) {
+      var isCurrent = s.id === current;
+
+      return {
+        label: s.label + (isCurrent ? ' ✓' : ''),
+        icon: s.icon,
+        fn: isCurrent ? function () {} : function () { setItemReviewStatus(item, s.id, onDone); },
+      };
+    }));
+  }
+
   function contextItems(item) {
     var list = [];
     var isFolder = item.type === 'folder';
@@ -4891,6 +4918,23 @@
       list.push({ label: 'Make default folder', icon: 'Buildings', fn: function () { makeDefaultFolder(item); } });
     }
     list.push({ sep: true });
+    /*
+     * Moving a document's review on without opening it.
+     *
+     * The reviewer's job is a queue of rows, and the status was reachable only
+     * from inside the viewer — so approving five documents meant opening and
+     * closing five of them. It opens the same picker the viewer's panel opens,
+     * in place of this menu, and reloads the list behind it.
+     */
+    if (canReview(item)) {
+      list.push({
+        label: 'Change status',
+        icon: 'SealCheck',
+        fn: function (x, y) {
+          openReviewStatusMenu(x, y, item, function () { load(true); notifyExternal(); });
+        },
+      });
+    }
     list.push({ label: 'View details', icon: 'Info', fn: function () { openDetails(item); } });
     if (perm(item, 'delete')) list.push({ label: 'Delete', icon: 'Trash', danger: true, fn: function () { deleteItem(item); } });
     return list;
@@ -4932,8 +4976,12 @@
       var b = e.target.closest('[data-ctx]');
       if (!b || b.disabled) return;
       var picked = list[parseInt(b.getAttribute('data-ctx'), 10)];
+      // Where the entry was, for anything that opens a second menu in place
+      // of this one — a submenu that appeared at the pointer would land
+      // wherever the reader's mouse had drifted to instead.
+      var at = b.getBoundingClientRect();
       closeContextMenu();
-      if (picked && picked.fn) picked.fn();
+      if (picked && picked.fn) picked.fn(at.left, at.top);
     });
 
     setTimeout(function () {
