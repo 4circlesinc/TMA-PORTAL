@@ -227,6 +227,16 @@ field placement and drawing, and computed CSS only exist in a browser.
   which is what the test is about. Standard throwaway server; leaves a
   renamed folder behind.
 
+- **`clients-cached-directory.mjs`** — the client directory painting from the
+  store, `files-cached-listing.mjs`'s three promises for the hub that carries
+  eleven thousand records. Asserted against `TMAClients.hasContact` and the
+  store, not the pixels — which table a client appears in is the application
+  table's business, and a client with no application has no row there. Writes
+  go through `TMAClients.api` (the hub's own layer), which is what proves the
+  invalidation seam is real. It also pins the store's anonymous-scope claim:
+  the directory is often fetched before /me answers, and without
+  `claimAnonymous` the entry lands under `anon::` and is never found again.
+
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with

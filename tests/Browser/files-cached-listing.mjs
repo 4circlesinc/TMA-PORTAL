@@ -81,6 +81,7 @@ try {
   await until(() => page.evaluate(() => !!(window.TMAFilesNet && window.TMAStore)));
 
   const stamp = `Cached ${Date.now().toString(36)}`;
+const renamed = `${stamp} renamed`;
   const made = await page.evaluate(async (name) => {
     const res = await window.TMAFilesNet.fetchJSON(window.TMAFilesNet.url('/folders'), {
       method: 'POST', json: { name },
@@ -116,17 +117,17 @@ try {
   await context.setOffline(false);
 
   step(4, 'A write empties the cache through the seam');
-  const dropped = await page.evaluate(async ({ id, key }) => {
+  const dropped = await page.evaluate(async ({ id, key, renamed }) => {
     await window.TMAFilesNet.fetchJSON(window.TMAFilesNet.url('/folders/' + id), {
-      method: 'PATCH', json: { name: 'Renamed by the seam' },
+      method: 'PATCH', json: { name: renamed },
     });
     return window.TMAStore.peek(key) === undefined;
-  }, { id: made, key: LISTING_KEY });
+  }, { id: made, key: LISTING_KEY, renamed });
   check(dropped, 'the cached listing is gone the moment the write lands');
 
   // And the refetch it forces shows the new name, not the cached old one.
   await page.reload({ waitUntil: 'domcontentloaded' });
-  check(await until(async () => (await listing()).includes('Renamed by the seam')),
+  check(await until(async () => (await listing()).includes(renamed)),
     'the next visit shows the rename');
 } catch (err) {
   failures.push(`threw: ${err.message}`);

@@ -167,7 +167,14 @@ try {
 
   step(2, 'Open it for editing, with a connection');
   await page.goto(`${BASE}/clients/${filed.clientUid}`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-clients-edit-application]', { timeout: 30000 });
+  try {
+    await page.waitForSelector('[data-clients-edit-application]', { timeout: 30000 });
+  } catch (e) {
+    console.log('DBG url:', page.url());
+    console.log('DBG detail:', (await page.locator('.tma-dash__clients-detail:visible').first().innerText().catch(() => '(no detail pane)')).slice(0, 300));
+    console.log('DBG hasContact:', await page.evaluate((u) => window.TMAClients.hasContact(u), filed.clientUid));
+    throw e;
+  }
   await page.locator('[data-clients-edit-application]').click();
   await page.waitForSelector('[data-cip-form]', { timeout: 25000 });
   check(await page.inputValue('[data-cip-field="firstName"]') === 'Nadia',

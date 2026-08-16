@@ -257,6 +257,16 @@
           err.data = data;
           throw err;
         }
+        /*
+         * A write that landed makes every cached hub listing suspect — the
+         * same blanket rule, at the same kind of seam, as the File Library's
+         * (see TMAFilesNet.fetchJSON): every client, company, assignment and
+         * invitation write in the hub goes through here, and dropping the
+         * prefix costs one refetch of whatever is opened next.
+         */
+        if (opts.method && opts.method !== 'GET' && window.TMAStore) {
+          window.TMAStore.invalidate('clients:');
+        }
         return data;
       });
     });
@@ -8067,22 +8077,48 @@
       state.loadError = null;
       startClients();
 
-      // Paint the directory as soon as clients arrive. Companies are secondary
-      // (company column / company view) and used to hold the whole hub hostage.
-      ClientsAPI.list().then(function (data) {
+      /*
+       * Both listings paint from the store first and repaint on the server's
+       * answer, the File Library pattern. For eleven thousand clients that is
+       * the difference between the hub opening and the hub asking Cloud
+       * Postgres to send the book again — and on the desktop the copy
+       * survives a restart, so the directory is there before the network is.
+       *
+       * The double hydrate is safe: hydrateClients rebuilds the in-memory
+       * directory from whichever answer is arriving, keeps profiles already
+       * fetched, and the second call simply does it again with fresher rows.
+       */
+      var paintClients = function (data) {
         hydrateClients((data && data.clients) || []);
         state.loadState = 'ready';
         state.loadError = null;
         startClients();
+      };
 
-        CompaniesAPI.list().then(function (companies) {
-          hydrateCompanies((companies && companies.companies) || []);
-          if (clientsMountRoot && clientsMountRoot._clientsController) {
-            clientsMountRoot._clientsController.syncRoute(
-              parseClientsPath(window.location.pathname)
-            );
-          }
-        }).catch(function () {
+      var paintCompanies = function (companies) {
+        hydrateCompanies((companies && companies.companies) || []);
+        if (clientsMountRoot && clientsMountRoot._clientsController) {
+          clientsMountRoot._clientsController.syncRoute(
+            parseClientsPath(window.location.pathname)
+          );
+        }
+      };
+
+      var listClients = function () { return ClientsAPI.list(); };
+      var listCompanies = function () { return CompaniesAPI.list(); };
+
+      // Paint the directory as soon as clients arrive. Companies are secondary
+      // (company column / company view) and used to hold the whole hub hostage.
+      var request = window.TMAStore
+        ? window.TMAStore.swr('clients:directory', listClients, paintClients)
+        : listClients().then(paintClients);
+
+      request.then(function () {
+        var companies = window.TMAStore
+          ? window.TMAStore.swr('clients:companies', listCompanies, paintCompanies)
+          : listCompanies().then(paintCompanies);
+
+        companies.catch(function () {
           hydrateCompanies([]);
         });
       }).catch(function () {
@@ -8125,6 +8161,14 @@
 
         if (clients && clients.clients) hydrateClients(clients.clients);
         if (companies && companies.companies) hydrateCompanies(companies.companies);
+        // The store learns what the signal fetched. A colleague's write
+        // invalidates nothing in THIS tab — the clientsFetch seam only sees
+        // our own writes — so without this the store would serve their
+        // yesterday's directory to tomorrow's reload.
+        if (window.TMAStore) {
+          if (clients) window.TMAStore.put('clients:directory', clients);
+          if (companies) window.TMAStore.put('clients:companies', companies);
+        }
         if (!clients && !companies) return;
 
         if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
@@ -8178,5 +8222,11 @@
     },
     routeFromPath: parseClientsPath,
     listDirectory: function (opts) { return ClientsAPI.list(opts); },
+    // The hub's own data layer, for lists that live outside this view — the
+    // same reason TMAFileActions exists. Everything on it goes through
+    // clientsFetch, so callers inherit the cache invalidation for free
+    // (which is also what lets the browser tests prove the seam is real
+    // rather than assert around it).
+    api: ClientsAPI,
   };
 })();

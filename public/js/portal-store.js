@@ -229,7 +229,44 @@
     var had = accountId;
     accountId = next;
 
-    return had === null ? Promise.resolve() : clear();
+    return had === null ? claimAnonymous() : clear();
+  }
+
+  /*
+   * Adopt what was written before /me answered.
+   *
+   * The first screens do not wait for the account to be known — a directory
+   * can be fetched, and cached, before /me returns. Those entries were
+   * written under the anonymous scope, and once the account arrives every
+   * read looks under the account's own: without this, whatever loaded in
+   * that opening moment is not wrong, just permanently unfindable — a miss
+   * that costs a refetch of exactly the biggest first-paint answers. Same
+   * reasoning as the write queue's claimUnstamped: the requests were made
+   * with this session's cookies, so what they returned belongs to whoever
+   * the session turns out to be.
+   */
+  function claimAnonymous() {
+    if (accountId == null) return Promise.resolve();
+
+    var anon = 'anon::';
+    Object.keys(memory).forEach(function (k) {
+      if (k.indexOf(anon) !== 0) return;
+      var entry = memory[k];
+      delete memory[k];
+      entry.key = accountId + '::' + k.slice(anon.length);
+      memory[entry.key] = entry;
+    });
+
+    // Disk too, where there is one: re-filed under the account, and the
+    // anonymous copy dropped so a later clear() has nothing to miss.
+    var moved = [];
+    return eachDiskKey(function (entry) {
+      if (entry.key.indexOf(anon) !== 0) return false;
+      moved.push({ key: accountId + '::' + entry.key.slice(anon.length), at: entry.at, value: entry.value });
+      return true;
+    }).then(function () {
+      return Promise.all(moved.map(writeDisk));
+    });
   }
 
   /**

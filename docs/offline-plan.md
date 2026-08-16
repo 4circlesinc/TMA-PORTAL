@@ -31,10 +31,18 @@ Documents tab — and (16 Aug) the whole File Library: `load()` in
 portal-files.js runs plain listings through `swr`, and every write
 invalidates through the one seam all File Library writes share,
 `TMAFilesNet.fetchJSON` (uploads included — completion posts there too).
-Searches and filtered views are deliberately not cached. *Delivers the
-"open instantly" ask on its own.* `public/js/portal-store.js`;
-`tests/Browser/files-cached-listing.mjs` proves the offline paint by cutting
-the network.
+Searches and filtered views are deliberately not cached. The client
+directory and companies follow the same pattern (`clients:directory` /
+`clients:companies`, invalidated at the clientsFetch seam, refreshed into the
+store by the Live handler — a colleague's write invalidates nothing in this
+tab, so the signal's answer must be written back). The store adopts entries
+written before /me answers (`claimAnonymous`): the directory is exactly the
+kind of fetch that beats the account, and an orphaned `anon::` entry is a
+miss that costs the biggest first paint. *Delivers the "open instantly" ask
+on its own.* `public/js/portal-store.js`;
+`tests/Browser/files-cached-listing.mjs` and
+`tests/Browser/clients-cached-directory.mjs` prove the offline paint by
+cutting the network.
 
 **2. Sync cursors.** ✅ *Shipped for applications; the other records still to
 do.* `GET /portal/cip/applications/sync?since=&after=` returns what has moved
