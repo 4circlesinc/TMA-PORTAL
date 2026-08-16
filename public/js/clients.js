@@ -90,6 +90,7 @@
     Globe: ICON + 'Globe.svg',
     CalendarBlank: ICON + 'CalendarBlank.svg',
     CheckCircle: ICON + 'CheckCircle.svg',
+    Image: ICON + 'Image.svg',
     IdentificationCard: ICON + 'IdentificationCard.svg',
     Circle: ICON + 'Circle.svg',
     LinkedinLogo: ICON + 'LinkedinLogo.svg',
@@ -3521,12 +3522,50 @@
       { icon: ICONS.IdentificationCard, label: 'Passport number', value: person.passportNumber },
     ].filter(function (r) { return !!r.value; }).map(renderListItem);
 
+    // Last in the list, so the column split carries it under the final field
+    // rather than standing it in a column of its own.
+    var photo = renderCipPersonPhoto(person);
+    if (photo) rows.push(photo);
+
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
       renderProfileListColumns(rows) +
       renderCipChecklist(person) +
       '</div>'
+    );
+  }
+
+  /*
+   * The passport photo, as the last row of the person's own list.
+   *
+   * A row rather than a column beside them: the fields run out partway down
+   * the second column, and the portrait belongs under the last of them where
+   * the reader is already looking.
+   *
+   * Built to renderListItem's shape — icon, label, value — so its label lines
+   * up with the labels above it and the picture with their answers. It links
+   * to the archival copy: what is drawn is the 320px avatar, and somebody
+   * checking a face against a passport wants the file that was actually
+   * filed.
+   */
+  function renderCipPersonPhoto(person) {
+    if (!person.photo) return '';
+
+    var img = '<img class="tma-dash__clients-person__photo" src="' + esc(person.photo) +
+      '" alt="Passport photo of ' + esc(person.name || 'the applicant') + '" width="168" height="168">';
+
+    return (
+      '<li class="tma-dash__clients-list-item tma-dash__clients-person__photo-row">' +
+      '<span class="tma-dash__clients-list-icon" aria-hidden="true">' +
+      '<img src="' + ICONS.Image + '" alt=""></span>' +
+      '<div class="tma-dash__clients-list-main">' +
+      '<span class="tma-dash__clients-list-label">Passport photo</span>' +
+      (person.passportPhotoUrl
+        ? '<a href="' + esc(person.passportPhotoUrl) + '" target="_blank" rel="noopener"' +
+          ' title="Open the filed photo">' + img + '</a>'
+        : img) +
+      '</div></li>'
     );
   }
 

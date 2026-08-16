@@ -34746,3 +34746,21 @@ span.tma-dash__messages-profile-avatar {
   padding-top: var(--space-16);
   border-top: 1px solid var(--color-overlay-4);
 }
+
+/*
+ * The passport photo as a row in the person's own list.
+ *
+ * A row, not a column beside them: the fields run out partway down the second
+ * column and the portrait belongs under the last of them. It is built to the
+ * list row's shape, so only the picture itself needs sizing — the label and
+ * the icon already line up with every row above it.
+ */
+.tma-dash__clients-person__photo {
+  display: block;
+  width: 168px;
+  height: 168px;
+  margin-top: var(--space-4);
+  object-fit: cover;
+  border-radius: var(--radius-12);
+  background: var(--color-hover);
+}
