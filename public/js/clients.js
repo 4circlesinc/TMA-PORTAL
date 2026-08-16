@@ -1205,7 +1205,7 @@
                 navId: 'clients',
                 view: 'clients',
                 title: 'CIP Applications',
-                crumb: '',
+                crumb: 'CIP Applications',
                 clientsScreen: 'list',
                 contactId: entry.state.selectedId || null,
               },
@@ -1213,7 +1213,7 @@
               '/clients'
             );
             if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
-              window.TMADashboard.updatePageMeta({ title: 'CIP Applications', crumb: '' });
+              window.TMADashboard.updatePageMeta({ title: 'CIP Applications', crumb: 'CIP Applications' });
             }
           }
         }
@@ -3029,19 +3029,12 @@
     var show = usesPagedClientsFlow(state) && state.screen !== 'list';
 
     /*
-     * Two separate questions, and they were one.
-     *
-     * `show` is whether the record's own head is lifted into the page head —
-     * a narrow-window arrangement. Whether the PAGE TITLE belongs there is a
-     * different question, and answering both with `show` left "CIP
-     * Applications" sitting above a head that already names the applicant, on
-     * every wide window. Two titles for one screen, stacked.
-     *
-     * The title is for the list. On any record — a client, a provider, a form
-     * — the head below says what you are looking at, and the sidebar says
-     * which section you are in.
+     * The page title is hidden only where the record's own head has been
+     * lifted INTO the page head — the narrow-window arrangement, where the two
+     * would otherwise sit on the same line. Everywhere else it stays: it is
+     * the header's own label and the header is not the hub's to empty.
      */
-    var hideTitle = state.screen !== 'list';
+    var hideTitle = show;
 
     if (titleEl) {
       titleEl.hidden = hideTitle;
@@ -7843,41 +7836,34 @@
       searchTerm: '',
     };
 
-    /*
-     * The hub says where you are three times over, so it now says it once.
-     *
-     * The sidebar names the section. The head names the record — the
-     * applicant's face and name, with the application's number and status
-     * under it. The breadcrumb read "CIP Applications / Asem Haddad" above
-     * both of them, and the page title said it a third time.
-     *
-     * So the crumb is empty here and the title is only for the list, where
-     * the tabs are the label. Every other view keeps its own: `activate()`
-     * sets them from the nav item on the way in, and this only overrides for
-     * the screens inside the hub.
-     */
     function pageMetaFor(screen, contactId, companyId) {
+      // Where the record's own head is lifted into the page header, the title
+      // beside it would be a second name for the same thing.
+      if (usesPagedClientsFlow(state) && screen !== 'list') {
+        return { title: '', crumb: 'CIP Applications' };
+      }
       if (screen === 'new-application' || screen === 'add') {
-        return { title: 'New application', crumb: '' };
+        return { title: 'New application', crumb: 'CIP Applications / New application' };
       }
       if (screen === 'edit-application') {
-        return { title: 'Edit application', crumb: '' };
+        return { title: 'Edit application', crumb: 'CIP Applications / Edit application' };
       }
       if (screen === 'add-company') {
-        return { title: 'New service provider', crumb: '' };
+        return { title: 'New service provider', crumb: 'CIP Applications / New service provider' };
       }
       if (screen === 'company' || screen === 'edit-company') {
         var company = companyFor(companyId || state.companyId);
+        var companyName = company ? company.name : 'Service provider';
 
-        return { title: company ? company.name : 'Service provider', crumb: '' };
+        return { title: companyName, crumb: 'CIP Applications / ' + companyName };
       }
       if ((screen === 'detail' || screen === 'edit') && contactId) {
         var contact = contactFor(contactId);
 
-        return { title: contact ? contact.name : '', crumb: '' };
+        return { title: contact.name, crumb: 'CIP Applications / ' + contact.name };
       }
 
-      return { title: 'CIP Applications', crumb: '' };
+      return { title: 'CIP Applications', crumb: 'CIP Applications' };
     }
 
     function applyScreen(screen, contactId, companyId, applicationId) {
@@ -8193,9 +8179,7 @@
               navId: 'clients',
               view: 'clients',
               title: 'CIP Applications',
-              // Empty here too, or stepping back into the hub restores a
-              // breadcrumb the hub itself no longer draws.
-              crumb: '',
+              crumb: 'CIP Applications',
               clientsScreen: 'list',
               contactId: state.selectedId,
             },
