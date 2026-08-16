@@ -2778,6 +2778,57 @@
     return null;
   }
 
+  /*
+   * The way back, as an arrow.
+   *
+   * No label. The destination is the thing you were just looking at and the
+   * head names where you are now — a word for it was a row of chrome above
+   * the person's own name, which is the wrong thing to put first on a page
+   * about somebody. The name it would have carried lives on as the accessible
+   * label, so it is still announced.
+   */
+  function renderClientsBackArrow(state) {
+    var owner = state && backDestination(state);
+    var client = owner ? contactFor(owner) : null;
+    var label = client && client.name ? client.name : 'CIP Applications';
+
+    return (
+      '<button type="button" class="tma-dash__clients-back-arrow" data-clients-back' +
+      ' aria-label="Back to ' + esc(label) + '" title="Back to ' + esc(label) + '">' +
+      '<img src="' + ICONS.CaretLeft + '" alt="" aria-hidden="true">' +
+      '</button>'
+    );
+  }
+
+  /*
+   * What this application is and where it has got to, as one line under the
+   * name.
+   *
+   * §7's number leads, because that is what the application is called; then
+   * the status, then who filed it. The internal number follows the CIP number
+   * once that arrives, since invoices and reviews go on quoting it.
+   */
+  function renderApplicationFacts(app) {
+    if (!app) return '';
+
+    var bits = [];
+
+    if (app.number) {
+      bits.push('<span class="tma-dash__clients-profile-number">' + esc(app.number) + '</span>');
+    }
+    if (app.cipNumber && app.internalNumber) {
+      bits.push('<span>' + esc(app.internalNumber) + '</span>');
+    }
+    if (app.statusLabel) {
+      bits.push('<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
+        ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>');
+    }
+    if (app.provider) bits.push('<span>' + esc(app.provider) + '</span>');
+    if (app.familyLabel) bits.push('<span>' + esc(app.familyLabel) + '</span>');
+
+    return bits.join('<span class="tma-dash__clients-profile-dot" aria-hidden="true">·</span>');
+  }
+
   function renderClientsBackBtn(state) {
     // Named for where it goes. "CIP Applications" over a button that returns
     // to one client is the sort of label a reader learns to distrust.
@@ -2803,13 +2854,27 @@
 
   function renderContactProfileToolbar(c, state) {
     if (!c) return '';
-    var subtitle = contactProfileSubtitle(c);
+    var app = applicationFor(c.id);
+    var subtitle = app ? renderApplicationFacts(app) : esc(contactProfileSubtitle(c));
+
+    /*
+     * The way back is an arrow beside the face, and the facts sit under the
+     * name.
+     *
+     * The labelled button above the head was a whole row spent on "go back",
+     * pushing the person's name down the page; and the application's number
+     * and status were a separate band below the tabs, which put the two halves
+     * of "who and where" in different places. One block now: arrow, face,
+     * name, and under the name what this application is and where it has got
+     * to.
+     */
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
-      '<div class="tma-dash__clients-profile-head">' + renderAvatar(c, 40) +
+      '<div class="tma-dash__clients-profile-head">' +
+      renderClientsBackArrow(state) + renderAvatar(c, 40) +
       '<div class="tma-dash__clients-profile-ident">' +
       '<span class="tma-dash__clients-profile-name">' + esc(c.name) + '</span>' +
-      (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + esc(subtitle) + '</span>' : '') +
+      (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + subtitle + '</span>' : '') +
       '</div></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
       (clientFolderUuid(c.id)
@@ -2938,7 +3003,15 @@
 
   function renderElevatedDetailChrome(state) {
     var toolbar = '';
-    if (state.screen === 'detail' && state.selectedId) {
+    /*
+     * A client's head carries the way back itself — an arrow beside their face
+     * (see renderContactProfileToolbar). The labelled button below is for the
+     * screens with no face to put it beside: the forms, and a service
+     * provider.
+     */
+    var ownsBack = state.screen === 'detail' && state.selectedId;
+
+    if (ownsBack) {
       toolbar = renderContactProfileToolbar(contactFor(state.selectedId), state);
     } else if (state.screen === 'company' && state.companyId) {
       toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
@@ -2962,7 +3035,7 @@
     } else if (state.screen === 'add-company' || state.screen === 'edit-company') {
       toolbar = renderCompanyFormToolbar(state);
     }
-    return renderClientsBackBtn(state) + (toolbar || '');
+    return (ownsBack ? '' : renderClientsBackBtn(state)) + (toolbar || '');
   }
 
   /* Full-page detail: put identity + actions in the global page-title row. */
@@ -4021,27 +4094,22 @@
    * feedback keep referring to it for the life of the application, and a
    * reader holding one needs to see that they are on the right record.
    */
+  /*
+   * What can be DONE to this application, above the panels.
+   *
+   * What it IS — the number, the status, the provider — moved under the name
+   * in the head, where the reader is already looking to find out whose page
+   * this is. What is left here is the verb, and when there is no verb to offer
+   * there is no band either: an empty strip between the tabs and the panels
+   * would be a row of chrome standing in for nothing.
+   */
   function renderApplicationBar(state, app) {
-    if (!app || !app.number) return '';
+    if (!app) return '';
 
-    var switched = !!app.cipNumber && !!app.internalNumber;
+    var action = renderSubmissionAction(state, app);
+    if (!action) return '';
 
-    return (
-      '<div class="tma-dash__clients-appbar">' +
-      '<span class="tma-dash__clients-appbar-number" title="Application number">' +
-      esc(app.number) + '</span>' +
-      (switched
-        ? '<span class="tma-dash__clients-appbar-internal" title="Internal number, kept for audit and invoicing">' +
-          esc(app.internalNumber) + '</span>'
-        : '') +
-      (app.statusLabel
-        ? '<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
-          ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>'
-        : '') +
-      (app.provider ? '<span class="tma-dash__clients-appbar-provider">' + esc(app.provider) + '</span>' : '') +
-      renderSubmissionAction(state, app) +
-      '</div>'
-    );
+    return '<div class="tma-dash__clients-appbar">' + action + '</div>';
   }
 
   /*
@@ -5192,9 +5260,6 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +
       '</div>' +
-      // Above the panels, not inside one: the number and the status are true
-      // of the whole application, and in a tab they would read as a fact about
-      // that section.
       renderApplicationBar(state, app) +
       renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out
