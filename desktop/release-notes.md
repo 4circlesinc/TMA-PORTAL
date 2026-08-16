@@ -1,3 +1,4 @@
-- Calls now open in their own small window that floats above your other apps, so you can take a call and carry on working
-- The call window shows the camera edge to edge; move your pointer over it to bring up the controls, and use the button in its corner to put the call back in the page
-- Calls no longer flicker while they are running
+- The app opens straight onto the portal instead of loading it — and it now opens even with no internet, showing your clients, folders and applications from the last time it was connected
+- Documents you have viewed open again offline, and changes you make offline are saved on your device and sent by themselves when you are back online
+- Right-clicking works everywhere now — copy, paste, spelling suggestions in anything you write, and saving or copying images
+- Connection problems now say what is actually wrong instead of showing an unexplained error
