@@ -198,6 +198,24 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-offline.mjs
   ```
+- **`missing-art.mjs`** — a sweep, not a test. Walks 29 screens with the
+  network watched and reports three things that all read as "an icon is
+  missing" and none of which a grep can find: an `<img>` whose file 404s, a
+  masked span with no mask-image (the portal tints icons by masking a span,
+  because an `<img>` of a Phosphor icon is always black), and a CSS
+  background that 404s. It asserts nothing about which icons *should* exist —
+  its output is the list to fix.
+
+  Point it at whichever deploy somebody is actually looking at. Locally the
+  portal is clean, so a report of missing art almost certainly means the
+  environment: avatars and company logos live on R2, and a bucket that has
+  moved on 404s while every reference in the code is still correct.
+
+  ```sh
+  TMA_BASE_URL=https://portal.tmantoinelaw.com \
+  TMA_STAFF_EMAIL=you@tmantoinelaw.com TMA_STAFF_PASSWORD=… \
+    node tests/Browser/missing-art.mjs
+  ```
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with
