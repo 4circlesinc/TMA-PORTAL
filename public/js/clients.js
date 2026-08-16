@@ -3682,6 +3682,7 @@
       // the face on the page is derived from it — so read the application back.
       window.TMAFileActions.open(file, function () {
         delete APPLICATIONS[state.selectedId];
+        forgetApplication(state.selectedId);
         ensureApplicationLoaded(state, render);
       });
       return;
@@ -4032,7 +4033,7 @@
 
     e.preventDefault();
     window.TMAFileActions.menu(e.clientX, e.clientY, row, function () {
-      loadClientFolder(root);
+      loadClientFolder(root, { changed: true });
     });
   }
 
@@ -4071,7 +4072,7 @@
         var row = clientFolderRow(fu);
 
         if (row && window.TMAFileActions && window.TMAFileActions.open) {
-          window.TMAFileActions.open(row, function () { loadClientFolder(root); });
+          window.TMAFileActions.open(row, function () { loadClientFolder(root, { changed: true }); });
 
           return;
         }
@@ -4118,21 +4119,61 @@
     renderFolderCrumbs(root);
   }
 
-  function loadClientFolder(root) {
+  /*
+   * A folder's contents, from the store first.
+   *
+   * Nothing was cached, so every step into a folder was a round trip with a
+   * blank panel until it answered — 60ms against a local database and the two
+   * seconds the firm sees against Cloud Postgres through one worker. The
+   * listing is painted from whatever is held and repainted when the server
+   * answers, so the second visit to a folder is immediate and the first is no
+   * slower. See docs/offline-plan.md.
+   */
+  function loadClientFolder(root, opts) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap || !filesNet()) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
-    filesNet().fetchJSON(filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0'))
-      .then(function (res) {
-        adoptFolderTrail(root, res);
-        renderClientFolderList(root, res);
-        bindClientFolderRows(root);
-        captureClientDocCount(root, res);
-      })
-      .catch(function () {
-        var list = wrap.querySelector('[data-clients-folder-list]') || wrap;
-        list.textContent = 'Could not load this folder.';
-      });
+    var url = filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0');
+
+    // Something just changed this folder — an upload, a rename, a delete. The
+    // held copy describes the folder as it was a moment ago, and showing it
+    // first would flash the old contents back over the new.
+    if (opts && opts.changed) invalidateClientFolder(uuid);
+
+    var paint = function (res) {
+      // The reader may have stepped on while the answer was in flight; a late
+      // listing must not redraw the folder they have already left.
+      if (wrap.getAttribute('data-folder-uuid') !== uuid) return;
+      adoptFolderTrail(root, res);
+      renderClientFolderList(root, res);
+      bindClientFolderRows(root);
+      captureClientDocCount(root, res);
+    };
+
+    var fail = function () {
+      var list = wrap.querySelector('[data-clients-folder-list]') || wrap;
+      list.textContent = 'Could not load this folder.';
+    };
+
+    if (!window.TMAStore) {
+      filesNet().fetchJSON(url).then(paint).catch(fail);
+
+      return;
+    }
+
+    window.TMAStore
+      .swr(folderCacheKey(uuid), function () { return filesNet().fetchJSON(url); }, paint)
+      .catch(fail);
+  }
+
+  function folderCacheKey(uuid) {
+    return 'files:folder:' + uuid;
+  }
+
+  /* Anything that changed a folder's contents. The listing it invalidates is
+     the one the reader is about to be shown again. */
+  function invalidateClientFolder(uuid) {
+    if (window.TMAStore && uuid) window.TMAStore.invalidate(folderCacheKey(uuid));
   }
 
   function uploadToClientFolder(files, uuid) {
@@ -4153,7 +4194,7 @@
       if (!wrap) return;
       var done = e.detail && e.detail.folderId;
       if (!done || done === wrap.getAttribute('data-folder-uuid')) {
-        loadClientFolder(clientsMountRoot);
+        loadClientFolder(clientsMountRoot, { changed: true });
       }
     });
   }
@@ -4194,7 +4235,7 @@
         var name = window.prompt('New folder name');
         if (!name || !name.trim() || !filesNet()) return;
         filesNet().fetchJSON(filesNet().url('/folders'), { method: 'POST', json: { name: name.trim(), parent: current() } })
-          .then(function () { clientsToast('Folder created', 'positive'); loadClientFolder(root); })
+          .then(function () { clientsToast('Folder created', 'positive'); loadClientFolder(root, { changed: true }); })
           .catch(function (err) { clientsToast((err && err.message) || 'Could not create the folder', 'negative'); });
       });
     }
@@ -4239,7 +4280,7 @@
           clientId: clientId || null,
           clientName: name || null,
           title: name ? 'Documents for ' + name : 'Please upload your documents',
-          onCreated: function () { loadClientFolder(root); },
+          onCreated: function () { loadClientFolder(root, { changed: true }); },
         });
       });
     }
@@ -6114,6 +6155,7 @@
         // Dropped so the profile re-reads it after the save, rather than
         // showing the answers the reader has just changed.
         delete APPLICATIONS[state.selectedId];
+        forgetApplication(state.selectedId);
         navigate('edit-application', null, { applicationId: app.id });
       });
     }
@@ -6744,17 +6786,41 @@
 
     state.applicationLoadingFor = id;
 
-    clientsFetch('/portal/cip/clients/' + encodeURIComponent(id) + '/application')
-      .then(function (json) {
-        APPLICATIONS[id] = (json && json.application) || null;
-      })
-      .catch(function () { APPLICATIONS[id] = null; })
+    var url = '/portal/cip/clients/' + encodeURIComponent(id) + '/application';
+
+    /*
+     * The application decides which tabs this profile even has, so until it
+     * lands the screen shows a client that is not the one it is about to show.
+     * Painted from the store first, which on a second visit means the right
+     * tabs on the first frame.
+     */
+    var paint = function (json) {
+      APPLICATIONS[id] = (json && json.application) || null;
+      if (state.selectedId !== id) return;
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    };
+
+    var request = window.TMAStore
+      ? window.TMAStore.swr(applicationCacheKey(id), function () { return clientsFetch(url); }, paint)
+      : clientsFetch(url).then(paint);
+
+    request
+      .catch(function () { paint(null); })
       .then(function () {
-        state.applicationLoadingFor = null;
-        if (state.selectedId !== id) return;
-        if (usesPagedClientsFlow(state)) render();
-        else render({ detailOnly: true });
+        if (state.applicationLoadingFor === id) state.applicationLoadingFor = null;
       });
+  }
+
+  function applicationCacheKey(clientId) {
+    return 'cip:application:' + clientId;
+  }
+
+  /* Drop the held copy as well as the in-page one. Both exist: the object
+     above survives a tab change, the store survives a reload, and an edit has
+     to outlive both or the reader is shown what they just replaced. */
+  function forgetApplication(clientId) {
+    if (window.TMAStore && clientId) window.TMAStore.invalidate(applicationCacheKey(clientId));
   }
 
   function ensureProfileLoaded(state, render) {

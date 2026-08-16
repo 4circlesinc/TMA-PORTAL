@@ -217,6 +217,15 @@
       if (!res.ok) return null;
       return res.json().then(function (j) {
         me = j;
+        /*
+         * Tell the store whose cache this is, before any screen reads it.
+         *
+         * A cache is scoped to an account, and until /me answers there is no
+         * account to scope it to. Signing in as somebody else from the same
+         * machine wipes what was held — warming a screen with the last
+         * reader's clients would look exactly like a permissions failure.
+         */
+        if (window.TMAStore && j && j.id != null) window.TMAStore.setAccount(j.id);
         if (j && j.toasts && window.TMAToast && window.TMAToast.applyToastPrefs) {
           window.TMAToast.applyToastPrefs(j.toasts);
           try { localStorage.setItem('tma.toasts', JSON.stringify(j.toasts)); } catch (e) {}
