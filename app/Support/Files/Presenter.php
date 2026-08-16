@@ -57,6 +57,8 @@ class Presenter
     /** @var array<int, array<string, mixed>>|null */
     private ?array $staffPeople = null;
 
+    private ?array $adminPeople = null;
+
     /**
      * How many people travel on a row. The cell draws four faces and a "+N",
      * so a couple spare is enough for the card to name whoever is shown.
@@ -544,18 +546,47 @@ class Presenter
          * Only the first few travel — the cell draws four and a "+N" — with the
          * real figure alongside so the "+N" can be honest.
          */
-        if ($audience && ($audience['count'] ?? null)) {
-            $seen = array_column($people, 'userId');
+        /*
+         * Administrators are always on it.
+         *
+         * They hold every capability by definition, so FileAccess hands them
+         * `full` on anything without a share existing — which made them
+         * invisible here, because this list was built from shares and grants.
+         * A client folder is the case that showed it: carved out of the
+         * firm-wide audience, so nothing filled the list and it read "one
+         * person" while three administrators could open every document in it.
+         * The file viewer's own panel already says this; the listing now
+         * agrees with it.
+         */
+        $people = $this->mergePeople($people, $this->adminPeople());
 
-            foreach ($this->staffPeople() as $member) {
-                if (count($people) >= self::PEOPLE_PREVIEW) {
-                    break;
-                }
-                if (in_array($member['userId'], $seen, true)) {
-                    continue;
-                }
-                $people[] = $member;
+        if ($audience && ($audience['count'] ?? null)) {
+            $people = $this->mergePeople($people, $this->staffPeople());
+        }
+
+        return $people;
+    }
+
+    /**
+     * Add people not already listed, up to what the cell draws.
+     *
+     * @param  array<int, array<string, mixed>>  $people
+     * @param  array<int, array<string, mixed>>  $more
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergePeople(array $people, array $more): array
+    {
+        $seen = array_column($people, 'userId');
+
+        foreach ($more as $member) {
+            if (count($people) >= self::PEOPLE_PREVIEW) {
+                break;
             }
+            if (in_array($member['userId'], $seen, true)) {
+                continue;
+            }
+            $people[] = $member;
+            $seen[] = $member['userId'];
         }
 
         return $people;
@@ -578,12 +609,44 @@ class Presenter
             return $audience['count'] + (($owner && ! $ownerIsStaff) ? 1 : 0);
         }
 
+        // Administrators reach it too, so they are part of the count — the
+        // "+N" has to add up to everyone who can open the thing.
         $ids = array_unique(array_filter(array_merge(
             [$owner?->id],
             array_column($sharedWith, 'userId'),
+            $this->adminIds(),
         )));
 
         return max(1, count($ids));
+    }
+
+    /**
+     * Every approved administrator, built once per listing.
+     *
+     * Not cut to the preview like staffPeople(): the count has to be the real
+     * number of administrators, and there are never many of them.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function adminPeople(): array
+    {
+        if ($this->adminPeople === null) {
+            $this->adminPeople = User::query()
+                ->where('account_type', Role::ADMINISTRATOR)
+                ->where('status', User::STATUS_APPROVED)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (User $u) => $this->person($u) + ['roles' => ['Administrator']])
+                ->all();
+        }
+
+        return $this->adminPeople;
+    }
+
+    /** @return array<int, int> */
+    private function adminIds(): array
+    {
+        return array_column($this->adminPeople(), 'userId');
     }
 
     /**
