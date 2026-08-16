@@ -18778,11 +18778,31 @@
   flex: none;
 }
 
+/*
+ * The panels scroll; the head and the tabs do not.
+ *
+ * The whole column used to scroll, which was fine while the tabs lived inside
+ * the panel and the panel's body did the scrolling. Moving them out put them
+ * in the scroller, so reading down a long tab took the tab row off the top of
+ * the screen — and coming back to that tab landed you where you left it, with
+ * nothing above the content to say what you were looking at.
+ *
+ * The scroll moves in one step to the element that holds the panels. Nothing
+ * needs to stick and nothing needs a background painted behind it to hide what
+ * is passing underneath, because the row is no longer in the moving part.
+ */
 .tma-dash__clients-page--detail .tma-dash__clients-detail,
 .tma-dash--clients-mobile .tma-dash__clients-page--detail .tma-dash__clients-detail {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.tma-dash__clients-page--detail .tma-dash__clients-profile,
+.tma-dash--clients-mobile .tma-dash__clients-page--detail .tma-dash__clients-profile {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
