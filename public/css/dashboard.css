@@ -17836,6 +17836,10 @@
   width: 100%;
   border-bottom: 1px solid var(--color-overlay-4);
   padding-bottom: var(--space-4);
+  /* Above the panel rather than in it, so it neither scrolls away with the
+     section it labels nor gets squeezed by it. */
+  flex-shrink: 0;
+  margin-bottom: var(--space-24);
 }
 
 .tma-dash__clients-profile-tablist .tma-tab:not(.is-active) {

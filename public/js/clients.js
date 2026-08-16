@@ -962,6 +962,77 @@
   }
 
   /*
+   * Where you were, in the address bar.
+   *
+   * A reload used to land on the first tab with the folder path thrown away,
+   * so somebody three folders deep in a client's documents who pressed refresh
+   * — or followed a link, or came back — started again from the top. The tab
+   * and the open folder are where you are, so they belong in the URL, which is
+   * also what makes a screen linkable and the back button mean something.
+   *
+   * Query rather than path: the path addresses the client, and these are a
+   * position within it.
+   */
+  function clientsDetailUrl(state) {
+    var base = pathForClientsScreen(state.screen, state.selectedId, state.companyId);
+    var params = [];
+    var tab = state.profileTab;
+
+    // Guarded on the screen once, by the caller. Repeating it here only bought
+    // a URL that carried the folder without the tab that shows it.
+    if (tab) params.push('tab=' + encodeURIComponent(tab));
+
+    // Only the folder actually in view. The trail above it is rebuilt from the
+    // server's own parent chain, so a link does not have to carry it.
+    if (tab === 'folders' && clientFolderNav) {
+      var here = clientFolderNav.path[clientFolderNav.path.length - 1];
+      if (here && here.uuid !== clientFolderNav.rootUuid) {
+        params.push('folder=' + encodeURIComponent(here.uuid));
+      }
+    }
+
+    return base + (params.length ? '?' + params.join('&') : '');
+  }
+
+  /* Rewrite the address for a move within the same screen — a tab, a folder.
+     Never a new history entry: the client is the destination, and stepping
+     back through six folders to leave them is not "back". */
+  function syncClientsDetailUrl(state) {
+    if (!window.history || !history.replaceState) return;
+    if (state.screen !== 'detail' || !state.selectedId) return;
+    history.replaceState(history.state, '', clientsDetailUrl(state));
+  }
+
+  /*
+   * Where the address says to be, read once at boot.
+   *
+   * Read eagerly, because dashboard.js rewrites the URL as it settles the
+   * route and the query is gone by the time this view mounts — the same trap
+   * the File Library's deep links hit.
+   */
+  var BOOT_POSITION = (function () {
+    var params = new URLSearchParams(window.location.search || '');
+
+    var folder = params.get('folder') || null;
+
+    // A folder can only be shown on the documents tab, so it says which tab
+    // to open — a link that carries one and not the other still works.
+    return { tab: params.get('tab') || (folder ? 'folders' : null), folder: folder };
+  })();
+
+  /* Taken, not read: a boot position applies to the screen it was typed for,
+     and must not reapply when the reader moves on to another client. Each half
+     is claimed by whatever restores it, which happen at different moments —
+     the tab once the profile knows which tabs it has, the folder once the
+     documents panel mounts. */
+  function takeBootPosition(key) {
+    var value = BOOT_POSITION[key];
+    BOOT_POSITION[key] = null;
+
+    return value;
+  }
+
+  /*
    * What the server matched for the current term.
    *
    * Search used to run over the profiles the browser held. The listing does not
@@ -3481,9 +3552,23 @@
     return tabs.concat(PROFILE_TABS.filter(function (t) { return t.id !== 'info'; }));
   }
 
-  /* The tab to open on, which is the first one this profile has. */
+  /*
+   * The tab to open on: the one the address asked for, else the first.
+   *
+   * Claimed here rather than at mount because the tabs a profile HAS depend on
+   * its application, which arrives after the first paint — asking earlier
+   * would mean checking "documents" against a list that is only ever
+   * Client info, and dropping it.
+   */
   function defaultProfileTab(state) {
     var tabs = profileTabsFor(state);
+    var ids = tabs.map(function (t) { return t.id; });
+
+    if (BOOT_POSITION.tab && ids.indexOf(BOOT_POSITION.tab) !== -1) {
+      state.profileTab = takeBootPosition('tab');
+
+      return state.profileTab;
+    }
 
     return tabs.length ? tabs[0].id : 'info';
   }
@@ -3918,6 +4003,7 @@
     var current = clientFolderNav.path[clientFolderNav.path.length - 1];
     wrap.setAttribute('data-folder-uuid', current.uuid);
     renderFolderCrumbs(root);
+    if (clientsMountState) syncClientsDetailUrl(clientsMountState);
     loadClientFolder(root);
   }
 
@@ -3996,12 +4082,49 @@
     });
   }
 
+  /**
+   * Take the crumbs from the server's answer.
+   *
+   * Restoring a folder from the URL leaves a path with a placeholder in it —
+   * the uuid is known, the names above it are not. The listing carries the
+   * whole trail, so this replaces the guess with the real one, cut at the
+   * client's own folder because everything above that is the firm's filing and
+   * not this reader's business here.
+   *
+   * A no-op when the trail already matches, which is every ordinary click.
+   */
+  function adoptFolderTrail(root, res) {
+    var trail = (res && res.breadcrumb) || [];
+    if (!clientFolderNav || !trail.length) return;
+
+    var start = -1;
+    for (var i = 0; i < trail.length; i += 1) {
+      if (trail[i].id === clientFolderNav.rootUuid) { start = i; break; }
+    }
+    if (start === -1) return;
+
+    var path = trail.slice(start).map(function (node, i) {
+      return { uuid: node.id, name: i === 0 ? 'Client documents' : node.name };
+    });
+
+    var same = path.length === clientFolderNav.path.length &&
+      path.every(function (node, i) {
+        return node.uuid === clientFolderNav.path[i].uuid &&
+          node.name === clientFolderNav.path[i].name;
+      });
+    if (same) return;
+
+    clientFolderNav.path = path;
+    renderFolderCrumbs(root);
+  }
+
   function loadClientFolder(root) {
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (!wrap || !filesNet()) return;
     var uuid = wrap.getAttribute('data-folder-uuid');
     filesNet().fetchJSON(filesNet().url('/?folder=' + encodeURIComponent(uuid) + '&perPage=0'))
       .then(function (res) {
+        adoptFolderTrail(root, res);
         renderClientFolderList(root, res);
         bindClientFolderRows(root);
         captureClientDocCount(root, res);
@@ -4044,6 +4167,17 @@
     // (so a switch to Client info and back stays put) for the same client.
     if (!clientFolderNav || clientFolderNav.rootUuid !== rootUuid) {
       clientFolderNav = { rootUuid: rootUuid, path: [{ uuid: rootUuid, name: 'Client documents' }] };
+
+      /*
+       * Reopened where the address left off.
+       *
+       * Only the folder in view is in the URL; the trail above it comes back
+       * with the listing (`breadcrumb`), so this points at the folder and lets
+       * the answer fill in the crumbs. A link to a folder need carry nothing
+       * but the folder.
+       */
+      var boot = takeBootPosition('folder');
+      if (boot) clientFolderNav.path.push({ uuid: boot, name: '…' });
     }
     wrap.setAttribute('data-folder-uuid', clientFolderNav.path[clientFolderNav.path.length - 1].uuid);
     renderFolderCrumbs(root);
@@ -4471,17 +4605,44 @@
     var activeTab = tabIds.indexOf(state.profileTab) !== -1
       ? state.profileTab
       : defaultProfileTab(state);
+
+    /*
+     * Say where we ended up.
+     *
+     * The route sync writes the client's path and nothing else, and it runs
+     * before this — before the application has arrived and before there is a
+     * tab to name. So the address is brought up to date once the answer is
+     * known, from the render that knows it. Not during: a history write inside
+     * the string-building would fire on every repaint of the same screen.
+     */
+    if (state.screen === 'detail' && activeTab !== state.profileTab) state.profileTab = activeTab;
+    if (state.screen === 'detail') {
+      setTimeout(function () { syncClientsDetailUrl(state); }, 0);
+    }
+
     var listItems = buildProfileListItems(c);
     var toolbar = opts.elevateToolbar ? '' : renderContactProfileToolbar(c, state);
 
+    /*
+     * The tabs sit above the panel, not inside it.
+     *
+     * They name the sections; they are not one of them. Inside, they were a
+     * row at the top of a grey surface that then held more grey surfaces — and
+     * on a CIP application, where every panel is made of cards, that surface
+     * was a card behind cards with nothing between them but a seam. Outside,
+     * the tabs sit on the page and each panel is whatever it is.
+     */
     return (
       '<div class="tma-dash__clients-detail">' +
-      '<div class="tma-dash__clients-profile' +
-      (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
       toolbar +
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +
       '</div>' +
+      // An application's panels are cards, so the panel behind them gets out
+      // of the way — the same reason a company's and the intake form's do.
+      '<div class="tma-dash__clients-profile' +
+      (app ? ' tma-dash__clients-profile--cards' : '') +
+      (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
       (app
         ? renderCipPersonPanel(state, app.applicant, 'applicant', activeTab !== 'applicant') +
           renderCipPersonPanel(state, app.sponsor, 'sponsor', activeTab !== 'sponsor') +
@@ -6489,6 +6650,7 @@
     MORPH.unwired(root, '[data-clients-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.profileTab = btn.getAttribute('data-clients-tab');
+        syncClientsDetailUrl(state);
         if (state.profileTab === 'assigned' && state.selectedId) {
           ensureAssignmentsLoaded(state, render);
         }
@@ -6707,6 +6869,10 @@
 
   var clientsMountRoot = null;
 
+  /* The mounted view's state, for the module-level folder wiring — it runs
+     outside the controller and still has to say where the reader is. */
+  var clientsMountState = null;
+
   function syncClientsShell(screen, viewMode) {
     var dash = document.querySelector('.tma-dash');
     if (!dash) return;
@@ -6720,6 +6886,7 @@
   function mount(root) {
     clientsMountRoot = root;
     if (root._clientsController) {
+      clientsMountState = root._clientsController.state || clientsMountState;
       root._clientsController.syncRoute(parseClientsPath(window.location.pathname));
       return;
     }
@@ -7148,7 +7315,8 @@
       }
     }
 
-    root._clientsController = { syncRoute: syncRoute, navigate: navigate, render: render };
+    root._clientsController = { syncRoute: syncRoute, navigate: navigate, render: render, state: state };
+    clientsMountState = state;
     registerViewToggle({ state: state, render: render });
 
     document.addEventListener('keydown', function (e) {
