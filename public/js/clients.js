@@ -3524,9 +3524,38 @@
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
-      renderProfileListColumns(rows) +
+      '<div class="tma-dash__clients-person">' +
+      '<div class="tma-dash__clients-person__facts">' + renderProfileListColumns(rows) + '</div>' +
+      renderCipPersonPhoto(person) +
+      '</div>' +
       renderCipChecklist(person) +
       '</div>'
+    );
+  }
+
+  /*
+   * The passport photo, beside the answers it belongs to.
+   *
+   * The fields fill two columns and run out halfway down the second, leaving
+   * a hand's width of empty panel next to a record whose whole point is a
+   * person. The portrait they filed goes there. It links to the archival copy
+   * — this is the 320px avatar, and somebody checking a face against a
+   * passport wants the one that was actually filed.
+   */
+  function renderCipPersonPhoto(person) {
+    if (!person.photo) return '';
+
+    var img = '<img class="tma-dash__clients-person__photo-img" src="' + esc(person.photo) +
+      '" alt="Passport photo of ' + esc(person.name || 'the applicant') + '" width="168" height="168">';
+
+    return (
+      '<figure class="tma-dash__clients-person__photo">' +
+      (person.passportPhotoUrl
+        ? '<a href="' + esc(person.passportPhotoUrl) + '" target="_blank" rel="noopener"' +
+          ' title="Open the filed photo">' + img + '</a>'
+        : img) +
+      '<figcaption class="tma-dash__clients-person__photo-cap">Passport photo</figcaption>' +
+      '</figure>'
     );
   }
 
