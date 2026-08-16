@@ -1799,6 +1799,36 @@
   }
 
   /* The detail panel, while one client's profile is being fetched. */
+  /*
+   * The tab row, before it is known which tabs there are.
+   *
+   * The real container, so the height, the rule underneath and the space below
+   * it are the tab row's own and nothing moves when the labels arrive. The
+   * widths are the widths of the tabs an application has, so the greyed row is
+   * the shape of the answer rather than a placeholder of its own invention.
+   */
+  function renderProfileTabsSkeleton() {
+    var widths = [84, 60, 78, 74, 64, 82];
+
+    return (
+      '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist"' +
+      ' aria-hidden="true">' +
+      widths.map(function (w) {
+        // The real tab's own parts — label and indicator — so the underline
+        // group sizes this exactly as it sizes the tab that replaces it. A box
+        // of my own measuring came out 16px short and the page stepped down
+        // when the labels arrived.
+        return '<span class="tma-tab tma-tab--skeleton">' +
+          '<span class="tma-tab__label">' +
+          '<span class="tma-skeleton tma-skeleton--text" style="width:' + w + 'px;height:12px"></span>' +
+          '</span>' +
+          '<span class="tma-tab__indicator"></span>' +
+          '</span>';
+      }).join('') +
+      '</div>'
+    );
+  }
+
   function renderProfileSkeleton() {
     var rows = '';
     for (var i = 0; i < 5; i++) {
@@ -4643,8 +4673,19 @@
       state.applicationLoadingFor === state.selectedId;
 
     if (state.selectedId && (!profileLoaded(state.selectedId) || appPending)) {
+      /*
+       * The tab row stays, as a shape.
+       *
+       * Waiting for the application means not knowing which tabs this profile
+       * has — but "not yet" is not the same as "none", and dropping the row
+       * made it vanish and come back on every single client you opened, taking
+       * the panel below it up and down with it. A row of the right height,
+       * greyed, holds its place until it can be filled in.
+       */
       return (
         '<div class="tma-dash__clients-detail">' +
+        (opts.elevateToolbar ? '' : renderContactProfileToolbar(contactFor(state.selectedId), state)) +
+        (state.profileError ? '' : renderProfileTabsSkeleton()) +
         '<div class="tma-dash__clients-profile' +
         (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
         (state.profileError

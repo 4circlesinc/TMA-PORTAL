@@ -17846,6 +17846,25 @@
   opacity: 0.4;
 }
 
+/* A tab with no label yet. It is built from the real tab's own parts, so the
+   underline group gives it the same height and nothing below it moves; all
+   this adds is that it does not look clickable. */
+.tma-tab--skeleton {
+  cursor: default;
+}
+
+/*
+ * The label's height is its line-height — that is what makes a real tab 28px
+ * (22 + the 4px gap + the 2px indicator) and what a bar of my own choosing got
+ * wrong by ten, stepping the whole page down when the labels arrived. Taken
+ * from the tab's own token, so it cannot drift from the thing it stands in for.
+ */
+.tma-tab--skeleton .tma-tab__label {
+  display: flex;
+  align-items: center;
+  height: var(--tab-line-height, 20px);
+}
+
 /*
  * The list's own tabs — Applications and Service providers.
  *
