@@ -17922,6 +17922,33 @@
   background: var(--color-bg-card, var(--color-white));
 }
 
+/*
+ * A person's card is as tall as the person.
+ *
+ * The answers stretched to fill whatever height was going and the Documents
+ * section went with the bottom of the card, so an applicant with six fields had
+ * a third of a screen of nothing between their region and their checklist. A
+ * dependant never had this — their card is drawn to its contents — and the same
+ * person should not be a different shape for being read from a different tab.
+ *
+ * The documents and folder panels are left stretching on purpose: a list of
+ * files fills the space it is given, and a short client folder that only came
+ * halfway down the card would read as a panel that had failed to finish
+ * loading.
+ */
+.tma-dash__clients-profile-panel[data-clients-panel="applicant"],
+.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] {
+  flex: 0 0 auto;
+}
+
+.tma-dash__clients-profile-panel[data-clients-panel="applicant"] .tma-dash__clients-profile-body,
+.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] .tma-dash__clients-profile-body {
+  flex: 0 0 auto;
+  /* Nothing to scroll once the card is the height of its contents, and an
+     `auto` here would clip the photo's row against a height it now sets. */
+  overflow: visible;
+}
+
 .tma-dash__clients-profile-panel[data-clients-panel="info"] .tma-dash__clients-profile-body {
   flex: 1;
 }
