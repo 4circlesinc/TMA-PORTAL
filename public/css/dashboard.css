@@ -34970,3 +34970,55 @@ span.tma-dash__messages-profile-avatar {
   outline: 2px solid var(--color-focus-ring, var(--color-primary));
   outline-offset: 2px;
 }
+
+/*
+ * §8 — the main application table.
+ *
+ * The documented table component does the chrome; this is only what the nine
+ * columns need of their own. A different table from the client grid beside it
+ * because it lists a different thing — applications, paged by the server —
+ * and it is the CBI board's table so the two read as one system.
+ */
+.tma-cip-table {
+  min-width: 1100px;
+}
+
+/* The number names the application (§7), so it carries the weight in the row
+   and tabular figures so a column of them lines up digit under digit. */
+.tma-cip-table__number {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* "F6". A count, so it reads as one — a chip rather than a sentence. */
+.tma-cip-table__family {
+  display: inline-block;
+  min-width: 34px;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--color-hover);
+  font-size: var(--text-size-12);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: help;
+}
+
+.tma-cip-table__officer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  white-space: nowrap;
+}
+
+.tma-cip-table__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 20px;
+}
+
+.tma-cip-table tbody tr[data-cip-open] { cursor: pointer; }
+
+.tma-cip-table tbody tr[data-cip-open]:hover { background: var(--color-hover); }

@@ -47,6 +47,9 @@ class CipApplicationController extends Controller
      */
     private const SYNC_PAGE = 50;
 
+    /** Rows in one page of the main application table (§8). */
+    private const LIST_PAGE = 50;
+
     /** Everything the wizard needs to draw itself, in one request. */
     public function form(Request $request): JsonResponse
     {
@@ -182,6 +185,154 @@ class CipApplicationController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * The main application table (§8).
+     *
+     * Its own endpoint rather than a widening of the client directory, for two
+     * reasons. The directory answers with every client the reader may see —
+     * eleven thousand of them — and pages in the browser; hanging an
+     * application, its provider, its officer and a head-count off each of
+     * those rows is the shape that put the container out of memory once
+     * already. And the table lists applications, not clients: a client with no
+     * application does not belong in it, and a client with two would appear
+     * once.
+     *
+     * Paged on the server, and every column is either a column of the row or
+     * an eager-loaded relation — no per-row query. Family size in particular
+     * is `withCount`, because §8 puts it on every line and `people()->count()`
+     * would be one query per application to answer it.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', 'string', 'max:32'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'perPage' => ['nullable', 'integer', 'min:1', 'max:200'],
+        ]);
+
+        $perPage = (int) ($data['perPage'] ?? self::LIST_PAGE);
+
+        $query = ApplicationScope::query($user)
+            ->with([
+                'provider:id,uuid,name,code',
+                'client:id,uid,name,email,phone',
+                'assignedOfficer:id,name,email,avatar_url',
+                // Only the main applicant: the table shows one name, and
+                // loading a whole family per row to read it would be six times
+                // the rows for one column.
+                'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+            ])
+            ->withCount('people');
+
+        if (! empty($data['status']) && Status::isValid($data['status'])) {
+            $query->where('status', $data['status']);
+        }
+
+        $this->applyListSearch($query, trim($data['q'] ?? ''));
+
+        $page = $query
+            // Newest first: the table is a worklist, and the application filed
+            // this morning is the one somebody is looking for.
+            ->orderByDesc('id')
+            ->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
+
+        return response()->json([
+            'applications' => collect($page->items())->map(fn ($a) => $this->row($a))->all(),
+            'page' => $page->currentPage(),
+            'lastPage' => $page->lastPage(),
+            'perPage' => $page->perPage(),
+            'total' => $page->total(),
+            'statuses' => collect(Status::ALL)->map(fn (string $s) => [
+                'value' => $s,
+                'label' => Status::label($s),
+                'tone' => Status::tone($s),
+            ])->all(),
+        ]);
+    }
+
+    /**
+     * §7's search, on the table it lists: either number, or the applicant.
+     *
+     * The numbers are matched from the start — a number is typed to find one
+     * record — while a name is matched anywhere, because people search on a
+     * surname as readily as a first name.
+     */
+    private function applyListSearch($query, string $term): void
+    {
+        if ($term === '') {
+            return;
+        }
+
+        $prefix = mb_strtolower(addcslashes($term, '\\%_')).'%';
+        $anywhere = '%'.mb_strtolower(addcslashes($term, '\\%_')).'%';
+
+        $query->where(function (Builder $q) use ($prefix, $anywhere) {
+            $q->whereRaw('LOWER(cip_applications.internal_number) LIKE ?', [$prefix])
+                ->orWhereRaw('LOWER(cip_applications.cip_number) LIKE ?', [$prefix])
+                ->orWhereHas('client', fn (Builder $c) => $c
+                    ->whereRaw('LOWER(clients.name) LIKE ?', [$anywhere]))
+                ->orWhereHas('people', fn (Builder $p) => $p
+                    ->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$anywhere]));
+        });
+    }
+
+    /**
+     * One row of §8, and only what §8 asks for.
+     *
+     * Deliberately not {@see record()}: that is the whole application with
+     * every person and their checklists, which is the right answer for a
+     * profile and a hundred times too much for a table of fifty lines.
+     */
+    private function row($application): array
+    {
+        $main = $application->people->first();
+        $client = $application->client;
+        $officer = $application->assignedOfficer;
+
+        return [
+            'id' => $application->uuid,
+            'clientUid' => $client?->uid,
+            // §7: the CIP number once it exists, the internal one until then.
+            'number' => $application->displayNumber(),
+            'internalNumber' => $application->internal_number,
+            'cipNumber' => $application->cip_number,
+            'applicantName' => $main
+                ? trim($main->first_name.' '.$main->last_name)
+                : ($client?->name ?? '—'),
+            'provider' => $application->provider?->name,
+            /*
+             * Who to contact about this application.
+             *
+             * The client record's own contact, which for a provider-referred
+             * application is the person the firm deals with there and for a
+             * private client is the applicant. Not `unit_contact` — that is
+             * the government's officer, a different question that §8 does not
+             * ask on this row.
+             */
+            'contactPerson' => $client?->name,
+            'contactEmail' => $client?->email,
+            'investmentType' => InvestmentType::display(
+                $application->investment_type,
+                $application->investment_type_other,
+            ),
+            // "1 Main Applicant + 1 Sponsor + 4 Dependents = F6" (§8).
+            'familySize' => (int) $application->people_count,
+            'familyLabel' => 'F'.max(1, (int) $application->people_count),
+            'status' => $application->status,
+            'statusLabel' => Status::label($application->status),
+            'statusTone' => Status::tone($application->status),
+            'assignedTo' => $officer ? [
+                'name' => $officer->name,
+                'email' => $officer->email,
+                'avatar' => $officer->avatar_url,
+            ] : null,
+        ];
     }
 
     /** One application, if this reader may see it. */

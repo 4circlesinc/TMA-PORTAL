@@ -2061,9 +2061,266 @@
     );
   }
 
+  /*
+   * §8 — the main application table.
+   *
+   * Nine columns about an APPLICATION: its number, who it is for, who filed
+   * it, how to reach them, what they are investing in, how many people travel
+   * on it, where it is, and whose desk it is on.
+   *
+   * A separate render path from the client grid beside it, because it lists a
+   * different thing. The grid's row is a client and pages in the browser out
+   * of the whole directory; this row is an application, and it is paged by the
+   * server — a client with no application does not belong here, and one with
+   * two would appear once.
+   *
+   * Built on the documented table component, the same one the CBI board uses,
+   * so it is one table style across the two boards rather than a second grid
+   * with its own column arithmetic.
+   */
+  var APP_TABLE = {
+    rows: [], page: 1, lastPage: 1, total: 0,
+    loading: false, error: null, loadedKey: null, status: '',
+  };
+
+  function applicationTableKey(state) {
+    return [state.search || '', APP_TABLE.status || '', APP_TABLE.page].join('|');
+  }
+
+  function ensureApplicationTable(state, render) {
+    var key = applicationTableKey(state);
+    if (APP_TABLE.loadedKey === key || APP_TABLE.loadingKey === key) return;
+
+    APP_TABLE.loadingKey = key;
+    APP_TABLE.loading = true;
+    APP_TABLE.error = null;
+
+    var params = ['perPage=50', 'page=' + APP_TABLE.page];
+    if (state.search) params.push('q=' + encodeURIComponent(state.search));
+    if (APP_TABLE.status) params.push('status=' + encodeURIComponent(APP_TABLE.status));
+
+    clientsFetch('/portal/cip/applications?' + params.join('&'))
+      .then(function (json) {
+        // A slower answer for a term the reader has moved on from must not
+        // overwrite the one they are looking at.
+        if (APP_TABLE.loadingKey !== key) return;
+        APP_TABLE.rows = (json && json.applications) || [];
+        APP_TABLE.page = (json && json.page) || 1;
+        APP_TABLE.lastPage = (json && json.lastPage) || 1;
+        APP_TABLE.total = (json && json.total) || 0;
+        APP_TABLE.statuses = (json && json.statuses) || APP_TABLE.statuses;
+        APP_TABLE.loadedKey = key;
+      })
+      .catch(function (err) {
+        if (APP_TABLE.loadingKey !== key) return;
+        APP_TABLE.error = (err && err.message) || 'Could not load applications.';
+        APP_TABLE.loadedKey = key;
+      })
+      .then(function () {
+        if (APP_TABLE.loadingKey !== key) return;
+        APP_TABLE.loadingKey = null;
+        APP_TABLE.loading = false;
+        render();
+      });
+  }
+
+  /* Drop what is held so the next paint refetches — after a save, or a live
+     signal that somebody else changed one. */
+  function forgetApplicationTable() {
+    APP_TABLE.loadedKey = null;
+  }
+
+  function renderApplicationTable(state) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.table) return '';
+
+    if (APP_TABLE.error) {
+      return '<div class="tma-dash__clients-directory-empty">' +
+        '<p class="tma-portal-modal__text">' + esc(APP_TABLE.error) + '</p></div>';
+    }
+
+    var headers = [
+      'Application', 'Applicant', 'Service provider', 'Contact person',
+      'Contact email', 'Investment', 'Family', 'Status', 'Assigned to',
+    ];
+
+    if (APP_TABLE.loading && !APP_TABLE.rows.length) {
+      return ui.table(headers, applicationTableSkeleton(), { cls: 'tma-cip-table' });
+    }
+
+    if (!APP_TABLE.rows.length) {
+      return ui.table(headers,
+        '<tr class="tma-portal-table__empty"><td colspan="9">' +
+        esc(state.search ? 'No application matches “' + state.search + '”.' : 'No applications yet.') +
+        '</td></tr>', { cls: 'tma-cip-table' });
+    }
+
+    var rows = APP_TABLE.rows.map(function (a) {
+      return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '">' +
+        // The number leads: §7 makes it the name of the application, and the
+        // internal one rides underneath once the CIP number has taken over.
+        '<td><span class="tma-cip-table__number">' + esc(a.number || '—') + '</span>' +
+        (a.cipNumber && a.internalNumber
+          ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
+          : '') + '</td>' +
+        '<td>' + esc(a.applicantName || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(a.provider || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' +
+        (a.contactEmail
+          ? '<a href="mailto:' + esc(a.contactEmail) + '">' + esc(a.contactEmail) + '</a>'
+          : '—') + '</td>' +
+        '<td class="tma-portal-table__muted">' + esc(a.investmentType || '—') + '</td>' +
+        // "F6" — §8's own shorthand, with the arithmetic behind it on hover.
+        '<td><span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
+        esc(a.familyLabel || '—') + '</span></td>' +
+        '<td><span class="tma-portal-status tma-portal-status--' + esc(a.statusTone || 'neutral') +
+        ' tma-portal-status--inline">' + esc(a.statusLabel || '—') + '</span></td>' +
+        '<td>' + assignedCell(a.assignedTo) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return ui.table(headers, rows, { cls: 'tma-cip-table' }) + renderApplicationTablePagination();
+  }
+
+  function familyTitle(a) {
+    var n = a.familySize || 0;
+
+    return n === 1 ? 'The applicant alone' : n + ' people travel on this application';
+  }
+
+  function assignedCell(officer) {
+    if (!officer) return '<span class="tma-portal-table__muted">Unassigned</span>';
+
+    return '<span class="tma-cip-table__officer">' +
+      (officer.avatar
+        ? '<img class="tma-cip-table__avatar" src="' + esc(officer.avatar) + '" alt="" width="20" height="20">'
+        : '') +
+      esc(officer.name || officer.email || 'Someone') + '</span>';
+  }
+
+  function applicationTableSkeleton() {
+    var rows = '';
+    for (var i = 0; i < 8; i++) {
+      rows += '<tr aria-hidden="true">';
+      for (var c = 0; c < 9; c++) {
+        rows += '<td>' + skeletonBar(skeletonWidth(i + c, 0.9)) + '</td>';
+      }
+      rows += '</tr>';
+    }
+
+    return rows;
+  }
+
+  function renderApplicationTablePagination() {
+    if (APP_TABLE.lastPage <= 1) return '';
+
+    var start = Math.max(1, Math.min(APP_TABLE.page - 2, APP_TABLE.lastPage - 4));
+    var end = Math.min(APP_TABLE.lastPage, start + 4);
+    var pages = '';
+    for (var p = start; p <= end; p++) {
+      var active = p === APP_TABLE.page;
+      pages += '<button type="button" class="tma-pagination__button' +
+        (active ? ' tma-pagination__button--active' : '') + '"' +
+        ' aria-label="Page ' + p + '"' + (active ? ' aria-current="page"' : '') +
+        ' data-cip-page="' + p + '"><span class="tma-pagination__label">' + p + '</span></button>';
+    }
+
+    var results = APP_TABLE.total.toLocaleString() +
+      (APP_TABLE.total === 1 ? ' application' : ' applications');
+
+    return '<div class="tma-pagination-bar tma-pagination-bar--footer">' +
+      '<div class="tma-pagination-bar__meta">' +
+      '<span class="tma-pagination-bar__results">' + esc(results) + '</span></div>' +
+      '<nav class="tma-pagination" aria-label="Pagination">' + pages +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon"' +
+      ' aria-label="Previous page" data-cip-direction="prev"' +
+      (APP_TABLE.page <= 1 ? ' disabled' : '') + '>' +
+      '<img src="' + ICONS.CaretLeft + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon' +
+      ' tma-pagination__button--next" aria-label="Next page" data-cip-direction="next"' +
+      (APP_TABLE.page >= APP_TABLE.lastPage ? ' disabled' : '') + '>' +
+      '<img src="' + ICONS.CaretRight + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      '</nav></div>';
+  }
+
+  /*
+   * Delegated, once, on the mount.
+   *
+   * Binding each row as it was drawn wired nothing that survived: the table is
+   * rebuilt whenever its data lands, so every handler was attached to a node
+   * already on its way out and the rows were inert by the time anyone clicked
+   * one. A listener on the mount outlives every repaint under it.
+   */
+  var cipTableWired = false;
+
+  function wireApplicationTable(root, state, navigate, render) {
+    if (cipTableWired) return;
+    cipTableWired = true;
+
+    /*
+     * On the document, like the intake toolbar above.
+     *
+     * Bound to the mount it was inert: the table is rebuilt whenever its data
+     * lands and the view remounts around it, so a listener attached to
+     * whichever element happened to be there is a listener on a node the next
+     * paint throws away. One on the document outlives all of it, and the
+     * handlers read `clientsMountState` rather than a captured `state` for the
+     * same reason.
+     */
+    document.addEventListener('click', function (e) {
+      var page = e.target.closest('[data-cip-page]');
+      if (page) {
+        APP_TABLE.page = parseInt(page.getAttribute('data-cip-page'), 10) || 1;
+        repaintClients();
+
+        return;
+      }
+
+      var step = e.target.closest('[data-cip-direction]');
+      if (step && !step.disabled) {
+        var next = step.getAttribute('data-cip-direction') === 'next'
+          ? APP_TABLE.page + 1
+          : APP_TABLE.page - 1;
+        APP_TABLE.page = Math.max(1, Math.min(APP_TABLE.lastPage, next));
+        repaintClients();
+
+        return;
+      }
+
+      var row = e.target.closest('[data-cip-open]');
+      if (!row) return;
+      // The Contact email column is a mailto — its own destination.
+      if (e.target.closest('a')) return;
+
+      var uid = row.getAttribute('data-cip-open');
+      if (!uid) return;
+      var controller = clientsMountRoot && clientsMountRoot._clientsController;
+      if (!controller) return;
+      // Opened on the applicant, because that is what the row was about.
+      if (clientsMountState) clientsMountState.profileTab = 'applicant';
+      controller.navigate('detail', uid);
+    });
+  }
+
+  function repaintClients() {
+    var controller = clientsMountRoot && clientsMountRoot._clientsController;
+    if (controller && controller.render) controller.render();
+  }
+
   function renderTableListPage(state) {
     var page = getTablePageData(state);
     var providers = onProvidersTab(state);
+
+    if (!providers) {
+      return (
+        renderTableToolbar(state) +
+        renderClientsFilterChips(state) +
+        '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
+        renderApplicationTable(state) +
+        '</div>'
+      );
+    }
 
     return (
       // The tabs live in the page head — see syncClientsHeadTabs.
@@ -6191,7 +6448,18 @@
 
   function refreshDirectoryFromSearch(root, state) {
     state.page = 1;
-    if (root.querySelector('[data-clients-body]') && state.viewMode === 'list') {
+    // §8's table pages on the server, so a new term is a new first page.
+    APP_TABLE.page = 1;
+    /*
+     * The full-width list repaints whole.
+     *
+     * It was found by looking for the grid's own body, which the application
+     * table does not have — so typing in the search box refreshed the client
+     * grid and left the application table showing the results of the term
+     * before it. Either table on screen means this is that view.
+     */
+    var fullTable = root.querySelector('[data-clients-body]') || root.querySelector('.tma-cip-table');
+    if (fullTable && state.viewMode === 'list') {
       if (root._clientsController && root._clientsController.render) {
         root._clientsController.render({ forceFull: true });
       }
@@ -6376,6 +6644,11 @@
 
   function wireEvents(root, state, scope, navigate, render) {
     wireCipToolbar(navigate);
+    wireApplicationTable(root, state, navigate, render);
+    // Asked for at paint rather than on navigation: the table is drawn from
+    // whatever the search box and the page buttons currently say, and those
+    // change without a route change.
+    if (state.screen === 'list' && !onProvidersTab(state)) ensureApplicationTable(state, render);
     // The intake wizard owns its own subtree once mounted; re-mounting on a
     // re-render would wipe a half-typed application.
     var intakeMount = root.querySelector('[data-cip-intake-mount]');
