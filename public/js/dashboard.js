@@ -223,6 +223,24 @@
     var scrim = root.querySelector('[data-dash-scrim]');
     var breadcrumbEl = root.querySelector('[data-breadcrumb]');
     var pageTitleEl = root.querySelector('[data-page-title]');
+
+    /*
+     * The page's title, and its visibility.
+     *
+     * A view may hide it: the Client hub does while a record is open, because
+     * its own head names the applicant and two titles stacked is the wrong
+     * page. It has no way to know when the reader leaves for somewhere else,
+     * so the title stayed hidden and Calendar, Email and the rest lost theirs.
+     *
+     * Whoever puts a new title up owns making it visible. A view that wants it
+     * hidden hides it again on its own render, which runs after this.
+     */
+    function setPageTitle(text) {
+      if (!pageTitleEl) return;
+      pageTitleEl.textContent = text;
+      pageTitleEl.hidden = false;
+      pageTitleEl.style.removeProperty('display');
+    }
     var backBtn = root.querySelector('[data-page-back]');
     var leaves = Array.prototype.slice.call(root.querySelectorAll('.tma-dash__nav-item[data-nav]:not([hidden])'));
 
@@ -1151,7 +1169,7 @@
       }
       var title = opts.title || (navEl && navEl.getAttribute('data-title'));
       var crumb = opts.crumb != null ? opts.crumb : (navEl && navEl.getAttribute('data-crumb'));
-      if (title && pageTitleEl) pageTitleEl.textContent = title;
+      if (title) setPageTitle(title);
       if (crumb != null) renderBreadcrumb(crumb);
       var viewName = opts.view || (navEl && navEl.getAttribute('data-view')) || 'dashboard';
       if (viewName === 'add-data') {
@@ -3092,7 +3110,7 @@
     root._refreshCurrentView = refreshCurrentView;
     root._updatePageMeta = function (meta) {
       meta = meta || {};
-      if (meta.title && pageTitleEl) pageTitleEl.textContent = meta.title;
+      if (meta.title) setPageTitle(meta.title);
       if (meta.crumb != null) renderBreadcrumb(meta.crumb);
     };
   }

@@ -3032,14 +3032,31 @@
     var host = left.querySelector('[data-clients-detail-head]');
     var show = usesPagedClientsFlow(state) && state.screen !== 'list';
 
+    /*
+     * Two separate questions, and they were one.
+     *
+     * `show` is whether the record's own head is lifted into the page head —
+     * a narrow-window arrangement. Whether the PAGE TITLE belongs there is a
+     * different question, and answering both with `show` left "CIP
+     * Applications" sitting above a head that already names the applicant, on
+     * every wide window. Two titles for one screen, stacked.
+     *
+     * The title is for the list. On any record — a client, a provider, a form
+     * — the head below says what you are looking at, and the sidebar says
+     * which section you are in.
+     */
+    var hideTitle = state.screen !== 'list';
+
+    if (titleEl) {
+      titleEl.hidden = hideTitle;
+      if (hideTitle) titleEl.style.display = 'none';
+      else titleEl.style.removeProperty('display');
+    }
+
     if (!show) {
       if (host) {
         host.hidden = true;
         host.innerHTML = '';
-      }
-      if (titleEl) {
-        titleEl.hidden = false;
-        titleEl.style.removeProperty('display');
       }
       left.classList.remove('tma-dash__main-head-left--clients-detail');
       return;
@@ -3053,10 +3070,6 @@
     }
     host.hidden = false;
     host.innerHTML = renderElevatedDetailChrome(state);
-    if (titleEl) {
-      titleEl.hidden = true;
-      titleEl.style.display = 'none';
-    }
     left.classList.add('tma-dash__main-head-left--clients-detail');
   }
 
