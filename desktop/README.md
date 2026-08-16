@@ -68,6 +68,37 @@ person already syncs through `/me/preferences`, so these stay local in
 Toggling one rebuilds the menu, so every checkbox reflects what is actually
 stored.
 
+## When a request fails, it must say so
+
+`protocol.handle` takes a promise, and a promise that **rejects** is a handler
+that failed — Chromium cannot tell what went wrong, so it reports the only
+thing it can: `ERR_UNEXPECTED`. `net.fetch` does not throw, it rejects, so the
+try/catch that looked like it covered this never did. Every ordinary network
+failure in the app — dropped wifi, a DNS blip, the portal between deploys —
+reached the window with its name taken off, and the error screen read
+"Can't reach the portal / ERR_UNEXPECTED".
+
+Answering `502` instead of rejecting is what lets the app's own error page say
+something true. If you touch [asset-cache.js](asset-cache.js), keep the
+`.catch()`.
+
+Two Electron facts that constrain anything you do there:
+
+- `net.fetch` with `redirect: 'manual'` **throws** (`Redirect was cancelled`)
+  rather than returning an opaque redirect, and with `follow` it reports
+  neither `redirected` nor a final `url`. So a navigation that redirects shows
+  the right page at the *original* address — `/` displaying the sign-in page.
+- `net.request` *does* expose the redirect, and **ignores**
+  `bypassCustomProtocolHandlers`: called from inside the handler it re-enters
+  it until the process dies with SIGTRAP. It is not an option here.
+
+Both go away when the app stops navigating to a website — see the shell notes.
+
+`npm run test:navigation` is the guard, and it points at **production** on
+purpose: the handler is registered for https and the dev server is http, so
+against localhost this code is not in the path at all. No local test can cover
+it.
+
 ## The right-click menu
 
 Electron ships none — right-clicking anywhere in the app did nothing at all,

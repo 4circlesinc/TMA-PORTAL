@@ -24,6 +24,7 @@
     "assets": "node bundle-assets.js",
     "test:context-menu": "env -u ELECTRON_RUN_AS_NODE electron test-context-menu.js",
     "test:art": "env -u ELECTRON_RUN_AS_NODE electron test-art.js",
+    "test:navigation": "env -u ELECTRON_RUN_AS_NODE electron test-navigation.js",
     "test:asset-cache": "env -u ELECTRON_RUN_AS_NODE electron test-asset-cache.js",
     "test:badge": "env -u ELECTRON_RUN_AS_NODE electron test-badge.js",
     "test:taskbar-pin": "env -u ELECTRON_RUN_AS_NODE electron test-taskbar-pin.js",

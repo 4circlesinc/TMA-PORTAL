@@ -93,23 +93,57 @@ function sanitizeRequestHeaders(headers) {
   return out;
 }
 
-/** Hand a request to the real network without re-entering this handler. */
+/**
+ * Hand a request to the real network without re-entering this handler.
+ *
+ * THE CATCH IS THE POINT
+ *
+ * `protocol.handle` takes a promise, and a promise that *rejects* is a handler
+ * that failed — Chromium has no idea what went wrong, so it reports the only
+ * thing it can: ERR_UNEXPECTED. The try/catch around the call never helped,
+ * because `net.fetch` does not throw, it rejects: every network failure in the
+ * app — a dropped wifi, a DNS blip, a portal between deploys — arrived at the
+ * window as ERR_UNEXPECTED instead of as itself.
+ *
+ * That is what the "Can't reach the portal / ERR_UNEXPECTED" screen was. Not a
+ * mystery error: an ordinary failed request with its name taken off. Answering
+ * 502 instead lets the app's own error page say something true.
+ *
+ * `redirect` is deliberately not forwarded. Chromium sets `follow` on
+ * navigations here anyway, and the two other values both make `net.fetch`
+ * throw rather than return — `manual` raises "Redirect was cancelled", which
+ * would land right back in the rejection case above.
+ *
+ * A known limitation, and one this design cannot fix: because the redirect is
+ * followed inside the handler, a navigation that redirects ends up showing the
+ * final page at the *original* address — `/` displaying the sign-in page
+ * rather than becoming `/auth/login`. `net.fetch` reports neither `redirected`
+ * nor a final `url`, and `net.request`, which does expose the redirect, ignores
+ * `bypassCustomProtocolHandlers` and re-enters this handler until the process
+ * dies. There is no third option while the app navigates to a website at all —
+ * which is one more argument for the app carrying its own shell.
+ */
 function networkFetch(request) {
   try {
     const init = {
       method: request.method,
       headers: sanitizeRequestHeaders(request.headers),
-      redirect: request.redirect,
     };
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       init.body = request.body;
       init.duplex = 'half';
     }
+
     return net.fetch(new Request(request.url, init), {
       bypassCustomProtocolHandlers: true,
+    }).catch((err) => {
+      console.error('[asset-cache] network fetch failed', request.url, err);
+
+      return new Response('', { status: 502, statusText: 'Bad Gateway' });
     });
   } catch (err) {
-    console.error('[asset-cache] network fetch failed', err);
+    console.error('[asset-cache] network fetch threw', err);
+
     return Promise.resolve(new Response('', { status: 502, statusText: 'Bad Gateway' }));
   }
 }
