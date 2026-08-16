@@ -287,6 +287,16 @@
   }
 
   function load() {
+    /*
+     * The remembered answer paints first — the greeting, the sidebar profile
+     * and the avatar are the most-looked-at pixels on the boot screen, and a
+     * shimmer where a person's own name was yesterday is the loudest "this is
+     * a website" tell there is. The server's answer follows and repaints;
+     * for the same person that repaint changes nothing visible.
+     */
+    var kept = recallMe();
+    if (kept && kept.id != null && !me) applyMe(kept);
+
     return api('GET', '/me').then(function (res) {
       /*
        * A real answer that is not this person — signed out, suspended. The

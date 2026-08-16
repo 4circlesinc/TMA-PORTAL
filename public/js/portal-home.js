@@ -102,6 +102,80 @@
   var homeFilesInflight = null;
   var homeFilesAt = 0;
 
+  /*
+   * ── Warm boot ─────────────────────────────────────────────────────
+   *
+   * Every tile below keeps its last answer in the store and starts from it.
+   * That is the whole difference between "an app opening" and "a page
+   * loading": the board paints exactly what it showed when the app was quit,
+   * and the fetches — which every loader already runs as a quiet,
+   * diff-before-repaint revalidation — correct it behind the paint. No
+   * skeleton, no tiles filling in one by one; the data simply updates, the
+   * way a chat app's list does.
+   *
+   * On the desktop the snapshots survive a restart (IndexedDB); in a browser
+   * the store is memory, so this warms in-session navigation and leaves
+   * nothing on the disk — the firm's standing decision.
+   *
+   * Hydration runs at script load, not at mount: the store's memory tier
+   * answers in a microtask and the disk tier in a few milliseconds, both
+   * long before the dashboard view first mounts, so the first render already
+   * has the data and the skeleton branch is never taken.
+   */
+  function keepWarm(key, value) {
+    if (window.TMAStore) window.TMAStore.put('home:' + key, value);
+  }
+
+  function hydrateHomeState() {
+    if (!window.TMAStore) return;
+
+    var remount = function () {
+      var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+      if (el && el.isConnected && el.childElementCount) mount(el, { fromLoad: true });
+    };
+
+    window.TMAStore.get('home:files').then(function (snap) {
+      if (!snap || homeFilesLoaded) return;
+      var s = data().state();
+      s.recentFiles = snap.recentFiles || [];
+      s.folders = s.folders || {};
+      s.folders.favorites = snap.favorites || [];
+      homeFilesLoaded = true;
+      remount();
+    });
+
+    window.TMAStore.get('home:metrics').then(function (snap) {
+      if (!snap || homeMetricsLoaded) return;
+      homeMetrics = snap;
+      homeMetricsLoaded = true;
+      remount();
+    });
+
+    window.TMAStore.get('home:staff').then(function (snap) {
+      if (!snap || homeStaffLoaded) return;
+      // Presence dots a restart old are presence dots, not the truth — the
+      // refresh already on its way corrects them, the same as a chat app
+      // showing last-known "online" for the first breath after launch.
+      homeStaff = snap;
+      homeStaffLoaded = true;
+      remount();
+    });
+
+    window.TMAStore.get('home:email').then(function (snap) {
+      if (!snap || homeEmailLoaded) return;
+      homeEmail = snap;
+      homeEmailLoaded = true;
+      remount();
+    });
+
+    window.TMAStore.get('home:chats').then(function (snap) {
+      if (!snap || homeChatsLoaded) return;
+      homeChats = snap;
+      homeChatsLoaded = true;
+      remount();
+    });
+  }
+
   var homeMetricsLoaded = false;
   var homeMetrics = null;
   var homeMetricsInflight = null;
@@ -490,6 +564,7 @@
       homeEmailLoaded = true;
       homeEmailAt = Date.now();
       homeEmail = payload;
+      keepWarm('email', payload);
       if (changed && el && el.isConnected) mount(el, { fromLoad: true });
     }
 
@@ -649,6 +724,7 @@
       homeChatsLoaded = true;
       homeChatsAt = Date.now();
       homeChats = payload;
+      keepWarm('chats', payload);
       if (changed && el && el.isConnected) mount(el, { fromLoad: true });
     }
 
@@ -814,6 +890,7 @@
         if (json) {
           homeStaff = json;
           homeStaffAt = Date.now();
+          keepWarm('staff', json);
         } else if (!homeStaff) {
           homeStaff = { staff: true, employees: [], error: true };
         }
@@ -1596,6 +1673,11 @@
         s.folders.favorites = favFolders.concat(favFiles);
       }
 
+      keepWarm('files', {
+        recentFiles: s.recentFiles || [],
+        favorites: (s.folders && s.folders.favorites) || [],
+      });
+
       // A revalidation that found nothing new is not a reason to touch the
       // page. Re-rendering an identical board is where the "cards keep
       // refreshing" feeling came from.
@@ -1623,7 +1705,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       // A failed refresh keeps the numbers already on the cards; only the very
       // first attempt has nothing to fall back to.
-      .then(function (j) { if (j) { homeMetrics = j; homeMetricsAt = Date.now(); } })
+      .then(function (j) { if (j) { homeMetrics = j; homeMetricsAt = Date.now(); keepWarm('metrics', j); } })
       .catch(function () {})
       .then(function () {
         homeMetricsInflight = null;
@@ -2086,6 +2168,10 @@
       },
     });
   }
+
+  // Before the view registers: by the time the dashboard first mounts, the
+  // store has answered and the board paints its last-known self.
+  hydrateHomeState();
 
   if (window.TMAPortalViews) window.TMAPortalViews.register('dashboard', mount);
 

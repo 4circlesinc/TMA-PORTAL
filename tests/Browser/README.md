@@ -250,6 +250,13 @@ field placement and drawing, and computed CSS only exist in a browser.
   row per kind (the inclusive tie-break re-delivering each boundary row);
   asserting zero there is asserting the bug the tie-break exists to prevent.
 
+- **`warm-home.mjs`** — the dashboard opens the way it was quit. Visits once
+  so every tile snapshots itself into the store, then reloads with every data
+  endpoint killed: whatever paints can only have come from the store, so a
+  skeleton or a missing greeting on that reload is warm boot failing, not the
+  network being slow. Runs the desktop path (TMADesktop declared before
+  boot) so the snapshots live in IndexedDB, as across a real quit.
+
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with

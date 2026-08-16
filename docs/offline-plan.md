@@ -81,8 +81,14 @@ N records" with a neutral dot (activity, not a warning). Desktop only
 throughout; `tests/Browser/files-replica.mjs` drives all of it — walk,
 assembly offline, client profile, progress — against a real IndexedDB store.
 
-**4. The offline shell.** ◐ *The desktop boots offline; browsers still get
-the error page.* Three pieces (16 Aug 2026): `desktop/shell-cache.js` keeps
+**4. The offline shell.** ◐ *The desktop boots offline — and (16 Aug,
+evening) boots WARM: the dashboard's five tiles snapshot themselves into the
+store after every load (`home:*` keys) and hydrate at script boot, /me
+paints from its remembered copy before the network answers, and avatars
+joined the desktop byte cache — so a quit-and-reopen shows the board exactly
+as it was, data refreshing silently behind, no skeletons
+(`tests/Browser/warm-home.mjs` proves it by killing every data endpoint).
+Browsers still get the error page on a no-network reload.* Three pieces (16 Aug 2026): `desktop/shell-cache.js` keeps
 the last served shell — capabilities inlined — and answers navigations from
 disk before the network has said a word, gated on a session cookie, the
 deploy build, and `/me` watchdogs for a dead session or a changed account.

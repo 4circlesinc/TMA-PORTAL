@@ -51,6 +51,8 @@ app.whenReady().then(async () => {
     fileCache.cacheable(url('/portal/files/files/aaaaaaaa-bbbb-cccc-dddd-000000000001/thumb'), 'GET'), true);
   check('a download is not — it is a save, not a view',
     fileCache.cacheable(url('/portal/files/files/aaaaaaaa-bbbb-cccc-dddd-000000000001/download'), 'GET'), false);
+  check('an avatar is — a boot screen of grey faces looks half-loaded',
+    fileCache.cacheable(url('/media/avatars/aaaaaaaa-bbbb-cccc-dddd-000000000001.jpg'), 'GET'), true);
   check('a listing is not', fileCache.cacheable(url('/portal/files/?section=all'), 'GET'), false);
   check('nor is any write', fileCache.cacheable(url(P(1)), 'POST'), false);
 

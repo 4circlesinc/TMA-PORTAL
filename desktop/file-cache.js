@@ -45,9 +45,11 @@ const DEFAULT_BUDGET = 512 * 1024 * 1024;
 /*
  * What is worth keeping: the bytes behind the viewer. Thumbs ride along —
  * they are small, numerous, and exactly what makes an offline folder look
- * like a folder rather than a list of grey squares.
+ * like a folder rather than a list of grey squares. Avatars too, for the
+ * same reason at the other scale: a boot screen with every face grey is a
+ * boot screen that looks half-loaded whatever else painted.
  */
-const CACHEABLE = /^\/portal\/files\/files\/[a-f0-9-]{36}\/(preview|thumb)$/;
+const CACHEABLE = /^\/(?:portal\/files\/files\/[a-f0-9-]{36}\/(?:preview|thumb)|media\/avatars\/[a-f0-9-]{36}\.jpg)$/;
 
 let dir = null;
 
