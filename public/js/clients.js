@@ -2829,21 +2829,6 @@
     return bits.join('<span class="tma-dash__clients-profile-dot" aria-hidden="true">·</span>');
   }
 
-  function renderClientsBackBtn(state) {
-    // Named for where it goes. "CIP Applications" over a button that returns
-    // to one client is the sort of label a reader learns to distrust.
-    var owner = state && backDestination(state);
-    var client = owner ? contactFor(owner) : null;
-    var label = client && client.name ? client.name : 'CIP Applications';
-
-    return (
-      '<button type="button" class="tma-dash__clients-back-btn" data-clients-back' +
-      ' aria-label="Back to ' + esc(label) + '">' +
-      '<img src="' + ICONS.CaretLeft + '" alt="" aria-hidden="true">' +
-      '<span>' + esc(label) + '</span>' +
-      '</button>'
-    );
-  }
 
   function contactProfileSubtitle(c) {
     if (!c) return '';
@@ -2950,6 +2935,7 @@
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
+      renderClientsBackArrow(null) +
       '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
       '<img src="' + ICONS.Buildings + '" alt="" width="20" height="20"></span>' +
       '<div class="tma-dash__clients-profile-ident">' +
@@ -2975,7 +2961,8 @@
     var title = isNew ? 'New application' : 'Edit application';
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
-      '<div class="tma-dash__clients-profile-head">' + renderFormHeadAvatar(draft, contact, isNew) +
+      '<div class="tma-dash__clients-profile-head">' + renderClientsBackArrow(state) +
+      renderFormHeadAvatar(draft, contact, isNew) +
       '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
@@ -2992,7 +2979,7 @@
       // form is not a record, and the circle stood in for a provider that
       // does not exist until the form is submitted.
       '<div class="tma-dash__clients-profile-toolbar">' +
-      '<div class="tma-dash__clients-profile-head">' +
+      '<div class="tma-dash__clients-profile-head">' + renderClientsBackArrow(state) +
       '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
@@ -3004,14 +2991,12 @@
   function renderElevatedDetailChrome(state) {
     var toolbar = '';
     /*
-     * A client's head carries the way back itself — an arrow beside their face
-     * (see renderContactProfileToolbar). The labelled button below is for the
-     * screens with no face to put it beside: the forms, and a service
-     * provider.
+     * Every head carries the way back itself now — an arrow on the same line
+     * as the name, before whatever stands for the record. The labelled button
+     * that used to sit on a row above them is gone: it spent a whole line of
+     * the page saying "leave", above the name of the thing you had opened.
      */
-    var ownsBack = state.screen === 'detail' && state.selectedId;
-
-    if (ownsBack) {
+    if (state.screen === 'detail' && state.selectedId) {
       toolbar = renderContactProfileToolbar(contactFor(state.selectedId), state);
     } else if (state.screen === 'company' && state.companyId) {
       toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
@@ -3022,6 +3007,7 @@
       var editingApp = state.screen === 'edit-application';
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
+        renderClientsBackArrow(state) +
         '<span class="tma-dash__clients-profile-name">' +
         (editingApp ? 'Edit application' : 'New application') + '</span>' +
         '</div>' +
@@ -3035,7 +3021,7 @@
     } else if (state.screen === 'add-company' || state.screen === 'edit-company') {
       toolbar = renderCompanyFormToolbar(state);
     }
-    return (ownsBack ? '' : renderClientsBackBtn(state)) + (toolbar || '');
+    return toolbar || '';
   }
 
   /* Full-page detail: put identity + actions in the global page-title row. */
