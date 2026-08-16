@@ -564,6 +564,10 @@
       var item = { id: rec.id, name: rec.name || 'Client' };
       if (rec.initial) item.initial = rec.initial;
       if (rec.initialColor) item.initialColor = rec.initialColor;
+      // The face, where the record has one. Carried on the item rather than
+      // read from the profile blob: the listing does not send profiles, so a
+      // row would otherwise wear initials until somebody opened it.
+      if (rec.photo) item.photo = rec.photo;
       insertContact(item);
     });
     // A client somebody else deleted must not survive in the profile cache.
@@ -749,6 +753,7 @@
     contact.id = item.id;
     contact.name = displayName(contact);
     contact.avatar = item.avatar;
+    if (item.photo) contact.photo = item.photo;
     contact.initial = item.initial;
     contact.initialColor = item.initialColor;
     contact.importantDates = normalizeImportantDates(contact);
@@ -861,7 +866,10 @@
       avatar: item.avatar,
       initial: item.initial,
       initialColor: item.initialColor,
-      photo: profile.photo || '',
+      // The row's own photo first: it rides on the lean directory record, so
+      // a face shows in the table without waiting for a profile to be opened.
+      // The blob is the fallback for a photo set through the contact form.
+      photo: item.photo || profile.photo || '',
     };
   }
 

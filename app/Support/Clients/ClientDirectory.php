@@ -29,7 +29,7 @@ final class ClientDirectory
     public const COLUMNS = [
         'id', 'uid', 'user_id', 'folder_id', 'company_id', 'name', 'client_type',
         'company', 'referral_type', 'referred_by_company_id', 'email', 'phone',
-        'initial', 'initial_color', 'deleted_at',
+        'initial', 'initial_color', 'photo_url', 'deleted_at',
     ];
 
     /**

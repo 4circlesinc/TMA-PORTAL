@@ -565,6 +565,23 @@ class Intake
             'photo_path' => $stored['path'],
             'photo_url' => $stored['url'],
         ])->save();
+
+        /*
+         * The main applicant's face is the client's face.
+         *
+         * A CIP client IS the applicant — the hub record exists to hold their
+         * file — so the portrait they filed with is the picture every list,
+         * row and header should draw for them. Without this the passport photo
+         * showed on the application while the client the application belongs
+         * to went on wearing its initials, which is the same person twice with
+         * two different faces.
+         *
+         * Only the main applicant: a sponsor and a dependant are people on the
+         * application, not the client it is filed for.
+         */
+        if ($person->role === CipPerson::ROLE_MAIN_APPLICANT) {
+            $person->application?->client?->forceFill(['photo_url' => $stored['url']])->save();
+        }
     }
 
     /**

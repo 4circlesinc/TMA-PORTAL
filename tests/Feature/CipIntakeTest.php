@@ -831,6 +831,36 @@ class CipIntakeTest extends TestCase
             ->assertJson(['application' => null]);
     }
 
+    public function test_the_applicants_passport_photo_becomes_the_clients_picture(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider, array_merge(
+            ['sponsored' => '1'],
+            $this->sponsor(),
+        )))->assertCreated();
+
+        // A CIP client IS the applicant, so the portrait they filed with is
+        // the picture every list and header draws for them.
+        $client = Client::first();
+        $main = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertNotNull($client->photo_url);
+        $this->assertSame($main->photo_url, $client->photo_url);
+
+        // It rides on the lean directory record, so a row shows a face without
+        // loading the profile blob the listing deliberately leaves behind.
+        $this->assertSame($client->photo_url, $client->toDirectoryRecord()['photo']);
+        $this->assertContains('photo_url', \App\Support\Clients\ClientDirectory::COLUMNS);
+
+        // The sponsor has a face of their own, but it is not the client's —
+        // they are somebody on the application, not who it is filed for.
+        $sponsor = CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR);
+        $this->assertNotNull($sponsor->photo_url);
+        $this->assertNotSame($sponsor->photo_url, $client->photo_url);
+    }
+
     public function test_the_form_offers_the_five_investment_types_and_every_country(): void
     {
         $staff = $this->user(Role::REVIEWING_OFFICER);

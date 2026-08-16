@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'uid', 'user_id', 'folder_id', 'company_id', 'name', 'client_type', 'company',
     'referral_type', 'referred_by_company_id', 'email', 'phone', 'initial',
-    'initial_color', 'data', 'created_by',
+    'initial_color', 'photo_url', 'data', 'created_by',
 ])]
 class Client extends Model
 {
@@ -130,6 +130,7 @@ class Client extends Model
             'name' => $this->name,
             'initial' => $this->initial,
             'initialColor' => $this->initial_color,
+            'photo' => $this->photo_url,
             'profile' => $this->data ?? [],
             'folderUuid' => $this->folder?->uuid,
             'hasLogin' => $this->user_id !== null,
@@ -177,6 +178,9 @@ class Client extends Model
             'name' => $this->name,
             'initial' => $this->initial,
             'initialColor' => $this->initial_color,
+            // The applicant's own face where there is one; the initials are
+            // the fallback, not the other way round.
+            'photo' => $this->photo_url,
             'folderUuid' => $this->folder?->uuid,
             'hasLogin' => $this->user_id !== null,
             'userId' => $this->user_id,
