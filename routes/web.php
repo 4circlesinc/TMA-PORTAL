@@ -322,6 +322,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // so the update is posted with _method, the way every other form in
         // the portal that sends files does it.
         Route::post('/applications/{uuid}', [CipApplicationController::class, 'update'])->name('applications.update');
+        // §7/§16: the Unit has it — record the date and the CIP number, which
+        // is also what switches every surface off the internal number.
+        Route::post('/applications/{uuid}/submission', [CipApplicationController::class, 'submit'])
+            ->name('applications.submit');
+        // A mistyped government number, corrected without unwinding the status.
+        Route::patch('/applications/{uuid}/cip-number', [CipApplicationController::class, 'correctNumber'])
+            ->name('applications.cip-number');
         // Which application a client's profile is showing, or none yet.
         Route::get('/clients/{uid}/application', [CipApplicationController::class, 'forClient'])->name('clients.application');
         // The archival passport photo, streamed through the app: it is a

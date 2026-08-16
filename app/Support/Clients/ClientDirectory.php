@@ -2,6 +2,7 @@
 
 namespace App\Support\Clients;
 
+use App\Models\CipApplication;
 use App\Models\Client;
 use App\Models\User;
 use App\Support\Access\ClientScope;
@@ -88,12 +89,14 @@ final class ClientDirectory
         $op = self::likeOperator();
 
         return self::baseQuery($user)
-            ->where(function ($q) use ($like, $op) {
+            ->where(function ($q) use ($like, $op, $term) {
                 $q->where('name', $op, $like)
                     ->orWhere('email', $op, $like)
                     ->orWhere('phone', $op, $like)
                     ->orWhere('company', $op, $like)
                     ->orWhereRaw(self::blobTextExpression().' '.$op.' ?', [$like]);
+
+                self::matchApplicationNumber($q, $term);
             })
             ->orderBy('name')
             ->limit($limit)
@@ -101,6 +104,44 @@ final class ClientDirectory
             ->map->toDirectoryRecord()
             ->values()
             ->all();
+    }
+
+    /**
+     * Widen a client search to the application numbers §7 promises.
+     *
+     * "Users may search using either: Internal Number, CIP Number, Applicant
+     * Name" — and a number is not a property of the client row, so the name
+     * search alone could never answer `GAL26-00001`. Both numbers are matched,
+     * not just whichever one is on display: the internal number stays in use
+     * for invoices and reviews for the life of the application, so somebody
+     * holding an invoice must still be able to find the applicant with it long
+     * after every screen has switched to the CIP number.
+     *
+     * Anchored at the start rather than contained. A number is typed to find
+     * one record, and `%00001%` would return every application of every year
+     * whose sequence happens to contain those digits.
+     *
+     * Deliberately not scoped by CIP reach: the surrounding query is already
+     * the reader's own client scope, and this only decides which of the
+     * clients they may see are a match. A number they cannot otherwise reach
+     * matches nothing they could not already list by name.
+     */
+    public static function matchApplicationNumber($query, string $term): void
+    {
+        $term = trim($term);
+        if ($term === '') {
+            return;
+        }
+
+        $prefix = mb_strtolower(addcslashes($term, '\\%_')).'%';
+
+        $query->orWhereIn('id', CipApplication::query()
+            ->whereNotNull('client_id')
+            ->where(function ($q) use ($prefix) {
+                $q->whereRaw('LOWER(internal_number) LIKE ?', [$prefix])
+                    ->orWhereRaw('LOWER(cip_number) LIKE ?', [$prefix]);
+            })
+            ->select('client_id'));
     }
 
     /** Drop every warm directory entry so the next read rebuilds. */

@@ -18,12 +18,14 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\Status;
+use App\Support\Cip\Submission;
 use App\Support\Files\Presenter;
 use App\Support\Realtime\Live;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 /**
  * CIP applications: what the intake wizard needs, and filing one.
@@ -243,6 +245,62 @@ class CipApplicationController extends Controller
         $data = $request->validate(Intake::rules(editing: true), Intake::messages());
 
         $application = Intake::update($application, $user, $data);
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
+     * The Unit has it: record the date and the CIP number (§16, §7).
+     *
+     * The number is the point. Every surface renders `displayNumber()`, so
+     * writing it here is what flips dashboards, reports, status screens, email
+     * subjects and search off the internal number in one move.
+     *
+     * The capability is not checked here on purpose. Submission is a status
+     * change and {@see Engine} owns those — it refuses the edge from anywhere
+     * but Ready to submit, and refuses the actor without `cip.compliance`.
+     * A second check in the controller would be a second place to get it wrong.
+     */
+    public function submit(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
+            // Recorded, not assumed: staff enter a submission after the fact
+            // as often as on the day, and defaulting silently to today would
+            // put the wrong date on an audit trail.
+            'submittedAt' => ['nullable', 'date'],
+        ], [
+            'cipNumber.required' => 'Enter the CIP application number from the Unit.',
+        ]);
+
+        $application = Submission::record(
+            $application,
+            $user,
+            $data['cipNumber'],
+            isset($data['submittedAt']) ? Carbon::parse($data['submittedAt']) : null,
+        );
+
+        Live::staff(Live::CIP);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /** Fix a CIP number that was typed wrong. The status does not move. */
+    public function correctNumber(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
+        ]);
+
+        $application = Submission::correct($application, $user, $data['cipNumber']);
 
         Live::staff(Live::CIP);
 

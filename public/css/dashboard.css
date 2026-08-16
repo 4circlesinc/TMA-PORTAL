@@ -17850,6 +17850,66 @@
    it is true of every tab below it — inside one, it would look like a note
    about that section. Takes the tab row's own bottom margin, so the panels
    sit where they always did whether or not it is there. */
+/*
+ * The application's own line: its number, its status, its provider.
+ *
+ * Between the tabs and the panels, for the same reason the sync notice is —
+ * it is true of every tab below it, and inside one it would read as a fact
+ * about that section. Takes the tab row's bottom margin so the panels sit
+ * where they always did.
+ */
+.tma-dash__clients-appbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  flex-shrink: 0;
+  margin-top: calc(var(--space-24) * -1 + var(--space-4));
+  margin-bottom: var(--space-24);
+}
+
+/* The number the whole portal calls this application (§7). Monospaced digits
+   so a column of them lines up and a transposed pair is visible. */
+.tma-dash__clients-appbar-number {
+  font-size: var(--text-size-16);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+/* The internal number once the CIP number has taken over the display. Beside
+   it rather than gone: invoices and reviews still quote it. */
+.tma-dash__clients-appbar-internal {
+  font-size: var(--text-size-12);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__clients-appbar-provider {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
+
+/* Pushed to the far end — it acts on the application, it does not describe
+   it like everything to its left. */
+.tma-dash__clients-appbar-action {
+  margin-left: auto;
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.tma-dash__clients-appbar-action:hover { background: var(--color-hover); }
+
+.tma-dash__clients-appbar-action--quiet {
+  border-color: transparent;
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__clients-sync-notice {
   flex-shrink: 0;
   margin-top: calc(var(--space-24) * -1 + var(--space-4));

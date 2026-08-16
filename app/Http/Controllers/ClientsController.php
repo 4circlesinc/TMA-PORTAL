@@ -106,7 +106,7 @@ class ClientsController extends Controller
         $op = $this->likeOperator();
 
         $ids = ClientScope::query($request->user())
-            ->where(function ($q) use ($like, $op) {
+            ->where(function ($q) use ($like, $op, $term) {
                 $q->where('name', $op, $like)
                     ->orWhere('email', $op, $like)
                     ->orWhere('phone', $op, $like)
@@ -114,6 +114,8 @@ class ClientsController extends Controller
                     // The rest of the searchable fields — nickname, job title,
                     // extra emails and phones — have no column of their own.
                     ->orWhereRaw($this->blobTextExpression().' '.$op.' ?', [$like]);
+
+                ClientDirectory::matchApplicationNumber($q, $term);
             })
             ->orderBy('name')
             ->pluck('uid');

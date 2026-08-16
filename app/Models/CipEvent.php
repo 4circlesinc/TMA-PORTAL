@@ -28,6 +28,17 @@ class CipEvent extends Model
 
     public const ACTION_UNASSIGNED = 'unassigned';
 
+    /**
+     * The government's number arrived, or was corrected.
+     *
+     * Its own action rather than a detail of the status change: §7 keeps two
+     * numbers for the life of the application, and which one a surface showed
+     * on a given day is an audit question. The internal number rides in the
+     * event's meta so an invoice can still be reconciled against a row that
+     * now displays something else.
+     */
+    public const ACTION_NUMBER_ASSIGNED = 'number_assigned';
+
     protected function casts(): array
     {
         return [

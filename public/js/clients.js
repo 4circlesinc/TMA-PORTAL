@@ -3669,6 +3669,73 @@
   }
 
   /*
+   * The application's own line: which application this is, and where it is.
+   *
+   * §7 requires the portal to display the application number and to switch
+   * every user-facing reference to the CIP number once it is recorded. The
+   * number was reaching the browser and being drawn nowhere — a toast after
+   * saving was the only place it appeared — so there was nothing for the rule
+   * to switch. This is that reference.
+   *
+   * `number` is the server's `displayNumber()`: the internal number until the
+   * Unit's arrives, the CIP number after. The internal one is not dropped when
+   * it is superseded, it moves beside — invoices, reviews and assessment
+   * feedback keep referring to it for the life of the application, and a
+   * reader holding one needs to see that they are on the right record.
+   */
+  function renderApplicationBar(state, app) {
+    if (!app || !app.number) return '';
+
+    var switched = !!app.cipNumber && !!app.internalNumber;
+
+    return (
+      '<div class="tma-dash__clients-appbar">' +
+      '<span class="tma-dash__clients-appbar-number" title="Application number">' +
+      esc(app.number) + '</span>' +
+      (switched
+        ? '<span class="tma-dash__clients-appbar-internal" title="Internal number, kept for audit and invoicing">' +
+          esc(app.internalNumber) + '</span>'
+        : '') +
+      (app.statusLabel
+        ? '<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
+          ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>'
+        : '') +
+      (app.provider ? '<span class="tma-dash__clients-appbar-provider">' + esc(app.provider) + '</span>' : '') +
+      renderSubmissionAction(state, app) +
+      '</div>'
+    );
+  }
+
+  /*
+   * Recording the submission, which is what enters the CIP number.
+   *
+   * Offered only from Ready to submit, because that is the one edge the server
+   * accepts (§16) — an action that could be pressed from anywhere and then
+   * refused would be the interface hiding a rule it could have simply not
+   * shown. Once the number is in, the same control corrects a typo, which does
+   * not move the status.
+   */
+  function renderSubmissionAction(state, app) {
+    if (app.status === 'ready_to_submit') {
+      return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-submit>' +
+        'Record submission</button>';
+    }
+
+    if (app.cipNumber && canRecordSubmission()) {
+      return '<button type="button" class="tma-dash__clients-appbar-action' +
+        ' tma-dash__clients-appbar-action--quiet" data-cip-fix-number>Correct number</button>';
+    }
+
+    return '';
+  }
+
+  function canRecordSubmission() {
+    var access = window.TMAPortalAccess;
+
+    return !!(access && access.can && access.can('cip.compliance'));
+  }
+
+  /*
    * One person from the application, as the profile's own list rows.
    *
    * The same list component the contact record uses, so an applicant reads
@@ -4787,6 +4854,10 @@
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +
       '</div>' +
+      // Above the panels, not inside one: the number and the status are true
+      // of the whole application, and in a tab they would read as a fact about
+      // that section.
+      renderApplicationBar(state, app) +
       renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out
       // of the way — the same reason a company's and the intake form's do.
@@ -5381,6 +5452,114 @@
       },
     });
     return host;
+  }
+
+  /*
+   * Entering the CIP number (§7, §16).
+   *
+   * Two jobs, one dialog, because they are the same field: recording the
+   * submission (which also moves the application to Pending review) and
+   * correcting a number typed wrong (which does not). Splitting them into two
+   * screens would mean two places to keep the same rules about a government
+   * identifier.
+   *
+   * The date is asked for rather than assumed. Staff record a submission after
+   * the fact as often as on the day, and quietly stamping today would put the
+   * wrong date on an audit trail nobody would think to check.
+   */
+  function openSubmissionDialog(state, render, correcting) {
+    var ui = window.TMAPortalUI;
+    var app = applicationFor(state.selectedId);
+    if (!app || !ui || !ui.openModal) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+
+    ui.openModal({
+      title: correcting ? 'Correct the CIP number' : 'Record submission to the Unit',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-number">CIP application number</label>' +
+        '<input type="text" id="cip-number" class="tma-dash__clients-field-input" data-cip-number' +
+        ' value="' + esc(correcting ? (app.cipNumber || '') : '') + '"' +
+        ' placeholder="10T1G12661P" autocomplete="off" spellcheck="false">' +
+        '</div>' +
+        (correcting
+          ? ''
+          : '<div class="tma-dash__clients-field">' +
+            '<label class="tma-dash__clients-field-label" for="cip-submitted">Submission date</label>' +
+            '<input type="date" id="cip-submitted" class="tma-dash__clients-field-input"' +
+            ' data-cip-submitted value="' + esc(today) + '">' +
+            '</div>') +
+        // Said before they commit: this is the moment the whole portal starts
+        // calling the application something else.
+        '<p class="tma-portal-modal__text">' +
+        (correcting
+          ? 'The status does not change.'
+          : 'Every screen will show this number from now on. ' +
+            esc(app.internalNumber || 'The internal number') + ' stays for audit and invoicing.') +
+        '</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-number>' +
+        (correcting ? 'Save number' : 'Record submission') + '</button>' +
+        '</div>',
+      onMount: function (el) {
+        var input = el.querySelector('[data-cip-number]');
+        if (input) input.focus();
+
+        var cancel = el.querySelector('[data-cip-cancel-number]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-number]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var number = input ? input.value.trim() : '';
+          if (!number) {
+            clientsToast('Enter the CIP application number from the Unit.', 'negative');
+            if (input) input.focus();
+
+            return;
+          }
+
+          var dateEl = el.querySelector('[data-cip-submitted]');
+          save.disabled = true;
+          save.textContent = 'Saving…';
+
+          submitCipNumber(app.id, number, correcting, dateEl ? dateEl.value : null)
+            .then(function (json) {
+              ui.closeModal();
+              var record = json && json.application;
+              if (record) rememberApplication(state.selectedId, record);
+              clientsToast(correcting
+                ? 'CIP number updated'
+                : 'Submission recorded — now ' + (record ? record.number : number), 'positive');
+              render({ detailOnly: !usesPagedClientsFlow(state) });
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = correcting ? 'Save number' : 'Record submission';
+              clientsToast((err && err.message) || 'Could not save that number.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  function submitCipNumber(applicationId, number, correcting, submittedAt) {
+    var base = '/portal/cip/applications/' + encodeURIComponent(applicationId);
+
+    if (correcting) {
+      return clientsFetch(base + '/cip-number', {
+        method: 'PATCH',
+        json: { cipNumber: number },
+      });
+    }
+
+    return clientsFetch(base + '/submission', {
+      method: 'POST',
+      json: { cipNumber: number, submittedAt: submittedAt || null },
+    });
   }
 
   function canAssignClients() {
@@ -6859,6 +7038,14 @@
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
       });
+    });
+
+    MORPH.unwired(root, '[data-cip-submit]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () { openSubmissionDialog(state, render, false); });
+    });
+
+    MORPH.unwired(root, '[data-cip-fix-number]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () { openSubmissionDialog(state, render, true); });
     });
 
     MORPH.unwired(root, '[data-cip-photo]').forEach(function (btn) {
