@@ -18700,6 +18700,20 @@
   min-width: 0;
 }
 
+/*
+ * The first row starts at the card's own padding line.
+ *
+ * A row's padding is there to give it a hover target down a list; on the first
+ * one it lands on top of the card's padding and pushes the answers away from
+ * the top by an amount neither of them meant — most visible on the applicant
+ * and the sponsor, where the list is the first thing in the card with no title
+ * above it to absorb the difference. The same reasoning already zeroes the
+ * horizontal padding on the stats row above.
+ */
+.tma-dash__clients-list--profile > .tma-dash__clients-list-item:first-child {
+  padding-top: 0;
+}
+
 .tma-dash__clients-page--list,
 .tma-dash__clients-page--detail {
   flex-direction: column;
