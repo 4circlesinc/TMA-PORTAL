@@ -136,6 +136,21 @@ with 2,000 usable files on disk. The moment a manifest can be fetched, the
 per-file gate is back. `test-asset-cache.js` pins both halves;
 `test-shell-cache.js` pins every gate and watchdog above.
 
+## The document-byte cache
+
+[file-cache.js](file-cache.js): previews and thumbs are kept on this machine
+(userData/file-cache, 512 MB default, least-recently-USED evicted), so a
+document somebody has looked at opens again with no network. It lives in the
+protocol handler, not portal JS, because the viewer never fetches — it renders
+`<img src>` / `<iframe src>` / `<video src>`, and the handler is the only
+place all of those pass through. **Network first, always**: a file's URL does
+not change when its content does, so the cache only answers when the network
+could not (the handler's own 502) — a real answer, including a 404, stands.
+Cleared when the shell cache detects a dead session or an account change;
+kept across deploys (files do not redeploy with the portal). The budget
+figure is still the firm's open question (docs/offline-plan.md) — one number
+in file-cache.js when answered. `npm run test:file-cache`.
+
 ## The right-click menu
 
 Electron ships none — right-clicking anywhere in the app did nothing at all,

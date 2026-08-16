@@ -104,8 +104,17 @@ again / Discard — the queue never throws work away by itself. Still to do:
 conflict detection by version (see the open question below), and the other
 modules' writes.
 
-**6. Document contents (desktop).** ✗ *Not started.* File blobs for offline
-viewing, bounded by a disk budget and evicted least-recently-used.
+**6. Document contents (desktop).** ✅ *Shipped.* `desktop/file-cache.js`,
+wired into the protocol handler — the one place every `<img src>` /
+`<iframe src>` / `<video src>` load passes through, so no portal change was
+needed and browser disks stay clean. Previews and thumbs are kept on view
+(cache-on-access, which is what LRU means), bounded (512 MB placeholder —
+the budget open question below still stands), least-recently-USED evicted.
+Network first always: the cache answers only when the network could not; a
+real answer, a 404 included, stands. Cleared on sign-out/account change,
+kept across deploys. What it deliberately is not: a proactive download of
+every byte the account may see — that is a different decision with a real
+disk bill, and the firm has not made it.
 
 ## What offline applications do and do not do today
 

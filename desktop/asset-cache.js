@@ -27,6 +27,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const shellCache = require('./shell-cache');
+const fileCache = require('./file-cache');
 
 const ROOT = path.join(__dirname, 'webassets');
 
@@ -266,6 +267,34 @@ async function handle(request) {
 
     const file = localFile(url, state.agreed instanceof Set ? state.agreed : null);
     if (file) return fileResponse(file);
+  }
+
+  /*
+   * Document bytes: network first, kept on the way through, served back only
+   * when the network could not answer at all. A real answer — a 404, a 403 —
+   * always stands; the 502 below is only ever the handler's own name for a
+   * dead connection. See file-cache.js for why this seam and no other.
+   */
+  if (fileCache.cacheable(url, request.method)) {
+    const response = await networkFetch(request);
+
+    if (response.ok) {
+      try {
+        const copy = response.clone();
+        copy.arrayBuffer().then((buf) => {
+          fileCache.store(url.pathname, Buffer.from(buf), copy.headers.get('content-type'));
+        }).catch(() => { /* keeping a copy must never break the view */ });
+      } catch { /* as above */ }
+
+      return response;
+    }
+
+    if (response.status === 502) {
+      const kept = fileCache.serve(url.pathname);
+      if (kept) return kept;
+    }
+
+    return response;
   }
 
   return shellCache.observe(url, request, await networkFetch(request));

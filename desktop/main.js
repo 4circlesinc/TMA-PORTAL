@@ -36,6 +36,7 @@ const handoff = require('./signin-handoff');
 const assetCache = require('./asset-cache');
 const contextMenu = require('./context-menu');
 const shellCache = require('./shell-cache');
+const fileCache = require('./file-cache');
 const settings = require('./settings');
 // Our own version, not app.getVersion(): that reports Electron's own version
 // whenever the app is started from a file rather than a package directory.
@@ -1202,9 +1203,20 @@ if (!app.requestSingleInstanceLock()) {
      * honest move is a fresh copy from the network. IgnoringCache, because
      * the wrong shell may have primed the HTTP cache with the wrong assets.
      */
+    // Document bytes, kept per machine under a budget — see file-cache.js.
+    fileCache.configure({ dir: path.join(app.getPath('userData'), 'file-cache') });
+
     shellCache.on({
       stale: (reason) => {
         console.log(`  • shell cache: reloading (${reason})`);
+        /*
+         * The kept document bytes go with the shell, for the two reasons a
+         * shell goes stale that are about WHO: a dead session, and somebody
+         * else signing in. Their right to every cached document is their own,
+         * not inherited from whoever fetched it. A deploy changing is about
+         * WHAT and keeps the bytes — files do not redeploy with the portal.
+         */
+        if (reason === 'signed-out' || reason === 'account-changed') fileCache.clear();
         if (mainWindow) mainWindow.webContents.reloadIgnoringCache();
       },
     });
