@@ -17872,42 +17872,45 @@
    so a column of them lines up and a transposed pair is visible. */
 /* The way back: an arrow the size of the face it sits beside, on the same
    line, so the head reads left to right as "back · who · where". */
+/* No box, no fill, no hover panel — just the mark. It is still a button and
+   still clickable; the only thing removed is the chrome drawn around it. */
 .tma-dash__clients-back-arrow {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  margin-right: var(--space-4);
+  margin-right: var(--space-8);
   padding: 0;
   border: 0;
-  border-radius: var(--radius-8);
-  background: transparent;
+  background: none;
   cursor: pointer;
 }
 
-.tma-dash__clients-back-arrow:hover { background: var(--color-hover); }
-
-.tma-dash__clients-back-arrow img { width: 16px; height: 16px; opacity: 0.7; }
-
-/* The application's facts, under the name. A row, so the status chip sits on
-   the same line as the number rather than under it. */
-.tma-dash__clients-profile-subtitle {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-8);
+.tma-dash__clients-back-arrow img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.55;
+  transition: opacity var(--duration-fast, 120ms) ease;
 }
 
-.tma-dash__clients-profile-number {
+/* The only feedback it needs: the mark itself darkens. */
+.tma-dash__clients-back-arrow:hover img { opacity: 1; }
+
+.tma-dash__clients-back-arrow:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--color-primary));
+  outline-offset: 2px;
+  border-radius: var(--radius-4, 4px);
+}
+
+/* The application's facts, in their own band: number, status, provider,
+   family. A row, so the status chip sits beside the number rather than under
+   it, and the action (when there is one) is pushed to the far end. */
+.tma-dash__clients-appbar .tma-dash__clients-profile-number {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
 }
 
-/* The separator is punctuation, not content — it must not be read out. */
-.tma-dash__clients-profile-dot { opacity: 0.4; }
+.tma-dash__clients-appbar .tma-dash__clients-profile-dot { opacity: 0.4; }
 
 .tma-dash__clients-appbar-number {
   font-size: var(--text-size-16);

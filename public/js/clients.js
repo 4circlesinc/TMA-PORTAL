@@ -2839,19 +2839,15 @@
 
   function renderContactProfileToolbar(c, state) {
     if (!c) return '';
-    var app = applicationFor(c.id);
-    var subtitle = app ? renderApplicationFacts(app) : esc(contactProfileSubtitle(c));
+    var subtitle = esc(contactProfileSubtitle(c));
 
     /*
-     * The way back is an arrow beside the face, and the facts sit under the
-     * name.
+     * Arrow, face, name. Nothing else.
      *
-     * The labelled button above the head was a whole row spent on "go back",
-     * pushing the person's name down the page; and the application's number
-     * and status were a separate band below the tabs, which put the two halves
-     * of "who and where" in different places. One block now: arrow, face,
-     * name, and under the name what this application is and where it has got
-     * to.
+     * The application's number and status were tried under the name and made
+     * the head a paragraph; they are back in their own band below the tabs,
+     * where they are one line about the application rather than more text
+     * about the person.
      */
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
@@ -4105,10 +4101,11 @@
   function renderApplicationBar(state, app) {
     if (!app) return '';
 
+    var facts = renderApplicationFacts(app);
     var action = renderSubmissionAction(state, app);
-    if (!action) return '';
+    if (!facts && !action) return '';
 
-    return '<div class="tma-dash__clients-appbar">' + action + '</div>';
+    return '<div class="tma-dash__clients-appbar">' + facts + action + '</div>';
   }
 
   /*
