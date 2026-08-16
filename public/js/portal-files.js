@@ -204,13 +204,7 @@
 
   /* ── data loading ──────────────────────────────────── */
 
-  function load(silent) {
-    // Status is cheap and answers "where are my files?" before anyone asks.
-    if (!silent) loadSyncStatus();
-    if (!silent) {
-      state.loading = true;
-      render();
-    }
+  function listingParams() {
     var params = new URLSearchParams();
     params.set('section', state.section);
     if (state.folder) params.set('folder', state.folder);
@@ -220,28 +214,93 @@
     params.set('sort', state.sort);
     params.set('dir', state.dir);
     params.set('perPage', '0');
+    return params;
+  }
 
-    // Returned so a live refresh can wait for it and avoid stacking refetches
-    // on top of each other when several changes land at once.
-    return net().fetchJSON(net().url('/?' + params.toString()))
-      .then(function (res) {
-        state.loading = false;
-        state.data = { folders: res.folders || [], files: res.files || [] };
-        state.owners = res.owners || [];
-        state.breadcrumb = res.breadcrumb || [];
-        if (res.folder) state.folderName = res.folder.name;
-        pruneSelection();
-        render();
-      })
-      .catch(function (err) {
-        state.loading = false;
-        // A silent refresh is nobody's request. Replacing a working list with
-        // an error because a background poll lost the network is a worse
-        // outcome than showing slightly stale rows until the next one lands.
-        if (silent) return;
-        state.error = err.message || 'Could not load this folder.';
-        render();
-      });
+  /*
+   * Which listings the store keeps. Plain browsing — a section, a folder, a
+   * sort — is what people come back to and what should open instantly; a
+   * search or a filter is a question asked once, and caching every variant
+   * would fill the store with answers nobody returns to. The key carries the
+   * whole query string, so two sorts of one folder are two entries rather
+   * than one lying about the other.
+   */
+  function listingCacheKey(params) {
+    if (state.search || state.filterType || state.filterOwner) return null;
+    return 'files:listing:' + params.toString();
+  }
+
+  function load(silent) {
+    // Status is cheap and answers "where are my files?" before anyone asks.
+    if (!silent) loadSyncStatus();
+
+    var params = listingParams();
+    var url = net().url('/?' + params.toString());
+    var key = window.TMAStore ? listingCacheKey(params) : null;
+    var expected = params.toString();
+
+    /*
+     * Guard every paint against the reader having moved on. The cached copy
+     * and the server's answer land at different times, and a fast navigator
+     * can be two folders away by the second one — applied unguarded, the
+     * folder they left overwrites the folder they are in. (The old
+     * single-answer code had the same race; the cache just made it likely
+     * enough to matter.)
+     */
+    var apply = function (res, meta) {
+      if (listingParams().toString() !== expected) return;
+      state.loading = false;
+      state.error = null;
+      state.data = { folders: res.folders || [], files: res.files || [] };
+      state.owners = res.owners || [];
+      state.breadcrumb = res.breadcrumb || [];
+      if (res.folder) state.folderName = res.folder.name;
+      pruneSelection();
+      render();
+    };
+
+    /*
+     * The skeleton only goes up when there is nothing better to show. With a
+     * memory hit the cached rows paint in the same breath; holding a
+     * skeleton in front of them for one frame is the flash the store exists
+     * to end.
+     */
+    if (!silent && !(key && window.TMAStore.peek(key))) {
+      state.loading = true;
+      render();
+    }
+
+    var fetcher = function () { return net().fetchJSON(url); };
+
+    /*
+     * A silent refresh — a live signal, a background poll — skips the cached
+     * paint on purpose: the screen already shows something at least as new
+     * (an optimistic insert may be newer than the store), and only the
+     * server's answer is worth a repaint. It still writes the store, so the
+     * next visit benefits from what the signal fetched.
+     *
+     * Returned so a live refresh can wait for it and avoid stacking refetches
+     * on top of each other when several changes land at once.
+     */
+    var request = key
+      ? (silent
+        ? fetcher().then(function (res) { window.TMAStore.put(key, res); apply(res); return res; })
+        : window.TMAStore.swr(key, fetcher, apply))
+      : fetcher().then(function (res) { apply(res); return res; });
+
+    return request.catch(function (err) {
+      // swr resolves quietly when a cached copy was already painted and only
+      // the refresh failed — that is the offline case working as designed.
+      // Reaching here means there was nothing to show at all.
+      if (listingParams().toString() !== expected) return;
+      state.loading = false;
+      // A silent refresh is nobody's request. Replacing a working list with
+      // an error because a background poll lost the network is a worse
+      // outcome than showing slightly stale rows until the next one lands.
+      if (silent) return;
+      state.error = err.message || 'Could not load this folder.';
+      render();
+    });
   }
 
   function pruneSelection() {

@@ -58,6 +58,20 @@
           err.data = data;
           throw err;
         }
+        /*
+         * Any write that succeeded makes every cached file listing suspect —
+         * a rename changes a row, a move changes two folders, a delete
+         * changes one and the recycle bin. Naming which listings each of the
+         * forty-odd write endpoints touches would be a table that is wrong
+         * the first time anyone adds one; dropping the lot costs a refetch
+         * of whatever the reader looks at next, which the store absorbs.
+         * This is the ONE choke point every File Library write goes through
+         * (uploads included — completion posts here too), which is what
+         * makes the blanket rule safe to rely on.
+         */
+        if (opts.method && opts.method !== 'GET' && window.TMAStore) {
+          window.TMAStore.invalidate('files:');
+        }
         return data;
       });
     });

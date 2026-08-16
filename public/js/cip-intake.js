@@ -1056,7 +1056,11 @@
       // Everything drawn from this application, wherever it was cached. Two
       // prefixes because two screens ask different questions of the same
       // record: the profile keys on the client, the wizard on the application.
-      invalidate: ['cip:application:', 'cip:application-record:'],
+      // And the file listings: the replay files scans into the applicant's
+      // folders, and it runs through the queue's own fetch rather than
+      // TMAFilesNet — so the seam that invalidates every other files write
+      // never sees this one.
+      invalidate: ['cip:application:', 'cip:application-record:', 'files:'],
     }).then(function () {
       done();
       if (state.onDone) state.onDone(editing ? optimistic() : null, { queued: true });

@@ -26,9 +26,15 @@ problem.
 a memory tier everywhere and an IndexedDB tier on the desktop, scoped to the
 signed-in account. Screens paint from cache immediately and revalidate behind
 the paint, so a second visit is instant and a first visit is no slower. Wired
-into the client directory, the profile, the application and the folder
-listings. *Delivers the "open instantly" ask on its own.*
-`public/js/portal-store.js`
+into the client directory, the profile, the application, the client
+Documents tab — and (16 Aug) the whole File Library: `load()` in
+portal-files.js runs plain listings through `swr`, and every write
+invalidates through the one seam all File Library writes share,
+`TMAFilesNet.fetchJSON` (uploads included — completion posts there too).
+Searches and filtered views are deliberately not cached. *Delivers the
+"open instantly" ask on its own.* `public/js/portal-store.js`;
+`tests/Browser/files-cached-listing.mjs` proves the offline paint by cutting
+the network.
 
 **2. Sync cursors.** ✅ *Shipped for applications; the other records still to
 do.* `GET /portal/cip/applications/sync?since=&after=` returns what has moved

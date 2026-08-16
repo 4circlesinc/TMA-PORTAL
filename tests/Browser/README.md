@@ -216,6 +216,17 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_STAFF_EMAIL=you@tmantoinelaw.com TMA_STAFF_PASSWORD=… \
     node tests/Browser/missing-art.mjs
   ```
+- **`files-cached-listing.mjs`** — the File Library painting from the store.
+  Three promises: a visited listing is held by TMAStore, moving between
+  visited sections with the network cut still paints their rows (asserted by
+  going offline, not by racing a stopwatch), and a write drops every cached
+  listing through the one seam all File Library writes share
+  (`TMAFilesNet.fetchJSON`). Section switches go through
+  `TMADashboard.navigate` rather than sidebar clicks — the nested rows'
+  visibility depends on group state and the user's sidebar style, neither of
+  which is what the test is about. Standard throwaway server; leaves a
+  renamed folder behind.
+
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with
