@@ -228,7 +228,7 @@ class CipApplicationController extends Controller
         $query = ApplicationScope::query($user)
             ->with([
                 'provider:id,uuid,name,code',
-                'client:id,uid,name,email,phone',
+                'client:id,uid,name,email,phone,photo_url,initial,initial_color',
                 'assignedOfficer:id,name,email,avatar_url',
                 /*
                  * Who is on this applicant.
@@ -321,6 +321,8 @@ class CipApplicationController extends Controller
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
+            // Their passport photo, which intake files as the client's picture.
+            'photo' => $client?->photo_url,
             'applicantName' => $main
                 ? trim($main->first_name.' '.$main->last_name)
                 : ($client?->name ?? '—'),

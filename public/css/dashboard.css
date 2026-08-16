@@ -34983,6 +34983,40 @@ span.tma-dash__messages-profile-avatar {
   min-width: 1100px;
 }
 
+/* The applicant, as a face and a name. The passport photo where there is one,
+   their initials where there is not — never a stock silhouette. */
+.tma-cip-table__applicant {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-cip-table__applicant-face {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 26px;
+}
+
+.tma-cip-table__applicant-face--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-hover);
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-12);
+  font-weight: 600;
+}
+
+.tma-cip-table__applicant-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The number names the application (§7), so it carries the weight in the row
    and tabular figures so a column of them lines up digit under digit. */
 .tma-cip-table__number {
@@ -35004,49 +35038,17 @@ span.tma-dash__messages-profile-avatar {
   cursor: help;
 }
 
-.tma-cip-table__officer {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-8);
-  white-space: nowrap;
-}
 
-/* Overlapped, so four people cost little more room than one and the row stays
-   a single line whoever is on the case. */
-.tma-cip-table__faces {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-}
 
-.tma-cip-table__faces > * + * { margin-left: -6px; }
 
-.tma-cip-table__avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex: 0 0 22px;
-  /* A ring in the table's own background separates overlapping faces without
-     drawing a border that would read as a badge. */
-  box-shadow: 0 0 0 2px var(--color-bg-card, var(--color-white));
-}
 
-.tma-cip-table__avatar--initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-hover);
-  color: var(--color-text-secondary);
-  font-size: var(--text-size-12);
-  font-weight: 600;
-}
 
-.tma-cip-table__officer-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+
+
+
+
+
+
 
 .tma-cip-table tbody tr[data-cip-open] { cursor: pointer; }
 

@@ -2173,7 +2173,7 @@
         (a.cipNumber && a.internalNumber
           ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
           : '') + '</td>' +
-        '<td>' + esc(a.applicantName || '—') + '</td>' +
+        '<td>' + applicantCell(a) + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.provider || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' + esc(a.contactPerson || '—') + '</td>' +
         '<td class="tma-portal-table__muted">' +
@@ -2200,45 +2200,55 @@
   }
 
   /*
-   * Who is on this applicant.
+   * Who is on this applicant — the CBI board's own cell.
    *
-   * A list, because a client can have a case officer and a reviewer and the
-   * column should not quietly pick one. The first is named; the rest are faces
-   * with their names on hover, so a row stays one line whether one person is
-   * assigned or four.
+   * TMAPersonCard is the component both boards share with the File Library:
+   * overlapping faces, a "+N" that is itself face-shaped so the column's width
+   * does not depend on how many people there are, and a card on hover that
+   * names them. Rebuilding any of that here would have been a second version
+   * of it to keep in step.
    */
   function assignedCell(people) {
     var list = people || [];
-    if (!list.length) return '<span class="tma-portal-table__muted">Unassigned</span>';
 
-    var shown = list.slice(0, 3);
-    var extra = list.length - shown.length;
+    if (window.TMAPersonCard && window.TMAPersonCard.faces) {
+      return window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' });
+    }
 
-    return '<span class="tma-cip-table__officer">' +
-      '<span class="tma-cip-table__faces">' +
-      shown.map(function (p) { return assignedFace(p); }).join('') +
-      '</span>' +
-      '<span class="tma-cip-table__officer-name">' + esc(nameOf(list[0])) +
-      (list.length > 1 ? ' +' + (list.length - 1) : '') + '</span>' +
-      (extra > 0 ? '' : '') +
+    return '<span class="tma-portal-table__muted">' +
+      esc(list.map(function (p) { return p.first || p.name; }).join(', ') || 'Unassigned') +
       '</span>';
   }
 
-  function nameOf(person) {
-    return (person && (person.name || person.email)) || 'Someone';
+  /*
+   * The applicant, as a face and a name.
+   *
+   * Their passport photo where there is one — it is filed as the client's
+   * picture at intake — and their initials where there is not. Never an
+   * invented face: a stock silhouette on a citizenship application would be
+   * the table showing somebody who does not exist.
+   */
+  function applicantCell(a) {
+    var name = a.applicantName || '—';
+    var face = a.photo
+      ? '<img class="tma-cip-table__applicant-face" src="' + esc(a.photo) + '" alt="" width="26" height="26">'
+      : applicantInitials(a);
+
+    return '<span class="tma-cip-table__applicant">' + face +
+      '<span class="tma-cip-table__applicant-name">' + esc(name) + '</span></span>';
   }
 
-  function assignedFace(person) {
-    var title = nameOf(person) + (person && person.role ? ' — ' + person.role : '');
+  function applicantInitials(a) {
+    var name = a.applicantName || '';
+    var uri = initialsAvatarUri(name, a.clientUid || name);
 
-    if (person && person.avatar) {
-      return '<img class="tma-cip-table__avatar" src="' + esc(person.avatar) +
-        '" alt="" width="22" height="22" title="' + esc(title) + '">';
+    if (uri) {
+      return '<img class="tma-cip-table__applicant-face" src="' + esc(uri) +
+        '" alt="" width="26" height="26">';
     }
 
-    // No photo: their initial, never an invented face.
-    return '<span class="tma-cip-table__avatar tma-cip-table__avatar--initial" title="' +
-      esc(title) + '">' + esc(String(nameOf(person)).charAt(0).toUpperCase()) + '</span>';
+    return '<span class="tma-cip-table__applicant-face tma-cip-table__applicant-face--initial">' +
+      esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
   }
 
   function applicationTableSkeleton() {
@@ -6686,6 +6696,9 @@
 
   function wireEvents(root, state, scope, navigate, render) {
     wireCipToolbar(navigate);
+    // The shared person card: the hover that names the faces in Assigned to.
+    // Once, on the document, like the board it is borrowed from.
+    if (window.TMAPersonCard && window.TMAPersonCard.wire) window.TMAPersonCard.wire();
     wireApplicationTable(root, state, navigate, render);
     // Asked for at paint rather than on navigation: the table is drawn from
     // whatever the search box and the page buttons currently say, and those
