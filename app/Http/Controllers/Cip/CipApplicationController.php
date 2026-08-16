@@ -11,6 +11,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\PassportPhoto;
@@ -163,7 +164,9 @@ class CipApplicationController extends Controller
 
     private function record($application): array
     {
-        $application->loadMissing(['provider', 'people.documents']);
+        // The slots' files as well as the slots: the checklist only needs to
+        // know a slot is answered, but the passport photo is opened from here.
+        $application->loadMissing(['provider', 'people.documents.file']);
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
         // Numbered first and in their number, then the unnumbered — a spouse
@@ -238,6 +241,11 @@ class CipApplicationController extends Controller
             'passportPhotoUrl' => $person->photo_path
                 ? '/portal/cip/people/'.$person->uuid.'/passport-photo'
                 : null,
+            // The photo as it was filed: a file in the person's folder, which
+            // is what opening it should show. The avatar is a 320px crop of
+            // it and the archival endpoint is bytes with no name, size or
+            // download — neither is the thing a viewer asked to look at.
+            'photoFile' => $this->photoFile($person),
             'documents' => $person->documents->map(fn ($slot) => [
                 'type' => $slot->type,
                 'label' => $slot->label,
@@ -245,6 +253,35 @@ class CipApplicationController extends Controller
                 'uploaded' => $slot->isFilled(),
             ])->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
+        ];
+    }
+
+    /**
+     * The passport photo's file record, for the viewer that opens it.
+     *
+     * Enough to open in the shared lightbox and no more — the same handful of
+     * keys the file library hands it. The permission check is the file
+     * routes' own: this says where the file is, not that you may read it, and
+     * a reader who may not gets the same refusal they would get anywhere else
+     * in the portal.
+     */
+    private function photoFile(CipPerson $person): ?array
+    {
+        $slot = $person->documents
+            ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO);
+
+        $file = $slot?->file;
+        if (! $file) {
+            return null;
+        }
+
+        return [
+            'id' => $file->uuid,
+            'name' => $file->name,
+            'mime' => $file->mime_type,
+            'size' => (int) $file->size,
+            'previewUrl' => route('files.preview', $file->uuid),
+            'downloadUrl' => route('files.download', $file->uuid),
         ];
     }
 }

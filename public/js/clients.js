@@ -3555,18 +3555,56 @@
     var img = '<img class="tma-dash__clients-person__photo" src="' + esc(person.photo) +
       '" alt="Passport photo of ' + esc(person.name || 'the applicant') + '" width="168" height="168">';
 
+    /*
+     * Opened in the shared lightbox, because it is a file.
+     *
+     * The photo is filed into the person's folder like every other document
+     * on the application, so looking at it should be the viewer the rest of
+     * the portal uses — with the filename, the size and a download — rather
+     * than a tab of loose bytes. What is drawn here is still the 320px
+     * avatar; the lightbox is handed the file.
+     */
+    var opens = person.photoFile ? ' data-cip-photo="' + esc(person.id) + '"' : '';
+
     return (
       '<li class="tma-dash__clients-list-item tma-dash__clients-person__photo-row">' +
       '<span class="tma-dash__clients-list-icon" aria-hidden="true">' +
       '<img src="' + ICONS.Image + '" alt=""></span>' +
       '<div class="tma-dash__clients-list-main">' +
       '<span class="tma-dash__clients-list-label">Passport photo</span>' +
-      (person.passportPhotoUrl
-        ? '<a href="' + esc(person.passportPhotoUrl) + '" target="_blank" rel="noopener"' +
-          ' title="Open the filed photo">' + img + '</a>'
+      (opens
+        ? '<button type="button" class="tma-dash__clients-person__photo-open"' + opens +
+          ' title="Open the filed photo">' + img + '</button>'
         : img) +
       '</div></li>'
     );
+  }
+
+  /* Every person on the open application, whatever role they hold. */
+  function cipPeople(state) {
+    var app = applicationFor(state.selectedId);
+    if (!app) return [];
+    return [app.applicant, app.sponsor].concat(app.dependents || []).filter(Boolean);
+  }
+
+  function openCipPhoto(state, personId) {
+    var person = cipPeople(state).filter(function (p) { return p.id === personId; })[0];
+    var file = person && person.photoFile;
+    if (!file) return;
+
+    if (!window.TMAPortalLightbox || typeof TMAPortalLightbox.open !== 'function') {
+      window.open(file.previewUrl || file.downloadUrl, '_blank', 'noopener');
+      return;
+    }
+
+    TMAPortalLightbox.open([{
+      name: file.name,
+      mime: file.mime || 'image/jpeg',
+      size: file.size || 0,
+      url: file.previewUrl || file.downloadUrl,
+      downloadUrl: file.downloadUrl,
+      canDownload: true,
+    }], 0);
   }
 
   /* What this person owes, and what they have handed over. */
@@ -6421,6 +6459,12 @@
         }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-photo]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        openCipPhoto(state, btn.getAttribute('data-cip-photo'));
       });
     });
   }

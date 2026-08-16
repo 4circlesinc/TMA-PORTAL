@@ -34768,3 +34768,31 @@ span.tma-dash__messages-profile-avatar {
      other block, and indenting it left a ragged 28px notch down the side. */
   margin: var(--space-4) 0 0 calc(-16px - var(--space-12));
 }
+
+/* The photo opens the file it was filed as, so it is a button — but a button
+   that is entirely the picture. Everything a button brings of its own is
+   taken back off, and the margin moves out to the wrapper so the picture
+   still lands on the icon column. */
+.tma-dash__clients-person__photo-open {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-12);
+  margin: var(--space-4) 0 0 calc(-16px - var(--space-12));
+}
+
+.tma-dash__clients-person__photo-open .tma-dash__clients-person__photo {
+  margin: 0;
+  transition: opacity var(--duration-fast, 120ms) ease;
+}
+
+.tma-dash__clients-person__photo-open:hover .tma-dash__clients-person__photo {
+  opacity: 0.88;
+}
+
+.tma-dash__clients-person__photo-open:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--color-primary));
+  outline-offset: 2px;
+}
