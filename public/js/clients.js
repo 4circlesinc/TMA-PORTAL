@@ -2199,14 +2199,46 @@
     return n === 1 ? 'The applicant alone' : n + ' people travel on this application';
   }
 
-  function assignedCell(officer) {
-    if (!officer) return '<span class="tma-portal-table__muted">Unassigned</span>';
+  /*
+   * Who is on this applicant.
+   *
+   * A list, because a client can have a case officer and a reviewer and the
+   * column should not quietly pick one. The first is named; the rest are faces
+   * with their names on hover, so a row stays one line whether one person is
+   * assigned or four.
+   */
+  function assignedCell(people) {
+    var list = people || [];
+    if (!list.length) return '<span class="tma-portal-table__muted">Unassigned</span>';
+
+    var shown = list.slice(0, 3);
+    var extra = list.length - shown.length;
 
     return '<span class="tma-cip-table__officer">' +
-      (officer.avatar
-        ? '<img class="tma-cip-table__avatar" src="' + esc(officer.avatar) + '" alt="" width="20" height="20">'
-        : '') +
-      esc(officer.name || officer.email || 'Someone') + '</span>';
+      '<span class="tma-cip-table__faces">' +
+      shown.map(function (p) { return assignedFace(p); }).join('') +
+      '</span>' +
+      '<span class="tma-cip-table__officer-name">' + esc(nameOf(list[0])) +
+      (list.length > 1 ? ' +' + (list.length - 1) : '') + '</span>' +
+      (extra > 0 ? '' : '') +
+      '</span>';
+  }
+
+  function nameOf(person) {
+    return (person && (person.name || person.email)) || 'Someone';
+  }
+
+  function assignedFace(person) {
+    var title = nameOf(person) + (person && person.role ? ' — ' + person.role : '');
+
+    if (person && person.avatar) {
+      return '<img class="tma-cip-table__avatar" src="' + esc(person.avatar) +
+        '" alt="" width="22" height="22" title="' + esc(title) + '">';
+    }
+
+    // No photo: their initial, never an invented face.
+    return '<span class="tma-cip-table__avatar tma-cip-table__avatar--initial" title="' +
+      esc(title) + '">' + esc(String(nameOf(person)).charAt(0).toUpperCase()) + '</span>';
   }
 
   function applicationTableSkeleton() {

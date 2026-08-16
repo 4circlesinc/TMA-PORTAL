@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CipApplication;
 use App\Models\CipPerson;
+use App\Models\ClientAssignment;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
@@ -92,6 +93,46 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame('Galaxy', $row['provider']);
         $this->assertSame('chen@example.com', $row['contactEmail']);
         $this->assertSame('Draft', $row['statusLabel']);
+    }
+
+    public function test_the_assigned_column_names_the_staff_on_the_client(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff, $this->provider($staff), 1, false);
+
+        $officer = User::create(['name' => 'Omar Reviewer', 'email' => 'omar@example.com', 'password' => bcrypt('password12345')]);
+        $officer->forceFill(['status' => 'approved', 'account_type' => 'Employee'])->save();
+
+        ClientAssignment::create([
+            'client_id' => $application->client_id, 'user_id' => $officer->id,
+            'assigned_by' => $staff->id, 'role' => 'case_officer',
+            'permission_level' => 'editor', 'status' => ClientAssignment::STATUS_ACTIVE,
+        ]);
+
+        $row = $this->actingAs($staff)->getJson('/portal/cip/applications')->assertOk()->json('applications.0');
+
+        $this->assertCount(1, $row['assignedTo']);
+        $this->assertSame('Omar Reviewer', $row['assignedTo'][0]['name']);
+    }
+
+    public function test_an_assignment_that_has_ended_is_not_shown_as_assigned(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff, $this->provider($staff), 1, false);
+
+        $gone = User::create(['name' => 'Left Already', 'email' => 'gone@example.com', 'password' => bcrypt('password12345')]);
+        $gone->forceFill(['status' => 'approved', 'account_type' => 'Employee'])->save();
+
+        ClientAssignment::create([
+            'client_id' => $application->client_id, 'user_id' => $gone->id,
+            'assigned_by' => $staff->id, 'role' => 'case_officer',
+            'permission_level' => 'editor', 'status' => ClientAssignment::STATUS_ACTIVE,
+            'ends_at' => now()->subDay(),
+        ]);
+
+        $row = $this->actingAs($staff)->getJson('/portal/cip/applications')->assertOk()->json('applications.0');
+
+        $this->assertSame([], $row['assignedTo'], 'Somebody who has stopped is not assigned.');
     }
 
     public function test_family_size_is_counted_not_typed(): void

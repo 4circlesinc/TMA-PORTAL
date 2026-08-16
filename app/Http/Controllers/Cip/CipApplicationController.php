@@ -230,6 +230,18 @@ class CipApplicationController extends Controller
                 'provider:id,uuid,name,code',
                 'client:id,uid,name,email,phone',
                 'assignedOfficer:id,name,email,avatar_url',
+                /*
+                 * Who is on this applicant.
+                 *
+                 * The client's live assignments, with their people. Ended and
+                 * not-yet-started ones are excluded here rather than filtered
+                 * after: an assignment that has run out is not a lighter shade
+                 * of assigned, it is somebody who has stopped working on this
+                 * client, and §8's column asks who is.
+                 */
+                'client.assignments' => fn ($q) => $q->live()
+                    ->with('user:id,name,email,avatar_url')
+                    ->orderByDesc('is_primary'),
                 // Only the main applicant: the table shows one name, and
                 // loading a whole family per row to read it would be six times
                 // the rows for one column.
@@ -334,12 +346,50 @@ class CipApplicationController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
-            'assignedTo' => $officer ? [
+            'assignedTo' => $this->assignees($application),
+        ];
+    }
+
+    /**
+     * Who §8's "Assigned To" column names.
+     *
+     * Two sources, and the order matters. An application will carry its own
+     * officer once the review workflow assigns one (phase 6); until then the
+     * honest answer is the staff assigned to the CLIENT, which the hub has
+     * recorded all along and which is who actually picks up the phone about
+     * this applicant today. Showing "Unassigned" over a client with three
+     * named people on them would be the table calling the firm's own records
+     * a blank.
+     *
+     * A list rather than a name: a client can have a case officer and a
+     * reviewer, and picking one of them to display would be the column
+     * quietly choosing whose work counts.
+     *
+     * @return list<array{name:string|null,email:string|null,avatar:string|null,role:string|null}>
+     */
+    private function assignees($application): array
+    {
+        if ($application->assignedOfficer) {
+            $officer = $application->assignedOfficer;
+
+            return [[
                 'name' => $officer->name,
                 'email' => $officer->email,
-                'avatar' => $officer->avatar_url,
-            ] : null,
-        ];
+                'avatar' => $officer->photoUrl(),
+                'role' => 'Case officer',
+            ]];
+        }
+
+        return collect($application->client?->assignments ?? [])
+            ->filter(fn ($a) => $a->user !== null)
+            ->map(fn ($a) => [
+                'name' => $a->user->name,
+                'email' => $a->user->email,
+                'avatar' => $a->user->photoUrl(),
+                'role' => $a->roleLabel(),
+            ])
+            ->values()
+            ->all();
     }
 
     /** One application, if this reader may see it. */
