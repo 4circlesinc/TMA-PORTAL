@@ -890,8 +890,22 @@
     return window.innerWidth <= CONTACTS_MOBILE_BP;
   }
 
-  function usesTableFullPage(state) {
-    return state.viewMode === 'list';
+  /*
+   * The hub is a table, and only a table.
+   *
+   * It used to offer a second arrangement — a directory column beside a
+   * detail pane — reachable from a toggle in the toolbar and remembered per
+   * reader. Two layouts meant every screen, every render path and every
+   * measurement in this file had to be right in both, and the column one was
+   * a narrower table with a profile squeezed in beside it. The firm reads
+   * applications as a table; that is the one this keeps.
+   *
+   * The predicate stays rather than being inlined as `true` everywhere: it is
+   * what the rest of the file asks, and answering it in one place is what made
+   * removing the other layout a small change instead of a hunt.
+   */
+  function usesTableFullPage() {
+    return true;
   }
 
   function usesPagedClientsFlow(state) {
@@ -1159,13 +1173,9 @@
     return items;
   }
 
+  /* One layout, so nothing to remember. A reader who had chosen the column
+     view before it was removed still opens the table. */
   function loadViewMode() {
-    try {
-      var saved = localStorage.getItem(VIEW_KEY);
-      if (saved === 'table') saved = 'list';
-      if (saved === 'directory') saved = 'grid';
-      if (saved === 'list' || saved === 'grid') return saved;
-    } catch (e) { /* ignore */ }
     return 'list';
   }
 
@@ -1189,38 +1199,15 @@
     } catch (e) { /* ignore */ }
   }
 
-  function registerViewToggle(entry) {
-    if (!window.TMATableViewToggle || !entry) return;
-    window.TMATableViewToggle.register('clients', {
-      getViewMode: function () { return entry.state.viewMode; },
-      setViewMode: function (mode) {
-        entry.state.viewMode = mode === 'list' ? 'list' : 'grid';
-        saveViewMode(entry.state.viewMode);
-        if (entry.state.viewMode === 'list') {
-          entry.state.screen = 'list';
-          entry.state.page = 1;
-          if (!isClientsMobile()) {
-            history.replaceState(
-              {
-                navId: 'clients',
-                view: 'clients',
-                title: 'CIP Applications',
-                crumb: 'CIP Applications',
-                clientsScreen: 'list',
-                contactId: entry.state.selectedId || null,
-              },
-              '',
-              '/clients'
-            );
-            if (window.TMADashboard && window.TMADashboard.updatePageMeta) {
-              window.TMADashboard.updatePageMeta({ title: 'CIP Applications', crumb: 'CIP Applications' });
-            }
-          }
-        }
-      },
-      render: function () { entry.render({ forceFull: true }); },
-    });
+  /*
+   * Not registered any more: the toggle draws a control for switching between
+   * two layouts, and there is one. Registering it would put a button in the
+   * toolbar whose other position no longer exists.
+   */
+  function registerViewToggle() {
+    return;
   }
+
 
   /* The first entry in an emails/phones list that actually holds a value. */
   function firstEntryValue(entries) {
@@ -2551,13 +2538,6 @@
     );
   }
 
-  function renderListPage(state) {
-    return (
-      '<div class="tma-dash__clients-page tma-dash__clients-page--list" data-node-id="clients-page">' +
-      renderDirectory(state, true) +
-      '</div>'
-    );
-  }
 
   function renderDetailContent(state, opts) {
     opts = opts || {};
@@ -2631,17 +2611,6 @@
     );
   }
 
-  function renderDesktopPage(state) {
-    if (typeof state.dirWidth !== 'number') state.dirWidth = loadDirWidth();
-    return (
-      '<div class="tma-dash__clients-page" data-node-id="clients-page"' +
-      ' style="--clients-dir-w:' + Math.round(state.dirWidth) + 'px">' +
-      renderDirectory(state, false) +
-      renderClientsResizer(state) +
-      renderDetailContent(state) +
-      '</div>'
-    );
-  }
 
   /*
    * Sets the width variable live during a drag rather than re-rendering, and
@@ -6876,17 +6845,15 @@
     // per-view branches below — several of which return early.
     wireClientsRecovery(root, state, render, navigate);
 
-    if (scope === 'list' || scope === 'split') {
+    if (scope === 'list') {
       wireSearchEvents(root, state);
-      // The split view carries the drag handle between the list and the
-      // detail pane; re-attached each render, and a no-op where there is none.
-      attachClientsResizer(root, state);
 
+      // A layout button left in any markup has nothing to switch to.
       MORPH.unwired(root, '[data-clients-layout]').forEach(function (btn) {
         btn.remove();
       });
 
-      if (scope === 'list' && state.viewMode === 'list') {
+      if (scope === 'list') {
         wireTableFilters(root, state, render);
         wireTablePagination(root, state, render);
         wireTableSelection(root, state);
@@ -7977,58 +7944,25 @@
 
     function render(options) {
       options = options || {};
-      syncClientsShell(state.screen, state.viewMode);
+      syncClientsShell(state.screen, 'list');
       syncClientsPageActions(state, navigate);
       syncClientsHeadTabs(state, render);
       syncClientsDetailHead(state);
-      root.className = state.viewMode === 'grid'
-        ? 'tma-dash__clients tma-dash__clients--grid'
-        : 'tma-dash__clients';
+      root.className = 'tma-dash__clients';
 
-      if (usesPagedClientsFlow(state)) {
-        if (state.screen === 'list') {
-          MORPH.patch(root, state.viewMode === 'list'
-            ? renderTableListPage(state)
-            : renderListPage(state));
-          wireEvents(root, state, 'list', navigate, render);
-          if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
-          requestAnimationFrame(function () {
-            var dirBody = root.querySelector('.tma-dash__clients-directory-body');
-            if (dirBody) dirBody.scrollTop = state.listScrollTop;
-          });
-          return;
-        }
-
-        MORPH.patch(root, renderDetailPage(state));
-        wireEvents(root, state, 'detail', navigate, render);
-        if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
-        return;
-      }
-
-      if (!isClientsMobile()) {
-        var hasSplit = root.querySelector('.tma-dash__clients-page .tma-dash__clients-directory');
-        if (!options.forceFull && hasSplit && options.detailOnly && renderDetailPanel()) {
-          syncDirectorySelection();
-          wireEvents(root, state, 'split', navigate, render);
-          return;
-        }
-        MORPH.patch(root, renderDesktopPage(state));
-        wireEvents(root, state, 'split', navigate, render);
-        if (window.TMATableViewToggle) window.TMATableViewToggle.sync('clients');
-        requestAnimationFrame(function () {
-          var dirBody = root.querySelector('.tma-dash__clients-directory-body');
-          if (dirBody) dirBody.scrollTop = state.listScrollTop;
-        });
-        return;
-      }
-
+      /*
+       * Two screens, and that is the whole of it.
+       *
+       * There were four render paths: the table, a card list, a split view
+       * with a directory column, and a detail-only repaint of that split's
+       * right-hand pane. Three of them existed to serve the column layout,
+       * which is gone — so the branch that chose between them is gone with it,
+       * and with it the class the shell had to be told to wear.
+       */
       if (state.screen === 'list') {
-        MORPH.patch(root, renderListPage(state));
+        MORPH.patch(root, renderTableListPage(state));
         wireEvents(root, state, 'list', navigate, render);
-        requestAnimationFrame(function () {
-          var dirBody = root.querySelector('.tma-dash__clients-directory-body');
-          if (dirBody) dirBody.scrollTop = state.listScrollTop;
-        });
+
         return;
       }
 

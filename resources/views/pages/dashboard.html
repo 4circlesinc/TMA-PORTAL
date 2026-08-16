@@ -405,7 +405,9 @@
         <div class="tma-dash__feed" data-feed></div>
       </div>
 
-      <div class="tma-dash__view" data-view="clients" data-table-view hidden>
+      <!-- No data-table-view: the hub has one layout, so the list/grid
+           toggle in the page head has nothing to switch between. -->
+      <div class="tma-dash__view" data-view="clients" hidden>
         <div class="tma-dash__clients" data-clients></div>
       </div>
 
@@ -635,7 +637,7 @@
   <script src="js/cip-sync.js?v=2" defer></script>
   <script src="js/files-sync.js?v=2" defer></script>
   <script src="js/clients-sync.js?v=1" defer></script>
-  <script src="js/clients.js?v=72" defer></script>
+  <script src="js/clients.js?v=73" defer></script>
   <script src="js/calendar.js?v=5" defer></script>
   <script src="js/pricing.js" defer></script>
   <script src="js/two-step-countries.js" defer></script>
