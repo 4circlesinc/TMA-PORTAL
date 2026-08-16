@@ -148,6 +148,29 @@ field placement and drawing, and computed CSS only exist in a browser.
 
   The account has to be an officer or an administrator: an `Employee` 302s to
   `/auth/role-pending` on every portal route.
+- **`cip-application-full.mjs`** — a whole family, filed and read back.
+  `cip-intake.mjs` pins that the form is wired to the endpoint; this pins what
+  the endpoint *leaves behind*, which is where the parts that only exist after
+  a save were going unchecked.
+
+  It files one application carrying a main applicant, a sponsor, three
+  qualified dependants and a spouse, then reads the response for all of it: the
+  minted number, the draft status, a family size of six, both photos having
+  become profile pictures, §2's three uploads having answered the applicant's
+  slots, the sponsor owing only the birth certificate that was deliberately
+  skipped, and every dependant holding a checklist from the first save. It
+  fetches the filed passport photo over HTTP to prove the archival copy serves.
+
+  The dependants are entered **oldest first on purpose**, in both the form and
+  the assertions: a form that echoed typing order rather than computing from
+  the dates of birth would read 1, 2, 3 and pass a weaker test.
+
+  Wants a fresh database — it counts folders and slots, and a second run would
+  file under the same client.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-application-full.mjs
+  ```
 - **`owner-column.mjs`** — the File Library's Owner column after it was given
   CBI's Assigned column's behaviour: a face per person on the row (owner first,
   then everyone it is shared with), a hover card naming their role here with
