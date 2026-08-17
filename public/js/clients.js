@@ -8795,6 +8795,83 @@
   }
 
   /*
+   * The same for the CIP module — §8's table, §9's chips, and whichever
+   * application is open beside them.
+   *
+   * Its own entry rather than a second job on the directory's: a client
+   * edited in the hub does not move an application through its statuses, and
+   * an officer approving a document does not change the client's card. One
+   * shared entry would make every write on either side refetch the other's
+   * screens, on every tab that has this module mounted.
+   *
+   * Nothing is fetched here. The four caches are dropped and the route is
+   * re-derived; the paint that follows refetches whichever of them is
+   * actually on screen. A signal that arrives while the reader is in the
+   * client directory therefore costs one render and no requests.
+   */
+  if (window.TMALive) {
+    window.TMALive.register(window.TMALive.RESOURCES.CIP, function () {
+      forgetApplicationTable();
+      forgetBuckets();
+
+      var route = parseClientsPath(window.location.pathname);
+      var open = route.contactId || null;
+      var app = open ? APPLICATIONS[open] : null;
+      var settled = [];
+
+      /*
+       * The open file is refetched in place, never dropped first.
+       *
+       * The application is what decides which tabs this profile even has, so
+       * clearing the held record blanks it: for the length of one request the
+       * reader's open Documents tab vanishes and the screen falls back to a
+       * plain client, then puts everything back. A colleague approving a
+       * document a floor away must not make the page somebody is reading
+       * flicker. The old copy stays up until the new one has arrived.
+       *
+       * A queued edit is not refetched at all. It is the only copy of a change
+       * made offline — the server has never seen it — so reading over it would
+       * take the reader's own work off the screen.
+       */
+      if (open && !(app && app.pendingSync)) {
+        forgetApplication(open);
+        settled.push(
+          clientsFetch('/portal/cip/clients/' + encodeURIComponent(open) + '/application')
+            .then(function (json) { rememberApplication(open, (json && json.application) || null); })
+            // Keep what is on screen. A signal is not a reason to empty a file.
+            .catch(function () {})
+        );
+      }
+
+      // The history the same way, and only one that has actually been read: a
+      // tab nobody has opened is fetched when they open it.
+      if (app && app.id && TIMELINE[open] !== undefined) {
+        settled.push(
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/events')
+            .then(function (json) { TIMELINE[open] = (json && json.events) || []; })
+            .catch(function () {})
+        );
+      }
+
+      var repaint = function () {
+        if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
+        clientsMountRoot._clientsController.syncRoute(route);
+      };
+
+      // Once now, so the table and the chips start refetching straight away
+      // rather than queueing behind the open file, and once when the file's
+      // own reads have landed.
+      repaint();
+
+      return Promise.all(settled).then(repaint);
+    }, {
+      active: function () {
+        return !!clientsMountRoot && document.contains(clientsMountRoot);
+      },
+    });
+  }
+
+  /*
    * A change made offline has just reached the server.
    *
    * The live signal that normally brings a colleague's edit back here is

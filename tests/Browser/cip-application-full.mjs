@@ -164,14 +164,32 @@ try {
   check(/^\/media\/avatars\//.test(app.sponsor?.photo || ''), 'and the sponsor’s did too');
   check(!!app.applicant?.passportPhotoUrl, 'the filed photo is reachable at full resolution');
 
+  /*
+   * What the form collects, against what the checklist asks for.
+   *
+   * Not "owes nothing": since phase 3 the checklist is the firm's requirement
+   * templates, so an application filed a second ago rightly still owes the
+   * police certificate and the rest. What the wizard is answerable for is the
+   * three it collects — each upload has to land in its slot and close it.
+   */
   step(8, 'Checklists (§2 uploads → document slots)');
-  check((app.applicant?.outstanding || ['x']).length === 0,
-    `the applicant owes nothing (${JSON.stringify(app.applicant?.outstanding)})`);
-  check((app.sponsor?.outstanding || []).join(', ') === 'Birth certificate',
-    `the sponsor owes only what was skipped (${JSON.stringify(app.sponsor?.outstanding)})`);
+  const collected = ['Passport photo', 'Passport bio page', 'Birth certificate'];
+  const applicantOwes = app.applicant?.outstanding || ['x'];
+  check(collected.every(label => !applicantOwes.includes(label)),
+    `the applicant's three uploads closed their slots (${JSON.stringify(applicantOwes)})`);
+
+  // The sponsor's birth certificate was deliberately skipped, so it is the one
+  // of the three still open — the evidence that a slot stays open until a file
+  // actually arrives in it.
+  const sponsorOwes = app.sponsor?.outstanding || [];
+  check(sponsorOwes.includes('Birth certificate'), 'the one the sponsor skipped is still owed');
+  check(!sponsorOwes.includes('Passport photo') && !sponsorOwes.includes('Passport bio page'),
+    `and the two they did upload are not (${JSON.stringify(sponsorOwes)})`);
+
   const dep = (app.dependents || [])[0];
-  check((dep?.documents || []).map(d => d.label).join(', ') === 'Passport bio page, Birth certificate',
-    'every dependant has a checklist from the first save');
+  const depLabels = (dep?.documents || []).map(d => d.label);
+  check(collected.slice(1).every(label => depLabels.includes(label)),
+    `every dependant has a checklist from the first save (${JSON.stringify(depLabels)})`);
 
   step(9, 'The photo is reachable, and only by someone who may see the file');
   const photoRes = await page.request.get(`${BASE}${app.applicant.passportPhotoUrl}`);
