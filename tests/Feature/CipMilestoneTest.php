@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * §4d — the dates card under the tabs.
+ * §4d — the Timeline card on Overview.
  *
  * The card is a timeline, so the two things worth guarding are the order it
  * reads in and the holes in it: a step still ahead of the file has to come back

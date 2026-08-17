@@ -18055,8 +18055,15 @@
  * loading.
  */
 .tma-dash__clients-profile-panel[data-clients-panel="applicant"],
-.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] {
+.tma-dash__clients-profile-panel[data-clients-panel="sponsor"],
+.tma-dash__clients-profile-panel[data-clients-panel="overview"] {
   flex: 0 0 auto;
+}
+
+.tma-dash__clients-profile-panel[data-clients-panel="overview"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
 }
 
 .tma-dash__clients-profile-panel[data-clients-panel="applicant"] .tma-dash__clients-profile-body,
@@ -35181,40 +35188,22 @@ span.tma-dash__messages-profile-avatar {
  * reach for. The chip styles went with the markup.
  */
 
-/* The journey, below the tabs. A row on a wide window, a column when the
-   dates would otherwise be squeezed to nothing. */
-.tma-dash__cip-dates {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-8) var(--space-24);
+/* The journey, as CBI's Timeline card — label on the left, date on the
+   right, a rule between rows. Lived under the tabs as a horizontal strip;
+   it is a card on Overview now, so the progress is a section of the file
+   rather than a caption on every person tab. */
+.tma-dash__cip-tl {
   list-style: none;
-  margin: calc(var(--space-24) * -1 + var(--space-4)) 0 var(--space-24);
+  margin: 0;
   padding: 0;
-  flex-shrink: 0;
-}
-
-.tma-dash__cip-date {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
-.tma-dash__cip-date-label {
-  font-size: var(--text-size-12);
-  color: var(--color-text-secondary);
-}
+.tma-dash__cip-tl li:last-child { border-bottom: 0; }
 
-.tma-dash__cip-date-value {
-  font-size: var(--text-size-14);
+.tma-dash__cip-tl .tma-portal-details__label {
   font-variant-numeric: tabular-nums;
-  color: var(--color-text-secondary);
-}
-
-/* A step that has happened carries its date in the page's own ink; one still
-   ahead stays grey, so the timeline reads without a legend. */
-.tma-dash__cip-date--done .tma-dash__cip-date-value {
-  color: var(--color-text-primary);
-  font-weight: 600;
 }
 
 .tma-dash__clients-profile-officer--none { opacity: 0.6; }
@@ -35266,7 +35255,20 @@ span.tma-dash__messages-profile-avatar {
 
 /* The assignee cell keeps its faces; the control beside them opens the
    picker. Quiet until the row is hovered, like the checklist's verbs. */
-.tma-dash__cip-assigned { display: inline-flex; align-items: center; gap: var(--space-4); }
+.tma-dash__cip-assigned {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tma-dash__cip-assigned .tma-people { min-width: 0; }
+
+.tma-cip-table th:last-child,
+.tma-cip-table td:last-child {
+  min-width: 140px;
+}
 
 /*
  * The control beside the faces: a caret to change who holds a file, a plus to
@@ -35278,6 +35280,7 @@ span.tma-dash__messages-profile-avatar {
  * its own, in a square hit area the row reveals on hover.
  */
 .tma-dash__cip-assign {
+  flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
   width: 22px;

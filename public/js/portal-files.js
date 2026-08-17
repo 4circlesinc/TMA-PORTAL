@@ -5203,11 +5203,30 @@
     return list;
   }
 
-  /* Placed where asked, then pulled back inside the window. */
+  /* Placed where asked, then pulled back inside the window.
+     Grows left from the point when the right edge would run off — the CIP
+     Assigned To column is the last one, and a menu that only clamped after
+     opening as file-actions (narrow) then filling with people (wide) is how
+     that picker vanished off the right of the window. */
   function placeMenu(el, x, y) {
     var w = el.offsetWidth, h = el.offsetHeight;
-    el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
-    el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+    var left = x;
+    if (left + w > window.innerWidth - 8) left = x - w;
+    el.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
+    var top = y;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, y - h);
+    el.style.top = Math.max(8, Math.min(top, window.innerHeight - h - 8)) + 'px';
+  }
+
+  function menuFaceHtml(it) {
+    if (it.avatar) return it.avatar;
+    if (it.face) {
+      return '<img class="tma-portal-context-menu__face" src="' + esc(it.face) + '" alt="" width="24" height="24">';
+    }
+    if (it.icon) {
+      return '<img class="tma-portal-context-menu__icon" src="images/icons/phosphor/' + it.icon + '.svg" alt="" width="16" height="16">';
+    }
+    return '<span class="tma-portal-context-menu__icon"></span>';
   }
 
   function menuItemHtml(it, i) {
@@ -5216,21 +5235,39 @@
       return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
         '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></div>';
     }
-    var iconHtml = it.avatar
-      ? it.avatar
-      : (it.icon
-        ? '<img class="tma-portal-context-menu__icon" src="images/icons/phosphor/' + it.icon + '.svg" alt="" width="16" height="16">'
-        : '<span class="tma-portal-context-menu__icon"></span>');
+    /*
+     * Somebody already on the record is not a thing to click — they are a
+     * thing to take off. The row is inert and carries an × of its own, so
+     * the only click that does nothing is the one that would have changed
+     * nothing anyway.
+     */
+    if (it.on) {
+      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--person' +
+        ' tma-portal-context-menu__item--on">' +
+        menuFaceHtml(it) +
+        '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
+        (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
+        (it.remove
+          ? '<button type="button" class="tma-portal-context-menu__off" data-ctx-off="' + i + '"' +
+            ' title="Take this off ' + esc(it.label) + '"' +
+            ' aria-label="Take this off ' + esc(it.label) + '">' +
+            '<img src="images/icons/tma/Close-12.svg" width="8" height="8" alt=""></button>'
+          : '') +
+        '</div>';
+    }
+    var person = !!(it.face || (it.avatar && !it.icon));
 
     return '<button type="button" class="tma-portal-context-menu__item' +
+      (person ? ' tma-portal-context-menu__item--person' : '') +
       (it.danger ? ' tma-portal-context-menu__item--danger' : '') +
       (it.submenu ? ' tma-portal-context-menu__item--parent' : '') +
       '" role="menuitem" data-ctx="' + i + '"' +
       (it.disabled ? ' disabled' : '') +
       (it.submenu ? ' aria-haspopup="true"' : '') +
       (it.title ? ' title="' + esc(it.title) + '"' : '') + '>' +
-      iconHtml +
+      menuFaceHtml(it) +
       '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
+      (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
       (it.note ? '<span class="tma-portal-context-menu__note">' + esc(it.note) + '</span>' : '') +
       (it.submenu
         ? '<img class="tma-portal-context-menu__chevron" src="images/icons/phosphor/CaretRight.svg" alt="" width="16" height="16" aria-hidden="true">'
@@ -5300,11 +5337,16 @@
    * `list` overrides the default item menu. The file viewer passes its own so
    * the three-dot menu is this exact component — same actions, icons, keyboard
    * handling and styling — rather than a second menu that drifts out of sync.
+   *
+   * Callers that are not a file (the CIP table's Assigned To picker) pass the
+   * rows themselves. Without that, this would build file actions for an
+   * application uuid — a menu that cannot assign anybody, which is how that
+   * column's control came to look broken.
    */
   function openContextMenu(x, y, item, list) {
     closeContextMenu();
     // Right-clicking an item selects just it, matching common file managers.
-    if (!state.selected[item.id]) { /* keep multi-select if already selected */ }
+    if (item && item.id && !state.selected[item.id]) { /* keep multi-select if already selected */ }
 
     list = list || contextItems(item);
     ctxEl = document.createElement('div');
@@ -5320,6 +5362,13 @@
     if (lb) ctxEl.style.zIndex = '700';
 
     ctxEl.addEventListener('click', function (e) {
+      var off = e.target.closest('[data-ctx-off]');
+      if (off) {
+        var take = list[parseInt(off.getAttribute('data-ctx-off'), 10)];
+        closeContextMenu();
+        if (take && take.remove) take.remove();
+        return;
+      }
       var b = e.target.closest('[data-ctx]');
       if (!b || b.disabled) return;
       var picked = list[parseInt(b.getAttribute('data-ctx'), 10)];
@@ -5694,11 +5743,15 @@
      *
      * `onChange` fires when an action has altered something, so the calling
      * list can reload rather than sit on a stale row.
+     *
+     * `list` is the rows to draw. Omit it for a file's own actions; pass it
+     * when the caller is not a file (CIP Assigned To) so this does not build
+     * Preview/Download for an application uuid.
      */
-    menu: function (x, y, item, onChange) {
-      externalItems = [item];
+    menu: function (x, y, item, onChange, list) {
+      externalItems = item ? [item] : [];
       externalOnChange = onChange || null;
-      openContextMenu(x, y, item);
+      openContextMenu(x, y, item || { id: '', type: 'application' }, list);
     },
 
     /**

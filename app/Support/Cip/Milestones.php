@@ -6,7 +6,7 @@ use App\Models\CipApplication;
 
 /**
  * The dates one application has reached, in the order it travels through them
- * — what §4d's card under the tabs draws.
+ * — what §4d's Timeline card on Overview draws.
  *
  * Every step is answered, including the ones still ahead of the file: a
  * milestone that has not happened comes back with no date rather than being

@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipEvent;
+use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
@@ -210,18 +211,30 @@ class Assignments
      * type is absent because those accounts cannot reach the portal at all,
      * and offering one would promise work to somebody who could never open it.
      * Anybody already holding the file is excluded for the plainest reason —
-     * the list would be offering work that is already theirs.
+     * the list would be offering work that is already theirs. "Holding" is
+     * the same list §8's column draws: the client's live assignments, plus
+     * the application's own when there is no client. Excluding only the CIP
+     * row left an officer who was already named in the cell as a person to
+     * add, which is the click that appeared to work and changed nothing.
      *
      * @return Collection<int, User>
      */
     public static function assignable(CipApplication $application): Collection
     {
-        $held = self::live($application)->pluck('user_id')->all();
+        $held = self::live($application)->pluck('user_id');
+
+        if ($application->client_id) {
+            $held = $held->merge(
+                ClientAssignment::live()
+                    ->where('client_id', $application->client_id)
+                    ->pluck('user_id')
+            );
+        }
 
         return User::query()
             ->whereIn('account_type', Role::OFFICERS)
             ->where('status', 'approved')
-            ->whereNotIn('id', $held)
+            ->whereNotIn('id', $held->unique()->all())
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type']);
     }

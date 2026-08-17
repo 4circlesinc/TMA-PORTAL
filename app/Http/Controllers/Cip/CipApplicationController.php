@@ -272,7 +272,7 @@ class CipApplicationController extends Controller
                 // Live only, with their people: the column names who holds the
                 // file now, and an ended assignment is somebody who has
                 // stopped. Eager, because this is fifty rows.
-                'assignments' => fn ($q) => $q->live()->with('user:id,name,email,avatar_url'),
+                'assignments' => fn ($q) => $q->live()->with('user:id,name,email,avatar_url,provider_avatar_url'),
                 /*
                  * Who is on this applicant.
                  *
@@ -283,7 +283,7 @@ class CipApplicationController extends Controller
                  * client, and §8's column asks who is.
                  */
                 'client.assignments' => fn ($q) => $q->live()
-                    ->with('user:id,name,email,avatar_url')
+                    ->with('user:id,name,email,avatar_url,provider_avatar_url')
                     ->orderByDesc('is_primary'),
                 // Only the main applicant: the table shows one name, and
                 // loading a whole family per row to read it would be six times
@@ -761,9 +761,9 @@ class CipApplicationController extends Controller
             'applicant' => $main ? $this->person($main, $presenter) : null,
             'sponsor' => $sponsor ? $this->person($sponsor, $presenter) : null,
             'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter))->all(),
-            // §4d's dates card: how far the file has travelled, and — because
-            // the steps it has not reached are answered too — how far it has
-            // left to go.
+            // §4d's Timeline card on Overview: how far the file has travelled,
+            // and — because the steps it has not reached are answered too —
+            // how far it has left to go.
             'milestones' => Milestones::for($application),
             'assignedOfficer' => $this->officer($application),
             'createdAt' => $application->created_at?->toIso8601String(),

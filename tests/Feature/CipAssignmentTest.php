@@ -6,6 +6,8 @@ use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Client;
+use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -63,6 +65,22 @@ class CipAssignmentTest extends TestCase
         ]);
 
         return Engine::apply($application, Status::NEW, $creator);
+    }
+
+    /** An application with a client, which is what §8's column actually reads. */
+    private function filed(User $creator): CipApplication
+    {
+        $application = $this->application($creator);
+        $client = Client::create([
+            'uid' => 'chen-wei-'.$application->id,
+            'name' => 'Chen Wei',
+            'email' => 'chen@example.com',
+            'created_by' => $creator->id,
+            'data' => [],
+        ]);
+        $application->forceFill(['client_id' => $client->id])->save();
+
+        return $application->refresh();
     }
 
     private function assign(User $actor, CipApplication $application, User $officer): TestResponse
@@ -234,5 +252,51 @@ class CipAssignmentTest extends TestCase
             ->assertOk()->json('assignable');
 
         $this->assertSame([$colin->id], array_column($after, 'id'));
+    }
+
+    public function test_assigning_names_the_officer_in_the_table_column(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Reviewer');
+        $application = $this->filed($admin);
+
+        $this->assign($admin, $application, $officer)->assertCreated();
+
+        $row = $this->actingAs($admin)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->json('applications.0');
+
+        $this->assertSame('Rita Reviewer', $row['assignedTo'][0]['name'] ?? null);
+        $this->assertDatabaseHas('client_assignments', [
+            'client_id' => $application->client_id,
+            'user_id' => $officer->id,
+            'status' => ClientAssignment::STATUS_ACTIVE,
+        ]);
+    }
+
+    public function test_somebody_already_on_the_client_is_not_offered_again(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Reviewer');
+        $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com', 'Colin Compliance');
+        $application = $this->filed($admin);
+
+        ClientAssignment::create([
+            'client_id' => $application->client_id,
+            'user_id' => $rita->id,
+            'assigned_by' => $admin->id,
+            'role' => 'reviewing_officer',
+            'permission_level' => 'editor',
+            'status' => ClientAssignment::STATUS_ACTIVE,
+        ]);
+
+        $body = $this->actingAs($admin)
+            ->getJson('/portal/cip/applications/'.$application->uuid.'/assignments')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame([$rita->id], array_column($body['assignments'], 'userId'));
+        $this->assertSame([$colin->id], array_column($body['assignable'], 'id'));
     }
 }

@@ -2701,6 +2701,7 @@
       .then(function (json) {
         var free = (json && json.assignable) || [];
         var live = (json && json.assignments) || [];
+        var held = {};
 
         /*
          * One list of people, not two.
@@ -2714,6 +2715,8 @@
          * changes nothing is what made this feel broken.
          */
         var items = live.map(function (a) {
+          held[String(a.userId)] = true;
+
           return {
             label: a.name || a.email || 'Somebody',
             meta: a.roleLabel || '',
@@ -2724,6 +2727,9 @@
         });
 
         free.forEach(function (o) {
+          // The column and this menu share the client list: somebody already
+          // named in the cell must not also appear as a person to add.
+          if (held[String(o.id)]) return;
           items.push({
             label: o.name || o.email,
             meta: officerRoleLabel(o),
@@ -2736,108 +2742,18 @@
           items.push({ label: 'No officers to assign', static: true });
         }
 
-        window.TMAFileActions.menu(box.left, box.bottom + 4, { id: applicationId, type: 'file' }, null);
-        // The menu component draws from the list it is given, so hand it ours
-        // rather than the file actions it would build for a file.
-        replaceMenuItems(items, box);
+        // The people, as the menu's own rows — not file actions for a fake
+        // file that we then overwrite. That swap measured a narrow menu and
+        // placed it, then grew it off the right of the Assigned To column.
+        window.TMAFileActions.menu(
+          box.left,
+          box.bottom + 4,
+          { id: applicationId, type: 'application' },
+          null,
+          items
+        );
       })
       .catch(function () { clientsToast('Could not load the officers.', 'negative'); });
-  }
-
-  /*
-   * The shared menu builds a FILE's actions from the item it is handed, and
-   * this is an application. Rather than teach it a second vocabulary, the menu
-   * is opened and its contents replaced — the chrome, the placement and the
-   * dismissal are the portal's, and only the lines are ours.
-   */
-  function replaceMenuItems(items, anchor) {
-    var menu = document.querySelector('.tma-portal-context-menu:not(.tma-portal-context-menu--sub)');
-    if (!menu) return;
-
-    menu.innerHTML = items.map(function (it, i) {
-      if (it.sep) return '<div class="tma-portal-context-menu__sep" role="separator"></div>';
-      if (it.static) {
-        return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
-          '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span></div>';
-      }
-
-      /*
-       * Somebody already on the file is not a thing to click — they are a
-       * thing to take off. The row is inert and carries an × of its own, so
-       * the only click that does nothing is the one that would have changed
-       * nothing anyway.
-       */
-      if (it.on) {
-        return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--person' +
-          ' tma-portal-context-menu__item--on">' +
-          (it.face
-            ? '<img class="tma-portal-context-menu__face" src="' + esc(it.face) + '" alt="" width="24" height="24">'
-            : '') +
-          '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
-          (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
-          '<button type="button" class="tma-portal-context-menu__off" data-cip-menu-off="' + i + '"' +
-          ' title="Take this off ' + esc(it.label) + '"' +
-          ' aria-label="Take this off ' + esc(it.label) + '">' +
-          '<img src="' + ICONS.Close12 + '" width="8" height="8" alt=""></button>' +
-          '</div>';
-      }
-
-      return '<button type="button" role="menuitem" data-cip-menu="' + i + '"' +
-        ' class="tma-portal-context-menu__item' +
-        (it.face ? ' tma-portal-context-menu__item--person' : '') +
-        (it.danger ? ' tma-portal-context-menu__item--danger' : '') + '">' +
-        (it.face
-          ? '<img class="tma-portal-context-menu__face" src="' + esc(it.face) + '" alt="" width="24" height="24">'
-          : '') +
-        '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
-        (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
-        '</button>';
-    }).join('');
-
-    /*
-     * Placed again, now that it holds our rows.
-     *
-     * The component measures and clamps itself as it opens, which is before
-     * this runs — and a row of ours is a face, a name and a job where a file
-     * action is an icon and a word. The menu therefore grew after it had
-     * decided where to sit, and on the Assigned To column, which is the last
-     * one in the table, the extra width ran off the right of the window.
-     *
-     * Right-aligned to the button rather than left when there is not room:
-     * the control is near the edge precisely when this happens, and a menu
-     * that opens leftwards from it stays attached to what was pressed instead
-     * of jumping to the window's margin.
-     */
-    if (anchor) {
-      requestAnimationFrame(function () {
-        var w = menu.offsetWidth;
-        var h = menu.offsetHeight;
-        var left = anchor.left;
-        if (left + w > window.innerWidth - 8) left = anchor.right - w;
-        menu.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
-
-        var top = anchor.bottom + 4;
-        if (top + h > window.innerHeight - 8) top = Math.max(8, anchor.top - h - 4);
-        menu.style.top = Math.round(top) + 'px';
-      });
-    }
-
-    menu.onclick = function (e) {
-      var off = e.target.closest('[data-cip-menu-off]');
-      if (off) {
-        var take = items[parseInt(off.getAttribute('data-cip-menu-off'), 10)];
-        menu.remove();
-        if (take && take.remove) take.remove();
-
-        return;
-      }
-
-      var btn = e.target.closest('[data-cip-menu]');
-      if (!btn) return;
-      var picked = items[parseInt(btn.getAttribute('data-cip-menu'), 10)];
-      menu.remove();
-      if (picked && picked.fn) picked.fn();
-    };
   }
 
   function changeAssignment(applicationId, method, userId) {
@@ -2899,14 +2815,13 @@
         '</button>'
       : '';
 
-    if (window.TMAPersonCard && window.TMAPersonCard.faces) {
-      return '<span class="tma-dash__cip-assigned">' +
-        window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' }) + picker + '</span>';
-    }
+    var faces = window.TMAPersonCard && window.TMAPersonCard.faces
+      ? window.TMAPersonCard.faces(list, { emptyLabel: 'Unassigned' })
+      : '<span class="tma-portal-table__muted">' +
+        esc(list.map(function (p) { return p.first || p.name; }).join(', ') || 'Unassigned') +
+        '</span>';
 
-    return '<span class="tma-portal-table__muted">' +
-      esc(list.map(function (p) { return p.first || p.name; }).join(', ') || 'Unassigned') +
-      '</span>';
+    return '<span class="tma-dash__cip-assigned">' + faces + picker + '</span>';
   }
 
   /*
@@ -3060,7 +2975,9 @@
 
       var assign = e.target.closest('[data-cip-assign]');
       if (assign) {
+        e.preventDefault();
         e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         openAssignMenu(assign, assign.getAttribute('data-cip-assign'));
 
         return;
@@ -3075,8 +2992,9 @@
       if (!uid) return;
       var controller = clientsMountRoot && clientsMountRoot._clientsController;
       if (!controller) return;
-      // Opened on the applicant, because that is what the row was about.
-      if (clientsMountState) clientsMountState.profileTab = 'applicant';
+      // Opened on Overview: the row is an application, and that tab is its
+      // journey — the Timeline card CBI keeps on the same tab.
+      if (clientsMountState) clientsMountState.profileTab = 'overview';
       controller.navigate('detail', uid);
     });
   }
@@ -4716,10 +4634,10 @@
    * The tabs this profile actually has.
    *
    * A CIP applicant's profile is their application, so its sections are the
-   * people on it — the main applicant, the sponsor when there is one, the
-   * dependants when there are any. "Client info" was the hub's own contact
-   * record standing in for all of that, which is not what anybody opens an
-   * applicant to read.
+   * file itself (Overview, with the Timeline card), then the people on it —
+   * the main applicant, the sponsor when there is one, the dependants when
+   * there are any. "Client info" was the hub's own contact record standing
+   * in for all of that, which is not what anybody opens an applicant to read.
    *
    * A client with no application keeps the contact record: plenty predate the
    * module, and a page of empty person tabs would say less than their phone
@@ -4729,7 +4647,14 @@
     var app = applicationFor(state.selectedId);
     if (!app) return PROFILE_TABS;
 
-    var tabs = [{ id: 'applicant', label: 'Main applicant' }];
+    var tabs = [
+      // The application's own facts — where it has got to — before the people
+      // on it. CBI calls this Overview and keeps the Timeline card here; a
+      // tab named "Application details" would sit next to "Main applicant"
+      // and ask the reader which of the two was the file.
+      { id: 'overview', label: 'Overview' },
+      { id: 'applicant', label: 'Main applicant' },
+    ];
     if (app.sponsor) tabs.push({ id: 'sponsor', label: 'Sponsor' });
     if ((app.dependents || []).length) tabs.push({ id: 'dependents', label: 'Dependents' });
 
@@ -4781,28 +4706,40 @@
   }
 
   /*
-   * The journey, as a row of dates (§4d).
+   * The journey, as CBI's Timeline card (§4d).
    *
-   * The one piece of the old CBI detail page the plan says comes over as-is.
-   * Steps that have not happened yet are drawn, greyed, rather than left out:
-   * a timeline with holes in it is how a reader tells what is still ahead, and
-   * dropping the empty ones would make every application look finished.
+   * It used to sit as a row of dates under every tab, which put the file's
+   * progress on screens that were about a person. It is a card of label/date
+   * rows — the same shape CBI draws — on Overview, which is the tab about
+   * the application. Steps that have not happened yet stay on it, greyed:
+   * a timeline with holes in it is how a reader tells what is still ahead.
    */
   function renderMilestones(app) {
     var steps = (app && app.milestones) || [];
     if (!steps.length) return '';
 
     return (
-      '<ol class="tma-dash__cip-dates">' +
+      '<ul class="tma-dash__cip-tl">' +
       steps.map(function (m) {
-        return '<li class="tma-dash__cip-date' +
-          (m.reached ? ' tma-dash__cip-date--done' : '') + '">' +
-          '<span class="tma-dash__cip-date-label">' + esc(m.label) + '</span>' +
-          '<span class="tma-dash__cip-date-value">' +
-          (m.date ? esc(fmtShortDate(m.date)) : '—') + '</span>' +
-          '</li>';
+        return '<li class="tma-portal-details__row">' +
+          '<span>' + esc(m.label) + '</span>' +
+          '<span class="tma-portal-details__label">' +
+          (m.date ? esc(fmtShortDate(m.date)) : '—') +
+          '</span></li>';
       }).join('') +
-      '</ol>'
+      '</ul>'
+    );
+  }
+
+  function renderOverviewPanel(app, hidden) {
+    if (!app) return '';
+
+    return (
+      '<div class="tma-dash__clients-profile-panel" data-clients-panel="overview" role="tabpanel"' +
+      (hidden ? ' hidden' : '') + '>' +
+      '<h3 class="tma-dash__clients-card-title">Timeline</h3>' +
+      renderMilestones(app) +
+      '</div>'
     );
   }
 
@@ -6105,7 +6042,6 @@
       renderProfileTabs(state, activeTab) +
       '</div>' +
       renderApplicationBar(state, app) +
-      renderMilestones(app) +
       renderApplicationSyncNotice(app) +
       // An application's panels are cards, so the panel behind them gets out
       // of the way — the same reason a company's and the intake form's do.
@@ -6113,7 +6049,8 @@
       (app ? ' tma-dash__clients-profile--cards' : '') +
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
       (app
-        ? renderCipPersonPanel(state, app.applicant, 'applicant', activeTab !== 'applicant') +
+        ? renderOverviewPanel(app, activeTab !== 'overview') +
+          renderCipPersonPanel(state, app.applicant, 'applicant', activeTab !== 'applicant') +
           renderCipPersonPanel(state, app.sponsor, 'sponsor', activeTab !== 'sponsor') +
           ((app.dependents || []).length
             ? renderCipDependentsPanel(state, app, activeTab !== 'dependents')
