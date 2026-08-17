@@ -18,6 +18,7 @@ use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Engine;
 use App\Support\Cip\Facets;
 use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
@@ -361,7 +362,7 @@ class CipApplicationController extends Controller
             ->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
 
         return response()->json([
-            'applications' => collect($page->items())->map(fn ($a) => $this->row($a))->all(),
+            'applications' => collect($page->items())->map(fn ($a) => $this->row($a, $user))->all(),
             'page' => $page->currentPage(),
             'lastPage' => $page->lastPage(),
             'perPage' => $page->perPage(),
@@ -439,7 +440,7 @@ class CipApplicationController extends Controller
      * every person and their checklists, which is the right answer for a
      * profile and a hundred times too much for a table of fifty lines.
      */
-    private function row($application): array
+    private function row($application, User $viewer): array
     {
         $main = $application->people->first();
         $client = $application->client;
@@ -479,8 +480,27 @@ class CipApplicationController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
+            'availableTransitions' => $this->transitions($application, $viewer),
             'assignedTo' => $this->assignees($application),
         ];
+    }
+
+    /**
+     * The next moves this reader may drive — what a status chip offers.
+     *
+     * The engine's list, not a second reading of the map, so a choice the
+     * chip draws is one the status endpoint would accept.
+     *
+     * @return list<array{value:string,label:string,tone:string}>
+     */
+    private function transitions($application, User $viewer): array
+    {
+        return collect(Engine::availableTransitions($application, $viewer))
+            ->map(fn (string $status) => [
+                'value' => $status,
+                'label' => Status::label($status),
+                'tone' => Status::tone($status),
+            ])->values()->all();
     }
 
     /**
@@ -745,6 +765,7 @@ class CipApplicationController extends Controller
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
+            'availableTransitions' => $this->transitions($application, $viewer),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,

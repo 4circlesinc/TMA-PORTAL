@@ -130,6 +130,7 @@ class Timeline
             CipEvent::ACTION_ASSIGNED => "{$who} assigned ".($meta['officer'] ?? 'an officer'),
             CipEvent::ACTION_UNASSIGNED => "{$who} ended ".($meta['officer'] ?? 'an officer').'’s assignment',
             CipEvent::ACTION_NUMBER_ASSIGNED => self::numberSentence($meta, $who),
+            CipEvent::ACTION_DECISION_RECORDED => self::decisionSentence($meta, $who),
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             /*
              * An action added to the table after this file was written.
@@ -184,6 +185,22 @@ class Timeline
         return isset($meta['previous'])
             ? "{$who} corrected the CIP number to {$number}"
             : "{$who} recorded the CIP number {$number}";
+    }
+
+    /**
+     * The Unit's decision, named as the status chip names it.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function decisionSentence(array $meta, string $who): string
+    {
+        $decision = $meta['decision'] ?? null;
+
+        if ($decision === null || ! Status::isTerminal($decision)) {
+            return "{$who} recorded the decision";
+        }
+
+        return "{$who} recorded the decision: ".Status::label($decision);
     }
 
     /**

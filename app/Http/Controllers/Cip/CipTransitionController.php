@@ -7,13 +7,17 @@ use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\Decision;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
 use App\Support\Cip\Status;
+use App\Support\Cip\Submission;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 /**
  * Moving an application through its lifecycle (§6).
@@ -84,7 +88,7 @@ class CipTransitionController extends Controller
      *    application lands in the officers' queue and §14's first read cannot
      *    begin. New files already start at NEW, so this door is only for rows
      *    that have not yet been moved.
-     *  - PENDING REVIEW is {@see \App\Support\Cip\Submission::record()}, which
+     *  - PENDING REVIEW is {@see Submission::record()}, which
      *    records the CIP number and the submission date. Driven bare, §7's
      *    dual-numbering rule fails silently — every surface goes on showing the
      *    internal number for an application the Unit already holds — and since
@@ -147,6 +151,45 @@ class CipTransitionController extends Controller
         }
 
         $application = $this->drive($application, Status::NEW, $user, []);
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
+     * Record the Unit's decision: Approved or Denied (§21).
+     *
+     * Its own endpoint because of the columns below, and open only to
+     * `cip.decide` — that grant lives in {@see Engine::allows()}, where the
+     * rest of the lifecycle's permissions are. The generic status route
+     * refuses both targets so a bare move cannot leave `decision` and
+     * `decided_at` null on a terminal file.
+     */
+    public function decide(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'decision' => ['required', 'string', Rule::in([Status::GRANTED, Status::DENIED])],
+            // Recorded, not assumed: a decision letter is dated, and staff
+            // enter it after the fact as often as on the day.
+            'decidedAt' => ['nullable', 'date'],
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $application = Decision::record(
+                $application,
+                $user,
+                $data['decision'],
+                isset($data['decidedAt']) ? Carbon::parse($data['decidedAt']) : null,
+                trim($data['note'] ?? ''),
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staff(Live::CIP);
 
         return response()->json(['application' => $this->record($application, $user)]);
     }

@@ -180,12 +180,27 @@ class CipTimelineTest extends TestCase
 
         // A later phase's action, arriving in a table this file cannot be
         // edited every time somebody adds one.
-        Engine::record($application, 'decision_recorded', $admin);
+        Engine::record($application, 'phase_nine_widget', $admin);
 
         $entry = Timeline::for($application, $admin)[0];
 
-        $this->assertSame('decision_recorded', $entry['action'], 'the raw action still travels for the icon');
-        $this->assertSame('Decision recorded by Ada Admin', $entry['what']);
+        $this->assertSame('phase_nine_widget', $entry['action'], 'the raw action still travels for the icon');
+        $this->assertSame('Phase nine widget by Ada Admin', $entry['what']);
+    }
+
+    public function test_a_recorded_decision_reads_as_the_outcome(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $admin, [
+            'decision' => Status::GRANTED,
+        ]);
+
+        $entry = Timeline::for($application, $admin)[0];
+
+        $this->assertSame(CipEvent::ACTION_DECISION_RECORDED, $entry['action']);
+        $this->assertSame('Ada Admin recorded the decision: Approved', $entry['what']);
     }
 
     public function test_a_null_actor_reads_as_the_system(): void

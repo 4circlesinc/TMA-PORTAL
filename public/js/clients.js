@@ -2614,6 +2614,7 @@
     var headers = [
       'Application', 'Applicant', 'Service provider', 'Contact person',
       'Contact email', 'Investment', 'Family', 'Status', 'Assigned to',
+      { html: '', attrs: ' class="tma-portal-cell--menu"' },
     ];
 
     if (APP_TABLE.loading && !APP_TABLE.rows.length) {
@@ -2622,7 +2623,7 @@
 
     if (!APP_TABLE.rows.length) {
       return ui.table(headers,
-        '<tr class="tma-portal-table__empty"><td colspan="9">' +
+        '<tr class="tma-portal-table__empty"><td colspan="10">' +
         esc(state.search ? 'No application matches “' + state.search + '”.' : 'No applications yet.') +
         '</td></tr>', { cls: 'tma-cip-table' });
     }
@@ -2647,9 +2648,13 @@
         // "F6" — §8's own shorthand, with the arithmetic behind it on hover.
         '<td><span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
         esc(a.familyLabel || '—') + '</span></td>' +
-        '<td><span class="tma-portal-status tma-portal-status--' + esc(a.statusTone || 'neutral') +
-        ' tma-portal-status--inline">' + esc(a.statusLabel || '—') + '</span></td>' +
+        '<td>' + cipStatusChip(a) + '</td>' +
         '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
+        '<td class="tma-portal-cell--menu">' +
+        '<button type="button" class="tma-portal-row-menu" data-cip-row-menu="' +
+        esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
+        ' aria-label="More actions" aria-haspopup="menu">' +
+        '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
         '</tr>';
     }).join('');
 
@@ -2892,6 +2897,7 @@
         '<td>' + chip(34) + '</td>' +
         '<td>' + chip(76) + '</td>' +
         '<td><span class="tma-cip-table__applicant">' + disc + '</span></td>' +
+        '<td class="tma-portal-cell--menu"></td>' +
         '</tr>';
     }
 
@@ -2980,6 +2986,47 @@
         e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         openAssignMenu(assign, assign.getAttribute('data-cip-assign'));
+
+        return;
+      }
+
+      var more = e.target.closest('[data-cip-row-menu]');
+      if (more) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        if (clientsCtxEl && clientsCtxAnchor === more) {
+          closeClientsContextMenu();
+
+          return;
+        }
+        var box = more.getBoundingClientRect();
+        openClientsContextMenu(
+          'application',
+          more.getAttribute('data-cip-row-menu'),
+          box.left,
+          box.bottom + 4,
+          { applicationId: more.getAttribute('data-cip-app') }
+        );
+        clientsCtxAnchor = more;
+
+        return;
+      }
+
+      var chip = e.target.closest('[data-cip-status-chip]');
+      if (chip) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        if (clientsCtxEl && clientsCtxAnchor === chip) {
+          closeClientsContextMenu();
+
+          return;
+        }
+        openCipStatusPicker(chip, {
+          applicationId: chip.getAttribute('data-cip-app'),
+        }, chip.getAttribute('data-cip-client'));
+        clientsCtxAnchor = chip;
 
         return;
       }
@@ -3407,10 +3454,24 @@
    * file is in the lifecycle.
    */
   function renderApplicationStatus(app) {
+    return cipStatusChip(app);
+  }
+
+  /*
+   * The status chip itself is the control — header, Overview card, table
+   * column. Clicking it opens the same list the row menu's Change status
+   * item does, so the words on the chip are also the way to move them.
+   */
+  function cipStatusChip(app) {
     if (!app || !app.statusLabel) return '';
 
-    return '<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
-      ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>';
+    return '<button type="button" class="tma-portal-status tma-portal-status--' +
+      esc(app.statusTone || 'neutral') +
+      ' tma-portal-status--inline tma-cip-status-chip" data-cip-status-chip' +
+      ' data-cip-app="' + esc(app.id || '') + '"' +
+      ' data-cip-client="' + esc(app.clientUid || '') + '"' +
+      ' aria-haspopup="menu" aria-label="Change status, currently ' +
+      esc(app.statusLabel) + '">' + esc(app.statusLabel) + '</button>';
   }
 
 
@@ -4819,14 +4880,10 @@
   }
 
   function renderOverviewApplication(app) {
-    var status = app.statusLabel
-      ? '<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
-        ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>'
-      : '';
     return overviewList(
       overviewRow('Number', app.number) +
       overviewRow('Internal', app.cipNumber && app.internalNumber ? app.internalNumber : '') +
-      overviewRow('Status', status, true) +
+      overviewRow('Status', cipStatusChip(app), true) +
       overviewRow('Investment', app.investmentType) +
       overviewRow('Referred by', app.provider) +
       overviewRow('Sponsored', app.sponsored ? 'Yes' : 'No')
@@ -6508,7 +6565,10 @@
           var id = el.getAttribute(attr);
           if (!id) return;
           e.preventDefault();
-          openClientsContextMenu(kind, id, e.clientX, e.clientY);
+          var extra = kind === 'application'
+            ? { applicationId: el.getAttribute('data-cip-app') }
+            : null;
+          openClientsContextMenu(kind, id, e.clientX, e.clientY, extra);
         });
       });
     }
@@ -6921,6 +6981,7 @@
   var clientsMenuCtx = null;
   var clientsCtxEl = null;
   var clientsCtxSubEl = null;
+  var clientsCtxAnchor = null;
   var clientsAssignable = {};
 
   /* Deleting a provider asks a real question — keep its people or take them
@@ -6995,9 +7056,9 @@
    * the fact as often as on the day, and quietly stamping today would put the
    * wrong date on an audit trail nobody would think to check.
    */
-  function openSubmissionDialog(state, render, correcting) {
+  function openSubmissionDialog(state, render, correcting, fromApp) {
     var ui = window.TMAPortalUI;
-    var app = applicationFor(state.selectedId);
+    var app = fromApp || applicationFor(state.selectedId);
     if (!app || !ui || !ui.openModal) return;
 
     var today = new Date().toISOString().slice(0, 10);
@@ -7058,11 +7119,18 @@
             .then(function (json) {
               ui.closeModal();
               var record = json && json.application;
-              if (record) rememberApplication(state.selectedId, record);
+              var uid = (fromApp && fromApp.clientUid) || state.selectedId;
+              if (record && uid) rememberApplication(uid, record);
+              forgetApplicationTable();
+              forgetBuckets();
               clientsToast(correcting
                 ? 'CIP number updated'
                 : 'Submission recorded — now ' + (record ? record.number : number), 'positive');
-              render({ detailOnly: !usesPagedClientsFlow(state) });
+              if (typeof render === 'function') {
+                render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
+              } else {
+                repaintClients();
+              }
             })
             .catch(function (err) {
               save.disabled = false;
@@ -7109,6 +7177,9 @@
       },
     ];
     if (kind === 'company') items.push({ act: 'add-person', label: 'Add person', icon: 'Plus' });
+    if (kind === 'application') {
+      items.push({ act: 'status', label: 'Change status', icon: 'Flag', submenu: true });
+    }
     // Assigning staff is `clients.assign` — the same capability the server
     // enforces, read through the access mirror rather than guessed from the
     // current-user store (which is not always populated by the time a row
@@ -7147,6 +7218,7 @@
     closeClientsCtxSub();
     if (clientsCtxEl && clientsCtxEl.parentNode) clientsCtxEl.parentNode.removeChild(clientsCtxEl);
     clientsCtxEl = null;
+    clientsCtxAnchor = null;
     document.removeEventListener('click', onClientsCtxDocClick);
     document.removeEventListener('keydown', onClientsCtxKey);
     document.removeEventListener('scroll', closeClientsContextMenu, true);
@@ -7156,13 +7228,18 @@
     if (clientsCtxSubEl && clientsCtxSubEl.parentNode) clientsCtxSubEl.parentNode.removeChild(clientsCtxSubEl);
     clientsCtxSubEl = null;
     if (clientsCtxEl) {
-      var parent = clientsCtxEl.querySelector('[data-clients-ctx-act="assign"]');
-      if (parent) parent.removeAttribute('data-open');
+      clientsCtxEl.querySelectorAll('[data-open]').forEach(function (el) {
+        el.removeAttribute('data-open');
+      });
     }
   }
 
   function onClientsCtxDocClick(e) {
     if (e.target.closest('.tma-portal-context-menu')) return;
+    // The row's three-dots button opens this menu; let that click toggle
+    // rather than close-and-miss.
+    if (e.target.closest('[data-cip-row-menu]')) return;
+    if (e.target.closest('[data-cip-status-chip]')) return;
     closeClientsContextMenu();
   }
 
@@ -7170,8 +7247,9 @@
     if (e.key === 'Escape') closeClientsContextMenu();
   }
 
-  function openClientsContextMenu(kind, id, x, y) {
+  function openClientsContextMenu(kind, id, x, y, extra) {
     closeClientsContextMenu();
+    extra = extra || {};
     var items = clientsContextItems(kind);
 
     clientsCtxEl = document.createElement('div');
@@ -7187,6 +7265,7 @@
       var act = btn.getAttribute('data-clients-ctx-act');
       // The parent row only opens its submenu; it is not an action itself.
       if (act === 'assign') { openClientsAssignSub(btn, kind, id); return; }
+      if (act === 'status') { openCipStatusSub(btn, kind, id, extra); return; }
       closeClientsContextMenu();
       runClientsContextAction(act, kind, id);
     });
@@ -7196,7 +7275,9 @@
     clientsCtxEl.addEventListener('mouseover', function (e) {
       var btn = e.target.closest('[data-clients-ctx-act]');
       if (!btn) return;
-      if (btn.getAttribute('data-clients-ctx-act') === 'assign') openClientsAssignSub(btn, kind, id);
+      var act = btn.getAttribute('data-clients-ctx-act');
+      if (act === 'assign') openClientsAssignSub(btn, kind, id);
+      else if (act === 'status') openCipStatusSub(btn, kind, id, extra);
       else closeClientsCtxSub();
     });
 
@@ -7276,6 +7357,213 @@
       if (sub !== clientsCtxSubEl) return;
       sub.innerHTML = '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
         '<span class="tma-portal-context-menu__label">Couldn\u2019t load staff</span></div>';
+    });
+  }
+
+  function applicationRowById(id) {
+    if (!id) return null;
+
+    return (APP_TABLE.rows || []).filter(function (a) { return a.id === id; })[0] || null;
+  }
+
+  function applicationRowByClient(uid) {
+    if (!uid) return null;
+
+    return (APP_TABLE.rows || []).filter(function (a) { return a.clientUid === uid; })[0] || null;
+  }
+
+  function cipRowForMenu(extra, clientUid) {
+    return applicationRowById(extra && extra.applicationId) || applicationRowByClient(clientUid);
+  }
+
+  function cipSourceFor(extra, clientUid) {
+    return cipRowForMenu(extra, clientUid) || applicationFor(clientUid) || null;
+  }
+
+  function cipTransitionsFor(extra, clientUid) {
+    var row = cipRowForMenu(extra, clientUid);
+    if (row && Array.isArray(row.availableTransitions)) return row.availableTransitions;
+    var app = applicationFor(clientUid);
+    if (app && Array.isArray(app.availableTransitions)) return app.availableTransitions;
+
+    return [];
+  }
+
+  function renderCipStatusSub(list) {
+    if (!list.length) {
+      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
+        '<span class="tma-portal-context-menu__label">No status change available</span></div>';
+    }
+
+    return list.map(function (status) {
+      return '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
+        ' data-cip-status-to="' + esc(status.value) + '"' +
+        ' data-cip-status-label="' + esc(status.label) + '">' +
+        '<span class="tma-portal-status tma-portal-status--' + esc(status.tone || 'neutral') +
+        ' tma-portal-status--inline tma-cip-status-chip">' + esc(status.label) + '</span></button>';
+    }).join('');
+  }
+
+  function openCipStatusSub(parentBtn, kind, id, extra) {
+    if (clientsCtxSubEl && parentBtn.hasAttribute('data-open')) return;
+    closeClientsCtxSub();
+    parentBtn.setAttribute('data-open', 'true');
+
+    var list = cipTransitionsFor(extra, id);
+
+    clientsCtxSubEl = document.createElement('div');
+    clientsCtxSubEl.className = 'tma-portal-context-menu tma-portal-context-menu--sub';
+    clientsCtxSubEl.setAttribute('role', 'menu');
+    clientsCtxSubEl.innerHTML = renderCipStatusSub(list);
+    document.body.appendChild(clientsCtxSubEl);
+
+    var rect = parentBtn.getBoundingClientRect();
+    placeCtxMenu(clientsCtxSubEl, rect.right + 2, rect.top - 4);
+
+    clientsCtxSubEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-cip-status-to]');
+      if (!btn) return;
+      var to = btn.getAttribute('data-cip-status-to');
+      var label = btn.getAttribute('data-cip-status-label') || to;
+      closeClientsContextMenu();
+      changeCipStatus(to, extra, id, label);
+    });
+  }
+
+  function openCipStatusPicker(anchor, extra, clientUid) {
+    closeClientsContextMenu();
+    extra = extra || {};
+
+    var list = cipTransitionsFor(extra, clientUid);
+    clientsCtxEl = document.createElement('div');
+    clientsCtxEl.className = 'tma-portal-context-menu';
+    clientsCtxEl.setAttribute('role', 'menu');
+    clientsCtxEl.innerHTML = renderCipStatusSub(list);
+    document.body.appendChild(clientsCtxEl);
+
+    var box = anchor.getBoundingClientRect();
+    placeCtxMenu(clientsCtxEl, box.left, box.bottom + 4);
+
+    clientsCtxEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-cip-status-to]');
+      if (!btn) return;
+      var to = btn.getAttribute('data-cip-status-to');
+      var label = btn.getAttribute('data-cip-status-label') || to;
+      closeClientsContextMenu();
+      changeCipStatus(to, extra, clientUid, label);
+    });
+
+    setTimeout(function () {
+      document.addEventListener('click', onClientsCtxDocClick);
+      document.addEventListener('keydown', onClientsCtxKey);
+      document.addEventListener('scroll', closeClientsContextMenu, true);
+    }, 0);
+  }
+
+  function refreshAfterCipMove(clientUid) {
+    forgetApplicationTable();
+    forgetBuckets();
+    if (clientUid) forgetApplication(clientUid);
+    if (clientsMenuCtx && clientsMenuCtx.render) clientsMenuCtx.render({ forceFull: true });
+    else repaintClients();
+  }
+
+  function changeCipStatus(to, extra, clientUid, label) {
+    var source = cipSourceFor(extra, clientUid);
+    var applicationId = (extra && extra.applicationId) || (source && source.id);
+    if (!applicationId) {
+      clientsToast('Could not find this application.', 'negative');
+
+      return;
+    }
+
+    var ctx = clientsMenuCtx;
+    var state = (ctx && ctx.state) || clientsMountState;
+    var render = (ctx && ctx.render) || repaintClients;
+
+    if (to === 'pending_review') {
+      if (!state) return;
+      openSubmissionDialog(state, render, false, source || { id: applicationId, clientUid: clientUid });
+
+      return;
+    }
+
+    if (to === 'granted' || to === 'denied') {
+      openDecisionDialog(applicationId, to, clientUid);
+
+      return;
+    }
+
+    var leftoverNew = to === 'new';
+    var url = '/portal/cip/applications/' + encodeURIComponent(applicationId) +
+      (leftoverNew ? '/submit' : '/status');
+
+    clientsFetch(url, leftoverNew ? { method: 'POST' } : { method: 'POST', json: { status: to } })
+      .then(function () {
+        clientsToast('Moved to ' + (label || 'the next status'), 'positive');
+        refreshAfterCipMove(clientUid);
+      })
+      .catch(function (err) {
+        clientsToast((err && err.message) || 'Could not change the status.', 'negative');
+      });
+  }
+
+  function openDecisionDialog(applicationId, decision, clientUid) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var approved = decision === 'granted';
+    var today = new Date().toISOString().slice(0, 10);
+
+    ui.openModal({
+      title: approved ? 'Record approval' : 'Record denial',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-decided">Decision date</label>' +
+        '<input type="date" id="cip-decided" class="tma-dash__clients-field-input"' +
+        ' data-cip-decided value="' + esc(today) + '">' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        (approved
+          ? 'The application will move to Approved. This cannot be undone from here.'
+          : 'The application will move to Denied. This cannot be undone from here.') +
+        '</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-decision>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-decision>' +
+        (approved ? 'Record approval' : 'Record denial') + '</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-decision]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-decision]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-decided]');
+          save.disabled = true;
+          save.textContent = 'Saving…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/decision', {
+            method: 'POST',
+            json: {
+              decision: decision,
+              decidedAt: dateEl ? dateEl.value : today,
+            },
+          })
+            .then(function () {
+              ui.closeModal();
+              clientsToast(approved ? 'Recorded as Approved' : 'Recorded as Denied', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              save.textContent = approved ? 'Record approval' : 'Record denial';
+              clientsToast((err && err.message) || 'Could not record the decision.', 'negative');
+            });
+        });
+      },
     });
   }
 

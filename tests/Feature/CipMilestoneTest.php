@@ -12,6 +12,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Milestones;
+use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -169,6 +170,15 @@ class CipMilestoneTest extends TestCase
         // empty person the card would draw a blank row for.
         $this->assertNull($body['assignedOfficer']);
         $this->assertSame([], $body['assignedTo']);
+        $this->assertSame(
+            [[
+                'value' => Status::REVIEW_APPLICATION,
+                'label' => 'Review Applications',
+                'tone' => 'action',
+            ]],
+            $body['availableTransitions'],
+            'the status chip on the file offers the edges this reader may drive',
+        );
     }
 
     public function test_the_officer_leaves_the_record_when_the_assignment_ends(): void

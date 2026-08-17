@@ -25,6 +25,12 @@ class CipApplicationTableTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['services.cip.enabled' => true]);
+    }
+
     private function staff(string $email = 'ada@example.com'): User
     {
         $u = User::create(['name' => 'Ada Admin', 'email' => $email, 'password' => bcrypt('password12345')]);
@@ -97,6 +103,15 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame('Galaxy', $row['provider']);
         $this->assertSame('chen@example.com', $row['contactEmail']);
         $this->assertSame('New Applications', $row['statusLabel']);
+        $this->assertSame(
+            [[
+                'value' => Status::REVIEW_APPLICATION,
+                'label' => 'Review Applications',
+                'tone' => 'action',
+            ]],
+            $row['availableTransitions'],
+            'the row menu’s Change status list is the edges this reader may drive',
+        );
     }
 
     public function test_the_assigned_column_names_the_staff_on_the_client(): void

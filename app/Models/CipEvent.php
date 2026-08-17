@@ -39,6 +39,15 @@ class CipEvent extends Model
      */
     public const ACTION_NUMBER_ASSIGNED = 'number_assigned';
 
+    /**
+     * The Unit decided — Approved or Denied.
+     *
+     * Its own action rather than a detail of the status change: the outcome
+     * and the date live on the application, and which day a report measures
+     * from is an audit question the status event alone does not answer.
+     */
+    public const ACTION_DECISION_RECORDED = 'decision_recorded';
+
     protected function casts(): array
     {
         return [

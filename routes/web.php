@@ -35,8 +35,8 @@ use App\Http\Controllers\ContactsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\Design\MailPreviewController;
-use App\Http\Controllers\DesktopAuthController;
 use App\Http\Controllers\DesktopAssetsController;
+use App\Http\Controllers\DesktopAuthController;
 use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\DevDatabaseController;
@@ -54,10 +54,9 @@ use App\Http\Controllers\Files\BulkController;
 use App\Http\Controllers\Files\FavoriteController;
 use App\Http\Controllers\Files\FileCommentController;
 use App\Http\Controllers\Files\FileController;
+use App\Http\Controllers\Files\FilePresenceController;
 use App\Http\Controllers\Files\FileRequestController;
 use App\Http\Controllers\Files\FileReviewController;
-use App\Http\Controllers\Files\FilePresenceController;
-use App\Http\Controllers\Files\SyncController as FilesSyncController;
 use App\Http\Controllers\Files\FileVersionController;
 use App\Http\Controllers\Files\FileViewerController;
 use App\Http\Controllers\Files\FileWorkflowController;
@@ -67,6 +66,7 @@ use App\Http\Controllers\Files\PublicUploadController;
 use App\Http\Controllers\Files\RecycleBinController;
 use App\Http\Controllers\Files\ShareController;
 use App\Http\Controllers\Files\ShortcutController;
+use App\Http\Controllers\Files\SyncController as FilesSyncController;
 use App\Http\Controllers\Files\SyncStatusController;
 use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
@@ -361,6 +361,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          */
         Route::post('/applications/{uuid}/submit', [CipTransitionController::class, 'submit'])
             ->name('applications.submit-draft');
+        /*
+         * §21: the Unit decided. Its own verb because it writes `decision`
+         * and `decided_at` — a bare status change would leave both null on a
+         * terminal file, and there is no edge back to fill them.
+         */
+        Route::post('/applications/{uuid}/decision', [CipTransitionController::class, 'decide'])
+            ->name('applications.decision');
 
         /*
          * §10: who is working on this application.

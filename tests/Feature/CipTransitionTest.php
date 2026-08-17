@@ -390,4 +390,52 @@ class CipTransitionTest extends TestCase
 
         $this->assertSame(0, CipEvent::where('action', CipEvent::ACTION_STATUS_CHANGED)->count());
     }
+
+    public function test_recording_a_decision_writes_the_outcome_and_moves_the_status(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
+
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+                'decision' => Status::GRANTED,
+                'decidedAt' => '2026-08-10',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::GRANTED)
+            ->assertJsonPath('application.statusLabel', 'Approved');
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::GRANTED, $fresh->status);
+        $this->assertSame(CipApplication::DECISION_GRANTED, $fresh->decision);
+        $this->assertSame('2026-08-10', $fresh->decided_at->toDateString());
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_DECISION_RECORDED,
+            'actor_id' => $admin->id,
+        ]);
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_STATUS_CHANGED,
+            'from_status' => Status::BACKGROUND_CHECK,
+            'to_status' => Status::GRANTED,
+        ]);
+    }
+
+    public function test_a_reviewer_cannot_record_a_decision(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $reviewer = $this->user(Role::REVIEWING_OFFICER);
+        $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
+
+        $this->actingAs($reviewer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/decision', [
+                'decision' => Status::DENIED,
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
+        $this->assertNull($application->fresh()->decision);
+    }
 }
