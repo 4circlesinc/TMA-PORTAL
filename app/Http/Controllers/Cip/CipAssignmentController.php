@@ -6,11 +6,12 @@ use App\Http\Controllers\ClientAssignmentController;
 use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
+use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
-use App\Support\Clients\Assignments as ClientAssignments;
 use App\Support\Cip\CipAccess;
+use App\Support\Clients\Assignments as ClientAssignments;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +31,9 @@ use Illuminate\Validation\Rule;
  */
 class CipAssignmentController extends Controller
 {
+    /** The mark on company assignments this workflow writes for itself. */
+    private const AUTO_NOTE = 'cip:auto-assigned with the application';
+
     /** Who holds this application, and who else could. */
     public function index(Request $request, string $uuid): JsonResponse
     {
@@ -89,6 +93,35 @@ class CipAssignmentController extends Controller
             ], $request->user(), announce: false);
         }
 
+        /*
+         * The provider firm comes with the file — automatically, and scoped.
+         *
+         * An officer's hub is what they are assigned to, so without this the
+         * application named Galaxy Partners while the officer's Service
+         * providers tab had no such firm — the firm's contact details being
+         * exactly what a reviewer needs to chase a document. COMPANY_ONLY is
+         * the point: the assignment opens the firm's own page, not its book
+         * of clients, and the people lists on that page are scoped to the
+         * viewer separately. Marked as the workflow's own row so ending the
+         * last assignment can take it back without touching grants an
+         * administrator made by hand.
+         */
+        $firm = $application->provider?->company;
+
+        if ($firm && ! CompanyStaffAssignment::where('company_id', $firm->id)
+            ->where('user_id', $officer->id)->live()->exists()) {
+            CompanyStaffAssignment::create([
+                'company_id' => $firm->id,
+                'user_id' => $officer->id,
+                'role' => $role,
+                'permission_level' => 'view_files',
+                'applies_to_clients' => CompanyStaffAssignment::SCOPE_COMPANY_ONLY,
+                'status' => CompanyStaffAssignment::STATUS_ACTIVE,
+                'assigned_by' => $request->user()->id,
+                'notes' => self::AUTO_NOTE,
+            ]);
+        }
+
         Assignments::assign($application, $officer, $request->user(), $role);
 
         // The officer's own worklist changes shape too — this row is what puts
@@ -128,6 +161,38 @@ class CipAssignmentController extends Controller
             }
         }
 
+        /*
+         * The firm goes back with the last file — checked after both rows
+         * above have ended, or the file being ended would count itself as
+         * still held and the firm would never come off.
+         *
+         * Only the row this workflow wrote (the note marks it), and only when
+         * no other application from that firm is still in the officer's
+         * hands: two Galaxy files assigned and one ended must not take
+         * Galaxy off the officer working the other. A company assignment an
+         * administrator made by hand is theirs and stays.
+         */
+        $firm = $application->provider?->company;
+
+        if ($firm) {
+            $stillHolds = ApplicationScope::query(User::find($userId))
+                ->where('provider_id', $application->provider_id)
+                ->exists();
+
+            if (! $stillHolds) {
+                CompanyStaffAssignment::where('company_id', $firm->id)
+                    ->where('user_id', $userId)
+                    ->where('notes', self::AUTO_NOTE)
+                    ->live()
+                    ->get()
+                    ->each(fn ($row) => $row->forceFill([
+                        'status' => CompanyStaffAssignment::STATUS_ENDED,
+                        'ended_at' => now(),
+                        'ended_by' => $request->user()->id,
+                    ])->save());
+            }
+        }
+
         Live::staffAnd(Live::CIP, [$userId]);
         Live::staffAnd(Live::CLIENTS, [$userId]);
 
@@ -156,7 +221,7 @@ class CipAssignmentController extends Controller
      *
      * The application's own assignments answer only where there is no client
      * record to share with — see the matching note in
-     * {@see \App\Http\Controllers\Cip\CipApplicationController}. Kept in
+     * {@see CipApplicationController}. Kept in
      * step with §8's column on purpose: the picker and the cell it opens from
      * must never name different people.
      *

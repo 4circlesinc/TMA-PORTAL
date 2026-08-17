@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\ClientAssignment;
 use App\Models\Company;
 use App\Models\CompanyStaffAssignment;
+use App\Models\User;
 use App\Support\Access\AccessSync;
+use App\Support\Access\ClientScope;
 use App\Support\Access\CompanyScope;
 use App\Support\Access\Role;
 use App\Support\Cip\Providers;
@@ -47,24 +50,28 @@ class CompaniesController extends Controller
     {
         $this->authorizeStaff($request);
 
-        // The firm-wide cache is only right for accounts that see the whole
-        // directory. Everyone else gets their assignment slice, computed per
-        // request — a handful of rows, not worth a per-user cache.
+        /*
+         * The firm-wide cache is only right for accounts that see the whole
+         * directory — the counts and previews inside it are viewer-scoped
+         * now, so a cached slice would be one officer's view served to the
+         * next reader. Everyone else gets their assignment slice, computed
+         * per request: a handful of rows, not worth a per-user cache.
+         */
         if (CompanyScope::seesEveryCompany($request->user())) {
             $payload = Cache::remember(
                 'companies.directory',
                 self::INDEX_TTL_SECONDS,
-                fn () => $this->directoryPayload(Company::query()),
+                fn () => $this->directoryPayload(Company::query(), $request->user()),
             );
         } else {
-            $payload = $this->directoryPayload(CompanyScope::query($request->user()));
+            $payload = $this->directoryPayload(CompanyScope::query($request->user()), $request->user());
         }
 
         return response()->json($payload);
     }
 
     /** The listing payload for whichever slice of companies the query holds. */
-    private function directoryPayload(Builder $query): array
+    private function directoryPayload(Builder $query, User $viewer): array
     {
         $companies = $query->with(['clients' => fn ($q) => $q
             // Only the columns toRecord() prints for a person. Unconstrained,
@@ -78,14 +85,14 @@ class CompaniesController extends Controller
             // toRecord() falls back to a query per count when the figure is
             // absent, which for member counts meant one round trip per company.
             ->withCount([
-                'referredClients',
-                'clients',
+                'referredClients' => fn ($q) => $this->viewerClients($viewer, $q),
+                'clients' => fn ($q) => $this->viewerClients($viewer, $q),
                 'members as current_members_count' => fn ($q) => $q->current(),
             ])
             ->orderBy('name')
             ->get();
 
-        $this->attachReferredPreviews($companies);
+        $this->attachReferredPreviews($companies, $viewer);
 
         return [
             'companies' => $companies->map->toRecord()->values()->all(),
@@ -103,11 +110,11 @@ class CompaniesController extends Controller
      *
      * @param  Collection<int, Company>  $companies
      */
-    private function attachReferredPreviews(Collection $companies): void
+    private function attachReferredPreviews(Collection $companies, User $viewer): void
     {
         $ids = $companies->pluck('id')->all();
 
-        $previews = $ids ? $this->referredPreviews($ids) : [];
+        $previews = $ids ? $this->referredPreviews($ids, $viewer) : [];
 
         foreach ($companies as $company) {
             $company->setRelation(
@@ -121,7 +128,7 @@ class CompaniesController extends Controller
      * @param  array<int, int>  $companyIds
      * @return array<int, EloquentCollection<int, Client>>
      */
-    private function referredPreviews(array $companyIds): array
+    private function referredPreviews(array $companyIds, User $viewer): array
     {
         // The base builder rather than the model, so the soft-delete scope is
         // not applied twice once this is wrapped in the outer query.
@@ -139,6 +146,20 @@ class CompaniesController extends Controller
             ->whereIn('referred_by_company_id', $companyIds)
             ->whereNull('deleted_at');
 
+        /*
+         * The viewer's slice, not the firm's book.
+         *
+         * An officer holds one applicant at Galaxy Partners; the firm has
+         * three. Their providers tab must preview — and count — the one, for
+         * the same reason the directory shows them the one: the rest of the
+         * book is not theirs to read, and a count of three above a page that
+         * shows one person reads as the page being broken.
+         */
+        if (! ClientScope::seesEveryClient($viewer)) {
+            $ranked->whereIn('id', ClientAssignment::query()
+                ->select('client_id')->live()->where('user_id', $viewer->id));
+        }
+
         $rows = DB::query()
             ->fromSub($ranked, 'ranked')
             ->where('preview_rank', '<=', Company::REFERRED_PREVIEW)
@@ -150,6 +171,26 @@ class CompaniesController extends Controller
         }
 
         return array_map(fn (array $rows) => Client::hydrate($rows), $grouped);
+    }
+
+    /**
+     * Narrow a client list or count to what this viewer may see.
+     *
+     * The rule is {@see ClientScope}'s, restated as a constraint because these
+     * are relation closures on a company query rather than a client query of
+     * their own. Somebody with clients.viewAll reads the firm's whole book;
+     * everybody else reads the clients they are assigned to, here exactly as
+     * in the directory — the company page is another window onto the same
+     * records, not a way around the slice.
+     */
+    private function viewerClients(User $viewer, $query)
+    {
+        if (! ClientScope::seesEveryClient($viewer)) {
+            $query->whereIn($query->getModel()->getQualifiedKeyName(), ClientAssignment::query()
+                ->select('client_id')->live()->where('user_id', $viewer->id));
+        }
+
+        return $query;
     }
 
     public function store(Request $request): JsonResponse
@@ -212,9 +253,26 @@ class CompaniesController extends Controller
     {
         $this->authorizeStaff($request);
 
+        /*
+         * Every people list and count preloaded, viewer-scoped. toRecord()
+         * falls back to its own unscoped queries for whatever is absent, so a
+         * relation left unloaded here would hand an officer the firm's whole
+         * book on the profile page the directory had correctly narrowed.
+         */
         $company = CompanyScope::query(
             $request->user(),
-            Company::with(['clients' => fn ($q) => $q->orderBy('name')->orderBy('id')]),
+            Company::with([
+                'clients' => fn ($q) => $this->viewerClients($request->user(), $q)
+                    ->orderBy('name')->orderBy('id'),
+                'referredClients' => fn ($q) => $this->viewerClients($request->user(), $q)
+                    ->select(self::PERSON_COLUMNS)
+                    ->addSelect('referred_by_company_id')
+                    ->orderBy('name')->orderBy('id')
+                    ->limit(Company::REFERRED_PREVIEW),
+            ])->withCount([
+                'referredClients' => fn ($q) => $this->viewerClients($request->user(), $q),
+                'clients' => fn ($q) => $this->viewerClients($request->user(), $q),
+            ]),
         )->where('uid', $uid)->firstOrFail();
 
         return response()->json(['company' => $company->toRecord()]);
