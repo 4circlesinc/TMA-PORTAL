@@ -717,11 +717,20 @@ class Postcards
             'eyebrow' => 'CIP Applications',
             'greeting' => 'Hi '.(strtok($officer->name, ' ') ?: $officer->name).',',
             'title' => 'An application has been assigned to you',
-            'lead' => 'You now hold '.$facts['number'].' as '.mb_strtolower($facts['roleLabel']).'.',
+            'lead' => 'You now hold '.$facts['number'].' as '.mb_strtolower($facts['roleLabel'])
+                .' — it stands at '.$facts['statusLabel'].'.',
+            /*
+             * The status is in the body as well as the subject. The subject
+             * announces it in §22's filing format, and a body that then said
+             * only "assigned to you" left the reader to work out what
+             * ASSESSMENT FEEDBACK meant for them — the one fact that decides
+             * what kind of work just landed.
+             */
             'details' => [
                 ['Application', $facts['number']],
                 ['Applicant', $facts['applicant']],
                 ['Service provider', $facts['provider']],
+                ['Status', $facts['statusLabel']],
                 ['Family size', 'F'.$facts['familySize']],
             ],
             'button' => ['label' => 'Open the application', 'url' => $url],

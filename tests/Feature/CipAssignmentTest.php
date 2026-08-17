@@ -331,6 +331,11 @@ class CipAssignmentTest extends TestCase
                 && $details['Application'] === $application->displayNumber()
                 && $details['Applicant'] === 'Chen Wei'
                 && $details['Service provider'] === 'Galaxy'
+                // The body says where the file stands, not only the subject:
+                // the status is the one fact that decides what kind of work
+                // just landed.
+                && $details['Status'] === 'Review Applications'
+                && str_contains($mail->payload['lead'], 'Review Applications')
                 && str_contains($mail->payload['button']['url'], '/clients/');
         });
 
