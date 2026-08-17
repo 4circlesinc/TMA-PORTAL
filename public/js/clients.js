@@ -6480,6 +6480,38 @@
    * @param {string} field  bucket | assignee | provider
    * @param {Array}  items  [{ id, name, count, tone? }] in the server's order
    */
+  /*
+   * What sits between the checkbox and the name.
+   *
+   * A status wears its tone as a dot; an officer wears their face. The portal
+   * draws a colleague with their picture everywhere else, and this list is
+   * the one place a reader picks a person out of several — which is exactly
+   * where two similar names get confused if there is nothing to tell them
+   * apart at a glance.
+   *
+   * "Unassigned" is not a person and does not get a face. It gets an empty
+   * ring in the same place, so the names below it still line up and nothing
+   * pretends there is somebody there — a stock silhouette on a row that means
+   * "nobody" would be the list inventing a person.
+   */
+  function filterItemArt(field, item) {
+    if (item.tone) {
+      return '<i class="tma-filter-popover__dot tma-filter-popover__dot--' + esc(item.tone) + '"></i>';
+    }
+
+    if (field !== 'assignee') return '';
+
+    if (String(item.id) === 'none') {
+      return '<span class="tma-filter-popover__face tma-filter-popover__face--none" aria-hidden="true"></span>';
+    }
+
+    var src = personFace(item);
+
+    return src
+      ? '<img class="tma-filter-popover__face" src="' + esc(src) + '" alt="" width="22" height="22">'
+      : '<span class="tma-filter-popover__face tma-filter-popover__face--none" aria-hidden="true"></span>';
+  }
+
   function filterGroup(field, items) {
     if (!items || !items.length) return '';
 
@@ -6498,9 +6530,7 @@
           (on ? ' data-selected' : '') +
           ' data-cip-filter="' + esc(field) + '" data-cip-value="' + esc(item.id) + '">' +
           '<span class="tma-filter-popover__check" aria-hidden="true"></span>' +
-          (item.tone
-            ? '<i class="tma-filter-popover__dot tma-filter-popover__dot--' + esc(item.tone) + '"></i>'
-            : '') +
+          filterItemArt(field, item) +
           '<span class="tma-filter-popover__item-label">' + esc(item.name) + '</span>' +
           '<span class="tma-filter-popover__item-meta">' + esc(String(item.count)) + '</span>' +
           '</button>';

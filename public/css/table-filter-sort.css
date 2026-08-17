@@ -638,3 +638,30 @@
 .tma-dash[data-theme="dark"] .tma-filter-popover__dot--neutral {
   background: rgba(255, 255, 255, 0.35);
 }
+
+/* The face beside an officer's name.
+ *
+ * Same size and shape as the faces the Assigned to column draws, so the same
+ * person reads as the same person in the menu and in the table. The row is
+ * top-aligned once a long name can wrap, so the face keeps to the first line
+ * rather than floating beside the middle of two. */
+.tma-filter-popover__face {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin-top: -1px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* "Unassigned" is nobody, so it holds the space without claiming a face —
+   a silhouette here would be the list inventing a person. */
+.tma-filter-popover__face--none {
+  border: 1.5px dashed rgba(0, 0, 0, 0.22);
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__face--none {
+  border-color: rgba(255, 255, 255, 0.3);
+}
