@@ -35004,6 +35004,35 @@ span.tma-dash__messages-profile-avatar {
   gap: var(--space-8);
 }
 
+/* A filed slot opens the library viewer — the same window the Documents tab
+   and the passport photo use — so the name is a button. The row still reads
+   as a checklist; only the pointer and a hover colour say it is a file. */
+.tma-dash__clients-checklist-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-4, 4px);
+}
+
+.tma-dash__clients-checklist-open:hover .tma-dash__clients-checklist-label {
+  color: var(--color-text-link, var(--dash-accent));
+}
+
+.tma-dash__clients-checklist-open:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--color-primary));
+  outline-offset: 2px;
+}
+
 /* The exception is what gets marked. Nearly every requirement is mandatory, so
    an asterisk on each of those would mark nothing — it is the optional ones
    that are worth saying out loud. */
@@ -35011,39 +35040,6 @@ span.tma-dash__messages-profile-avatar {
   font-size: var(--text-size-12);
   color: var(--color-text-secondary);
 }
-
-/* The verbs sit on the row they judge — §12 is explicit that working a
-   checklist must never mean a trip to the File Library. Quiet until the row is
-   hovered or a key lands on them, because most rows are read, not judged. */
-.tma-dash__clients-checklist-actions {
-  display: inline-flex;
-  gap: var(--space-4);
-  margin-left: var(--space-8);
-  opacity: 0;
-  transition: opacity var(--duration-fast, 120ms) ease;
-}
-
-.tma-dash__clients-checklist-row:hover .tma-dash__clients-checklist-actions,
-.tma-dash__clients-checklist-actions:focus-within {
-  opacity: 1;
-}
-
-/* Never hidden from a keyboard or a screen reader: opacity, not display, and
-   the moment one takes focus the pair appears. */
-.tma-dash__clients-checklist-act {
-  padding: 2px var(--space-8);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-8);
-  background: var(--color-white);
-  font: 400 var(--text-size-12) / var(--text-lh-12) var(--font-family);
-  color: var(--color-text-primary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.tma-dash__clients-checklist-act:hover { background: var(--color-hover); }
-
-.tma-dash__clients-checklist-act--warn { color: var(--color-red); }
 
 .tma-dash__clients-checklist-block {
   display: flex;
@@ -35056,10 +35052,10 @@ span.tma-dash__messages-profile-avatar {
 /*
  * The passport photo as a row in the person's own list.
  *
- * A row, not a column beside them: the fields run out partway down the second
- * column and the portrait belongs under the last of them. It is built to the
- * list row's shape, so only the picture itself needs sizing — the label and
- * the icon already line up with every row above it.
+ * A row, not a column beside them: it sits under the passport number at the
+ * top of the list. It is built to the list row's shape, so only the picture
+ * itself needs sizing — the label and the icon already line up with every
+ * other row.
  */
 .tma-dash__clients-person__photo {
   display: block;

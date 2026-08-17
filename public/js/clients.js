@@ -4825,15 +4825,18 @@
   }
 
   /*
-   * Overview is the file at a glance: who travels, what they still owe, where
-   * the application has got to. Short cards pair up; nothing here is a full-
-   * width band just because it is the first tab.
+   * Overview is the file at a glance: where it is, then who travels and
+   * what they still owe. Application and Timeline lead; the rest pair up
+   * under them. Nothing here is a full-width band just because it is the
+   * first tab.
    */
   function renderOverviewPanel(app, hidden) {
     if (!app) return '';
 
     var family = cipFamily(app);
     var cards =
+      companyCard('Application', renderOverviewApplication(app), { half: true }) +
+      companyCard('Timeline', renderMilestones(app), { half: true }) +
       companyCard('Family', renderOverviewFamily(app), {
         half: true, count: app.familyLabel || family.length || '',
       }) +
@@ -4841,11 +4844,9 @@
         half: true, count: overviewDocCount(app),
       }) +
       companyCard('Document status', renderOverviewDocStatus(app), { half: true }) +
-      companyCard('Application', renderOverviewApplication(app), { half: true }) +
       companyCard('Assigned', renderOverviewAssigned(app), {
         half: true, count: Array.isArray(app.assignedTo) ? app.assignedTo.length : 0,
-      }) +
-      companyCard('Timeline', renderMilestones(app), { half: true });
+      });
 
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="overview" role="tabpanel"' +
@@ -4973,6 +4974,7 @@
     if (!person) return '';
 
     var rows = [
+      { icon: ICONS.IdentificationCard, label: 'Passport number', value: person.passportNumber },
       { icon: ICONS.User, label: 'Name', value: person.name },
       { icon: ICONS.User, label: 'Gender', value: person.gender },
       { icon: ICONS.CalendarBlank, label: 'Date of birth', value: person.dateOfBirth },
@@ -4980,13 +4982,13 @@
       { icon: ICONS.MapPin, label: 'Country of residence', value: person.countryOfResidence },
       { icon: ICONS.MapPin, label: 'Region', value: person.region },
       { icon: ICONS.Briefcase, label: 'Occupation', value: person.occupation },
-      { icon: ICONS.IdentificationCard, label: 'Passport number', value: person.passportNumber },
     ].filter(function (r) { return !!r.value; }).map(renderListItem);
 
-    // Last in the list, so the column split carries it under the final field
-    // rather than standing it in a column of its own.
+    // Directly under the number, so the two passport fields read as one
+    // block at the top of the first column rather than the photo dropping
+    // under whatever field happened to come last.
     var photo = renderCipPersonPhoto(person);
-    if (photo) rows.push(photo);
+    if (photo) rows.splice(person.passportNumber ? 1 : 0, 0, photo);
 
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="' + esc(panelId) + '" role="tabpanel"' +
@@ -4998,14 +5000,14 @@
   }
 
   /*
-   * The passport photo, as the last row of the person's own list.
+   * The passport photo, as the second row of the person's own list.
    *
-   * A row rather than a column beside them: the fields run out partway down
-   * the second column, and the portrait belongs under the last of them where
-   * the reader is already looking.
+   * A row rather than a column beside them: it sits under the passport
+   * number, the two of them first, so a reader checking a face against a
+   * number is not hunting through the rest of the answers.
    *
    * Built to renderListItem's shape — icon, label, value — so its label lines
-   * up with the labels above it and the picture with their answers. It links
+   * up with the labels around it and the picture with their answers. It links
    * to the archival copy: what is drawn is the 320px avatar, and somebody
    * checking a face against a passport wants the file that was actually
    * filed.
@@ -5050,12 +5052,60 @@
 
   function openCipPhoto(state, personId, render) {
     var person = cipPeople(state).filter(function (p) { return p.id === personId; })[0];
-    var file = person && person.photoFile;
+    openCipLibraryFile(state, person && person.photoFile, render);
+  }
+
+  /*
+   * A filed checklist slot, opened the same way as the passport photo.
+   *
+   * The slot only carries the library uuid — the viewer wants the full file
+   * row — so this uses a row we already hold (the photo, or the Documents
+   * tab listing) and otherwise asks the library for that one file.
+   */
+  function openCipFile(state, fileId, render) {
+    if (!fileId) return;
+
+    var known = cipLibraryFile(state, fileId);
+    if (known) {
+      openCipLibraryFile(state, known, render);
+      return;
+    }
+
+    var net = filesNet();
+    if (net && net.fetchJSON) {
+      net.fetchJSON(net.url('/files/' + encodeURIComponent(fileId)))
+        .then(function (item) { openCipLibraryFile(state, item, render); })
+        .catch(function () { /* gone, or not this reader's to open */ });
+      return;
+    }
+
+    if (net) window.open(net.url('/files/' + encodeURIComponent(fileId) + '/preview'), '_blank', 'noopener');
+  }
+
+  function cipLibraryFile(state, fileId) {
+    var people = cipPeople(state);
+    var i;
+    var j;
+    var docs;
+
+    for (i = 0; i < people.length; i++) {
+      if (people[i].photoFile && people[i].photoFile.id === fileId) return people[i].photoFile;
+      docs = people[i].documents || [];
+      for (j = 0; j < docs.length; j++) {
+        if (docs[j].file && docs[j].file.id === fileId) return docs[j].file;
+      }
+    }
+
+    return clientFolderRow(fileId);
+  }
+
+  function openCipLibraryFile(state, file, render) {
     if (!file) return;
 
     if (window.TMAFileActions && window.TMAFileActions.open) {
-      // A new photo filed from the viewer is a new version of this file, and
-      // the face on the page is derived from it — so read the application back.
+      // A new version filed from the viewer is a new version of this file, and
+      // the face on the page is derived from the passport photo — so read the
+      // application back either way.
       window.TMAFileActions.open(file, function () {
         delete APPLICATIONS[state.selectedId];
         forgetApplication(state.selectedId);
@@ -5114,11 +5164,8 @@
     var filed = !!d.uploaded;
     var status = d.statusLabel || (filed ? 'Filed' : 'Outstanding');
     var tone = d.statusTone || (filed ? 'success' : 'neutral');
-
-    return (
-      '<li class="tma-dash__clients-checklist-row">' +
-      '<input type="checkbox" class="tma-dash__check"' + (filed ? ' checked' : '') +
-      ' disabled tabindex="-1" aria-hidden="true">' +
+    var opens = filed && d.fileId;
+    var name =
       '<span class="tma-dash__clients-checklist-label">' + esc(d.label) +
       // Not a red star after every line: the mandatory ones are the norm and
       // the exception is worth naming, so the OPTIONAL ones are the ones
@@ -5126,36 +5173,21 @@
       (d.required === false
         ? '<span class="tma-dash__clients-checklist-optional">Optional</span>'
         : '') +
-      '</span>' +
+      '</span>';
+    var chip =
       '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
-      ' tma-portal-status--inline">' + esc(status) + '</span>' +
-      renderChecklistActions(d) +
-      '</li>'
-    );
-  }
-
-  /*
-   * Judging a document, on the row it is about.
-   *
-   * §12 is explicit that a reviewer must never have to go to the File Library
-   * to work a checklist — the verbs belong beside the requirement they are
-   * about, next to the status they change. So the row carries them, and only
-   * when they mean something: a document nobody has sent cannot be approved,
-   * and one already settled is not re-judged by accident.
-   */
-  function renderChecklistActions(d) {
-    if (!d.id || !canReviewDocuments()) return '';
-    if (d.status !== 'application_review') return '';
+      ' tma-portal-status--inline">' + esc(status) + '</span>';
+    var body = opens
+      ? '<button type="button" class="tma-dash__clients-checklist-open" data-cip-file="' +
+        esc(d.fileId) + '" title="Open the filed document">' + name + chip + '</button>'
+      : name + chip;
 
     return (
-      '<span class="tma-dash__clients-checklist-actions">' +
-      '<button type="button" class="tma-dash__clients-checklist-act"' +
-      ' data-cip-approve="' + esc(d.id) + '">Approve</button>' +
-      '<button type="button" class="tma-dash__clients-checklist-act' +
-      ' tma-dash__clients-checklist-act--warn"' +
-      ' data-cip-changes="' + esc(d.id) + '"' +
-      ' data-cip-doc-label="' + esc(d.label) + '">Request changes</button>' +
-      '</span>'
+      '<li class="tma-dash__clients-checklist-row">' +
+      '<input type="checkbox" class="tma-dash__check"' + (filed ? ' checked' : '') +
+      ' disabled tabindex="-1" aria-hidden="true">' +
+      body +
+      '</li>'
     );
   }
 
@@ -5166,12 +5198,6 @@
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
 
     return !!((me && me.isAdmin) || (access && access.can && access.can('cip.assign')));
-  }
-
-  function canReviewDocuments() {
-    var access = window.TMAPortalAccess;
-
-    return !!(access && access.can && access.can('cip.review'));
   }
 
   /*
@@ -7041,101 +7067,6 @@
     });
   }
 
-  /*
-   * Approving a document, and sending one back.
-   *
-   * Approving is one press: a reviewer who has read the scan has already made
-   * the decision, and a confirmation would ask them to make it twice.
-   *
-   * Sending one back is not, because §12 pairs it with a reason. "Update
-   * required" on its own is a reviewer making the provider guess what is
-   * wrong, so the reason is asked for here and refused if it is blank — the
-   * server refuses it too, and this is only the polite half of that.
-   */
-  function reviewDocument(state, render, documentId, verb, label) {
-    if (verb === 'approve') {
-      return sendReview(state, render, documentId, 'approve', {});
-    }
-
-    var ui = window.TMAPortalUI;
-    if (!ui || !ui.openModal) return null;
-
-    return ui.openModal({
-      title: 'Send back ' + (label || 'this document'),
-      body:
-        '<div class="tma-dash__clients-field">' +
-        '<label class="tma-dash__clients-field-label" for="cip-changes">' +
-        'What needs to change?</label>' +
-        '<textarea id="cip-changes" class="tma-dash__clients-field-input"' +
-        ' data-cip-changes-note rows="4"' +
-        ' placeholder="e.g. The second page is cut off — please re-scan the whole document."></textarea>' +
-        '</div>' +
-        '<p class="tma-portal-modal__text">The provider sees this on the document and can reply to it.</p>' +
-        '<div class="tma-portal-modal__foot">' +
-        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-changes-cancel>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-cip-changes-send>Send back</button>' +
-        '</div>',
-      onMount: function (el) {
-        var note = el.querySelector('[data-cip-changes-note]');
-        if (note) note.focus();
-
-        var cancel = el.querySelector('[data-cip-changes-cancel]');
-        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
-
-        var send = el.querySelector('[data-cip-changes-send]');
-        if (!send) return;
-
-        send.addEventListener('click', function () {
-          var comment = note ? note.value.trim() : '';
-          if (!comment) {
-            clientsToast('Say what needs to change — the provider sees this.', 'negative');
-            if (note) note.focus();
-
-            return;
-          }
-
-          send.disabled = true;
-          send.textContent = 'Sending…';
-
-          sendReview(state, render, documentId, 'request-changes', { comment: comment })
-            .then(function () { ui.closeModal(); })
-            .catch(function () {
-              send.disabled = false;
-              send.textContent = 'Send back';
-            });
-        });
-      },
-    });
-  }
-
-  function sendReview(state, render, documentId, verb, body) {
-    return clientsFetch('/portal/cip/documents/' + encodeURIComponent(documentId) + '/' + verb, {
-      method: 'POST',
-      json: body,
-    })
-      .then(function (json) {
-        /*
-         * The whole application comes back, not just the document.
-         *
-         * Judging one document can move the application — the last approval
-         * reaches assessment feedback, the first rejection puts it into update
-         * required — so a response carrying only the slot would leave the head
-         * and the tab counts describing the application as it was a moment ago.
-         */
-        var record = json && json.application;
-        if (record) rememberApplication(state.selectedId, record);
-        else forgetApplication(state.selectedId);
-
-        clientsToast(verb === 'approve' ? 'Document approved' : 'Sent back to the provider', 'positive');
-        render({ detailOnly: !usesPagedClientsFlow(state) });
-      })
-      .catch(function (err) {
-        clientsToast((err && err.message) || 'Could not record that.', 'negative');
-
-        throw err;
-      });
-  }
-
   function canAssignClients() {
     var access = window.TMAPortalAccess;
     return !!(access && access.can && access.can('clients.assign'));
@@ -8705,24 +8636,6 @@
       });
     });
 
-    MORPH.unwired(root, '[data-cip-approve]').forEach(function (btn) {
-      MORPH.on(btn, 'click', function () {
-        reviewDocument(state, render, btn.getAttribute('data-cip-approve'), 'approve');
-      });
-    });
-
-    MORPH.unwired(root, '[data-cip-changes]').forEach(function (btn) {
-      MORPH.on(btn, 'click', function () {
-        reviewDocument(
-          state,
-          render,
-          btn.getAttribute('data-cip-changes'),
-          'request-changes',
-          btn.getAttribute('data-cip-doc-label'),
-        );
-      });
-    });
-
     MORPH.unwired(root, '[data-cip-submit]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () { openSubmissionDialog(state, render, false); });
     });
@@ -8734,6 +8647,12 @@
     MORPH.unwired(root, '[data-cip-photo]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
         openCipPhoto(state, btn.getAttribute('data-cip-photo'), render);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-file]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        openCipFile(state, btn.getAttribute('data-cip-file'), render);
       });
     });
   }
