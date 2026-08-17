@@ -4874,9 +4874,9 @@
    * The case at a glance, under every tab — CBI's facts strip.
    *
    * Application number is `displayNumber()`: the internal number until the
-   * CIP number is recorded, the CIP number after. Family number is the F-
-   * size. Empty dates drop out so a file that has only just been filed does
-   * not pretend it was submitted; Assigned always answers, Unassigned if nobody.
+   * CIP number is recorded, the CIP number after. Submitted stays on the
+   * strip even before the Unit has it, as an empty date. Empty decision
+   * dates still drop out; Assigned always answers, Unassigned if nobody.
    */
   function cipFact(label, value, rawHtml) {
     if (value == null || value === '') return '';
@@ -4920,9 +4920,8 @@
 
     var html =
       cipFact('Application number', app.number) +
-      cipFact('Family number', app.familyLabel) +
       cipFact('Received', cipMilestoneDate(app, 'filed')) +
-      cipFact('Submitted', cipMilestoneDate(app, 'submitted')) +
+      cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '—') +
       cipFact('Decision', cipMilestoneDate(app, 'decision')) +
       cipFact('Investment', app.investmentType) +
       cipFact('Referred by', app.provider) +
