@@ -4705,38 +4705,178 @@
     var steps = (app && app.milestones) || [];
     if (!steps.length) return '';
 
-    return (
-      '<ul class="tma-dash__cip-tl">' +
-      steps.map(function (m) {
-        return '<li class="tma-portal-details__row">' +
-          '<span>' + esc(m.label) + '</span>' +
-          '<span class="tma-portal-details__label">' +
-          (m.date ? esc(fmtShortDate(m.date)) : '—') +
-          '</span></li>';
-      }).join('') +
-      '</ul>'
+    return overviewList(steps.map(function (m) {
+      return overviewRow(m.label, m.date ? fmtShortDate(m.date) : '—');
+    }).join(''));
+  }
+
+  function overviewRow(label, value, rawHtml) {
+    if (value == null || value === '') return '';
+    return '<li class="tma-portal-details__row">' +
+      '<span>' + esc(label) + '</span>' +
+      '<span class="tma-portal-details__label">' + (rawHtml ? value : esc(value)) + '</span></li>';
+  }
+
+  function overviewList(rows) {
+    if (!rows) return '';
+    return '<ul class="tma-dash__cip-tl">' + rows + '</ul>';
+  }
+
+  function cipFamily(app) {
+    var people = [];
+    if (app.applicant) people.push(app.applicant);
+    if (app.sponsor) people.push(app.sponsor);
+    (app.dependents || []).forEach(function (d) { people.push(d); });
+    return people;
+  }
+
+  function familyComposition(app) {
+    var parts = [];
+    if (app.applicant) parts.push('1 Main Applicant');
+    if (app.sponsor) parts.push('1 Sponsor');
+    var n = (app.dependents || []).length;
+    if (n) parts.push(n === 1 ? '1 Dependent' : n + ' Dependents');
+    if (!parts.length) return '';
+    return parts.join(' + ') + (app.familyLabel ? ' = ' + app.familyLabel : '');
+  }
+
+  function personDocStats(person) {
+    var docs = (person && person.documents) || [];
+    var total = docs.length;
+    var filed = 0;
+    var pending = 0;
+    var review = 0;
+    var update = 0;
+    var ready = 0;
+    docs.forEach(function (d) {
+      if (d.uploaded) filed += 1;
+      if (!d.uploaded) pending += 1;
+      else if (d.status === 'application_review') review += 1;
+      else if (d.status === 'update_required') update += 1;
+      else if (d.status === 'ready_for_submission') ready += 1;
+    });
+    return {
+      total: total,
+      filed: filed,
+      pending: pending,
+      review: review,
+      update: update,
+      ready: ready,
+    };
+  }
+
+  function renderOverviewFamily(app) {
+    var people = cipFamily(app);
+    var lead = familyComposition(app);
+    var rows = people.map(function (p) {
+      return overviewRow(p.name || '—', p.label || '');
+    }).join('');
+    if (!lead && !rows) return '';
+    return (lead ? '<p class="tma-dash__cip-ov-lead">' + esc(lead) + '</p>' : '') +
+      overviewList(rows);
+  }
+
+  function renderOverviewDocuments(app) {
+    var people = cipFamily(app);
+    if (!people.length) return '';
+    return overviewList(people.map(function (p) {
+      var s = personDocStats(p);
+      return overviewRow(p.name || p.label || '—', s.filed + ' / ' + s.total);
+    }).join(''));
+  }
+
+  function renderOverviewDocStatus(app) {
+    var totals = { pending: 0, review: 0, update: 0, ready: 0, filed: 0, total: 0 };
+    cipFamily(app).forEach(function (p) {
+      var s = personDocStats(p);
+      totals.pending += s.pending;
+      totals.review += s.review;
+      totals.update += s.update;
+      totals.ready += s.ready;
+      totals.filed += s.filed;
+      totals.total += s.total;
+    });
+    return overviewList(
+      overviewRow('Pending upload', String(totals.pending)) +
+      overviewRow('Application review', String(totals.review)) +
+      overviewRow('Update required', String(totals.update)) +
+      overviewRow('Ready for submission', String(totals.ready))
     );
   }
 
+  function overviewDocCount(app) {
+    var filed = 0;
+    var total = 0;
+    cipFamily(app).forEach(function (p) {
+      var s = personDocStats(p);
+      filed += s.filed;
+      total += s.total;
+    });
+    return total ? filed + ' / ' + total : '';
+  }
+
+  function renderOverviewApplication(app) {
+    var status = app.statusLabel
+      ? '<span class="tma-portal-status tma-portal-status--' + esc(app.statusTone || 'neutral') +
+        ' tma-portal-status--inline">' + esc(app.statusLabel) + '</span>'
+      : '';
+    return overviewList(
+      overviewRow('Number', app.number) +
+      overviewRow('Internal', app.cipNumber && app.internalNumber ? app.internalNumber : '') +
+      overviewRow('Status', status, true) +
+      overviewRow('Investment', app.investmentType) +
+      overviewRow('Referred by', app.provider) +
+      overviewRow('Sponsored', app.sponsored ? 'Yes' : 'No')
+    );
+  }
+
+  function renderOverviewAssigned(app) {
+    var people = Array.isArray(app.assignedTo) ? app.assignedTo : [];
+    var faces = cipAssignedFaces(app);
+    var rows = people.map(function (p) {
+      return overviewRow(p.name || '—', (p.roles && p.roles[0]) || '');
+    }).join('');
+    return '<div class="tma-dash__cip-ov-assigned">' + faces + '</div>' +
+      overviewList(rows);
+  }
+
+  /*
+   * Overview is the file at a glance: who travels, what they still owe, where
+   * the application has got to. Short cards pair up; nothing here is a full-
+   * width band just because it is the first tab.
+   */
   function renderOverviewPanel(app, hidden) {
     if (!app) return '';
+
+    var family = cipFamily(app);
+    var cards =
+      companyCard('Family', renderOverviewFamily(app), {
+        half: true, count: app.familyLabel || family.length || '',
+      }) +
+      companyCard('Documents', renderOverviewDocuments(app), {
+        half: true, count: overviewDocCount(app),
+      }) +
+      companyCard('Document status', renderOverviewDocStatus(app), { half: true }) +
+      companyCard('Application', renderOverviewApplication(app), { half: true }) +
+      companyCard('Assigned', renderOverviewAssigned(app), {
+        half: true, count: Array.isArray(app.assignedTo) ? app.assignedTo.length : 0,
+      }) +
+      companyCard('Timeline', renderMilestones(app), { half: true });
 
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="overview" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
-      '<h3 class="tma-dash__clients-card-title">Timeline</h3>' +
-      renderMilestones(app) +
-      '</div>'
+      '<div class="tma-dash__clients-cards">' + cards + '</div></div>'
     );
   }
 
   /*
    * The case at a glance, under every tab — CBI's facts strip.
    *
-   * Received, Submitted, Investment, who referred them, who holds the file.
-   * Empty dates drop out so a file that has only just been filed does not
-   * pretend it was submitted; Assigned always answers, Unassigned if nobody.
-   * The Timeline card on Overview still has the whole journey, holes and all.
+   * Application number is `displayNumber()`: the internal number until the
+   * CIP number is recorded, the CIP number after. Family number is the F-
+   * size. Empty dates drop out so a file that has only just been filed does
+   * not pretend it was submitted; Assigned always answers, Unassigned if nobody.
    */
   function cipFact(label, value, rawHtml) {
     if (value == null || value === '') return '';
@@ -4779,6 +4919,8 @@
     if (!app) return '';
 
     var html =
+      cipFact('Application number', app.number) +
+      cipFact('Family number', app.familyLabel) +
       cipFact('Received', cipMilestoneDate(app, 'filed')) +
       cipFact('Submitted', cipMilestoneDate(app, 'submitted')) +
       cipFact('Decision', cipMilestoneDate(app, 'decision')) +

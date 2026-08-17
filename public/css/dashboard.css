@@ -18060,13 +18060,17 @@
 }
 
 .tma-dash__clients-profile-panel[data-clients-panel="overview"]:not([hidden]) {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-12);
+  display: block;
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 0;
+  background: none;
+  border-radius: 0;
 }
 
-/* Author `display: flex` above beats the UA [hidden] rule, so it has to be
-   restated — otherwise Timeline sits on every tab. */
+/* Restated so Timeline cannot leak onto other tabs: the overview panel is
+   `display: block` when open, which would otherwise beat the UA [hidden]
+   rule the same way `flex` did. */
 .tma-dash__clients-profile-panel[data-clients-panel="overview"][hidden] {
   display: none;
 }
@@ -35215,6 +35219,17 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__cip-tl .tma-portal-details__label {
   font-variant-numeric: tabular-nums;
+}
+
+.tma-dash__cip-ov-lead {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-size-13, 13px);
+  line-height: 18px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__cip-ov-assigned {
+  margin-bottom: var(--space-8);
 }
 
 /*
