@@ -11,10 +11,10 @@ use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
-use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\Facets;
 use App\Support\Cip\Status;
+use App\Support\Clients\Assignments;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -81,12 +81,37 @@ class CipFacetsTest extends TestCase
         return [$provider, $contact];
     }
 
+    /**
+     * An application with a client of its own.
+     *
+     * Every application in production has one — phase 2c creates it at intake
+     * — and the Assigned To column reads the client's list, so a fixture
+     * without one would be testing the no-client fallback rather than the
+     * thing the screen does.
+     */
     private function application(CipProvider $provider, User $creator, string $status = Status::NEW): CipApplication
     {
         $application = Applications::create($provider, $creator);
-        $application->forceFill(['status' => $status])->save();
+        $client = Client::create([
+            'uid' => 'c-'.$application->id,
+            'name' => 'Client '.$application->id,
+            'data' => [],
+            'created_by' => $creator->id,
+        ]);
+        $application->forceFill(['status' => $status, 'client_id' => $client->id])->save();
 
         return $application->refresh();
+    }
+
+    /** Put somebody on the file, the way both screens do. */
+    private function putOn(CipApplication $application, User $staff, User $by): void
+    {
+        ClientAssignment::create([
+            'client_id' => $application->client_id,
+            'user_id' => $staff->id,
+            'status' => ClientAssignment::STATUS_ACTIVE,
+            'assigned_by' => $by->id,
+        ]);
     }
 
     /** The listing, filtered as the menu would filter it. */
@@ -113,9 +138,9 @@ class CipFacetsTest extends TestCase
 
         // Three for Rita, one for Colin, two nobody has picked up.
         foreach (range(1, 3) as $ignored) {
-            Assignments::assign($this->application($provider, $admin), $rita, $admin);
+            $this->putOn($this->application($provider, $admin), $rita, $admin);
         }
-        Assignments::assign($this->application($provider, $admin), $colin, $admin, 'compliance_officer');
+        $this->putOn($this->application($provider, $admin), $colin, $admin);
         $this->application($provider, $admin);
         $this->application($provider, $admin);
 
@@ -134,7 +159,7 @@ class CipFacetsTest extends TestCase
         $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
 
         foreach (range(1, 4) as $ignored) {
-            Assignments::assign($this->application($galaxy, $admin), $rita, $admin);
+            $this->putOn($this->application($galaxy, $admin), $rita, $admin);
         }
         $this->application($galaxy, $admin);
         $this->application($other, $admin);
@@ -174,10 +199,10 @@ class CipFacetsTest extends TestCase
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
 
         $held = $this->application($provider, $admin);
-        Assignments::assign($held, $rita, $admin);
+        $this->putOn($held, $rita, $admin);
 
         $handedBack = $this->application($provider, $admin);
-        Assignments::assign($handedBack, $rita, $admin);
+        $this->putOn($handedBack, $rita, $admin);
 
         // Both are held, so the menu offers no unassigned row at all — it is
         // omitted rather than shown as a zero.
@@ -191,7 +216,11 @@ class CipFacetsTest extends TestCase
          * assignment ended is exactly what "nobody has picked this up" means,
          * and the row stays in the table as history rather than being deleted.
          */
-        Assignments::end(Assignments::live($handedBack->refresh())->first(), $admin);
+        Assignments::end(
+            $handedBack->client,
+            $handedBack->client->assignments()->live()->first(),
+            $admin,
+        );
 
         $counts = $this->facet($this->listing($admin), 'assignees');
         $this->assertSame(1, $counts[Facets::UNASSIGNED]);
@@ -208,8 +237,8 @@ class CipFacetsTest extends TestCase
         $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
 
-        Assignments::assign($this->application($provider, $admin, Status::DELAYED), $rita, $admin);
-        Assignments::assign($this->application($provider, $admin, Status::GRANTED), $colin, $admin, 'compliance_officer');
+        $this->putOn($this->application($provider, $admin, Status::DELAYED), $rita, $admin);
+        $this->putOn($this->application($provider, $admin, Status::GRANTED), $colin, $admin);
         $this->application($provider, $admin, Status::DELAYED);
 
         // Two officers ticked: either one's work, never the intersection.
@@ -241,7 +270,7 @@ class CipFacetsTest extends TestCase
         [$mine, $contact] = $this->providerWithContact('GAL');
         [$theirs] = $this->providerWithContact('PRI');
 
-        Assignments::assign($this->application($mine, $admin), $rita, $admin);
+        $this->putOn($this->application($mine, $admin), $rita, $admin);
         $this->application($theirs, $admin);
         $this->application($theirs, $admin);
 
@@ -264,7 +293,7 @@ class CipFacetsTest extends TestCase
 
         $this->application($mine, $admin);
         $hidden = $this->application($theirs, $admin);
-        Assignments::assign($hidden, $stranger, $admin);
+        $this->putOn($hidden, $stranger, $admin);
 
         $mineOnly = $this->listing($contact)['total'];
         $this->assertSame(1, $mineOnly);
@@ -287,7 +316,7 @@ class CipFacetsTest extends TestCase
         $this->assertSame(0, $otherFirm['total']);
     }
 
-    public function test_a_client_manager_does_not_count_as_holding_the_application(): void
+    public function test_the_assigned_tab_and_the_table_are_one_list(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $manager = $this->user(Role::ADMINISTRATOR, 'mo@example.com');
@@ -308,17 +337,21 @@ class CipFacetsTest extends TestCase
         ]);
 
         /*
-         * Looking after the client is not holding the application, and the
-         * menu counts what the column shows. When the two disagreed the table
-         * read "Unassigned 1" beside a cell naming somebody, and assigning
-         * that same person changed nothing visible.
+         * Somebody added on the profile's Assigned tab is in the table's
+         * column, in its filter, and in its count — all three read the one
+         * record. When they were separate tables the tab and the table each
+         * showed a different answer for the same file.
          */
         $body = $this->listing($admin);
 
-        $this->assertSame([], $body['applications'][0]['assignedTo'], 'the column names nobody');
-        $this->assertSame(1, $this->facet($body, 'assignees')[Facets::UNASSIGNED] ?? 0);
-        $this->assertSame(0, $this->facet($body, 'assignees')[(string) $manager->id] ?? 0);
-        $this->assertSame(1, $this->listing($admin, ['assignee' => Facets::UNASSIGNED])['total']);
+        $this->assertSame(
+            'Mo',
+            $body['applications'][0]['assignedTo'][0]['name'] ?? null,
+            'the column names them',
+        );
+        $this->assertSame(1, $this->facet($body, 'assignees')[(string) $manager->id] ?? 0);
+        $this->assertSame(0, $this->facet($body, 'assignees')[Facets::UNASSIGNED] ?? 0);
+        $this->assertSame(1, $this->listing($admin, ['assignee' => (string) $manager->id])['total']);
     }
 
     public function test_the_facets_do_not_cost_a_query_per_officer(): void
@@ -327,7 +360,7 @@ class CipFacetsTest extends TestCase
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
 
         $one = $this->user(Role::REVIEWING_OFFICER, 'one@example.com');
-        Assignments::assign($this->application($provider, $admin), $one, $admin);
+        $this->putOn($this->application($provider, $admin), $one, $admin);
 
         DB::enableQueryLog();
         $this->listing($admin);
@@ -337,8 +370,8 @@ class CipFacetsTest extends TestCase
         // Nine more officers, each holding two files.
         foreach (range(2, 10) as $n) {
             $officer = $this->user(Role::REVIEWING_OFFICER, "officer{$n}@example.com");
-            Assignments::assign($this->application($provider, $admin), $officer, $admin);
-            Assignments::assign($this->application($provider, $admin), $officer, $admin);
+            $this->putOn($this->application($provider, $admin), $officer, $admin);
+            $this->putOn($this->application($provider, $admin), $officer, $admin);
         }
 
         DB::enableQueryLog();

@@ -99,7 +99,7 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame('Draft', $row['statusLabel']);
     }
 
-    public function test_the_assigned_column_names_only_the_officers_on_the_application(): void
+    public function test_the_assigned_column_names_the_staff_on_the_client(): void
     {
         $staff = $this->staff();
         $application = $this->application($staff, $this->provider($staff), 1, false);
@@ -116,16 +116,15 @@ class CipApplicationTableTest extends TestCase
         $row = $this->actingAs($staff)->getJson('/portal/cip/applications')->assertOk()->json('applications.0');
 
         /*
-         * Empty, though this client has staff on it.
+         * The client's list IS this column.
          *
-         * The column used to fall back to the people looking after the client
-         * when nobody was on the application, and that made assigning look
-         * broken: a client manager who is also an officer already had their
-         * name in the cell, so putting them on the file changed nothing
-         * anybody could see. Who looks after a client is a fact about the
-         * client; this column answers who holds the application.
+         * The profile's Assigned tab and this cell are one record, so somebody
+         * put on from either place shows in both. They used to be separate
+         * tables, which meant staff added in the tab were invisible here and
+         * assigning from here was invisible there.
          */
-        $this->assertSame([], $row['assignedTo']);
+        $this->assertCount(1, $row['assignedTo']);
+        $this->assertSame('Omar Reviewer', $row['assignedTo'][0]['name']);
     }
 
     public function test_an_assignment_that_has_ended_is_not_shown_as_assigned(): void

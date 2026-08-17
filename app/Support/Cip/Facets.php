@@ -2,8 +2,8 @@
 
 namespace App\Support\Cip;
 
-use App\Models\CipApplicationAssignment;
 use App\Models\CipProvider;
+use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
@@ -74,10 +74,10 @@ class Facets
      *
      * WHO COUNTS AS HOLDING IT
      *
-     * The officers on the application, and nobody else — the same one source
-     * §8's Assigned To column draws. The two used to disagree, and a facet
-     * that counts differently from the column beside it is the one thing this
-     * class exists to prevent.
+     * Whoever is on the client, which is the one list §8's Assigned To column
+     * draws and the profile's Assigned tab edits. The menu and the column used
+     * to read different tables, and a facet that counts differently from the
+     * cell beside it is the one thing this class exists to prevent.
      *
      * The unassigned row leads, because "what has nobody picked up" is the
      * question an administrator opens this menu to ask, and it is the one
@@ -95,8 +95,8 @@ class Facets
          * in production — the shape this module was redesigned to avoid.
          */
         $held = self::liveAssignments(ApplicationScope::query($reader))
-            ->selectRaw('cip_application_assignments.user_id, COUNT(DISTINCT cip_applications.id) as total')
-            ->groupBy('cip_application_assignments.user_id')
+            ->selectRaw('client_assignments.user_id, COUNT(DISTINCT cip_applications.id) as total')
+            ->groupBy('client_assignments.user_id')
             ->pluck('total', 'user_id');
 
         /*
@@ -238,7 +238,7 @@ class Facets
 
         return $query->where(function (Builder $q) use ($wantsUnassigned, $ids) {
             if ($ids !== []) {
-                $q->orWhereHas('assignments', fn ($a) => $a->live()->whereIn('user_id', $ids));
+                $q->orWhereHas('client.assignments', fn ($a) => $a->live()->whereIn('user_id', $ids));
             }
 
             if ($wantsUnassigned) {
@@ -271,21 +271,30 @@ class Facets
     /* ── internals ─────────────────────────────────── */
 
     /**
-     * The scoped listing joined to its live assignments.
+     * The scoped listing joined to the live assignments on each client.
+     *
+     * The same rows §8's Assigned To column draws — one list, shared with the
+     * profile's Assigned tab — so a count here and the names in the cell
+     * cannot come apart.
      *
      * A join rather than whereHas because this counts rather than filters, and
-     * the count is per officer: the grouped total needs a row per (application,
-     * officer) pair to group by, which a subquery does not produce. DISTINCT on
-     * the application id is what keeps a file held by two officers from
-     * counting twice for either of them.
+     * the count is per person: the grouped total needs a row per (application,
+     * person) pair to group by, which a subquery does not produce. DISTINCT on
+     * the application id is what keeps a file two people are on from counting
+     * twice for either of them.
      */
     private static function liveAssignments(Builder $query): Builder
     {
-        return $query->join('cip_application_assignments', function ($join) {
-            $join->on('cip_application_assignments.application_id', '=', 'cip_applications.id')
-                ->where('cip_application_assignments.status', CipApplicationAssignment::STATUS_ACTIVE)
-                ->whereNull('cip_application_assignments.ended_at');
-        });
+        return $query
+            ->join('clients', 'clients.id', '=', 'cip_applications.client_id')
+            ->join('client_assignments', function ($join) {
+                $join->on('client_assignments.client_id', '=', 'clients.id')
+                    ->where('client_assignments.status', ClientAssignment::STATUS_ACTIVE)
+                    ->where(fn ($q) => $q->whereNull('client_assignments.starts_at')
+                        ->orWhere('client_assignments.starts_at', '<=', now()))
+                    ->where(fn ($q) => $q->whereNull('client_assignments.ends_at')
+                        ->orWhere('client_assignments.ends_at', '>', now()));
+            });
     }
 
     /**
@@ -300,9 +309,9 @@ class Facets
         return self::whereNobodyHolds(ApplicationScope::query($reader))->count();
     }
 
-    /** The applications no officer currently holds. */
+    /** The applications nobody is on. */
     private static function whereNobodyHolds(Builder $query): Builder
     {
-        return $query->whereDoesntHave('assignments', fn ($a) => $a->live());
+        return $query->whereDoesntHave('client.assignments', fn ($a) => $a->live());
     }
 }

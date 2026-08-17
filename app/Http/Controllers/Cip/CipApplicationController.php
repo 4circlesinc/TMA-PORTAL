@@ -503,30 +503,47 @@ class CipApplicationController extends Controller
     private function assignees($application): array
     {
         /*
-         * Everyone who holds THIS APPLICATION, and nobody else.
+         * Who is on this client, which is the same list the profile's Assigned
+         * tab shows and edits.
          *
-         * `assigned_officer_id` caches only the reviewing officer, so a file a
-         * compliance officer had also been put on showed one name while two
-         * people worked it — the column is "Assigned To" and the cell draws a
-         * set of faces, so naming one of two is the table choosing whose work
-         * counts.
+         * One record, deliberately. The tab and this column used to read
+         * different tables, so staff put on from one place were invisible in
+         * the other — and assigning somebody the column already named (because
+         * they were on the client) changed the database and nothing on screen.
+         * They are now the same rows: assign in either place and both follow.
          *
-         * It used to fall back to the people looking after the client when
-         * nobody was on the application. That made assigning look broken: a
-         * client manager who is also an officer already had their name here,
-         * so putting them on the file changed nothing visible. Who looks after
-         * a client is a fact about the client and belongs on the client.
+         * Live only. An assignment that has ended is not a lighter shade of
+         * assigned — that person has stopped working on this — and §8's column
+         * asks who is.
+         */
+        $person = fn ($a, string $role) => [
+            'name' => $a->user->name,
+            'first' => Str::of($a->user->name)->trim()->explode(' ')->first(),
+            'email' => $a->user->email,
+            'avatar' => $a->user->photoUrl(),
+            'userId' => $a->user_id,
+            'roles' => [$role],
+        ];
+
+        if ($application->client !== null) {
+            return collect($application->client->assignments)
+                ->filter(fn ($a) => $a->user !== null)
+                ->map(fn ($a) => $person($a, $a->roleLabel()))
+                ->values()
+                ->all();
+        }
+
+        /*
+         * No client record at all — nothing to share a list with.
+         *
+         * The application's own assignments answer instead. This cannot bring
+         * back the bug the merge fixed: that came from a client's staff
+         * standing in for officers on the file, and here there is no client
+         * for anybody to stand in from.
          */
         return $application->assignments
             ->filter(fn ($a) => $a->user !== null)
-            ->map(fn ($a) => [
-                'name' => $a->user->name,
-                'first' => Str::of($a->user->name)->trim()->explode(' ')->first(),
-                'email' => $a->user->email,
-                'avatar' => $a->user->photoUrl(),
-                'userId' => $a->user_id,
-                'roles' => [Assignments::roleLabel($a->role)],
-            ])
+            ->map(fn ($a) => $person($a, Assignments::roleLabel($a->role)))
             ->values()
             ->all();
     }

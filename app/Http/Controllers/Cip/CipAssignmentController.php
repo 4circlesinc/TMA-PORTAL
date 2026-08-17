@@ -9,6 +9,7 @@ use App\Models\CipApplicationAssignment;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
+use App\Support\Clients\Assignments as ClientAssignments;
 use App\Support\Cip\CipAccess;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
@@ -69,11 +70,32 @@ class CipAssignmentController extends Controller
             'That officer cannot take this application as '.mb_strtolower(Assignments::roleLabel($role)).'.',
         );
 
+        /*
+         * Written to the CLIENT's assignment list, which is what the Assigned
+         * tab shows and what §8's column draws — one record, so somebody put
+         * on here appears there and vice versa.
+         *
+         * The CIP assignment is written too, because §10 hangs off it: the
+         * file being assigned is what moves it into review, and the reviewer
+         * verbs are gated on holding it. The client row is the one anybody
+         * looks at; this is the one the workflow reads.
+         */
+        $client = $application->client;
+
+        if ($client) {
+            ClientAssignments::assign($client, $officer, [
+                'role' => $role,
+                'level' => 'editor',
+            ], $request->user());
+        }
+
         Assignments::assign($application, $officer, $request->user(), $role);
 
         // The officer's own worklist changes shape too — this row is what puts
-        // the application on it.
+        // the application on it. CLIENTS as well as CIP: the same write shows
+        // up on the client's own Assigned tab.
         Live::staffAnd(Live::CIP, [$officer->id]);
+        Live::staffAnd(Live::CLIENTS, [$officer->id]);
 
         return response()->json($this->payload($request, $application->fresh()), 201);
     }
@@ -91,11 +113,23 @@ class CipAssignmentController extends Controller
         $assignment = CipApplicationAssignment::live()
             ->where('application_id', $application->id)
             ->where('user_id', $userId)
-            ->firstOrFail();
+            ->first();
 
-        Assignments::end($assignment, $request->user());
+        if ($assignment) {
+            Assignments::end($assignment, $request->user());
+        }
+
+        // And off the client's list, which is the one the two screens share.
+        $client = $application->client;
+        if ($client) {
+            $held = $client->assignments()->live()->where('user_id', $userId)->first();
+            if ($held) {
+                ClientAssignments::end($client, $held, $request->user());
+            }
+        }
 
         Live::staffAnd(Live::CIP, [$userId]);
+        Live::staffAnd(Live::CLIENTS, [$userId]);
 
         return response()->json($this->payload($request, $application->fresh()));
     }
@@ -118,6 +152,46 @@ class CipAssignmentController extends Controller
     }
 
     /**
+     * Who is on this file, from the one list the Assigned tab shares.
+     *
+     * The application's own assignments answer only where there is no client
+     * record to share with — see the matching note in
+     * {@see \App\Http\Controllers\Cip\CipApplicationController}. Kept in
+     * step with §8's column on purpose: the picker and the cell it opens from
+     * must never name different people.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function holders(CipApplication $application): array
+    {
+        $client = $application->client;
+
+        if ($client !== null) {
+            return $client->assignments()->live()->with('user')->get()
+                ->map(fn ($a) => [
+                    'userId' => $a->user_id,
+                    'name' => $a->user?->name,
+                    'email' => $a->user?->email,
+                    'avatar' => $a->user?->photoUrl(),
+                    'role' => $a->role,
+                    'roleLabel' => $a->roleLabel(),
+                    'assignedAt' => ($a->starts_at ?? $a->created_at)?->toIso8601String(),
+                ])->values()->all();
+        }
+
+        return Assignments::live($application)
+            ->map(fn (CipApplicationAssignment $a) => [
+                'userId' => $a->user_id,
+                'name' => $a->user?->name,
+                'email' => $a->user?->email,
+                'avatar' => $a->user?->photoUrl(),
+                'role' => $a->role,
+                'roleLabel' => Assignments::roleLabel($a->role),
+                'assignedAt' => ($a->starts_at ?? $a->created_at)?->toIso8601String(),
+            ])->values()->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function payload(Request $request, CipApplication $application): array
@@ -125,16 +199,13 @@ class CipAssignmentController extends Controller
         $canAssign = Assignments::canAssign($request->user());
 
         return [
-            'assignments' => Assignments::live($application)
-                ->map(fn (CipApplicationAssignment $a) => [
-                    'userId' => $a->user_id,
-                    'name' => $a->user?->name,
-                    'email' => $a->user?->email,
-                    'avatar' => $a->user?->photoUrl(),
-                    'role' => $a->role,
-                    'roleLabel' => Assignments::roleLabel($a->role),
-                    'assignedAt' => ($a->starts_at ?? $a->created_at)?->toIso8601String(),
-                ])->values()->all(),
+            /*
+             * Who is on this file, read off the client — the one list the
+             * profile's Assigned tab shows and this table's picker edits.
+             * Two records meant staff added in one place were invisible in
+             * the other.
+             */
+            'assignments' => self::holders($application),
             'canAssign' => $canAssign,
             /*
              * Only somebody who may actually hand the file over is shown the

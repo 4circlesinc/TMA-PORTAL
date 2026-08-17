@@ -37,6 +37,16 @@ class ClientAssignment extends Model
      * they may open.
      */
     public const ROLES = [
+        /*
+         * The two CIP jobs, on the one assignment record.
+         *
+         * The applications table and this client's Assigned tab are the same
+         * list — somebody put on a file from either place appears in both —
+         * so the job they were given has to live here rather than in a second
+         * table that only one of the two screens can see.
+         */
+        'reviewing_officer' => 'Reviewing officer',
+        'compliance_officer' => 'Compliance officer',
         'account_manager' => 'Account manager',
         'booking_coordinator' => 'Booking coordinator',
         'finance' => 'Finance contact',
